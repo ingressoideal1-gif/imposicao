@@ -6468,7 +6468,17 @@ window.runImposition = async function () {
 
             return {
 
-                ...arte,
+                qtd: arte.qtd,
+
+                pdf_url: arte.pdf_url,
+
+                pdf_name: arte.pdf_name,
+
+                num1_id: arte.num1_id,
+
+                num2_id: arte.num2_id,
+
+                start: arte.start,
 
                 numeracao: state.numeracoes.find(n => n.id === arte.num1_id) || null,
 

@@ -464,75 +464,76 @@ class ImpositionEngine:
                         els.append(e)
                 return els
 
-        def _load_art_as_pdf(file_path: str, is_url: bool = False) -> fitz.Document:
-            try:
-                if is_url:
-                    if file_path in pdf_cache:
-                        return pdf_cache[file_path]
-                    req = urllib.request.Request(file_path, headers={'User-Agent': 'Mozilla/5.0'})
-                    with urllib.request.urlopen(req) as response:
-                        pdf_bytes = response.read()
-                        
-                    # Tentar abrir como PDF diretamente
-                    try:
-                        doc = fitz.open("pdf", pdf_bytes)
-                        if getattr(doc, "is_pdf", False):
-                            pdf_cache[file_path] = doc
-                            return doc
+            def _load_art_as_pdf(file_path: str, is_url: bool = False) -> fitz.Document:
+                import urllib.request
+                try:
+                    if is_url:
+                        if file_path in pdf_cache:
+                            return pdf_cache[file_path]
+                        req = urllib.request.Request(file_path, headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(req) as response:
+                            pdf_bytes = response.read()
+                            
+                        # Tentar abrir como PDF diretamente
+                        try:
+                            doc = fitz.open("pdf", pdf_bytes)
+                            if getattr(doc, "is_pdf", False):
+                                pdf_cache[file_path] = doc
+                                return doc
+                            doc.close()
+                        except Exception:
+                            pass
+                            
+                        # Falhou, pode ser uma imagem. Extrair dimensoes e criar PDF envelopando a imagem.
+                        try:
+                            doc = fitz.open("img", pdf_bytes)
+                        except Exception:
+                            doc = fitz.open("jpg", pdf_bytes)
+                            
+                        img_w, img_h = doc[0].rect.width, doc[0].rect.height
                         doc.close()
-                    except Exception:
-                        pass
                         
-                    # Falhou, pode ser uma imagem. Extrair dimensoes e criar PDF envelopando a imagem.
-                    try:
-                        doc = fitz.open("img", pdf_bytes)
-                    except Exception:
-                        doc = fitz.open("jpg", pdf_bytes)
+                        doc = fitz.open()
+                        page = doc.new_page(width=cfg.item_w, height=cfg.item_h)
+                        scale = min(cfg.item_w / img_w, cfg.item_h / img_h)
+                        draw_w = img_w * scale; draw_h = img_h * scale
+                        draw_x = (cfg.item_w - draw_w) / 2; draw_y = (cfg.item_h - draw_h) / 2
+                        rect = fitz.Rect(draw_x, draw_y, draw_x + draw_w, draw_y + draw_h)
+                        page.insert_image(rect, stream=pdf_bytes)
                         
-                    img_w, img_h = doc[0].rect.width, doc[0].rect.height
-                    doc.close()
-                    
-                    doc = fitz.open()
-                    page = doc.new_page(width=cfg.item_w, height=cfg.item_h)
-                    scale = min(cfg.item_w / img_w, cfg.item_h / img_h)
-                    draw_w = img_w * scale; draw_h = img_h * scale
-                    draw_x = (cfg.item_w - draw_w) / 2; draw_y = (cfg.item_h - draw_h) / 2
-                    rect = fitz.Rect(draw_x, draw_y, draw_x + draw_w, draw_y + draw_h)
-                    page.insert_image(rect, stream=pdf_bytes)
-                    
-                    final_bytes = doc.write()
-                    doc.close()
-                    final_doc = fitz.open(stream=final_bytes, filetype="pdf")
-                    pdf_cache[file_path] = final_doc
-                    return final_doc
-                else:
-                    try:
+                        final_bytes = doc.write()
+                        doc.close()
+                        final_doc = fitz.open(stream=final_bytes, filetype="pdf")
+                        pdf_cache[file_path] = final_doc
+                        return final_doc
+                    else:
+                        try:
+                            doc = fitz.open(file_path)
+                            if getattr(doc, "is_pdf", False):
+                                return doc
+                            doc.close()
+                        except Exception:
+                            pass
+                            
+                        # Converter imagem para PDF na memoria
                         doc = fitz.open(file_path)
-                        if getattr(doc, "is_pdf", False):
-                            return doc
+                        img_w, img_h = doc[0].rect.width, doc[0].rect.height
                         doc.close()
-                    except Exception:
-                        pass
                         
-                    # Converter imagem para PDF na memoria
-                    doc = fitz.open(file_path)
-                    img_w, img_h = doc[0].rect.width, doc[0].rect.height
-                    doc.close()
-                    
-                    doc = fitz.open()
-                    page = doc.new_page(width=cfg.item_w, height=cfg.item_h)
-                    scale = min(cfg.item_w / img_w, cfg.item_h / img_h)
-                    draw_w = img_w * scale; draw_h = img_h * scale
-                    draw_x = (cfg.item_w - draw_w) / 2; draw_y = (cfg.item_h - draw_h) / 2
-                    rect = fitz.Rect(draw_x, draw_y, draw_x + draw_w, draw_y + draw_h)
-                    page.insert_image(rect, filename=file_path)
-                    
-                    pdf_bytes = doc.write()
-                    doc.close()
-                    return fitz.open(stream=pdf_bytes, filetype="pdf")
-            except Exception as e:
-                print(f"Erro ao carregar/converter arte como PDF ({file_path}): {e}")
-                return None
+                        doc = fitz.open()
+                        page = doc.new_page(width=cfg.item_w, height=cfg.item_h)
+                        scale = min(cfg.item_w / img_w, cfg.item_h / img_h)
+                        draw_w = img_w * scale; draw_h = img_h * scale
+                        draw_x = (cfg.item_w - draw_w) / 2; draw_y = (cfg.item_h - draw_h) / 2
+                        rect = fitz.Rect(draw_x, draw_y, draw_x + draw_w, draw_y + draw_h)
+                        page.insert_image(rect, filename=file_path)
+                        
+                        pdf_bytes = doc.write()
+                        doc.close()
+                        return fitz.open(stream=pdf_bytes, filetype="pdf")
+                except Exception as e:
+                    print(f"Erro ao carregar/converter arte como PDF ({file_path}): {e}")
+                    return None
 
             for art in sorted_artes:
                 qtd = int(art.get("qtd", 0))
