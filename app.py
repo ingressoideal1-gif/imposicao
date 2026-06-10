@@ -6,6 +6,13 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Bac
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+
+DIAG_LOGS = []
+def log_diag(msg: str):
+    import datetime
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    DIAG_LOGS.append(f"[{now}] {msg}")
+    print(f"[{now}] {msg}")
 from engine import ImpositionConfig, ImpositionEngine
 import db
 import print_service
@@ -241,6 +248,7 @@ def delete_modelo_imposicao(mod_id: str, user: dict = Depends(get_current_user))
 
 @app.post("/api/impose")
 async def impose_file(
+    request: Request,
     file: UploadFile | None = File(None),
     csv_file: UploadFile | None = File(None),
     multi_artes_files: list[UploadFile] = File(default=[]),
