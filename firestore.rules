@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    // Verifica se o usuário tem um determinado papel no projeto
+    function hasRole(projectId, role) {
+      return exists(/databases/$(database)/documents/userRoles/$(request.auth.uid + '_' + projectId)) &&
+             get(/databases/$(database)/documents/userRoles/$(request.auth.uid + '_' + projectId)).data.role == role;
+    }
+
+    function isAdmin(projectId) { return hasRole(projectId, 'admin'); }
+    function isEditor(projectId) { return hasRole(projectId, 'editor'); }
+    function canWrite(projectId) { return isAdmin(projectId) || isEditor(projectId); }
+
+    // ── Teste de conexão silencioso ───────────────────────────────────────────
+    match /_conn_test/{doc} {
+      allow read: if request.auth != null;
+    }
+
+    // ── Projetos dos usuários ─────────────────────────────────────────────────
+    match /users/{userId}/projects/{projectId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Arquivos da biblioteca de mídia ───────────────────────────────────────
+    match /files/{fileId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null
+                    && (request.auth.uid == resource.data.userId
+                        || isAdmin(resource.data.projectId));
+      allow delete: if request.auth != null
+                    && (request.auth.uid == resource.data.userId
+                        || isAdmin(resource.data.projectId));
+    }
+
+    // ── Categorias da biblioteca de mídia ────────────────────────────────────
+    match /categories/{categoryId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null
+                            && (request.auth.uid == resource.data.userId
+                                || isAdmin(resource.data.projectId));
+    }
+
+    // ── Papéis de usuários por projeto ───────────────────────────────────────
+    match /userRoles/{roleId} {
+      allow read: if request.auth != null
+                  && (resource == null
+                      || request.auth.uid == resource.data.userId
+                      || isAdmin(resource.data.projectId));
+      allow create: if request.auth != null;
+      allow update: if request.auth != null
+                    && isAdmin(resource.data.projectId);
+      allow delete: if request.auth != null
+                    && isAdmin(resource.data.projectId)
+                    && request.auth.uid != resource.data.userId;
+    }
+
+    // ── Coleções do Ideal Imposition (Acesso Público para simplificar) ────────
+    match /formatos/{document} {
+      allow read, write: if true;
+    }
+    match /numeracoes/{document} {
+      allow read, write: if true;
+    }
+    match /saidas/{document} {
+      allow read, write: if true;
+    }
+    match /cores/{document} {
+      allow read, write: if true;
+    }
+    match /modelos_imposicao/{document} {
+      allow read, write: if true;
+    }
+
+    // ── Coleções do Ideal Control ─────────────────────────────────────────────
+    match /eventos/{document=**} {
+      allow read, write: if true;
+    }
+    match /permissoes_area/{document=**} {
+      allow read, write: if true;
+    }
+    match /credenciais/{document=**} {
+      allow read, write: if true;
+    }
+    match /logs_acesso/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

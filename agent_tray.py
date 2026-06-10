@@ -1,0 +1,178 @@
+﻿# -*- coding: utf-8 -*-
+import multiprocessing
+multiprocessing.freeze_support()
+
+import sys
+import os
+import threading
+import webbrowser
+import socket
+import time
+
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS
+    EXE_DIR = os.path.dirname(sys.executable)
+    sys.path.insert(0, BASE_DIR)
+    os.chdir(EXE_DIR)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    EXE_DIR = BASE_DIR
+    os.chdir(BASE_DIR)
+
+import uvicorn
+from local_print_agent import app as fastapi_app
+
+AGENT_PORT = 9000
+AGENT_HOST = "127.0.0.1"
+server_thread = None
+_server_instance = None
+
+
+def find_icon():
+    candidates = [
+        os.path.join(EXE_DIR, "agent_icon.ico"),
+        os.path.join(BASE_DIR, "agent_icon.ico"),
+        os.path.join(EXE_DIR, "Logo Ideal Dark.png"),
+        os.path.join(BASE_DIR, "Logo Ideal Dark.png"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def create_tray_image():
+    from PIL import Image, ImageDraw
+    icon_path = find_icon()
+    if icon_path:
+        try:
+            img = Image.open(icon_path).convert("RGBA")
+            img = img.resize((64, 64), Image.LANCZOS)
+            return img
+        except Exception:
+            pass
+    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    dc = ImageDraw.Draw(img)
+    dc.ellipse([2, 2, 62, 62], fill=(26, 54, 93, 255))
+    return img
+
+
+def is_port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def run_server():
+    config = uvicorn.Config(
+        app=fastapi_app,
+        host=AGENT_HOST,
+        port=AGENT_PORT,
+        log_level="warning",
+        access_log=False,
+    )
+    global _server_instance
+    _server_instance = uvicorn.Server(config)
+    _server_instance.run()
+
+
+def start_server_thread():
+    global server_thread
+    if is_port_in_use(AGENT_PORT):
+        return
+    server_thread = threading.Thread(target=run_server, daemon=True, name="IdealAgentServer")
+    server_thread.start()
+    for _ in range(50):
+        if is_port_in_use(AGENT_PORT):
+            break
+        time.sleep(0.1)
+
+
+def open_panel(icon=None, item=None):
+    webbrowser.open(f"http://{AGENT_HOST}:{AGENT_PORT}/")
+
+
+def add_to_startup(icon=None, item=None):
+    try:
+        import winreg
+        exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0, winreg.KEY_SET_VALUE
+        )
+        winreg.SetValueEx(key, "IdealImpositionAgent", 0, winreg.REG_SZ, f'"{exe_path}"')
+        winreg.CloseKey(key)
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, "Adicionado ao inicio do Windows com sucesso!", "Ideal Agent", 0)
+    except Exception as e:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, f"Erro: {e}", "Ideal Agent", 0)
+
+
+def remove_from_startup(icon=None, item=None):
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0, winreg.KEY_SET_VALUE
+        )
+        try:
+            winreg.DeleteValue(key, "IdealImpositionAgent")
+        except FileNotFoundError:
+            pass
+        winreg.CloseKey(key)
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, "Removido do inicio do Windows.", "Ideal Agent", 0)
+    except Exception as e:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, f"Erro: {e}", "Ideal Agent", 0)
+
+
+def quit_agent(icon, item):
+    if _server_instance:
+        _server_instance.should_exit = True
+    icon.stop()
+
+
+def setup_tray(icon):
+    icon.visible = True
+    start_server_thread()
+
+
+def main():
+    try:
+        import pystray
+        from PIL import Image
+    except ImportError as e:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, f"Dependencia ausente: {e}", "Ideal Agent - Erro", 0)
+        sys.exit(1)
+
+    tray_image = create_tray_image()
+
+    menu = pystray.Menu(
+        pystray.MenuItem("Ideal Imposition Agent", None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem(f"Ativo - Porta {AGENT_PORT}", None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Abrir Painel Local", open_panel),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Iniciar com o Windows", add_to_startup),
+        pystray.MenuItem("Remover do Inicio", remove_from_startup),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Encerrar Agente", quit_agent),
+    )
+
+    icon = pystray.Icon(
+        name="IdealImpositionAgent",
+        icon=tray_image,
+        title="Ideal Imposition Agent - Ativo",
+        menu=menu,
+    )
+
+    icon.run(setup=setup_tray)
+
+
+if __name__ == "__main__":
+    main()
