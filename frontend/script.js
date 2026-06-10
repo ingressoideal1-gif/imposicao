@@ -5098,6 +5098,28 @@ function drawPreview() {
 
 
 
+            // Desenhar Nome da Arte (Multi-Artes)
+            if (schema === 'multi_artes' && multiArteItem && multiArteItem.nome) {
+                ctx.save();
+                const nomeTxt = String(multiArteItem.nome).padStart(6, '0');
+                const nomeColor = multiArteItem.nome_color || '#000000';
+                // Fonte: 17pt em pontos PDF, convertido para pixels do canvas
+                const nomeFontSizePx = 14 * scale;
+                ctx.font = `${nomeFontSizePx}px Impact, Arial, sans-serif`;
+                ctx.fillStyle = nomeColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // Posição X: 0mm da lateral esquerda da célula
+                // Após rotação -90°, textBaseline='middle' centraliza horizontalmente,
+                // então o ponto de translate é o CENTRO do texto rotacionado.
+                // Para a borda esquerda do texto ficar a 0mm: center_x = -cw/2 + fontSize/2
+                ctx.translate(-cw / 2 + nomeFontSizePx / 2, 0);
+                ctx.rotate(-Math.PI / 2);
+                // textAlign='center' centraliza o texto verticalmente (eixo X pré-rotação = eixo Y pós-rotação)
+                ctx.fillText(nomeTxt, 0, 0);
+                ctx.restore();
+            }
+
             // Elementos variáveis (VDP) - Suporte a 2 numerações sobrepostas
 
         const drawVdpElements = (currentNum, source_id) => {
@@ -5450,9 +5472,14 @@ function drawPreview() {
 
         };
 
-        drawVdpElements(num, 1);
-
-        drawVdpElements(num2, 2);
+        // Para multi_artes, usar a numeração específica de cada arte
+        if (schema === 'multi_artes' && multiArteItem) {
+            drawVdpElements(multiArteItem.numeracao, 1);
+            drawVdpElements(multiArteItem.numeracao_2, 2);
+        } else {
+            drawVdpElements(num, 1);
+            drawVdpElements(num2, 2);
+        }
 
 
 
@@ -5558,6 +5585,10 @@ window.addMultiArte = function() {
 
         qtd: 1,
 
+        nome: '',
+
+        nome_color: '#000000',
+
         num1_id: '',
 
         num2_id: ''
@@ -5593,6 +5624,9 @@ window.updateMultiArte = function(index, field, value) {
     state.impMultiArtes[index][field] = value;
 
     if (field === 'qtd') updateImpSummary();
+
+    // Redesenhar preview quando campos visuais mudam
+    if (field === 'nome' || field === 'nome_color' || field === 'qtd') drawPreview();
 
 };
 
@@ -5743,6 +5777,20 @@ window.renderMultiArtes = function() {
                 <label style="font-size:0.75rem; color:var(--text-dim); display:block; margin-bottom:4px;">Qtd (un)</label>
 
                 <input type="number" class="form-control" value="${a.qtd}" min="1" oninput="updateMultiArte(${i}, 'qtd', this.value)" style="height:32px; border-color:var(--blue);">
+
+            </div>
+
+            <div style="flex:1.5">
+
+                <label style="font-size:0.75rem; color:var(--text-dim); display:block; margin-bottom:4px;">Nome (6 dígitos)</label>
+
+                <div style="display:flex; gap:4px; align-items:center;">
+
+                    <input type="text" class="form-control" value="${a.nome || ''}" maxlength="6" placeholder="000000" oninput="updateMultiArte(${i}, 'nome', this.value)" style="height:32px; font-weight:bold; font-size:14px; letter-spacing:1px; text-align:center;">
+
+                    <input type="color" value="${a.nome_color || '#000000'}" onchange="updateMultiArte(${i}, 'nome_color', this.value)" title="Cor do nome" style="width:32px; height:32px; padding:0; border:1px solid var(--border-color); border-radius:4px; cursor:pointer;">
+
+                </div>
 
             </div>
 
@@ -6473,6 +6521,10 @@ window.runImposition = async function () {
                 pdf_url: arte.pdf_url,
 
                 pdf_name: arte.pdf_name,
+
+                nome: arte.nome || '',
+
+                nome_color: arte.nome_color || '#000000',
 
                 num1_id: arte.num1_id,
 

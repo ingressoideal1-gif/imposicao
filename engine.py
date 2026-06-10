@@ -566,7 +566,9 @@ class ImpositionEngine:
                         "val1": n1 + i,
                         "val2": n2 + i,
                         "local_path": local_path,
-                        "pdf_url": pdf_url
+                        "pdf_url": pdf_url,
+                        "nome": art.get("nome", ""),
+                        "nome_color": art.get("nome_color", "#000000")
                     })
 
         for S in range(total_sheets):
@@ -680,6 +682,58 @@ class ImpositionEngine:
 
                         # Renderiza na página temporária usando coordenadas relativas diretas
                         self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+
+                    # Renderizar nome da arte (Multi-Artes) - rotacionado 90°, alinhado à esquerda, centralizado na altura
+                    arte_nome = arte_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
+                    if arte_nome:
+                        nome_str = str(arte_nome).zfill(6)
+                        nome_color_hex = arte_data.get("nome_color", "#000000")
+                        nome_rgb = _hex_to_rgb(nome_color_hex)
+                        nome_font_size = 14
+                        # Posição X: 0mm da lateral esquerda da célula (em pontos PDF)
+                        # O texto é rotacionado -90°, então X define a distância do canto esq.
+                        # Com rotação -90°: o eixo do texto vai de baixo pra cima.
+                        # Para colocar a 0mm da lateral esquerda: nome_x = font_size (apenas o pivot)
+                        nome_x = nome_font_size  # pivot X = altura da fonte (0mm de margem)
+                        # Centralizar verticalmente: calcular largura real do texto e deslocar
+                        # origin.y por metade para que o texto fique centrado na célula.
+                        # Determinar fontname/fontfile antes para calcular text_length
+                        import os as _os
+                        _impact_candidates = [
+                            "C:/Windows/Fonts/impact.ttf",               # Windows
+                            "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",  # Linux msttcorefonts
+                            "/usr/share/fonts/impact/impact.ttf",         # Linux alternativo
+                        ]
+                        _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
+                        _font_name_calc = "Impact" if _impact_file else "hebo"
+                        _font_file_calc = _impact_file  # None se não encontrou
+                        # Calcular largura do texto para centralizar verticalmente
+                        try:
+                            text_width = fitz.get_text_length(nome_str, fontname=_font_name_calc,
+                                                              fontsize=nome_font_size,
+                                                              fontfile=_font_file_calc)
+                        except Exception:
+                            text_width = len(nome_str) * nome_font_size * 0.6  # fallback aproximado
+                        nome_y = (cfg.item_h + text_width) / 2   # deslocar para baixo metade do texto
+                        # origin: ponto de inserção do texto (baseline) antes da rotação
+                        # pivot: ponto de rotação = mesmo ponto (gira em torno de si)
+                        # Com rotação -90°, o texto vai de baixo para cima a partir de origin.
+                        # Como origin.y = centro + metade_texto, o texto fica centrado.
+                        origin = fitz.Point(nome_x, nome_y)
+                        pivot  = fitz.Point(nome_x, nome_y)
+                        # Montar kwargs para insert_text (fonte Impact 14pt)
+                        _nome_insert_kwargs = dict(
+                            fontsize=nome_font_size,
+                            color=nome_rgb,
+                            morph=(pivot, fitz.Matrix(math.cos(math.radians(-90)), -math.sin(math.radians(-90)),
+                                                      math.sin(math.radians(-90)),  math.cos(math.radians(-90)), 0, 0))
+                        )
+                        if _impact_file:
+                            _nome_insert_kwargs["fontname"] = "Impact"
+                            _nome_insert_kwargs["fontfile"] = _impact_file
+                        else:
+                            _nome_insert_kwargs["fontname"] = "hebo"  # Helvetica Bold como fallback
+                        temp_page.insert_text(origin, nome_str, **_nome_insert_kwargs)
 
                     # 2. Impor a pagina temporaria completa (arte + VDP) na folha final
                     # FIX: materializar temp_doc para bytes antes de usar como fonte
