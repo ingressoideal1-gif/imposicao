@@ -6875,13 +6875,13 @@ window.runImposition = async function () {
         if (pText) pText.textContent = 'Concluído! (100%)';
 
         setTimeout(() => {
-
             overlay.classList.remove('active');
-
-            document.getElementById('btn-impose').disabled = false;
-
+            const btn = document.getElementById('btn-impose');
+            btn.disabled = false;
+            btn.innerHTML = '⚙️ Gerar PDF de Alta Resolução';
+            btn.style.opacity = '1';
+            btn.style.pointerEvents = 'auto';
         }, 400);
-
         impositionAbortController = null;
 
     }
