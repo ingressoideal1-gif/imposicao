@@ -550,22 +550,23 @@ class ImpositionEngine:
                 local_path = art.get("local_path")
                 art_doc = None
                 
-                if local_path and os.path.exists(local_path):
-                    art_doc = _load_art_as_pdf(local_path, is_url=False)
-                elif pdf_url:
-                    art_doc = _load_art_as_pdf(pdf_url, is_url=True)
-            except Exception as ex:
-                print(f"[multi_artes] Erro ao preparar arte: {ex}")
+                try:
+                    if local_path and os.path.exists(local_path):
+                        art_doc = _load_art_as_pdf(local_path, is_url=False)
+                    elif pdf_url:
+                        art_doc = _load_art_as_pdf(pdf_url, is_url=True)
+                except Exception as ex:
+                    print(f"[multi_artes] Erro ao preparar arte: {ex}")
 
-            for i in range(qtd):
-                multi_map.append({
-                    "doc_base": art_doc,
-                    "elements": art_els,
-                    "val1": n1 + i,
-                    "val2": n2 + i,
-                    "local_path": local_path,
-                    "pdf_url": pdf_url
-                })
+                for i in range(qtd):
+                    multi_map.append({
+                        "doc_base": art_doc,
+                        "elements": art_els,
+                        "val1": n1 + i,
+                        "val2": n2 + i,
+                        "local_path": local_path,
+                        "pdf_url": pdf_url
+                    })
 
         for S in range(total_sheets):
             # 1. RENDERIZAR FRENTE DA FOLHA
