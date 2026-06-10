@@ -600,6 +600,7 @@ class ImpositionEngine:
                     val2 = val
                     arte_nome = ""
                     arte_fsize = 10
+                    arte_data = {}
 
                     if cfg.layout_schema == "multi_artes" and item_index < len(multi_map):
                         arte_data = multi_map[item_index]
@@ -729,6 +730,7 @@ class ImpositionEngine:
                         val2 = val
                         arte_nome = ""
                         arte_fsize = 10
+                        arte_data = {}
 
                         if cfg.layout_schema == "multi_artes" and item_index < len(multi_map):
                             arte_data = multi_map[item_index]
