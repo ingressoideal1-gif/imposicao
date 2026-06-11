@@ -2010,7 +2010,10 @@ function renderNumeracoes() {
 
     const filtradas = state.numeracoes.filter(n => {
 
-        if (filterFmt && n.formato_id !== filterFmt) return false;
+        if (filterFmt) {
+            const ids = n.formato_ids || [n.formato_id];
+            if (!ids.some(id => String(id) === String(filterFmt))) return false;
+        }
 
         if (searchVal && !(n.name || '').toLowerCase().includes(searchVal)) return false;
 
@@ -6303,7 +6306,10 @@ function updateImpSummary() {
 
         const curNumVal2 = numSelect2 ? numSelect2.value : '';
 
-        const filteredNums = currentFmtId ? state.numeracoes.filter(n => n.formato_id === currentFmtId) : state.numeracoes;
+        const filteredNums = currentFmtId ? state.numeracoes.filter(n => {
+            const ids = n.formato_ids || [n.formato_id];
+            return ids.some(id => String(id) === String(currentFmtId));
+        }) : state.numeracoes;
 
         
 
