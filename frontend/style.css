@@ -1021,5 +1021,136 @@ body.not-logged-in .app-shell {
     pointer-events: none;
 }
 
+/* ─── Font Picker ───────────────────────────────────────────────────────────── */
+.font-picker-wrap {
+    position: relative;
+    width: 100%;
+}
+
+.font-picker-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    background: rgba(10, 15, 30, 0.6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: left;
+    min-height: 40px;
+}
+.font-picker-trigger:hover { border-color: var(--border-glow); }
+.font-picker-trigger.open {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px var(--blue-glow);
+}
+.font-picker-trigger .fp-preview { font-size: 1rem; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.font-picker-trigger .fp-arrow { color: var(--text-faint); flex-shrink: 0; transition: transform var(--transition); }
+.font-picker-trigger.open .fp-arrow { transform: rotate(180deg); }
+
+.font-picker-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--border-glow);
+    border-radius: var(--radius-sm);
+    z-index: 500;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 240px;
+}
+.font-picker-dropdown.open { display: flex; }
+
+.font-picker-search { padding: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.font-picker-search input {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text);
+    font-size: 0.85rem;
+    outline: none;
+    box-sizing: border-box;
+}
+.font-picker-search input:focus { border-color: var(--blue); }
+
+.font-picker-list { overflow-y: auto; max-height: 280px; padding: 4px; }
+
+.font-picker-group-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    padding: 6px 8px 2px;
+}
+
+.font-picker-opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background var(--transition);
+}
+.font-picker-opt:hover { background: rgba(255,255,255,0.06); }
+.font-picker-opt.selected { background: var(--blue-dim); }
+.font-picker-opt .fp-name { font-size: 0.85rem; color: var(--text-dim); flex-shrink: 0; min-width: 60px; }
+.font-picker-opt .fp-sample { font-size: 1rem; color: var(--text); flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.font-picker-opt .fp-style-tag {
+    font-size: 0.62rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(99,120,180,0.15);
+    color: var(--text-faint);
+    flex-shrink: 0;
+}
+.font-picker-loading { text-align: center; padding: 20px; color: var(--text-faint); font-size: 0.85rem; }
+
+.fp-permission-row {
+    padding: 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.fp-reload-btn {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--blue-dim);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 6px;
+    color: var(--blue);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: center;
+}
+.fp-reload-btn:hover {
+    background: rgba(59,130,246,0.2);
+    border-color: var(--blue);
+}
+
+.fp-tip {
+    font-size: 0.75rem;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 6px 8px;
+}
+
+
 
 

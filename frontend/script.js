@@ -120,6 +120,380 @@ const state = {
 
 
 
+// ─── Utility — fetchPdfBytes ──────────────────────────────────────────────────
+// Busca os bytes de um PDF a partir de uma URL ou string base64.
+// Para URLs: tenta fetch DIRETO primeiro (funciona para URLs do Supabase que têm CORS público).
+// Só usa o proxy como fallback quando API_BASE_URL está disponível (backend local).
+// Isso evita o erro 404 no Vercel onde não há rota /api/proxy.
+async function fetchPdfBytes(content) {
+    if (!content) return null;
+
+    // base64 direto (com ou sem prefixo data:)
+    if (!content.startsWith('http')) {
+        const b64 = content.includes('base64,') ? content.split('base64,')[1] : content;
+        const binStr = atob(b64);
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        return bytes.buffer;
+    }
+
+    // É uma URL — tenta fetch direto primeiro (Supabase tem CORS público)
+    try {
+        const resp = await fetch(content);
+        if (resp.ok) return await resp.arrayBuffer();
+        throw new Error(`HTTP ${resp.status}`);
+    } catch (directErr) {
+        // Fallback: usa proxy se API_BASE_URL estiver disponível (backend local)
+        const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
+        if (baseUrl) {
+            const resp = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(content)}`);
+            if (resp.ok) return await resp.arrayBuffer();
+            throw new Error(`Proxy falhou: HTTP ${resp.status}`);
+        }
+        throw new Error(`Não foi possível buscar o PDF: ${directErr.message}`);
+    }
+}
+// ─── Utility — getFontCSS ─────────────────────────────────────────────────────
+// Converte font_name do elemento para string CSS para renderização no canvas.
+// Suporta fontes Base-14 (helv, helv-bold, times...) e fontes do sistema (system:NomeDaFonte).
+function getFontCSS(font_name) {
+    if (!font_name || font_name === 'helv') return 'Inter, Arial, sans-serif';
+    if (font_name === 'helv-bold') return 'bold Inter, Arial, sans-serif';
+    if (font_name === 'times') return '"Times New Roman", Times, serif';
+    if (font_name === 'times-bold') return 'bold "Times New Roman", Times, serif';
+    if (font_name === 'cour') return '"Courier New", Courier, monospace';
+    if (font_name === 'cour-bold') return 'bold "Courier New", Courier, monospace';
+    // Fonte do sistema: "system:Arial Bold" → bold "Arial Bold"
+    if (font_name.startsWith('system:')) {
+        const parts = font_name.slice(7).split('|'); // "NomeFamilia|bold|italic"
+        const family = parts[0];
+        const bold = parts.includes('bold') ? 'bold ' : '';
+        const italic = parts.includes('italic') ? 'italic ' : '';
+        return `${italic}${bold}"${family}", sans-serif`;
+    }
+    return `"${font_name}", sans-serif`;
+}
+
+// ─── State — Fontes do Sistema ────────────────────────────────────────────────
+const state_fonts = {
+    system: [],           // [{ family, fullName, style }]
+    loaded: false,        // true quando qualquer lista foi carregada (API ou fallback)
+    loadedFromAPI: false, // true SOMENTE quando queryLocalFonts() retornou com sucesso
+    loading: false,
+    permissionDenied: false,
+};
+
+// Fontes Base-14 embutidas no PDF (sem necessidade de arquivo externo)
+const BUILTIN_FONTS = [
+    { family: 'Sans-Serif (Helvetica)', fullName: 'helv',      style: 'Regular' },
+    { family: 'Sans-Serif Bold',        fullName: 'helv-bold', style: 'Bold' },
+    { family: 'Serif (Times)',           fullName: 'times',     style: 'Regular' },
+    { family: 'Serif Bold',             fullName: 'times-bold', style: 'Bold' },
+    { family: 'Mono (Courier)',          fullName: 'cour',      style: 'Regular' },
+    { family: 'Mono Bold',              fullName: 'cour-bold', style: 'Bold' },
+];
+
+// Carrega fontes do sistema via Local Font Access API (Chrome 103+).
+// forceRequest = true → ignora estado anterior e pede permissão novamente.
+async function loadSystemFonts(forceRequest = false) {
+    if (state_fonts.loading) return;
+    // Se já carregou da API real, não precisa recarregar (a menos que forçado)
+    if (state_fonts.loadedFromAPI && !forceRequest) return;
+    state_fonts.loading = true;
+    state_fonts.permissionDenied = false;
+
+    try {
+        if ('queryLocalFonts' in window) {
+            // Esta chamada dispara o prompt de permissão do Chrome (requer gesto do usuário
+            // ou permissão prévia concedida). Lança NotAllowedError se negada.
+            const fonts = await window.queryLocalFonts();
+
+            // Deduplica por família + estilo normalizado
+            const seen = new Set();
+            const systemFonts = [];
+            for (const f of fonts) {
+                const key = `${f.family}|${f.style}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+
+                const isBold   = /bold/i.test(f.style);
+                const isItalic = /italic|oblique/i.test(f.style);
+                const tags = [isBold && 'bold', isItalic && 'italic'].filter(Boolean);
+                const value = `system:${f.family}${tags.length ? '|' + tags.join('|') : ''}`;
+                systemFonts.push({ family: f.family, fullName: value, style: f.style });
+            }
+
+            // Ordenar por família A→Z, depois por estilo
+            systemFonts.sort((a, b) => {
+                const fc = a.family.localeCompare(b.family);
+                return fc !== 0 ? fc : a.style.localeCompare(b.style);
+            });
+
+            state_fonts.system       = [...BUILTIN_FONTS, ...systemFonts];
+            state_fonts.loadedFromAPI = true;  // ✅ API real usada com sucesso
+            console.info(`[Fonts] ${systemFonts.length} fontes do sistema carregadas via API.`);
+        } else {
+            throw new Error('queryLocalFonts não disponível neste navegador');
+        }
+    } catch (e) {
+        if (e.name === 'NotAllowedError') {
+            state_fonts.permissionDenied = true;
+            console.warn('[Fonts] Permissão negada pelo usuário.');
+        } else {
+            console.info('[Fonts] queryLocalFonts indisponível. Usando lista curada.');
+        }
+
+        // Fallback: lista curada de fontes comuns Windows + Mac
+        if (!state_fonts.loadedFromAPI) {
+            const COMMON = [
+                'Arial', 'Arial Black', 'Arial Narrow', 'Arial Rounded MT Bold',
+                'Bahnschrift', 'Calibri', 'Calibri Light', 'Cambria', 'Candara',
+                'Century Gothic', 'Comic Sans MS', 'Consolas', 'Constantia', 'Corbel',
+                'Courier New', 'Ebrima', 'Franklin Gothic Medium', 'Gabriola', 'Gadugi',
+                'Garamond', 'Georgia', 'Impact', 'Ink Free', 'Javanese Text',
+                'Leelawadee UI', 'Lucida Console', 'Lucida Sans Unicode',
+                'Malgun Gothic', 'Marlett', 'Microsoft Sans Serif', 'Mongolian Baiti',
+                'MV Boli', 'Myanmar Text', 'Palatino Linotype', 'Segoe Print',
+                'Segoe Script', 'Segoe UI', 'Segoe UI Black', 'Segoe UI Historic',
+                'Segoe UI Emoji', 'Sylfaen', 'Symbol', 'Tahoma', 'Times New Roman',
+                'Trebuchet MS', 'Verdana', 'Webdings', 'Wingdings',
+                'Helvetica Neue', 'San Francisco', 'Apple Chancery', 'Futura',
+            ];
+            const fallback = COMMON.flatMap(f => [
+                { family: f, fullName: `system:${f}`,             style: 'Regular' },
+                { family: f, fullName: `system:${f}|bold`,        style: 'Bold' },
+                { family: f, fullName: `system:${f}|italic`,      style: 'Italic' },
+                { family: f, fullName: `system:${f}|bold|italic`, style: 'Bold Italic' },
+            ]);
+            state_fonts.system = [...BUILTIN_FONTS, ...fallback];
+        }
+    }
+
+    state_fonts.loaded  = true;
+    state_fonts.loading = false;
+}
+
+// ⚠️ NÃO pré-carregamos em background:
+// queryLocalFonts() sem gesto do usuário pode não mostrar o prompt de permissão
+// no Chrome, resultando em NotAllowedError silencioso e bloqueando futuras tentativas.
+// O carregamento é feito sob demanda ao abrir o font picker pela primeira vez.
+
+
+
+
+// ─── Font Picker Component ────────────────────────────────────────────────────
+// Cria um font picker interativo com busca, preview e suporte a fontes do sistema.
+function createFontPicker(elId, currentValue, onChange) {
+    const wrap = document.createElement('div');
+    wrap.className = 'font-picker-wrap';
+    wrap.dataset.elId = elId;
+
+    const BUILTIN_IDS = ['helv','helv-bold','times','times-bold','cour','cour-bold'];
+
+    const getLabelForValue = (v) => {
+        if (!v || v === 'helv') return 'Sans-Serif (Helvetica)';
+        if (v === 'helv-bold') return 'Sans-Serif Bold';
+        if (v === 'times') return 'Serif (Times)';
+        if (v === 'times-bold') return 'Serif Bold';
+        if (v === 'cour') return 'Mono (Courier)';
+        if (v === 'cour-bold') return 'Mono Bold';
+        if (v.startsWith('system:')) {
+            const parts = v.slice(7).split('|');
+            const style = parts.slice(1).join(' ');
+            return parts[0] + (style ? ` — ${style}` : '');
+        }
+        return v;
+    };
+
+    const buildTriggerHTML = (v) => {
+        const label = getLabelForValue(v);
+        const css   = getFontCSS(v);
+        const fam   = css.replace(/^(bold |italic )*/, '');
+        return `<span class="fp-preview" style="font-family:${fam}">${label}</span><span class="fp-arrow">▾</span>`;
+    };
+
+    wrap.innerHTML = `
+        <button type="button" class="font-picker-trigger" id="fpt-${elId}">
+            ${buildTriggerHTML(currentValue)}
+        </button>
+        <div class="font-picker-dropdown" id="fpd-${elId}">
+            <div class="font-picker-search">
+                <input type="text" placeholder="🔍 Buscar fonte..." id="fps-${elId}" autocomplete="off">
+            </div>
+            <div class="font-picker-list" id="fpl-${elId}">
+                <div class="font-picker-loading">Carregando fontes…</div>
+            </div>
+        </div>
+    `;
+
+    const trigger     = wrap.querySelector(`#fpt-${elId}`);
+    const dropdown    = wrap.querySelector(`#fpd-${elId}`);
+    const searchInput = wrap.querySelector(`#fps-${elId}`);
+    const list        = wrap.querySelector(`#fpl-${elId}`);
+
+    let currentFont = currentValue || 'helv';
+    let allFonts    = [];
+
+    // Declarado antes de renderList (que o referencia), definido logo após.
+    let doReloadFonts;
+
+    const renderList = (filter = '') => {
+
+        const q        = filter.toLowerCase().trim();
+        const builtins = allFonts.filter(f =>  BUILTIN_IDS.includes(f.fullName));
+        const system   = allFonts.filter(f => !BUILTIN_IDS.includes(f.fullName));
+        const match    = f => !q || f.family.toLowerCase().includes(q) || (f.style || '').toLowerCase().includes(q);
+
+        let html = '';
+
+        // ── Fontes embutidas ──
+        const bFiltered = builtins.filter(match);
+        if (bFiltered.length) {
+            html += `<div class="font-picker-group-label">Fontes Embutidas (PDF)</div>`;
+            for (const f of bFiltered) {
+                const sel = f.fullName === currentFont ? 'selected' : '';
+                const css = getFontCSS(f.fullName);
+                const fam = css.replace(/^(bold |italic )*/, '');
+                html += `<div class="font-picker-opt ${sel}" data-value="${f.fullName}">
+                    <span class="fp-sample" style="font-family:${fam};${css.includes('bold')?'font-weight:700;':''}${css.includes('italic')?'font-style:italic;':''}">AaBbCc 123</span>
+                    <span class="fp-name">${f.family}</span>
+                    <span class="fp-style-tag">${f.style || 'Regular'}</span>
+                </div>`;
+            }
+        }
+
+        // ── Fontes do sistema ──
+        const sFiltered = system.filter(match);
+        if (sFiltered.length) {
+            const apiLabel = ('queryLocalFonts' in window) ? `Fontes do PC (${sFiltered.length})` : `Fontes Comuns (${sFiltered.length})`;
+            html += `<div class="font-picker-group-label">${apiLabel}</div>`;
+            for (const f of sFiltered) {
+                const sel  = f.fullName === currentFont ? 'selected' : '';
+                const bld  = /bold/i.test(f.style)    ? 'font-weight:700;'   : '';
+                const itl  = /italic/i.test(f.style)  ? 'font-style:italic;' : '';
+                html += `<div class="font-picker-opt ${sel}" data-value="${f.fullName}">
+                    <span class="fp-sample" style="font-family:'${f.family}',sans-serif;${bld}${itl}">${f.family}</span>
+                    <span class="fp-style-tag">${f.style || 'Regular'}</span>
+                </div>`;
+            }
+        }
+
+        // ── Botão para carregar/recarregar fontes do PC ──
+        if ('queryLocalFonts' in window && !state_fonts.permissionDenied) {
+            const btnLabel = state_fonts.loadedFromAPI
+                ? '🔄 Recarregar fontes do PC'
+                : '🖥️ Carregar fontes instaladas no PC';
+            html += `<div class="fp-permission-row"><button class="fp-reload-btn" data-fp-reload="1">${btnLabel}</button></div>`;
+        } else if (!('queryLocalFonts' in window)) {
+            html += `<div class="fp-permission-row fp-tip">💡 Use o Chrome para acessar fontes instaladas no PC</div>`;
+        } else if (state_fonts.permissionDenied) {
+            html += `<div class="fp-permission-row fp-tip">⚠️ Permissão negada. Clique no ícone 🔒 na barra de endereço do Chrome e libere "Fontes locais".</div>`;
+        }
+
+        if (!bFiltered.length && !sFiltered.length) {
+            html = `<div class="font-picker-loading">Nenhuma fonte encontrada para "${filter}"</div>` + (html || '');
+        }
+
+        list.innerHTML = html;
+
+        // Bind do botão de reload (usa o closure doReloadFonts deste picker)
+        const reloadBtn = list.querySelector('[data-fp-reload]');
+        if (reloadBtn) reloadBtn.addEventListener('mousedown', e => { e.preventDefault(); doReloadFonts(); });
+
+
+        list.querySelectorAll('.font-picker-opt').forEach(opt => {
+            opt.addEventListener('mousedown', e => {
+                e.preventDefault();
+                const val = opt.dataset.value;
+                currentFont = val;
+                trigger.innerHTML = buildTriggerHTML(val);
+                closeDropdown();
+                if (onChange) onChange(val);
+            });
+        });
+
+        const sel = list.querySelector('.font-picker-opt.selected');
+        if (sel) sel.scrollIntoView({ block: 'nearest' });
+    };
+
+    // Reload de fontes: closure por instância (não global sobrescrito)
+    // Isso garante que cada picker aponte para seu próprio `list` e `searchInput`.
+    doReloadFonts = async () => {
+        state_fonts.loadedFromAPI = false; // forçar nova tentativa com a API
+        list.innerHTML = `<div class="font-picker-loading">🔄 Solicitando acesso às fontes do PC…</div>`;
+        await loadSystemFonts(true);
+        allFonts = state_fonts.system;
+        renderList(searchInput.value);
+    };
+    // Expõe no elemento wrap para o onclick inline do botão encontrar o closure certo
+    wrap._reloadFonts = doReloadFonts;
+
+    const openDropdown = async () => {
+        trigger.classList.add('open');
+        dropdown.classList.add('open');
+        searchInput.value = '';
+        searchInput.focus();
+
+        const needLoad = !state_fonts.loadedFromAPI && ('queryLocalFonts' in window) && !state_fonts.permissionDenied;
+        const firstTime = !state_fonts.loaded;
+
+        if (firstTime || needLoad) {
+            list.innerHTML = `<div class="font-picker-loading">🔄 Carregando fontes do PC…</div>`;
+            await loadSystemFonts();
+        }
+        allFonts = state_fonts.system;
+        renderList('');
+    };
+
+    const closeDropdown = () => {
+        trigger.classList.remove('open');
+        dropdown.classList.remove('open');
+    };
+
+    trigger.addEventListener('click', e => {
+        e.stopPropagation();
+        if (dropdown.classList.contains('open')) {
+            closeDropdown();
+        } else {
+            document.querySelectorAll('.font-picker-dropdown.open').forEach(d => d.classList.remove('open'));
+            document.querySelectorAll('.font-picker-trigger.open').forEach(t => t.classList.remove('open'));
+            openDropdown();
+        }
+    });
+
+    searchInput.addEventListener('input', () => renderList(searchInput.value));
+
+    // Fechar ao clicar fora
+    document.addEventListener('click', (e) => {
+        if (!wrap.contains(e.target)) closeDropdown();
+    }, { capture: true, passive: true });
+
+    return wrap;
+}
+
+// Gera o HTML do grupo de Fonte para uso em template strings de elementos
+// (será montado depois via JS, não inline HTML, pois precisa do DOM)
+function fontPickerHTML(elId, currentValue) {
+    // Retorna um placeholder que será substituído após inserção no DOM
+    return `<div class="font-picker-mount" data-el-id="${elId}" data-current="${currentValue || 'helv'}"></div>`;
+}
+
+// Monta todos os font pickers pendentes no DOM
+function mountFontPickers() {
+    document.querySelectorAll('.font-picker-mount').forEach(mount => {
+        if (mount.dataset.mounted) return;
+        mount.dataset.mounted = '1';
+        const elId = mount.dataset.elId;
+        const currentValue = mount.dataset.current || 'helv';
+        const picker = createFontPicker(elId, currentValue, (val) => {
+            updateEl(elId, 'font_name', val);
+        });
+        mount.replaceWith(picker);
+    });
+}
+
+
+
 // ─── Utility — Toast ─────────────────────────────────────────────────────────
 
 function toast(msg, type = 'info') {
@@ -1494,13 +1868,29 @@ function populateSelects() {
 
         } else if (id === 'imp-numeracao' || id === 'imp-numeracao-2') {
 
-            const selectedFmt = document.getElementById('imp-formato')?.value;
+            const selectedFmtId  = document.getElementById('imp-formato')?.value;
+            const selectedFmtObj = state.formatos.find(f => f.id === selectedFmtId);
 
-            const filteredNums = selectedFmt ? state.numeracoes.filter(n => n.formato_id === selectedFmt) : state.numeracoes;
+            let filteredNums;
+            if (selectedFmtObj) {
+                // Filtrar por TAMANHO do formato (width_mm × height_mm), não pelo ID exato
+                filteredNums = state.numeracoes.filter(n => {
+                    const numFmt = state.formatos.find(f => f.id === n.formato_id);
+                    return numFmt &&
+                        numFmt.width_mm  === selectedFmtObj.width_mm &&
+                        numFmt.height_mm === selectedFmtObj.height_mm;
+                });
+            } else {
+                filteredNums = state.numeracoes;
+            }
 
             sel.innerHTML = '<option value="">— Sem numeração —</option>' +
 
-                filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+                filteredNums.map(n => {
+                    const numFmt  = state.formatos.find(f => f.id === n.formato_id);
+                    const fmtLabel = numFmt ? ` (${numFmt.name})` : '';
+                    return `<option value="${n.id}">${n.name}${fmtLabel}</option>`;
+                }).join('');
 
         } else {
 
@@ -1509,6 +1899,7 @@ function populateSelects() {
                 state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 
         }
+
 
         if (cur) {
 
@@ -1570,9 +1961,20 @@ function populateSelects() {
 
         const selectedCor = state.cores.find(c => c.id === selectedCorId);
 
-        const filteredNums = (selectedCor && selectedCor.formato_id) 
+        const filteredNums = (selectedCor && selectedCor.formato_id)
 
-            ? state.numeracoes.filter(n => n.formato_id === selectedCor.formato_id) 
+            ? (() => {
+                // Filtrar por TAMANHO do formato da cor selecionada
+                const corFmt = state.formatos.find(f => f.id === selectedCor.formato_id);
+                return corFmt
+                    ? state.numeracoes.filter(n => {
+                        const numFmt = state.formatos.find(f => f.id === n.formato_id);
+                        return numFmt &&
+                            numFmt.width_mm  === corFmt.width_mm &&
+                            numFmt.height_mm === corFmt.height_mm;
+                    })
+                    : state.numeracoes;
+            })()
 
             : state.numeracoes;
 
@@ -1858,6 +2260,16 @@ function editNumeracao(id) {
 
     state.numPdfContent = n.pdf_content || "";
 
+    // Fallback: se o pdf_content da numeração estiver vazio mas algum elemento PDF tiver conteúdo,
+    // usar o pdf_content desse elemento como source (evita perder o PDF ao re-salvar sem recarregar)
+    if (!state.numPdfContent) {
+        const pdfEl = (state.numElements || []).find(el => el.type === 'PDF' && el.pdf_content);
+        if (pdfEl) {
+            state.numPdfContent = pdfEl.pdf_content;
+            console.info('[edit] numPdfContent recuperado do elemento PDF:', state.numPdfContent.substring(0, 60));
+        }
+    }
+
     if (state.numPdfContent) {
 
         const btn = document.getElementById('btn-remove-num-pdf');
@@ -1872,37 +2284,11 @@ function editNumeracao(id) {
 
         if (typeof pdfjsLib !== 'undefined') {
 
-            let pdfSrc = state.numPdfContent;
+            fetchPdfBytes(state.numPdfContent).then(async pdfData => {
 
-            if (pdfSrc.startsWith('data:')) {
+                if (!pdfData) return;
 
-                const b64 = pdfSrc.split(',')[1];
-
-                const binaryString = atob(b64);
-
-                const bytes = new Uint8Array(binaryString.length);
-
-                for (let i = 0; i < binaryString.length; i++) {
-
-                    bytes[i] = binaryString.charCodeAt(i);
-
-                }
-
-                pdfSrc = bytes;
-
-            }
-
-            if (typeof pdfSrc === 'string' && pdfSrc.startsWith('http')) {
-
-                const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-
-                pdfSrc = `${baseUrl}/api/proxy?url=${encodeURIComponent(pdfSrc)}`;
-
-            }
-
-            const loadArgs = (typeof pdfSrc === 'string') ? { url: pdfSrc } : { data: pdfSrc };
-
-            pdfjsLib.getDocument(loadArgs).promise.then(async pdf => {
+                const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
 
                 const page = await pdf.getPage(1);
 
@@ -1951,6 +2337,42 @@ function editNumeracao(id) {
     renderElementsList();
 
     drawCanvas();
+
+    // Pré-carregar _pdfCanvas para cada elemento PDF presente na numeração
+    // para garantir renderização correta (respeitando width_mm x height_mm do elemento)
+    (async () => {
+        for (const el of state.numElements) {
+            if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
+                el._pdfLoading = true;
+                try {
+                    const pdfData = await fetchPdfBytes(el.pdf_content);
+                    if (pdfData && typeof pdfjsLib !== 'undefined') {
+                        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                        const page = await pdf.getPage(1);
+                        const vp = page.getViewport({ scale: 2 });
+                        const offCanvas = document.createElement('canvas');
+                        offCanvas.width = Math.round(vp.width);
+                        offCanvas.height = Math.round(vp.height);
+                        const octx = offCanvas.getContext('2d');
+                        await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
+                        el._pdfCanvas = offCanvas;
+
+                        // Atualizar originalW/H se ainda não definidos
+                        if (!state.numPdfOriginalW) {
+                            const vpOrig = page.getViewport({ scale: 1 });
+                            state.numPdfOriginalW = vpOrig.width * (25.4 / 72);
+                            state.numPdfOriginalH = vpOrig.height * (25.4 / 72);
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[Editor] Erro pré-carregando _pdfCanvas do elemento:', err);
+                } finally {
+                    delete el._pdfLoading;
+                }
+            }
+        }
+        drawCanvas();
+    })();
 
 }
 
@@ -2296,9 +2718,13 @@ function drawCanvas() {
 
 
 
-    // Renderizar elementos
-
+    // Renderizar elementos (com clipping no formato para evitar overflow para fora dos limites)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, H);
+    ctx.clip();
     state.numElements.forEach(el => drawElement(ctx, el, S));
+    ctx.restore();
 
 }
 
@@ -2340,19 +2766,7 @@ function drawElement(ctx, el, S) {
 
         const fs = (el.font_size || 12) * S / 2.8346;
 
-        let fontStyle = 'Inter, sans-serif';
-
-        if (el.font_name === 'helv-bold') fontStyle = 'bold Inter, sans-serif';
-
-        else if (el.font_name === 'times') fontStyle = 'Times New Roman, serif';
-
-        else if (el.font_name === 'times-bold') fontStyle = 'bold Times New Roman, serif';
-
-        else if (el.font_name === 'cour') fontStyle = 'Courier New, monospace';
-
-        else if (el.font_name === 'cour-bold') fontStyle = 'bold Courier New, monospace';
-
-
+        const fontStyle = getFontCSS(el.font_name);
 
         ctx.font = `${fs}px ${fontStyle}`;
 
@@ -2564,46 +2978,62 @@ function drawElement(ctx, el, S) {
 
         const h = (el.height_mm || 20) * S;
 
-        const imgObj = el.type === 'SVG' ? state.numSvgImage : state.numPdfImage;
+        // Aplicar clipping para que a imagem nunca ultrapasse o bounding box do elemento
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, w, h);
+        ctx.clip();
 
-        const title = el.type === 'SVG' ? 'SVG' : 'PDF';
+        if (el.type === 'PDF') {
 
-        if (imgObj) {
+            // Preferir o canvas renderizado pelo PDF.js (mais fiel ao PDF real)
+            const pdfCanvas = el._pdfCanvas || null;
+            const imgObj = pdfCanvas || state.numPdfImage;
 
-            ctx.drawImage(imgObj, 0, 0, w, h);
+            if (imgObj) {
+                ctx.drawImage(imgObj, 0, 0, w, h);
+            } else {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(0, 0, w, h);
+                ctx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                ctx.fillStyle = color;
+                ctx.textAlign = 'center';
+                ctx.fillText('PDF (Sem arquivo)', w / 2, h / 2 + (h * 0.05));
+                ctx.textAlign = 'left';
+            }
 
         } else {
 
-            ctx.strokeStyle = color;
+            // SVG
+            const imgObj = state.numSvgImage;
 
-            ctx.lineWidth = 1;
-
-            ctx.strokeRect(0, 0, w, h);
-
-            ctx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
-
-            ctx.fillStyle = color;
-
-            ctx.textAlign = 'center';
-
-            ctx.fillText(title + ' (Sem arquivo)', w / 2, h / 2 + (h * 0.05));
-
-            ctx.textAlign = 'left';
+            if (imgObj) {
+                ctx.drawImage(imgObj, 0, 0, w, h);
+            } else {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(0, 0, w, h);
+                ctx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                ctx.fillStyle = color;
+                ctx.textAlign = 'center';
+                ctx.fillText('SVG (Sem arquivo)', w / 2, h / 2 + (h * 0.05));
+                ctx.textAlign = 'left';
+            }
 
         }
 
+        ctx.restore();
+
+        // Borda do bounding box (desenhada fora do clip para ficar sempre visível)
+        ctx.strokeStyle = isSelected ? '#3b82f6' : color;
+        ctx.lineWidth = isSelected ? 2 : 1;
         if (isSelected) {
-
-            ctx.strokeStyle = '#3b82f6';
-
-            ctx.lineWidth = 1.5;
-
             ctx.setLineDash([4, 2]);
-
             ctx.strokeRect(-2, -2, w + 4, h + 4);
-
             ctx.setLineDash([]);
-
+        } else {
+            ctx.strokeRect(0, 0, w, h);
         }
 
     }
@@ -2992,17 +3422,7 @@ function getElementSizeMM(el) {
 
             const fs = (el.font_size || 12) * S / 2.8346;
 
-            let fontStyle = 'Inter, sans-serif';
-
-            if (el.font_name === 'helv-bold') fontStyle = 'bold Inter, sans-serif';
-
-            else if (el.font_name === 'times') fontStyle = 'Times New Roman, serif';
-
-            else if (el.font_name === 'times-bold') fontStyle = 'bold Times New Roman, serif';
-
-            else if (el.font_name === 'cour') fontStyle = 'Courier New, monospace';
-
-            else if (el.font_name === 'cour-bold') fontStyle = 'bold Courier New, monospace';
+            const fontStyle = getFontCSS(el.font_name);
 
             ctx.font = `${fs}px ${fontStyle}`;
 
@@ -3047,6 +3467,8 @@ function getElementSizeMM(el) {
     else if (el.type === 'BARCODE') { w = el.width_mm || 40; h = el.height_mm || 10; }
 
     else if (el.type === 'SVG') { w = el.width_mm || 20; h = el.height_mm || 20; }
+
+    else if (el.type === 'PDF') { w = el.width_mm || 20; h = el.height_mm || 20; }
 
     return { w, h };
 
@@ -3440,6 +3862,14 @@ async function loadNumPdfFile(file) {
 
             state.numPdfImage = img;
 
+            // Guardar o canvas renderizado para uso direto nos elementos PDF
+            state.numPdfOffCanvas = off;
+
+            // Atualizar o _pdfCanvas de qualquer elemento PDF já existente (ex: ao trocar arquivo)
+            state.numElements.forEach(el => {
+                if (el.type === 'PDF') el._pdfCanvas = off;
+            });
+
             
 
             const vpOrig = page.getViewport({ scale: 1 });
@@ -3602,7 +4032,12 @@ window.addElement = function (type) {
 
     if (type === 'SVG') Object.assign(base, { width_mm: state.numSvgOriginalW || 20, height_mm: state.numSvgOriginalH || 20, svg_content: state.numSvgContent || '' });
 
-    if (type === 'PDF') Object.assign(base, { width_mm: state.numPdfOriginalW || 20, height_mm: state.numPdfOriginalH || 20, pdf_content: state.numPdfContent || '' });
+    if (type === 'PDF') Object.assign(base, {
+        width_mm: state.numPdfOriginalW || 20,
+        height_mm: state.numPdfOriginalH || 20,
+        pdf_content: state.numPdfContent || '',
+        _pdfCanvas: state.numPdfOffCanvas || undefined
+    });
 
     if (type === 'PICOTE') Object.assign(base, { name: 'Picote' });
 
@@ -3730,24 +4165,8 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group"><label>Fonte</label>
-
-                    <select class="form-control" onchange="updateEl('${el.id}','font_name',this.value)">
-
-                        <option value="helv" ${el.font_name === 'helv' ? 'selected' : ''}>Sans-Serif (Helvetica)</option>
-
-                        <option value="helv-bold" ${el.font_name === 'helv-bold' ? 'selected' : ''}>Sans-Serif Bold</option>
-
-                        <option value="times" ${el.font_name === 'times' ? 'selected' : ''}>Serif (Times)</option>
-
-                        <option value="times-bold" ${el.font_name === 'times-bold' ? 'selected' : ''}>Serif Bold</option>
-
-                        <option value="cour" ${el.font_name === 'cour' ? 'selected' : ''}>Monospace (Courier)</option>
-
-                        <option value="cour-bold" ${el.font_name === 'cour-bold' ? 'selected' : ''}>Monospace Bold</option>
-
-                    </select>
-
+                <div class="form-group el-full"><label>Fonte</label>
+                    ${fontPickerHTML(el.id, el.font_name)}
                 </div>
 
                 <div class="form-group"><label>Tamanho (pt)</label><input class="form-control el-font" type="number" value="${el.font_size}" min="4" max="120" onchange="updateEl('${el.id}','font_size',+this.value)"></div>
@@ -3770,24 +4189,8 @@ function renderElementsList() {
 
                 <div class="form-group el-full"><label>Texto Fixo</label><input class="form-control" type="text" value="${el.fixed_value || ''}" onchange="updateEl('${el.id}','fixed_value',this.value)"></div>
 
-                <div class="form-group"><label>Fonte</label>
-
-                    <select class="form-control" onchange="updateEl('${el.id}','font_name',this.value)">
-
-                        <option value="helv" ${el.font_name === 'helv' ? 'selected' : ''}>Sans-Serif (Helvetica)</option>
-
-                        <option value="helv-bold" ${el.font_name === 'helv-bold' ? 'selected' : ''}>Sans-Serif Bold</option>
-
-                        <option value="times" ${el.font_name === 'times' ? 'selected' : ''}>Serif (Times)</option>
-
-                        <option value="times-bold" ${el.font_name === 'times-bold' ? 'selected' : ''}>Serif Bold</option>
-
-                        <option value="cour" ${el.font_name === 'cour' ? 'selected' : ''}>Monospace (Courier)</option>
-
-                        <option value="cour-bold" ${el.font_name === 'cour-bold' ? 'selected' : ''}>Monospace Bold</option>
-
-                    </select>
-
+                <div class="form-group el-full"><label>Fonte</label>
+                    ${fontPickerHTML(el.id, el.font_name)}
                 </div>
 
                 <div class="form-group"><label>Tamanho (pt)</label><input class="form-control" type="number" value="${el.font_size}" min="4" max="120" onchange="updateEl('${el.id}','font_size',+this.value)"></div>`;
@@ -3977,6 +4380,9 @@ function renderElementsList() {
         </div>`;
 
     }).join('');
+
+    // Montar os Font Pickers (substitui os placeholders .font-picker-mount por componentes reais)
+    requestAnimationFrame(() => mountFontPickers());
 
 }
 
@@ -4239,19 +4645,24 @@ window.saveNumeracao = async function () {
 
             svg_filename: state.numSvgFilename || "",
 
-            pdf_content: pdfUrl || "",
+            // pdf_content da numeração: usar pdfUrl se válido, senão manter o conteúdo anterior de state
+            // (que pode ter sido recuperado de um elemento PDF no editNumeracao como fallback)
+            pdf_content: pdfUrl || state.numPdfContent || "",
 
             pdf_filename: state.numPdfFilename || "",
 
             elements: state.numElements.map(el => {
 
-                const e = { ...el };
+                // Remover propriedades internas do frontend (não serializáveis)
+                const { _pdfCanvas, _pdfLoading, _svgImage, _pdfPreview, ...e } = el;
 
                 if (e.type === 'FIXED') e.fixed = true;
 
-                if (e.type === 'SVG') e.svg_content = svgUrl || "";
+                if (e.type === 'SVG') e.svg_content = svgUrl || e.svg_content || "";
 
-                if (e.type === 'PDF') e.pdf_content = pdfUrl || "";
+                // Para PDF: usar pdfUrl se válido, senão manter o pdf_content original do elemento
+                // Isso evita apagar o PDF ao re-editar sem recarregar o arquivo
+                if (e.type === 'PDF') e.pdf_content = pdfUrl || e.pdf_content || "";
 
                 return e;
 
@@ -5213,19 +5624,7 @@ function drawPreview() {
 
                         const fs = (el.font_size || 12) * scale;
 
-                        let fontStyle = 'Inter, sans-serif';
-
-                        if (el.font_name === 'helv-bold') fontStyle = 'bold Inter, sans-serif';
-
-                        else if (el.font_name === 'times') fontStyle = 'Times New Roman, serif';
-
-                        else if (el.font_name === 'times-bold') fontStyle = 'bold Times New Roman, serif';
-
-                        else if (el.font_name === 'cour') fontStyle = 'Courier New, monospace';
-
-                        else if (el.font_name === 'cour-bold') fontStyle = 'bold Courier New, monospace';
-
-
+                        const fontStyle = getFontCSS(el.font_name);
 
                         ctx.font = `${fs}px ${fontStyle}`;
 
@@ -5341,31 +5740,9 @@ function drawPreview() {
 
                                 try {
 
-                                    let pdfData;
+                                    const pdfData = await fetchPdfBytes(el.pdf_content);
 
-                                    const content = el.pdf_content;
-
-                                    if (content.startsWith('http')) {
-
-                                        const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-
-                                        const resp = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(content)}`);
-
-                                        pdfData = await resp.arrayBuffer();
-
-                                    } else {
-
-                                        const b64 = content.includes('base64,') ? content.split('base64,')[1] : content;
-
-                                        const binStr = atob(b64);
-
-                                        const bytes = new Uint8Array(binStr.length);
-
-                                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-
-                                        pdfData = bytes.buffer;
-
-                                    }
+                                    if (!pdfData) throw new Error('fetchPdfBytes retornou null');
 
                                     const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
 
@@ -5381,15 +5758,13 @@ function drawPreview() {
 
                                     const octx = offCanvas.getContext('2d');
 
-                                    // background: 'rgba(0,0,0,0)' impede o PDF.js de preencher o fundo com branco
-
                                     await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
 
                                     el._pdfCanvas = offCanvas;
 
                                     delete el._pdfLoading;
 
-                                    drawPreview(); // redesenhar o preview após carregar
+                                    drawPreview();
 
                                 } catch (errPdf) {
 
@@ -5977,31 +6352,9 @@ function updateImpSummary() {
 
                     try {
 
-                        let pdfData;
+                        const pdfData = await fetchPdfBytes(el.pdf_content);
 
-                        const content = el.pdf_content;
-
-                        if (content.startsWith('http')) {
-
-                            const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-
-                            const resp = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(content)}`);
-
-                            pdfData = await resp.arrayBuffer();
-
-                        } else {
-
-                            const b64 = content.includes('base64,') ? content.split('base64,')[1] : content;
-
-                            const binStr = atob(b64);
-
-                            const bytes = new Uint8Array(binStr.length);
-
-                            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-
-                            pdfData = bytes.buffer;
-
-                        }
+                        if (!pdfData) throw new Error('fetchPdfBytes retornou null');
 
                         const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
 
@@ -6016,8 +6369,6 @@ function updateImpSummary() {
                         offCanvas.height = Math.round(vp.height);
 
                         const octx = offCanvas.getContext('2d');
-
-                        // background: 'rgba(0,0,0,0)' impede o PDF.js de preencher o fundo com branco
 
                         await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
 
@@ -8831,19 +9182,7 @@ window.onAmostraNumeracaoSelect = function() {
 
                 const fs = (el.font_size || 12) * S / 2.8346;
 
-                let fontStyle = 'Inter, sans-serif';
-
-                if (el.font_name === 'helv-bold') fontStyle = 'bold Inter, sans-serif';
-
-                else if (el.font_name === 'times') fontStyle = 'Times New Roman, serif';
-
-                else if (el.font_name === 'times-bold') fontStyle = 'bold Times New Roman, serif';
-
-                else if (el.font_name === 'cour') fontStyle = 'Courier New, monospace';
-
-                else if (el.font_name === 'cour-bold') fontStyle = 'bold Courier New, monospace';
-
-
+                const fontStyle = getFontCSS(el.font_name);
 
                 ctx.font = `${fs}px ${fontStyle}`;
 

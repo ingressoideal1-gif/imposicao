@@ -295,8 +295,69 @@ class ImpositionEngine:
                 "cour": "cour",
                 "cour-bold": "cobo"
             }
-            font_name = font_map.get(raw_font_name, "helv")
+
+            font_name = "helv"
+            font_file = None  # None = usar fonte embutida Base-14
+
+            if raw_font_name.startswith("system:"):
+                # Fonte do sistema: "system:NomeFamilia|bold|italic"
+                parts = raw_font_name[7:].split("|")
+                family = parts[0]
+                is_bold = "bold" in parts[1:]
+                is_italic = "italic" in parts[1:]
+
+                # Tenta localizar o arquivo TTF nas pastas de fontes do sistema
+                import glob as _glob
+                font_dirs = [
+                    "C:/Windows/Fonts",
+                    "/usr/share/fonts",
+                    "/System/Library/Fonts",
+                    os.path.expanduser("~/Library/Fonts"),
+                ]
+                # Normaliza o nome da família para comparação: "Arial" → "arial"
+                family_lower = family.lower().replace(" ", "")
+                found_file = None
+                for fdir in font_dirs:
+                    if not os.path.isdir(fdir):
+                        continue
+                    for ext in ("*.ttf", "*.otf", "*.TTF", "*.OTF"):
+                        for fpath in _glob.glob(os.path.join(fdir, ext)):
+                            base = os.path.splitext(os.path.basename(fpath))[0].lower().replace(" ", "").replace("-", "").replace("_", "")
+                            fam_norm = family_lower.replace("-", "").replace("_", "")
+                            bold_match = ("bold" in base) == is_bold
+                            italic_match = ("italic" in base or "oblique" in base) == is_italic
+                            if base.startswith(fam_norm) and bold_match and italic_match:
+                                found_file = fpath
+                                break
+                            # Match menos restritivo: nome da família está no arquivo
+                            if fam_norm in base and not found_file:
+                                if bold_match and italic_match:
+                                    found_file = fpath
+                        if found_file:
+                            break
+                    if found_file:
+                        break
+
+                if found_file:
+                    font_name = family  # Nome único para embutir no PDF
+                    font_file = found_file
+                else:
+                    # Fallback para fonte embutida
+                    font_name = "hebo" if is_bold else "helv"
+                    font_file = None
+                    print(f"[engine] Fonte '{family}' não encontrada no sistema, usando Helvetica{'Bold' if is_bold else ''}")
+            else:
+                font_name = font_map.get(raw_font_name, "helv")
+
             # Ponto de inserção Y em PyMuPDF é baseline; ajustamos pela font_size
+            insert_kwargs = {
+                "fontsize": font_size,
+                "fontname": font_name,
+                "color": rgb,
+            }
+            if font_file:
+                insert_kwargs["fontfile"] = font_file
+
             if angle != 0:
                 # Para rotação, usamos insert_text com morph
                 origin = fitz.Point(el_x, el_y + font_size)
@@ -304,20 +365,17 @@ class ImpositionEngine:
                 page.insert_text(
                     origin,
                     val_str,
-                    fontsize=font_size,
-                    fontname=font_name,
-                    color=rgb,
                     morph=(pivot, fitz.Matrix(math.cos(math.radians(angle)), -math.sin(math.radians(angle)),
-                                              math.sin(math.radians(angle)),  math.cos(math.radians(angle)), 0, 0))
+                                              math.sin(math.radians(angle)),  math.cos(math.radians(angle)), 0, 0)),
+                    **insert_kwargs
                 )
             else:
                 page.insert_text(
                     (el_x, el_y + font_size),
                     val_str,
-                    fontsize=font_size,
-                    fontname=font_name,
-                    color=rgb,
+                    **insert_kwargs
                 )
+
 
         elif t == "QR":
             size = el.get("_size", 42.5)
