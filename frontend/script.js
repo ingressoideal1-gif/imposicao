@@ -1852,80 +1852,25 @@ function populateSelects() {
 
 
 
-    // Imposição
+    // Imposição — formato e saída
+    const selImpFmt = document.getElementById('imp-formato');
+    if (selImpFmt) {
+        const cur = selImpFmt.value;
+        selImpFmt.innerHTML = '<option value="">— Selecione —</option>' +
+            state.formatos.map(f => `<option value="${f.id}">${f.name} (${f.width_mm}×${f.height_mm}mm)</option>`).join('');
+        if (cur) selImpFmt.value = cur;
+    }
 
-    ['imp-formato', 'imp-numeracao', 'imp-numeracao-2', 'imp-saida'].forEach(id => {
+    const selImpSaida = document.getElementById('imp-saida');
+    if (selImpSaida) {
+        const cur = selImpSaida.value;
+        selImpSaida.innerHTML = '<option value="">— Selecione —</option>' +
+            state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        if (cur) selImpSaida.value = cur;
+    }
 
-        const sel = document.getElementById(id);
-
-        const cur = sel.value;
-
-        if (id === 'imp-formato') {
-
-            sel.innerHTML = '<option value="">— Selecione —</option>' +
-
-                state.formatos.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
-
-        } else if (id === 'imp-numeracao' || id === 'imp-numeracao-2') {
-
-            const selectedFmtId  = document.getElementById('imp-formato')?.value;
-            const selectedFmtObj = state.formatos.find(f => String(f.id) === String(selectedFmtId));
-
-            // DEBUG — remover após confirmar
-            console.log('[DEBUG filtro numeração]', {
-                selectedFmtId,
-                selectedFmtIdType: typeof selectedFmtId,
-                selectedFmtObj,
-                formatos: state.formatos.map(f => ({ id: f.id, idType: typeof f.id, w: f.width_mm, wType: typeof f.width_mm, h: f.height_mm })),
-                numeracoes: state.numeracoes.map(n => ({ id: n.id, formato_id: n.formato_id, fmtIdType: typeof n.formato_id })),
-            });
-
-            let filteredNums;
-            if (selectedFmtObj) {
-                // Filtrar por TAMANHO do formato (width_mm × height_mm), não pelo ID exato
-                // parseFloat + String() garantem comparação correta independente de tipos da API
-                const selW = parseFloat(selectedFmtObj.width_mm);
-                const selH = parseFloat(selectedFmtObj.height_mm);
-                filteredNums = state.numeracoes.filter(n => {
-                    const numFmt = state.formatos.find(f => String(f.id) === String(n.formato_id));
-                    return numFmt &&
-                        parseFloat(numFmt.width_mm)  === selW &&
-                        parseFloat(numFmt.height_mm) === selH;
-                });
-                console.log('[DEBUG] selW:', selW, 'selH:', selH, 'filteredNums:', filteredNums.length, filteredNums.map(n=>n.name));
-            } else {
-                filteredNums = state.numeracoes;
-                console.warn('[DEBUG] selectedFmtObj não encontrado — mostrando todas as numerações');
-            }
-
-            sel.innerHTML = '<option value="">— Sem numeração —</option>' +
-
-                filteredNums.map(n => {
-                    const numFmt  = state.formatos.find(f => f.id === n.formato_id);
-                    const fmtLabel = numFmt ? ` (${numFmt.name})` : '';
-                    return `<option value="${n.id}">${n.name}${fmtLabel}</option>`;
-                }).join('');
-
-        } else {
-
-            sel.innerHTML = '<option value="">— Selecione —</option>' +
-
-                state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-
-        }
-
-
-        if (cur) {
-
-            const optionExists = Array.from(sel.options).some(opt => opt.value === cur);
-
-            if (optionExists) sel.value = cur;
-
-            else sel.value = '';
-
-        }
-
-    });
+    // Imposição — numerações (filtradas por tamanho do formato selecionado)
+    populateImpNumeracoes();
 
 
 
@@ -2007,8 +1952,58 @@ function populateSelects() {
 }
 
 
+// ─── Popula Numeração 1 e 2 na Imposição, filtradas por TAMANHO do formato ───
+function populateImpNumeracoes() {
+    const fmtSel = document.getElementById('imp-formato');
+    if (!fmtSel) return;
+
+    const selectedFmtId = fmtSel.value;
+
+    // Busca o formato selecionado
+    const selectedFmt = selectedFmtId
+        ? state.formatos.find(f => String(f.id) === String(selectedFmtId))
+        : null;
+
+    // Filtra numerações cujo formato tenha o mesmo tamanho (width_mm × height_mm)
+    let filteredNums;
+    if (selectedFmt) {
+        const targetW = parseFloat(selectedFmt.width_mm);
+        const targetH = parseFloat(selectedFmt.height_mm);
+        filteredNums = state.numeracoes.filter(n => {
+            const nFmt = state.formatos.find(f => String(f.id) === String(n.formato_id));
+            if (!nFmt) return false;
+            return parseFloat(nFmt.width_mm) === targetW && parseFloat(nFmt.height_mm) === targetH;
+        });
+        console.info(`[Imposição] Formato "${selectedFmt.name}" (${targetW}×${targetH}mm) → ${filteredNums.length} numeração(ões): [${filteredNums.map(n => n.name).join(', ')}]`);
+    } else {
+        filteredNums = state.numeracoes;
+    }
+
+    // Popula Numeração 1 e Numeração 2
+    ['imp-numeracao', 'imp-numeracao-2'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const cur = sel.value;
+
+        sel.innerHTML = '<option value="">— Sem numeração —</option>' +
+            filteredNums.map(n => {
+                const nFmt = state.formatos.find(f => String(f.id) === String(n.formato_id));
+                const label = nFmt ? ` (${nFmt.name})` : '';
+                return `<option value="${n.id}">${n.name}${label}</option>`;
+            }).join('');
+
+        // Restaurar seleção anterior se ainda existir na lista filtrada
+        if (cur && filteredNums.some(n => String(n.id) === String(cur))) {
+            sel.value = cur;
+        } else {
+            sel.value = '';
+        }
+    });
+}
+
 
 // ─── NUMERAÇÃO EDITOR ─────────────────────────────────────────────────────────
+
 
 
 
