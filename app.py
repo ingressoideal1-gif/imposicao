@@ -2,6 +2,17 @@ import json
 import shutil
 import tempfile
 import os
+
+# ─── Monkeypatch Starlette MultiPartParser para permitir uploads/campos maiores (ex: PDFs em base64 grandes) ───
+import starlette.formparsers
+_original_init = starlette.formparsers.MultiPartParser.__init__
+def _patched_init(self, *args, **kwargs):
+    kwargs["max_part_size"] = 100 * 1024 * 1024  # Aumenta o limite para 100MB
+    _spool_max_size = 100 * 1024 * 1024          # Aumenta o limite do spool
+    self.spool_max_size = _spool_max_size
+    _original_init(self, *args, **kwargs)
+starlette.formparsers.MultiPartParser.__init__ = _patched_init
+
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles

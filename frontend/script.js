@@ -4127,69 +4127,64 @@ function deselectAllCards() {
 // ─── Salvar Numeração ─────────────────────────────────────────────────────────
 
 async function uploadToStorage(content, fileName, path) {
-
     if (!content) return content;
-
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return content;
-
     if (typeof content === 'string' && content.startsWith('http')) return content; // Already a URL
 
-
-
     let blob;
-
-    if (content instanceof File || content instanceof Blob) {
-
-        blob = content;
-
-    } else if (typeof content === 'string' && content.startsWith('data:')) {
-
-        const res = await fetch(content);
-
-        blob = await res.blob();
-
-    } else {
-
-        blob = new Blob([content], { type: 'image/svg+xml' });
-
+    try {
+        if (content instanceof File || content instanceof Blob) {
+            blob = content;
+        } else if (typeof content === 'string' && content.startsWith('data:')) {
+            const res = await fetch(content);
+            blob = await res.blob();
+        } else {
+            blob = new Blob([content], { type: 'image/svg+xml' });
+        }
+    } catch (fetchErr) {
+        console.warn("Erro ao converter conteúdo em Blob usando fetch, tentando conversão manual:", fetchErr);
+        try {
+            if (typeof content === 'string' && content.startsWith('data:')) {
+                const parts = content.split(',');
+                const mime = parts[0].match(/:(.*?);/)[1];
+                const bstr = atob(parts[1]);
+                let n = bstr.length;
+                const u8arr = new Uint8Array(n);
+                while (n--) {
+                    u8arr[n] = bstr.charCodeAt(n);
+                }
+                blob = new Blob([u8arr], { type: mime });
+            } else {
+                throw fetchErr;
+            }
+        } catch (convErr) {
+            console.error("Falha na conversão manual do base64:", convErr);
+            return content; // Fallback: retorna o conteúdo original (base64)
+        }
     }
-
-
 
     const safeName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : 'arquivo';
-
     const finalPath = `${path}/${Date.now()}_${safeName}`;
-
     
+    try {
+        const { data, error } = await supabaseClient.storage
+            .from('imposicao-storage')
+            .upload(finalPath, blob, { upsert: true });
 
-    const { data, error } = await supabaseClient.storage
+        if (error) {
+            console.warn("Erro no upload para o Supabase Storage, salvando como Base64:", error);
+            return content; // Fallback: retorna o base64 para salvar diretamente no DB
+        }
 
-        .from('imposicao-storage')
+        const { data: publicUrlData } = supabaseClient.storage
+            .from('imposicao-storage')
+            .getPublicUrl(finalPath);
 
-        .upload(finalPath, blob, { upsert: true });
-
-
-
-    if (error) {
-
-        console.error("Erro no upload para o Supabase Storage:", error);
-
-        throw new Error("Falha no upload do arquivo.");
-
+        return publicUrlData.publicUrl;
+    } catch (uploadErr) {
+        console.warn("Falha de rede/exceção ao enviar para o Supabase Storage, salvando como Base64:", uploadErr);
+        return content; // Fallback: retorna o base64 para salvar diretamente no DB
     }
-
-
-
-    const { data: publicUrlData } = supabaseClient.storage
-
-        .from('imposicao-storage')
-
-        .getPublicUrl(finalPath);
-
-
-
-    return publicUrlData.publicUrl;
-
 }
 
 

@@ -3,11 +3,13 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 let supabaseClient = null;
 
-if (typeof supabase !== 'undefined') {
+const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.protocol === 'file:';
+
+if (typeof supabase !== 'undefined' && !isLocalhost) {
     supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     console.log("Supabase inicializado com sucesso!");
 } else {
-    console.error("Biblioteca do Supabase não encontrada no escopo global.");
+    console.log("Ambiente local detectado: Supabase desativado, utilizando API local FastAPI.");
 }
 
 // URL base do backend FastAPI.
