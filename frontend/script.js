@@ -1869,22 +1869,33 @@ function populateSelects() {
         } else if (id === 'imp-numeracao' || id === 'imp-numeracao-2') {
 
             const selectedFmtId  = document.getElementById('imp-formato')?.value;
-            const selectedFmtObj = state.formatos.find(f => f.id === selectedFmtId);
+            const selectedFmtObj = state.formatos.find(f => String(f.id) === String(selectedFmtId));
+
+            // DEBUG — remover após confirmar
+            console.log('[DEBUG filtro numeração]', {
+                selectedFmtId,
+                selectedFmtIdType: typeof selectedFmtId,
+                selectedFmtObj,
+                formatos: state.formatos.map(f => ({ id: f.id, idType: typeof f.id, w: f.width_mm, wType: typeof f.width_mm, h: f.height_mm })),
+                numeracoes: state.numeracoes.map(n => ({ id: n.id, formato_id: n.formato_id, fmtIdType: typeof n.formato_id })),
+            });
 
             let filteredNums;
             if (selectedFmtObj) {
                 // Filtrar por TAMANHO do formato (width_mm × height_mm), não pelo ID exato
-                // parseFloat garante comparação numérica mesmo se a API retornar strings
+                // parseFloat + String() garantem comparação correta independente de tipos da API
                 const selW = parseFloat(selectedFmtObj.width_mm);
                 const selH = parseFloat(selectedFmtObj.height_mm);
                 filteredNums = state.numeracoes.filter(n => {
-                    const numFmt = state.formatos.find(f => f.id === n.formato_id);
+                    const numFmt = state.formatos.find(f => String(f.id) === String(n.formato_id));
                     return numFmt &&
                         parseFloat(numFmt.width_mm)  === selW &&
                         parseFloat(numFmt.height_mm) === selH;
                 });
+                console.log('[DEBUG] selW:', selW, 'selH:', selH, 'filteredNums:', filteredNums.length, filteredNums.map(n=>n.name));
             } else {
                 filteredNums = state.numeracoes;
+                console.warn('[DEBUG] selectedFmtObj não encontrado — mostrando todas as numerações');
             }
 
             sel.innerHTML = '<option value="">— Sem numeração —</option>' +
