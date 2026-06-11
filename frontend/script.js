@@ -1874,11 +1874,14 @@ function populateSelects() {
             let filteredNums;
             if (selectedFmtObj) {
                 // Filtrar por TAMANHO do formato (width_mm × height_mm), não pelo ID exato
+                // parseFloat garante comparação numérica mesmo se a API retornar strings
+                const selW = parseFloat(selectedFmtObj.width_mm);
+                const selH = parseFloat(selectedFmtObj.height_mm);
                 filteredNums = state.numeracoes.filter(n => {
                     const numFmt = state.formatos.find(f => f.id === n.formato_id);
                     return numFmt &&
-                        numFmt.width_mm  === selectedFmtObj.width_mm &&
-                        numFmt.height_mm === selectedFmtObj.height_mm;
+                        parseFloat(numFmt.width_mm)  === selW &&
+                        parseFloat(numFmt.height_mm) === selH;
                 });
             } else {
                 filteredNums = state.numeracoes;
@@ -1965,15 +1968,17 @@ function populateSelects() {
 
             ? (() => {
                 // Filtrar por TAMANHO do formato da cor selecionada
+                // parseFloat garante comparação numérica mesmo se a API retornar strings
                 const corFmt = state.formatos.find(f => f.id === selectedCor.formato_id);
-                return corFmt
-                    ? state.numeracoes.filter(n => {
-                        const numFmt = state.formatos.find(f => f.id === n.formato_id);
-                        return numFmt &&
-                            numFmt.width_mm  === corFmt.width_mm &&
-                            numFmt.height_mm === corFmt.height_mm;
-                    })
-                    : state.numeracoes;
+                if (!corFmt) return state.numeracoes;
+                const corW = parseFloat(corFmt.width_mm);
+                const corH = parseFloat(corFmt.height_mm);
+                return state.numeracoes.filter(n => {
+                    const numFmt = state.formatos.find(f => f.id === n.formato_id);
+                    return numFmt &&
+                        parseFloat(numFmt.width_mm)  === corW &&
+                        parseFloat(numFmt.height_mm) === corH;
+                });
             })()
 
             : state.numeracoes;
