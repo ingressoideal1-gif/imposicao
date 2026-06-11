@@ -281,13 +281,19 @@
                                 placeholder="Ex: Numeração Ingresso VIP">
                         </div>
                         <div class="form-group">
-                            <label>Formato Base</label>
+                            <label>Formato Base <span style="font-weight:400;color:var(--text-dim);font-size:0.78rem;">(define o tamanho do canvas)</span></label>
                             <select class="form-control" id="num-formato" onchange="onFormatoSelect()">
                                 <option value="">— Selecione um Formato —</option>
                             </select>
                         </div>
                     </div>
+                    <!-- Checkboxes de formatos compatíveis -->
+                    <div id="num-formatos-compat" style="display:none; margin: 12px 0 0 0; padding: 12px 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--radius);">
+                        <label style="display:block; margin-bottom:8px; font-size:0.82rem; font-weight:600;">📐 Formatos compatíveis com esta numeração <span style="font-weight:400;color:var(--text-dim);font-size:0.75rem;">(marque todos os formatos onde esta numeração deve aparecer na Imposição)</span></label>
+                        <div id="num-formatos-checks" style="display:flex; flex-wrap:wrap; gap:8px 16px;"></div>
+                    </div>
                     <div class="divider" style="margin: 16px 0 12px 0;"></div>
+
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
                         <div class="form-group">
                             <label>Banco de Dados (CSV)</label>
@@ -1010,7 +1016,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
-    <script src="script.js?v=11"></script>
+    <script src="script.js?v=12"></script>
 
 
 </body>

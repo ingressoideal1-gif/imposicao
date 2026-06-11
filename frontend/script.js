@@ -1921,23 +1921,14 @@ function populateSelects() {
         const selectedCor = state.cores.find(c => c.id === selectedCorId);
 
         const filteredNums = (selectedCor && selectedCor.formato_id)
-
-            ? (() => {
-                // Filtrar por TAMANHO do formato da cor selecionada
-                // parseFloat garante comparação numérica mesmo se a API retornar strings
-                const corFmt = state.formatos.find(f => f.id === selectedCor.formato_id);
-                if (!corFmt) return state.numeracoes;
-                const corW = parseFloat(corFmt.width_mm);
-                const corH = parseFloat(corFmt.height_mm);
-                return state.numeracoes.filter(n => {
-                    const numFmt = state.formatos.find(f => f.id === n.formato_id);
-                    return numFmt &&
-                        parseFloat(numFmt.width_mm)  === corW &&
-                        parseFloat(numFmt.height_mm) === corH;
-                });
-            })()
-
+            ? state.numeracoes.filter(n => {
+                // formato_ids é o array de formatos compatíveis (novo campo)
+                // fallback: se não existir, usa [formato_id] (dados antigos)
+                const ids = n.formato_ids || [n.formato_id];
+                return ids.some(id => String(id) === String(selectedCor.formato_id));
+            })
             : state.numeracoes;
+
 
         selAmNum.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
 
@@ -1959,22 +1950,15 @@ function populateImpNumeracoes() {
 
     const selectedFmtId = fmtSel.value;
 
-    // Busca o formato selecionado
-    const selectedFmt = selectedFmtId
-        ? state.formatos.find(f => String(f.id) === String(selectedFmtId))
-        : null;
-
-    // Filtra numerações cujo formato tenha o mesmo tamanho (width_mm × height_mm)
+    // Filtra numerações cujo formato_ids inclui o formato selecionado
     let filteredNums;
-    if (selectedFmt) {
-        const targetW = parseFloat(selectedFmt.width_mm);
-        const targetH = parseFloat(selectedFmt.height_mm);
+    if (selectedFmtId) {
         filteredNums = state.numeracoes.filter(n => {
-            const nFmt = state.formatos.find(f => String(f.id) === String(n.formato_id));
-            if (!nFmt) return false;
-            return parseFloat(nFmt.width_mm) === targetW && parseFloat(nFmt.height_mm) === targetH;
+            // formato_ids é o array de formatos compatíveis (novo campo)
+            // fallback: se não existir, usa [formato_id] (dados antigos)
+            const ids = n.formato_ids || [n.formato_id];
+            return ids.some(id => String(id) === String(selectedFmtId));
         });
-        console.info(`[Imposição] Formato "${selectedFmt.name}" (${targetW}×${targetH}mm) → ${filteredNums.length} numeração(ões): [${filteredNums.map(n => n.name).join(', ')}]`);
     } else {
         filteredNums = state.numeracoes;
     }
@@ -2000,6 +1984,7 @@ function populateImpNumeracoes() {
         }
     });
 }
+
 
 
 // ─── NUMERAÇÃO EDITOR ─────────────────────────────────────────────────────────
@@ -2195,9 +2180,13 @@ function editNumeracao(id) {
 
     document.getElementById('btn-num-cancel').style.display = 'inline-flex';
 
-
+    // Restaurar checkboxes de formatos compatíveis
+    // onFormatoSelect(false) renderiza os checkboxes com auto-marcação por tamanho;
+    // depois sobrescrevemos com os formato_ids salvos.
+    // (chamado mais abaixo via onFormatoSelect(false))
 
     // Carregar elementos e recalcular contador para evitar colisões de ID (Bug 3)
+
 
     state.numElements = (n.elements || []).map(e => ({ ...e }));
 
@@ -2345,7 +2334,20 @@ function editNumeracao(id) {
 
     onFormatoSelect(false);
 
+    // Restaurar checkboxes de formatos compatíveis a partir dos formato_ids salvos
+    if (n.formato_ids && n.formato_ids.length) {
+        const savedIds = new Set(n.formato_ids);
+        document.querySelectorAll('#num-formatos-checks input[type="checkbox"]').forEach(cb => {
+            if (cb.value === n.formato_id) {
+                cb.checked = true; // formato base sempre marcado
+            } else {
+                cb.checked = savedIds.has(cb.value);
+            }
+        });
+    }
+
     renderElementsList();
+
 
     drawCanvas();
 
@@ -2443,8 +2445,8 @@ window.duplicateCatalogNumeracao = async function (id) {
 
 
 
-function cancelNumEdit() {
 
+function cancelNumEdit() {
     document.getElementById('num-id').value = '';
 
     document.getElementById('num-name').value = '';
@@ -2453,11 +2455,16 @@ function cancelNumEdit() {
 
     document.getElementById('btn-num-cancel').style.display = 'none';
 
+    // Esconder checkboxes de formatos compatíveis
+    const compatContainer = document.getElementById('num-formatos-compat');
+    if (compatContainer) compatContainer.style.display = 'none';
+
     state.numElements = [];
 
     state.numFormato = null;
 
     state.bgImage = null;
+
 
     const btnRemove = document.getElementById('btn-remove-bg');
 
@@ -2485,39 +2492,60 @@ window.cancelNumEdit = cancelNumEdit;
 
 
 
-// Quando o formato é selecionado, mostrar editor
+// Quando o formato é selecionado, mostrar editor e checkboxes de formatos compatíveis
 
 window.onFormatoSelect = function (clearElements = true) {
 
     const fmtId = document.getElementById('num-formato').value;
+    const compatContainer = document.getElementById('num-formatos-compat');
+    const checksDiv = document.getElementById('num-formatos-checks');
 
     if (!fmtId) {
-
         document.getElementById('numeracao-editor').style.display = 'none';
-
+        if (compatContainer) compatContainer.style.display = 'none';
         return;
-
     }
 
     state.numFormato = state.formatos.find(f => f.id === fmtId);
-
     if (!state.numFormato) return;
 
+    // ── Renderizar checkboxes de formatos compatíveis ──
+    if (compatContainer && checksDiv) {
+        const selectedFmt = state.numFormato;
+        const selW = parseFloat(selectedFmt.width_mm);
+        const selH = parseFloat(selectedFmt.height_mm);
 
+        // Coletar formatos já marcados manualmente (para preservar ao trocar formato)
+        const previouslyChecked = new Set();
+        checksDiv.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+            previouslyChecked.add(cb.value);
+        });
+
+        checksDiv.innerHTML = state.formatos.map(f => {
+            const fW = parseFloat(f.width_mm);
+            const fH = parseFloat(f.height_mm);
+            const sameSize = (fW === selW && fH === selH);
+            // Auto-marcar: formato base + mesmo tamanho + previamente marcados
+            const checked = (f.id === fmtId || sameSize || previouslyChecked.has(f.id)) ? 'checked' : '';
+            const isBase = f.id === fmtId ? ' style="font-weight:700;color:var(--blue);"' : '';
+            return `<label style="display:flex;align-items:center;gap:4px;font-size:0.82rem;cursor:pointer;padding:4px 0;"${isBase}>
+                <input type="checkbox" value="${f.id}" ${checked} ${f.id === fmtId ? 'disabled' : ''}>
+                ${f.name} <span style="color:var(--text-dim);font-size:0.75rem;">(${f.width_mm}×${f.height_mm}mm)</span>
+            </label>`;
+        }).join('');
+
+        compatContainer.style.display = 'block';
+    }
 
     if (clearElements !== false) state.numElements = [];
 
     document.getElementById('numeracao-editor').style.display = 'grid';
 
-
-
     initCanvas();
-
     renderElementsList();
-
     drawCanvas();
-
 };
+
 
 
 
@@ -4645,6 +4673,16 @@ window.saveNumeracao = async function () {
             name,
 
             formato_id: fmtId,
+
+            // Coletar todos os formatos marcados nos checkboxes
+            formato_ids: (() => {
+                const checks = document.querySelectorAll('#num-formatos-checks input[type="checkbox"]');
+                const ids = [];
+                checks.forEach(cb => { if (cb.checked || cb.value === fmtId) ids.push(cb.value); });
+                // Garantir que o formato base está sempre incluído
+                if (!ids.includes(fmtId)) ids.unshift(fmtId);
+                return ids;
+            })(),
 
             csv_filename: state.numCsvFilename || "",
 
@@ -8895,7 +8933,12 @@ window.onAmostraCorSelect = async function() {
 
         const curNumVal = numSelect.value;
 
-        const filteredNums = (cor && cor.formato_id) ? state.numeracoes.filter(n => n.formato_id === cor.formato_id) : state.numeracoes;
+        const filteredNums = (cor && cor.formato_id)
+            ? state.numeracoes.filter(n => {
+                const ids = n.formato_ids || [n.formato_id];
+                return ids.some(id => String(id) === String(cor.formato_id));
+            })
+            : state.numeracoes;
 
         numSelect.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
 
