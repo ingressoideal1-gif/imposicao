@@ -1,94 +1,112 @@
-# 📄 Ideal Imposition — Documentação Técnica Completa
+# Ideal Imposition — Documentação Completa do Projeto
 
-> **Sistema de Imposição Gráfica com Dados Variáveis (VDP)**
-> Última atualização: 10 de Junho de 2026
+> Sistema profissional de imposição gráfica com dados variáveis (VDP) para produção de ingressos, pulseiras e credenciais.
 
 ---
 
-## 📋 Índice
+## Índice
 
 1. [Visão Geral](#visão-geral)
-2. [Arquitetura do Sistema](#arquitetura-do-sistema)
-3. [Estrutura de Arquivos](#estrutura-de-arquivos)
-4. [Backend (FastAPI)](#backend-fastapi)
-5. [Motor de Imposição (engine.py)](#motor-de-imposição-enginepy)
-6. [Banco de Dados](#banco-de-dados)
-7. [Frontend](#frontend)
-8. [Serviço de Impressão](#serviço-de-impressão)
-9. [Deploy](#deploy)
-10. [Desenvolvimento Local](#desenvolvimento-local)
-11. [Variáveis de Ambiente e Configuração](#variáveis-de-ambiente-e-configuração)
-12. [Histórico de Bugs Resolvidos](#histórico-de-bugs-resolvidos)
+2. [Arquitetura](#arquitetura)
+3. [Stack Tecnológico](#stack-tecnológico)
+4. [Estrutura de Arquivos](#estrutura-de-arquivos)
+5. [Backend — API (FastAPI)](#backend--api-fastapi)
+6. [Motor de Imposição (engine.py)](#motor-de-imposição-enginepy)
+7. [Banco de Dados](#banco-de-dados)
+8. [Frontend (SPA)](#frontend-spa)
+9. [Serviço de Impressão](#serviço-de-impressão)
+10. [Deploy e Infraestrutura](#deploy-e-infraestrutura)
+11. [Integração Vibecode](#integração-vibecode)
+12. [Guia de Desenvolvimento Local](#guia-de-desenvolvimento-local)
 
 ---
 
 ## Visão Geral
 
-O **Ideal Imposition** é um sistema web completo para **imposição gráfica** de PDFs com suporte a **Dados Variáveis (VDP)**. Ele permite:
+O **Ideal Imposition** é um sistema de imposição gráfica que automatiza o processo de montagem de folhas de impressão com dados variáveis (VDP). Ele permite:
 
-- Imposição de PDFs em grades configuráveis (colunas × linhas)
-- Numeração sequencial com textos, QR Codes, códigos de barras
-- Dados variáveis via CSV (banco de dados)
-- Múltiplas artes em uma mesma folha (Multi-Artes)
-- Impressão frente/verso (duplex) com espelhamento automático
-- Rotação individual de células
-- Envio direto para impressoras via PostScript/PPD
-- Modelos de imposição salvos para reuso
-
-### Stack Tecnológica
-
-| Camada | Tecnologia |
-|--------|-----------|
-| Backend API | Python 3.10+ / FastAPI / Uvicorn |
-| Motor PDF | PyMuPDF (fitz) |
-| Frontend | HTML/CSS/JavaScript vanilla |
-| Banco de Dados (local) | JSON (`formats_db.json`) |
-| Banco de Dados (produção) | Supabase (PostgreSQL) |
-| Hospedagem Backend | Render (Web Service) |
-| Hospedagem Frontend | Vercel (Static) |
-| Repositório | GitHub |
+- Cadastrar **formatos** de ingressos/pulseiras com grade de imposição configurável
+- Criar **numerações** com elementos variáveis: numeração sequencial, QR Code, código de barras, texto fixo, SVG e PDF
+- Definir **saídas** (formatos de folha: SRA3, A3, A4, etc.)
+- Cadastrar **cores** de fundo com PDF de referência
+- Gerar **PDFs impostos** com dados variáveis para impressão
+- Enviar jobs diretamente para **impressoras** locais
+- Integrar com sistema externo via **banco de dados compartilhado** (Supabase)
 
 ---
 
-## Arquitetura do Sistema
+## Arquitetura
 
 ```
-┌───────────────────────────────────────────────────────┐
-│                    USUÁRIO (Browser)                    │
-│           Frontend: Vercel / localhost:8080             │
-└────────────────────┬──────────────────────────────────┘
-                     │ HTTP (fetch)
-        ┌────────────┼────────────┐
-        ▼            ▼            ▼
-  ┌──────────┐ ┌──────────┐ ┌──────────────┐
-  │ Servidor │ │ Agente   │ │   Render     │
-  │ Local    │ │ Local    │ │   (Cloud)    │
-  │ :8080    │ │ :9000    │ │ imposicao.   │
-  │ app.py   │ │ local_   │ │ onrender.com │
-  │          │ │ print_   │ │              │
-  │          │ │ agent.py │ │              │
-  └────┬─────┘ └────┬─────┘ └──────┬───────┘
-       │             │              │
-       ▼             ▼              ▼
-  ┌──────────────────────────────────────┐
-  │         engine.py (ImpositionEngine) │
-  │    PyMuPDF + QRCode + Barcode        │
-  └──────────────────┬───────────────────┘
-                     │
-  ┌──────────────────┼───────────────────┐
-  │                  │                   │
-  ▼                  ▼                   ▼
-formats_db.json   Supabase          Impressoras
-(local)           (produção)        (win32print)
+┌──────────────────────────────────────────────────────────────────┐
+│  FRONTEND (Vercel)                                               │
+│  HTML + CSS + Vanilla JS (SPA)                                   │
+│  ├─ Supabase Client (CRUD direto no deploy)                     │
+│  └─ API_BASE_URL → Render (para /api/impose, /api/print)        │
+├──────────────────────────────────────────────────────────────────┤
+│  BACKEND (Render / Local)                                        │
+│  FastAPI + Uvicorn (porta 8080)                                  │
+│  ├─ db.py → formats_db.json (JSON local)                        │
+│  ├─ engine.py → Motor de imposição PDF (PyMuPDF)                │
+│  └─ print_service.py → Impressão via Win32                      │
+├──────────────────────────────────────────────────────────────────┤
+│  AGENTE LOCAL (opcional, porta 9000)                             │
+│  local_print_agent.py                                            │
+│  └─ Permite impressão física local a partir do frontend online  │
+├──────────────────────────────────────────────────────────────────┤
+│  BANCO DE DADOS                                                  │
+│  ├─ Supabase PostgreSQL (9 tabelas, RLS desabilitado)           │
+│  └─ formats_db.json (fallback local do backend)                 │
+├──────────────────────────────────────────────────────────────────┤
+│  SISTEMA EXTERNO (Vibecode)                                      │
+│  └─ Conecta ao mesmo Supabase para gestão de OS                │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### Fluxo de Decisão do Frontend
+### Fluxo de Dados
 
-O frontend detecta automaticamente onde processar:
+**Ambiente de Produção (Deploy):**
+- Frontend (Vercel) → Supabase (CRUD de dados)
+- Frontend (Vercel) → Backend Render (processamento de PDF)
 
-1. **Porta 8080 ativa?** → Usa servidor local (máxima velocidade)
-2. **Porta 9000 ativa?** → Usa agente de impressão local
-3. **Nenhum local?** → Usa Render (cloud)
+**Ambiente Local (Desenvolvimento):**
+- Frontend → Backend local FastAPI (tudo via API REST)
+- Backend → `formats_db.json` (persistência local)
+
+---
+
+## Stack Tecnológico
+
+### Backend
+| Tecnologia | Versão | Uso |
+|---|---|---|
+| Python | 3.10+ | Linguagem principal |
+| FastAPI | ≥0.100.0 | Framework web / API REST |
+| Uvicorn | ≥0.23.0 | Servidor ASGI |
+| PyMuPDF (fitz) | ≥1.23.0 | Motor de manipulação de PDF |
+| Pillow | ≥10.0.0 | Processamento de imagens |
+| qrcode[pil] | ≥7.4.2 | Geração de QR Codes |
+| python-barcode | ≥0.15.1 | Geração de códigos de barras |
+| python-multipart | ≥0.0.6 | Upload de arquivos |
+| firebase-admin | ≥6.2.0 | Legado (em migração) |
+
+### Frontend
+| Tecnologia | Uso |
+|---|---|
+| HTML5 | Estrutura |
+| CSS3 (Vanilla) | Estilização (tema dark, glassmorphism) |
+| JavaScript (Vanilla) | Lógica da SPA |
+| PDF.js (v3.11.174) | Renderização de PDFs no browser |
+| Supabase JS SDK (v2) | Conexão com banco de dados |
+| Google Fonts (Inter) | Tipografia |
+
+### Infraestrutura
+| Serviço | Uso |
+|---|---|
+| Supabase | Banco PostgreSQL + Storage |
+| Vercel | Hosting do frontend |
+| Render | Hosting do backend |
+| GitHub | Repositório de código |
 
 ---
 
@@ -96,445 +114,365 @@ O frontend detecta automaticamente onde processar:
 
 ```
 ideal-imposition/
-│
-├── app.py                    # Servidor FastAPI principal (porta 8080)
-├── engine.py                 # Motor de imposição PDF (núcleo do sistema)
-├── db.py                     # Camada de banco de dados (JSON local)
-├── print_service.py          # Serviço de impressão (PostScript/PPD)
-├── ppd_parser.py             # Parser de arquivos PPD de impressora
-├── local_print_agent.py      # Agente local para impressão (porta 9000)
-├── agent_tray.py             # Agente com ícone na bandeja do sistema
-├── main.py                   # CLI de teste (antigo, não usado no servidor)
-│
+├── app.py                    # API FastAPI principal (526 linhas)
+├── engine.py                 # Motor de imposição PDF (1200+ linhas)
+├── db.py                     # Persistência JSON local (349 linhas)
+├── print_service.py          # Serviço de impressão Windows (163 linhas)
+├── local_print_agent.py      # Agente local de impressão (239 linhas)
+├── ppd_parser.py             # Parser de arquivos PPD
+├── main.py                   # CLI standalone (PoC original)
 ├── requirements.txt          # Dependências Python
-├── render.yaml               # Configuração de deploy no Render
-├── schema.sql                # Schema SQL para Supabase (PostgreSQL)
+├── formats_db.json           # Banco de dados JSON local
+├── schema.sql                # Schema SQL base (Supabase)
+├── schema_os.sql             # Schema SQL de Ordens de Serviço
+├── render.yaml               # Configuração de deploy (Render)
+├── DEPLOY.md                 # Guia de deploy
+├── iniciar_servidores.bat    # Script para iniciar servidores locais
+├── installer.iss             # Script Inno Setup (instalador Windows)
+├── agent_tray.py             # Agente de bandeja do sistema
+├── agent_tray.spec           # Spec do PyInstaller
 ├── firestore.rules           # Regras do Firestore (legado)
-├── iniciar_servidores.bat    # Script Windows para iniciar tudo
-├── installer.iss             # Script Inno Setup para criar instalador
-├── formats_db.json           # Banco de dados local (gerado automaticamente)
 │
-├── frontend/                 # Frontend estático
-│   ├── index.html            # Página principal (SPA)
-│   ├── script.js             # Toda a lógica JavaScript (~10.000 linhas)
-│   ├── style.css             # Estilos CSS
-│   ├── supabase-config.js    # Configuração Supabase + URL da API
-│   ├── vercel.json           # Configuração de deploy Vercel
-│   ├── logo.png              # Logo da aplicação
-│   └── Logo Ideal Dark.png   # Logo variante escura
+├── frontend/                 # Frontend SPA
+│   ├── index.html            # Página principal (1115 linhas)
+│   ├── script.js             # Lógica JavaScript (10900+ linhas)
+│   ├── style.css             # Estilos CSS (33 KB)
+│   ├── supabase-config.js    # Configuração do Supabase
+│   ├── Logo Ideal Dark.png   # Logo
+│   └── vercel.json           # Configuração Vercel
 │
-├── ppds/                     # Arquivos PPD de impressoras uploadados
 ├── docs/                     # Documentação
-├── venv/                     # Ambiente virtual Python (local)
-├── build/                    # Build do instalador
-└── dist/                     # Distribuição do instalador
+│   ├── README.md             # Esta documentação
+│   └── integracao_vibecode.md
+│
+├── ppds/                     # Arquivos PPD de impressoras
+├── build/                    # Build do PyInstaller
+├── dist/                     # Distribuição
+└── venv/                     # Ambiente virtual Python
 ```
 
 ---
 
-## Backend (FastAPI)
+## Backend — API (FastAPI)
 
-### Arquivo: `app.py`
+**Arquivo:** `app.py` (526 linhas)
+**Porta:** 8080
+**Framework:** FastAPI com Uvicorn
+**CORS:** Habilitado para todas as origens
 
-Servidor principal que roda na **porta 8080**.
+### Autenticação
 
-#### Rotas da API
+> ⚠️ **ATENÇÃO**: A autenticação está **desabilitada**. A função `get_current_user()` sempre retorna um usuário fake com permissões de admin. Deve ser implementada antes de ir para produção com múltiplos usuários.
 
-| Método | Rota | Descrição |
+### Endpoints Completos
+
+#### Utilitários
+| Método | Path | Descrição |
 |--------|------|-----------|
 | `GET` | `/` | Redireciona para `/app/index.html` |
-| `GET` | `/api/proxy?url=` | Proxy para download de PDFs externos |
-| **Formatos** | | |
-| `GET` | `/api/formatos` | Lista todos os formatos |
-| `GET` | `/api/formatos/{id}` | Obtém formato por ID |
-| `POST` | `/api/formatos` | Cria novo formato |
-| `PUT` | `/api/formatos/{id}` | Atualiza formato |
-| `DELETE` | `/api/formatos/{id}` | Remove formato |
-| **Numerações** | | |
-| `GET` | `/api/numeracoes` | Lista numerações |
-| `GET` | `/api/numeracoes/{id}` | Obtém numeração por ID |
-| `POST` | `/api/numeracoes` | Cria numeração |
-| `PUT` | `/api/numeracoes/{id}` | Atualiza numeração |
-| `DELETE` | `/api/numeracoes/{id}` | Remove numeração |
-| **Saídas** | | |
-| `GET` | `/api/saidas` | Lista saídas (tamanhos de folha) |
-| `POST/PUT/DELETE` | `/api/saidas/{id}` | CRUD de saídas |
-| **Cores** | | |
-| `GET` | `/api/cores` | Lista cores |
-| `POST/PUT/DELETE` | `/api/cores/{id}` | CRUD de cores |
-| **Modelos** | | |
-| `GET` | `/api/modelos_imposicao` | Lista modelos salvos |
-| `POST/PUT/DELETE` | `/api/modelos_imposicao/{id}` | CRUD de modelos |
-| **Imposição** | | |
-| `POST` | `/api/impose` | **Rota principal** — executa imposição |
-| **Impressão** | | |
+| `GET` | `/favicon.ico` | Retorna 204 |
+| `GET` | `/api/proxy?url=` | Proxy para URLs externas |
+| `GET` | `/api/diag` | Retorna logs de diagnóstico |
+
+#### Administração (Stubs)
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/admin/users` | Lista usuários (retorna `[]`) |
+| `POST` | `/api/admin/users/{uid}/role` | Define role (retorna 501) |
+
+#### CRUD — Formatos
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/formatos` | Lista todos |
+| `GET` | `/api/formatos/{fmt_id}` | Busca por ID |
+| `POST` | `/api/formatos` | Cria novo |
+| `PUT` | `/api/formatos/{fmt_id}` | Atualiza |
+| `DELETE` | `/api/formatos/{fmt_id}` | Remove |
+
+#### CRUD — Numerações
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/numeracoes` | Lista todas |
+| `GET` | `/api/numeracoes/{num_id}` | Busca por ID |
+| `POST` | `/api/numeracoes` | Cria (dedup por nome) |
+| `PUT` | `/api/numeracoes/{num_id}` | Atualiza |
+| `DELETE` | `/api/numeracoes/{num_id}` | Remove |
+
+#### CRUD — Saídas
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/saidas` | Lista todas |
+| `GET` | `/api/saidas/{sai_id}` | Busca por ID |
+| `POST` | `/api/saidas` | Cria nova |
+| `PUT` | `/api/saidas/{sai_id}` | Atualiza |
+| `DELETE` | `/api/saidas/{sai_id}` | Remove |
+
+#### CRUD — Cores
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/cores` | Lista todas |
+| `GET` | `/api/cores/{cor_id}` | Busca por ID |
+| `POST` | `/api/cores` | Cria nova |
+| `PUT` | `/api/cores/{cor_id}` | Atualiza |
+| `DELETE` | `/api/cores/{cor_id}` | Remove |
+
+#### CRUD — Modelos de Imposição
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/modelos_imposicao` | Lista todos |
+| `GET` | `/api/modelos_imposicao/{mod_id}` | Busca por ID |
+| `POST` | `/api/modelos_imposicao` | Cria novo |
+| `PUT` | `/api/modelos_imposicao/{mod_id}` | Atualiza |
+| `DELETE` | `/api/modelos_imposicao/{mod_id}` | Remove |
+
+#### Imposição (endpoint principal)
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `POST` | `/api/impose` | Recebe PDF/imagem + payload JSON, gera PDF imposto |
+
+**Parâmetros do `/api/impose`** (multipart form):
+- `file` — Arquivo base (PDF/JPG/PNG)
+- `csv_file` — CSV opcional para VDP de banco de dados
+- `multi_artes_files` — Lista de arquivos para modo Multi-Artes
+- `payload` — JSON string com configuração completa
+
+#### Impressão
+| Método | Path | Descrição |
+|--------|------|-----------|
 | `GET` | `/api/printers` | Lista impressoras do sistema |
 | `GET` | `/api/ppds` | Lista PPDs uploadados |
 | `POST` | `/api/ppds/upload` | Upload de arquivo PPD |
-| `GET/POST` | `/api/printers/ppd-map` | Mapeamento impressora↔PPD |
+| `GET` | `/api/printers/ppd-map` | Mapa impressora↔PPD |
+| `POST` | `/api/printers/ppd-map` | Salva mapa |
 | `POST` | `/api/print/submit` | Envia job de impressão |
-| **Diagnóstico** | | |
-| `GET` | `/api/diag` | Retorna logs de diagnóstico |
 
-#### Rota `/api/impose` (Detalhamento)
-
-Aceita `multipart/form-data` com:
-
-- `file` — Arquivo principal (PDF/JPG/PNG), opcional para multi_artes
-- `csv_file` — Arquivo CSV para dados variáveis (opcional)
-- `ma_file_0`, `ma_file_1`... — Arquivos de artes múltiplas (para schema multi_artes)
-- `payload` — JSON string com toda a configuração:
-
-```json
-{
-  "formato": { "name": "...", "width_mm": 100, "height_mm": 50, "cols": 2, "rows": 5, ... },
-  "saida": { "width_mm": 450, "height_mm": 320, ... },
-  "numeracao": { "elements": [...] },
-  "numeracao_2": null,
-  "seq_start": 1,
-  "seq_end": 100,
-  "seq_increment": 1,
-  "schema": "sequential",
-  "print_mode": "front",
-  "rotate_page": false,
-  "multi_artes": []
-}
-```
+#### Ordens de Serviço
+| Método | Path | Descrição |
+|--------|------|-----------|
+| `GET` | `/api/ordens` | Lista todas as OS |
+| `GET` | `/api/ordens/{os_id}/itens` | Itens de uma OS |
+| `PUT` | `/api/os_itens/{item_id}` | Atualiza item (impressao, formato_id, cor_id, numeracao_id) |
 
 ---
 
 ## Motor de Imposição (engine.py)
 
+**Arquivo:** `engine.py` (1200+ linhas)
+**Biblioteca PDF:** PyMuPDF (fitz)
+**Constante:** `MM2PT = 2.8346` (conversão milímetros → pontos PDF)
+
 ### Classe `ImpositionConfig`
 
-Recebe e pré-processa toda a configuração:
+| Parâmetro | Tipo | Default | Descrição |
+|-----------|------|---------|-----------|
+| `base_file` | str | — | Caminho do arquivo base (PDF/imagem) |
+| `out_pdf` | str | — | Caminho do PDF de saída |
+| `formato` | dict | — | Formato do item |
+| `numeracao` | dict/None | None | Numeração 1 com elementos VDP |
+| `saida` | dict | — | Formato da folha de saída |
+| `seq_start` | int | 1 | Início da sequência |
+| `seq_end` | int | 100 | Fim da sequência |
+| `seq_increment` | int | 1 | Incremento |
+| `layout_schema` | str | "sequential" | Regra de paginação |
+| `csv_data` | list/None | None | Dados CSV para VDP |
+| `print_mode` | str | "front" | Modo de impressão (front/duplex) |
+| `numeracao_2` | dict/None | None | Numeração 2 (verso) |
+| `rotate_page` | bool | False | Rotação da página |
+| `multi_artes` | list/None | None | Lista de múltiplas artes |
 
-| Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
-| `base_file` | str | Caminho do PDF/imagem base |
-| `out_pdf` | str | Caminho do PDF de saída |
-| `formato` | dict | Tamanho do item + grade (cols/rows/gaps) |
-| `numeracao` | dict | Elementos VDP da frente |
-| `numeracao_2` | dict | Elementos VDP do verso (duplex) |
-| `saida` | dict | Tamanho da folha de saída |
-| `layout_schema` | str | Esquema de layout |
-| `csv_data` | list | Dados CSV para VDP via banco de dados |
-| `print_mode` | str | `front`, `duplex` |
-| `rotate_page` | bool | Rotação de 90° da página |
-| `multi_artes` | list | Lista de artes para Multi-Artes |
+### Schemas de Layout
 
-### Esquemas de Layout (`layout_schema`)
+| Schema | Descrição |
+|--------|-----------|
+| `sequential` | Numeração sequencial padrão |
+| `cut_stack` | Cut & Stack (blocos para guilhotina) |
+| `step_repeat` | Step & Repeat (mesma arte repetida) |
+| `pdf_multiple` | PDF paginado (cada página = uma arte) |
+| `multi_artes` | Múltiplas artes por coluna |
 
-| Schema | Descrição | Ordenação |
-|--------|-----------|-----------|
-| `sequential` | Preenche posições sequencialmente | Folha 1: pos 1,2,3,4... Folha 2: pos 5,6,7... |
-| `cut_stack` | Empilhar e cortar — mesma posição em folhas diferentes recebe sequência | Pos 1 folha 1 = item 1, Pos 1 folha 2 = item 2... |
-| `step_repeat` | Repetição — todos os itens da folha são iguais | Folha 1: todos = item 1, Folha 2: todos = item 2 |
-| `pdf_multiple` | Cada página do PDF base vira um item da grade | Página 1 → pos 1, Página 2 → pos 2... |
-| `multi_artes` | Múltiplas artes com quantidades independentes | Distribuição por coluna, ordenado por quantidade |
+### Tipos de Elementos VDP
 
-### Elementos VDP Suportados
-
-| Tipo | Campos | Descrição |
-|------|--------|-----------|
-| `TEXT` | x_mm, y_mm, font_size, font_name, color, rotation, prefix, suffix, pad | Texto com numeração sequencial |
-| `FIXED` | x_mm, y_mm, font_size, fixed_value | Texto fixo (não varia) |
-| `QR` | x_mm, y_mm, size_mm, color | QR Code gerado dinamicamente |
-| `BARCODE` | x_mm, y_mm, width_mm, height_mm, barcode_format, color | Código de barras (code128, ean13, ean8, upca, itf) |
-| `SVG` | x_mm, y_mm, width_mm, height_mm, svg_content | Imagem SVG (URL ou inline) |
-| `PDF` | x_mm, y_mm, width_mm, height_mm, pdf_content | PDF embutido (base64 ou URL) |
-
-### Fontes Suportadas (Base-14)
-
-| Frontend | PyMuPDF |
-|----------|---------|
-| `helv` | `helv` (Helvetica) |
-| `helv-bold` | `hebo` (Helvetica Bold) |
-| `times` | `tiro` (Times Roman) |
-| `times-bold` | `tibo` (Times Bold) |
-| `cour` | `cour` (Courier) |
-| `cour-bold` | `cobo` (Courier Bold) |
-
-### Constante de Conversão
-
-```python
-MM2PT = 2.8346  # 1mm = 2.8346 pontos PDF
-```
+| Tipo | Descrição |
+|------|-----------|
+| `TEXT` | Numeração sequencial com padding, prefixo, sufixo |
+| `FIXED` | Texto fixo |
+| `QR` | QR Code com cor e tamanho customizáveis |
+| `BARCODE` | Código de barras (code128, ean13, ean8, upca, itf) |
+| `SVG` | Vetor SVG (inline ou URL) |
+| `PDF` | Elemento PDF embutido (base64 ou URL) |
+| `PICOTE` | Linha de picote (vertical tracejada) |
 
 ---
 
 ## Banco de Dados
 
-### Modo Local (Desenvolvimento)
+### Supabase (PostgreSQL)
 
-- **Arquivo:** `formats_db.json`
-- **Módulo:** `db.py`
-- Banco JSON simples com CRUD para: `formatos`, `numeracoes`, `saidas`, `cores`, `modelos_imposicao`
-- IDs gerados com UUID: `fmt_`, `num_`, `sai_`, `cor_`, `mod_`
-- Suporta migração de schema antigo (`input_formats`/`output_formats`)
+**URL:** `https://atsxtuibeitloosckmlc.supabase.co`
 
-### Modo Produção (Supabase)
+#### Tabelas Base (schema.sql)
 
-- **Schema:** `schema.sql`
-- **Configuração:** `frontend/supabase-config.js`
-- Tabelas: `formatos`, `saidas`, `cores`, `numeracoes`, `modelos_imposicao`
-- RLS desabilitado (segurança gerenciada pela aplicação)
-- URL: `https://atsxtuibeitloosckmlc.supabase.co`
+| Tabela | Colunas Principais | Descrição |
+|--------|------|-----------|
+| `formatos` | id, name, width_mm, height_mm, cols, rows, gap_h_mm, gap_v_mm, offset_h_mm, offset_v_mm, rotations(JSONB) | Formatos de entrada |
+| `saidas` | id, name, width_mm, height_mm, file_format | Formatos de folha de saída |
+| `cores` | id, name, formato_id, width_mm, height_mm, pdf_base64, pdf_filename | Cores de referência |
+| `numeracoes` | id, name, formato_id, formato_ids(JSONB), csv_data(JSONB), elements(JSONB), svg_content, pdf_content | Numerações VDP |
+| `modelos_imposicao` | id, name, config(JSONB) | Modelos de imposição salvos |
+
+#### Tabelas de OS (schema_os.sql)
+
+| Tabela | Colunas Principais | Descrição |
+|--------|------|-----------|
+| `usuarios` | id(UUID), nome, email, role, ativo | Perfis de usuários |
+| `ordens_servico` | id, numero(UNIQUE), status, observacoes, criado_por(FK) | Ordens de serviço |
+| `os_itens` | id, os_id(FK), setor, produto, modelo, formato, quantidade, num_inicial, num_final, cor, aprovacao, impressao | Itens da OS |
+| `os_log` | id, os_id(FK), item_id, usuario_id(FK), acao, detalhes(JSONB) | Auditoria |
+
+#### Convenções de IDs
+
+| Prefixo | Tabela |
+|---------|--------|
+| `fmt_` | formatos |
+| `num_` | numeracoes |
+| `sai_` | saidas |
+| `cor_` | cores |
+| `mod_` | modelos_imposicao |
+| `os_` | ordens_servico |
+| `osi_` | os_itens |
+
+### JSON Local (formats_db.json)
+
+Fallback do backend em modo local. Mesma estrutura das tabelas Supabase em arquivo JSON.
 
 ---
 
-## Frontend
+## Frontend (SPA)
 
-### Arquivos
+**Tema:** Dark mode com glassmorphism, gradientes sutis, fonte Inter
 
-| Arquivo | Tamanho | Descrição |
-|---------|---------|-----------|
-| `index.html` | 70 KB | HTML completo (SPA) |
-| `script.js` | 240 KB | Lógica JavaScript (~10.000 linhas) |
-| `style.css` | 29 KB | Estilos CSS |
-| `supabase-config.js` | 1 KB | Config Supabase + URL da API |
-| `vercel.json` | 291 B | Config deploy Vercel |
+### Design Tokens (CSS Variables)
 
-### Detecção Automática de Backend
-
-O frontend (`supabase-config.js`) detecta automaticamente:
-
-```javascript
-const API_BASE_URL = (window.location.hostname === "localhost" || 
-                      window.location.hostname === "127.0.0.1") &&
-                      window.location.protocol !== 'file:'
-    ? ""   // Mesmo domínio (localhost)
-    : "https://imposicao.onrender.com";  // Cloud (Render)
+```css
+--bg:          #0a0f1e          /* fundo principal */
+--bg2:         #0f172a          /* fundo secundário */
+--card:        rgba(17, 25, 46, 0.85)
+--blue:        #3b82f6          /* cor primária */
+--purple:      #8b5cf6
+--teal:        #14b8a6
+--green:       #22c55e
+--amber:       #f59e0b
+--red:         #ef4444
+--text:        #e2e8f0
+--text-dim:    #94a3b8
+--sidebar-w:   240px
+--radius:      14px
 ```
 
-Além disso, na hora de imposicionar (`runImposition`), o frontend tenta:
-1. `http://localhost:8080/api/formatos` → Servidor local (prioridade máxima)
-2. `http://localhost:9000/` → Agente de impressão local
-3. `API_BASE_URL` → Render (cloud)
+### Views/Seções
+
+| ID | Ícone | Nome | Grupo |
+|----|-------|------|-------|
+| `view-formatos` | 📐 | Formatos | Configuração |
+| `view-lista-formatos` | 📋 | Lista Formatos | Configuração |
+| `view-numeracao` | 🔢 | Numeração | Configuração |
+| `view-catalogo` | 📚 | Catálogo de Numerações | Configuração |
+| `view-saidas` | 📄 | Saídas | Configuração |
+| `view-cores` | 🎨 | Cores | Configuração |
+| `view-lista-cores` | 📋 | Lista Cores | Configuração |
+| `view-imposicao` | 🖨️ | Imposição | Produção |
+| `view-amostras` | 🧪 | Amostras | Produção |
+| `view-lista-imposicao` | 📋 | Modelos de Imposição | Produção |
+| `view-ordens` | 📦 | Ordens de Serviço | Produção |
+| `view-admin` | 🛡️ | Usuários | Administração |
+
+### Lógica de Conexão (supabase-config.js)
+
+- **Localhost** → Supabase desativado, usa API local FastAPI
+- **Deploy (Vercel)** → Supabase ativo, API_BASE_URL = `https://imposicao.onrender.com`
 
 ---
 
 ## Serviço de Impressão
 
-### Arquitetura de Impressão
+### print_service.py
+- `win32print` (Windows) para acesso ao spooler
+- Conversão PDF → PostScript Level 2 (JPEG → ASCII85)
+- PPDs em `ppds/`, mapeamento em `printer_ppd_map.json`
 
-```
-Frontend → /api/print/submit → print_service.py
-                                    │
-                            ┌───────┼───────┐
-                            ▼               ▼
-                      convert_pdf_      win32print
-                      to_ps_with_ppd    (Windows API)
-                            │
-                      Render page → JPEG → ASCII85 → PostScript
-                            │
-                      Inject PPD codes (PageSize, Duplex, Tray...)
-```
+### local_print_agent.py
+- FastAPI independente em `127.0.0.1:9000`
+- Replica endpoints de impressão e imposição
+- Permite que o frontend online acesse impressoras físicas locais
 
-### Componentes
-
-- **`print_service.py`**: Converte PDF → PostScript com injeção de opções PPD, envia ao spooler Windows
-- **`ppd_parser.py`**: Parseia arquivos PPD de impressoras para extrair opções configuráveis
-- **`local_print_agent.py`**: Servidor FastAPI leve (porta 9000) para impressão direta
-- **`agent_tray.py`**: Versão com ícone na bandeja do sistema (systray)
-
-### Fluxo de Impressão
-
-1. Usuário seleciona impressora e configura opções (bandeja, duplex, qualidade)
-2. Frontend envia PDF + opções para `/api/print/submit`
-3. Backend converte PDF → PostScript com comandos PPD injetados
-4. PostScript é enviado como RAW ao spooler do Windows (`win32print`)
+### Instalador Windows (installer.iss)
+- App: "Ideal Imposition Agent" v1.0.0
+- Instala em `%LOCALAPPDATA%` (sem admin)
+- Auto-start com Windows
+- Idioma: PT-BR
 
 ---
 
-## Deploy
+## Deploy e Infraestrutura
 
-### Repositório Git
+| Componente | Serviço | URL |
+|------------|---------|-----|
+| Frontend | Vercel | (deploy automático via git push) |
+| Backend | Render | https://imposicao.onrender.com |
+| Banco de Dados | Supabase | https://atsxtuibeitloosckmlc.supabase.co |
+| Repositório | GitHub | https://github.com/ingressoideal1-gif/imposicao |
 
-```
-URL:    https://github.com/ingressoideal1-gif/imposicao.git
-Branch: main
-```
-
-### Regra de Deploy
-
-> **Toda alteração feita na branch `main` dispara deploy automático (CI/CD)** tanto no Vercel (frontend) quanto no Render (backend).
-
-### Deploy do Backend — Render
-
-| Config | Valor |
-|--------|-------|
-| **Plataforma** | [Render](https://render.com/) |
-| **Tipo** | Web Service |
-| **Nome** | `ideal-imposition-api` |
-| **URL Pública** | `https://imposicao.onrender.com` |
-| **Linguagem** | Python 3.10 |
-| **Build Command** | `pip install -r requirements.txt` |
-| **Start Command** | `uvicorn app:app --host 0.0.0.0 --port $PORT` |
-| **Config File** | `render.yaml` |
-| **Branch monitorada** | `main` |
-
-#### Passos para Deploy Manual no Render
-
-1. Acesse [render.com](https://render.com/) e faça login
-2. Selecione o serviço `ideal-imposition-api`
-3. O Render detecta automaticamente pushes para `main`
-4. Se necessário, clique em **Manual Deploy → Deploy latest commit**
-
-### Deploy do Frontend — Vercel
-
-| Config | Valor |
-|--------|-------|
-| **Plataforma** | [Vercel](https://vercel.com/) |
-| **Root Directory** | `frontend` |
-| **Framework** | Other (estático) |
-| **Config File** | `frontend/vercel.json` |
-| **Branch monitorada** | `main` |
-| **Headers** | Cache-Control: no-cache, no-store, must-revalidate |
-
-#### Passos para Deploy Manual na Vercel
-
-**Opção A — Via Dashboard (Recomendado):**
-1. Acesse [vercel.com](https://vercel.com/)
-2. Selecione o projeto importado
-3. O Vercel detecta automaticamente pushes para `main`
-
-**Opção B — Via CLI:**
-```bash
-cd frontend
-npx vercel --prod
-```
-
-### Deploy Completo (Checklist)
-
-```
-□ Testar localmente: python app.py → http://localhost:8080
-□ Verificar que as alterações estão corretas
-□ git add . && git commit -m "descrição"
-□ git push origin main
-□ Aguardar build do Render (2-5 min) → verificar https://imposicao.onrender.com
-□ Aguardar build do Vercel (1-2 min) → verificar URL do Vercel
-□ Testar online: imposição sequential, multi_artes, duplex
-```
-
-### ⚠️ Regras Importantes de Deploy
-
-1. **Nunca edite arquivos diretamente no Render/Vercel** — sempre via Git
-2. **A URL da API no frontend** (`supabase-config.js`) deve apontar para `https://imposicao.onrender.com`
-3. **O Render tem cold start** — a primeira requisição após inatividade pode demorar ~30s
-4. **PDFs grandes** podem causar timeout no Render (plano gratuito: 30s). Para jobs pesados, use o servidor local
-5. **O `formats_db.json` no Render é efêmero** — dados persistentes devem ficar no Supabase
-6. **Limpar `__pycache__`** após alterações no engine para evitar usar bytecode antigo
+### Deploy automático
+- **Push para `main`** → Vercel e Render detectam e fazem deploy automaticamente
 
 ---
 
-## Desenvolvimento Local
+## Integração Vibecode
+
+Documentação completa em `docs/integracao_vibecode.md`.
+
+### Responsabilidades
+
+| Ação | Vibecode | Imposition |
+|------|----------|------------|
+| Criar OS | ✅ | ❌ |
+| Inserir itens | ✅ | ❌ |
+| Atualizar aprovação | ✅ | ❌ |
+| Atualizar status da OS | ✅ | ❌ |
+| Ler OS e itens | ✅ | ✅ |
+| Vincular formato/cor/numeração | ❌ | ✅ |
+| Atualizar impressão | ❌ | ✅ |
+| Registrar logs | ✅ | ✅ |
+
+---
+
+## Guia de Desenvolvimento Local
 
 ### Pré-requisitos
-
 - Python 3.10+
-- pip / venv
 - Git
-- Node.js (opcional, para Vercel CLI)
 
-### Configuração Inicial
+### Instalação
 
 ```bash
-cd ideal-imposition
+git clone https://github.com/ingressoideal1-gif/imposicao.git
+cd imposicao
 python -m venv venv
-venv\Scripts\activate        # Windows
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Iniciar Servidores
+### Executar
 
-**Opção 1 — Script Batch (Windows):**
 ```bash
+# Script automático (API + Agente de Impressão)
 iniciar_servidores.bat
-```
 
-Isso inicia:
-- Servidor API na porta **8080** (`app.py`)
-- Agente de Impressão na porta **9000** (`local_print_agent.py`)
-
-**Opção 2 — Manual:**
-```bash
-# Terminal 1 — Servidor principal
+# Ou manualmente
 python app.py
-
-# Terminal 2 — Agente de impressão (opcional)
-python local_print_agent.py
+# Acesse: http://localhost:8080/app/index.html
 ```
-
-### Acessar
-
-- **Aplicação:** http://localhost:8080
-- **API Docs:** http://localhost:8080/docs (Swagger automático do FastAPI)
-- **Agente impressão:** http://localhost:9000
-
-### Dependências (`requirements.txt`)
-
-```
-pymupdf>=1.23.0           # Motor PDF (fitz)
-qrcode[pil]>=7.4.2        # Geração de QR Codes
-fastapi>=0.100.0           # Framework web
-uvicorn>=0.23.0            # Servidor ASGI
-python-multipart>=0.0.6   # Upload de arquivos (multipart/form-data)
-python-barcode[images]>=0.15.1  # Geração de códigos de barras
-Pillow>=10.0.0             # Processamento de imagens
-firebase-admin>=6.2.0      # Firebase (legado, pode ser removido)
-```
-
-> **Nota:** `win32print` (pywin32) é necessário apenas no Windows para impressão direta. Não está no requirements.txt pois não é compatível com Linux (Render).
 
 ---
 
-## Variáveis de Ambiente e Configuração
-
-### Supabase (frontend/supabase-config.js)
-
-| Variável | Descrição |
-|----------|-----------|
-| `SUPABASE_URL` | URL do projeto Supabase |
-| `SUPABASE_ANON_KEY` | Chave pública (anon) do Supabase |
-| `API_BASE_URL` | URL do backend (auto-detectada ou manual) |
-
-### Render (render.yaml)
-
-| Variável | Valor |
-|----------|-------|
-| `PYTHON_VERSION` | `3.10.0` |
-
----
-
-## Histórico de Bugs Resolvidos
-
-### Bug #1 — Multi-Artes: "ERR: doc_base nulo!" (10/06/2026)
-
-**Sintoma:** PDFs gerados com multi_artes mostravam mensagem de erro em cada célula.
-
-**Causa:** Bug de indentação no `engine.py` — o loop `for art in sorted_artes:` que popula `multi_map` estava dentro da função `_load_art_as_pdf()` após um `return None`, tornando-o código morto (unreachable). `multi_map` ficava vazio → todas as células usavam `doc_base` (que é `None` para multi_artes).
-
-**Correção:** Mover o loop e a função `_load_art_as_pdf()` para dentro do bloco `if cfg.layout_schema == "multi_artes":`.
-
-**Por que só falhava online:** Localmente o Python usava `__pycache__/engine.cpython-314.pyc` compilado de uma versão anterior (correta). No Render, sem cache, compilava o código quebrado.
-
-### Bug #2 — Multi-Artes: Imposição não iniciava (10/06/2026)
-
-**Sintoma:** Ao clicar "Gerar PDF" no multi_artes, a janela de salvar abria mas nada acontecia depois.
-
-**Causa:** No `frontend/script.js`, o `payloadMultiArtes` usava `...arte` (spread) que copiava propriedades não-serializáveis (`pdfDoc` com referências circulares, `rawFile`, `pagesCache`). O `JSON.stringify` explodia com `TypeError: Converting circular structure to JSON`, e como estava fora do `try/catch`, o erro era silencioso.
-
-**Correção:** Substituir `...arte` por uma lista explícita de propriedades serializáveis: `qtd`, `pdf_url`, `pdf_name`, `num1_id`, `num2_id`, `start`.
-
-### Bug #3 — `urllib.request` não importado (10/06/2026)
-
-**Sintoma:** Artes multi_artes carregadas via URL (Supabase Storage) falhavam silenciosamente.
-
-**Causa:** A função `_load_art_as_pdf()` usava `urllib.request.Request` sem importar o módulo.
-
-**Correção:** Adicionado `import urllib.request` no início da função.
-
----
-
-*Documentação gerada automaticamente em 10/06/2026. Manter atualizada a cada alteração significativa no projeto.*
+*Documentação gerada em 12/06/2026 — Ideal Imposition v1.0*
