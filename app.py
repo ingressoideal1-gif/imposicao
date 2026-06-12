@@ -495,6 +495,26 @@ async def submit_print_job(
             os.remove(pdf_path)
 
 
+# ─── ORDENS DE SERVIÇO ────────────────────────────────────────────────────────
+# Endpoints para modo local (quando não usa Supabase direto no frontend)
+
+@app.get("/api/ordens")
+def list_ordens(user: dict = Depends(get_current_user)):
+    return db.get_ordens()
+
+@app.get("/api/ordens/{os_id}/itens")
+def get_ordens_itens(os_id: str, user: dict = Depends(get_current_user)):
+    return db.get_os_itens(os_id)
+
+@app.put("/api/os_itens/{item_id}")
+async def update_os_item(item_id: str, request: Request, user: dict = Depends(get_current_user)):
+    data = await request.json()
+    ok = db.update_os_item(item_id, data)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
+    return {"status": "success"}
+
+
 if __name__ == "__main__":
     import uvicorn
     db.init_db()

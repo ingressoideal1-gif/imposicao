@@ -317,3 +317,32 @@ def delete_modelo_imposicao(mod_id: str):
     db["modelos_imposicao"] = [m for m in db.get("modelos_imposicao", []) if m["id"] != mod_id]
     _save_db(db)
 
+
+# ─── ORDENS DE SERVIÇO ────────────────────────────────────────────────────────
+
+def get_ordens() -> list:
+    db_data = _get_db()
+    ordens = db_data.get("ordens_servico", [])
+    os_itens = db_data.get("os_itens", [])
+    # Anexar contagem de itens
+    for os_item in ordens:
+        os_item["_itens_count"] = len([i for i in os_itens if i.get("os_id") == os_item["id"]])
+    return ordens
+
+
+def get_os_itens(os_id: str) -> list:
+    db_data = _get_db()
+    return [i for i in db_data.get("os_itens", []) if i.get("os_id") == os_id]
+
+
+def update_os_item(item_id: str, data: dict) -> bool:
+    db_data = _get_db()
+    for i, item in enumerate(db_data.get("os_itens", [])):
+        if item["id"] == item_id:
+            # Apenas atualiza campos permitidos (impressao, formato_id, cor_id, numeracao_id)
+            for key in ["impressao", "formato_id", "cor_id", "numeracao_id"]:
+                if key in data:
+                    db_data["os_itens"][i][key] = data[key]
+            _save_db(db_data)
+            return True
+    return False

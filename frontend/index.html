@@ -97,6 +97,12 @@
                 Lista de Imposição
             </button>
 
+            <button class="nav-btn" data-view="view-ordens" id="nav-ordens">
+                <span class="nav-icon">📦</span>
+                Ordens de Serviço
+                <span class="nav-badge" id="badge-ordens">0</span>
+            </button>
+
             <span class="nav-group-label admin-only" style="margin-top:8px; display:none;">Administração</span>
 
             <button class="nav-btn admin-only" data-view="view-admin" id="nav-admin" style="display:none;">
@@ -974,6 +980,91 @@
                         <div class="empty-state-icon">📋</div>
                         <p>Nenhum modelo cadastrado ainda.</p>
                     </div>
+                </div>
+            </section>
+
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: ORDENS DE SERVIÇO                                       -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <section id="view-ordens" class="view-section">
+                <div class="page-header" style="flex-wrap: wrap;">
+                    <div class="page-header-text">
+                        <h1>📦 Ordens de Serviço</h1>
+                        <p>Acompanhe as ordens de serviço recebidas e gerencie o status de impressão dos itens.</p>
+                    </div>
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div style="position: relative;">
+                            <input type="text" id="os-search" class="form-control" placeholder="Buscar OS..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;">
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">🔍</span>
+                        </div>
+                        <select id="os-filter-status" class="form-control" onchange="renderOrdens()" style="width: 160px;">
+                            <option value="">Todos os Status</option>
+                            <option value="ARTE">🎨 Arte</option>
+                            <option value="PRODUÇÃO">🏭 Produção</option>
+                            <option value="FINALIZADA">✅ Finalizada</option>
+                            <option value="CANCELADA">❌ Cancelada</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" onclick="loadOrdens()" title="Atualizar lista">🔄 Atualizar</button>
+                    </div>
+                </div>
+
+                <!-- Tabela de OS -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title"><span class="icon">📋</span> Ordens de Serviço</span>
+                        <span class="badge badge-teal" id="os-count-badge">0 OS</span>
+                    </div>
+                    <table class="data-table" id="table-ordens">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;"></th>
+                                <th>Nº OS</th>
+                                <th>Status</th>
+                                <th>Itens</th>
+                                <th>Criada em</th>
+                                <th>Atualizada</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-ordens">
+                            <!-- Inserido dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                    <div class="empty-state" id="empty-ordens" style="display:none">
+                        <div class="empty-state-icon">📦</div>
+                        <p>Nenhuma ordem de serviço encontrada.</p>
+                    </div>
+                </div>
+
+                <!-- Detalhes da OS selecionada (itens) -->
+                <div class="card" id="os-detail-card" style="display: none;">
+                    <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
+                        <span class="card-title"><span class="icon">📄</span> Itens da OS <span id="os-detail-numero" style="color: var(--blue);"></span></span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span class="badge" id="os-detail-status-badge"></span>
+                            <span id="os-detail-obs" style="font-size: 0.8rem; color: var(--text-dim);"></span>
+                        </div>
+                    </div>
+                    <table class="data-table" id="table-os-itens">
+                        <thead>
+                            <tr>
+                                <th>Setor</th>
+                                <th>Produto</th>
+                                <th>Modelo</th>
+                                <th>Formato</th>
+                                <th>Qtd</th>
+                                <th>Numeração</th>
+                                <th>Cor</th>
+                                <th>Verso</th>
+                                <th>Blocos</th>
+                                <th>Aprovação</th>
+                                <th>Impressão</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-os-itens">
+                            <!-- Inserido dinamicamente via JS -->
+                        </tbody>
+                    </table>
                 </div>
             </section>
 

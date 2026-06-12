@@ -46,6 +46,7 @@ create table if not exists numeracoes (
     id text primary key,
     name text not null,
     formato_id text,
+    formato_ids jsonb,
     csv_filename text,
     csv_headers jsonb,
     csv_data jsonb,

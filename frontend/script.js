@@ -9054,15 +9054,15 @@ window.onAmostraCorSelect = async function() {
 
             
 
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = scaledViewport.width;
+            offCanvas.height = scaledViewport.height;
+            const offCtx = offCanvas.getContext('2d');
+            await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+            canvas.width = offCanvas.width;
+            canvas.height = offCanvas.height;
             const context = canvas.getContext('2d');
-
-            canvas.width = scaledViewport.width;
-
-            canvas.height = scaledViewport.height;
-
-            
-
-            await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+            context.drawImage(offCanvas, 0, 0);
 
             
 
@@ -9470,15 +9470,15 @@ async function loadAmostraArteFile(file) {
 
             
 
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = scaledViewport.width;
+            offCanvas.height = scaledViewport.height;
+            const offCtx = offCanvas.getContext('2d');
+            await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+            canvas.width = offCanvas.width;
+            canvas.height = offCanvas.height;
             const context = canvas.getContext('2d');
-
-            canvas.width = scaledViewport.width;
-
-            canvas.height = scaledViewport.height;
-
-            
-
-            await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+            context.drawImage(offCanvas, 0, 0);
 
         } else {
 
@@ -10621,4 +10621,358 @@ function clearActiveOS() {
 window.clearActiveOS = clearActiveOS;
 
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ORDENS DE SERVIÇO — Integração com banco de dados compartilhado
+// ═══════════════════════════════════════════════════════════════════════════════
 
+// Estado local de OS
+if (!state.ordens) state.ordens = [];
+if (!state.osItens) state.osItens = {};
+if (!state.osExpandedId) state.osExpandedId = null;
+
+/**
+ * Carrega todas as OS do Supabase (ou API local)
+ */
+async function loadOrdens() {
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { data, error } = await supabaseClient
+                .from('ordens_servico')
+                .select('*, os_itens(id)')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            state.ordens = (data || []).map(os => ({
+                ...os,
+                _itens_count: os.os_itens ? os.os_itens.length : 0
+            }));
+        } else {
+            const res = await fetch(`${API_BASE_URL}/api/ordens`);
+            if (res.ok) {
+                state.ordens = await res.json();
+            } else {
+                state.ordens = [];
+            }
+        }
+        renderOrdens();
+    } catch (e) {
+        console.error('Erro ao carregar OS:', e);
+        toast('Erro ao carregar Ordens de Serviço: ' + e.message, 'error');
+    }
+}
+
+/**
+ * Carrega os itens de uma OS específica
+ */
+async function loadOSItens(osId) {
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { data, error } = await supabaseClient
+                .from('os_itens')
+                .select('*')
+                .eq('os_id', osId)
+                .order('created_at', { ascending: true });
+            if (error) throw error;
+            state.osItens[osId] = data || [];
+        } else {
+            const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
+            if (res.ok) {
+                state.osItens[osId] = await res.json();
+            } else {
+                state.osItens[osId] = [];
+            }
+        }
+        renderOSItens(osId);
+    } catch (e) {
+        console.error('Erro ao carregar itens da OS:', e);
+        toast('Erro ao carregar itens: ' + e.message, 'error');
+    }
+}
+
+/**
+ * Formata data para exibição
+ */
+function formatDate(dateStr) {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+        ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Retorna badge HTML para status
+ */
+function getStatusBadge(status) {
+    const map = {
+        'ARTE': { icon: '🎨', cls: 'badge-blue' },
+        'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber' },
+        'FINALIZADA': { icon: '✅', cls: 'badge-teal' },
+        'CANCELADA': { icon: '❌', cls: 'badge-red' }
+    };
+    const s = map[status] || { icon: '❓', cls: '' };
+    return `<span class="badge ${s.cls}">${s.icon} ${status}</span>`;
+}
+
+/**
+ * Retorna badge HTML para aprovação
+ */
+function getAprovacaoBadge(aprov) {
+    const map = {
+        'EM ARTE': { cls: 'badge-amber', icon: '🎨' },
+        'APROVADA': { cls: 'badge-teal', icon: '✅' },
+        'PRONTA': { cls: 'badge-blue', icon: '📋' },
+        'REPROVADA': { cls: 'badge-red', icon: '❌' }
+    };
+    const s = map[aprov] || { cls: '', icon: '' };
+    return `<span class="badge ${s.cls}">${s.icon} ${aprov || '—'}</span>`;
+}
+
+/**
+ * Retorna badge HTML para impressão
+ */
+function getImpressaoBadge(imp) {
+    const map = {
+        'AGUARD.': { cls: 'badge-amber', icon: '⏳' },
+        'PARCIAL': { cls: 'badge-blue', icon: '🔄' },
+        'IMPRESSO': { cls: 'badge-teal', icon: '✅' },
+        'ERRO': { cls: 'badge-red', icon: '❌' }
+    };
+    const s = map[imp] || { cls: '', icon: '' };
+    return `<span class="badge ${s.cls}">${s.icon} ${imp || '—'}</span>`;
+}
+
+/**
+ * Renderiza a tabela de OS na view
+ */
+function renderOrdens() {
+    const tbody = document.getElementById('tbody-ordens');
+    const empty = document.getElementById('empty-ordens');
+    const badge = document.getElementById('os-count-badge');
+    const table = document.getElementById('table-ordens');
+    if (!tbody) return;
+
+    // Filtros
+    const search = (document.getElementById('os-search')?.value || '').trim().toLowerCase();
+    const statusFilter = document.getElementById('os-filter-status')?.value || '';
+
+    let filtered = state.ordens.filter(os => {
+        if (statusFilter && os.status !== statusFilter) return false;
+        if (search) {
+            const num = String(os.numero || '');
+            const obs = (os.observacoes || '').toLowerCase();
+            if (!num.includes(search) && !obs.includes(search)) return false;
+        }
+        return true;
+    });
+
+    if (badge) badge.textContent = `${filtered.length} OS`;
+
+    // Atualizar badge do nav
+    const navBadge = document.getElementById('badge-ordens');
+    if (navBadge) navBadge.textContent = state.ordens.length;
+
+    if (!filtered.length) {
+        tbody.innerHTML = '';
+        if (empty) empty.style.display = 'block';
+        if (table) table.style.display = 'none';
+        return;
+    }
+
+    if (empty) empty.style.display = 'none';
+    if (table) table.style.display = '';
+
+    tbody.innerHTML = filtered.map(os => {
+        const isExpanded = state.osExpandedId === os.id;
+        const itensCount = os._itens_count || 0;
+        return `
+            <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
+                <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
+                <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
+                <td>${getStatusBadge(os.status)}</td>
+                <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
+                <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDate(os.created_at)}</td>
+                <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDate(os.updated_at)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Expande/colapsa os detalhes de uma OS
+ */
+async function toggleOSDetail(osId) {
+    const detailCard = document.getElementById('os-detail-card');
+    if (!detailCard) return;
+
+    if (state.osExpandedId === osId) {
+        // Colapsar
+        state.osExpandedId = null;
+        detailCard.style.display = 'none';
+        renderOrdens();
+        return;
+    }
+
+    // Expandir
+    state.osExpandedId = osId;
+    detailCard.style.display = 'block';
+
+    const os = state.ordens.find(o => o.id === osId);
+    if (os) {
+        document.getElementById('os-detail-numero').textContent = `#${os.numero}`;
+        document.getElementById('os-detail-status-badge').innerHTML = getStatusBadge(os.status);
+        document.getElementById('os-detail-obs').textContent = os.observacoes || '';
+    }
+
+    renderOrdens();
+    await loadOSItens(osId);
+
+    // Scroll suave até o card de detalhes
+    detailCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/**
+ * Renderiza os itens de uma OS no card de detalhes
+ */
+function renderOSItens(osId) {
+    const tbody = document.getElementById('tbody-os-itens');
+    if (!tbody) return;
+
+    const itens = state.osItens[osId] || [];
+
+    if (!itens.length) {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-dim); padding:20px;">Nenhum item encontrado nesta OS.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = itens.map(item => `
+        <tr>
+            <td>${item.setor || '—'}</td>
+            <td><strong>${item.produto || '—'}</strong></td>
+            <td style="font-family: monospace; font-size: 0.85rem;">${item.modelo || '—'}</td>
+            <td><span class="badge">${item.formato || '—'}</span></td>
+            <td style="text-align: center;"><strong>${item.quantidade || 0}</strong><br><span style="font-size:0.72rem;color:var(--text-dim);">${item.num_inicial}→${item.num_final}</span></td>
+            <td>${item.numeracao || '—'}</td>
+            <td>${item.cor || 'STD'}</td>
+            <td style="text-align: center;">${item.verso ? '✅' : '—'}</td>
+            <td style="text-align: center;">${item.blocos || 'N'}</td>
+            <td>${getAprovacaoBadge(item.aprovacao)}</td>
+            <td>
+                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled title="Aguardando aprovação"' : ''}>
+                    <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
+                    <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
+                    <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
+                    <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>❌ Erro</option>
+                </select>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="enviarParaImposicao('${item.id}', '${osId}')" title="Enviar para Imposição" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled' : ''}>
+                    🖨️ Impor
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+/**
+ * Atualiza status de impressão de um item
+ */
+async function updateItemImpressao(itemId, osId, novoStatus) {
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { error } = await supabaseClient
+                .from('os_itens')
+                .update({ impressao: novoStatus })
+                .eq('id', itemId);
+            if (error) throw error;
+        } else {
+            const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ impressao: novoStatus })
+            });
+            if (!res.ok) throw new Error('Falha ao atualizar');
+        }
+
+        // Atualizar estado local
+        if (state.osItens[osId]) {
+            const item = state.osItens[osId].find(i => i.id === itemId);
+            if (item) item.impressao = novoStatus;
+        }
+
+        toast(`Impressão atualizada: ${novoStatus}`, 'success');
+    } catch (e) {
+        console.error('Erro ao atualizar impressão:', e);
+        toast('Erro ao atualizar impressão: ' + e.message, 'error');
+        // Recarregar para reverter
+        await loadOSItens(osId);
+    }
+}
+
+/**
+ * Envia um item da OS para a tela de Imposição, preenchendo os campos automaticamente
+ */
+function enviarParaImposicao(itemId, osId) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => i.id === itemId);
+    if (!item) return toast('Item não encontrado.', 'error');
+
+    // Navegar para a view de Imposição
+    const navBtn = document.querySelector('[data-view="view-imposicao"]');
+    if (navBtn) navBtn.click();
+
+    // Preencher formato (busca por nome que contenha o formato da OS)
+    if (item.formato_id) {
+        const fmtSelect = document.getElementById('imp-formato');
+        if (fmtSelect) {
+            // Tenta selecionar pelo formato_id
+            const opt = fmtSelect.querySelector(`option[value="${item.formato_id}"]`);
+            if (opt) {
+                fmtSelect.value = item.formato_id;
+                fmtSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    }
+
+    // Preencher numeração
+    if (item.numeracao_id) {
+        setTimeout(() => {
+            const numSelect = document.getElementById('imp-numeracao');
+            if (numSelect) {
+                const opt = numSelect.querySelector(`option[value="${item.numeracao_id}"]`);
+                if (opt) {
+                    numSelect.value = item.numeracao_id;
+                    numSelect.dispatchEvent(new Event('change'));
+                }
+            }
+        }, 300);
+    }
+
+    // Preencher faixa de numeração
+    setTimeout(() => {
+        const numStart = document.getElementById('imp-num-start');
+        const numEnd = document.getElementById('imp-num-end');
+        if (numStart && item.num_inicial) numStart.value = item.num_inicial;
+        if (numEnd && item.num_final) numEnd.value = item.num_final;
+    }, 400);
+
+    const os = state.ordens.find(o => o.id === osId);
+    const osNum = os ? os.numero : '';
+    toast(`Item "${item.produto} — ${item.formato}" da OS #${osNum} carregado na Imposição!`, 'info');
+}
+
+// Hook: Carregar OS quando abrir a view
+const origShowView = window.showView;
+if (origShowView) {
+    window.showView = function(viewId) {
+        origShowView(viewId);
+        if (viewId === 'view-ordens') {
+            loadOrdens();
+        }
+    };
+}
+
+// Expor funções globais
+window.loadOrdens = loadOrdens;
+window.renderOrdens = renderOrdens;
+window.toggleOSDetail = toggleOSDetail;
+window.updateItemImpressao = updateItemImpressao;
+window.enviarParaImposicao = enviarParaImposicao;
