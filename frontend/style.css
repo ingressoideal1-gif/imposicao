@@ -1152,32 +1152,48 @@ body.not-logged-in .app-shell {
 }
 
 /* ─── ESTILOS DA TELA DE AMOSTRAS UNIFICADA ───────────────────────────────────── */
-.amostra-layout {
-    display: grid;
-    grid-template-columns: 420px 1fr;
-    gap: 24px;
-    align-items: start;
-    margin-top: 16px;
+
+/* Linha 1: Ajustes de Arte (sliders full-width) */
+.amostra-ajustes-row {
+    background: rgba(30, 41, 59, 0.35);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 20px;
 }
 
-@media (max-width: 1024px) {
-    .amostra-layout {
+.amostra-sliders-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 32px;
+}
+
+@media (max-width: 768px) {
+    .amostra-sliders-grid {
         grid-template-columns: 1fr;
     }
 }
 
-.amostra-controles-card {
-    display: flex;
-    flex-direction: column;
+/* Linha 2: Decisão + Config lado a lado */
+.amostra-mid-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 20px;
+    align-items: stretch;
 }
 
+@media (max-width: 900px) {
+    .amostra-mid-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Painel de Decisão de Qualidade */
 .amostra-decisao-panel {
     background: rgba(30, 41, 59, 0.4);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 20px;
-    margin-top: 16px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -1204,23 +1220,29 @@ body.not-logged-in .app-shell {
     border: 1px solid var(--border);
 }
 
-.amostra-decisao-status-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
 .amostra-decisao-btns {
     display: flex;
     gap: 12px;
     margin-top: 8px;
 }
 
+/* Painel de Configurações da Amostra */
+.amostra-config-panel {
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Linha 3: Canvas de Preview (full-width) */
 .amostra-preview-container {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 450px;
+    min-height: 350px;
     background: var(--bg-body);
     border-radius: var(--radius);
     padding: 24px;
