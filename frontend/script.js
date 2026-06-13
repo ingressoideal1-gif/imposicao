@@ -11999,8 +11999,12 @@ function onItemCorSelect(idx, osId) {
 }
 
 /**
- * Renderiza o canvas de preview combinada para um card de item individual
- * Usa a mesma lógica do renderAmostraCombinada do card avulso
+ * Renderiza o canvas de preview combinada para um card de item individual.
+ * Usa exatamente a mesma lógica do card avulso:
+ * - Cor: renderiza PDF via pdf.js em offscreen canvas
+ * - Numeração: desenha elements (TEXT, FIXED, QR, BARCODE) em offscreen canvas
+ * - Arte: carrega imagem do upload
+ * - Compõe tudo no canvas final
  */
 async function renderItemAmostraCombinada(idx, osId) {
     const canvas = document.getElementById(`amostra-item-canvas-${idx}`);
@@ -12021,99 +12025,95 @@ async function renderItemAmostraCombinada(idx, osId) {
     if (arteNameSpan) arteNameSpan.textContent = hasArte ? arteInput.files[0].name : '';
     if (removeBtn) removeBtn.style.display = hasArte ? '' : 'none';
 
-    // Se nada selecionado, esconder canvas e mostrar estado vazio
+    // Se nada selecionado, esconder canvas
     if (!corId && !numId && !hasArte) {
         canvas.style.display = 'none';
         if (empty) empty.style.display = 'block';
         return;
     }
 
-    // Obter a cor selecionada e suas dimensões
+    // Obter cor e formato
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
+    const num = numId ? state.numeracoes.find(n => n.id === numId) : null;
 
-    // Usar o formato da cor ou fallback para primeiro formato cadastrado
+    // Determinar formato base
     let fmt = null;
     if (cor && cor.formato_id) {
         fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
     }
+    if (!fmt && num && num.formato_id) {
+        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
+    }
     if (!fmt && state.formatos.length > 0) {
         fmt = state.formatos[0];
     }
+    if (!fmt) {
+        // Sem formato — fallback básico
+        fmt = { width_mm: 180, height_mm: 50 };
+    }
 
-    // Dimensões do canvas
-    let targetW = fmt ? fmt.width_mm : 180;
-    let targetH = fmt ? fmt.height_mm : 50;
+    // Calcular escala (idêntico ao getAmostraScale)
+    const containerWidth = canvas.parentElement ? canvas.parentElement.clientWidth - 4 : 600;
+    const S = containerWidth / fmt.width_mm;
+
+    let targetW = fmt.width_mm;
+    let targetH = fmt.height_mm;
     if (cor && cor.width_mm && cor.height_mm) {
         targetW = cor.width_mm;
         targetH = cor.height_mm;
     }
 
-    // Calcular escala como no card avulso (fit dentro do container)
-    const containerWidth = canvas.parentElement ? canvas.parentElement.clientWidth : 600;
-    const S = Math.min(containerWidth / targetW, 4); // Max 4px/mm
+    const finalWidth = Math.round(targetW * S);
+    const finalHeight = Math.round(targetH * S);
+    if (finalWidth <= 0 || finalHeight <= 0) return;
 
-    const W = Math.round(targetW * S);
-    const H = Math.round(targetH * S);
-
-    if (W <= 0 || H <= 0) return;
-
-    canvas.width = W;
-    canvas.height = H;
+    canvas.width = finalWidth;
+    canvas.height = finalHeight;
     canvas.style.display = 'block';
     if (empty) empty.style.display = 'none';
 
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, H);
+    ctx.clearRect(0, 0, finalWidth, finalHeight);
+    ctx.globalCompositeOperation = 'source-over';
 
-    // Camada 1: Cor (renderizar a partir do canvas de cor ou PDF base64)
-    if (cor) {
-        if (cor.pdf_base64) {
-            try {
-                const img = new Image();
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                    img.src = `data:image/png;base64,${cor.pdf_base64}`;
-                });
-                if (img.width > 0 && img.height > 0) {
-                    ctx.drawImage(img, 0, 0, W, H);
-                }
-            } catch (e) {
-                console.warn(`[Item ${idx}] Erro ao renderizar cor PDF:`, e);
-                if (cor.hex) { ctx.fillStyle = cor.hex; ctx.fillRect(0, 0, W, H); }
-            }
-        } else if (cor.hex) {
-            ctx.fillStyle = cor.hex;
-            ctx.fillRect(0, 0, W, H);
+    // ====== CAMADA 1: COR (PDF via pdf.js) ======
+    let corRendered = false;
+    if (cor && cor.pdf_base64 && typeof pdfjsLib !== 'undefined') {
+        try {
+            const base64Data = cor.pdf_base64.includes('base64,') ? cor.pdf_base64.split('base64,')[1] : cor.pdf_base64;
+            const binStr = atob(base64Data);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+
+            const loadingTask = pdfjsLib.getDocument({ data: bytes });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+
+            const viewport = page.getViewport({ scale: 1.0 });
+            const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
+            const scaledViewport = page.getViewport({ scale: pdfScale * (S / 2.8346) });
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = scaledViewport.width;
+            offCanvas.height = scaledViewport.height;
+            const offCtx = offCanvas.getContext('2d');
+            await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+
+            // Centralizar como faz o card avulso
+            const dx = (finalWidth - offCanvas.width) / 2;
+            const dy = (finalHeight - offCanvas.height) / 2;
+            ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+            corRendered = true;
+        } catch (e) {
+            console.warn(`[Item ${idx}] Erro ao renderizar cor PDF:`, e);
         }
     }
-
-    // Camada 2: Numeração (SVG content)
-    if (numId) {
-        const num = state.numeracoes.find(n => n.id === numId);
-        if (num && num.svg_content) {
-            try {
-                const svgBlob = new Blob([num.svg_content], { type: 'image/svg+xml' });
-                const svgUrl = URL.createObjectURL(svgBlob);
-                const svgImg = new Image();
-                await new Promise((resolve, reject) => {
-                    svgImg.onload = resolve;
-                    svgImg.onerror = reject;
-                    svgImg.src = svgUrl;
-                });
-                if (svgImg.width > 0 && svgImg.height > 0) {
-                    ctx.drawImage(svgImg, 0, 0, W, H);
-                }
-                URL.revokeObjectURL(svgUrl);
-            } catch (e) {
-                console.warn(`[Item ${idx}] Erro ao renderizar numeração SVG:`, e);
-            }
-        }
+    if (!corRendered) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, finalWidth, finalHeight);
     }
 
-    // Camada 3: Arte (arquivo local do upload)
+    // ====== CAMADA 2: ARTE (imagem do upload, com multiply) ======
     if (hasArte) {
         try {
             const file = arteInput.files[0];
@@ -12125,7 +12125,33 @@ async function renderItemAmostraCombinada(idx, osId) {
                 arteImg.src = url;
             });
             if (arteImg.width > 0 && arteImg.height > 0) {
-                ctx.drawImage(arteImg, 0, 0, W, H);
+                // Criar canvas temporário para arte no tamanho final
+                const tempArte = document.createElement('canvas');
+                tempArte.width = finalWidth;
+                tempArte.height = finalHeight;
+                const tempCtx = tempArte.getContext('2d');
+
+                // Centralizar arte mantendo proporção
+                const artRatio = arteImg.width / arteImg.height;
+                const canvasRatio = finalWidth / finalHeight;
+                let dw, dh, ddx, ddy;
+                if (artRatio > canvasRatio) {
+                    dw = finalWidth;
+                    dh = finalWidth / artRatio;
+                    ddx = 0;
+                    ddy = (finalHeight - dh) / 2;
+                } else {
+                    dh = finalHeight;
+                    dw = finalHeight * artRatio;
+                    ddx = (finalWidth - dw) / 2;
+                    ddy = 0;
+                }
+                tempCtx.drawImage(arteImg, ddx, ddy, dw, dh);
+
+                // Aplicar com multiply (como o card avulso)
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.drawImage(tempArte, 0, 0);
+                ctx.globalCompositeOperation = 'source-over';
             }
             URL.revokeObjectURL(url);
         } catch (e) {
@@ -12133,10 +12159,76 @@ async function renderItemAmostraCombinada(idx, osId) {
         }
     }
 
+    // ====== CAMADA 3: NUMERAÇÃO (desenhar elements como o card avulso) ======
+    if (num && num.elements && num.elements.length > 0) {
+        const numCanvas = document.createElement('canvas');
+        numCanvas.width = Math.round(fmt.width_mm * S);
+        numCanvas.height = Math.round(fmt.height_mm * S);
+        const numCtx = numCanvas.getContext('2d');
+
+        // Fundo transparente — contorno do formato
+        numCtx.strokeStyle = '#64748b';
+        numCtx.lineWidth = 1;
+        numCtx.strokeRect(0, 0, numCanvas.width, numCanvas.height);
+
+        // Desenhar cada elemento da numeração
+        num.elements.forEach(el => {
+            const x = el.x_mm * S;
+            const y = el.y_mm * S;
+            const color = el.color || '#000000';
+            const rot = (el.rotation || 0) * Math.PI / 180;
+
+            numCtx.save();
+            numCtx.translate(x, y);
+            numCtx.rotate(rot);
+
+            if (el.type === 'TEXT' || el.type === 'FIXED') {
+                const fs = (el.font_size || 12) * S / 2.8346;
+                const fontStyle = typeof getFontCSS === 'function' ? getFontCSS(el.font_name) : (el.font_name || 'monospace');
+                numCtx.font = `${fs}px ${fontStyle}`;
+                numCtx.fillStyle = color;
+
+                let label = '';
+                if (el.type === 'FIXED') {
+                    label = el.fixed_value || 'TEXTO';
+                } else {
+                    const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
+                    label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
+                }
+                numCtx.fillText(label, 0, fs);
+            } else if (el.type === 'QR') {
+                const sz = (el.size_mm || 15) * S;
+                numCtx.fillStyle = color;
+                numCtx.fillRect(0, 0, sz, sz);
+                numCtx.fillStyle = '#ffffff';
+                const cell = sz / 7;
+                for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
+                    numCtx.fillRect(cx * cell, cy * cell, 3 * cell, 3 * cell);
+                    numCtx.fillStyle = color;
+                    numCtx.fillRect(cx * cell + cell, cy * cell + cell, cell, cell);
+                    numCtx.fillStyle = '#ffffff';
+                }
+            } else if (el.type === 'BARCODE') {
+                const bw = (el.barcode_width_mm || 30) * S;
+                const bh = (el.barcode_height_mm || 8) * S;
+                numCtx.fillStyle = color;
+                for (let i = 0; i < bw; i += 3) {
+                    if (Math.random() > 0.3) numCtx.fillRect(i, 0, 1.5, bh);
+                }
+            }
+            numCtx.restore();
+        });
+
+        // Compor numeração sobre o canvas final (centralizado)
+        const ndx = (finalWidth - numCanvas.width) / 2;
+        const ndy = (finalHeight - numCanvas.height) / 2;
+        ctx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+    }
+
     // Borda decorativa
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, W, H);
+    ctx.strokeRect(0, 0, finalWidth, finalHeight);
 }
 
 // Expor globalmente
