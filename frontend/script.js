@@ -11751,23 +11751,28 @@ function toggleImpOSQueue() {
     }
 }
 
-// Hook: Carregar OS quando abrir a view
-const origShowView = window.showView;
-if (origShowView) {
-    window.showView = function(viewId) {
-        origShowView(viewId);
-        if (viewId === 'view-lista-impressao' || viewId === 'view-lista-arte') {
-            loadOrdens();
-        }
-        if (viewId === 'view-imposicao') {
-            renderImpOSQueue();
-        }
-        // Se saindo da view de amostras sem pedido ativo, limpar
-        if (viewId !== 'view-amostras') {
-            // não limpar os dados, deixar persistir para quando voltar
-        }
-    };
-}
+// Função global de navegação entre views
+window.showView = function(viewId) {
+    // Trocar a view ativa
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+
+    // Ativar a view destino
+    const view = document.getElementById(viewId);
+    if (view) view.classList.add('active');
+
+    // Ativar o nav-btn correspondente
+    const navBtn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);
+    if (navBtn) navBtn.classList.add('active');
+
+    // Hooks: carregar dados ao abrir certas views
+    if (viewId === 'view-lista-impressao' || viewId === 'view-lista-arte') {
+        loadOrdens();
+    }
+    if (viewId === 'view-imposicao') {
+        renderImpOSQueue();
+    }
+};
 
 /**
  * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
@@ -11796,15 +11801,8 @@ async function navigateToAmostrasFromOS(osId) {
     // Salvar o ID do pedido ativo na tela de Amostras
     state.amostrasOSAtivo = osId;
 
-    // Navegar para a view de Amostras
-    if (window.showView) {
-        window.showView('view-amostras');
-    }
-
-    // Ativar o item de navegação correto
-    document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
-    const navAmostras = document.querySelector('[data-view="view-amostras"]') || document.getElementById('nav-amostras');
-    if (navAmostras) navAmostras.classList.add('active');
+    // Navegar para a view de Amostras (showView cuida de ativar nav + view)
+    window.showView('view-amostras');
 
     // Renderizar os cards de itens
     renderAmostrasOSItens(osId);
