@@ -4718,6 +4718,8 @@ window.saveNumeracao = async function () {
             pdf_content: pdfUrl || state.numPdfContent || "",
 
             pdf_filename: state.numPdfFilename || "",
+is_custom: window.customNumeracaoEditState ? true : false,
+os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.itemId : null,
 
             elements: state.numElements.map(el => {
 
@@ -11866,9 +11868,10 @@ function renderAmostrasOSItens(osId) {
         ).join('');
 
         // Gerar opções de numeração iniciais
-        const numOpts = (state.numeracoes || []).map(n =>
-            `<option value="${n.id}" ${n.id === item.amostra_num_id ? 'selected' : ''}>${n.name}</option>`
-        ).join('');
+        const numOpts = (state.numeracoes || [])
+            .filter(n => !n.is_custom || n.id === item.amostra_num_id || n.os_item_id === item.id)
+            .map(n => `<option value="${n.id}" ${n.id === item.amostra_num_id ? 'selected' : ''}>${n.name}</option>`)
+            .join('');
 
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
@@ -11917,7 +11920,10 @@ function renderAmostrasOSItens(osId) {
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Numeração Cadastrada</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
+                                    <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
+                                </div>
                                 <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
                                     <option value="">— Selecione uma Numeração —</option>
                                     ${numOpts}
@@ -11979,12 +11985,17 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
 
     // Filtrar numeraes pelo formato_id da cor
     const curNumVal = numSelect.value;
+    const item = state.osItens[osId].find(i => i.id === itemId);
     const filteredNums = (cor && cor.formato_id)
         ? state.numeracoes.filter(n => {
             const ids = n.formato_ids || [n.formato_id];
-            return ids.some(id => String(id) === String(cor.formato_id));
+            const isFormatOk = ids.some(id => String(id) === String(cor.formato_id));
+            const isAccessOk = !n.is_custom || (item && (n.id === item.amostra_num_id || n.os_item_id === item.id));
+            return isFormatOk && isAccessOk;
         })
-        : state.numeracoes;
+        : state.numeracoes.filter(n => {
+            return !n.is_custom || (item && (n.id === item.amostra_num_id || n.os_item_id === item.id));
+        });
 
     numSelect.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
         filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
@@ -12314,11 +12325,55 @@ async function renderItemAmostraCombinada(idx, osId) {
 
 // Expor globalmente
 window.renderItemAmostraCombinada = renderItemAmostraCombinada;
+
+window.customNumeracaoEditState = null;
+
+function editCustomNumeracao(idx, osId, itemId) {
+    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+    if (!numSelect || !numSelect.value) {
+        toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
+        return;
+    }
+    
+    const baseNumId = numSelect.value;
+    const baseNum = state.numeracoes.find(n => n.id === baseNumId);
+    if (!baseNum) return;
+    
+    const item = state.osItens[osId].find(i => i.id === itemId);
+    const modelName = `${item.produto} (Modelo ${idx + 1})`;
+    
+    // Set custom state
+    window.customNumeracaoEditState = {
+        active: true,
+        osId,
+        itemId,
+        idx,
+        modelName,
+        baseNumId
+    };
+    
+    // Mudar view
+    showView('view-numeracoes');
+    
+    setTimeout(() => {
+        // Carrega numerao base
+        editNumeracao(baseNumId);
+        
+        setTimeout(() => {
+            // Limpa ID para forcar INSERT e altera o nome
+            document.getElementById('num-id').value = '';
+            document.getElementById('num-name').value = modelName;
+            
+            toast(`Editando numeração exclusivamente para o modelo: ${modelName}`, 'info');
+        }, 150);
+    }, 100);
+}
 window.onItemCorSelect = onItemCorSelect;
 window.onItemNumSelect = onItemNumSelect;
 window.onItemArteUpload = onItemArteUpload;
 window.onItemArteRemove = onItemArteRemove;
 window.saveAmostraToDB = saveAmostraToDB;
+window.editCustomNumeracao = editCustomNumeracao;
 
 /**
  * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
