@@ -519,21 +519,18 @@ function toast(msg, type = 'info') {
 // ─── Navigation ──────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
-
     btn.addEventListener('click', () => {
-
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-        document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-
-        btn.classList.add('active');
-
-        const view = document.getElementById(btn.dataset.view);
-
-        if (view) view.classList.add('active');
-
+        const viewId = btn.dataset.view;
+        if (typeof window.showView === 'function') {
+            window.showView(viewId);
+        } else {
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+            btn.classList.add('active');
+            const view = document.getElementById(viewId);
+            if (view) view.classList.add('active');
+        }
     });
-
 });
 
 
@@ -4773,18 +4770,28 @@ os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.it
         }
 
         cancelNumEdit();
+await loadAll();
 
-        await loadAll();
-
-
-
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
-        document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-
-        document.getElementById('nav-catalogo').classList.add('active');
-
-        document.getElementById('view-catalogo').classList.add('active');
+if (window.customNumeracaoEditState && window.customNumeracaoEditState.active) {
+    const customState = window.customNumeracaoEditState;
+    window.customNumeracaoEditState = null;
+    
+    // Encontrar a numeracao recem criada (pelo nome)
+    const newNum = state.numeracoes.find(n => n.name === customState.modelName);
+    if (newNum) {
+        // Associar a amostra
+        await saveAmostraToDB(customState.itemId, customState.osId, { amostra_num_id: newNum.id });
+    }
+    
+    showView('view-amostras');
+    renderAmostrasOSItens(customState.osId);
+    toast('Numeração customizada salva e aplicada ao modelo!', 'success');
+} else {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+    document.getElementById('nav-catalogo').classList.add('active');
+    document.getElementById('view-catalogo').classList.add('active');
+}
 
 
 
