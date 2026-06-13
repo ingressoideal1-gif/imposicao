@@ -515,6 +515,111 @@ async def update_os_item(item_id: str, request: Request, user: dict = Depends(ge
     return {"status": "success"}
 
 
+@app.post("/api/migrate_temp_data")
+async def migrate_temp_data(request: Request, secret: str = None):
+    if secret != "ideal_migration_2026":
+        raise HTTPException(status_code=403, detail="Acesso não autorizado")
+    
+    request_data = await request.json()
+    
+    import uuid
+    def to_uuid(old_id):
+        if not old_id:
+            return None
+        try:
+            uuid.UUID(str(old_id))
+            return str(old_id)
+        except ValueError:
+            return str(uuid.uuid5(uuid.NAMESPACE_DNS, str(old_id)))
+            
+    # Formatos
+    for f in request_data.get("formatos", []):
+        fid = f.get("id")
+        if not fid:
+            continue
+        clean = {
+            "id": to_uuid(fid),
+            "name": f.get("name"),
+            "width_mm": float(f.get("width_mm", 0)),
+            "height_mm": float(f.get("height_mm", 0)),
+            "cols": int(f.get("cols", 1)),
+            "rows": int(f.get("rows", 1)),
+            "gap_h_mm": float(f.get("gap_h_mm", 0)),
+            "gap_v_mm": float(f.get("gap_v_mm", 0)),
+            "offset_h_mm": float(f.get("offset_h_mm", 0)),
+            "offset_v_mm": float(f.get("offset_v_mm", 0)),
+        }
+        db.add_formato(clean)
+        
+    # Saídas
+    for s in request_data.get("saidas", []):
+        sid = s.get("id")
+        if not sid:
+            continue
+        clean = {
+            "id": to_uuid(sid),
+            "name": s.get("name"),
+            "width_mm": float(s.get("width_mm", 0)),
+            "height_mm": float(s.get("height_mm", 0)),
+            "file_format": s.get("file_format", "pdf")
+        }
+        db.add_saida(clean)
+        
+    # Cores
+    for c in request_data.get("cores", []):
+        cid = c.get("id")
+        if not cid:
+            continue
+        clean = {
+            "id": to_uuid(cid),
+            "name": c.get("name"),
+            "hex": c.get("hex", ""),
+            "pdf_url": c.get("pdf_url", ""),
+            "pdf_filename": c.get("pdf_filename", "")
+        }
+        db.add_cor(clean)
+        
+    # Numerações
+    for n in request_data.get("numeracoes", []):
+        nid = n.get("id")
+        if not nid:
+            continue
+        clean = {
+            "id": to_uuid(nid),
+            "name": n.get("name"),
+            "formato_id": to_uuid(n.get("formato_id")),
+            "csv_filename": n.get("csv_filename", ""),
+            "csv_headers": n.get("csv_headers", []),
+            "csv_data": n.get("csv_data"),
+            "svg_content": n.get("svg_content", ""),
+            "svg_filename": n.get("svg_filename", ""),
+            "elements": n.get("elements", [])
+        }
+        db.add_numeracao(clean)
+        
+    # Modelos
+    for m in request_data.get("modelos_imposicao", []):
+        mid = m.get("id")
+        if not mid:
+            continue
+        config = dict(m)
+        for k in ("id", "name", "formato_id", "saida_id", "numeracao_id", "cor_id", "created_at"):
+            if k in config:
+                del config[k]
+        clean = {
+            "id": to_uuid(mid),
+            "name": m.get("name", "Modelo"),
+            "formato_id": to_uuid(m.get("formato_id")),
+            "saida_id": to_uuid(m.get("saida_id")),
+            "numeracao_id": to_uuid(m.get("numeracao_id")),
+            "cor_id": to_uuid(m.get("cor_id")),
+            "config": config
+        }
+        db.add_modelo_imposicao(clean)
+        
+    return {"status": "success", "message": "Migração executada no servidor"}
+
+
 if __name__ == "__main__":
     import uvicorn
     db.init_db()
