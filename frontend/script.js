@@ -11860,103 +11860,96 @@ function renderAmostrasOSItens(osId) {
         if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADA</span>';
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
 
+        // Card idêntico ao "Amostra Combinada Unificada", sem sliders
         return `
-        <div class="card" style="border: 1px solid var(--border);">
-            <div class="card-header" style="background: rgba(59, 130, 246, 0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <span class="card-title">🧪 <strong>Modelo ${idx + 1}:</strong> ${item.produto || '—'} — <span style="color: var(--text-dim); font-weight: 400;">${item.formato || ''}</span></span>
-                ${statusBadge}
-            </div>
-            <div style="padding: 20px;">
-                <!-- Info Grid -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px;">
-                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
-                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Setor</div>
-                        <div style="font-size: 0.95rem; font-weight: 600;">${item.setor || '—'}</div>
-                    </div>
-                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
-                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Quantidade</div>
-                        <div style="font-size: 0.95rem; font-weight: 600;">${item.quantidade || 0}</div>
-                    </div>
-                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
-                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">NI → NF</div>
-                        <div style="font-size: 0.95rem; font-weight: 600; font-family: monospace;">${item.num_inicial || 1} → ${item.num_final || item.quantidade || 0}</div>
-                    </div>
-                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
-                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Verso</div>
-                        <div style="font-size: 0.95rem; font-weight: 600;">${item.verso ? '✅ Sim' : '— Não'}</div>
-                    </div>
-                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
-                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Formato</div>
-                        <div style="font-size: 0.95rem; font-weight: 600;">${item.formato || '—'}</div>
-                    </div>
-                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
-                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Cor</div>
-                        <div style="font-size: 0.95rem; font-weight: 600;">${item.cor || 'STD'}</div>
-                    </div>
+        <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
+            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span class="card-title">🧪 <strong>Modelo ${idx + 1}: ${item.produto || '—'}</strong> — ${item.formato || ''}</span>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
+                    <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} → NF: ${item.num_final || item.quantidade || 0}</span>
+                    <span class="badge" style="font-size: 0.72rem;">${item.verso ? '✅ Verso' : '— S/ Verso'}</span>
+                    <span class="badge" style="font-size: 0.72rem;">🏭 ${item.setor || '—'}</span>
+                    ${statusBadge}
                 </div>
+            </div>
+            <div style="padding: 24px;">
 
-                <!-- Meio: Decisão + Configurações lado a lado -->
+                <!-- LINHA 2: Decisão + Configurações (lado a lado) — idêntico ao card avulso -->
                 <div class="amostra-mid-row">
                     <!-- Coluna Esquerda: Decisão de Qualidade -->
-                    <div class="amostra-decisao-panel" style="margin-top: 0;">
-                        <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
+                    <div class="amostra-decisao-panel">
+                        <div class="amostra-decisao-title">
+                            ⚖️ Decisão de Qualidade
+                        </div>
+                        
+                        <div class="amostra-decisao-status-box">
+                            <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
+                            ${statusBadge}
+                        </div>
+
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações</label>
-                            <textarea class="form-control" rows="2" placeholder="Observações..." 
-                                style="resize: none; background: rgba(0,0,0,0.2); font-size: 0.82rem; padding: 8px;"
-                                id="amostra-obs-${item.id}"
+                            <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
+                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
                                 onchange="saveAmostraItemObs('${item.id}', this.value)">${obs}</textarea>
                         </div>
+
                         <div class="amostra-decisao-btns">
-                            <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.82rem;" 
-                                onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">✅ APROVAR</button>
-                            <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.82rem;" 
-                                onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">❌ ALTERAR</button>
+                            <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                                ✅ APROVAR
+                            </button>
+                            <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                ❌ ALTERAR
+                            </button>
                         </div>
                     </div>
 
                     <!-- Coluna Direita: Configurações da Amostra -->
-                    <div class="amostra-config-panel" style="margin-top: 0;">
+                    <div class="amostra-config-panel">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
                             ⚙️ Configurações da Amostra
                         </h3>
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; flex-direction: column; gap: 14px;">
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
                                 <select class="form-control" id="amostra-item-cor-${idx}" onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
                                     <option value="">— Selecione uma Cor —</option>
                                     ${corsOpts}
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Numeração Cadastrada</label>
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Numeração Cadastrada</label>
                                 <select class="form-control" id="amostra-item-num-${idx}" onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
                                     <option value="">— Selecione uma Numeração —</option>
                                     ${numOpts}
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
-                                <div style="display:flex; gap:8px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
-                                    <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">🖼️ Upload Arte</label>
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
+                                <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+                                    <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">
+                                        🖼️ Upload Arte
+                                    </label>
                                     <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                         onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
-                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.78rem; color:var(--text-dim);"></span>
+                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="display:none; padding: 4px 8px;" onclick="document.getElementById('amostra-item-arte-${idx}').value=''; this.style.display='none'; document.getElementById('amostra-item-arte-name-${idx}').textContent=''; renderItemAmostraCombinada(${idx}, '${osId}')">✕ Remover</button>
+                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)"></span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Canvas de Visualização Combinada (full-width) -->
-                <div style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <!-- LINHA 3: Canvas de Visualização Combinada (full-width) — idêntico ao card avulso -->
+                <div class="amostra-preview-container" style="margin-top: 20px;">
                     <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
-                    <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; background: rgba(15,23,42,0.3); border-radius: var(--radius-sm); border: 1px dashed var(--border);">
-                        <div style="font-size: 2rem; margin-bottom: 8px; opacity: 0.6;">🧪</div>
-                        <p style="font-size: 0.85rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
-                        <p style="font-size: 0.78rem; opacity: 0.6; margin-top: 4px;">A visualização combinada aparecerá aqui.</p>
+                    <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                        <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🧪</div>
+                        <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
+                        <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
                     </div>
                 </div>
+
             </div>
         </div>`;
     }).join('');
