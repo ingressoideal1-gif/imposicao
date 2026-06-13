@@ -60,6 +60,9 @@ DEFAULT_DB = {
 
 # ─── CARREGAR CREDENCIAIS SUPABASE DO PARCEIRO VIBECODE ────────────────────────
 
+DEFAULT_SUPABASE_URL = "https://vwbtitjlpelrcnsytzqw.supabase.co"
+DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3YnRpdGpscGVscmNuc3l0enF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NzE5NTEsImV4cCI6MjA2NDU0Nzk1MX0.te1kg9RKJUQ-gBQ7YiXLDk-Ej8JMNcujIzIR-fTGR-o"
+
 SUPABASE_URL = None
 SUPABASE_KEY = None
 
@@ -86,6 +89,12 @@ if os.path.exists(env_local_path):
 # Sobrescrever via variáveis de ambiente se presentes
 SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL)
 SUPABASE_KEY = os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", SUPABASE_KEY)
+
+# Fallback para os valores padrão do parceiro Vibecode
+if not SUPABASE_URL:
+    SUPABASE_URL = DEFAULT_SUPABASE_URL
+if not SUPABASE_KEY:
+    SUPABASE_KEY = DEFAULT_SUPABASE_KEY
 
 IS_SUPABASE_ACTIVE = bool(SUPABASE_URL and SUPABASE_KEY)
 
