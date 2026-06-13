@@ -11784,6 +11784,15 @@ async function navigateToAmostrasFromOS(osId) {
         await loadOSItens(osId);
     }
 
+    // Garantir que cores e numerações estejam carregados (necessários para os selects)
+    if (!state.cores || state.cores.length === 0 || !state.numeracoes || state.numeracoes.length === 0) {
+        try {
+            await loadAll();
+        } catch (e) {
+            console.warn('Erro ao carregar dados de cadastro:', e);
+        }
+    }
+
     // Salvar o ID do pedido ativo na tela de Amostras
     state.amostrasOSAtivo = osId;
 
@@ -11912,7 +11921,7 @@ function renderAmostrasOSItens(osId) {
                         <div style="display: flex; flex-direction: column; gap: 14px;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
-                                <select class="form-control" id="amostra-item-cor-${idx}" onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
+                                <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}')">
                                     <option value="">— Selecione uma Cor —</option>
                                     ${corsOpts}
                                 </select>
@@ -11956,8 +11965,42 @@ function renderAmostrasOSItens(osId) {
 }
 
 /**
+ * Ao selecionar cor em um card dinâmico, filtrar numerações compatíveis
+ * (idêntico ao onAmostraCorSelect do card avulso)
+ */
+function onItemCorSelect(idx, osId) {
+    const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
+    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+    if (!corSelect || !numSelect) return;
+
+    const corId = corSelect.value;
+    const cor = corId ? state.cores.find(c => c.id === corId) : null;
+
+    // Filtrar numerações pelo formato_id da cor
+    const curNumVal = numSelect.value;
+    const filteredNums = (cor && cor.formato_id)
+        ? state.numeracoes.filter(n => {
+            const ids = n.formato_ids || [n.formato_id];
+            return ids.some(id => String(id) === String(cor.formato_id));
+        })
+        : state.numeracoes;
+
+    numSelect.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
+        filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+
+    if (filteredNums.some(n => n.id === curNumVal)) {
+        numSelect.value = curNumVal;
+    } else {
+        numSelect.value = '';
+    }
+
+    // Renderizar canvas
+    renderItemAmostraCombinada(idx, osId);
+}
+
+/**
  * Renderiza o canvas de preview combinada para um card de item individual
- * Reutiliza a lógica do renderAmostraCombinada adaptada para cards dinâmicos
+ * Usa a mesma lógica do renderAmostraCombinada do card avulso
  */
 async function renderItemAmostraCombinada(idx, osId) {
     const canvas = document.getElementById(`amostra-item-canvas-${idx}`);
@@ -11966,6 +12009,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     const numSelect = document.getElementById(`amostra-item-num-${idx}`);
     const arteInput = document.getElementById(`amostra-item-arte-${idx}`);
     const arteNameSpan = document.getElementById(`amostra-item-arte-name-${idx}`);
+    const removeBtn = document.getElementById(`btn-remove-amostra-arte-${idx}`);
 
     if (!canvas) return;
 
@@ -11973,38 +12017,45 @@ async function renderItemAmostraCombinada(idx, osId) {
     const numId = numSelect ? numSelect.value : '';
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
 
-    // Mostrar nome do arquivo de arte
-    if (arteNameSpan && hasArte) {
-        arteNameSpan.textContent = arteInput.files[0].name;
-    }
+    // Mostrar nome do arquivo e botão remover
+    if (arteNameSpan) arteNameSpan.textContent = hasArte ? arteInput.files[0].name : '';
+    if (removeBtn) removeBtn.style.display = hasArte ? '' : 'none';
 
-    // Se nada selecionado, esconder canvas
+    // Se nada selecionado, esconder canvas e mostrar estado vazio
     if (!corId && !numId && !hasArte) {
         canvas.style.display = 'none';
         if (empty) empty.style.display = 'block';
         return;
     }
 
-    // Buscar formato para dimensões
+    // Obter a cor selecionada e suas dimensões
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
-    let targetW = 180; // Largura padrão em mm
-    let targetH = 50;  // Altura padrão em mm
 
+    // Usar o formato da cor ou fallback para primeiro formato cadastrado
+    let fmt = null;
+    if (cor && cor.formato_id) {
+        fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
+    }
+    if (!fmt && state.formatos.length > 0) {
+        fmt = state.formatos[0];
+    }
+
+    // Dimensões do canvas
+    let targetW = fmt ? fmt.width_mm : 180;
+    let targetH = fmt ? fmt.height_mm : 50;
     if (cor && cor.width_mm && cor.height_mm) {
         targetW = cor.width_mm;
         targetH = cor.height_mm;
-    } else {
-        // Tentar obter das dimensões do formato
-        const formatos = state.formatos || [];
-        if (formatos.length > 0) {
-            targetW = formatos[0].width_mm || 180;
-            targetH = formatos[0].height_mm || 50;
-        }
     }
 
-    const SCALE = 2; // Escala de pixels por mm
-    const W = Math.round(targetW * SCALE);
-    const H = Math.round(targetH * SCALE);
+    // Calcular escala como no card avulso (fit dentro do container)
+    const containerWidth = canvas.parentElement ? canvas.parentElement.clientWidth : 600;
+    const S = Math.min(containerWidth / targetW, 4); // Max 4px/mm
+
+    const W = Math.round(targetW * S);
+    const H = Math.round(targetH * S);
+
+    if (W <= 0 || H <= 0) return;
 
     canvas.width = W;
     canvas.height = H;
@@ -12016,30 +12067,30 @@ async function renderItemAmostraCombinada(idx, osId) {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, W, H);
 
-    // Camada 1: Cor (PDF renderizado como imagem)
-    if (cor && cor.pdf_base64) {
-        try {
-            const img = new Image();
-            await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = reject;
-                img.src = `data:image/png;base64,${cor.pdf_base64}`;
-            });
-            ctx.drawImage(img, 0, 0, W, H);
-        } catch (e) {
-            console.warn(`Erro ao renderizar cor para item ${idx}:`, e);
-            // Fallback: preencher com a cor hex
-            if (cor.hex) {
-                ctx.fillStyle = cor.hex;
-                ctx.fillRect(0, 0, W, H);
+    // Camada 1: Cor (renderizar a partir do canvas de cor ou PDF base64)
+    if (cor) {
+        if (cor.pdf_base64) {
+            try {
+                const img = new Image();
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = `data:image/png;base64,${cor.pdf_base64}`;
+                });
+                if (img.width > 0 && img.height > 0) {
+                    ctx.drawImage(img, 0, 0, W, H);
+                }
+            } catch (e) {
+                console.warn(`[Item ${idx}] Erro ao renderizar cor PDF:`, e);
+                if (cor.hex) { ctx.fillStyle = cor.hex; ctx.fillRect(0, 0, W, H); }
             }
+        } else if (cor.hex) {
+            ctx.fillStyle = cor.hex;
+            ctx.fillRect(0, 0, W, H);
         }
-    } else if (cor && cor.hex) {
-        ctx.fillStyle = cor.hex;
-        ctx.fillRect(0, 0, W, H);
     }
 
-    // Camada 2: Numeração (SVG renderizado como imagem)
+    // Camada 2: Numeração (SVG content)
     if (numId) {
         const num = state.numeracoes.find(n => n.id === numId);
         if (num && num.svg_content) {
@@ -12052,10 +12103,12 @@ async function renderItemAmostraCombinada(idx, osId) {
                     svgImg.onerror = reject;
                     svgImg.src = svgUrl;
                 });
-                ctx.drawImage(svgImg, 0, 0, W, H);
+                if (svgImg.width > 0 && svgImg.height > 0) {
+                    ctx.drawImage(svgImg, 0, 0, W, H);
+                }
                 URL.revokeObjectURL(svgUrl);
             } catch (e) {
-                console.warn(`Erro ao renderizar numeração para item ${idx}:`, e);
+                console.warn(`[Item ${idx}] Erro ao renderizar numeração SVG:`, e);
             }
         }
     }
@@ -12071,21 +12124,24 @@ async function renderItemAmostraCombinada(idx, osId) {
                 arteImg.onerror = reject;
                 arteImg.src = url;
             });
-            ctx.drawImage(arteImg, 0, 0, W, H);
+            if (arteImg.width > 0 && arteImg.height > 0) {
+                ctx.drawImage(arteImg, 0, 0, W, H);
+            }
             URL.revokeObjectURL(url);
         } catch (e) {
-            console.warn(`Erro ao renderizar arte para item ${idx}:`, e);
+            console.warn(`[Item ${idx}] Erro ao renderizar arte:`, e);
         }
     }
 
     // Borda decorativa
-    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, W, H);
 }
 
 // Expor globalmente
 window.renderItemAmostraCombinada = renderItemAmostraCombinada;
+window.onItemCorSelect = onItemCorSelect;
 
 /**
  * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
