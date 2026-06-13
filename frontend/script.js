@@ -11247,7 +11247,7 @@ function renderOrdens() {
                 return `
                     <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
                         <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
-                        <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
+                        <td><strong style="font-size: 1.05rem; color: var(--blue); cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" onclick="event.stopPropagation(); navigateToAmostrasFromOS('${os.id}')" title="Abrir na página de Amostras">#${os.numero}</strong></td>
                         <td><strong>${os.cliente || '—'}</strong></td>
                         <td>${os.vendedor || '—'}</td>
                         <td>${renderDesignerSelect(os.id)}</td>
@@ -11763,7 +11763,215 @@ if (origShowView) {
         if (viewId === 'view-imposicao') {
             renderImpOSQueue();
         }
+        // Se saindo da view de amostras sem pedido ativo, limpar
+        if (viewId !== 'view-amostras') {
+            // não limpar os dados, deixar persistir para quando voltar
+        }
     };
+}
+
+/**
+ * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
+ */
+async function navigateToAmostrasFromOS(osId) {
+    const os = state.ordens.find(o => o.id === osId);
+    if (!os) {
+        toast('Pedido não encontrado.', 'error');
+        return;
+    }
+
+    // Garantir que os itens estejam carregados
+    if (!state.osItens[osId] || state.osItens[osId].length === 0) {
+        await loadOSItens(osId);
+    }
+
+    // Salvar o ID do pedido ativo na tela de Amostras
+    state.amostrasOSAtivo = osId;
+
+    // Navegar para a view de Amostras
+    if (window.showView) {
+        window.showView('view-amostras');
+    }
+
+    // Ativar o item de navegação correto
+    document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+    const navAmostras = document.querySelector('[data-view="view-amostras"]') || document.getElementById('nav-amostras');
+    if (navAmostras) navAmostras.classList.add('active');
+
+    // Renderizar os cards de itens
+    renderAmostrasOSItens(osId);
+}
+
+/**
+ * Renderiza os cards de itens do pedido na página de Amostras
+ * Cada item gera um card com: Produto, Setor, Quantidade, NI→NF, Verso, Cor, Numeração + Decisão
+ */
+function renderAmostrasOSItens(osId) {
+    const os = state.ordens.find(o => o.id === osId);
+    const container = document.getElementById('amostras-itens-container');
+    const banner = document.getElementById('amostras-os-banner');
+    const avulsa = document.getElementById('amostra-combinada-avulsa');
+
+    if (!os || !container) return;
+
+    const itens = state.osItens[osId] || [];
+
+    // Mostrar banner, esconder card avulso
+    if (banner) {
+        banner.style.display = 'block';
+        const numEl = document.getElementById('amostras-os-numero');
+        const cliEl = document.getElementById('amostras-os-cliente');
+        const countEl = document.getElementById('amostras-os-itens-count');
+        if (numEl) numEl.textContent = `#${os.numero}`;
+        if (cliEl) cliEl.textContent = os.cliente || '';
+        if (countEl) countEl.textContent = `${itens.length} ${itens.length === 1 ? 'modelo' : 'modelos'}`;
+    }
+    if (avulsa) avulsa.style.display = 'none';
+
+    if (!itens.length) {
+        container.innerHTML = `
+            <div class="card" style="border: 1px dashed var(--border);">
+                <div style="padding: 40px; text-align: center; color: var(--text-dim);">
+                    <div style="font-size: 2.5rem; margin-bottom: 12px;">📦</div>
+                    <p>Nenhum modelo encontrado neste pedido.</p>
+                </div>
+            </div>`;
+        return;
+    }
+
+    // Carregar decisões salvas
+    const decisoes = JSON.parse(localStorage.getItem('vibe_amostra_decisoes') || '{}');
+
+    container.innerHTML = itens.map((item, idx) => {
+        const itemDecisao = decisoes[item.id] || {};
+        const status = itemDecisao.status || 'PENDENTE';
+        const obs = itemDecisao.obs || '';
+        
+        let statusBadge = '<span class="badge badge-yellow">⏳ PENDENTE</span>';
+        if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADA</span>';
+        else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
+
+        return `
+        <div class="card" style="border: 1px solid var(--border);">
+            <div class="card-header" style="background: rgba(59, 130, 246, 0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span class="card-title">🧪 <strong>Modelo ${idx + 1}:</strong> ${item.produto || '—'} — <span style="color: var(--text-dim); font-weight: 400;">${item.modelo || ''}</span></span>
+                ${statusBadge}
+            </div>
+            <div style="padding: 20px;">
+                <!-- Info Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
+                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Setor</div>
+                        <div style="font-size: 0.95rem; font-weight: 600;">${item.setor || '—'}</div>
+                    </div>
+                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
+                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Quantidade</div>
+                        <div style="font-size: 0.95rem; font-weight: 600;">${item.quantidade || 0}</div>
+                    </div>
+                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
+                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">NI → NF</div>
+                        <div style="font-size: 0.95rem; font-weight: 600; font-family: monospace;">${item.num_inicial || 1} → ${item.num_final || item.quantidade || 0}</div>
+                    </div>
+                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
+                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Verso</div>
+                        <div style="font-size: 0.95rem; font-weight: 600;">${item.verso ? '✅ Sim' : '— Não'}</div>
+                    </div>
+                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
+                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Formato</div>
+                        <div style="font-size: 0.95rem; font-weight: 600;">${item.formato || '—'}</div>
+                    </div>
+                    <div style="background: rgba(15,23,42,0.4); border-radius: var(--radius-sm); padding: 10px 14px; border: 1px solid var(--border);">
+                        <div style="font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; margin-bottom: 4px;">Cor</div>
+                        <div style="font-size: 0.95rem; font-weight: 600;">${item.cor || 'STD'}</div>
+                    </div>
+                </div>
+
+                <!-- Decisão de Qualidade -->
+                <div class="amostra-mid-row">
+                    <div class="amostra-decisao-panel" style="margin-top: 0;">
+                        <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações</label>
+                            <textarea class="form-control" rows="2" placeholder="Observações..." 
+                                style="resize: none; background: rgba(0,0,0,0.2); font-size: 0.82rem; padding: 8px;"
+                                id="amostra-obs-${item.id}"
+                                onchange="saveAmostraItemObs('${item.id}', this.value)">${obs}</textarea>
+                        </div>
+                        <div class="amostra-decisao-btns">
+                            <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.82rem;" 
+                                onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">✅ APROVAR</button>
+                            <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.82rem;" 
+                                onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">❌ ALTERAR</button>
+                        </div>
+                    </div>
+
+                    <div class="amostra-config-panel" style="margin-top: 0;">
+                        <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+                            ⚙️ Configurações
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Numeração</label>
+                                <div style="font-size: 0.9rem; font-weight: 600; padding: 6px 0;">${item.numeracao || 'SEQUENCIAL'}</div>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Blocos</label>
+                                <div style="font-size: 0.9rem; font-weight: 600; padding: 6px 0;">${item.blocos || 'N'}</div>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
+                                <div style="display:flex; gap:8px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+                                    <label class="btn btn-sm btn-secondary" for="amostra-arte-${item.id}" style="margin: 0; cursor: pointer;">🖼️ Upload Arte</label>
+                                    <input type="file" id="amostra-arte-${item.id}" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+/**
+ * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
+ */
+function decisionAmostraItem(itemId, osId, status) {
+    const decisoes = JSON.parse(localStorage.getItem('vibe_amostra_decisoes') || '{}');
+    const obsEl = document.getElementById(`amostra-obs-${itemId}`);
+    const obs = obsEl ? obsEl.value : '';
+    
+    decisoes[itemId] = { status, obs, timestamp: new Date().toISOString() };
+    localStorage.setItem('vibe_amostra_decisoes', JSON.stringify(decisoes));
+
+    toast(`Item ${status === 'APROVADA' ? 'aprovado' : 'marcado para alteração'}!`, status === 'APROVADA' ? 'success' : 'warning');
+    
+    // Re-renderizar
+    renderAmostrasOSItens(osId);
+}
+
+/**
+ * Salva a observação de um item de amostra
+ */
+function saveAmostraItemObs(itemId, obs) {
+    const decisoes = JSON.parse(localStorage.getItem('vibe_amostra_decisoes') || '{}');
+    if (!decisoes[itemId]) decisoes[itemId] = {};
+    decisoes[itemId].obs = obs;
+    localStorage.setItem('vibe_amostra_decisoes', JSON.stringify(decisoes));
+}
+
+/**
+ * Limpa o pedido ativo da tela de Amostras, voltando ao modo avulso
+ */
+function clearAmostrasOS() {
+    state.amostrasOSAtivo = null;
+    const container = document.getElementById('amostras-itens-container');
+    const banner = document.getElementById('amostras-os-banner');
+    const avulsa = document.getElementById('amostra-combinada-avulsa');
+    
+    if (container) container.innerHTML = '';
+    if (banner) banner.style.display = 'none';
+    if (avulsa) avulsa.style.display = '';
 }
 
 // Expor funções globais
@@ -11781,4 +11989,8 @@ window.toggleImpOSQueue = toggleImpOSQueue;
 window.matchFormato = matchFormato;
 window.matchCor = matchCor;
 window.matchNumeracao = matchNumeracao;
+window.navigateToAmostrasFromOS = navigateToAmostrasFromOS;
+window.clearAmostrasOS = clearAmostrasOS;
+window.decisionAmostraItem = decisionAmostraItem;
+window.saveAmostraItemObs = saveAmostraItemObs;
 

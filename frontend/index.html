@@ -861,8 +861,24 @@
                     </div>
                 </div>
 
-                <!-- Painel Único de Amostra Combinada -->
-                <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
+                <!-- Banner do Pedido Ativo (visível quando navegando da Lista de Arte) -->
+                <div id="amostras-os-banner" style="display: none; margin-bottom: 16px;">
+                    <div class="card" style="border: 2px solid var(--yellow); margin-bottom: 0;">
+                        <div class="card-header" style="background: rgba(245, 158, 11, 0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                            <span class="card-title">📋 <strong>Pedido <span id="amostras-os-numero" style="color: var(--yellow);"></span></strong> — <span id="amostras-os-cliente" style="font-weight: 400; color: var(--text-dim);"></span></span>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span id="amostras-os-itens-count" class="badge badge-yellow"></span>
+                                <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem;">✕ Fechar Pedido</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Container dinâmico dos cards de itens do pedido -->
+                <div id="amostras-itens-container" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;"></div>
+
+                <!-- Painel Único de Amostra Combinada (modo avulso) -->
+                <div class="card" id="amostra-combinada-avulsa" style="border: 2px solid var(--blue); margin-bottom: 0;">
                     <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center;">
                         <span class="card-title">🧪 <strong>Amostra Combinada Unificada</strong></span>
                         <span class="badge badge-blue">Resultado Final</span>
