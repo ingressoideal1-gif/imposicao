@@ -11241,16 +11241,15 @@ function renderOrdens() {
             if (tableArte) tableArte.style.display = '';
 
             tbodyArte.innerHTML = filteredArte.map(os => {
-                const isExpanded = state.osExpandedId === os.id;
                 const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
                 return `
-                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
-                        <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
-                        <td><strong style="font-size: 1.05rem; color: var(--blue); cursor: pointer; text-decoration: underline; text-decoration-style: dotted;" onclick="event.stopPropagation(); navigateToAmostrasFromOS('${os.id}')" title="Abrir na página de Amostras">#${os.numero}</strong></td>
+                    <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer;" title="Abrir Amostras">
+                        <td style="text-align: center; font-size: 1.1rem;">▶</td>
+                        <td><strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong></td>
                         <td><strong>${os.cliente || '—'}</strong></td>
                         <td>${os.vendedor || '—'}</td>
-                        <td>${renderDesignerSelect(os.id)}</td>
+                        <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td>${getStatusBadge(os.status)}</td>
@@ -11839,6 +11838,16 @@ function renderAmostrasOSItens(osId) {
         return;
     }
 
+    // Gerar opções de cor do cadastro
+    const corsOpts = (state.cores || []).map(c =>
+        `<option value="${c.id}">${c.name}</option>`
+    ).join('');
+
+    // Gerar opções de numeração do cadastro
+    const numOpts = (state.numeracoes || []).map(n =>
+        `<option value="${n.id}">${n.name}</option>`
+    ).join('');
+
     // Carregar decisões salvas
     const decisoes = JSON.parse(localStorage.getItem('vibe_amostra_decisoes') || '{}');
 
@@ -11854,7 +11863,7 @@ function renderAmostrasOSItens(osId) {
         return `
         <div class="card" style="border: 1px solid var(--border);">
             <div class="card-header" style="background: rgba(59, 130, 246, 0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <span class="card-title">🧪 <strong>Modelo ${idx + 1}:</strong> ${item.produto || '—'} — <span style="color: var(--text-dim); font-weight: 400;">${item.modelo || ''}</span></span>
+                <span class="card-title">🧪 <strong>Modelo ${idx + 1}:</strong> ${item.produto || '—'} — <span style="color: var(--text-dim); font-weight: 400;">${item.formato || ''}</span></span>
                 ${statusBadge}
             </div>
             <div style="padding: 20px;">
@@ -11886,8 +11895,9 @@ function renderAmostrasOSItens(osId) {
                     </div>
                 </div>
 
-                <!-- Decisão de Qualidade -->
+                <!-- Meio: Decisão + Configurações lado a lado -->
                 <div class="amostra-mid-row">
+                    <!-- Coluna Esquerda: Decisão de Qualidade -->
                     <div class="amostra-decisao-panel" style="margin-top: 0;">
                         <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
                         <div class="form-group" style="margin-bottom: 0;">
@@ -11905,33 +11915,184 @@ function renderAmostrasOSItens(osId) {
                         </div>
                     </div>
 
+                    <!-- Coluna Direita: Configurações da Amostra -->
                     <div class="amostra-config-panel" style="margin-top: 0;">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
-                            ⚙️ Configurações
+                            ⚙️ Configurações da Amostra
                         </h3>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Numeração</label>
-                                <div style="font-size: 0.9rem; font-weight: 600; padding: 6px 0;">${item.numeracao || 'SEQUENCIAL'}</div>
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
+                                <select class="form-control" id="amostra-item-cor-${idx}" onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
+                                    <option value="">— Selecione uma Cor —</option>
+                                    ${corsOpts}
+                                </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Blocos</label>
-                                <div style="font-size: 0.9rem; font-weight: 600; padding: 6px 0;">${item.blocos || 'N'}</div>
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Numeração Cadastrada</label>
+                                <select class="form-control" id="amostra-item-num-${idx}" onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
+                                    <option value="">— Selecione uma Numeração —</option>
+                                    ${numOpts}
+                                </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
                                 <div style="display:flex; gap:8px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
-                                    <label class="btn btn-sm btn-secondary" for="amostra-arte-${item.id}" style="margin: 0; cursor: pointer;">🖼️ Upload Arte</label>
-                                    <input type="file" id="amostra-arte-${item.id}" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
+                                    <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">🖼️ Upload Arte</label>
+                                    <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
+                                        onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
+                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.78rem; color:var(--text-dim);"></span>
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Canvas de Visualização Combinada (full-width) -->
+                <div style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+                    <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
+                    <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; background: rgba(15,23,42,0.3); border-radius: var(--radius-sm); border: 1px dashed var(--border);">
+                        <div style="font-size: 2rem; margin-bottom: 8px; opacity: 0.6;">🧪</div>
+                        <p style="font-size: 0.85rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
+                        <p style="font-size: 0.78rem; opacity: 0.6; margin-top: 4px;">A visualização combinada aparecerá aqui.</p>
                     </div>
                 </div>
             </div>
         </div>`;
     }).join('');
 }
+
+/**
+ * Renderiza o canvas de preview combinada para um card de item individual
+ * Reutiliza a lógica do renderAmostraCombinada adaptada para cards dinâmicos
+ */
+async function renderItemAmostraCombinada(idx, osId) {
+    const canvas = document.getElementById(`amostra-item-canvas-${idx}`);
+    const empty = document.getElementById(`amostra-item-empty-${idx}`);
+    const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
+    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+    const arteInput = document.getElementById(`amostra-item-arte-${idx}`);
+    const arteNameSpan = document.getElementById(`amostra-item-arte-name-${idx}`);
+
+    if (!canvas) return;
+
+    const corId = corSelect ? corSelect.value : '';
+    const numId = numSelect ? numSelect.value : '';
+    const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
+
+    // Mostrar nome do arquivo de arte
+    if (arteNameSpan && hasArte) {
+        arteNameSpan.textContent = arteInput.files[0].name;
+    }
+
+    // Se nada selecionado, esconder canvas
+    if (!corId && !numId && !hasArte) {
+        canvas.style.display = 'none';
+        if (empty) empty.style.display = 'block';
+        return;
+    }
+
+    // Buscar formato para dimensões
+    const cor = corId ? state.cores.find(c => c.id === corId) : null;
+    let targetW = 180; // Largura padrão em mm
+    let targetH = 50;  // Altura padrão em mm
+
+    if (cor && cor.width_mm && cor.height_mm) {
+        targetW = cor.width_mm;
+        targetH = cor.height_mm;
+    } else {
+        // Tentar obter das dimensões do formato
+        const formatos = state.formatos || [];
+        if (formatos.length > 0) {
+            targetW = formatos[0].width_mm || 180;
+            targetH = formatos[0].height_mm || 50;
+        }
+    }
+
+    const SCALE = 2; // Escala de pixels por mm
+    const W = Math.round(targetW * SCALE);
+    const H = Math.round(targetH * SCALE);
+
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.display = 'block';
+    if (empty) empty.style.display = 'none';
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+
+    // Camada 1: Cor (PDF renderizado como imagem)
+    if (cor && cor.pdf_base64) {
+        try {
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = `data:image/png;base64,${cor.pdf_base64}`;
+            });
+            ctx.drawImage(img, 0, 0, W, H);
+        } catch (e) {
+            console.warn(`Erro ao renderizar cor para item ${idx}:`, e);
+            // Fallback: preencher com a cor hex
+            if (cor.hex) {
+                ctx.fillStyle = cor.hex;
+                ctx.fillRect(0, 0, W, H);
+            }
+        }
+    } else if (cor && cor.hex) {
+        ctx.fillStyle = cor.hex;
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    // Camada 2: Numeração (SVG renderizado como imagem)
+    if (numId) {
+        const num = state.numeracoes.find(n => n.id === numId);
+        if (num && num.svg_content) {
+            try {
+                const svgBlob = new Blob([num.svg_content], { type: 'image/svg+xml' });
+                const svgUrl = URL.createObjectURL(svgBlob);
+                const svgImg = new Image();
+                await new Promise((resolve, reject) => {
+                    svgImg.onload = resolve;
+                    svgImg.onerror = reject;
+                    svgImg.src = svgUrl;
+                });
+                ctx.drawImage(svgImg, 0, 0, W, H);
+                URL.revokeObjectURL(svgUrl);
+            } catch (e) {
+                console.warn(`Erro ao renderizar numeração para item ${idx}:`, e);
+            }
+        }
+    }
+
+    // Camada 3: Arte (arquivo local do upload)
+    if (hasArte) {
+        try {
+            const file = arteInput.files[0];
+            const url = URL.createObjectURL(file);
+            const arteImg = new Image();
+            await new Promise((resolve, reject) => {
+                arteImg.onload = resolve;
+                arteImg.onerror = reject;
+                arteImg.src = url;
+            });
+            ctx.drawImage(arteImg, 0, 0, W, H);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.warn(`Erro ao renderizar arte para item ${idx}:`, e);
+        }
+    }
+
+    // Borda decorativa
+    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, W, H);
+}
+
+// Expor globalmente
+window.renderItemAmostraCombinada = renderItemAmostraCombinada;
 
 /**
  * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
