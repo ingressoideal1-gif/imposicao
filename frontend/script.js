@@ -11052,6 +11052,86 @@ function getImpressaoBadge(imp) {
  * Renderiza a tabela de OS na view
  */
 /**
+/**
+ * Lista de designers cadastrados (fonte local até integração com E-deal)
+ */
+const DESIGNERS_LISTA = [
+    'Amanda Souza',
+    'Junior',
+];
+
+/**
+ * Obtém o designer atribuído a uma OS (salvo em localStorage)
+ */
+function getOSDesigner(osId) {
+    const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
+    return overrides[osId] || '';
+}
+
+/**
+ * Define o designer responsável por uma OS (salva em localStorage)
+ */
+function setOSDesigner(osId, designerName) {
+    const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
+    if (designerName) {
+        overrides[osId] = designerName;
+    } else {
+        delete overrides[osId];
+    }
+    localStorage.setItem('vibe_designer_overrides', JSON.stringify(overrides));
+    renderOrdens();
+}
+
+// Expor globalmente
+window.setOSDesigner = setOSDesigner;
+
+/**
+ * Popula o dropdown de filtro de designers com os nomes disponíveis
+ */
+function populateDesignerFilter() {
+    const filterSelect = document.getElementById('os-filter-designer');
+    if (!filterSelect) return;
+
+    const currentValue = filterSelect.value;
+    
+    // Coletar designers atribuídos + lista fixa
+    const allDesigners = new Set(DESIGNERS_LISTA);
+    const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
+    Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
+
+    filterSelect.innerHTML = '<option value="">🎨 Todos os Designers</option>';
+    [...allDesigners].sort().forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        filterSelect.appendChild(opt);
+    });
+
+    filterSelect.value = currentValue;
+}
+
+/**
+ * Gera o HTML do select inline de designer para uma OS na tabela
+ */
+function renderDesignerSelect(osId) {
+    const currentDesigner = getOSDesigner(osId);
+    const allDesigners = new Set(DESIGNERS_LISTA);
+    const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
+    Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
+
+    let options = '<option value="">— Atribuir —</option>';
+    [...allDesigners].sort().forEach(d => {
+        const selected = d === currentDesigner ? 'selected' : '';
+        const escaped = d.replace(/'/g, "\\'");
+        options += `<option value="${escaped}" ${selected}>${d}</option>`;
+    });
+
+    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
+                onclick="event.stopPropagation()" 
+                onchange="event.stopPropagation(); setOSDesigner('${osId}', this.value)">${options}</select>`;
+}
+
+/**
  * Renderiza as tabelas de OS (Fila de Impressão e Fila de Arte) na view
  */
 function renderOrdens() {
@@ -11062,6 +11142,7 @@ function renderOrdens() {
     // Filtros de busca
     const searchImpressao = (document.getElementById('os-search-impressao')?.value || '').trim().toLowerCase();
     const searchArte = (document.getElementById('os-search-arte')?.value || '').trim().toLowerCase();
+    const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
 
     // Fila 1: Impressão (Status EM IMPRESSÃO)
     let ordensImpressao = state.ordens.filter(os => os.status === 'EM IMPRESSÃO');
@@ -11078,13 +11159,19 @@ function renderOrdens() {
     // Fila 2: Arte (Status ARTE_EM_ANDAMENTO)
     let ordensArte = state.ordens.filter(os => os.status === 'ARTE_EM_ANDAMENTO');
     let filteredArte = ordensArte.filter(os => {
+        let matchSearch = true;
         if (searchArte) {
             const num = String(os.numero || '');
             const cli = (os.cliente || '').toLowerCase();
             const vend = (os.vendedor || '').toLowerCase();
-            return num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte);
+            const des = getOSDesigner(os.id).toLowerCase();
+            matchSearch = num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte) || des.includes(searchArte);
         }
-        return true;
+        let matchDesigner = true;
+        if (filterDesigner) {
+            matchDesigner = getOSDesigner(os.id) === filterDesigner;
+        }
+        return matchSearch && matchDesigner;
     });
 
     // Atualizar badges da navegação lateral
@@ -11100,6 +11187,9 @@ function renderOrdens() {
 
     const countArte = document.getElementById('os-arte-count-badge');
     if (countArte) countArte.textContent = `${filteredArte.length} ${filteredArte.length === 1 ? 'Pedido' : 'Pedidos'}`;
+
+    // Popular filtro de designers
+    populateDesignerFilter();
 
     // Renderizar Fila de Impressão
     if (tbodyImpressao) {
@@ -11160,6 +11250,7 @@ function renderOrdens() {
                         <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
                         <td><strong>${os.cliente || '—'}</strong></td>
                         <td>${os.vendedor || '—'}</td>
+                        <td>${renderDesignerSelect(os.id)}</td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td>${getStatusBadge(os.status)}</td>
