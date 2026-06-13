@@ -8937,7 +8937,14 @@ function getAmostraScale(fmt, canvasElement) {
 
     
 
-    const containerW = refCanvas.parentElement.clientWidth - 30; // compensar padding
+    const parent = refCanvas.parentElement;
+    if (!parent) return 3.5;
+
+    const containerW = parent.clientWidth - 30; // compensar padding
+    if (containerW <= 0) {
+        // Fallback seguro se o container estiver oculto
+        return 3.5;
+    }
 
     return containerW / activeFmt.width_mm;
 
@@ -9406,7 +9413,8 @@ window.clearAmostraArteFile = function() {
 
     document.getElementById('btn-remove-amostra-arte').style.display = 'none';
 
-    document.getElementById('amostra-arte-badge').textContent = 'Sem Arte';
+    const badge = document.getElementById('amostra-arte-badge');
+    if (badge) badge.textContent = 'Sem Arte';
 
     
 
@@ -9594,11 +9602,11 @@ function renderAmostraCombinada() {
 
 
 
-    const corCanvas = document.getElementById('amostra-cor-canvas') || window._amostraCorCanvas;
+    const corCanvas = document.getElementById('amostra-cor-canvas') || (window._amostraCorCanvas = window._amostraCorCanvas || document.createElement('canvas'));
 
-    const arteCanvas = document.getElementById('amostra-arte-canvas') || window._amostraArteCanvas;
+    const arteCanvas = document.getElementById('amostra-arte-canvas') || (window._amostraArteCanvas = window._amostraArteCanvas || document.createElement('canvas'));
 
-    const numCanvas = document.getElementById('amostra-num-canvas') || window._amostraNumCanvas;
+    const numCanvas = document.getElementById('amostra-num-canvas') || (window._amostraNumCanvas = window._amostraNumCanvas || document.createElement('canvas'));
 
 
 
