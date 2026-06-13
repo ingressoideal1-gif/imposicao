@@ -10955,6 +10955,14 @@ function mapVibecodeProdutoToOSItem(p, osId) {
         observacoes: p.modelo_descri || p.nome_produto || '',
         created_at: p.created_at,
         updated_at: p.updated_at || p.created_at,
+        
+        // --- Campos de Amostra (salvos no BD) ---
+        amostra_cor_id: p.amostra_cor_id || null,
+        amostra_num_id: p.amostra_num_id || null,
+        amostra_arte_base64: p.amostra_arte_base64 || null,
+        amostra_status: p.amostra_status || 'PENDENTE',
+        amostra_obs: p.amostra_obs || '',
+
         _source: 'vibecode',
         _vibe_produto_id: p.id,
         _vibe_id_produto: p.id_produto,
@@ -11708,7 +11716,6 @@ function renderImpOSQueue() {
 
     const pendentes = itens.filter(i => i.impressao !== 'IMPRESSO' && (i.aprovacao === 'APROVADA' || i.aprovacao === 'PRONTA'));
     if (pendingBadge) pendingBadge.textContent = `${pendentes.length} pendente${pendentes.length !== 1 ? 's' : ''}`;
-
     tbody.innerHTML = itens.map(item => {
         const isActive = activeItem.itemId === item.id;
         const isPending = item.impressao !== 'IMPRESSO';
@@ -11845,29 +11852,24 @@ function renderAmostrasOSItens(osId) {
         return;
     }
 
-    // Gerar opções de cor do cadastro
-    const corsOpts = (state.cores || []).map(c =>
-        `<option value="${c.id}">${c.name}</option>`
-    ).join('');
-
-    // Gerar opções de numeração do cadastro
-    const numOpts = (state.numeracoes || []).map(n =>
-        `<option value="${n.id}">${n.name}</option>`
-    ).join('');
-
-    // Carregar decisões salvas
-    const decisoes = JSON.parse(localStorage.getItem('vibe_amostra_decisoes') || '{}');
-
     container.innerHTML = itens.map((item, idx) => {
-        const itemDecisao = decisoes[item.id] || {};
-        const status = itemDecisao.status || 'PENDENTE';
-        const obs = itemDecisao.obs || '';
+        const status = item.amostra_status || 'PENDENTE';
+        const obs = item.amostra_obs || '';
         
         let statusBadge = '<span class="badge badge-yellow">⏳ PENDENTE</span>';
         if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADA</span>';
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
 
-        // Card idêntico ao "Amostra Combinada Unificada", sem sliders
+        // Gerar opções de cor com selected
+        const corsOpts = (state.cores || []).map(c =>
+            `<option value="${c.id}" ${c.id === item.amostra_cor_id ? 'selected' : ''}>${c.name}</option>`
+        ).join('');
+
+        // Gerar opções de numeração iniciais
+        const numOpts = (state.numeracoes || []).map(n =>
+            `<option value="${n.id}" ${n.id === item.amostra_num_id ? 'selected' : ''}>${n.name}</option>`
+        ).join('');
+
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
@@ -11881,26 +11883,18 @@ function renderAmostrasOSItens(osId) {
                 </div>
             </div>
             <div style="padding: 24px;">
-
-                <!-- LINHA 2: Decisão + Configurações (lado a lado) — idêntico ao card avulso -->
                 <div class="amostra-mid-row">
-                    <!-- Coluna Esquerda: Decisão de Qualidade -->
                     <div class="amostra-decisao-panel">
-                        <div class="amostra-decisao-title">
-                            ⚖️ Decisão de Qualidade
-                        </div>
-                        
+                        <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
                         <div class="amostra-decisao-status-box">
                             <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
                             ${statusBadge}
                         </div>
-
                         <div class="form-group" style="margin-bottom: 0;">
                             <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
                             <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
-                                onchange="saveAmostraItemObs('${item.id}', this.value)">${obs}</textarea>
+                                onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
-
                         <div class="amostra-decisao-btns">
                             <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
                                 ✅ APROVAR
@@ -11910,8 +11904,6 @@ function renderAmostrasOSItens(osId) {
                             </button>
                         </div>
                     </div>
-
-                    <!-- Coluna Direita: Configurações da Amostra -->
                     <div class="amostra-config-panel">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
                             ⚙️ Configurações da Amostra
@@ -11919,14 +11911,14 @@ function renderAmostrasOSItens(osId) {
                         <div style="display: flex; flex-direction: column; gap: 14px;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
-                                <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}')">
+                                <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
                                     <option value="">— Selecione uma Cor —</option>
                                     ${corsOpts}
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Numeração Cadastrada</label>
-                                <select class="form-control" id="amostra-item-num-${idx}" onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
+                                <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
                                     <option value="">— Selecione uma Numeração —</option>
                                     ${numOpts}
                                 </select>
@@ -11938,35 +11930,41 @@ function renderAmostrasOSItens(osId) {
                                         🖼️ Upload Arte
                                     </label>
                                     <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
-                                        onchange="renderItemAmostraCombinada(${idx}, '${osId}')">
-                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="display:none; padding: 4px 8px;" onclick="document.getElementById('amostra-item-arte-${idx}').value=''; this.style.display='none'; document.getElementById('amostra-item-arte-name-${idx}').textContent=''; renderItemAmostraCombinada(${idx}, '${osId}')">✕ Remover</button>
-                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)"></span>
+                                        onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}')">
+                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}')">✕ Remover</button>
+                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.amostra_arte_base64 ? '(Arte Salva)' : ''}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- LINHA 3: Canvas de Visualização Combinada (full-width) — idêntico ao card avulso -->
                 <div class="amostra-preview-container" style="margin-top: 20px;">
                     <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
                     <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                        <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🧪</div>
+                        <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                         <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
                         <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
                     </div>
                 </div>
-
             </div>
         </div>`;
     }).join('');
+
+    setTimeout(() => {
+        itens.forEach((item, idx) => {
+            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64) {
+                renderItemAmostraCombinada(idx, osId);
+            }
+        });
+    }, 50);
 }
+
 
 /**
  * Ao selecionar cor em um card dinâmico, filtrar numerações compatíveis
  * (idêntico ao onAmostraCorSelect do card avulso)
  */
-function onItemCorSelect(idx, osId) {
+function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
     const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
     const numSelect = document.getElementById(`amostra-item-num-${idx}`);
     if (!corSelect || !numSelect) return;
@@ -11974,7 +11972,12 @@ function onItemCorSelect(idx, osId) {
     const corId = corSelect.value;
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
 
-    // Filtrar numerações pelo formato_id da cor
+    // Se no for carga inicial, salva no banco
+    if (!isInitialLoad) {
+        saveAmostraToDB(itemId, osId, { amostra_cor_id: corId || null });
+    }
+
+    // Filtrar numeraes pelo formato_id da cor
     const curNumVal = numSelect.value;
     const filteredNums = (cor && cor.formato_id)
         ? state.numeracoes.filter(n => {
@@ -11988,12 +11991,92 @@ function onItemCorSelect(idx, osId) {
 
     if (filteredNums.some(n => n.id === curNumVal)) {
         numSelect.value = curNumVal;
-    } else {
-        numSelect.value = '';
     }
 
-    // Renderizar canvas
+    if (!isInitialLoad) {
+        renderItemAmostraCombinada(idx, osId);
+    }
+}
+
+function onItemNumSelect(idx, osId, itemId) {
+    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+    if (!numSelect) return;
+    
+    saveAmostraToDB(itemId, osId, { amostra_num_id: numSelect.value || null });
     renderItemAmostraCombinada(idx, osId);
+}
+
+function onItemArteUpload(idx, osId, itemId) {
+    const input = document.getElementById(`amostra-item-arte-${idx}`);
+    const nameLabel = document.getElementById(`amostra-item-arte-name-${idx}`);
+    const removeBtn = document.getElementById(`btn-remove-amostra-arte-${idx}`);
+    
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        nameLabel.textContent = file.name;
+        removeBtn.style.display = 'inline-block';
+        
+        // Ler como Base64
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64 = e.target.result;
+            // Salvar no banco
+            saveAmostraToDB(itemId, osId, { amostra_arte_base64: base64 });
+            // Atualizar o state
+            const osItems = state.osItens[osId];
+            const item = osItems.find(i => i.id === itemId);
+            if (item) item.amostra_arte_base64 = base64;
+            
+            // Renderizar
+            renderItemAmostraCombinada(idx, osId);
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function onItemArteRemove(idx, osId, itemId) {
+    const input = document.getElementById(`amostra-item-arte-${idx}`);
+    const nameLabel = document.getElementById(`amostra-item-arte-name-${idx}`);
+    const removeBtn = document.getElementById(`btn-remove-amostra-arte-${idx}`);
+    
+    input.value = '';
+    nameLabel.textContent = '';
+    removeBtn.style.display = 'none';
+    
+    saveAmostraToDB(itemId, osId, { amostra_arte_base64: null });
+    const item = state.osItens[osId].find(i => i.id === itemId);
+    if (item) item.amostra_arte_base64 = null;
+    
+    renderItemAmostraCombinada(idx, osId);
+}
+
+async function saveAmostraToDB(itemId, osId, dataToUpdate) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        console.warn('Supabase no configurado, dados salvos apenas em memria.');
+        return;
+    }
+    
+    // O itemId do front comea com "vibe_item_". O ID no banco  numrico.
+    const vibeIdStr = itemId.replace('vibe_item_', '');
+    const vibeId = parseInt(vibeIdStr, 10);
+    
+    try {
+        const { error } = await vibeClient
+            .from('produtos_proposta')
+            .update(dataToUpdate)
+            .eq('id', vibeId);
+            
+        if (error) throw error;
+        
+        // Atualizar state local
+        const item = state.osItens[osId].find(i => i.id === itemId);
+        if (item) {
+            Object.assign(item, dataToUpdate);
+        }
+    } catch (e) {
+        console.error('Erro ao salvar no Supabase:', e);
+        toast('Falha ao salvar amostra no banco de dados', 'error');
+    }
 }
 
 /**
@@ -12232,32 +12315,30 @@ async function renderItemAmostraCombinada(idx, osId) {
 // Expor globalmente
 window.renderItemAmostraCombinada = renderItemAmostraCombinada;
 window.onItemCorSelect = onItemCorSelect;
+window.onItemNumSelect = onItemNumSelect;
+window.onItemArteUpload = onItemArteUpload;
+window.onItemArteRemove = onItemArteRemove;
+window.saveAmostraToDB = saveAmostraToDB;
 
 /**
  * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
  */
 function decisionAmostraItem(itemId, osId, status) {
-    const decisoes = JSON.parse(localStorage.getItem('vibe_amostra_decisoes') || '{}');
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
     const obs = obsEl ? obsEl.value : '';
     
-    decisoes[itemId] = { status, obs, timestamp: new Date().toISOString() };
-    localStorage.setItem('vibe_amostra_decisoes', JSON.stringify(decisoes));
-
-    toast(`Item ${status === 'APROVADA' ? 'aprovado' : 'marcado para alteração'}!`, status === 'APROVADA' ? 'success' : 'warning');
-    
-    // Re-renderizar
-    renderAmostrasOSItens(osId);
+    // Salvar no banco
+    saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs }).then(() => {
+        toast(`Item ${status === 'APROVADA' ? 'aprovado' : 'marcado para alteração'}!`, status === 'APROVADA' ? 'success' : 'warning');
+        renderAmostrasOSItens(osId);
+    });
 }
 
 /**
  * Salva a observação de um item de amostra
  */
-function saveAmostraItemObs(itemId, obs) {
-    const decisoes = JSON.parse(localStorage.getItem('vibe_amostra_decisoes') || '{}');
-    if (!decisoes[itemId]) decisoes[itemId] = {};
-    decisoes[itemId].obs = obs;
-    localStorage.setItem('vibe_amostra_decisoes', JSON.stringify(decisoes));
+function saveAmostraItemObs(itemId, osId, obs) {
+    saveAmostraToDB(itemId, osId, { amostra_obs: obs });
 }
 
 /**
