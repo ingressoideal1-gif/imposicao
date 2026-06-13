@@ -4,6 +4,35 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-06-13] — Integração: Tabelas de Catálogo no Supabase do Vibecode (Aprovação Parcial)
+
+### Funcionalidade 1 — Criação do Schema Isolado de Catálogo com RLS Habilitado
+Conforme a aprovação parcial e ressalvas do parceiro Vibecode, estruturamos o banco de dados centralizado do ecossistema. Foram isoladas as tabelas do catálogo de layout (configurações geométricas) no arquivo `schema_catalogo.sql` com o Row Level Security (RLS) habilitado e políticas de acesso configuradas por padrão.
+
+**Tabelas de Catálogo Criadas:**
+- `producao_formatos` — Gabarito geométrico de imposição.
+- `producao_numeracoes` — Templates de VDP.
+- `producao_saidas` — Dimensões de papel de saída.
+- `producao_cores` — Cadastro de cores e calibração de fundos.
+- `producao_modelos_imposicao` — Receitas prontas de motor.
+- `producao_produtos_formatos` — **Nova tabela** adicionada com base no feedback do usuário para mapear o `id_produto` (do ERP) ao `formato_id` correspondente do catálogo.
+
+**Políticas RLS Aplicadas:**
+- `SELECT` permitido de forma pública/anônima (`anon` e `authenticated`) para leitura da API e do frontend.
+- `ALL` (escrita/edição) restrito exclusivamente a conexões autenticadas (`authenticated`).
+
+**Dados Semente (Seed) Cadastrados:**
+- Formato padrão: **Mobi** (`152x53mm`, 2 colunas × 4 linhas).
+- Saídas padrão: **A3** e **A4**.
+
+---
+
+### Correção 2 — Execução do Script de Servidores Locais (`iniciar_servidores.bat`)
+- **Problema:** O console de terminal CMD filha aberto pelo comando `start` não abria no diretório do projeto, fazendo com que ele tentasse carregar o executável do Python e os scripts em `C:\Windows\system32` (onde não existiam) e fechando silenciosamente sem que o usuário visse o erro. Além disso, havia um parêntese não escapado no bloco condicional `if/else` que quebrava o parser de lotes do CMD.
+- **Solução:** Adicionado o parâmetro `/D "%~dp0"` nos comandos `start` para forçar o diretório de trabalho correto na inicialização e removidos os parênteses do bloco condicional do assistente de lotes para evitar conflito com o parser. O servidor agora inicia normalmente em background e ouve nas portas `8080` (FastAPI) e `9000` (Agente de Impressão).
+
+---
+
 ## [2026-06-08] — Correção: Transparência do PDF no Canvas e Renderização na Imposição
 
 ### Problema 1 — Fundo branco nas numerações com elemento PDF (visualizador)

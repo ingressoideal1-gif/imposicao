@@ -1,6 +1,8 @@
 import json
 import os
 import uuid
+import urllib.request
+import urllib.parse
 
 # Caminho absoluto baseado na localização do script — independente do CWD
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "formats_db.json")
@@ -56,15 +58,81 @@ DEFAULT_DB = {
     "modelos_imposicao": []
 }
 
-# ─── Internal helpers ──────────────────────────────────────────────────────────
+# ─── CARREGAR CREDENCIAIS SUPABASE DO PARCEIRO VIBECODE ────────────────────────
+
+SUPABASE_URL = None
+SUPABASE_KEY = None
+
+env_local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
+if os.path.exists(env_local_path):
+    try:
+        with open(env_local_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("=", 1)
+                if len(parts) == 2:
+                    k, v = parts[0].strip(), parts[1].strip()
+                    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                        v = v[1:-1]
+                    if k == "NEXT_PUBLIC_SUPABASE_URL":
+                        SUPABASE_URL = v
+                    elif k == "NEXT_PUBLIC_SUPABASE_ANON_KEY":
+                        SUPABASE_KEY = v
+    except Exception as e:
+        print(f"[db.py] Erro ao ler .env.local: {e}")
+
+# Sobrescrever via variáveis de ambiente se presentes
+SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL)
+SUPABASE_KEY = os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", SUPABASE_KEY)
+
+IS_SUPABASE_ACTIVE = bool(SUPABASE_URL and SUPABASE_KEY)
+
+if IS_SUPABASE_ACTIVE:
+    print(f"[db.py] Supabase do Vibecode ativo: {SUPABASE_URL}")
+else:
+    print("[db.py] Supabase inativo, operando em modo local (formats_db.json)")
+
+
+# ─── UTILITÁRIO SUPABASE REST REQUEST ──────────────────────────────────────────
+
+def _supabase_request(method: str, path: str, body: dict = None) -> list | dict | None:
+    if not IS_SUPABASE_ACTIVE:
+        return None
+        
+    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    if method in ("POST", "PATCH"):
+        headers["Prefer"] = "return=representation"
+        
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        
+    req = urllib.request.Request(url, headers=headers, method=method, data=data)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            content = resp.read().decode("utf-8")
+            if content:
+                return json.loads(content)
+            return None
+    except Exception as e:
+        print(f"[db.py] Erro Supabase REST {method} em {path}: {e}")
+        raise e
+
+
+# ─── Internal helpers (fallback local) ─────────────────────────────────────────
 
 def _migrate_old_db(data: dict) -> dict:
-    """Migra o schema antigo (input_formats / output_formats) para o novo."""
     if "formatos" in data:
-        return data  # já está no novo formato
-
+        return data
     new_db = {**DEFAULT_DB, "formatos": [], "numeracoes": [], "saidas": []}
-
     for f in data.get("input_formats", []):
         new_db["formatos"].append({
             "id": f.get("id", "fmt_" + str(uuid.uuid4())[:8]),
@@ -76,7 +144,6 @@ def _migrate_old_db(data: dict) -> dict:
             "gap_h_mm": 0,
             "gap_v_mm": 0
         })
-
     for o in data.get("output_formats", []):
         new_db["saidas"].append({
             "id": o.get("id", "sai_" + str(uuid.uuid4())[:8]),
@@ -85,29 +152,22 @@ def _migrate_old_db(data: dict) -> dict:
             "height_mm": o.get("height_mm", 297),
             "file_format": "pdf"
         })
-
     return new_db
-
 
 def init_db():
     if not os.path.exists(DB_FILE):
         _save_db(DEFAULT_DB)
         return
-
-    # Verificar se precisa de migração
     with open(DB_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
-
     if "input_formats" in data or "formatos" not in data:
         migrated = _migrate_old_db(data)
         _save_db(migrated)
-
 
 def _get_db() -> dict:
     init_db()
     with open(DB_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
-
 
 def _save_db(db_data: dict):
     with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -117,26 +177,66 @@ def _save_db(db_data: dict):
 # ─── FORMATOS ─────────────────────────────────────────────────────────────────
 
 def get_formatos() -> list:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            return _supabase_request("GET", "producao_formatos?order=name.asc") or []
+        except Exception:
+            return []
     return _get_db().get("formatos", [])
 
-
 def get_formato(fmt_id: str) -> dict | None:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", f"producao_formatos?id=eq.{fmt_id}")
+            return res[0] if res else None
+        except Exception:
+            return None
     for f in get_formatos():
         if f["id"] == fmt_id:
             return f
     return None
 
-
 def add_formato(data: dict) -> str:
-    db = _get_db()
-    new_id = "fmt_" + str(uuid.uuid4())[:8]
+    new_id = data.get("id") or (str(uuid.uuid4()) if IS_SUPABASE_ACTIVE else ("fmt_" + str(uuid.uuid4())[:8]))
     data["id"] = new_id
+    if IS_SUPABASE_ACTIVE:
+        clean_data = {
+            "id": new_id,
+            "name": data.get("name"),
+            "width_mm": float(data.get("width_mm", 0)),
+            "height_mm": float(data.get("height_mm", 0)),
+            "cols": int(data.get("cols", 1)),
+            "rows": int(data.get("rows", 1)),
+            "gap_h_mm": float(data.get("gap_h_mm", 0)),
+            "gap_v_mm": float(data.get("gap_v_mm", 0)),
+            "offset_h_mm": float(data.get("offset_h_mm", 0)),
+            "offset_v_mm": float(data.get("offset_v_mm", 0)),
+        }
+        _supabase_request("POST", "producao_formatos", clean_data)
+        return new_id
+    db = _get_db()
     db.setdefault("formatos", []).append(data)
     _save_db(db)
     return new_id
 
-
 def update_formato(fmt_id: str, data: dict) -> bool:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            clean_data = {
+                "name": data.get("name"),
+                "width_mm": float(data.get("width_mm", 0)),
+                "height_mm": float(data.get("height_mm", 0)),
+                "cols": int(data.get("cols", 1)),
+                "rows": int(data.get("rows", 1)),
+                "gap_h_mm": float(data.get("gap_h_mm", 0)),
+                "gap_v_mm": float(data.get("gap_v_mm", 0)),
+                "offset_h_mm": float(data.get("offset_h_mm", 0)),
+                "offset_v_mm": float(data.get("offset_v_mm", 0)),
+            }
+            res = _supabase_request("PATCH", f"producao_formatos?id=eq.{fmt_id}", clean_data)
+            return bool(res)
+        except Exception:
+            return False
     db = _get_db()
     for i, f in enumerate(db.get("formatos", [])):
         if f["id"] == fmt_id:
@@ -146,8 +246,13 @@ def update_formato(fmt_id: str, data: dict) -> bool:
             return True
     return False
 
-
 def delete_formato(fmt_id: str):
+    if IS_SUPABASE_ACTIVE:
+        try:
+            _supabase_request("DELETE", f"producao_formatos?id=eq.{fmt_id}")
+            return
+        except Exception:
+            pass
     db = _get_db()
     db["formatos"] = [f for f in db.get("formatos", []) if f["id"] != fmt_id]
     _save_db(db)
@@ -156,35 +261,84 @@ def delete_formato(fmt_id: str):
 # ─── NUMERAÇÕES ───────────────────────────────────────────────────────────────
 
 def get_numeracoes() -> list:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            return _supabase_request("GET", "producao_numeracoes?order=name.asc") or []
+        except Exception:
+            return []
     return _get_db().get("numeracoes", [])
 
-
 def get_numeracao(num_id: str) -> dict | None:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", f"producao_numeracoes?id=eq.{num_id}")
+            return res[0] if res else None
+        except Exception:
+            return None
     for n in get_numeracoes():
         if n["id"] == num_id:
             return n
     return None
 
-
 def add_numeracao(data: dict) -> str:
-    db = _get_db()
-    # Se já existe numeração com mesmo nome, substitui (Bug 2)
     name = data.get("name", "").strip().lower()
-    for i, n in enumerate(db.get("numeracoes", [])):
-        if n.get("name", "").strip().lower() == name:
-            data["id"] = n["id"]
-            db["numeracoes"][i] = data
-            _save_db(db)
-            return n["id"]
-    # Nova numeração
-    new_id = "num_" + str(uuid.uuid4())[:8]
+    existing_id = None
+    if IS_SUPABASE_ACTIVE:
+        try:
+            escaped_name = urllib.parse.quote(data.get("name", "").strip())
+            res = _supabase_request("GET", f"producao_numeracoes?name=ilike.{escaped_name}")
+            if res:
+                existing_id = res[0]["id"]
+        except Exception:
+            pass
+    else:
+        db = _get_db()
+        for n in db.get("numeracoes", []):
+            if n.get("name", "").strip().lower() == name:
+                existing_id = n["id"]
+                break
+    if existing_id:
+        update_numeracao(existing_id, data)
+        return existing_id
+
+    new_id = data.get("id") or (str(uuid.uuid4()) if IS_SUPABASE_ACTIVE else ("num_" + str(uuid.uuid4())[:8]))
     data["id"] = new_id
+    if IS_SUPABASE_ACTIVE:
+        clean_data = {
+            "id": new_id,
+            "name": data.get("name"),
+            "formato_id": data.get("formato_id"),
+            "csv_filename": data.get("csv_filename", ""),
+            "csv_headers": data.get("csv_headers", []),
+            "csv_data": data.get("csv_data"),
+            "svg_content": data.get("svg_content", ""),
+            "svg_filename": data.get("svg_filename", ""),
+            "elements": data.get("elements", [])
+        }
+        _supabase_request("POST", "producao_numeracoes", clean_data)
+        return new_id
+    db = _get_db()
     db.setdefault("numeracoes", []).append(data)
     _save_db(db)
     return new_id
 
-
 def update_numeracao(num_id: str, data: dict) -> bool:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            clean_data = {
+                "name": data.get("name"),
+                "formato_id": data.get("formato_id"),
+                "csv_filename": data.get("csv_filename", ""),
+                "csv_headers": data.get("csv_headers", []),
+                "csv_data": data.get("csv_data"),
+                "svg_content": data.get("svg_content", ""),
+                "svg_filename": data.get("svg_filename", ""),
+                "elements": data.get("elements", [])
+            }
+            res = _supabase_request("PATCH", f"producao_numeracoes?id=eq.{num_id}", clean_data)
+            return bool(res)
+        except Exception:
+            return False
     db = _get_db()
     for i, n in enumerate(db.get("numeracoes", [])):
         if n["id"] == num_id:
@@ -194,8 +348,13 @@ def update_numeracao(num_id: str, data: dict) -> bool:
             return True
     return False
 
-
 def delete_numeracao(num_id: str):
+    if IS_SUPABASE_ACTIVE:
+        try:
+            _supabase_request("DELETE", f"producao_numeracoes?id=eq.{num_id}")
+            return
+        except Exception:
+            pass
     db = _get_db()
     db["numeracoes"] = [n for n in db.get("numeracoes", []) if n["id"] != num_id]
     _save_db(db)
@@ -204,26 +363,56 @@ def delete_numeracao(num_id: str):
 # ─── SAÍDAS ───────────────────────────────────────────────────────────────────
 
 def get_saidas() -> list:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            return _supabase_request("GET", "producao_saidas?order=name.asc") or []
+        except Exception:
+            return []
     return _get_db().get("saidas", [])
 
-
 def get_saida(sai_id: str) -> dict | None:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", f"producao_saidas?id=eq.{sai_id}")
+            return res[0] if res else None
+        except Exception:
+            return None
     for s in get_saidas():
         if s["id"] == sai_id:
             return s
     return None
 
-
 def add_saida(data: dict) -> str:
-    db = _get_db()
-    new_id = "sai_" + str(uuid.uuid4())[:8]
+    new_id = data.get("id") or (str(uuid.uuid4()) if IS_SUPABASE_ACTIVE else ("sai_" + str(uuid.uuid4())[:8]))
     data["id"] = new_id
+    if IS_SUPABASE_ACTIVE:
+        clean_data = {
+            "id": new_id,
+            "name": data.get("name"),
+            "width_mm": float(data.get("width_mm", 0)),
+            "height_mm": float(data.get("height_mm", 0)),
+            "file_format": data.get("file_format", "pdf")
+        }
+        _supabase_request("POST", "producao_saidas", clean_data)
+        return new_id
+    db = _get_db()
     db.setdefault("saidas", []).append(data)
     _save_db(db)
     return new_id
 
-
 def update_saida(sai_id: str, data: dict) -> bool:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            clean_data = {
+                "name": data.get("name"),
+                "width_mm": float(data.get("width_mm", 0)),
+                "height_mm": float(data.get("height_mm", 0)),
+                "file_format": data.get("file_format", "pdf")
+            }
+            res = _supabase_request("PATCH", f"producao_saidas?id=eq.{sai_id}", clean_data)
+            return bool(res)
+        except Exception:
+            return False
     db = _get_db()
     for i, s in enumerate(db.get("saidas", [])):
         if s["id"] == sai_id:
@@ -233,8 +422,13 @@ def update_saida(sai_id: str, data: dict) -> bool:
             return True
     return False
 
-
 def delete_saida(sai_id: str):
+    if IS_SUPABASE_ACTIVE:
+        try:
+            _supabase_request("DELETE", f"producao_saidas?id=eq.{sai_id}")
+            return
+        except Exception:
+            pass
     db = _get_db()
     db["saidas"] = [s for s in db.get("saidas", []) if s["id"] != sai_id]
     _save_db(db)
@@ -243,26 +437,56 @@ def delete_saida(sai_id: str):
 # ─── CORES ───────────────────────────────────────────────────────────────────
 
 def get_cores() -> list:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            return _supabase_request("GET", "producao_cores?order=name.asc") or []
+        except Exception:
+            return []
     return _get_db().get("cores", [])
 
-
 def get_cor(cor_id: str) -> dict | None:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", f"producao_cores?id=eq.{cor_id}")
+            return res[0] if res else None
+        except Exception:
+            return None
     for c in get_cores():
         if c["id"] == cor_id:
             return c
     return None
 
-
 def add_cor(data: dict) -> str:
-    db = _get_db()
-    new_id = "cor_" + str(uuid.uuid4())[:8]
+    new_id = data.get("id") or (str(uuid.uuid4()) if IS_SUPABASE_ACTIVE else ("cor_" + str(uuid.uuid4())[:8]))
     data["id"] = new_id
+    if IS_SUPABASE_ACTIVE:
+        clean_data = {
+            "id": new_id,
+            "name": data.get("name"),
+            "hex": data.get("hex", ""),
+            "pdf_url": data.get("pdf_url", ""),
+            "pdf_filename": data.get("pdf_filename", "")
+        }
+        _supabase_request("POST", "producao_cores", clean_data)
+        return new_id
+    db = _get_db()
     db.setdefault("cores", []).append(data)
     _save_db(db)
     return new_id
 
-
 def update_cor(cor_id: str, data: dict) -> bool:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            clean_data = {
+                "name": data.get("name"),
+                "hex": data.get("hex", ""),
+                "pdf_url": data.get("pdf_url", ""),
+                "pdf_filename": data.get("pdf_filename", "")
+            }
+            res = _supabase_request("PATCH", f"producao_cores?id=eq.{cor_id}", clean_data)
+            return bool(res)
+        except Exception:
+            return False
     db = _get_db()
     for i, c in enumerate(db.get("cores", [])):
         if c["id"] == cor_id:
@@ -272,8 +496,13 @@ def update_cor(cor_id: str, data: dict) -> bool:
             return True
     return False
 
-
 def delete_cor(cor_id: str):
+    if IS_SUPABASE_ACTIVE:
+        try:
+            _supabase_request("DELETE", f"producao_cores?id=eq.{cor_id}")
+            return
+        except Exception:
+            pass
     db = _get_db()
     db["cores"] = [c for c in db.get("cores", []) if c["id"] != cor_id]
     _save_db(db)
@@ -282,26 +511,103 @@ def delete_cor(cor_id: str):
 # ─── MODELOS DE IMPOSIÇÃO ──────────────────────────────────────────────────────
 
 def get_modelos_imposicao() -> list:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", "producao_modelos_imposicao?order=name.asc") or []
+            flat_res = []
+            for m in res:
+                cfg = m.get("config") or {}
+                flat_res.append({
+                    "id": m["id"],
+                    "name": m["name"],
+                    "formato_id": m.get("formato_id"),
+                    "saida_id": m.get("saida_id"),
+                    "numeracao_id": m.get("numeracao_id"),
+                    "cor_id": m.get("cor_id"),
+                    **cfg
+                })
+            return flat_res
+        except Exception:
+            return []
     return _get_db().get("modelos_imposicao", [])
 
-
 def get_modelo_imposicao(mod_id: str) -> dict | None:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", f"producao_modelos_imposicao?id=eq.{mod_id}")
+            if res:
+                m = res[0]
+                cfg = m.get("config") or {}
+                return {
+                    "id": m["id"],
+                    "name": m["name"],
+                    "formato_id": m.get("formato_id"),
+                    "saida_id": m.get("saida_id"),
+                    "numeracao_id": m.get("numeracao_id"),
+                    "cor_id": m.get("cor_id"),
+                    **cfg
+                }
+            return None
+        except Exception:
+            return None
     for m in get_modelos_imposicao():
         if m["id"] == mod_id:
             return m
     return None
 
-
 def add_modelo_imposicao(data: dict) -> str:
-    db = _get_db()
-    new_id = "mod_" + str(uuid.uuid4())[:8]
+    new_id = data.get("id") or (str(uuid.uuid4()) if IS_SUPABASE_ACTIVE else ("mod_" + str(uuid.uuid4())[:8]))
     data["id"] = new_id
+    if IS_SUPABASE_ACTIVE:
+        name = data.get("name", "Modelo")
+        formato_id = data.get("formato_id")
+        saida_id = data.get("saida_id")
+        numeracao_id = data.get("numeracao_id")
+        cor_id = data.get("cor_id")
+        config = dict(data)
+        for k in ("id", "name", "formato_id", "saida_id", "numeracao_id", "cor_id"):
+            if k in config:
+                del config[k]
+        clean_data = {
+            "id": new_id,
+            "name": name,
+            "formato_id": formato_id,
+            "saida_id": saida_id,
+            "numeracao_id": numeracao_id,
+            "cor_id": cor_id,
+            "config": config
+        }
+        _supabase_request("POST", "producao_modelos_imposicao", clean_data)
+        return new_id
+    db = _get_db()
     db.setdefault("modelos_imposicao", []).append(data)
     _save_db(db)
     return new_id
 
-
 def update_modelo_imposicao(mod_id: str, data: dict) -> bool:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            name = data.get("name", "Modelo")
+            formato_id = data.get("formato_id")
+            saida_id = data.get("saida_id")
+            numeracao_id = data.get("numeracao_id")
+            cor_id = data.get("cor_id")
+            config = dict(data)
+            for k in ("id", "name", "formato_id", "saida_id", "numeracao_id", "cor_id"):
+                if k in config:
+                    del config[k]
+            clean_data = {
+                "name": name,
+                "formato_id": formato_id,
+                "saida_id": saida_id,
+                "numeracao_id": numeracao_id,
+                "cor_id": cor_id,
+                "config": config
+            }
+            res = _supabase_request("PATCH", f"producao_modelos_imposicao?id=eq.{mod_id}", clean_data)
+            return bool(res)
+        except Exception:
+            return False
     db = _get_db()
     for i, m in enumerate(db.get("modelos_imposicao", [])):
         if m["id"] == mod_id:
@@ -311,8 +617,13 @@ def update_modelo_imposicao(mod_id: str, data: dict) -> bool:
             return True
     return False
 
-
 def delete_modelo_imposicao(mod_id: str):
+    if IS_SUPABASE_ACTIVE:
+        try:
+            _supabase_request("DELETE", f"producao_modelos_imposicao?id=eq.{mod_id}")
+            return
+        except Exception:
+            pass
     db = _get_db()
     db["modelos_imposicao"] = [m for m in db.get("modelos_imposicao", []) if m["id"] != mod_id]
     _save_db(db)
@@ -321,25 +632,53 @@ def delete_modelo_imposicao(mod_id: str):
 # ─── ORDENS DE SERVIÇO ────────────────────────────────────────────────────────
 
 def get_ordens() -> list:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", "producao_ordens_servico?select=*,producao_os_itens(id)")
+            if not res:
+                return []
+            for os in res:
+                os["_itens_count"] = len(os.get("producao_os_itens", []))
+                if "producao_os_itens" in os:
+                    del os["producao_os_itens"]
+            return res
+        except Exception:
+            return []
+            
     db_data = _get_db()
     ordens = db_data.get("ordens_servico", [])
     os_itens = db_data.get("os_itens", [])
-    # Anexar contagem de itens
     for os_item in ordens:
         os_item["_itens_count"] = len([i for i in os_itens if i.get("os_id") == os_item["id"]])
     return ordens
 
-
 def get_os_itens(os_id: str) -> list:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            return _supabase_request("GET", f"producao_os_itens?os_id=eq.{os_id}&order=created_at.asc") or []
+        except Exception:
+            return []
+            
     db_data = _get_db()
     return [i for i in db_data.get("os_itens", []) if i.get("os_id") == os_id]
 
-
 def update_os_item(item_id: str, data: dict) -> bool:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            clean_data = {}
+            for key in ["impressao", "formato_id", "cor_id", "numeracao_id"]:
+                if key in data:
+                    clean_data[key] = data[key]
+            if not clean_data:
+                return True
+            res = _supabase_request("PATCH", f"producao_os_itens?id=eq.{item_id}", clean_data)
+            return bool(res)
+        except Exception:
+            return False
+            
     db_data = _get_db()
     for i, item in enumerate(db_data.get("os_itens", [])):
         if item["id"] == item_id:
-            # Apenas atualiza campos permitidos (impressao, formato_id, cor_id, numeracao_id)
             for key in ["impressao", "formato_id", "cor_id", "numeracao_id"]:
                 if key in data:
                     db_data["os_itens"][i][key] = data[key]

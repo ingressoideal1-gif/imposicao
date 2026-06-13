@@ -92,15 +92,16 @@
                 Amostras
             </button>
 
-            <button class="nav-btn" data-view="view-lista-imposicao" id="nav-lista-imposicao">
-                <span class="nav-icon">📋</span>
-                Lista de Imposição
+            <button class="nav-btn" data-view="view-lista-impressao" id="nav-lista-impressao">
+                <span class="nav-icon">🖨️</span>
+                Lista de Impressão
+                <span class="nav-badge" id="badge-impressao">0</span>
             </button>
 
-            <button class="nav-btn" data-view="view-ordens" id="nav-ordens">
-                <span class="nav-icon">📦</span>
-                Ordens de Serviço
-                <span class="nav-badge" id="badge-ordens">0</span>
+            <button class="nav-btn" data-view="view-lista-arte" id="nav-lista-arte">
+                <span class="nav-icon">🎨</span>
+                Lista de Arte
+                <span class="nav-badge" id="badge-arte">0</span>
             </button>
 
             <span class="nav-group-label admin-only" style="margin-top:8px; display:none;">Administração</span>
@@ -687,6 +688,34 @@
                                 <button type="button" class="btn btn-ghost btn-sm btn-danger" onclick="clearActiveOS()" style="padding: 2px 8px; font-size: 0.75rem; margin: 0;">✕ Limpar OS</button>
                             </div>
 
+                            <!-- Fila de Itens OS pendentes -->
+                            <div id="imp-os-queue" style="display: none; margin-bottom: 16px;">
+                                <div class="card" style="border: 1px solid var(--blue); background: rgba(59,130,246,0.04);">
+                                    <div class="card-header" style="padding: 8px 12px; cursor: pointer;" onclick="toggleImpOSQueue()">
+                                        <span class="card-title" style="font-size: 0.88rem;"><span class="icon">📦</span> Itens da OS <span id="imp-os-queue-numero" style="color: var(--blue);"></span></span>
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span class="badge badge-amber" id="imp-os-queue-pending">0 pendentes</span>
+                                            <span id="imp-os-queue-arrow" style="font-size: 0.8rem; transition: transform 0.2s;">▼</span>
+                                        </div>
+                                    </div>
+                                    <div id="imp-os-queue-body" style="max-height: 220px; overflow-y: auto;">
+                                        <table class="data-table" style="font-size: 0.78rem; margin: 0;">
+                                            <thead>
+                                                <tr>
+                                                    <th style="padding: 6px 8px;">Produto</th>
+                                                    <th style="padding: 6px 8px;">Formato</th>
+                                                    <th style="padding: 6px 8px;">Qtd</th>
+                                                    <th style="padding: 6px 8px;">Impressão</th>
+                                                    <th style="padding: 6px 8px; width: 70px;">Ação</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-imp-os-queue">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="form-grid form-grid-4" style="margin-bottom:20px;">
                                 <div class="form-group">
                                     <label>1. Formato</label>
@@ -828,121 +857,112 @@
                 <div class="page-header">
                     <div class="page-header-text">
                         <h1>🧪 Amostras</h1>
-                        <p>Selecione uma cor e uma numeração cadastradas, carregue uma arte e veja a visualização em tempo real de cada camada.</p>
+                        <p>Simulador técnico de amostra combinada (Cor + Arte + Numeração) com ferramentas de ajuste e aprovação.</p>
                     </div>
                 </div>
 
-                <div class="card" style="margin-bottom: 24px;">
-                    <div class="card-header">
-                        <span class="card-title"><span class="icon">⚙️</span> Seleção de Camadas</span>
+                <!-- Painel Único de Amostra Combinada -->
+                <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
+                    <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center;">
+                        <span class="card-title">🧪 <strong>Amostra Combinada Unificada</strong></span>
+                        <span class="badge badge-blue">Resultado Final</span>
                     </div>
-                    <div class="form-grid" style="grid-template-columns: 1fr 1fr 1.5fr;">
-                        <div class="form-group">
-                            <label>Cor Cadastrada</label>
-                            <select class="form-control" id="amostra-cor" onchange="onAmostraCorSelect()">
-                                <option value="">— Selecione uma Cor —</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Numeração Cadastrada</label>
-                            <select class="form-control" id="amostra-numeracao" onchange="onAmostraNumeracaoSelect()">
-                                <option value="">— Selecione uma Numeração —</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Arte de Amostra (PDF, JPG, PNG)</label>
-                            <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
-                                <label class="btn btn-sm btn-secondary" for="amostra-arte-file" style="margin: 0; cursor: pointer;">
-                                    🖼️ Upload Arte
-                                </label>
-                                <input type="file" id="amostra-arte-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte" style="display:none; padding: 4px 8px;" onclick="clearAmostraArteFile()">✕ Remover</button>
-                                <span id="amostra-arte-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="divider" style="margin: 16px 0 12px 0;"></div>
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <span style="font-size:0.8rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; display:block;">🎨 Ajustes da Camada de Arte</span>
-                        <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                            <div class="form-group">
-                                <label style="display: flex; justify-content: space-between;">Saturação <span id="val-amostra-sat">100%</span></label>
-                                <input type="range" id="amostra-sat" min="0" max="200" value="100" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-sat').textContent = this.value + '%'; renderAmostraCombinada();">
-                            </div>
-                            <div class="form-group">
-                                <label style="display: flex; justify-content: space-between;">Contraste <span id="val-amostra-con">100%</span></label>
-                                <input type="range" id="amostra-con" min="50" max="150" value="100" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-con').textContent = this.value + '%'; renderAmostraCombinada();">
-                            </div>
-                            <div class="form-group">
-                                <label style="display: flex; justify-content: space-between;">Brilho <span id="val-amostra-bri">100%</span></label>
-                                <input type="range" id="amostra-bri" min="50" max="150" value="100" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-bri').textContent = this.value + '%'; renderAmostraCombinada();">
-                            </div>
-                            <div class="form-group">
-                                <label style="display: flex; justify-content: space-between;">Nitidez (Sharpen) <span id="val-amostra-shp">0%</span></label>
-                                <input type="range" id="amostra-shp" min="0" max="100" value="0" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-shp').textContent = this.value + '%'; renderAmostraCombinada();">
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                    <div style="padding: 24px;">
+                        <div class="amostra-layout">
+                            <!-- Coluna Esquerda: Controles & Ações -->
+                            <div class="amostra-controles-card">
+                                <div>
+                                    <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                                        ⚙️ Configurações da Amostra
+                                    </h3>
+                                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label>Cor Cadastrada</label>
+                                            <select class="form-control" id="amostra-cor" onchange="onAmostraCorSelect()">
+                                                <option value="">— Selecione uma Cor —</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label>Numeração Cadastrada</label>
+                                            <select class="form-control" id="amostra-numeracao" onchange="onAmostraNumeracaoSelect()">
+                                                <option value="">— Selecione uma Numeração —</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label>Arte de Amostra (PDF, JPG, PNG)</label>
+                                            <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+                                                <label class="btn btn-sm btn-secondary" for="amostra-arte-file" style="margin: 0; cursor: pointer;">
+                                                    🖼️ Upload Arte
+                                                </label>
+                                                <input type="file" id="amostra-arte-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
+                                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte" style="display:none; padding: 4px 8px;" onclick="clearAmostraArteFile()">✕ Remover</button>
+                                                <span id="amostra-arte-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
-                <!-- Janelas de Visualização Uma Abaixo da Outra -->
-                <div style="display: flex; flex-direction: column; gap: 24px;">
-                    <!-- Janela Principal de Visualização Unificada (Amostra Combinada) -->
-                    <div class="card" style="margin-bottom: 0; border: 2px solid var(--blue);">
-                        <div class="card-header" style="background: rgba(59, 130, 246, 0.08);">
-                            <span class="card-title">🧪 <strong>Amostra Combinada (Cor + Arte + Numeração)</strong></span>
-                            <span class="badge badge-blue">Resultado Final</span>
-                        </div>
-                        <div style="display: flex; justify-content: center; align-items: center; min-height: 300px; background: var(--bg-body); border-radius: var(--radius); padding: 15px; overflow: auto; border: 1px solid var(--border);">
-                            <canvas id="amostra-comb-canvas" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
-                            <div id="amostra-comb-empty" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                <div style="font-size: 3rem; margin-bottom: 12px; opacity: 0.7;">🧪</div>
-                                <p style="font-size: 0.9rem; font-weight: 500;">Selecione Cor/Numeração e carregue uma Arte para gerar a amostra combinada.</p>
-                            </div>
-                        </div>
-                    </div>
+                                <div class="divider" style="margin: 8px 0;"></div>
 
-                    <!-- 1. Visualização da Cor -->
-                    <div class="card" style="margin-bottom: 0;">
-                        <div class="card-header">
-                            <span class="card-title">🎨 Camada 1: Visualização da Cor</span>
-                            <span class="badge badge-blue" id="amostra-cor-badge">Sem Cor</span>
-                        </div>
-                        <div style="display: flex; justify-content: center; align-items: center; min-height: 250px; background: var(--bg-body); border-radius: var(--radius); padding: 15px; overflow: auto; border: 1px solid var(--border);">
-                            <canvas id="amostra-cor-canvas" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
-                            <div id="amostra-cor-empty" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
-                                <p style="font-size: 0.85rem; font-weight: 500;">Selecione uma cor para visualizar.</p>
-                            </div>
-                        </div>
-                    </div>
+                                <div>
+                                    <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                                        🎨 Ajustes da Camada de Arte
+                                    </h3>
+                                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="display: flex; justify-content: space-between; font-size: 0.82rem;">Saturação <span id="val-amostra-sat">100%</span></label>
+                                            <input type="range" id="amostra-sat" min="0" max="200" value="100" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-sat').textContent = this.value + '%'; renderAmostraCombinada();">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="display: flex; justify-content: space-between; font-size: 0.82rem;">Contraste <span id="val-amostra-con">100%</span></label>
+                                            <input type="range" id="amostra-con" min="50" max="150" value="100" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-con').textContent = this.value + '%'; renderAmostraCombinada();">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="display: flex; justify-content: space-between; font-size: 0.82rem;">Brilho <span id="val-amostra-bri">100%</span></label>
+                                            <input type="range" id="amostra-bri" min="50" max="150" value="100" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-bri').textContent = this.value + '%'; renderAmostraCombinada();">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label style="display: flex; justify-content: space-between; font-size: 0.82rem;">Nitidez (Sharpen) <span id="val-amostra-shp">0%</span></label>
+                                            <input type="range" id="amostra-shp" min="0" max="100" value="0" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-shp').textContent = this.value + '%'; renderAmostraCombinada();">
+                                        </div>
+                                    </div>
+                                </div>
 
-                    <!-- 2. Visualização da Arte de Amostra -->
-                    <div class="card" style="margin-bottom: 0;">
-                        <div class="card-header">
-                            <span class="card-title">🖼️ Camada 2: Visualização da Arte Carregada</span>
-                            <span class="badge badge-teal" id="amostra-arte-badge">Sem Arte</span>
-                        </div>
-                        <div style="display: flex; justify-content: center; align-items: center; min-height: 250px; background: var(--bg-body); border-radius: var(--radius); padding: 15px; overflow: auto; border: 1px solid var(--border);">
-                            <canvas id="amostra-arte-canvas" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
-                            <div id="amostra-arte-empty" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">🖼️</div>
-                                <p style="font-size: 0.85rem; font-weight: 500;">Carregue uma arte em PDF ou imagem para visualizar.</p>
-                            </div>
-                        </div>
-                    </div>
+                                <!-- Painel de Decisão Técnico-Comercial -->
+                                <div class="amostra-decisao-panel">
+                                    <div class="amostra-decisao-title">
+                                        ⚖️ Decisão de Qualidade
+                                    </div>
+                                    
+                                    <div class="amostra-decisao-status-box">
+                                        <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
+                                        <span id="amostra-status-badge" class="badge">⏳ Sem Seleção</span>
+                                    </div>
 
-                    <!-- 3. Visualização da Numeração (VDP) -->
-                    <div class="card" style="margin-bottom: 0;">
-                        <div class="card-header">
-                            <span class="card-title">🔢 Camada 3: Visualização da Numeração (VDP)</span>
-                            <span class="badge badge-purple" id="amostra-num-badge">Sem Numeração</span>
-                        </div>
-                        <div style="display: flex; justify-content: center; align-items: center; min-height: 250px; background: var(--bg-body); border-radius: var(--radius); padding: 15px; overflow: auto; border: 1px solid var(--border);">
-                            <canvas id="amostra-num-canvas" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
-                            <div id="amostra-num-empty" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">🔢</div>
-                                <p style="font-size: 0.85rem; font-weight: 500;">Selecione uma numeração para visualizar.</p>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label for="amostra-obs-alteracao" style="font-size: 0.82rem;">Anotações / Observações de Alteração</label>
+                                        <textarea id="amostra-obs-alteracao" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"></textarea>
+                                    </div>
+
+                                    <div class="amostra-decisao-btns">
+                                        <button class="btn btn-success" id="btn-amostra-aprovar" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="window.decisionAmostra('APROVADA')">
+                                            ✅ APROVAR
+                                        </button>
+                                        <button class="btn btn-danger" id="btn-amostra-alterar" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="window.decisionAmostra('REPROVADA')">
+                                            ❌ ALTERAR
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Coluna Direita: Visualização do Canvas -->
+                            <div class="amostra-preview-container">
+                                <canvas id="amostra-comb-canvas" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
+                                <div id="amostra-comb-empty" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                                    <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🧪</div>
+                                    <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
+                                    <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -950,101 +970,63 @@
             </section>
 
             <!-- ══════════════════════════════════════════════════════════════ -->
-            <!-- VIEW: LISTA DE IMPOSIÇÃO                                       -->
+            <!-- VIEW: LISTA DE IMPRESSÃO                                       -->
             <!-- ══════════════════════════════════════════════════════════════ -->
-            <section id="view-lista-imposicao" class="view-section">
+            <section id="view-lista-impressao" class="view-section">
                 <div class="page-header" style="flex-wrap: wrap;">
                     <div class="page-header-text">
-                        <h1>📋 Modelos de Imposição</h1>
-                        <p>Gerencie seus modelos de imposição cadastrados no sistema.</p>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title"><span class="icon">📋</span> Modelos Cadastrados</span>
-                    </div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Nome do Modelo</th>
-                                <th>Formato</th>
-                                <th>Saída</th>
-                                <th>Regra de Paginação</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-modelos-imposicao"></tbody>
-                    </table>
-                    <div class="empty-state" id="empty-modelos-imposicao" style="display:none">
-                        <div class="empty-state-icon">📋</div>
-                        <p>Nenhum modelo cadastrado ainda.</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ══════════════════════════════════════════════════════════════ -->
-            <!-- VIEW: ORDENS DE SERVIÇO                                       -->
-            <!-- ══════════════════════════════════════════════════════════════ -->
-            <section id="view-ordens" class="view-section">
-                <div class="page-header" style="flex-wrap: wrap;">
-                    <div class="page-header-text">
-                        <h1>📦 Ordens de Serviço</h1>
-                        <p>Acompanhe as ordens de serviço recebidas e gerencie o status de impressão dos itens.</p>
+                        <h1>🖨️ Lista de Impressão</h1>
+                        <p>Pedidos liberados para produção e prontos para imposição e impressão.</p>
                     </div>
                     <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <div style="position: relative;">
-                            <input type="text" id="os-search" class="form-control" placeholder="Buscar OS..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;">
+                            <input type="text" id="os-search-impressao" class="form-control" placeholder="Buscar Pedido..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;">
                             <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">🔍</span>
                         </div>
-                        <select id="os-filter-status" class="form-control" onchange="renderOrdens()" style="width: 160px;">
-                            <option value="">Todos os Status</option>
-                            <option value="ARTE">🎨 Arte</option>
-                            <option value="PRODUÇÃO">🏭 Produção</option>
-                            <option value="FINALIZADA">✅ Finalizada</option>
-                            <option value="CANCELADA">❌ Cancelada</option>
-                        </select>
                         <button class="btn btn-secondary btn-sm" onclick="loadOrdens()" title="Atualizar lista">🔄 Atualizar</button>
                     </div>
                 </div>
 
-                <!-- Tabela de OS -->
+                <!-- Tabela de OS de Impressão -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">📋</span> Ordens de Serviço</span>
-                        <span class="badge badge-teal" id="os-count-badge">0 OS</span>
+                        <span class="card-title"><span class="icon">📋</span> Fila de Impressão</span>
+                        <span class="badge badge-teal" id="os-impressao-count-badge">0 Pedidos</span>
                     </div>
-                    <table class="data-table" id="table-ordens">
+                    <table class="data-table" id="table-impressao">
                         <thead>
                             <tr>
                                 <th style="width: 50px;"></th>
-                                <th>Nº OS</th>
+                                <th>Nº Pedido</th>
+                                <th>Cliente</th>
+                                <th>Vendedor</th>
+                                <th>Data Liberação</th>
+                                <th>Prazo Entrega</th>
                                 <th>Status</th>
                                 <th>Itens</th>
-                                <th>Criada em</th>
-                                <th>Atualizada</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-ordens">
+                        <tbody id="tbody-impressao">
                             <!-- Inserido dinamicamente via JS -->
                         </tbody>
                     </table>
-                    <div class="empty-state" id="empty-ordens" style="display:none">
-                        <div class="empty-state-icon">📦</div>
-                        <p>Nenhuma ordem de serviço encontrada.</p>
+                    <div class="empty-state" id="empty-impressao" style="display:none">
+                        <div class="empty-state-icon">🖨️</div>
+                        <p>Nenhum pedido liberado para impressão encontrado.</p>
                     </div>
                 </div>
 
-                <!-- Detalhes da OS selecionada (itens) -->
-                <div class="card" id="os-detail-card" style="display: none;">
+                <!-- Detalhes da OS de Impressão -->
+                <div class="card" id="os-detail-card-impressao" style="display: none;">
                     <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
-                        <span class="card-title"><span class="icon">📄</span> Itens da OS <span id="os-detail-numero" style="color: var(--blue);"></span></span>
+                        <span class="card-title"><span class="icon">📄</span> Itens do Pedido <span id="os-detail-numero-impressao" style="color: var(--blue);"></span></span>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <span class="badge" id="os-detail-status-badge"></span>
-                            <span id="os-detail-obs" style="font-size: 0.8rem; color: var(--text-dim);"></span>
+                            <span class="badge" id="os-detail-status-badge-impressao"></span>
+                            <span id="os-detail-obs-impressao" style="font-size: 0.8rem; color: var(--text-dim);"></span>
                         </div>
                     </div>
-                    <table class="data-table" id="table-os-itens">
+                    <table class="data-table" id="table-os-itens-impressao">
                         <thead>
                             <tr>
                                 <th>Setor</th>
@@ -1061,7 +1043,88 @@
                                 <th>Ações</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-os-itens">
+                        <tbody id="tbody-os-itens-impressao">
+                            <!-- Inserido dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: LISTA DE ARTE                                            -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <section id="view-lista-arte" class="view-section">
+                <div class="page-header" style="flex-wrap: wrap;">
+                    <div class="page-header-text">
+                        <h1>🎨 Lista de Arte</h1>
+                        <p>Pedidos em fase de criação, revisão ou aprovação de arte gráfica.</p>
+                    </div>
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div style="position: relative;">
+                            <input type="text" id="os-search-arte" class="form-control" placeholder="Buscar Pedido..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;">
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">🔍</span>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" onclick="loadOrdens()" title="Atualizar lista">🔄 Atualizar</button>
+                    </div>
+                </div>
+
+                <!-- Tabela de OS de Arte -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title"><span class="icon">📋</span> Fila de Arte</span>
+                        <span class="badge badge-yellow" id="os-arte-count-badge">0 Pedidos</span>
+                    </div>
+                    <table class="data-table" id="table-arte">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;"></th>
+                                <th>Nº Pedido</th>
+                                <th>Cliente</th>
+                                <th>Vendedor</th>
+                                <th>Data Liberação</th>
+                                <th>Prazo Entrega</th>
+                                <th>Status</th>
+                                <th>Itens</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-arte">
+                            <!-- Inserido dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                    <div class="empty-state" id="empty-arte" style="display:none">
+                        <div class="empty-state-icon">🎨</div>
+                        <p>Nenhum pedido em fase de arte encontrado.</p>
+                    </div>
+                </div>
+
+                <!-- Detalhes da OS de Arte -->
+                <div class="card" id="os-detail-card-arte" style="display: none;">
+                    <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
+                        <span class="card-title"><span class="icon">📄</span> Itens do Pedido <span id="os-detail-numero-arte" style="color: var(--blue);"></span></span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span class="badge" id="os-detail-status-badge-arte"></span>
+                            <span id="os-detail-obs-arte" style="font-size: 0.8rem; color: var(--text-dim);"></span>
+                        </div>
+                    </div>
+                    <table class="data-table" id="table-os-itens-arte">
+                        <thead>
+                            <tr>
+                                <th>Setor</th>
+                                <th>Produto</th>
+                                <th>Modelo</th>
+                                <th>Formato</th>
+                                <th>Qtd</th>
+                                <th>Numeração</th>
+                                <th>Cor</th>
+                                <th>Verso</th>
+                                <th>Blocos</th>
+                                <th>Aprovação</th>
+                                <th>Impressão</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-os-itens-arte">
                             <!-- Inserido dinamicamente via JS -->
                         </tbody>
                     </table>

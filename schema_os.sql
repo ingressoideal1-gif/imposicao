@@ -1,12 +1,15 @@
 -- ══════════════════════════════════════════════════════════════════════════════
--- IDEAL IMPOSITION + VIBECODE — Schema de Ordens de Serviço
+-- IDEAL IMPOSITION + VIBECODE — Schema de Ordens de Serviço (Operacional)
 -- Banco compartilhado entre os dois sistemas via Supabase
--- Criado em: 2026-06-12
+-- Prefixo: producao_ (alinhado com convenções do Vibecode)
+-- Criado em: 2026-06-12 | Atualizado para conformidade de chaves UUID e empresa_id
 -- ══════════════════════════════════════════════════════════════════════════════
 
--- ── FUNÇÃO UTILITÁRIA: updated_at automático ─────────────────────────────────
+-- ── HABILITAR EXTENSÃO DE UUID (se não estiver habilitada) ───────────────────
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE OR REPLACE FUNCTION update_updated_at()
+-- ── FUNÇÃO UTILITÁRIA: updated_at automático ─────────────────────────────────
+CREATE OR REPLACE FUNCTION producao_update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = now();
@@ -14,11 +17,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ── TABELA: usuarios ─────────────────────────────────────────────────────────
+-- ── TABELA: producao_usuarios ────────────────────────────────────────────────
 -- Perfis de usuários vinculados ao auth.users do Supabase
--- Criados automaticamente ao fazer signup ou manualmente pelo admin
 
-CREATE TABLE IF NOT EXISTS usuarios (
+CREATE TABLE IF NOT EXISTS producao_usuarios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
@@ -29,56 +31,54 @@ CREATE TABLE IF NOT EXISTS usuarios (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TRIGGER trg_usuarios_updated
-    BEFORE UPDATE ON usuarios
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_producao_usuarios_updated
+    BEFORE UPDATE ON producao_usuarios
+    FOR EACH ROW EXECUTE FUNCTION producao_update_updated_at();
 
-ALTER TABLE usuarios DISABLE ROW LEVEL SECURITY;
+ALTER TABLE producao_usuarios DISABLE ROW LEVEL SECURITY;
 
--- ── TABELA: ordens_servico ───────────────────────────────────────────────────
--- Cada OS agrupa múltiplos itens (linhas da planilha)
--- O campo 'numero' é o identificador humano (ex: 17455)
+-- ── TABELA: producao_ordens_servico ──────────────────────────────────────────
+-- Cada OS agrupa múltiplos itens (linhas da proposta/pedido)
 
-CREATE TABLE IF NOT EXISTS ordens_servico (
-    id TEXT PRIMARY KEY DEFAULT 'os_' || substr(gen_random_uuid()::text, 1, 8),
+CREATE TABLE IF NOT EXISTS producao_ordens_servico (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    empresa_id UUID,                     -- Tenant ID
     numero INTEGER UNIQUE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'ARTE'
-        CHECK (status IN ('ARTE', 'PRODUÇÃO', 'FINALIZADA', 'CANCELADA')),
+    status TEXT NOT NULL DEFAULT 'PRODUÇÃO',
     observacoes TEXT,
-    criado_por UUID REFERENCES usuarios(id),
+    criado_por UUID REFERENCES producao_usuarios(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TRIGGER trg_os_updated
-    BEFORE UPDATE ON ordens_servico
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_producao_os_updated
+    BEFORE UPDATE ON producao_ordens_servico
+    FOR EACH ROW EXECUTE FUNCTION producao_update_updated_at();
 
-ALTER TABLE ordens_servico DISABLE ROW LEVEL SECURITY;
+ALTER TABLE producao_ordens_servico DISABLE ROW LEVEL SECURITY;
 
--- ── TABELA: os_itens ─────────────────────────────────────────────────────────
+-- ── TABELA: producao_os_itens ────────────────────────────────────────────────
 -- Cada item representa uma linha de produção dentro da OS
--- Possui FKs opcionais para tabelas do Imposition (formato_id, cor_id, numeracao_id)
 
-CREATE TABLE IF NOT EXISTS os_itens (
-    id TEXT PRIMARY KEY DEFAULT 'osi_' || substr(gen_random_uuid()::text, 1, 8),
-    os_id TEXT NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS producao_os_itens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    empresa_id UUID,                     -- Tenant ID
+    os_id UUID NOT NULL REFERENCES producao_ordens_servico(id) ON DELETE CASCADE,
     setor TEXT NOT NULL,                -- TEXTIL, IMPRESS., FLEX
     produto TEXT NOT NULL,              -- TEX, CORDÃO, TRIBAND, MOBI, UP, TEX PLUS
-    modelo TEXT,                        -- código do modelo (ex: 123123)
+    modelo TEXT,                        -- código do modelo (ex: VIBE-12807-611)
     formato TEXT NOT NULL,              -- referência textual (ex: "35X2")
-    formato_id TEXT,                    -- FK opcional → formatos.id do Imposition
-    quantidade INTEGER NOT NULL CHECK (quantidade > 0),
+    formato_id UUID REFERENCES producao_formatos(id) ON DELETE SET NULL, -- FK → formatos do Imposition
+    quantidade INTEGER NOT NULL CHECK (quantidade >= 0),
     num_inicial INTEGER NOT NULL DEFAULT 1,
     num_final INTEGER NOT NULL,
     cor TEXT DEFAULT 'STD',             -- nome da cor (ex: AMARELO, PINK, ROXO)
-    cor_id TEXT,                        -- FK opcional → cores.id do Imposition
+    cor_id UUID REFERENCES producao_cores(id) ON DELETE SET NULL, -- FK → cores do Imposition
     blocos TEXT DEFAULT 'N',            -- 'N' ou quantidade numérica (ex: '50', '25')
     verso BOOLEAN DEFAULT false,        -- impressão frente e verso
-    numeracao TEXT DEFAULT 'SEQUENCIAL', -- tipo: PADRÃO, QR, BARRAS, SEQUENCIAL, CLIENTE, BANCO D., TICKET, TEATRO
-    numeracao_id TEXT,                  -- FK opcional → numeracoes.id do Imposition
-    aprovacao TEXT DEFAULT 'EM ARTE'
-        CHECK (aprovacao IN ('EM ARTE', 'APROVADA', 'PRONTA', 'REPROVADA')),
+    numeracao TEXT DEFAULT 'SEQUENCIAL', -- tipo: PADRÃO, QR, BARRAS, SEQUENCIAL
+    numeracao_id UUID REFERENCES producao_numeracoes(id) ON DELETE SET NULL, -- FK → numeracoes do Imposition
+    aprovacao TEXT DEFAULT 'APROVADA',
     impressao TEXT DEFAULT 'AGUARD.'
         CHECK (impressao IN ('AGUARD.', 'PARCIAL', 'IMPRESSO', 'ERRO')),
     observacoes TEXT,
@@ -86,48 +86,48 @@ CREATE TABLE IF NOT EXISTS os_itens (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TRIGGER trg_osi_updated
-    BEFORE UPDATE ON os_itens
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_producao_osi_updated
+    BEFORE UPDATE ON producao_os_itens
+    FOR EACH ROW EXECUTE FUNCTION producao_update_updated_at();
 
-ALTER TABLE os_itens DISABLE ROW LEVEL SECURITY;
+ALTER TABLE producao_os_itens DISABLE ROW LEVEL SECURITY;
 
--- ── TABELA: os_log ───────────────────────────────────────────────────────────
--- Auditoria de todas as ações sobre OS e itens
--- Essencial para rastrear quem fez o quê em sistema com centenas de usuários
+-- ── TABELA: producao_os_log ──────────────────────────────────────────────────
+-- Auditoria de todas as ações operacionais
 
-CREATE TABLE IF NOT EXISTS os_log (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    os_id TEXT REFERENCES ordens_servico(id) ON DELETE SET NULL,
-    item_id TEXT,                       -- referência ao os_itens.id (sem FK para manter logs após delete)
-    usuario_id UUID REFERENCES usuarios(id),
+CREATE TABLE IF NOT EXISTS producao_os_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    empresa_id UUID,                     -- Tenant ID
+    os_id UUID REFERENCES producao_ordens_servico(id) ON DELETE SET NULL,
+    item_id UUID,                       -- ID da producao_os_itens
+    usuario_id UUID REFERENCES producao_usuarios(id) ON DELETE SET NULL,
     acao TEXT NOT NULL,                 -- ex: CRIOU_OS, APROVOU_ITEM, IMPRIMIU, CANCELOU, EDITOU
     detalhes JSONB,                    -- dados extras (ex: {"campo": "aprovacao", "de": "EM ARTE", "para": "APROVADA"})
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-ALTER TABLE os_log DISABLE ROW LEVEL SECURITY;
+ALTER TABLE producao_os_log DISABLE ROW LEVEL SECURITY;
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- INDEXES — Performance otimizada para centenas de usuários
+-- INDEXES
 -- ══════════════════════════════════════════════════════════════════════════════
 
--- Ordens de Serviço
-CREATE INDEX IF NOT EXISTS idx_os_numero ON ordens_servico(numero);
-CREATE INDEX IF NOT EXISTS idx_os_status ON ordens_servico(status);
-CREATE INDEX IF NOT EXISTS idx_os_created ON ordens_servico(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_os_criado_por ON ordens_servico(criado_por);
+CREATE INDEX IF NOT EXISTS idx_producao_os_numero ON producao_ordens_servico(numero);
+CREATE INDEX IF NOT EXISTS idx_producao_os_status ON producao_ordens_servico(status);
+CREATE INDEX IF NOT EXISTS idx_producao_os_created ON producao_ordens_servico(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_producao_os_criado_por ON producao_ordens_servico(criado_por);
+CREATE INDEX IF NOT EXISTS idx_producao_os_empresa ON producao_ordens_servico(empresa_id);
 
--- Itens da OS
-CREATE INDEX IF NOT EXISTS idx_osi_os_id ON os_itens(os_id);
-CREATE INDEX IF NOT EXISTS idx_osi_aprovacao ON os_itens(aprovacao);
-CREATE INDEX IF NOT EXISTS idx_osi_impressao ON os_itens(impressao);
-CREATE INDEX IF NOT EXISTS idx_osi_modelo ON os_itens(modelo);
-CREATE INDEX IF NOT EXISTS idx_osi_formato ON os_itens(formato);
-CREATE INDEX IF NOT EXISTS idx_osi_setor ON os_itens(setor);
+CREATE INDEX IF NOT EXISTS idx_producao_osi_os_id ON producao_os_itens(os_id);
+CREATE INDEX IF NOT EXISTS idx_producao_osi_aprovacao ON producao_os_itens(aprovacao);
+CREATE INDEX IF NOT EXISTS idx_producao_osi_impressao ON producao_os_itens(impressao);
+CREATE INDEX IF NOT EXISTS idx_producao_osi_modelo ON producao_os_itens(modelo);
+CREATE INDEX IF NOT EXISTS idx_producao_osi_formato ON producao_os_itens(formato);
+CREATE INDEX IF NOT EXISTS idx_producao_osi_setor ON producao_os_itens(setor);
+CREATE INDEX IF NOT EXISTS idx_producao_osi_empresa ON producao_os_itens(empresa_id);
 
--- Log de auditoria
-CREATE INDEX IF NOT EXISTS idx_log_os_id ON os_log(os_id);
-CREATE INDEX IF NOT EXISTS idx_log_usuario ON os_log(usuario_id);
-CREATE INDEX IF NOT EXISTS idx_log_created ON os_log(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_log_acao ON os_log(acao);
+CREATE INDEX IF NOT EXISTS idx_producao_log_os_id ON producao_os_log(os_id);
+CREATE INDEX IF NOT EXISTS idx_producao_log_usuario ON producao_os_log(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_producao_log_created ON producao_os_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_producao_log_acao ON producao_os_log(acao);
+CREATE INDEX IF NOT EXISTS idx_producao_log_empresa ON producao_os_log(empresa_id);

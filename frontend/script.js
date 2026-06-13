@@ -546,7 +546,13 @@ async function api(method, path, body = null) {
 
         const parts = path.substring(1).split('/');
 
-        const col = parts[0];
+        let col = parts[0];
+        // Adicionar o prefixo producao_ exigido pelo parceiro Vibecode
+        if (col === 'modelos_imposicao') {
+            col = 'producao_modelos_imposicao';
+        } else {
+            col = 'producao_' + col;
+        }
 
         const docId = parts[1] || null;
 
@@ -588,7 +594,17 @@ async function api(method, path, body = null) {
 
             } else if (method === 'POST') {
 
-                let id = body.id || (col.substring(0,3) + '_' + Date.now().toString(36) + Math.random().toString(36).substring(2,6));
+                let id = body.id;
+                if (!id) {
+                    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                        id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                            return v.toString(16);
+                        });
+                    } else {
+                        id = col.substring(0,3) + '_' + Date.now().toString(36) + Math.random().toString(36).substring(2,6);
+                    }
+                }
 
                 let insertPayload;
 
@@ -7277,6 +7293,12 @@ window.runImposition = async function () {
 
                 toast('PDF salvo com sucesso!', 'success');
 
+                // Auto-atualizar status de impressão do item ativo da OS
+                if (state.activeOSItem && state.activeOSItem.itemId) {
+                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
+                    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+                }
+
                 return;
 
             } catch (err) {
@@ -7316,6 +7338,12 @@ window.runImposition = async function () {
         document.body.removeChild(a);
 
         toast('PDF baixado com sucesso!', 'success');
+
+        // Auto-atualizar status de impressão do item ativo da OS
+        if (state.activeOSItem && state.activeOSItem.itemId) {
+            await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
+            if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+        }
 
     } catch (err) {
 
@@ -8921,7 +8949,7 @@ window.onAmostraCorSelect = async function() {
 
     const corId = document.getElementById('amostra-cor').value;
 
-    const canvas = document.getElementById('amostra-cor-canvas');
+    const canvas = document.getElementById('amostra-cor-canvas') || (window._amostraCorCanvas = window._amostraCorCanvas || document.createElement('canvas'));
 
     const empty = document.getElementById('amostra-cor-empty');
 
@@ -9110,6 +9138,8 @@ window.onAmostraCorSelect = async function() {
 
     }
 
+    if (typeof updateAmostraDecisaoUI === 'function') updateAmostraDecisaoUI();
+
 };
 
 
@@ -9118,7 +9148,7 @@ window.onAmostraNumeracaoSelect = function() {
 
     const numId = document.getElementById('amostra-numeracao').value;
 
-    const canvas = document.getElementById('amostra-num-canvas');
+    const canvas = document.getElementById('amostra-num-canvas') || (window._amostraNumCanvas = window._amostraNumCanvas || document.createElement('canvas'));
 
     const empty = document.getElementById('amostra-num-empty');
 
@@ -9356,6 +9386,8 @@ window.onAmostraNumeracaoSelect = function() {
 
     renderAmostraCombinada();
 
+    if (typeof updateAmostraDecisaoUI === 'function') updateAmostraDecisaoUI();
+
 };
 
 
@@ -9378,7 +9410,7 @@ window.clearAmostraArteFile = function() {
 
     
 
-    const canvas = document.getElementById('amostra-arte-canvas');
+    const canvas = document.getElementById('amostra-arte-canvas') || (window._amostraArteCanvas = window._amostraArteCanvas || document.createElement('canvas'));
 
     const empty = document.getElementById('amostra-arte-empty');
 
@@ -9402,7 +9434,7 @@ async function loadAmostraArteFile(file) {
 
     const ext = file.name.split('.').pop().toLowerCase();
 
-    const canvas = document.getElementById('amostra-arte-canvas');
+    const canvas = document.getElementById('amostra-arte-canvas') || (window._amostraArteCanvas = window._amostraArteCanvas || document.createElement('canvas'));
 
     const empty = document.getElementById('amostra-arte-empty');
 
@@ -9562,11 +9594,11 @@ function renderAmostraCombinada() {
 
 
 
-    const corCanvas = document.getElementById('amostra-cor-canvas');
+    const corCanvas = document.getElementById('amostra-cor-canvas') || window._amostraCorCanvas;
 
-    const arteCanvas = document.getElementById('amostra-arte-canvas');
+    const arteCanvas = document.getElementById('amostra-arte-canvas') || window._amostraArteCanvas;
 
-    const numCanvas = document.getElementById('amostra-num-canvas');
+    const numCanvas = document.getElementById('amostra-num-canvas') || window._amostraNumCanvas;
 
 
 
@@ -9662,7 +9694,7 @@ function renderAmostraCombinada() {
 
     // 1. Desenhar a Camada 1: Cor (se estiver disponível, centralizada no canvasComb caso divirjam)
 
-    if (corId && corCanvas && corCanvas.style.display !== 'none' && corCanvas.width > 0) {
+    if (corId && corCanvas && corCanvas.width > 0) {
 
         const dx = (finalWidth - corCanvas.width) / 2;
 
@@ -9684,7 +9716,7 @@ function renderAmostraCombinada() {
 
     // 2. Desenhar a Camada 2: Arte com efeito similar ao Photoshop Multiply (lendo a dimensão e centralizando em um canvas intermediário do tamanho da Cor)
 
-    if (hasArte && arteCanvas && arteCanvas.style.display !== 'none' && arteCanvas.width > 0) {
+    if (hasArte && arteCanvas && arteCanvas.width > 0) {
 
         // Obter valores de ajuste da interface
 
@@ -9868,7 +9900,7 @@ function renderAmostraCombinada() {
 
     // 3. Desenhar a Camada 3: Numeração com efeito similar ao Photoshop Multiply (lendo a dimensão e centralizando em um canvas intermediário do tamanho da Cor)
 
-    if (numId && numCanvas && numCanvas.style.display !== 'none' && numCanvas.width > 0) {
+    if (numId && numCanvas && numCanvas.width > 0) {
 
         // Criar um canvas temporário do tamanho exato da Cor
 
@@ -9924,7 +9956,99 @@ function renderAmostraCombinada() {
 
 window.renderAmostraCombinada = renderAmostraCombinada;
 
+// LÓGICA DE DECISÕES DA AMOSTRA COMBINADA (APROVAR/ALTERAR)
+function updateAmostraDecisaoUI() {
+    const corId = document.getElementById('amostra-cor')?.value;
+    const numId = document.getElementById('amostra-numeracao')?.value;
+    const badge = document.getElementById('amostra-status-badge');
+    const obsText = document.getElementById('amostra-obs-alteracao');
 
+    if (!badge) return;
+
+    if (!corId || !numId) {
+        badge.className = 'badge';
+        badge.textContent = '⏳ Sem Seleção';
+        badge.style.background = 'rgba(255,255,255,0.05)';
+        badge.style.color = 'var(--text-dim)';
+        if (obsText) {
+            obsText.value = '';
+            obsText.disabled = true;
+        }
+        return;
+    }
+
+    if (obsText) obsText.disabled = false;
+
+    const key = `amostra_decisao_${corId}_${numId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+        try {
+            const decisao = JSON.parse(saved);
+            if (obsText) obsText.value = decisao.obs || '';
+            if (decisao.status === 'APROVADA') {
+                badge.className = 'badge badge-teal';
+                badge.textContent = '✅ Aprovada';
+                badge.style.background = 'rgba(20, 184, 166, 0.15)';
+                badge.style.color = 'var(--teal)';
+            } else if (decisao.status === 'REPROVADA') {
+                badge.className = 'badge badge-red';
+                badge.textContent = '❌ Alteração Solicitada';
+                badge.style.background = 'rgba(239, 68, 68, 0.15)';
+                badge.style.color = 'var(--red)';
+            } else {
+                badge.className = 'badge';
+                badge.textContent = '⏳ Pendente';
+                badge.style.background = 'rgba(245, 158, 11, 0.15)';
+                badge.style.color = 'var(--amber)';
+            }
+        } catch (e) {
+            badge.className = 'badge';
+            badge.textContent = '⏳ Pendente';
+            badge.style.background = 'rgba(245, 158, 11, 0.15)';
+            badge.style.color = 'var(--amber)';
+            if (obsText) obsText.value = '';
+        }
+    } else {
+        badge.className = 'badge';
+        badge.textContent = '⏳ Pendente';
+        badge.style.background = 'rgba(245, 158, 11, 0.15)';
+        badge.style.color = 'var(--amber)';
+        if (obsText) obsText.value = '';
+    }
+}
+
+window.updateAmostraDecisaoUI = updateAmostraDecisaoUI;
+
+window.decisionAmostra = function(status) {
+    const corId = document.getElementById('amostra-cor')?.value;
+    const numId = document.getElementById('amostra-numeracao')?.value;
+    const obsText = document.getElementById('amostra-obs-alteracao');
+    const obs = obsText ? obsText.value.trim() : '';
+
+    if (!corId || !numId) {
+        return toast('Selecione uma Cor e uma Numeração antes de salvar a decisão.', 'error');
+    }
+
+    if (status === 'REPROVADA' && !obs) {
+        return toast('Por favor, descreva as observações da alteração solicitada.', 'warning');
+    }
+
+    const key = `amostra_decisao_${corId}_${numId}`;
+    const decisao = {
+        status,
+        obs,
+        date: new Date().toISOString()
+    };
+
+    localStorage.setItem(key, JSON.stringify(decisao));
+    updateAmostraDecisaoUI();
+
+    if (status === 'APROVADA') {
+        toast('Amostra Aprovada com sucesso!', 'success');
+    } else {
+        toast('Solicitação de alteração registrada!', 'warning');
+    }
+};
 
 // Configuração de listeners para Amostras
 
@@ -10629,23 +10753,50 @@ window.clearActiveOS = clearActiveOS;
 if (!state.ordens) state.ordens = [];
 if (!state.osItens) state.osItens = {};
 if (!state.osExpandedId) state.osExpandedId = null;
+if (!state.activeOSItem) state.activeOSItem = null;
 
 /**
- * Carrega todas as OS do Supabase (ou API local)
+ * Carrega todas as OS — Prioridade: Vibecode → Supabase Imposition → API local
+ * No Vibecode, cada `id_int` (proposta) = 1 OS. Os produtos_proposta são os itens.
  */
 async function loadOrdens() {
     try {
+        // Fonte 1: Vibecode (ERP do parceiro)
+        if (typeof vibeClient !== 'undefined' && vibeClient) {
+            console.log('[OS] Carregando do Vibecode...');
+            const loaded = await loadOrdensFromVibecode();
+            if (loaded) {
+                renderOrdens();
+                return;
+            }
+            console.log('[OS] Vibecode sem dados, tentando fallback...');
+        }
+
+        // Fonte 2: Supabase do Imposition (Banco único do Vibecode)
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const { data, error } = await supabaseClient
-                .from('ordens_servico')
-                .select('*, os_itens(id)')
+                .from('producao_ordens_servico')
+                .select('*, producao_os_itens(id)')
                 .order('created_at', { ascending: false });
             if (error) throw error;
-            state.ordens = (data || []).map(os => ({
-                ...os,
-                _itens_count: os.os_itens ? os.os_itens.length : 0
-            }));
+            state.ordens = (data || []).map(os => {
+                const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+                const savedStatus = vibeStatusOverrides[os.id];
+                let dbStatus = os.status;
+                if (dbStatus === 'PRODUÇÃO') dbStatus = 'EM IMPRESSÃO';
+                else if (dbStatus === 'ARTE' || dbStatus === 'NOVO') dbStatus = 'ARTE_EM_ANDAMENTO';
+                return {
+                    ...os,
+                    status: savedStatus || dbStatus,
+                    cliente: os.cliente || getFallbackCliente(os.numero || 0),
+                    vendedor: os.vendedor || getFallbackVendedor(os.numero || 0),
+                    data_liberacao: os.data_liberacao || os.created_at,
+                    prazo_entrega: os.prazo_entrega || getFallbackPrazo(os.created_at, os.numero || 0),
+                    _itens_count: os.producao_os_itens ? os.producao_os_itens.length : 0
+                };
+            });
         } else {
+            // Fonte 3: API local (FastAPI)
             const res = await fetch(`${API_BASE_URL}/api/ordens`);
             if (res.ok) {
                 state.ordens = await res.json();
@@ -10661,13 +10812,162 @@ async function loadOrdens() {
 }
 
 /**
+ * Carrega OS do Vibecode agrupando produtos_proposta por id_int
+ * Cada id_int = 1 proposta = 1 OS virtual
+ * Retorna true se conseguiu carregar, false se não há dados
+ */
+async function loadOrdensFromVibecode() {
+    try {
+        // Buscar todos os produtos_proposta
+        const { data: produtos, error } = await vibeClient
+            .from('produtos_proposta')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('[Vibecode] Erro ao ler produtos_proposta:', error);
+            return false;
+        }
+
+        if (!produtos || produtos.length === 0) return false;
+
+        // Buscar propostas (tabela pai) se existir e for acessível
+        let propostas = [];
+        try {
+            const { data: propData, error: propError } = await vibeClient
+                .from('propostas')
+                .select('*');
+            if (!propError && propData) {
+                propostas = propData;
+            }
+        } catch (pe) {
+            console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
+        }
+
+        // Agrupar por id_int (cada id_int = 1 proposta = 1 OS)
+        const grouped = {};
+        produtos.forEach(p => {
+            const key = p.id_int;
+            if (!grouped[key]) {
+                const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+                const osId = `vibe_${key}`;
+                const savedStatus = vibeStatusOverrides[osId];
+
+                // Buscar dados reais da proposta
+                const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
+
+                // Mapear campos com fallbacks determinísticos
+                const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || getFallbackCliente(key);
+                const vendedor = propReal?.vendedor || propReal?.vendedor_nome || getFallbackVendedor(key);
+                const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || p.created_at;
+                const prazoEntrega = propReal?.prazo_entrega || propReal?.prazo || getFallbackPrazo(p.created_at, key);
+
+                grouped[key] = {
+                    id: osId,
+                    numero: key,
+                    status: savedStatus || (key % 2 === 0 ? 'EM IMPRESSÃO' : 'ARTE_EM_ANDAMENTO'),
+                    cliente: cliente,
+                    vendedor: vendedor,
+                    data_liberacao: dataLiberacao,
+                    prazo_entrega: prazoEntrega,
+                    observacoes: `Proposta #${key} — Vibecode`,
+                    criado_por: null,
+                    created_at: p.created_at,
+                    updated_at: p.updated_at || p.created_at,
+                    _itens_count: 0,
+                    _source: 'vibecode',
+                    _itens_raw: []
+                };
+            }
+            grouped[key]._itens_count++;
+            grouped[key]._itens_raw.push(p);
+
+            // Usar a data mais recente
+            if (p.updated_at && p.updated_at > grouped[key].updated_at) {
+                grouped[key].updated_at = p.updated_at;
+            }
+        });
+
+        // Converter para array ordenado por número (desc)
+        state.ordens = Object.values(grouped).sort((a, b) => b.numero - a.numero);
+
+        // Pré-carregar itens no formato esperado pelo Imposition
+        state.ordens.forEach(os => {
+            state.osItens[os.id] = (os._itens_raw || []).map(p => mapVibecodeProdutoToOSItem(p, os.id));
+            delete os._itens_raw; // limpar dados brutos
+        });
+
+        console.log(`[Vibecode] ${state.ordens.length} OS carregadas, ${produtos.length} itens totais`);
+        return true;
+    } catch (e) {
+        console.error('[Vibecode] Erro na leitura:', e);
+        return false;
+    }
+}
+
+/**
+ * Transforma um produto_proposta do Vibecode → formato os_itens do Imposition
+ */
+function mapVibecodeProdutoToOSItem(p, osId) {
+    // Detectar tipo de produto pelo nome
+    const nomeProd = (p.nome_produto || '').toUpperCase();
+    let setor = 'IMPRESS.';
+    let produto = nomeProd;
+    
+    // Mapear nomes conhecidos
+    if (nomeProd.includes('TRIBAND')) produto = 'TRIBAND';
+    else if (nomeProd.includes('MOBI')) produto = 'MOBI';
+    else if (nomeProd.includes('BRACELETE')) produto = 'TEX PLUS';
+    else if (nomeProd.includes('CORD')) produto = 'CORDÃO';
+    else if (nomeProd.includes('TEX')) produto = 'TEX';
+    else if (nomeProd.includes('PULSEIRA')) produto = 'TEX';
+
+    // Extrair formato da descrição (ex: "25×2cm" → "Mobi")
+    const formato = p.modelo_descri || 'Mobi';
+
+    return {
+        id: `vibe_item_${p.id}`,
+        os_id: osId,
+        setor: setor,
+        produto: produto,
+        modelo: `VIBE-${p.id_int}-${p.id}`,
+        formato: formato,
+        formato_id: null, // matching automático vai preencher
+        quantidade: p.qtd || 0,
+        num_inicial: 1,
+        num_final: p.qtd || 0,
+        cor: 'STD',
+        cor_id: null,
+        blocos: 'N',
+        verso: false,
+        numeracao: 'SEQUENCIAL',
+        numeracao_id: null,
+        aprovacao: 'APROVADA',
+        impressao: 'AGUARD.',
+        observacoes: p.modelo_descri || p.nome_produto || '',
+        created_at: p.created_at,
+        updated_at: p.updated_at || p.created_at,
+        _source: 'vibecode',
+        _vibe_produto_id: p.id,
+        _vibe_id_produto: p.id_produto,
+        _nome_original: p.nome_produto
+    };
+}
+
+/**
  * Carrega os itens de uma OS específica
  */
 async function loadOSItens(osId) {
     try {
+        // Se já pré-carregados (Vibecode ou cache), usar direto
+        if (state.osItens[osId] && state.osItens[osId].length > 0) {
+            renderOSItens(osId);
+            return;
+        }
+
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const { data, error } = await supabaseClient
-                .from('os_itens')
+                .from('producao_os_itens')
                 .select('*')
                 .eq('os_id', osId)
                 .order('created_at', { ascending: true });
@@ -10743,97 +11043,180 @@ function getImpressaoBadge(imp) {
 /**
  * Renderiza a tabela de OS na view
  */
+/**
+ * Renderiza as tabelas de OS (Fila de Impressão e Fila de Arte) na view
+ */
 function renderOrdens() {
-    const tbody = document.getElementById('tbody-ordens');
-    const empty = document.getElementById('empty-ordens');
-    const badge = document.getElementById('os-count-badge');
-    const table = document.getElementById('table-ordens');
-    if (!tbody) return;
+    const tbodyImpressao = document.getElementById('tbody-impressao');
+    const tbodyArte = document.getElementById('tbody-arte');
+    if (!tbodyImpressao && !tbodyArte) return;
 
-    // Filtros
-    const search = (document.getElementById('os-search')?.value || '').trim().toLowerCase();
-    const statusFilter = document.getElementById('os-filter-status')?.value || '';
+    // Filtros de busca
+    const searchImpressao = (document.getElementById('os-search-impressao')?.value || '').trim().toLowerCase();
+    const searchArte = (document.getElementById('os-search-arte')?.value || '').trim().toLowerCase();
 
-    let filtered = state.ordens.filter(os => {
-        if (statusFilter && os.status !== statusFilter) return false;
-        if (search) {
+    // Fila 1: Impressão (Status EM IMPRESSÃO)
+    let ordensImpressao = state.ordens.filter(os => os.status === 'EM IMPRESSÃO');
+    let filteredImpressao = ordensImpressao.filter(os => {
+        if (searchImpressao) {
             const num = String(os.numero || '');
-            const obs = (os.observacoes || '').toLowerCase();
-            if (!num.includes(search) && !obs.includes(search)) return false;
+            const cli = (os.cliente || '').toLowerCase();
+            const vend = (os.vendedor || '').toLowerCase();
+            return num.includes(searchImpressao) || cli.includes(searchImpressao) || vend.includes(searchImpressao);
         }
         return true;
     });
 
-    if (badge) badge.textContent = `${filtered.length} OS`;
+    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO)
+    let ordensArte = state.ordens.filter(os => os.status === 'ARTE_EM_ANDAMENTO');
+    let filteredArte = ordensArte.filter(os => {
+        if (searchArte) {
+            const num = String(os.numero || '');
+            const cli = (os.cliente || '').toLowerCase();
+            const vend = (os.vendedor || '').toLowerCase();
+            return num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte);
+        }
+        return true;
+    });
 
-    // Atualizar badge do nav
-    const navBadge = document.getElementById('badge-ordens');
-    if (navBadge) navBadge.textContent = state.ordens.length;
+    // Atualizar badges da navegação lateral
+    const badgeImpressao = document.getElementById('badge-impressao');
+    if (badgeImpressao) badgeImpressao.textContent = ordensImpressao.length;
 
-    if (!filtered.length) {
-        tbody.innerHTML = '';
-        if (empty) empty.style.display = 'block';
-        if (table) table.style.display = 'none';
-        return;
+    const badgeArte = document.getElementById('badge-arte');
+    if (badgeArte) badgeArte.textContent = ordensArte.length;
+
+    // Atualizar badges das tabelas
+    const countImpressao = document.getElementById('os-impressao-count-badge');
+    if (countImpressao) countImpressao.textContent = `${filteredImpressao.length} ${filteredImpressao.length === 1 ? 'Pedido' : 'Pedidos'}`;
+
+    const countArte = document.getElementById('os-arte-count-badge');
+    if (countArte) countArte.textContent = `${filteredArte.length} ${filteredArte.length === 1 ? 'Pedido' : 'Pedidos'}`;
+
+    // Renderizar Fila de Impressão
+    if (tbodyImpressao) {
+        const emptyImpressao = document.getElementById('empty-impressao');
+        const tableImpressao = document.getElementById('table-impressao');
+
+        if (!filteredImpressao.length) {
+            tbodyImpressao.innerHTML = '';
+            if (emptyImpressao) emptyImpressao.style.display = 'block';
+            if (tableImpressao) tableImpressao.style.display = 'none';
+        } else {
+            if (emptyImpressao) emptyImpressao.style.display = 'none';
+            if (tableImpressao) tableImpressao.style.display = '';
+
+            tbodyImpressao.innerHTML = filteredImpressao.map(os => {
+                const isExpanded = state.osExpandedId === os.id;
+                const itensCount = os._itens_count || 0;
+                const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
+                return `
+                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
+                        <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
+                        <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
+                        <td><strong>${os.cliente || '—'}</strong></td>
+                        <td>${os.vendedor || '—'}</td>
+                        <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
+                        <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
+                        <td>${getStatusBadge(os.status)}</td>
+                        <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
+                        <td>
+                            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); changeOSStatus('${os.id}', 'ARTE_EM_ANDAMENTO')" title="Mover para a Lista de Arte" style="padding: 4px 8px; font-size: 0.75rem;">🎨 Mover p/ Arte</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
     }
 
-    if (empty) empty.style.display = 'none';
-    if (table) table.style.display = '';
+    // Renderizar Fila de Arte
+    if (tbodyArte) {
+        const emptyArte = document.getElementById('empty-arte');
+        const tableArte = document.getElementById('table-arte');
 
-    tbody.innerHTML = filtered.map(os => {
-        const isExpanded = state.osExpandedId === os.id;
-        const itensCount = os._itens_count || 0;
-        return `
-            <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
-                <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
-                <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
-                <td>${getStatusBadge(os.status)}</td>
-                <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
-                <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDate(os.created_at)}</td>
-                <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDate(os.updated_at)}</td>
-            </tr>
-        `;
-    }).join('');
+        if (!filteredArte.length) {
+            tbodyArte.innerHTML = '';
+            if (emptyArte) emptyArte.style.display = 'block';
+            if (tableArte) tableArte.style.display = 'none';
+        } else {
+            if (emptyArte) emptyArte.style.display = 'none';
+            if (tableArte) tableArte.style.display = '';
+
+            tbodyArte.innerHTML = filteredArte.map(os => {
+                const isExpanded = state.osExpandedId === os.id;
+                const itensCount = os._itens_count || 0;
+                const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
+                return `
+                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
+                        <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
+                        <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
+                        <td><strong>${os.cliente || '—'}</strong></td>
+                        <td>${os.vendedor || '—'}</td>
+                        <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
+                        <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
+                        <td>${getStatusBadge(os.status)}</td>
+                        <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); changeOSStatus('${os.id}', 'EM IMPRESSÃO')" title="Liberar para a Lista de Impressão" style="padding: 4px 8px; font-size: 0.75rem;">🖨️ Liberar p/ Impressão</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
 }
 
 /**
- * Expande/colapsa os detalhes de uma OS
+ * Expande/colapsa os detalhes de uma OS na fila correspondente
  */
 async function toggleOSDetail(osId) {
-    const detailCard = document.getElementById('os-detail-card');
-    if (!detailCard) return;
+    const os = state.ordens.find(o => o.id === osId);
+    if (!os) return;
+
+    const isImpressao = os.status === 'EM IMPRESSÃO';
+    const activeCard = document.getElementById(isImpressao ? 'os-detail-card-impressao' : 'os-detail-card-arte');
+    const inactiveCard = document.getElementById(isImpressao ? 'os-detail-card-arte' : 'os-detail-card-impressao');
+
+    if (inactiveCard) inactiveCard.style.display = 'none';
+
+    if (!activeCard) return;
 
     if (state.osExpandedId === osId) {
         // Colapsar
         state.osExpandedId = null;
-        detailCard.style.display = 'none';
+        activeCard.style.display = 'none';
         renderOrdens();
         return;
     }
 
     // Expandir
     state.osExpandedId = osId;
-    detailCard.style.display = 'block';
+    activeCard.style.display = 'block';
 
-    const os = state.ordens.find(o => o.id === osId);
-    if (os) {
-        document.getElementById('os-detail-numero').textContent = `#${os.numero}`;
-        document.getElementById('os-detail-status-badge').innerHTML = getStatusBadge(os.status);
-        document.getElementById('os-detail-obs').textContent = os.observacoes || '';
-    }
+    const numEl = document.getElementById(isImpressao ? 'os-detail-numero-impressao' : 'os-detail-numero-arte');
+    const badgeEl = document.getElementById(isImpressao ? 'os-detail-status-badge-impressao' : 'os-detail-status-badge-arte');
+    const obsEl = document.getElementById(isImpressao ? 'os-detail-obs-impressao' : 'os-detail-obs-arte');
+
+    if (numEl) numEl.textContent = `#${os.numero}`;
+    if (badgeEl) badgeEl.innerHTML = getStatusBadge(os.status);
+    if (obsEl) obsEl.textContent = os.observacoes || '';
 
     renderOrdens();
     await loadOSItens(osId);
 
     // Scroll suave até o card de detalhes
-    detailCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 /**
- * Renderiza os itens de uma OS no card de detalhes
+ * Renderiza os itens de uma OS no card de detalhes correspondente
  */
 function renderOSItens(osId) {
-    const tbody = document.getElementById('tbody-os-itens');
+    const os = state.ordens.find(o => o.id === osId);
+    if (!os) return;
+
+    const isImpressao = os.status === 'EM IMPRESSÃO';
+    const tbody = document.getElementById(isImpressao ? 'tbody-os-itens-impressao' : 'tbody-os-itens-arte');
     if (!tbody) return;
 
     const itens = state.osItens[osId] || [];
@@ -10873,13 +11256,115 @@ function renderOSItens(osId) {
 }
 
 /**
+ * Altera o status simulado de uma OS no localStorage
+ */
+function changeOSStatus(osId, newStatus) {
+    const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+    overrides[osId] = newStatus;
+    localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+    // Atualizar no estado local em memória
+    const os = state.ordens.find(o => o.id === osId);
+    if (os) {
+        os.status = newStatus;
+    }
+
+    // Se o card de detalhes da OS estiver aberto, fechar
+    if (state.osExpandedId === osId) {
+        state.osExpandedId = null;
+        const cardImp = document.getElementById('os-detail-card-impressao');
+        const cardArt = document.getElementById('os-detail-card-arte');
+        if (cardImp) cardImp.style.display = 'none';
+        if (cardArt) cardArt.style.display = 'none';
+    }
+
+    renderOrdens();
+    toast(`Pedido #${os ? os.numero : ''} atualizado para ${newStatus === 'EM IMPRESSÃO' ? 'Impressão' : 'Arte'}!`, 'success');
+}
+
+/**
+ * Funções auxiliares para dados de propostas e prazos do E-deal (Vibecode)
+ */
+function getFallbackCliente(numero) {
+    const clientes = [
+        "Art & Show Eventos Ltda",
+        "Hospital Metropolitano",
+        "Clube Atlético Ideal",
+        "Arena de Show Brasil",
+        "Prefeitura Municipal",
+        "Cervejaria Artesanal Express",
+        "Associação Atlética Acadêmica"
+    ];
+    return clientes[numero % clientes.length];
+}
+
+function getFallbackVendedor(numero) {
+    const vendedores = [
+        "Carlos Souza",
+        "Ana Júlia Silva",
+        "Marcos Oliveira",
+        "Juliana Ribeiro",
+        "Fernanda Costa"
+    ];
+    return vendedores[numero % vendedores.length];
+}
+
+function getFallbackPrazo(createdAtStr, numero) {
+    try {
+        const date = new Date(createdAtStr);
+        const diasExtras = 3 + (numero % 5);
+        date.setDate(date.getDate() + diasExtras);
+        return date.toISOString();
+    } catch (e) {
+        return new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+    }
+}
+
+function formatPrazoDestaque(prazoStr) {
+    if (!prazoStr) return { text: '—', style: '' };
+    try {
+        const date = new Date(prazoStr);
+        const now = new Date();
+
+        // Zerar horas para cálculo de dias
+        const d1 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const d2 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        const diffTime = d1.getTime() - d2.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        const text = date.toLocaleDateString('pt-BR');
+
+        if (diffDays < 0) {
+            return { text: `${text} (Atrasado)`, style: 'color: var(--red); font-weight: 600;' };
+        } else if (diffDays <= 2) {
+            return { text: `${text} (Urgente)`, style: 'color: var(--amber); font-weight: 600;' };
+        } else {
+            return { text: text, style: 'color: var(--text-dim);' };
+        }
+    } catch (e) {
+        return { text: prazoStr, style: '' };
+    }
+}
+
+function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).replace(',', '');
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+/**
  * Atualiza status de impressão de um item
  */
 async function updateItemImpressao(itemId, osId, novoStatus) {
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const { error } = await supabaseClient
-                .from('os_itens')
+                .from('producao_os_itens')
                 .update({ impressao: novoStatus })
                 .eq('id', itemId);
             if (error) throw error;
@@ -10907,56 +11392,265 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MATCHING INTELIGENTE — OS → Catálogo do Imposition
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Matching inteligente: texto do formato da OS → formato_id do catálogo
+ * Ex: "35X2" → busca formato com width_mm=35 e (cols=2 ou nome contém "35X2")
+ */
+function matchFormato(formatoText) {
+    if (!formatoText || !state.formatos.length) return null;
+    const text = formatoText.trim().toUpperCase();
+    // 1. Match exato por nome
+    let match = state.formatos.find(f => f.name.toUpperCase() === text);
+    if (match) return match.id;
+    // 2. Match parcial por nome (contém)
+    match = state.formatos.find(f => f.name.toUpperCase().includes(text) || text.includes(f.name.toUpperCase()));
+    if (match) return match.id;
+    // 3. Parse "NNxM" → width_mm=NN
+    const parts = text.match(/^(\d+)[Xx×](\d+)$/);
+    if (parts) {
+        const w = parseInt(parts[1]);
+        match = state.formatos.find(f => Math.round(f.width_mm) === w);
+        if (match) return match.id;
+    }
+    return null;
+}
+
+/**
+ * Matching inteligente: nome da cor da OS → cor_id do catálogo
+ */
+function matchCor(corText, formatoId) {
+    if (!corText || !state.cores || !state.cores.length) return null;
+    const text = corText.trim().toUpperCase();
+    if (text === 'STD') return null;
+    let pool = formatoId ? state.cores.filter(c => !c.formato_id || c.formato_id === formatoId) : state.cores;
+    let match = pool.find(c => c.name.toUpperCase() === text);
+    if (match) return match.id;
+    match = pool.find(c => c.name.toUpperCase().includes(text) || text.includes(c.name.toUpperCase()));
+    if (match) return match.id;
+    return null;
+}
+
+/**
+ * Matching inteligente: tipo de numeração da OS → numeracao_id do catálogo
+ */
+function matchNumeracao(numText, formatoId) {
+    if (!numText || !state.numeracoes.length) return null;
+    const text = numText.trim().toUpperCase();
+    let pool = formatoId
+        ? state.numeracoes.filter(n => {
+            if (n.formato_ids && Array.isArray(n.formato_ids)) return n.formato_ids.includes(formatoId);
+            if (n.formato_id) return n.formato_id === formatoId;
+            return true;
+        })
+        : state.numeracoes;
+    let match = pool.find(n => n.name.toUpperCase() === text);
+    if (match) return match.id;
+    match = pool.find(n => n.name.toUpperCase().includes(text) || text.includes(n.name.toUpperCase()));
+    if (match) return match.id;
+    const typeMap = { 'QR': 'QR', 'BARRAS': 'BARR', 'SEQUENCIAL': 'SEQ', 'PADRÃO': 'PADR', 'BANCO D.': 'BANC', 'TICKET': 'TICK', 'TEATRO': 'TEAT' };
+    const keyword = typeMap[text];
+    if (keyword) {
+        match = pool.find(n => n.name.toUpperCase().includes(keyword));
+        if (match) return match.id;
+    }
+    return null;
+}
+
+/**
+ * Auto-salva um campo do item da OS (formato_id, cor_id, numeracao_id)
+ */
+async function autoSaveOSItemField(itemId, osId, field, value) {
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { error } = await supabaseClient
+                .from('producao_os_itens')
+                .update({ [field]: value })
+                .eq('id', itemId);
+            if (error) console.error(`[OS] Erro ao auto-salvar ${field}:`, error);
+        } else {
+            await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [field]: value })
+            });
+        }
+        if (state.osItens[osId]) {
+            const item = state.osItens[osId].find(i => i.id === itemId);
+            if (item) item[field] = value;
+        }
+    } catch (e) {
+        console.error(`[OS] Erro ao auto-salvar ${field}:`, e);
+    }
+}
+
 /**
  * Envia um item da OS para a tela de Imposição, preenchendo os campos automaticamente
+ * com matching inteligente de formato, cor e numeração
  */
-function enviarParaImposicao(itemId, osId) {
+async function enviarParaImposicao(itemId, osId) {
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => i.id === itemId);
     if (!item) return toast('Item não encontrado.', 'error');
+
+    // Guardar referência ao item ativo para atualização automática pós-imposição
+    state.activeOSItem = { itemId, osId };
 
     // Navegar para a view de Imposição
     const navBtn = document.querySelector('[data-view="view-imposicao"]');
     if (navBtn) navBtn.click();
 
-    // Preencher formato (busca por nome que contenha o formato da OS)
-    if (item.formato_id) {
+    // --- MATCHING AUTOMÁTICO DE FORMATO ---
+    let formatoId = item.formato_id;
+    if (!formatoId && item.formato) {
+        formatoId = matchFormato(item.formato);
+        if (formatoId) {
+            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            console.log(`[OS→Imp] Formato matched: "${item.formato}" → ${formatoId}`);
+        }
+    }
+    if (formatoId) {
         const fmtSelect = document.getElementById('imp-formato');
         if (fmtSelect) {
-            // Tenta selecionar pelo formato_id
-            const opt = fmtSelect.querySelector(`option[value="${item.formato_id}"]`);
-            if (opt) {
-                fmtSelect.value = item.formato_id;
-                fmtSelect.dispatchEvent(new Event('change'));
-            }
+            fmtSelect.value = formatoId;
+            fmtSelect.dispatchEvent(new Event('change'));
         }
     }
 
-    // Preencher numeração
-    if (item.numeracao_id) {
-        setTimeout(() => {
+    // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
+    setTimeout(() => {
+        let numId = item.numeracao_id;
+        if (!numId && item.numeracao) {
+            numId = matchNumeracao(item.numeracao, formatoId);
+            if (numId) {
+                autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
+                console.log(`[OS→Imp] Numeração matched: "${item.numeracao}" → ${numId}`);
+            }
+        }
+        if (numId) {
             const numSelect = document.getElementById('imp-numeracao');
             if (numSelect) {
-                const opt = numSelect.querySelector(`option[value="${item.numeracao_id}"]`);
+                const opt = numSelect.querySelector(`option[value="${numId}"]`);
                 if (opt) {
-                    numSelect.value = item.numeracao_id;
+                    numSelect.value = numId;
                     numSelect.dispatchEvent(new Event('change'));
                 }
             }
-        }, 300);
-    }
+        }
+    }, 300);
 
-    // Preencher faixa de numeração
+    // --- PREENCHER FAIXA DE NUMERAÇÃO ---
     setTimeout(() => {
-        const numStart = document.getElementById('imp-num-start');
-        const numEnd = document.getElementById('imp-num-end');
+        const numStart = document.getElementById('imp-start');
+        const numEnd = document.getElementById('imp-end');
         if (numStart && item.num_inicial) numStart.value = item.num_inicial;
         if (numEnd && item.num_final) numEnd.value = item.num_final;
     }, 400);
 
+    // --- PREENCHER MODO DE IMPRESSÃO ---
+    setTimeout(() => {
+        if (item.verso) {
+            const printMode = document.getElementById('imp-print-mode');
+            if (printMode) {
+                printMode.value = 'duplex';
+                printMode.dispatchEvent(new Event('change'));
+            }
+        }
+        if (item.blocos && item.blocos !== 'N') {
+            const schemaSelect = document.getElementById('imp-schema');
+            if (schemaSelect) {
+                schemaSelect.value = 'cut_stack';
+                schemaSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        updateImpSummary();
+    }, 500);
+
+    // --- ATUALIZAR PAINEL DE ITENS OS ---
+    setTimeout(() => { renderImpOSQueue(); }, 600);
+
     const os = state.ordens.find(o => o.id === osId);
     const osNum = os ? os.numero : '';
     toast(`Item "${item.produto} — ${item.formato}" da OS #${osNum} carregado na Imposição!`, 'info');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PAINEL DE ITENS OS PENDENTES — na view de Imposição
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Renderiza a fila de itens pendentes da OS na view de Imposição
+ */
+function renderImpOSQueue() {
+    const container = document.getElementById('imp-os-queue');
+    const tbody = document.getElementById('tbody-imp-os-queue');
+    const pendingBadge = document.getElementById('imp-os-queue-pending');
+    const numeroBadge = document.getElementById('imp-os-queue-numero');
+    if (!container || !tbody) return;
+
+    const activeItem = state.activeOSItem;
+    if (!activeItem || !activeItem.osId) {
+        container.style.display = 'none';
+        return;
+    }
+
+    const osId = activeItem.osId;
+    const itens = state.osItens[osId] || [];
+    if (!itens.length) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    const os = state.ordens.find(o => o.id === osId);
+    if (numeroBadge) numeroBadge.textContent = os ? `#${os.numero}` : '';
+
+    const pendentes = itens.filter(i => i.impressao !== 'IMPRESSO' && (i.aprovacao === 'APROVADA' || i.aprovacao === 'PRONTA'));
+    if (pendingBadge) pendingBadge.textContent = `${pendentes.length} pendente${pendentes.length !== 1 ? 's' : ''}`;
+
+    tbody.innerHTML = itens.map(item => {
+        const isActive = activeItem.itemId === item.id;
+        const isPending = item.impressao !== 'IMPRESSO';
+        const isApproved = item.aprovacao === 'APROVADA' || item.aprovacao === 'PRONTA';
+        const rowBg = isActive ? 'background: rgba(59,130,246,0.12);' : '';
+        return `
+            <tr style="${rowBg}">
+                <td style="padding: 5px 8px;">
+                    ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
+                    <strong>${item.produto || '—'}</strong>
+                </td>
+                <td style="padding: 5px 8px;"><span class="badge">${item.formato || '—'}</span></td>
+                <td style="padding: 5px 8px; text-align: center;">${item.quantidade || 0}</td>
+                <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
+                <td style="padding: 5px 8px; text-align: center;">
+                    ${isActive
+                        ? '<span style="font-size: 0.72rem; color: var(--blue); font-weight: 600;">ATIVO</span>'
+                        : (isApproved && isPending
+                            ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); enviarParaImposicao(\'' + item.id + '\', \'' + osId + '\')" style="padding: 2px 8px; font-size: 0.72rem;">▶ Carregar</button>'
+                            : '<span style="font-size: 0.72rem; color: var(--text-dim);">—</span>')}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Toggle (expandir/colapsar) o corpo da fila de itens OS
+ */
+function toggleImpOSQueue() {
+    const body = document.getElementById('imp-os-queue-body');
+    const arrow = document.getElementById('imp-os-queue-arrow');
+    if (!body) return;
+    if (body.style.display === 'none') {
+        body.style.display = '';
+        if (arrow) arrow.textContent = '▼';
+    } else {
+        body.style.display = 'none';
+        if (arrow) arrow.textContent = '▶';
+    }
 }
 
 // Hook: Carregar OS quando abrir a view
@@ -10964,15 +11658,28 @@ const origShowView = window.showView;
 if (origShowView) {
     window.showView = function(viewId) {
         origShowView(viewId);
-        if (viewId === 'view-ordens') {
+        if (viewId === 'view-lista-impressao' || viewId === 'view-lista-arte') {
             loadOrdens();
+        }
+        if (viewId === 'view-imposicao') {
+            renderImpOSQueue();
         }
     };
 }
 
 // Expor funções globais
 window.loadOrdens = loadOrdens;
+window.loadOrdensFromVibecode = loadOrdensFromVibecode;
+window.mapVibecodeProdutoToOSItem = mapVibecodeProdutoToOSItem;
 window.renderOrdens = renderOrdens;
 window.toggleOSDetail = toggleOSDetail;
+window.changeOSStatus = changeOSStatus;
 window.updateItemImpressao = updateItemImpressao;
 window.enviarParaImposicao = enviarParaImposicao;
+window.autoSaveOSItemField = autoSaveOSItemField;
+window.renderImpOSQueue = renderImpOSQueue;
+window.toggleImpOSQueue = toggleImpOSQueue;
+window.matchFormato = matchFormato;
+window.matchCor = matchCor;
+window.matchNumeracao = matchNumeracao;
+

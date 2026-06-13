@@ -8,18 +8,18 @@ echo ==============================================
 set PYTHON_EXE=python
 if exist venv\Scripts\python.exe (
     set PYTHON_EXE=venv\Scripts\python.exe
-    echo Utilizando ambiente virtual (venv).
+    echo Utilizando ambiente virtual venv.
 ) else (
     echo Ambiente virtual nao detectado. Utilizando Python global.
 )
 
 echo.
 echo [1/2] Iniciando Servidor FastAPI Principal (app.py) na porta 8080...
-start "Servidor API - Porta 8080" %PYTHON_EXE% app.py
+start "Servidor API - Porta 8080" /D "%~dp0" %PYTHON_EXE% app.py
 
 echo.
 echo [2/2] Iniciando Agente de Impressao Local (local_print_agent.py) na porta 9000...
-start "Agente de Impressao - Porta 9000" %PYTHON_EXE% local_print_agent.py
+start "Agente de Impressao - Porta 9000" /D "%~dp0" %PYTHON_EXE% local_print_agent.py
 
 echo.
 echo =============================================
