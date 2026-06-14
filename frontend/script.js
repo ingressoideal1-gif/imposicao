@@ -1024,33 +1024,29 @@ window.editFmt = editFmt;
 
 
 async function duplicateFmt(id) {
-
     const f = state.formatos.find(x => x.id === id);
-
     if (!f) return;
 
     try {
-
-        const clone = JSON.parse(JSON.stringify(f));
-
-        delete clone.id; // Remover ID para o backend gerar um novo UUID
-
-        clone.name = clone.name + ' (cópia)';
-
-
+        const clone = {
+            name: f.name + ' (cópia)',
+            width_mm: parseFloat(f.width_mm),
+            height_mm: parseFloat(f.height_mm),
+            cols: parseInt(f.cols),
+            rows: parseInt(f.rows),
+            gap_h_mm: parseFloat(f.gap_h_mm || 0),
+            gap_v_mm: parseFloat(f.gap_v_mm || 0),
+            offset_h_mm: parseFloat(f.offset_h_mm || 0),
+            offset_v_mm: parseFloat(f.offset_v_mm || 0),
+            rotations: f.rotations || {},
+        };
 
         await api('POST', '/formatos', clone);
-
         toast('Formato duplicado!', 'success');
-
         await loadAll();
-
     } catch (e) {
-
         toast('Erro ao duplicar: ' + e.message, 'error');
-
     }
-
 }
 
 window.duplicateFmt = duplicateFmt;
@@ -2430,33 +2426,35 @@ window.deleteNumeracao = deleteNumeracao;
 
 
 window.duplicateCatalogNumeracao = async function (id) {
-
     const n = state.numeracoes.find(x => x.id === id);
-
     if (!n) return;
 
     try {
-
-        const clone = JSON.parse(JSON.stringify(n));
-
-        delete clone.id; // Remover ID para o backend gerar um novo UUID
-
-        clone.name = clone.name + ' (cópia)';
-
-
+        const clone = {
+            name: n.name + ' (cópia)',
+            formato_id: n.formato_id,
+            formato_ids: n.formato_ids || [n.formato_id],
+            csv_filename: n.csv_filename || "",
+            csv_headers: n.csv_headers || [],
+            csv_data: n.csv_data || null,
+            svg_content: n.svg_content || "",
+            svg_filename: n.svg_filename || "",
+            pdf_content: n.pdf_content || "",
+            pdf_filename: n.pdf_filename || "",
+            is_custom: n.is_custom ? true : false,
+            os_item_id: n.os_item_id || null,
+            elements: (n.elements || []).map(el => {
+                const { _pdfCanvas, _pdfLoading, _svgImage, _pdfPreview, ...e } = el;
+                return e;
+            })
+        };
 
         await api('POST', '/numeracoes', clone);
-
         toast('Numeração duplicada!', 'success');
-
         await loadAll();
-
     } catch (e) {
-
         toast('Erro ao duplicar: ' + e.message, 'error');
-
     }
-
 };
 
 
