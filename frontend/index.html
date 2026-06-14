@@ -724,14 +724,24 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label id="lbl-imp-num-1">2. Numeração 1 (opcional)</label>
-                                    <select class="form-control" id="imp-numeracao" onchange="updateImpSummary()">
+                                    <label id="lbl-imp-num-1" style="display:flex; justify-content:space-between; align-items:center;">
+                                        2. Numeração 1 (opcional)
+                                        <button id="btn-edit-imp-num-1" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numeração" onclick="editImposicaoCustomNumeracao('imp-numeracao')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                        </button>
+                                    </label>
+                                    <select class="form-control" id="imp-numeracao" onchange="updateImpSummary(); toggleImpNumEditButtons();">
                                         <option value="">— Sem numeração —</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label id="lbl-imp-num-2">3. Numeração 2 (opcional)</label>
-                                    <select class="form-control" id="imp-numeracao-2" onchange="updateImpSummary()">
+                                    <label id="lbl-imp-num-2" style="display:flex; justify-content:space-between; align-items:center;">
+                                        3. Numeração 2 (opcional)
+                                        <button id="btn-edit-imp-num-2" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numeração" onclick="editImposicaoCustomNumeracao('imp-numeracao-2')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                        </button>
+                                    </label>
+                                    <select class="form-control" id="imp-numeracao-2" onchange="updateImpSummary(); toggleImpNumEditButtons();">
                                         <option value="">— Sem numeração —</option>
                                     </select>
                                 </div>
@@ -989,7 +999,7 @@
             <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: LISTA DE IMPRESSÃO                                       -->
             <!-- ══════════════════════════════════════════════════════════════ -->
-            <section id="view-lista-impressao" class="view-section">
+            <section id="view-lista-impressao" class="view-section" style="max-width: 100%;">
                 <div class="page-header" style="flex-wrap: wrap;">
                     <div class="page-header-text">
                         <h1>🖨️ Lista de Impressão</h1>
@@ -1010,24 +1020,26 @@
                         <span class="card-title"><span class="icon">📋</span> Fila de Impressão</span>
                         <span class="badge badge-teal" id="os-impressao-count-badge">0 Pedidos</span>
                     </div>
-                    <table class="data-table" id="table-impressao">
-                        <thead>
-                            <tr>
-                                <th style="width: 50px;"></th>
-                                <th>Nº Pedido</th>
-                                <th>Cliente</th>
-                                <th>Vendedor</th>
-                                <th>Data Liberação</th>
-                                <th>Prazo Entrega</th>
-                                <th>Status</th>
-                                <th>Itens</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-impressao">
-                            <!-- Inserido dinamicamente via JS -->
-                        </tbody>
-                    </table>
+                    <div style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
+                        <table class="data-table" id="table-impressao" style="min-width: 800px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>Nº Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>Vendedor</th>
+                                    <th>Data Liberação</th>
+                                    <th>Prazo Entrega</th>
+                                    <th>Status</th>
+                                    <th>Itens</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-impressao">
+                                <!-- Inserido dinamicamente via JS -->
+                            </tbody>
+                        </table>
+                    </div>
                     <div class="empty-state" id="empty-impressao" style="display:none">
                         <div class="empty-state-icon">🖨️</div>
                         <p>Nenhum pedido liberado para impressão encontrado.</p>
@@ -1043,34 +1055,36 @@
                             <span id="os-detail-obs-impressao" style="font-size: 0.8rem; color: var(--text-dim);"></span>
                         </div>
                     </div>
-                    <table class="data-table" id="table-os-itens-impressao">
-                        <thead>
-                            <tr>
-                                <th>Setor</th>
-                                <th>Produto</th>
-                                <th>Modelo</th>
-                                <th>Formato</th>
-                                <th>Qtd</th>
-                                <th>Numeração</th>
-                                <th>Cor</th>
-                                <th>Verso</th>
-                                <th>Blocos</th>
-                                <th>Aprovação</th>
-                                <th>Impressão</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-os-itens-impressao">
-                            <!-- Inserido dinamicamente via JS -->
-                        </tbody>
-                    </table>
+                    <div style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
+                        <table class="data-table" id="table-os-itens-impressao" style="min-width: 1000px;">
+                            <thead>
+                                <tr>
+                                    <th>Setor</th>
+                                    <th>Produto</th>
+                                    <th>Modelo</th>
+                                    <th>Formato</th>
+                                    <th>Qtd</th>
+                                    <th>Numeração</th>
+                                    <th>Cor</th>
+                                    <th>Verso</th>
+                                    <th>Blocos</th>
+                                    <th>Aprovação</th>
+                                    <th>Impressão</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-os-itens-impressao">
+                                <!-- Inserido dinamicamente via JS -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
             <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: LISTA DE ARTE                                            -->
             <!-- ══════════════════════════════════════════════════════════════ -->
-            <section id="view-lista-arte" class="view-section">
+            <section id="view-lista-arte" class="view-section" style="max-width: 100%;">
                 <div class="page-header" style="flex-wrap: wrap;">
                     <div class="page-header-text">
                         <h1>🎨 Lista de Arte</h1>
@@ -1094,25 +1108,27 @@
                         <span class="card-title"><span class="icon">📋</span> Fila de Arte</span>
                         <span class="badge badge-yellow" id="os-arte-count-badge">0 Pedidos</span>
                     </div>
-                    <table class="data-table" id="table-arte">
-                        <thead>
-                            <tr>
-                                <th style="width: 50px;"></th>
-                                <th>Nº Pedido</th>
-                                <th>Cliente</th>
-                                <th>Vendedor</th>
-                                <th>Designer Resp.</th>
-                                <th>Data Liberação</th>
-                                <th>Prazo Entrega</th>
-                                <th>Status</th>
-                                <th>Itens</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-arte">
-                            <!-- Inserido dinamicamente via JS -->
-                        </tbody>
-                    </table>
+                    <div style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
+                        <table class="data-table" id="table-arte" style="min-width: 800px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>Nº Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>Vendedor</th>
+                                    <th>Designer Resp.</th>
+                                    <th>Data Liberação</th>
+                                    <th>Prazo Entrega</th>
+                                    <th>Status</th>
+                                    <th>Itens</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-arte">
+                                <!-- Inserido dinamicamente via JS -->
+                            </tbody>
+                        </table>
+                    </div>
                     <div class="empty-state" id="empty-arte" style="display:none">
                         <div class="empty-state-icon">🎨</div>
                         <p>Nenhum pedido em fase de arte encontrado.</p>
@@ -1128,27 +1144,29 @@
                             <span id="os-detail-obs-arte" style="font-size: 0.8rem; color: var(--text-dim);"></span>
                         </div>
                     </div>
-                    <table class="data-table" id="table-os-itens-arte">
-                        <thead>
-                            <tr>
-                                <th>Setor</th>
-                                <th>Produto</th>
-                                <th>Modelo</th>
-                                <th>Formato</th>
-                                <th>Qtd</th>
-                                <th>Numeração</th>
-                                <th>Cor</th>
-                                <th>Verso</th>
-                                <th>Blocos</th>
-                                <th>Aprovação</th>
-                                <th>Impressão</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-os-itens-arte">
-                            <!-- Inserido dinamicamente via JS -->
-                        </tbody>
-                    </table>
+                    <div style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
+                        <table class="data-table" id="table-os-itens-arte" style="min-width: 1000px;">
+                            <thead>
+                                <tr>
+                                    <th>Setor</th>
+                                    <th>Produto</th>
+                                    <th>Modelo</th>
+                                    <th>Formato</th>
+                                    <th>Qtd</th>
+                                    <th>Numeração</th>
+                                    <th>Cor</th>
+                                    <th>Verso</th>
+                                    <th>Blocos</th>
+                                    <th>Aprovação</th>
+                                    <th>Impressão</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-os-itens-arte">
+                                <!-- Inserido dinamicamente via JS -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 

@@ -2643,58 +2643,46 @@ function drawCanvas() {
 
 
 
+    // Determinar qual imagem de fundo usar dependendo da view ativa
+    let refBg = state.bgImage;
+    const viewNumeracao = document.getElementById('view-numeracao');
+    if (!refBg && viewNumeracao && viewNumeracao.classList.contains('active')) {
+        refBg = state.numPdfImage || state.numSvgImage;
+    }
+
     // Arte de fundo (camada de referência semitransparente em tamanho original e centralizada)
-
-    if (state.bgImage) {
-
+    if (refBg) {
         const MM2PT = 2.8346;
-
         let originalW_mm = 0;
-
         let originalH_mm = 0;
 
-
-
-        if (state.bgImage.originalPdfWidthPt) {
-
+        if (refBg.originalPdfWidthPt) {
             // Se for PDF, usar os pontos originais dividindo por MM2PT (72 / 25.4 = 2.8346)
-
-            originalW_mm = state.bgImage.originalPdfWidthPt / MM2PT;
-
-            originalH_mm = state.bgImage.originalPdfHeightPt / MM2PT;
-
+            originalW_mm = refBg.originalPdfWidthPt / MM2PT;
+            originalH_mm = refBg.originalPdfHeightPt / MM2PT;
         } else {
-
-            // Se for imagem (JPG/PNG), obter o DPI lido ou adotar 300 DPI como fallback de alta resolução
-
-            const dpi = state.bgImage.dpiValue || 300;
-
-            // pixels / dpi * 25.4 (conversão para mm)
-
-            originalW_mm = (state.bgImage.width / dpi) * 25.4;
-
-            originalH_mm = (state.bgImage.height / dpi) * 25.4;
-
+            // Se for imagem (JPG/PNG/SVG), obter o DPI lido ou adotar 300 DPI como fallback
+            const dpi = refBg.dpiValue || 300;
+            originalW_mm = (refBg.width / dpi) * 25.4;
+            originalH_mm = (refBg.height / dpi) * 25.4;
         }
 
+        // Fallback: se a largura não for calculada direito (ex: SVG), usar as dimensões do formato base
+        if (!originalW_mm || originalW_mm < 1) {
+            if (state.numFormato) {
+                originalW_mm = state.numFormato.width_mm;
+                originalH_mm = state.numFormato.height_mm;
+            }
+        }
 
-
-        const drawW = originalW_mm * S;
-
-        const drawH = originalH_mm * S;
-
-        const drawX = (W - drawW) / 2;
-
-        const drawY = (H - drawH) / 2;
-
-
+        const drawW = originalW_mm * state.canvasScale;
+        const drawH = originalH_mm * state.canvasScale;
+        const drawX = (canvas.width - drawW) / 2;
+        const drawY = (canvas.height - drawH) / 2;
 
         ctx.globalAlpha = 0.55;
-
-        ctx.drawImage(state.bgImage, drawX, drawY, drawW, drawH);
-
+        ctx.drawImage(refBg, drawX, drawY, drawW, drawH);
         ctx.globalAlpha = 1.0;
-
     }
 
 
@@ -4772,20 +4760,48 @@ os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.it
         cancelNumEdit();
 await loadAll();
 
-if (window.customNumeracaoEditState && window.customNumeracaoEditState.active) {
+if (window.customNumeracaoEditState) {
     const customState = window.customNumeracaoEditState;
     window.customNumeracaoEditState = null;
     
     // Encontrar a numeracao recem criada (pelo nome)
-    const newNum = state.numeracoes.find(n => n.name === customState.modelName);
-    if (newNum) {
-        // Associar a amostra
-        await saveAmostraToDB(customState.itemId, customState.osId, { amostra_num_id: newNum.id });
-    }
+    const newNumName = customState.modelName || customState.modeloName;
+    const newNum = state.numeracoes.find(n => n.name === newNumName || n.name === document.getElementById('num-name').value.trim());
     
-    showView('view-amostras');
-    renderAmostrasOSItens(customState.osId);
-    toast('Numeração customizada salva e aplicada ao modelo!', 'success');
+    if (customState.active || customState.view === 'amostras') {
+        if (newNum) {
+            // Associar a amostra
+            await saveAmostraToDB(customState.itemId, customState.osId, { amostra_num_id: newNum.id });
+        }
+        showView('view-amostras');
+        if (typeof renderAmostrasOSItens === 'function') {
+            renderAmostrasOSItens(customState.osId);
+        }
+        toast('Numeração customizada salva e aplicada à amostra!', 'success');
+    } else if (customState.view === 'imposicao') {
+        showView('view-imposicao');
+        if (newNum) {
+            const numSelect = document.getElementById(customState.fieldId);
+            if (numSelect) {
+                // Atualizar as opções do select caso a numeração seja nova
+                if (!Array.from(numSelect.options).some(o => o.value === newNum.id)) {
+                    const opt = document.createElement('option');
+                    opt.value = newNum.id;
+                    opt.textContent = newNum.name;
+                    numSelect.appendChild(opt);
+                }
+                numSelect.value = newNum.id;
+                
+                if (typeof updateImpSummary === 'function') {
+                    updateImpSummary();
+                }
+                if (typeof toggleImpNumEditButtons === 'function') {
+                    toggleImpNumEditButtons();
+                }
+            }
+        }
+        toast('Numeração customizada salva e aplicada ao modelo de imposição!', 'success');
+    }
 } else {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
@@ -12381,6 +12397,51 @@ window.onItemArteUpload = onItemArteUpload;
 window.onItemArteRemove = onItemArteRemove;
 window.saveAmostraToDB = saveAmostraToDB;
 window.editCustomNumeracao = editCustomNumeracao;
+
+window.toggleImpNumEditButtons = function() {
+    const num1 = document.getElementById('imp-numeracao');
+    const btn1 = document.getElementById('btn-edit-imp-num-1');
+    if (num1 && btn1) {
+        btn1.style.display = num1.value ? 'inline-flex' : 'none';
+    }
+    
+    const num2 = document.getElementById('imp-numeracao-2');
+    const btn2 = document.getElementById('btn-edit-imp-num-2');
+    if (num2 && btn2) {
+        btn2.style.display = num2.value ? 'inline-flex' : 'none';
+    }
+};
+
+window.editImposicaoCustomNumeracao = function(fieldId) {
+    const numSelect = document.getElementById(fieldId);
+    if (!numSelect || !numSelect.value) {
+        toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
+        return;
+    }
+    
+    const impName = document.getElementById('imp-name').value.trim() || 'Modelo Imposição';
+    const numId = numSelect.value;
+    const baseNum = state.numeracoes.find(n => n.id === numId);
+    if (!baseNum) return;
+    
+    // Configura o state para que no saveNumeracao volte para Imposição
+    window.customNumeracaoEditState = {
+        view: 'imposicao',
+        fieldId: fieldId,
+        modeloName: impName
+    };
+    
+    // Abre a numeração
+    editNumeracao(numId);
+    
+    // Força o nome no editor da numeração
+    const suffix = fieldId === 'imp-numeracao' ? ' Num1' : ' Num2';
+    document.getElementById('num-name').value = impName + suffix;
+    
+    // Marca como um novo cadastro (clone)
+    document.getElementById('num-id').value = '';
+    toast(`Clonando base "${baseNum.name}" para edição customizada.`, 'info');
+};
 
 /**
  * Salva a decisão (APROVADA/REPROVADA) de um item de amostra

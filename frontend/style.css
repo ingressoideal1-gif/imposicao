@@ -1256,3 +1256,9 @@ body.not-logged-in .app-shell {
 
 
 
+
+@media (max-width: 768px) {
+    .view-section {
+        padding: 20px 15px;
+    }
+}
