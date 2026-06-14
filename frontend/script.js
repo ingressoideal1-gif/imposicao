@@ -11978,7 +11978,8 @@ function renderAmostrasOSItens(osId) {
                     `}
                 </div>
                 <div class="amostra-preview-container" style="margin-top: 20px;">
-                    <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
+                    <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'cursor: zoom-in;' : ''}"
+                        onclick="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? `openClienteLightbox('amostra-item-canvas-${idx}')` : ''}"></canvas>
                     <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                         <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                         <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
@@ -13096,9 +13097,145 @@ function mostrarResultadoCliente(icon, titulo, msg) {
     if (msgEl) msgEl.textContent = msg;
 }
 
+function openClienteLightbox(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    
+    const overlay = document.getElementById('cliente-lightbox-overlay');
+    const img = document.getElementById('cliente-lightbox-img');
+    const container = document.getElementById('cliente-lightbox-container');
+    if (!overlay || !img) return;
+    
+    img.src = canvas.toDataURL('image/png');
+    overlay.style.display = 'flex';
+    
+    // Resetar transformações
+    let scale = 1.0;
+    let posX = 0;
+    let posY = 0;
+    img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+    
+    // Configurar interações de arrastar (pan) e zoom
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    
+    // Multi-touch pinch-to-zoom
+    let initialDist = 0;
+    
+    // Eventos de mouse/touch para arrastar (pan)
+    const onStart = (e) => {
+        const touches = e.touches || [];
+        if (touches.length === 2) {
+            isDragging = false;
+            initialDist = Math.hypot(
+                touches[0].clientX - touches[1].clientX,
+                touches[0].clientY - touches[1].clientY
+            );
+        } else {
+            isDragging = true;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            startX = clientX - posX;
+            startY = clientY - posY;
+            img.style.cursor = 'grabbing';
+            img.style.transition = 'none'; // Desativar transição durante drag
+        }
+    };
+    
+    const onMove = (e) => {
+        const touches = e.touches || [];
+        if (touches.length === 2 && initialDist > 0) {
+            const dist = Math.hypot(
+                touches[0].clientX - touches[1].clientX,
+                touches[0].clientY - touches[1].clientY
+            );
+            const factor = dist / initialDist;
+            scale = Math.max(0.8, Math.min(5, scale * factor));
+            initialDist = dist;
+            img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        } else if (isDragging) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            posX = clientX - startX;
+            posY = clientY - startY;
+            img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        }
+    };
+    
+    const onEnd = () => {
+        isDragging = false;
+        initialDist = 0;
+        img.style.cursor = 'grab';
+        img.style.transition = 'transform 0.1s ease'; // Reativar transição suave
+    };
+    
+    // Duplo toque/clique para alternar zoom (1.0x <-> 2.5x)
+    let lastTap = 0;
+    const onDoubleTap = (e) => {
+        const now = new Date().getTime();
+        const timesince = now - lastTap;
+        if (timesince < 300 && timesince > 0) {
+            img.style.transition = 'transform 0.2s ease';
+            if (scale > 1.2) {
+                scale = 1.0;
+                posX = 0;
+                posY = 0;
+            } else {
+                scale = 2.5;
+                posX = 0;
+                posY = 0;
+            }
+            img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        }
+        lastTap = now;
+    };
+    
+    img.addEventListener('mousedown', onStart);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onEnd);
+    
+    img.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onEnd);
+    
+    img.addEventListener('click', onDoubleTap);
+    
+    // Clique no overlay/container fecha o lightbox
+    const onOverlayClick = (e) => {
+        if (e.target === overlay || e.target === container) {
+            closeClienteLightbox();
+        }
+    };
+    overlay.addEventListener('click', onOverlayClick);
+    
+    // Salvar referências para remover eventos ao fechar
+    window.clienteLightboxCleanup = () => {
+        img.removeEventListener('mousedown', onStart);
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onEnd);
+        
+        img.removeEventListener('touchstart', onStart);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onEnd);
+        img.removeEventListener('click', onDoubleTap);
+        overlay.removeEventListener('click', onOverlayClick);
+    };
+}
+
+function closeClienteLightbox() {
+    const overlay = document.getElementById('cliente-lightbox-overlay');
+    if (overlay) overlay.style.display = 'none';
+    if (typeof window.clienteLightboxCleanup === 'function') {
+        window.clienteLightboxCleanup();
+    }
+}
+
 // Exportar funções globais
 window.gerarLinkCliente = gerarLinkCliente;
 window.clienteAprovarTudo = clienteAprovarTudo;
+window.openClienteLightbox = openClienteLightbox;
+window.closeClienteLightbox = closeClienteLightbox;
 
 // ─── ROUTER: Verificar rota do cliente no carregamento ───
 document.addEventListener('DOMContentLoaded', () => {
