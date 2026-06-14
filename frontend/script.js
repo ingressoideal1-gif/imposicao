@@ -12300,53 +12300,105 @@ async function renderItemAmostraCombinada(idx, osId) {
         ctx.fillRect(0, 0, finalWidth, finalHeight);
     }
 
-    // ====== CAMADA 2: ARTE (imagem do upload ou salva, com multiply) ======
+    // ====== CAMADA 2: ARTE (imagem ou PDF do upload ou salva, com multiply) ======
     if (hasArte || hasSavedArte) {
         try {
-            let url;
+            let isPdf = false;
+            let file = null;
             if (hasArte) {
-                const file = arteInput.files[0];
-                url = URL.createObjectURL(file);
+                file = arteInput.files[0];
+                isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
             } else {
-                url = item.amostra_arte_base64;
+                isPdf = item.amostra_arte_base64 && (item.amostra_arte_base64.startsWith('data:application/pdf') || item.amostra_arte_base64.includes('JVBERi'));
             }
-            const arteImg = new Image();
-            await new Promise((resolve, reject) => {
-                arteImg.onload = resolve;
-                arteImg.onerror = reject;
-                arteImg.src = url;
-            });
-            if (arteImg.width > 0 && arteImg.height > 0) {
-                // Criar canvas temporário para arte no tamanho final
-                const tempArte = document.createElement('canvas');
-                tempArte.width = finalWidth;
-                tempArte.height = finalHeight;
-                const tempCtx = tempArte.getContext('2d');
 
-                // Centralizar arte mantendo proporção
-                const artRatio = arteImg.width / arteImg.height;
-                const canvasRatio = finalWidth / finalHeight;
-                let dw, dh, ddx, ddy;
-                if (artRatio > canvasRatio) {
-                    dw = finalWidth;
-                    dh = finalWidth / artRatio;
-                    ddx = 0;
-                    ddy = (finalHeight - dh) / 2;
+            if (isPdf && typeof pdfjsLib !== 'undefined') {
+                // Configurar o workerSrc do PDF.js
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                
+                let bytes;
+                if (hasArte) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    bytes = new Uint8Array(arrayBuffer);
                 } else {
-                    dh = finalHeight;
-                    dw = finalHeight * artRatio;
-                    ddx = (finalWidth - dw) / 2;
-                    ddy = 0;
+                    const base64Data = item.amostra_arte_base64.includes('base64,') ? item.amostra_arte_base64.split('base64,')[1] : item.amostra_arte_base64;
+                    const binStr = atob(base64Data);
+                    bytes = new Uint8Array(binStr.length);
+                    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
                 }
-                tempCtx.drawImage(arteImg, ddx, ddy, dw, dh);
 
-                // Aplicar com multiply (como o card avulso)
+                const loadingTask = pdfjsLib.getDocument({ data: bytes });
+                const pdf = await loadingTask.promise;
+                const page = await pdf.getPage(1);
+
+                const vp = page.getViewport({ scale: 1.0 });
+                const artRatio = vp.width / vp.height;
+                const canvasRatio = finalWidth / finalHeight;
+                
+                let pdfScale;
+                if (artRatio > canvasRatio) {
+                    pdfScale = finalWidth / vp.width;
+                } else {
+                    pdfScale = finalHeight / vp.height;
+                }
+
+                const scaledViewport = page.getViewport({ scale: pdfScale });
+
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = Math.round(scaledViewport.width);
+                offCanvas.height = Math.round(scaledViewport.height);
+                const offCtx = offCanvas.getContext('2d');
+                await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+
+                const dx = (finalWidth - offCanvas.width) / 2;
+                const dy = (finalHeight - offCanvas.height) / 2;
+
                 ctx.globalCompositeOperation = 'multiply';
-                ctx.drawImage(tempArte, 0, 0);
+                ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
                 ctx.globalCompositeOperation = 'source-over';
-            }
-            if (hasArte) {
-                URL.revokeObjectURL(url);
+            } else {
+                // Tratar como imagem normal (PNG, JPG)
+                let url;
+                if (hasArte) {
+                    url = URL.createObjectURL(file);
+                } else {
+                    url = item.amostra_arte_base64;
+                }
+                const arteImg = new Image();
+                await new Promise((resolve, reject) => {
+                    arteImg.onload = resolve;
+                    arteImg.onerror = reject;
+                    arteImg.src = url;
+                });
+                if (arteImg.width > 0 && arteImg.height > 0) {
+                    const tempArte = document.createElement('canvas');
+                    tempArte.width = finalWidth;
+                    tempArte.height = finalHeight;
+                    const tempCtx = tempArte.getContext('2d');
+
+                    const artRatio = arteImg.width / arteImg.height;
+                    const canvasRatio = finalWidth / finalHeight;
+                    let dw, dh, ddx, ddy;
+                    if (artRatio > canvasRatio) {
+                        dw = finalWidth;
+                        dh = finalWidth / artRatio;
+                        ddx = 0;
+                        ddy = (finalHeight - dh) / 2;
+                    } else {
+                        dh = finalHeight;
+                        dw = finalHeight * artRatio;
+                        ddx = (finalWidth - dw) / 2;
+                        ddy = 0;
+                    }
+                    tempCtx.drawImage(arteImg, ddx, ddy, dw, dh);
+
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.drawImage(tempArte, 0, 0);
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                if (hasArte) {
+                    URL.revokeObjectURL(url);
+                }
             }
         } catch (e) {
             console.warn(`[Item ${idx}] Erro ao renderizar arte:`, e);
