@@ -11377,7 +11377,12 @@ function renderOSItens(osId) {
                     <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>❌ Erro</option>
                 </select>
             </td>
-            <td>
+            <td style="display: flex; gap: 6px; flex-wrap: wrap;">
+                ${!isImpressao ? `
+                <button class="btn btn-sm btn-secondary" onclick="openArtesModal('${item.id}', '${osId}')" title="Gerenciar Artes do Modelo">
+                    🎨 Artes
+                </button>
+                ` : ''}
                 <button class="btn btn-sm btn-primary" onclick="enviarParaImposicao('${item.id}', '${osId}')" title="Enviar para Imposição" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled' : ''}>
                     🖨️ Impor
                 </button>
@@ -12498,3 +12503,223 @@ window.clearAmostrasOS = clearAmostrasOS;
 window.decisionAmostraItem = decisionAmostraItem;
 window.saveAmostraItemObs = saveAmostraItemObs;
 
+// ==========================================
+// GERENCIAMENTO DE ARTES E MODELOS (FASE 1)
+// ==========================================
+
+let artesModalState = {
+    itemId: null,
+    osId: null,
+    id_int: null,
+    modeloNome: null,
+    artes: []
+};
+
+async function openArtesModal(itemId, osId) {
+    const os = state.ordens.find(o => o.id === osId);
+    const item = (state.osItens[osId] || []).find(i => i.id === itemId);
+    if (!os || !item) return;
+    
+    artesModalState.itemId = itemId;
+    artesModalState.osId = osId;
+    artesModalState.id_int = os.numero || osId.replace('vibe_', '');
+    artesModalState.modeloNome = item.modelo || 'Padrão';
+    
+    document.getElementById('modal-artes-modelo-nome').textContent = artesModalState.modeloNome;
+    document.getElementById('modal-artes').style.display = 'flex';
+    document.getElementById('modal-artes-file').value = '';
+    document.getElementById('modal-artes-comment').value = '';
+    
+    await loadArtesDoModelo();
+}
+
+function closeArtesModal() {
+    document.getElementById('modal-artes').style.display = 'none';
+}
+
+async function loadArtesDoModelo() {
+    const container = document.getElementById('modal-artes-timeline');
+    container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Carregando histórico...</div>';
+    
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Supabase não configurado.</div>';
+        return;
+    }
+    
+    try {
+        const { data, error } = await supabaseClient
+            .from('pedidos_artes')
+            .select('*')
+            .eq('id_modelo', artesModalState.itemId)
+            .order('versao', { ascending: false });
+            
+        if (error) {
+            if (error.code === '42P01') { 
+                container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Tabela pedidos_artes não existe no banco.</div>'; 
+                return; 
+            }
+            throw error;
+        }
+        
+        artesModalState.artes = data || [];
+        renderArtesTimeline();
+    } catch (e) {
+        console.error('Erro ao buscar artes:', e);
+        container.innerHTML = '<div style="text-align: center; color: red;">Erro ao carregar artes.</div>';
+    }
+}
+
+function renderArtesTimeline() {
+    const container = document.getElementById('modal-artes-timeline');
+    if (artesModalState.artes.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 20px;">Nenhuma arte enviada ainda.</div>';
+        return;
+    }
+    
+    container.innerHTML = artesModalState.artes.map((arte, i) => {
+        const isLatest = i === 0;
+        let badgeClass = 'badge-yellow';
+        if (arte.status.includes('APROVADA') || arte.status === 'LIBERADA') badgeClass = 'badge-teal';
+        else if (arte.status.includes('REPROVADA')) badgeClass = 'badge-red';
+        
+        return `
+        <div style="border: 1px solid ${isLatest ? 'var(--blue)' : 'var(--border)'}; border-radius: 6px; padding: 12px; background: var(--bg-card); opacity: ${isLatest ? '1' : '0.8'};">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <strong>Versão ${arte.versao} ${isLatest ? ' (Atual)' : ''}</strong>
+                <span class="badge ${badgeClass}">${arte.status}</span>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 8px;">
+                📅 ${new Date(arte.created_at).toLocaleString('pt-BR')} <br>
+                👤 Enviado por: ${arte.enviado_por || 'Sistema'}
+            </div>
+            ${arte.url_arquivo ? `<div><a href="${arte.url_arquivo}" target="_blank" class="btn btn-sm btn-secondary" style="font-size: 0.75rem;">👁️ Ver Arquivo</a></div>` : ''}
+            ${arte.comentarios_revisao ? `<div style="margin-top: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; font-size: 0.85rem;">💬 ${arte.comentarios_revisao}</div>` : ''}
+        </div>
+        `;
+    }).join('');
+}
+
+async function submitNovaArte() {
+    const fileInput = document.getElementById('modal-artes-file');
+    const comment = document.getElementById('modal-artes-comment').value.trim();
+    const btn = document.getElementById('btn-submit-arte');
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+        toast('Selecione um arquivo (PDF ou Imagem) primeiro!', 'warning');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    btn.disabled = true;
+    btn.textContent = '⏳ Enviando...';
+    
+    try {
+        let proximaVersao = artesModalState.artes.length > 0 ? artesModalState.artes[0].versao + 1 : 1;
+        const timestamp = Date.now();
+        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const storagePath = `propostas/${artesModalState.id_int}/artes/${artesModalState.itemId}/${timestamp}_${safeName}`;
+        
+        const { error: uploadError } = await supabaseClient.storage
+            .from('chat-ideal')
+            .upload(storagePath, file, { upsert: true });
+            
+        if (uploadError) throw new Error('Falha no upload: ' + uploadError.message);
+        
+        const { data: publicUrlData } = supabaseClient.storage.from('chat-ideal').getPublicUrl(storagePath);
+        
+        const { error: insertError } = await supabaseClient
+            .from('pedidos_artes')
+            .insert({
+                id_int: artesModalState.id_int,
+                id_modelo: artesModalState.itemId,
+                versao: proximaVersao,
+                nome_arquivo: file.name,
+                storage_bucket: 'chat-ideal',
+                storage_path: storagePath,
+                url_arquivo: publicUrlData.publicUrl,
+                tipo_arquivo: file.type.includes('pdf') ? 'PDF' : 'IMAGEM',
+                mime_type: file.type,
+                tamanho_bytes: file.size,
+                status: 'EM_REVISAO_INTERNA',
+                enviado_por: 'Usuário do Sistema',
+                comentarios_revisao: comment
+            });
+            
+        if (insertError) throw insertError;
+        
+        await logToChatIdeal(`Arte enviada para o Modelo ${artesModalState.modeloNome} (versão ${proximaVersao}). Aguardando análise.\\nObs: ${comment}`);
+        
+        toast('Nova versão enviada com sucesso!', 'success');
+        fileInput.value = '';
+        document.getElementById('modal-artes-comment').value = '';
+        await loadArtesDoModelo();
+        
+    } catch (e) {
+        console.error('Erro no submit:', e);
+        toast(e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📤 Enviar Nova Versão';
+    }
+}
+
+async function logToChatIdeal(mensagem) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    try {
+        await supabaseClient.from('propostas_chat').insert({
+            id_int: artesModalState.id_int,
+            tipo: 'PRODUCAO',
+            setor: 'Pre-impressao',
+            visivel_externo: false,
+            mensagem: mensagem,
+            remetente_nome: 'Ideal Imposition',
+        });
+    } catch (e) {
+        console.error('Erro ao logar no chat:', e);
+    }
+}
+
+async function setStatusArteAtual(novoStatus) {
+    if (artesModalState.artes.length === 0) {
+        toast('Não há arte atual.', 'warning');
+        return;
+    }
+    const arteAtual = artesModalState.artes[0];
+    const comment = document.getElementById('modal-artes-comment').value.trim();
+    
+    try {
+        const { error } = await supabaseClient
+            .from('pedidos_artes')
+            .update({ 
+                status: novoStatus,
+                comentarios_revisao: comment || arteAtual.comentarios_revisao,
+                aprovado_por: novoStatus.includes('APROVADA') || novoStatus === 'LIBERADA' ? 'Avaliador' : null,
+                data_aprovacao: novoStatus.includes('APROVADA') || novoStatus === 'LIBERADA' ? new Date().toISOString() : null
+            })
+            .eq('id', arteAtual.id);
+            
+        if (error) throw error;
+        
+        await supabaseClient.from('pedidos_modelos')
+            .update({ status_arte: novoStatus })
+            .eq('id_item', artesModalState.itemId)
+            .catch(e => console.warn('Sem sync modelo:', e));
+            
+        const statusTexto = novoStatus === 'LIBERADA' ? 'LIBERADA PARA IMPRESSÃO' : novoStatus;
+        await logToChatIdeal(`Arte do Modelo ${artesModalState.modeloNome} (versão ${arteAtual.versao}) alterada para: ${statusTexto}.\\n${comment ? 'Obs: '+comment : ''}`);
+        
+        toast(`Arte atualizada para ${statusTexto}`, 'success');
+        document.getElementById('modal-artes-comment').value = '';
+        await loadArtesDoModelo();
+    } catch (e) {
+        console.error('Erro ao atualizar status:', e);
+        toast('Erro ao atualizar arte', 'error');
+    }
+}
+
+window.openArtesModal = openArtesModal;
+window.closeArtesModal = closeArtesModal;
+window.submitNovaArte = submitNovaArte;
+window.aprovarArteAtual = () => setStatusArteAtual('APROVADA_CLIENTE');
+window.liberarArteAtual = () => setStatusArteAtual('LIBERADA');
+window.reprovarArteAtual = () => setStatusArteAtual('REPROVADA_CLIENTE');

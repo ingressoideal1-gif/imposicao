@@ -1202,6 +1202,48 @@
                 </div>
             </section>
 
+            <!-- MODAL GERENCIAMENTO DE ARTES -->
+            <div id="modal-artes" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+                <div class="modal-content" style="background: var(--bg-card); width: 90%; max-width: 800px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh;">
+                    <div class="modal-header" style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0;">🎨 Gerenciamento de Artes - Modelo <span id="modal-artes-modelo-nome" style="color: var(--blue);"></span></h3>
+                        <button class="btn btn-ghost" onclick="closeArtesModal()" style="border: none; background: transparent; cursor: pointer; font-size: 1.2rem;">✖</button>
+                    </div>
+                    
+                    <div class="modal-body" style="padding: 16px; overflow-y: auto; flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- Esquerda: Histórico -->
+                        <div>
+                            <h4 style="margin-top: 0;">Histórico de Versões</h4>
+                            <div id="modal-artes-timeline" style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+                                <!-- Versões dinâmicas inseridas via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Direita: Envio e Ações -->
+                        <div class="modal-artes-right" style="border-left: 1px solid var(--border); padding-left: 20px;">
+                            <h4 style="margin-top: 0;">Enviar Nova Arte</h4>
+                            <div class="form-group">
+                                <label>Arquivo (PDF/Imagem)</label>
+                                <input type="file" id="modal-artes-file" class="form-control" accept=".pdf,image/*">
+                            </div>
+                            <div class="form-group" style="margin-top: 12px;">
+                                <label>Comentário / Observação</label>
+                                <textarea id="modal-artes-comment" class="form-control" rows="2" placeholder="Ex: Ajustado conforme solicitado..."></textarea>
+                            </div>
+                            <button class="btn btn-primary btn-full" style="margin-top: 12px;" id="btn-submit-arte" onclick="submitNovaArte()">📤 Enviar Nova Versão</button>
+                            
+                            <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+                            
+                            <h4 style="margin-top: 0;">Ações na Versão Atual</h4>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn btn-success btn-sm" onclick="aprovarArteAtual()">✅ Aprovar (Cliente)</button>
+                                <button class="btn btn-teal btn-sm" onclick="liberarArteAtual()">✅ Liberar Impressão</button>
+                                <button class="btn btn-danger btn-sm" onclick="reprovarArteAtual()">❌ Reprovar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
         </main>
     </div>
