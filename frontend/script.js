@@ -6205,9 +6205,17 @@ window.renderMultiArtes = function() {
 
 
 
-    // Gerar options das numerações
-
-    const numOptions = `<option value="">- Nenhuma -</option>` + state.numeracoes.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+    // Gerar options das numerações filtradas pelo formato da imposição
+    const fmtSelect = document.getElementById('imp-formato');
+    const selectedFmtId = fmtSelect ? fmtSelect.value : '';
+    let filteredNums = state.numeracoes;
+    if (selectedFmtId) {
+        filteredNums = state.numeracoes.filter(n => {
+            const ids = n.formato_ids || [n.formato_id];
+            return ids.some(id => String(id) === String(selectedFmtId));
+        });
+    }
+    const numOptions = `<option value="">- Nenhuma -</option>` + filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
 
 
 
@@ -11893,16 +11901,34 @@ function renderAmostrasOSItens(osId) {
         if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADA</span>';
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
 
-        // Gerar opções de cor com selected
-        const corsOpts = (state.cores || []).map(c =>
+        // Determinar o formato ID do item da OS
+        const itemFormatoId = item.formato_id || (item.formato ? matchFormato(item.formato) : null);
+
+        // Filtrar cores com base no formato do produto
+        const filteredCores = itemFormatoId
+            ? (state.cores || []).filter(c => String(c.formato_id) === String(itemFormatoId))
+            : (state.cores || []);
+
+        const corsOpts = filteredCores.map(c =>
             `<option value="${c.id}" ${c.id === item.amostra_cor_id ? 'selected' : ''}>${c.name}</option>`
         ).join('');
 
-        // Gerar opções de numeração iniciais
-        const numOpts = (state.numeracoes || [])
-            .filter(n => !n.is_custom || n.id === item.amostra_num_id || n.os_item_id === item.id)
-            .map(n => `<option value="${n.id}" ${n.id === item.amostra_num_id ? 'selected' : ''}>${n.name}</option>`)
-            .join('');
+        // Filtrar numerações com base no formato do produto
+        const filteredNumeracoes = (state.numeracoes || []).filter(n => {
+            // Se for customizada, só exibe se for vinculada a este item específico
+            if (n.is_custom && n.id !== item.amostra_num_id && n.os_item_id !== item.id) return false;
+            
+            // Se tivermos um formato identificado para o produto, verifica compatibilidade
+            if (itemFormatoId) {
+                const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
+                return ids.some(id => String(id) === String(itemFormatoId));
+            }
+            return true;
+        });
+
+        const numOpts = filteredNumeracoes.map(n =>
+            `<option value="${n.id}" ${n.id === item.amostra_num_id ? 'selected' : ''}>${n.name}</option>`
+        ).join('');
 
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
@@ -12017,19 +12043,22 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
         saveAmostraToDB(itemId, osId, { amostra_cor_id: corId || null });
     }
 
-    // Filtrar numeraes pelo formato_id da cor
+    // Filtrar numerações pelo formato do produto
     const curNumVal = numSelect.value;
     const item = state.osItens[osId].find(i => i.id === itemId);
-    const filteredNums = (cor && cor.formato_id)
-        ? state.numeracoes.filter(n => {
-            const ids = n.formato_ids || [n.formato_id];
-            const isFormatOk = ids.some(id => String(id) === String(cor.formato_id));
-            const isAccessOk = !n.is_custom || (item && (n.id === item.amostra_num_id || n.os_item_id === item.id));
-            return isFormatOk && isAccessOk;
-        })
-        : state.numeracoes.filter(n => {
-            return !n.is_custom || (item && (n.id === item.amostra_num_id || n.os_item_id === item.id));
-        });
+    const itemFormatoId = item ? (item.formato_id || (item.formato ? matchFormato(item.formato) : null)) : null;
+
+    const filteredNums = (state.numeracoes || []).filter(n => {
+        // Se for customizada, só exibe se for vinculada a este item específico
+        if (n.is_custom && (!item || (n.id !== item.amostra_num_id && n.os_item_id !== item.id))) return false;
+        
+        // Se tivermos um formato identificado para o produto, verifica compatibilidade
+        if (itemFormatoId) {
+            const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
+            return ids.some(id => String(id) === String(itemFormatoId));
+        }
+        return true;
+    });
 
     numSelect.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
         filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
