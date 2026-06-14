@@ -1251,7 +1251,77 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
-    <script src="script.js?v=13"></script>
+    <script src="script.js?v=14"></script>
+
+    <!-- PÁGINA PÚBLICA DO CLIENTE (fora do app-shell) -->
+    <div id="cliente-page" class="cliente-page" style="display: none;">
+        <div class="cliente-container">
+            <header class="cliente-header">
+                <img src="Logo Ideal Dark.png" alt="Ingresso Ideal" style="height: 40px; border-radius: 6px;">
+                <div>
+                    <h1 class="cliente-title">Aprovação do Pedido <span id="cliente-pedido-numero" style="color: var(--blue);"></span></h1>
+                    <p class="cliente-subtitle" id="cliente-pedido-cliente"></p>
+                </div>
+            </header>
+
+            <!-- Erro / Loading -->
+            <div id="cliente-loading" style="text-align: center; padding: 60px 20px; color: var(--text-dim);">
+                <div class="spinner" style="margin: 0 auto 16px;"></div>
+                <p>Carregando dados do pedido...</p>
+            </div>
+            <div id="cliente-error" style="display: none; text-align: center; padding: 60px 20px;">
+                <h2 style="color: var(--red); margin-bottom: 12px;">⚠️ Link inválido ou expirado</h2>
+                <p style="color: var(--text-dim);">Este link de aprovação não foi encontrado ou já foi desativado.<br>Entre em contato com a gráfica para obter um link válido.</p>
+            </div>
+
+            <!-- Conteúdo do pedido -->
+            <div id="cliente-content" style="display: none;">
+                <section class="cliente-section">
+                    <h2>📦 Itens do Pedido</h2>
+                    <div style="overflow-x: auto;">
+                        <table class="data-table cliente-table">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Modelo</th>
+                                    <th>Cor</th>
+                                    <th>Numeração</th>
+                                    <th>Qtd</th>
+                                    <th>Status Arte</th>
+                                    <th>Visualizar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cliente-tbody-itens"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="cliente-section">
+                    <h2>💬 Observações / Anotações</h2>
+                    <textarea id="cliente-obs" class="form-control" rows="4" placeholder="Escreva aqui suas observações, alterações desejadas de cor, numeração, ou qualquer instrução para a gráfica..."></textarea>
+                </section>
+
+                <section class="cliente-section cliente-actions">
+                    <button class="btn btn-success btn-lg" onclick="clienteAprovar()" id="btn-cliente-aprovar">
+                        ✅ Aprovar Pedido
+                    </button>
+                    <button class="btn btn-danger btn-lg" onclick="clienteSolicitarAlteracao()" id="btn-cliente-reprovar">
+                        ❌ Solicitar Alteração
+                    </button>
+                </section>
+
+                <div id="cliente-resultado" style="display: none; text-align: center; padding: 40px 20px;">
+                    <div style="font-size: 3rem; margin-bottom: 16px;" id="cliente-resultado-icon"></div>
+                    <h2 id="cliente-resultado-titulo"></h2>
+                    <p id="cliente-resultado-msg" style="color: var(--text-dim); margin-top: 8px;"></p>
+                </div>
+            </div>
+
+            <footer class="cliente-footer">
+                <p>Ideal Imposition — Sistema de Imposição Gráfica &copy; 2026</p>
+            </footer>
+        </div>
+    </div>
 
 
 </body>

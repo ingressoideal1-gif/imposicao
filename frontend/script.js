@@ -11288,7 +11288,7 @@ function renderOrdens() {
                         <td>${getStatusBadge(os.status)}</td>
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
                         <td>
-                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); changeOSStatus('${os.id}', 'EM IMPRESSÃO')" title="Liberar para a Lista de Impressão" style="padding: 4px 8px; font-size: 0.75rem;">🖨️ Liberar p/ Impressão</button>
+                            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); gerarLinkCliente('${os.id}', '${os.numero}')" title="Gerar link público para aprovação do cliente" style="padding: 4px 8px; font-size: 0.75rem;">🔗 Link do Cliente</button>
                         </td>
                     </tr>
                 `;
@@ -12723,3 +12723,378 @@ window.submitNovaArte = submitNovaArte;
 window.aprovarArteAtual = () => setStatusArteAtual('APROVADA_CLIENTE');
 window.liberarArteAtual = () => setStatusArteAtual('LIBERADA');
 window.reprovarArteAtual = () => setStatusArteAtual('REPROVADA_CLIENTE');
+
+// ==========================================
+// LINK DO CLIENTE — PÁGINA PÚBLICA (FASE 2)
+// ==========================================
+
+/**
+ * Gera token alfanumérico aleatório de 6 caracteres
+ */
+function generateClientToken(length = 6) {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    for (let i = 0; i < length; i++) {
+        result += chars[array[i] % chars.length];
+    }
+    return result;
+}
+
+/**
+ * Gera ou recupera o link público do cliente para uma OS
+ */
+async function gerarLinkCliente(osId, numero) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        toast('Supabase não configurado. Não é possível gerar o link.', 'error');
+        return;
+    }
+
+    try {
+        // Verificar se já existe um link para esta OS
+        const { data: existing, error: fetchError } = await supabaseClient
+            .from('pedidos_links_cliente')
+            .select('*')
+            .eq('os_id', osId)
+            .eq('ativo', true)
+            .maybeSingle();
+
+        if (fetchError && fetchError.code !== 'PGRST116') {
+            if (fetchError.code === '42P01') {
+                toast('Tabela pedidos_links_cliente ainda não existe no banco. Execute o SQL de criação.', 'warning');
+                return;
+            }
+            throw fetchError;
+        }
+
+        let token;
+        if (existing) {
+            token = existing.token;
+        } else {
+            // Gerar novo token
+            token = generateClientToken(6);
+            const os = state.ordens.find(o => o.id === osId);
+            const { error: insertError } = await supabaseClient
+                .from('pedidos_links_cliente')
+                .insert({
+                    os_id: osId,
+                    numero_pedido: String(numero),
+                    token: token,
+                    id_int: os ? (os.numero || numero) : numero
+                });
+            if (insertError) throw insertError;
+        }
+
+        // Montar URL
+        const baseUrl = window.location.origin;
+        const linkUrl = `${baseUrl}/cliente/${numero}-${token}`;
+
+        // Copiar para a área de transferência
+        try {
+            await navigator.clipboard.writeText(linkUrl);
+            toast(`Link copiado! 📋\n${linkUrl}`, 'success');
+        } catch (clipErr) {
+            // Fallback: mostrar em prompt
+            prompt('Copie o link abaixo:', linkUrl);
+        }
+
+    } catch (e) {
+        console.error('Erro ao gerar link do cliente:', e);
+        toast('Erro ao gerar o link: ' + e.message, 'error');
+    }
+}
+
+/**
+ * Router SPA — detecta se estamos em /cliente/{numero}-{token}
+ * Deve rodar no carregamento da página
+ */
+function checkClienteRoute() {
+    const path = window.location.pathname;
+    const match = path.match(/^\/cliente\/(\d+)-([a-z0-9]+)$/i);
+
+    if (match) {
+        const numero = match[1];
+        const token = match[2];
+
+        // Esconder o app principal e mostrar a página do cliente
+        const appShell = document.querySelector('.app-shell');
+        const clientePage = document.getElementById('cliente-page');
+
+        if (appShell) appShell.style.display = 'none';
+        if (clientePage) clientePage.style.display = 'block';
+
+        // Iniciar carregamento dos dados
+        initClientePage(numero, token);
+        return true;
+    }
+    return false;
+}
+
+let clienteState = {
+    numero: null,
+    token: null,
+    osId: null,
+    linkId: null,
+    itens: []
+};
+
+/**
+ * Inicializa a página do cliente com validação de token
+ */
+async function initClientePage(numero, token) {
+    clienteState.numero = numero;
+    clienteState.token = token;
+
+    const loadingEl = document.getElementById('cliente-loading');
+    const errorEl = document.getElementById('cliente-error');
+    const contentEl = document.getElementById('cliente-content');
+    const numeroEl = document.getElementById('cliente-pedido-numero');
+    const clienteEl = document.getElementById('cliente-pedido-cliente');
+
+    if (numeroEl) numeroEl.textContent = `#${numero}`;
+
+    // Esperar o Supabase carregar
+    let attempts = 0;
+    while ((typeof supabaseClient === 'undefined' || !supabaseClient) && attempts < 20) {
+        await new Promise(r => setTimeout(r, 250));
+        attempts++;
+    }
+
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'block';
+        return;
+    }
+
+    try {
+        // Validar token
+        const { data: linkData, error: linkError } = await supabaseClient
+            .from('pedidos_links_cliente')
+            .select('*')
+            .eq('numero_pedido', numero)
+            .eq('token', token)
+            .eq('ativo', true)
+            .maybeSingle();
+
+        if (linkError || !linkData) {
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (errorEl) errorEl.style.display = 'block';
+            return;
+        }
+
+        clienteState.osId = linkData.os_id;
+        clienteState.linkId = linkData.id;
+
+        // Incrementar acessos
+        await supabaseClient
+            .from('pedidos_links_cliente')
+            .update({ acessos: (linkData.acessos || 0) + 1, ultimo_acesso: new Date().toISOString() })
+            .eq('id', linkData.id);
+
+        // Buscar dados da OS (tentar Vibecode primeiro)
+        let osCliente = '';
+        try {
+            const { data: propData } = await supabaseClient
+                .from('propostas')
+                .select('cliente_nome')
+                .eq('id_int', numero)
+                .maybeSingle();
+            if (propData) osCliente = propData.cliente_nome || '';
+        } catch (e) { /* silencioso */ }
+
+        if (clienteEl) clienteEl.textContent = osCliente;
+
+        // Buscar itens do pedido
+        let itens = [];
+        try {
+            const { data: prodData } = await supabaseClient
+                .from('produtos_proposta')
+                .select('*')
+                .eq('id_int', parseInt(numero));
+            if (prodData && prodData.length > 0) {
+                itens = prodData.map(p => ({
+                    id: p.id,
+                    produto: p.nome || p.descricao || 'Produto',
+                    modelo: p.modelo || p.cor || '—',
+                    cor: p.cor || 'STD',
+                    numeracao: `${p.num_inicial || 0} → ${p.num_final || 0}`,
+                    quantidade: p.quantidade || 0,
+                    status_arte: p.status_arte || 'PENDENTE',
+                    url_arte: null
+                }));
+            }
+        } catch (e) { console.warn('Itens não encontrados via produtos_proposta:', e); }
+
+        // Tentar buscar artes dos modelos
+        for (let item of itens) {
+            try {
+                const { data: arteData } = await supabaseClient
+                    .from('pedidos_artes')
+                    .select('url_arquivo, status')
+                    .eq('id_modelo', `vibe_item_${item.id}`)
+                    .order('versao', { ascending: false })
+                    .limit(1);
+                if (arteData && arteData.length > 0) {
+                    item.url_arte = arteData[0].url_arquivo;
+                    item.status_arte = arteData[0].status || item.status_arte;
+                }
+            } catch (e) { /* silencioso */ }
+        }
+
+        clienteState.itens = itens;
+
+        // Renderizar itens
+        renderClienteItens();
+
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
+
+    } catch (e) {
+        console.error('Erro ao inicializar página do cliente:', e);
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'block';
+    }
+}
+
+function renderClienteItens() {
+    const tbody = document.getElementById('cliente-tbody-itens');
+    if (!tbody) return;
+
+    if (!clienteState.itens.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 20px;">Nenhum item encontrado neste pedido.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = clienteState.itens.map(item => {
+        let badgeClass = 'badge-yellow';
+        if (item.status_arte.includes('APROVADA') || item.status_arte === 'LIBERADA') badgeClass = 'badge-teal';
+        else if (item.status_arte.includes('REPROVADA')) badgeClass = 'badge-red';
+
+        return `
+        <tr>
+            <td><strong>${item.produto}</strong></td>
+            <td>${item.modelo}</td>
+            <td>${item.cor}</td>
+            <td style="font-family: monospace; font-size: 0.85rem;">${item.numeracao}</td>
+            <td style="text-align: center;"><strong>${item.quantidade}</strong></td>
+            <td><span class="badge ${badgeClass}">${item.status_arte}</span></td>
+            <td>${item.url_arte ? `<a href="${item.url_arte}" target="_blank" class="btn btn-sm btn-secondary" style="font-size: 0.75rem;">👁️ Ver</a>` : '<span style="color: var(--text-dim);">—</span>'}</td>
+        </tr>
+        `;
+    }).join('');
+}
+
+async function clienteAprovar() {
+    const obs = document.getElementById('cliente-obs').value.trim();
+    const btnAprovar = document.getElementById('btn-cliente-aprovar');
+    const btnReprovar = document.getElementById('btn-cliente-reprovar');
+
+    btnAprovar.disabled = true;
+    btnAprovar.textContent = '⏳ Processando...';
+
+    try {
+        // Atualizar status de todas as artes mais recentes
+        for (const item of clienteState.itens) {
+            try {
+                await supabaseClient
+                    .from('pedidos_artes')
+                    .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
+                    .eq('id_modelo', `vibe_item_${item.id}`)
+                    .order('versao', { ascending: false })
+                    .limit(1);
+            } catch (e) { /* silencioso */ }
+        }
+
+        // Log no chat
+        try {
+            await supabaseClient.from('propostas_chat').insert({
+                id_int: clienteState.numero,
+                tipo: 'PRODUCAO',
+                setor: 'Cliente',
+                visivel_externo: true,
+                mensagem: `✅ PEDIDO APROVADO PELO CLIENTE via link de aprovação.\n${obs ? 'Observações: ' + obs : '(Sem observações)'}`,
+                remetente_nome: 'Cliente (aprovação online)',
+            });
+        } catch (e) { console.error('Erro log chat:', e); }
+
+        // Mostrar resultado
+        mostrarResultadoCliente('✅', 'Pedido Aprovado!', 'Sua aprovação foi registrada com sucesso. A gráfica já foi notificada e iniciará a produção.');
+    } catch (e) {
+        console.error('Erro ao aprovar:', e);
+        toast('Erro ao processar aprovação.', 'error');
+        btnAprovar.disabled = false;
+        btnAprovar.textContent = '✅ Aprovar Pedido';
+    }
+}
+
+async function clienteSolicitarAlteracao() {
+    const obs = document.getElementById('cliente-obs').value.trim();
+    if (!obs) {
+        alert('Por favor, descreva as alterações desejadas no campo de observações antes de solicitar.');
+        return;
+    }
+
+    const btnAprovar = document.getElementById('btn-cliente-aprovar');
+    const btnReprovar = document.getElementById('btn-cliente-reprovar');
+
+    btnReprovar.disabled = true;
+    btnReprovar.textContent = '⏳ Processando...';
+
+    try {
+        // Atualizar status
+        for (const item of clienteState.itens) {
+            try {
+                await supabaseClient
+                    .from('pedidos_artes')
+                    .update({ status: 'REPROVADA_CLIENTE', comentarios_revisao: obs })
+                    .eq('id_modelo', `vibe_item_${item.id}`)
+                    .order('versao', { ascending: false })
+                    .limit(1);
+            } catch (e) { /* silencioso */ }
+        }
+
+        // Log no chat
+        try {
+            await supabaseClient.from('propostas_chat').insert({
+                id_int: clienteState.numero,
+                tipo: 'PRODUCAO',
+                setor: 'Cliente',
+                visivel_externo: true,
+                mensagem: `❌ ALTERAÇÃO SOLICITADA PELO CLIENTE via link de aprovação.\nObservações: ${obs}`,
+                remetente_nome: 'Cliente (aprovação online)',
+            });
+        } catch (e) { console.error('Erro log chat:', e); }
+
+        mostrarResultadoCliente('📝', 'Alteração Solicitada', 'Suas observações foram enviadas para a gráfica. Você receberá um novo link quando as artes forem atualizadas.');
+    } catch (e) {
+        console.error('Erro ao solicitar alteração:', e);
+        btnReprovar.disabled = false;
+        btnReprovar.textContent = '❌ Solicitar Alteração';
+    }
+}
+
+function mostrarResultadoCliente(icon, titulo, msg) {
+    const contentEl = document.getElementById('cliente-content');
+    const resultadoEl = document.getElementById('cliente-resultado');
+    const iconEl = document.getElementById('cliente-resultado-icon');
+    const tituloEl = document.getElementById('cliente-resultado-titulo');
+    const msgEl = document.getElementById('cliente-resultado-msg');
+
+    // Esconder tabela e botões, mostrar resultado
+    document.querySelectorAll('.cliente-section').forEach(s => s.style.display = 'none');
+    if (resultadoEl) resultadoEl.style.display = 'block';
+    if (iconEl) iconEl.textContent = icon;
+    if (tituloEl) tituloEl.textContent = titulo;
+    if (msgEl) msgEl.textContent = msg;
+}
+
+// Exportar funções globais
+window.gerarLinkCliente = gerarLinkCliente;
+window.clienteAprovar = clienteAprovar;
+window.clienteSolicitarAlteracao = clienteSolicitarAlteracao;
+
+// ─── ROUTER: Verificar rota do cliente no carregamento ───
+document.addEventListener('DOMContentLoaded', () => {
+    checkClienteRoute();
+});
