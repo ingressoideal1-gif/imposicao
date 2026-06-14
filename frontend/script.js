@@ -12183,9 +12183,16 @@ async function renderItemAmostraCombinada(idx, osId) {
         fmt = { width_mm: 180, height_mm: 50 };
     }
 
-    // Calcular escala (idêntico ao getAmostraScale)
-    const containerWidth = canvas.parentElement ? canvas.parentElement.clientWidth - 4 : 600;
-    const S = containerWidth / fmt.width_mm;
+    // Calcular escala (150 DPI apenas no link do cliente para nitidez retina/HiDPI, senão usar largura do container)
+    const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
+    let S;
+    if (isClientePage) {
+        // 150 DPI = 150 pixels por polegada (25.4 mm)
+        S = 150 / 25.4;
+    } else {
+        const containerWidth = canvas.parentElement ? canvas.parentElement.clientWidth - 4 : 600;
+        S = containerWidth / fmt.width_mm;
+    }
 
     let targetW = fmt.width_mm;
     let targetH = fmt.height_mm;
