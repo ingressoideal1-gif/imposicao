@@ -220,6 +220,7 @@ def add_formato(data: dict) -> str:
             "gap_v_mm": float(data.get("gap_v_mm", 0)),
             "offset_h_mm": float(data.get("offset_h_mm", 0)),
             "offset_v_mm": float(data.get("offset_v_mm", 0)),
+            "rotations": data.get("rotations", {}),
         }
         _supabase_request("POST", "producao_formatos", clean_data)
         return new_id
@@ -241,6 +242,7 @@ def update_formato(fmt_id: str, data: dict) -> bool:
                 "gap_v_mm": float(data.get("gap_v_mm", 0)),
                 "offset_h_mm": float(data.get("offset_h_mm", 0)),
                 "offset_v_mm": float(data.get("offset_v_mm", 0)),
+                "rotations": data.get("rotations", {}),
             }
             res = _supabase_request("PATCH", f"producao_formatos?id=eq.{fmt_id}", clean_data)
             return bool(res)
