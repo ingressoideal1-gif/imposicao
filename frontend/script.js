@@ -4678,6 +4678,70 @@ window.saveNumeracao = async function () {
 
 
     try {
+        // ─── GERAR PREVIEW JPG 100 DPI ───
+        let previewJpgBase64 = "";
+        const fmt = state.formatos.find(f => String(f.id) === String(fmtId));
+        if (fmt) {
+            const S_100 = 100 / 25.4; // 100 DPI
+            const previewCanvas = document.createElement('canvas');
+            previewCanvas.width = Math.round(fmt.width_mm * S_100);
+            previewCanvas.height = Math.round(fmt.height_mm * S_100);
+            const pctx = previewCanvas.getContext('2d', { colorSpace: 'srgb' });
+
+            // 1. Fundo branco
+            pctx.fillStyle = '#ffffff';
+            pctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+            // 2. Imagem de fundo (PDF ou SVG se houver)
+            let refBg = state.bgImage || state.numPdfImage || state.numSvgImage;
+            if (refBg) {
+                const MM2PT = 2.8346;
+                let originalW_mm = 0;
+                let originalH_mm = 0;
+
+                if (refBg.originalPdfWidthPt) {
+                    originalW_mm = refBg.originalPdfWidthPt / MM2PT;
+                    originalH_mm = refBg.originalPdfHeightPt / MM2PT;
+                } else {
+                    const dpi = refBg.dpiValue || 300;
+                    originalW_mm = (refBg.width / dpi) * 25.4;
+                    originalH_mm = (refBg.height / dpi) * 25.4;
+                }
+
+                if (!originalW_mm || originalW_mm < 1) {
+                    originalW_mm = fmt.width_mm;
+                    originalH_mm = fmt.height_mm;
+                }
+
+                const drawW = originalW_mm * S_100;
+                const drawH = originalH_mm * S_100;
+                const drawX = (previewCanvas.width - drawW) / 2;
+                const drawY = (previewCanvas.height - drawH) / 2;
+
+                pctx.drawImage(refBg, drawX, drawY, drawW, drawH);
+            }
+
+            // 3. Desenhar elementos de numeração sem a borda de seleção azul
+            pctx.save();
+            pctx.beginPath();
+            pctx.rect(0, 0, previewCanvas.width, previewCanvas.height);
+            pctx.clip();
+
+            const oldSelected = state.selectedElId;
+            state.selectedElId = null;
+
+            state.numElements.forEach(el => {
+                if (typeof drawElement === 'function') {
+                    drawElement(pctx, el, S_100);
+                }
+            });
+
+            state.selectedElId = oldSelected;
+            pctx.restore();
+
+            // 4. Exportar como JPEG
+            previewJpgBase64 = previewCanvas.toDataURL('image/jpeg', 0.85);
+        }
 
         const svgUrl = await uploadToStorage(state.numSvgContent, state.numSvgFilename || 'arquivo.svg', 'uploads_svg');
 
@@ -4696,6 +4760,8 @@ window.saveNumeracao = async function () {
             name,
 
             formato_id: fmtId,
+
+            preview_jpg: previewJpgBase64,
 
             // Coletar todos os formatos marcados nos checkboxes
             formato_ids: (() => {

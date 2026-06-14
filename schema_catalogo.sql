@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS producao_numeracoes (
     svg_content TEXT DEFAULT '',
     svg_filename TEXT DEFAULT '',
     elements JSONB DEFAULT '[]',
+    preview_jpg TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
