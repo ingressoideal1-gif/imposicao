@@ -1584,11 +1584,9 @@ function renderCores() {
                                     <td>${pdfLink}</td>
 
                                     <td class="actions-cell" style="text-align: right;" onclick="event.stopPropagation();">
-
+                                        <button class="btn btn-secondary btn-sm" onclick="duplicateCor('${c.id}')" title="Duplicar Cor">⧉</button>
                                         <button class="btn btn-sm btn-ghost" onclick="editCor('${c.id}')">✏️ Editar</button>
-
                                         <button class="btn btn-danger btn-sm" onclick="deleteCor('${c.id}')">🗑️</button>
-
                                     </td>
 
                                 </tr>
@@ -1615,6 +1613,29 @@ function renderCores() {
 
 window.renderCores = renderCores;
 
+async function duplicateCor(id) {
+    const c = state.cores.find(x => x.id === id);
+    if (!c) return;
+
+    try {
+        const clone = {
+            name: c.name + ' (cópia)',
+            formato_id: c.formato_id,
+            width_mm: parseFloat(c.width_mm),
+            height_mm: parseFloat(c.height_mm),
+            pdf_base64: c.pdf_base64 || null,
+            pdf_filename: c.pdf_filename || "",
+        };
+
+        await api('POST', '/cores', clone);
+        toast('Cor duplicada!', 'success');
+        await loadAll();
+    } catch (e) {
+        toast('Erro ao duplicar cor: ' + e.message, 'error');
+    }
+}
+
+window.duplicateCor = duplicateCor;
 
 
 async function saveCor() {
