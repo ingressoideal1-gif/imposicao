@@ -11917,7 +11917,7 @@ function renderAmostrasOSItens(osId) {
                 </div>
             </div>
             <div style="padding: 24px;">
-                <div class="amostra-mid-row">
+                <div class="amostra-mid-row" style="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'grid-template-columns: 1fr;' : ''}">
                     <div class="amostra-decisao-panel">
                         <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
                         <div class="amostra-decisao-status-box">
@@ -11938,6 +11938,7 @@ function renderAmostrasOSItens(osId) {
                             </button>
                         </div>
                     </div>
+                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                     <div class="amostra-config-panel">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
                             ⚙️ Configurações da Amostra
@@ -11974,6 +11975,7 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                     </div>
+                    `}
                 </div>
                 <div class="amostra-preview-container" style="margin-top: 20px;">
                     <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
@@ -12140,16 +12142,22 @@ async function renderItemAmostraCombinada(idx, osId) {
 
     if (!canvas) return;
 
-    const corId = corSelect ? corSelect.value : '';
-    const numId = numSelect ? numSelect.value : '';
+    const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
+    const corId = corSelect ? corSelect.value : (item ? item.amostra_cor_id : '');
+    const numId = numSelect ? numSelect.value : (item ? item.amostra_num_id : '');
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
+    const hasSavedArte = !!(item && item.amostra_arte_base64);
 
     // Mostrar nome do arquivo e botão remover
-    if (arteNameSpan) arteNameSpan.textContent = hasArte ? arteInput.files[0].name : '';
-    if (removeBtn) removeBtn.style.display = hasArte ? '' : 'none';
+    if (arteNameSpan) {
+        if (hasArte) arteNameSpan.textContent = arteInput.files[0].name;
+        else if (hasSavedArte) arteNameSpan.textContent = '(Arte Salva)';
+        else arteNameSpan.textContent = '';
+    }
+    if (removeBtn) removeBtn.style.display = (hasArte || hasSavedArte) ? '' : 'none';
 
     // Se nada selecionado, esconder canvas
-    if (!corId && !numId && !hasArte) {
+    if (!corId && !numId && !hasArte && !hasSavedArte) {
         canvas.style.display = 'none';
         if (empty) empty.style.display = 'block';
         return;
@@ -12236,11 +12244,16 @@ async function renderItemAmostraCombinada(idx, osId) {
         ctx.fillRect(0, 0, finalWidth, finalHeight);
     }
 
-    // ====== CAMADA 2: ARTE (imagem do upload, com multiply) ======
-    if (hasArte) {
+    // ====== CAMADA 2: ARTE (imagem do upload ou salva, com multiply) ======
+    if (hasArte || hasSavedArte) {
         try {
-            const file = arteInput.files[0];
-            const url = URL.createObjectURL(file);
+            let url;
+            if (hasArte) {
+                const file = arteInput.files[0];
+                url = URL.createObjectURL(file);
+            } else {
+                url = item.amostra_arte_base64;
+            }
             const arteImg = new Image();
             await new Promise((resolve, reject) => {
                 arteImg.onload = resolve;
@@ -12276,7 +12289,9 @@ async function renderItemAmostraCombinada(idx, osId) {
                 ctx.drawImage(tempArte, 0, 0);
                 ctx.globalCompositeOperation = 'source-over';
             }
-            URL.revokeObjectURL(url);
+            if (hasArte) {
+                URL.revokeObjectURL(url);
+            }
         } catch (e) {
             console.warn(`[Item ${idx}] Erro ao renderizar arte:`, e);
         }
