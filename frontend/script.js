@@ -11851,25 +11851,28 @@ async function navigateToAmostrasFromOS(osId) {
  */
 function renderAmostrasOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
-    const container = document.getElementById('amostras-itens-container');
-    const banner = document.getElementById('amostras-os-banner');
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
+    const banner = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-banner' : 'cliente-os-banner');
     const avulsa = document.getElementById('amostra-combinada-avulsa');
 
     if (!os || !container) return;
 
     const itens = state.osItens[osId] || [];
 
-    // Mostrar banner, esconder card avulso
+    // Mostrar banner, esconder card avulso se for painel interno
     if (banner) {
         banner.style.display = 'block';
-        const numEl = document.getElementById('amostras-os-numero');
-        const cliEl = document.getElementById('amostras-os-cliente');
-        const countEl = document.getElementById('amostras-os-itens-count');
+        const numEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-numero' : 'cliente-pedido-numero');
+        const cliEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-cliente' : 'cliente-pedido-cliente');
+        const countEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-itens-count' : 'cliente-os-itens-count');
         if (numEl) numEl.textContent = `#${os.numero}`;
         if (cliEl) cliEl.textContent = os.cliente || '';
         if (countEl) countEl.textContent = `${itens.length} ${itens.length === 1 ? 'modelo' : 'modelos'}`;
     }
-    if (avulsa) avulsa.style.display = 'none';
+    if (containerId === 'amostras-itens-container' && avulsa) {
+        avulsa.style.display = 'none';
+    }
 
     if (!itens.length) {
         container.innerHTML = `
@@ -11950,7 +11953,7 @@ function renderAmostrasOSItens(osId) {
                             <div class="form-group" style="margin-bottom: 0;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                     <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
-                                    <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
+                                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>`}
                                 </div>
                                 <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
                                     <option value="">— Selecione uma Numeração —</option>
@@ -12451,15 +12454,54 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
 /**
  * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
  */
-function decisionAmostraItem(itemId, osId, status) {
+async function decisionAmostraItem(itemId, osId, status) {
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
     const obs = obsEl ? obsEl.value : '';
     
-    // Salvar no banco
-    saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs }).then(() => {
+    try {
+        await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs });
+        
+        // Se for na página do cliente, vamos notificar no chat do pedido!
+        const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
+        if (isClientePage) {
+            const item = state.osItens[osId].find(i => i.id === itemId);
+            const prodNome = item ? item.produto : 'Produto';
+            
+            // Enviar mensagem no chat da proposta
+            try {
+                await supabaseClient.from('propostas_chat').insert({
+                    id_int: parseInt(clienteState.numero),
+                    tipo: 'PRODUCAO',
+                    setor: 'Cliente',
+                    visivel_externo: true,
+                    mensagem: status === 'APROVADA' 
+                        ? `✅ O cliente APROVOU a amostra do item: "${prodNome}".`
+                        : `❌ O cliente solicitou ALTERAÇÃO na amostra do item: "${prodNome}".\nObservações: ${obs || '(Sem observações)'}`,
+                    remetente_nome: 'Cliente (via link)',
+                });
+            } catch (chatErr) {
+                console.warn('Erro ao inserir mensagem no chat:', chatErr);
+            }
+            
+            // Se for reprovado e for o fluxo do cliente, podemos atualizar a tabela pedidos_artes também
+            if (status === 'REPROVADA') {
+                try {
+                    await supabaseClient
+                        .from('pedidos_artes')
+                        .update({ status: 'REPROVADA_CLIENTE', comentarios_revisao: obs })
+                        .eq('id_modelo', itemId)
+                        .order('versao', { ascending: false })
+                        .limit(1);
+                } catch (e) { /* silencioso */ }
+            }
+        }
+        
         toast(`Item ${status === 'APROVADA' ? 'aprovado' : 'marcado para alteração'}!`, status === 'APROVADA' ? 'success' : 'warning');
         renderAmostrasOSItens(osId);
-    });
+    } catch (err) {
+        console.error('Erro na decisão do item:', err);
+        toast('Erro ao registrar decisão: ' + err.message, 'error');
+    }
 }
 
 /**
@@ -12894,58 +12936,62 @@ async function initClientePage(numero, token) {
 
         // Buscar dados da OS (tentar Vibecode primeiro)
         let osCliente = '';
+        let propData = null;
         try {
-            const { data: propData } = await supabaseClient
+            const { data } = await supabaseClient
                 .from('propostas')
-                .select('cliente_nome')
+                .select('*')
                 .eq('id_int', numero)
                 .maybeSingle();
+            propData = data;
             if (propData) osCliente = propData.cliente_nome || '';
         } catch (e) { /* silencioso */ }
 
         if (clienteEl) clienteEl.textContent = osCliente;
 
-        // Buscar itens do pedido
-        let itens = [];
+        // Carregar formatos, cores e numerações para o state global do front
+        try {
+            const [coresRes, numeracoesRes, formatosRes] = await Promise.all([
+                supabaseClient.from('producao_cores').select('*').order('name', { ascending: true }),
+                supabaseClient.from('producao_numeracoes').select('*').order('name', { ascending: true }),
+                supabaseClient.from('producao_formatos').select('*').order('name', { ascending: true })
+            ]);
+            state.cores = coresRes.data || [];
+            state.numeracoes = numeracoesRes.data || [];
+            state.formatos = formatosRes.data || [];
+        } catch (err) {
+            console.error('Erro ao carregar dados auxiliares do Supabase:', err);
+        }
+
+        // Buscar itens do pedido (tabela produtos_proposta)
+        let rawItens = [];
         try {
             const { data: prodData } = await supabaseClient
                 .from('produtos_proposta')
                 .select('*')
                 .eq('id_int', parseInt(numero));
-            if (prodData && prodData.length > 0) {
-                itens = prodData.map(p => ({
-                    id: p.id,
-                    produto: p.nome || p.descricao || 'Produto',
-                    modelo: p.modelo || p.cor || '—',
-                    cor: p.cor || 'STD',
-                    numeracao: `${p.num_inicial || 0} → ${p.num_final || 0}`,
-                    quantidade: p.quantidade || 0,
-                    status_arte: p.status_arte || 'PENDENTE',
-                    url_arte: null
-                }));
-            }
+            rawItens = prodData || [];
         } catch (e) { console.warn('Itens não encontrados via produtos_proposta:', e); }
 
-        // Tentar buscar artes dos modelos
-        for (let item of itens) {
-            try {
-                const { data: arteData } = await supabaseClient
-                    .from('pedidos_artes')
-                    .select('url_arquivo, status')
-                    .eq('id_modelo', `vibe_item_${item.id}`)
-                    .order('versao', { ascending: false })
-                    .limit(1);
-                if (arteData && arteData.length > 0) {
-                    item.url_arte = arteData[0].url_arquivo;
-                    item.status_arte = arteData[0].status || item.status_arte;
-                }
-            } catch (e) { /* silencioso */ }
-        }
+        // Mapear itens como os_itens e salvar no state global
+        const osId = clienteState.osId;
+        state.osItens[osId] = rawItens.map(p => mapVibecodeProdutoToOSItem(p, osId));
 
-        clienteState.itens = itens;
+        // Salvar a OS no state.ordens
+        const os = {
+            id: osId,
+            numero: numero,
+            cliente: osCliente,
+            _itens_raw: rawItens
+        };
+        state.ordens = [os];
+        state.amostrasOSAtivo = osId;
 
-        // Renderizar itens
-        renderClienteItens();
+        // Configurar o container de renderização das amostras para o cliente
+        state.amostrasContainerId = 'cliente-amostras-itens-container';
+
+        // Renderizar a tela de amostras combinada idêntica à interna
+        renderAmostrasOSItens(osId);
 
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
@@ -12957,120 +13003,55 @@ async function initClientePage(numero, token) {
     }
 }
 
-function renderClienteItens() {
-    const tbody = document.getElementById('cliente-tbody-itens');
-    if (!tbody) return;
+async function clienteAprovarTudo() {
+    const osId = clienteState.osId;
+    const itens = state.osItens[osId] || [];
+    const btnAprovar = document.getElementById('btn-cliente-aprovar-tudo');
 
-    if (!clienteState.itens.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 20px;">Nenhum item encontrado neste pedido.</td></tr>';
-        return;
+    if (btnAprovar) {
+        btnAprovar.disabled = true;
+        btnAprovar.textContent = '⏳ Processando aprovação de todos os itens...';
     }
 
-    tbody.innerHTML = clienteState.itens.map(item => {
-        let badgeClass = 'badge-yellow';
-        if (item.status_arte.includes('APROVADA') || item.status_arte === 'LIBERADA') badgeClass = 'badge-teal';
-        else if (item.status_arte.includes('REPROVADA')) badgeClass = 'badge-red';
-
-        return `
-        <tr>
-            <td><strong>${item.produto}</strong></td>
-            <td>${item.modelo}</td>
-            <td>${item.cor}</td>
-            <td style="font-family: monospace; font-size: 0.85rem;">${item.numeracao}</td>
-            <td style="text-align: center;"><strong>${item.quantidade}</strong></td>
-            <td><span class="badge ${badgeClass}">${item.status_arte}</span></td>
-            <td>${item.url_arte ? `<a href="${item.url_arte}" target="_blank" class="btn btn-sm btn-secondary" style="font-size: 0.75rem;">👁️ Ver</a>` : '<span style="color: var(--text-dim);">—</span>'}</td>
-        </tr>
-        `;
-    }).join('');
-}
-
-async function clienteAprovar() {
-    const obs = document.getElementById('cliente-obs').value.trim();
-    const btnAprovar = document.getElementById('btn-cliente-aprovar');
-    const btnReprovar = document.getElementById('btn-cliente-reprovar');
-
-    btnAprovar.disabled = true;
-    btnAprovar.textContent = '⏳ Processando...';
-
     try {
-        // Atualizar status de todas as artes mais recentes
-        for (const item of clienteState.itens) {
+        // Para cada item, salvar status como APROVADA
+        for (const item of itens) {
+            await saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' });
+        }
+
+        // Também atualizar o status em pedidos_artes para manter compatibilidade
+        for (const item of itens) {
             try {
                 await supabaseClient
                     .from('pedidos_artes')
                     .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
-                    .eq('id_modelo', `vibe_item_${item.id}`)
+                    .eq('id_modelo', item.id)
                     .order('versao', { ascending: false })
                     .limit(1);
             } catch (e) { /* silencioso */ }
         }
 
-        // Log no chat
+        // Log no chat da proposta
         try {
             await supabaseClient.from('propostas_chat').insert({
-                id_int: clienteState.numero,
+                id_int: parseInt(clienteState.numero),
                 tipo: 'PRODUCAO',
                 setor: 'Cliente',
                 visivel_externo: true,
-                mensagem: `✅ PEDIDO APROVADO PELO CLIENTE via link de aprovação.\n${obs ? 'Observações: ' + obs : '(Sem observações)'}`,
+                mensagem: `✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.`,
                 remetente_nome: 'Cliente (aprovação online)',
             });
         } catch (e) { console.error('Erro log chat:', e); }
 
-        // Mostrar resultado
-        mostrarResultadoCliente('✅', 'Pedido Aprovado!', 'Sua aprovação foi registrada com sucesso. A gráfica já foi notificada e iniciará a produção.');
+        // Mostrar tela de sucesso
+        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Obrigado! Sua aprovação foi registrada. A gráfica foi notificada e dará andamento à produção do seu pedido.');
     } catch (e) {
-        console.error('Erro ao aprovar:', e);
-        toast('Erro ao processar aprovação.', 'error');
-        btnAprovar.disabled = false;
-        btnAprovar.textContent = '✅ Aprovar Pedido';
-    }
-}
-
-async function clienteSolicitarAlteracao() {
-    const obs = document.getElementById('cliente-obs').value.trim();
-    if (!obs) {
-        alert('Por favor, descreva as alterações desejadas no campo de observações antes de solicitar.');
-        return;
-    }
-
-    const btnAprovar = document.getElementById('btn-cliente-aprovar');
-    const btnReprovar = document.getElementById('btn-cliente-reprovar');
-
-    btnReprovar.disabled = true;
-    btnReprovar.textContent = '⏳ Processando...';
-
-    try {
-        // Atualizar status
-        for (const item of clienteState.itens) {
-            try {
-                await supabaseClient
-                    .from('pedidos_artes')
-                    .update({ status: 'REPROVADA_CLIENTE', comentarios_revisao: obs })
-                    .eq('id_modelo', `vibe_item_${item.id}`)
-                    .order('versao', { ascending: false })
-                    .limit(1);
-            } catch (e) { /* silencioso */ }
+        console.error('Erro ao aprovar tudo:', e);
+        toast('Erro ao processar aprovação final: ' + e.message, 'error');
+        if (btnAprovar) {
+            btnAprovar.disabled = false;
+            btnAprovar.textContent = '✅ FINALIZAR E APROVAR PEDIDO COMPLETO';
         }
-
-        // Log no chat
-        try {
-            await supabaseClient.from('propostas_chat').insert({
-                id_int: clienteState.numero,
-                tipo: 'PRODUCAO',
-                setor: 'Cliente',
-                visivel_externo: true,
-                mensagem: `❌ ALTERAÇÃO SOLICITADA PELO CLIENTE via link de aprovação.\nObservações: ${obs}`,
-                remetente_nome: 'Cliente (aprovação online)',
-            });
-        } catch (e) { console.error('Erro log chat:', e); }
-
-        mostrarResultadoCliente('📝', 'Alteração Solicitada', 'Suas observações foram enviadas para a gráfica. Você receberá um novo link quando as artes forem atualizadas.');
-    } catch (e) {
-        console.error('Erro ao solicitar alteração:', e);
-        btnReprovar.disabled = false;
-        btnReprovar.textContent = '❌ Solicitar Alteração';
     }
 }
 
@@ -13081,8 +13062,12 @@ function mostrarResultadoCliente(icon, titulo, msg) {
     const tituloEl = document.getElementById('cliente-resultado-titulo');
     const msgEl = document.getElementById('cliente-resultado-msg');
 
-    // Esconder tabela e botões, mostrar resultado
-    document.querySelectorAll('.cliente-section').forEach(s => s.style.display = 'none');
+    // Esconder o container de itens e o botão de aprovação, mostrar resultado
+    const container = document.getElementById('cliente-amostras-itens-container');
+    const actions = document.querySelector('.cliente-actions');
+    if (container) container.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+    
     if (resultadoEl) resultadoEl.style.display = 'block';
     if (iconEl) iconEl.textContent = icon;
     if (tituloEl) tituloEl.textContent = titulo;
@@ -13091,8 +13076,7 @@ function mostrarResultadoCliente(icon, titulo, msg) {
 
 // Exportar funções globais
 window.gerarLinkCliente = gerarLinkCliente;
-window.clienteAprovar = clienteAprovar;
-window.clienteSolicitarAlteracao = clienteSolicitarAlteracao;
+window.clienteAprovarTudo = clienteAprovarTudo;
 
 // ─── ROUTER: Verificar rota do cliente no carregamento ───
 document.addEventListener('DOMContentLoaded', () => {

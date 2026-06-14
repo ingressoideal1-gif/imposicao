@@ -1261,6 +1261,7 @@
                 <div>
                     <h1 class="cliente-title">Aprovação do Pedido <span id="cliente-pedido-numero" style="color: var(--blue);"></span></h1>
                     <p class="cliente-subtitle" id="cliente-pedido-cliente"></p>
+                    <span id="cliente-os-itens-count" class="badge badge-blue" style="margin-top: 6px; display: inline-block;"></span>
                 </div>
             </header>
 
@@ -1276,37 +1277,13 @@
 
             <!-- Conteúdo do pedido -->
             <div id="cliente-content" style="display: none;">
-                <section class="cliente-section">
-                    <h2>📦 Itens do Pedido</h2>
-                    <div style="overflow-x: auto;">
-                        <table class="data-table cliente-table">
-                            <thead>
-                                <tr>
-                                    <th>Produto</th>
-                                    <th>Modelo</th>
-                                    <th>Cor</th>
-                                    <th>Numeração</th>
-                                    <th>Qtd</th>
-                                    <th>Status Arte</th>
-                                    <th>Visualizar</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cliente-tbody-itens"></tbody>
-                        </table>
-                    </div>
-                </section>
+                <!-- Container de itens do pedido (idêntico ao interno) -->
+                <div id="cliente-amostras-itens-container" style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 24px;"></div>
 
-                <section class="cliente-section">
-                    <h2>💬 Observações / Anotações</h2>
-                    <textarea id="cliente-obs" class="form-control" rows="4" placeholder="Escreva aqui suas observações, alterações desejadas de cor, numeração, ou qualquer instrução para a gráfica..."></textarea>
-                </section>
-
-                <section class="cliente-section cliente-actions">
-                    <button class="btn btn-success btn-lg" onclick="clienteAprovar()" id="btn-cliente-aprovar">
-                        ✅ Aprovar Pedido
-                    </button>
-                    <button class="btn btn-danger btn-lg" onclick="clienteSolicitarAlteracao()" id="btn-cliente-reprovar">
-                        ❌ Solicitar Alteração
+                <!-- Painel de Conclusão Opcional (comum) -->
+                <section class="cliente-section cliente-actions" style="margin-top: 30px;">
+                    <button class="btn btn-success btn-lg" onclick="clienteAprovarTudo()" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                        ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
                     </button>
                 </section>
 
