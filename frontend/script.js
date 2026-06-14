@@ -10970,6 +10970,21 @@ async function loadOrdensFromVibecode() {
             console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
         }
 
+        // Buscar pedidos da tabela comercial se disponível (Apenas Leitura)
+        let pedidosComerciais = [];
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            try {
+                const { data: pedData, error: pedError } = await supabaseClient
+                    .from('pedidos')
+                    .select('*');
+                if (!pedError && pedData) {
+                    pedidosComerciais = pedData;
+                }
+            } catch (err) {
+                console.warn('[Supabase] Erro ao carregar tabela pedidos:', err);
+            }
+        }
+
         // Agrupar por id_int (cada id_int = 1 proposta = 1 OS)
         const grouped = {};
         produtos.forEach(p => {
@@ -10981,12 +10996,19 @@ async function loadOrdensFromVibecode() {
 
                 // Buscar dados reais da proposta
                 const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
+                
+                // Buscar dados do pedido comercial
+                const pedidoReal = pedidosComerciais.find(ped => ped.id_int === key);
 
                 // Mapear campos com fallbacks determinísticos
                 const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || getFallbackCliente(key);
                 const vendedor = propReal?.vendedor || propReal?.vendedor_nome || getFallbackVendedor(key);
                 const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || p.created_at;
                 const prazoEntrega = propReal?.prazo_entrega || propReal?.prazo || getFallbackPrazo(p.created_at, key);
+
+                // Dados comerciais reais
+                const dataPedido = pedidoReal?.data_pedido || null;
+                const valorTotal = pedidoReal?.valor_total || null;
 
                 grouped[key] = {
                     id: osId,
@@ -10995,6 +11017,8 @@ async function loadOrdensFromVibecode() {
                     cliente: cliente,
                     vendedor: vendedor,
                     data_liberacao: dataLiberacao,
+                    data_pedido: dataPedido,
+                    valor_total: valorTotal,
                     prazo_entrega: prazoEntrega,
                     observacoes: `Proposta #${key} — Vibecode`,
                     criado_por: null,
@@ -11093,28 +11117,65 @@ function mapVibecodeProdutoToOSItem(p, osId) {
  */
 async function loadOSItens(osId) {
     try {
-        // Se já pré-carregados (Vibecode ou cache), usar direto
-        if (state.osItens[osId] && state.osItens[osId].length > 0) {
-            renderOSItens(osId);
-            return;
-        }
+        const os = state.ordens.find(o => o.id === osId);
+        if (!os) return;
 
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { data, error } = await supabaseClient
-                .from('producao_os_itens')
-                .select('*')
-                .eq('os_id', osId)
-                .order('created_at', { ascending: true });
-            if (error) throw error;
-            state.osItens[osId] = data || [];
-        } else {
-            const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
-            if (res.ok) {
-                state.osItens[osId] = await res.json();
+        // Se não carregado ainda, busca a fonte de dados principal
+        if (!state.osItens[osId] || state.osItens[osId].length === 0) {
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { data, error } = await supabaseClient
+                    .from('producao_os_itens')
+                    .select('*')
+                    .eq('os_id', osId)
+                    .order('created_at', { ascending: true });
+                if (error) throw error;
+                state.osItens[osId] = data || [];
             } else {
-                state.osItens[osId] = [];
+                const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
+                if (res.ok) {
+                    state.osItens[osId] = await res.json();
+                } else {
+                    state.osItens[osId] = [];
+                }
             }
         }
+
+        // Buscar dados dinâmicos da arte (pedidos_artes) e mesclar nos itens
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && os.numero) {
+            try {
+                const queryNum = parseInt(os.numero);
+                if (!isNaN(queryNum)) {
+                    const { data: artes, error: artesError } = await supabaseClient
+                        .from('pedidos_artes')
+                        .select('*')
+                        .eq('id_int', queryNum);
+                    
+                    if (!artesError && artes && artes.length > 0) {
+                        state.osItens[osId].forEach(item => {
+                            // Encontrar artes vinculadas a este item
+                            const artesDoItem = artes.filter(a => a.id_modelo === item.id);
+                            if (artesDoItem.length > 0) {
+                                // Ordenar por versão decrescente para pegar a mais recente
+                                artesDoItem.sort((a, b) => b.versao - a.versao);
+                                const ultimaArte = artesDoItem[0];
+                                
+                                // Atualizar metadados de visualização
+                                item.aprovacao = ultimaArte.status;
+                                item.nome_arquivo_arte = ultimaArte.nome_arquivo;
+                                item.versao_arte = ultimaArte.versao;
+                                item.url_arquivo_arte = ultimaArte.url_arquivo;
+                                if (ultimaArte.comentarios_revisao) {
+                                    item.amostra_obs = ultimaArte.comentarios_revisao;
+                                }
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('[Supabase] Erro ao integrar dados de pedidos_artes:', err);
+            }
+        }
+
         renderOSItens(osId);
     } catch (e) {
         console.error('Erro ao carregar itens da OS:', e);
@@ -11151,13 +11212,21 @@ function getStatusBadge(status) {
  */
 function getAprovacaoBadge(aprov) {
     const map = {
-        'EM ARTE': { cls: 'badge-amber', icon: '🎨' },
-        'APROVADA': { cls: 'badge-teal', icon: '✅' },
-        'PRONTA': { cls: 'badge-blue', icon: '📋' },
-        'REPROVADA': { cls: 'badge-red', icon: '❌' }
+        'EM ARTE': { cls: 'badge-amber', icon: '🎨', text: 'EM ARTE' },
+        'APROVADA': { cls: 'badge-teal', icon: '✅', text: 'APROVADA' },
+        'PRONTA': { cls: 'badge-blue', icon: '📋', text: 'PRONTA' },
+        'REPROVADA': { cls: 'badge-red', icon: '❌', text: 'REPROVADA' },
+        
+        // Novos status da tabela pedidos_artes
+        'EM_REVISAO_INTERNA': { cls: 'badge-amber', icon: '🎨', text: 'Rev. Interna' },
+        'AGUARDANDO_APROVACAO': { cls: 'badge-yellow', icon: '⏳', text: 'Aguard. Cliente' },
+        'APROVADA_CLIENTE': { cls: 'badge-teal', icon: '✅', text: 'Aprov. Cliente' },
+        'REPROVADA_CLIENTE': { cls: 'badge-red', icon: '❌', text: 'Reprov. Cliente' },
+        'LIBERADA': { cls: 'badge-teal', icon: '📋', text: 'Liberada' }
     };
-    const s = map[aprov] || { cls: '', icon: '' };
-    return `<span class="badge ${s.cls}">${s.icon} ${aprov || '—'}</span>`;
+    const key = aprov ? aprov.toUpperCase() : '';
+    const s = map[key] || map[aprov] || { cls: '', icon: '', text: aprov || '—' };
+    return `<span class="badge ${s.cls}">${s.icon} ${s.text}</span>`;
 }
 
 /**
@@ -11334,13 +11403,21 @@ function renderOrdens() {
                 const isExpanded = state.osExpandedId === os.id;
                 const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
+                const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
+                const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
                 return `
                     <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
                         <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
-                        <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
+                        <td>
+                            <strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong>
+                            ${valorFormatado}
+                        </td>
                         <td><strong>${os.cliente || '—'}</strong></td>
                         <td>${os.vendedor || '—'}</td>
-                        <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
+                        <td style="font-size: 0.82rem; color: var(--text-dim);">
+                            ${formatDateTime(os.data_liberacao)}
+                            ${dataPedFormatada}
+                        </td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td>${getStatusBadge(os.status)}</td>
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
@@ -11369,14 +11446,22 @@ function renderOrdens() {
             tbodyArte.innerHTML = filteredArte.map(os => {
                 const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
+                const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
+                const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer;" title="Abrir Amostras">
                         <td style="text-align: center; font-size: 1.1rem;">▶</td>
-                        <td><strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong></td>
+                        <td>
+                            <strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong>
+                            ${valorFormatado}
+                        </td>
                         <td><strong>${os.cliente || '—'}</strong></td>
                         <td>${os.vendedor || '—'}</td>
                         <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
-                        <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
+                        <td style="font-size: 0.82rem; color: var(--text-dim);">
+                            ${formatDateTime(os.data_liberacao)}
+                            ${dataPedFormatada}
+                        </td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td>${getStatusBadge(os.status)}</td>
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
@@ -11461,9 +11546,21 @@ function renderOSItens(osId) {
             <td>${item.cor || 'STD'}</td>
             <td style="text-align: center;">${item.verso ? '✅' : '—'}</td>
             <td style="text-align: center;">${item.blocos || 'N'}</td>
-            <td>${getAprovacaoBadge(item.aprovacao)}</td>
             <td>
-                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled title="Aguardando aprovação"' : ''}>
+                ${getAprovacaoBadge(item.aprovacao)}
+                ${item.nome_arquivo_arte ? `
+                    <div style="font-size: 0.72rem; margin-top: 4px; color: var(--text-dim); display: flex; flex-direction: column; gap: 2px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <span title="${item.nome_arquivo_arte}">
+                            📄 v${item.versao_arte || 1}: ${item.nome_arquivo_arte}
+                        </span>
+                        ${item.url_arquivo_arte ? `
+                            <a href="${item.url_arquivo_arte}" target="_blank" style="color: var(--blue); text-decoration: underline; font-size: 0.68rem;" onclick="event.stopPropagation()">Download</a>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            </td>
+            <td>
+                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                     <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
                     <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
                     <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
