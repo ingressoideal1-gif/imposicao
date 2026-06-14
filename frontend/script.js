@@ -12180,6 +12180,49 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
  * - Arte: carrega imagem do upload
  * - Compõe tudo no canvas final
  */
+function preloadAmostraItemPdfElements(numeracao, idx, osId) {
+    if (!numeracao || !numeracao.elements) return;
+
+    numeracao.elements.forEach(el => {
+        if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
+            el._pdfLoading = true;
+            (async () => {
+                try {
+                    let bytes;
+                    if (el.pdf_content.startsWith('http') || el.pdf_content.startsWith('/')) {
+                        bytes = await fetchPdfBytes(el.pdf_content);
+                    } else {
+                        const base64Data = el.pdf_content.includes('base64,') ? el.pdf_content.split('base64,')[1] : el.pdf_content;
+                        const binStr = atob(base64Data);
+                        bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    }
+
+                    if (!bytes) throw new Error('Falha ao obter os bytes do PDF do elemento');
+
+                    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+                    const page = await pdf.getPage(1);
+                    const vp = page.getViewport({ scale: 2.0 });
+
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = Math.round(vp.width);
+                    offCanvas.height = Math.round(vp.height);
+                    const octx = offCanvas.getContext('2d');
+                    await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
+
+                    el._pdfCanvas = offCanvas;
+                    delete el._pdfLoading;
+
+                    renderItemAmostraCombinada(idx, osId);
+                } catch (err) {
+                    console.error('[Amostra Item] Erro pré-carregando PDF do elemento:', err);
+                    delete el._pdfLoading;
+                }
+            })();
+        }
+    });
+}
+
 async function renderItemAmostraCombinada(idx, osId) {
     const canvas = document.getElementById(`amostra-item-canvas-${idx}`);
     const empty = document.getElementById(`amostra-item-empty-${idx}`);
@@ -12215,6 +12258,10 @@ async function renderItemAmostraCombinada(idx, osId) {
     // Obter cor e formato
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
     const num = numId ? state.numeracoes.find(n => n.id === numId) : null;
+
+    if (num) {
+        preloadAmostraItemPdfElements(num, idx, osId);
+    }
 
     // Determinar formato base
     let fmt = null;
@@ -12455,12 +12502,91 @@ async function renderItemAmostraCombinada(idx, osId) {
                     numCtx.fillStyle = '#ffffff';
                 }
             } else if (el.type === 'BARCODE') {
-                const bw = (el.barcode_width_mm || 30) * S;
-                const bh = (el.barcode_height_mm || 8) * S;
+                const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
+                const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
                 numCtx.fillStyle = color;
-                for (let i = 0; i < bw; i += 3) {
-                    if (Math.random() > 0.3) numCtx.fillRect(i, 0, 1.5, bh);
+                const barW = bw / 40;
+                const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
+                for (let i = 0; i < pattern.length; i++) {
+                    if (pattern[i]) numCtx.fillRect(i * barW, 0, barW * 0.7, bh);
                 }
+            } else if (el.type === 'PICOTE') {
+                numCtx.strokeStyle = color;
+                numCtx.lineWidth = 2.0;
+                numCtx.setLineDash([6, 3]);
+                numCtx.beginPath();
+                numCtx.moveTo(0, -y);
+                numCtx.lineTo(0, numCanvas.height - y);
+                numCtx.stroke();
+                numCtx.setLineDash([]);
+            } else if (el.type === 'SVG' || el.type === 'PDF') {
+                const w = (el.width_mm || 20) * S;
+                const h = (el.height_mm || 20) * S;
+
+                numCtx.save();
+                numCtx.beginPath();
+                numCtx.rect(0, 0, w, h);
+                numCtx.clip();
+
+                if (el.type === 'PDF') {
+                    const imgObj = el._pdfCanvas || null;
+                    if (imgObj) {
+                        numCtx.drawImage(imgObj, 0, 0, w, h);
+                    } else {
+                        numCtx.strokeStyle = color;
+                        numCtx.lineWidth = 1;
+                        numCtx.strokeRect(0, 0, w, h);
+                        numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                        numCtx.fillStyle = color;
+                        numCtx.textAlign = 'center';
+                        numCtx.fillText('PDF (Carregando...)', w / 2, h / 2 + (h * 0.05));
+                        numCtx.textAlign = 'left';
+                    }
+                } else {
+                    // SVG
+                    if (el.svg_content) {
+                        if (!el._svgImage && !el._svgLoading) {
+                            el._svgLoading = true;
+                            const img = new Image();
+                            img.onload = () => {
+                                el._svgImage = img;
+                                delete el._svgLoading;
+                                renderItemAmostraCombinada(idx, osId);
+                            };
+                            img.onerror = () => {
+                                console.error('[Amostra Item] Erro ao carregar SVG do elemento');
+                                delete el._svgLoading;
+                            };
+                            if (el.svg_content.startsWith('http') || el.svg_content.startsWith('data:')) {
+                                img.src = el.svg_content;
+                            } else {
+                                img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(el.svg_content);
+                            }
+                        }
+                        if (el._svgImage) {
+                            numCtx.drawImage(el._svgImage, 0, 0, w, h);
+                        } else {
+                            numCtx.strokeStyle = color;
+                            numCtx.lineWidth = 1;
+                            numCtx.strokeRect(0, 0, w, h);
+                            numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                            numCtx.fillStyle = color;
+                            numCtx.textAlign = 'center';
+                            numCtx.fillText('SVG (Carregando...)', w / 2, h / 2 + (h * 0.05));
+                            numCtx.textAlign = 'left';
+                        }
+                    } else {
+                        numCtx.strokeStyle = color;
+                        numCtx.lineWidth = 1;
+                        numCtx.strokeRect(0, 0, w, h);
+                        numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                        numCtx.fillStyle = color;
+                        numCtx.textAlign = 'center';
+                        numCtx.fillText('SVG', w / 2, h / 2 + (h * 0.05));
+                        numCtx.textAlign = 'left';
+                    }
+                }
+                numCtx.restore();
             }
             numCtx.restore();
         });
