@@ -9740,7 +9740,7 @@ function renderAmostraCombinada() {
 
 
 
-    const ctx = canvasComb.getContext('2d');
+    const ctx = canvasComb.getContext('2d', { colorSpace: 'srgb' });
 
     ctx.clearRect(0, 0, finalWidth, finalHeight);
 
@@ -9798,7 +9798,7 @@ function renderAmostraCombinada() {
 
         tempArteCanvas.height = finalHeight;
 
-        const tempArteCtx = tempArteCanvas.getContext('2d');
+        const tempArteCtx = tempArteCanvas.getContext('2d', { colorSpace: 'srgb' });
 
         
 
@@ -9970,7 +9970,7 @@ function renderAmostraCombinada() {
 
         tempNumCanvas.height = finalHeight;
 
-        const tempNumCtx = tempNumCanvas.getContext('2d');
+        const tempNumCtx = tempNumCanvas.getContext('2d', { colorSpace: 'srgb' });
 
         
 
@@ -12207,7 +12207,7 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
                     const offCanvas = document.createElement('canvas');
                     offCanvas.width = Math.round(vp.width);
                     offCanvas.height = Math.round(vp.height);
-                    const octx = offCanvas.getContext('2d');
+                    const octx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
                     await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
 
                     el._pdfCanvas = offCanvas;
@@ -12306,7 +12306,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     canvas.style.display = 'block';
     if (empty) empty.style.display = 'none';
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
     ctx.clearRect(0, 0, finalWidth, finalHeight);
     ctx.globalCompositeOperation = 'source-over';
 
@@ -12330,7 +12330,7 @@ async function renderItemAmostraCombinada(idx, osId) {
             const offCanvas = document.createElement('canvas');
             offCanvas.width = scaledViewport.width;
             offCanvas.height = scaledViewport.height;
-            const offCtx = offCanvas.getContext('2d');
+            const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
             await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
 
             // Centralizar como faz o card avulso
@@ -12394,7 +12394,7 @@ async function renderItemAmostraCombinada(idx, osId) {
                 const offCanvas = document.createElement('canvas');
                 offCanvas.width = Math.round(scaledViewport.width);
                 offCanvas.height = Math.round(scaledViewport.height);
-                const offCtx = offCanvas.getContext('2d');
+                const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
                 await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
 
                 const dx = (finalWidth - offCanvas.width) / 2;
@@ -12421,7 +12421,7 @@ async function renderItemAmostraCombinada(idx, osId) {
                     const tempArte = document.createElement('canvas');
                     tempArte.width = finalWidth;
                     tempArte.height = finalHeight;
-                    const tempCtx = tempArte.getContext('2d');
+                    const tempCtx = tempArte.getContext('2d', { colorSpace: 'srgb' });
 
                     const artRatio = arteImg.width / arteImg.height;
                     const canvasRatio = finalWidth / finalHeight;
@@ -12457,7 +12457,7 @@ async function renderItemAmostraCombinada(idx, osId) {
         const numCanvas = document.createElement('canvas');
         numCanvas.width = Math.round(fmt.width_mm * S);
         numCanvas.height = Math.round(fmt.height_mm * S);
-        const numCtx = numCanvas.getContext('2d');
+        const numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
 
         // Fundo transparente — contorno do formato
         numCtx.strokeStyle = '#64748b';
