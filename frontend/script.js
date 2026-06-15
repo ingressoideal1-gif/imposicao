@@ -10971,6 +10971,7 @@ async function loadOrdens() {
                 console.error('[Supabase] Falha catastrófica ao carregar tabela pedidos:', err);
             }
         }
+        state.hasPedidosComerciais = pedidosComerciais.length > 0;
         console.log('[Supabase] Pedidos comerciais carregados:', pedidosComerciais.length, pedidosComerciais);
 
         // Fonte 1: Vibecode (ERP do parceiro)
@@ -11014,9 +11015,14 @@ async function loadOrdens() {
                     state.osItens[os.id] = os.producao_os_itens;
                 }
                 
+                // Mapear o status_arte comercial
+                const osNumeroInt = parseInt(os.numero);
+                const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
+                
                 return {
                     ...os,
                     status: savedStatus || dbStatus,
+                    status_arte: pedidoReal?.status_arte || null,
                     cliente: os.cliente || getFallbackCliente(os.numero || 0),
                     vendedor: os.vendedor || getFallbackVendedor(os.numero || 0),
                     data_liberacao: os.data_liberacao || os.created_at,
@@ -11030,13 +11036,23 @@ async function loadOrdens() {
             if (res.ok) {
                 const localData = await res.json();
                 const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+                
+                const mappedLocalData = localData.map(os => {
+                    const osNumeroInt = parseInt(os.numero);
+                    const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
+                    return {
+                        ...os,
+                        status_arte: pedidoReal?.status_arte || null
+                    };
+                });
+
                 if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
-                    state.ordens = localData.filter(os => {
+                    state.ordens = mappedLocalData.filter(os => {
                         const osNumeroInt = parseInt(os.numero);
                         return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
                     });
                 } else {
-                    state.ordens = localData;
+                    state.ordens = mappedLocalData;
                 }
             } else {
                 state.ordens = [];
@@ -11140,6 +11156,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
                     id: osId,
                     numero: key,
                     status: savedStatus || 'ARTE_EM_ANDAMENTO',
+                    status_arte: pedidoReal?.status_arte || null,
                     cliente: cliente,
                     vendedor: vendedor,
                     data_liberacao: dataLiberacao,
@@ -11639,14 +11656,27 @@ function renderOrdens() {
     });
 
     // Fila 2: Arte (Status ARTE_EM_ANDAMENTO, ARTE_EM_CORRECAO, ARTE_APROVADA ou novos status do fluxo de arte)
-    let ordensArte = state.ordens.filter(os => 
-        os.status === 'ARTE_EM_ANDAMENTO' || 
-        os.status === 'ARTE_EM_CORRECAO' || 
-        os.status === 'ARTE_APROVADA' || 
-        os.status === 'Arte APROVADA' || 
-        os.status === 'Enviar ARTE' || 
-        os.status === 'Pendente Informação'
-    );
+    // E com status_arte === 'PENDENTE' na tabela pedidos comercial
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+    
+    let ordensArte = state.ordens.filter(os => {
+        const matchStatusOS = 
+            os.status === 'ARTE_EM_ANDAMENTO' || 
+            os.status === 'ARTE_EM_CORRECAO' || 
+            os.status === 'ARTE_APROVADA' || 
+            os.status === 'Arte APROVADA' || 
+            os.status === 'Enviar ARTE' || 
+            os.status === 'Pendente Informação';
+        
+        if (!matchStatusOS) return false;
+
+        if (!isDev || state.hasPedidosComerciais) {
+            const statusArteComercial = (os.status_arte || '').toUpperCase();
+            return statusArteComercial === 'PENDENTE';
+        }
+
+        return true;
+    });
 
     // --- Calcular Estatísticas de Arte ---
     let totalItensPendentesArte = 0;
