@@ -11222,7 +11222,13 @@ function getStatusBadge(status) {
         'ARTE': { icon: '🎨', cls: 'badge-blue' },
         'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber' },
         'FINALIZADA': { icon: '✅', cls: 'badge-teal' },
-        'CANCELADA': { icon: '❌', cls: 'badge-red' }
+        'CANCELADA': { icon: '❌', cls: 'badge-red' },
+        
+        // Novos status do fluxo de arte
+        'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue' },
+        'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple' },
+        'Enviar ARTE': { icon: '📨', cls: 'badge-green' },
+        'Pendente Informação': { icon: '⚠️', cls: 'badge-red' }
     };
     const s = map[status] || { icon: '❓', cls: '' };
     return `<span class="badge ${s.cls}">${s.icon} ${status}</span>`;
@@ -11520,8 +11526,12 @@ function renderOrdens() {
         return true;
     });
 
-    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO)
-    let ordensArte = state.ordens.filter(os => os.status === 'ARTE_EM_ANDAMENTO');
+    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO ou novos status do fluxo de arte)
+    let ordensArte = state.ordens.filter(os => 
+        os.status === 'ARTE_EM_ANDAMENTO' || 
+        os.status === 'Enviar ARTE' || 
+        os.status === 'Pendente Informação'
+    );
 
     // --- Calcular Estatísticas de Arte ---
     let totalItensPendentesArte = 0;
@@ -12455,6 +12465,68 @@ function renderAmostrasOSItens(osId) {
     }, 50);
 }
 
+/**
+ * Atualiza o status global do pedido para "Enviar ARTE" ou "Pendente Informação"
+ * dependendo de todos os modelos estarem marcados como PRONTO em Amostras
+ */
+async function voltarParaAtendimento() {
+    const osId = state.amostrasOSAtivo;
+    if (!osId) {
+        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
+        return;
+    }
+
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) {
+        toast('Nenhum modelo de item encontrado neste pedido.', 'warning');
+        return;
+    }
+
+    // Verificar se todos os itens possuem amostra_status === 'PRONTO'
+    const todasProntas = itens.every(item => item.amostra_status === 'PRONTO');
+
+    const novoStatus = todasProntas ? 'Enviar ARTE' : 'Pendente Informação';
+
+    try {
+        // Atualizar status global da OS
+        // 1. Atualizar no localstorage vibe_status_overrides
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        // 2. Atualizar no estado local em memória
+        const os = state.ordens.find(o => o.id === osId);
+        if (os) {
+            os.status = novoStatus;
+        }
+
+        // 3. Atualizar no banco Supabase se for OS local (não começa com vibe_)
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
+            const { error } = await supabaseClient
+                .from('producao_ordens_servico')
+                .update({ status: novoStatus })
+                .eq('id', osId);
+            if (error) throw error;
+        }
+
+        // Exibir feedback adequado
+        if (todasProntas) {
+            toast(`Pedido #${os ? os.numero : ''} concluído com sucesso e enviado para atendimento!`, 'success');
+        } else {
+            toast(`Pedido #${os ? os.numero : ''} retornado com pendências para a Lista de Arte.`, 'warning');
+        }
+
+        // Voltar para a view Lista de Arte e atualizar renderização
+        clearAmostrasOS();
+        showView('view-lista-arte');
+    } catch (err) {
+        console.error('Erro ao voltar para atendimento:', err);
+        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
+    }
+}
+
+// Expor globalmente
+window.voltarParaAtendimento = voltarParaAtendimento;
 
 /**
  * Ao selecionar cor em um card dinâmico, filtrar numerações compatíveis

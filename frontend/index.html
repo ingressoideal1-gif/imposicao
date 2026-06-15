@@ -878,6 +878,7 @@
                             <span class="card-title">📋 <strong>Pedido <span id="amostras-os-numero" style="color: var(--yellow);"></span></strong> — <span id="amostras-os-cliente" style="font-weight: 400; color: var(--text-dim);"></span></span>
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <span id="amostras-os-itens-count" class="badge badge-yellow"></span>
+                                <button class="btn btn-primary btn-sm" onclick="voltarParaAtendimento()" style="font-size: 0.78rem; font-weight: 600;">↩️ Voltar para Atendimento</button>
                                 <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem;">✕ Fechar Pedido</button>
                             </div>
                         </div>
@@ -1344,7 +1345,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="/script.js?v=17"></script>
+    <script src="/script.js?v=18"></script>
 
     <!-- PÁGINA PÚBLICA DO CLIENTE (fora do app-shell) -->
     <div id="cliente-page" class="cliente-page" style="display: none;">
