@@ -10953,10 +10953,26 @@ async function loadOrdens() {
     try {
         // Carrega usuários do Supabase
         await loadUsuarios();
+        
+        // Buscar pedidos da tabela comercial se disponível (Apenas Leitura)
+        let pedidosComerciais = [];
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            try {
+                const { data: pedData, error: pedError } = await supabaseClient
+                    .from('pedidos')
+                    .select('*');
+                if (!pedError && pedData) {
+                    pedidosComerciais = pedData;
+                }
+            } catch (err) {
+                console.warn('[Supabase] Erro ao carregar tabela pedidos:', err);
+            }
+        }
+
         // Fonte 1: Vibecode (ERP do parceiro)
         if (typeof vibeClient !== 'undefined' && vibeClient) {
             console.log('[OS] Carregando do Vibecode...');
-            const loaded = await loadOrdensFromVibecode();
+            const loaded = await loadOrdensFromVibecode(pedidosComerciais);
             if (loaded) {
                 await sincronizarStatusOrdensDinamico();
                 renderOrdens();
@@ -10972,7 +10988,16 @@ async function loadOrdens() {
                 .select('*, producao_os_itens(*)')
                 .order('created_at', { ascending: false });
             if (error) throw error;
-            state.ordens = (data || []).map(os => {
+
+            let ordensFiltradas = data || [];
+            if (pedidosComerciais && pedidosComerciais.length > 0) {
+                ordensFiltradas = ordensFiltradas.filter(os => {
+                    const osNumeroInt = parseInt(os.numero);
+                    return pedidosComerciais.some(ped => ped.id_int === osNumeroInt);
+                });
+            }
+
+            state.ordens = ordensFiltradas.map(os => {
                 const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const savedStatus = vibeStatusOverrides[os.id];
                 let dbStatus = os.status;
@@ -10998,7 +11023,15 @@ async function loadOrdens() {
             // Fonte 3: API local (FastAPI)
             const res = await fetch(`${API_BASE_URL}/api/ordens`);
             if (res.ok) {
-                state.ordens = await res.json();
+                const localData = await res.json();
+                if (pedidosComerciais && pedidosComerciais.length > 0) {
+                    state.ordens = localData.filter(os => {
+                        const osNumeroInt = parseInt(os.numero);
+                        return pedidosComerciais.some(ped => ped.id_int === osNumeroInt);
+                    });
+                } else {
+                    state.ordens = localData;
+                }
             } else {
                 state.ordens = [];
             }
@@ -11016,7 +11049,7 @@ async function loadOrdens() {
  * Cada id_int = 1 proposta = 1 OS virtual
  * Retorna true se conseguiu carregar, false se não há dados
  */
-async function loadOrdensFromVibecode() {
+async function loadOrdensFromVibecode(pedidosComerciais = []) {
     try {
         // Buscar todos os produtos_proposta
         const { data: produtos, error } = await vibeClient
@@ -11044,9 +11077,8 @@ async function loadOrdensFromVibecode() {
             console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
         }
 
-        // Buscar pedidos da tabela comercial se disponível (Apenas Leitura)
-        let pedidosComerciais = [];
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        // Se pedidosComerciais não foi passado ou está vazio, e temos supabaseClient, tenta carregar
+        if ((!pedidosComerciais || pedidosComerciais.length === 0) && typeof supabaseClient !== 'undefined' && supabaseClient) {
             try {
                 const { data: pedData, error: pedError } = await supabaseClient
                     .from('pedidos')
@@ -11063,6 +11095,15 @@ async function loadOrdensFromVibecode() {
         const grouped = {};
         produtos.forEach(p => {
             const key = p.id_int;
+
+            // FILTRAR: Se tiver pedidosComerciais, e a proposta/id_int não existir em pedidosComerciais, ignora
+            if (pedidosComerciais && pedidosComerciais.length > 0) {
+                const existe = pedidosComerciais.some(ped => ped.id_int === key);
+                if (!existe) {
+                    return; // ignora este produto e não cria a OS
+                }
+            }
+
             if (!grouped[key]) {
                 const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const osId = `vibe_${key}`;
@@ -11087,7 +11128,7 @@ async function loadOrdensFromVibecode() {
                 grouped[key] = {
                     id: osId,
                     numero: key,
-                    status: savedStatus || (key % 2 === 0 ? 'EM IMPRESSÃO' : 'ARTE_EM_ANDAMENTO'),
+                    status: savedStatus || 'ARTE_EM_ANDAMENTO',
                     cliente: cliente,
                     vendedor: vendedor,
                     data_liberacao: dataLiberacao,
