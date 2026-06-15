@@ -10892,6 +10892,60 @@ if (!state.osExpandedId) state.osExpandedId = null;
 if (!state.activeOSItem) state.activeOSItem = null;
 
 /**
+ * Sincroniza dinamicamente o status da OS em memória e no banco com base nas decisões de amostra do cliente
+ */
+async function sincronizarStatusOrdensDinamico() {
+    // Apenas rodar no painel interno (não na página do cliente)
+    if (state.amostrasContainerId === 'cliente-amostras-itens-container') return;
+
+    for (const os of state.ordens) {
+        const osId = os.id;
+        const itens = state.osItens[osId] || [];
+        if (itens.length === 0) continue;
+
+        // Se o status da OS já estiver finalizado em termos de produção, não fazemos override
+        if (os.status === 'FINALIZADA' || os.status === 'CANCELADA' || os.status === 'PRODUÇÃO' || os.status === 'EM IMPRESSÃO') {
+            continue;
+        }
+
+        // Verificar o status de todas as amostras/itens
+        const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
+        const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
+
+        let novoStatus = null;
+        if (todosAprovados) {
+            novoStatus = 'ARTE_APROVADA';
+        } else if (algumReprovado) {
+            novoStatus = 'ARTE_EM_CORRECAO';
+        }
+
+        if (novoStatus && os.status !== novoStatus) {
+            console.log(`[Sync] Ajustando status da OS #${os.numero} de ${os.status} para ${novoStatus} com base nas amostras.`);
+            
+            // 1. Atualizar em memória
+            os.status = novoStatus;
+
+            // 2. Atualizar no localstorage overrides (comum para ordens Vibecode e Supabase no front)
+            const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+            overrides[osId] = novoStatus;
+            localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+            // 3. Atualizar no banco Supabase (somente se for OS local e não for mock/vibe virtual)
+            if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
+                try {
+                    await supabaseClient
+                        .from('producao_ordens_servico')
+                        .update({ status: novoStatus })
+                        .eq('id', osId);
+                } catch (err) {
+                    console.warn(`[Sync] Falha ao gravar status no Supabase para OS #${os.numero}:`, err);
+                }
+            }
+        }
+    }
+}
+
+/**
  * Carrega todas as OS — Prioridade: Vibecode → Supabase Imposition → API local
  * No Vibecode, cada `id_int` (proposta) = 1 OS. Os produtos_proposta são os itens.
  */
@@ -10904,6 +10958,7 @@ async function loadOrdens() {
             console.log('[OS] Carregando do Vibecode...');
             const loaded = await loadOrdensFromVibecode();
             if (loaded) {
+                await sincronizarStatusOrdensDinamico();
                 renderOrdens();
                 return;
             }
@@ -10948,6 +11003,7 @@ async function loadOrdens() {
                 state.ordens = [];
             }
         }
+        await sincronizarStatusOrdensDinamico();
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
