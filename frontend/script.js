@@ -10890,6 +10890,8 @@ if (!state.activeOSItem) state.activeOSItem = null;
  */
 async function loadOrdens() {
     try {
+        // Carrega usuários do Supabase
+        await loadUsuarios();
         // Fonte 1: Vibecode (ERP do parceiro)
         if (typeof vibeClient !== 'undefined' && vibeClient) {
             console.log('[OS] Carregando do Vibecode...');
@@ -11260,12 +11262,50 @@ function getImpressaoBadge(imp) {
  */
 /**
 /**
+let usuariosSupabase = [];
+
+/**
  * Lista de designers cadastrados (fonte local até integração com E-deal)
  */
 const DESIGNERS_LISTA = [
     'Amanda Souza',
     'Junior',
 ];
+
+const VENDEDORES_LISTA = [
+    'L. Martins',
+    'Comercial',
+];
+
+/**
+ * Carrega a lista de usuários da tabela producao_usuarios do Supabase
+ */
+async function loadUsuarios() {
+    try {
+        if (!supabaseClient) {
+            console.log("SupabaseClient não inicializado. Usando fallbacks locais para usuários.");
+            return;
+        }
+        const { data, error } = await supabaseClient
+            .from('producao_usuarios')
+            .select('nome')
+            .eq('ativo', true);
+
+        if (error) {
+            console.error("Erro ao carregar usuários do Supabase:", error);
+            return;
+        }
+
+        if (data && data.length > 0) {
+            usuariosSupabase = data.map(u => u.nome).filter(Boolean);
+            console.log("Usuários carregados do Supabase:", usuariosSupabase);
+        } else {
+            console.log("Nenhum usuário ativo retornado do Supabase. Usando fallbacks.");
+        }
+    } catch (err) {
+        console.error("Exceção ao carregar usuários:", err);
+    }
+}
 
 /**
  * Obtém o designer atribuído a uma OS (salvo em localStorage)
@@ -11292,17 +11332,15 @@ function setOSDesigner(osId, designerName) {
 // Expor globalmente
 window.setOSDesigner = setOSDesigner;
 
-/**
- * Popula o dropdown de filtro de designers com os nomes disponíveis
- */
 function populateDesignerFilter() {
     const filterSelect = document.getElementById('os-filter-designer');
     if (!filterSelect) return;
 
     const currentValue = filterSelect.value;
     
-    // Coletar designers atribuídos + lista fixa
-    const allDesigners = new Set(DESIGNERS_LISTA);
+    // Coletar designers atribuídos + lista base
+    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
+    const allDesigners = new Set(baseList);
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
 
@@ -11322,7 +11360,8 @@ function populateDesignerFilter() {
  */
 function renderDesignerSelect(osId) {
     const currentDesigner = getOSDesigner(osId);
-    const allDesigners = new Set(DESIGNERS_LISTA);
+    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
+    const allDesigners = new Set(baseList);
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
 
@@ -11336,6 +11375,68 @@ function renderDesignerSelect(osId) {
     return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
                 onclick="event.stopPropagation()" 
                 onchange="event.stopPropagation(); setOSDesigner('${osId}', this.value)">${options}</select>`;
+}
+
+/**
+ * Obtém o vendedor atribuído a uma OS (salvo em localStorage ou nativo da OS)
+ */
+function getOSVendedor(osId) {
+    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
+    if (overrides[osId]) {
+        return overrides[osId];
+    }
+    const os = state.ordens.find(o => o.id === osId);
+    return os ? (os.vendedor || '') : '';
+}
+
+/**
+ * Define o vendedor responsável por uma OS (salva em localStorage)
+ */
+function setOSVendedor(osId, vendedorName) {
+    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
+    if (vendedorName) {
+        overrides[osId] = vendedorName;
+    } else {
+        delete overrides[osId];
+    }
+    localStorage.setItem('vibe_vendedor_overrides', JSON.stringify(overrides));
+    renderOrdens();
+}
+
+// Expor globalmente
+window.setOSVendedor = setOSVendedor;
+
+/**
+ * Gera o HTML do select inline de vendedor para uma OS na tabela
+ */
+function renderVendedorSelect(osId) {
+    const currentVendedor = getOSVendedor(osId);
+    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : VENDEDORES_LISTA;
+    const allVendedores = new Set(baseList);
+    
+    if (currentVendedor) {
+        allVendedores.add(currentVendedor);
+    }
+    
+    // Garantir que o vendedor nativo esteja na lista
+    const os = state.ordens.find(o => o.id === osId);
+    if (os && os.vendedor) {
+        allVendedores.add(os.vendedor);
+    }
+
+    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
+    Object.values(overrides).forEach(v => { if (v) allVendedores.add(v); });
+
+    let options = '<option value="">— Atribuir —</option>';
+    [...allVendedores].sort().forEach(v => {
+        const selected = v === currentVendedor ? 'selected' : '';
+        const escaped = v.replace(/'/g, "\\'");
+        options += `<option value="${escaped}" ${selected}>${v}</option>`;
+    });
+
+    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
+                onclick="event.stopPropagation()" 
+                onchange="event.stopPropagation(); setOSVendedor('${osId}', this.value)">${options}</select>`;
 }
 
 /**
@@ -11399,8 +11500,9 @@ function renderOrdens() {
         if (searchImpressao) {
             const num = String(os.numero || '');
             const cli = (os.cliente || '').toLowerCase();
-            const vend = (os.vendedor || '').toLowerCase();
-            const matchSearch = num.includes(searchImpressao) || cli.includes(searchImpressao) || vend.includes(searchImpressao);
+            const vend = getOSVendedor(os.id).toLowerCase();
+            const des = getOSDesigner(os.id).toLowerCase();
+            const matchSearch = num.includes(searchImpressao) || cli.includes(searchImpressao) || vend.includes(searchImpressao) || des.includes(searchImpressao);
             if (!matchSearch) return false;
         }
 
@@ -11467,7 +11569,7 @@ function renderOrdens() {
         if (searchArte) {
             const num = String(os.numero || '');
             const cli = (os.cliente || '').toLowerCase();
-            const vend = (os.vendedor || '').toLowerCase();
+            const vend = getOSVendedor(os.id).toLowerCase();
             const des = getOSDesigner(os.id).toLowerCase();
             const matchSearch = num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte) || des.includes(searchArte);
             if (!matchSearch) return false;
@@ -11538,7 +11640,8 @@ function renderOrdens() {
                             ${valorFormatado}
                         </td>
                         <td><strong>${os.cliente || '—'}</strong></td>
-                        <td>${os.vendedor || '—'}</td>
+                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
+                        <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">
                             ${formatDateTime(os.data_liberacao)}
                             ${dataPedFormatada}
@@ -11581,7 +11684,7 @@ function renderOrdens() {
                             ${valorFormatado}
                         </td>
                         <td><strong>${os.cliente || '—'}</strong></td>
-                        <td>${os.vendedor || '—'}</td>
+                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
                         <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">
                             ${formatDateTime(os.data_liberacao)}
