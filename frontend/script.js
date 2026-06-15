@@ -10961,13 +10961,17 @@ async function loadOrdens() {
                 const { data: pedData, error: pedError } = await supabaseClient
                     .from('pedidos')
                     .select('*');
+                if (pedError) {
+                    console.error('[Supabase] Erro na resposta da tabela pedidos:', pedError);
+                }
                 if (!pedError && pedData) {
                     pedidosComerciais = pedData;
                 }
             } catch (err) {
-                console.warn('[Supabase] Erro ao carregar tabela pedidos:', err);
+                console.error('[Supabase] Falha catastrófica ao carregar tabela pedidos:', err);
             }
         }
+        console.log('[Supabase] Pedidos comerciais carregados:', pedidosComerciais.length, pedidosComerciais);
 
         // Fonte 1: Vibecode (ERP do parceiro)
         if (typeof vibeClient !== 'undefined' && vibeClient) {
@@ -10990,10 +10994,11 @@ async function loadOrdens() {
             if (error) throw error;
 
             let ordensFiltradas = data || [];
-            if (pedidosComerciais && pedidosComerciais.length > 0) {
+            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+            if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
                 ordensFiltradas = ordensFiltradas.filter(os => {
                     const osNumeroInt = parseInt(os.numero);
-                    return pedidosComerciais.some(ped => ped.id_int === osNumeroInt);
+                    return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
                 });
             }
 
@@ -11024,10 +11029,11 @@ async function loadOrdens() {
             const res = await fetch(`${API_BASE_URL}/api/ordens`);
             if (res.ok) {
                 const localData = await res.json();
-                if (pedidosComerciais && pedidosComerciais.length > 0) {
+                const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+                if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
                     state.ordens = localData.filter(os => {
                         const osNumeroInt = parseInt(os.numero);
-                        return pedidosComerciais.some(ped => ped.id_int === osNumeroInt);
+                        return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
                     });
                 } else {
                     state.ordens = localData;
@@ -11083,22 +11089,27 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
                 const { data: pedData, error: pedError } = await supabaseClient
                     .from('pedidos')
                     .select('*');
+                if (pedError) {
+                    console.error('[Supabase] Erro na resposta da tabela pedidos:', pedError);
+                }
                 if (!pedError && pedData) {
                     pedidosComerciais = pedData;
                 }
             } catch (err) {
-                console.warn('[Supabase] Erro ao carregar tabela pedidos:', err);
+                console.error('[Supabase] Falha ao carregar tabela pedidos:', err);
             }
         }
+
+        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
 
         // Agrupar por id_int (cada id_int = 1 proposta = 1 OS)
         const grouped = {};
         produtos.forEach(p => {
             const key = p.id_int;
 
-            // FILTRAR: Se tiver pedidosComerciais, e a proposta/id_int não existir em pedidosComerciais, ignora
-            if (pedidosComerciais && pedidosComerciais.length > 0) {
-                const existe = pedidosComerciais.some(ped => ped.id_int === key);
+            // FILTRAR: Se for produção (não-dev) ou se tiver pedidosComerciais populada, filtra
+            if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
+                const existe = pedidosComerciais.some(ped => String(ped.id_int) === String(key));
                 if (!existe) {
                     return; // ignora este produto e não cria a OS
                 }
@@ -11113,7 +11124,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
                 const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
                 
                 // Buscar dados do pedido comercial
-                const pedidoReal = pedidosComerciais.find(ped => ped.id_int === key);
+                const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(key));
 
                 // Mapear campos com fallbacks determinísticos
                 const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || getFallbackCliente(key);
