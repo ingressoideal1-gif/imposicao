@@ -1580,3 +1580,123 @@ body.not-logged-in .app-shell {
         padding: 16px;
     }
 }
+
+/* ─── Painel de Produção Estilizado (Fila de Impressão) ─── */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition);
+}
+
+.stat-card:hover {
+    border-color: var(--border-glow);
+    transform: translateY(-2px);
+    background: var(--card-hover);
+}
+
+.stat-card-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+}
+
+.stat-card-value {
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.1;
+}
+
+.stat-card-value.blue { color: var(--blue); }
+.stat-card-value.teal { color: var(--teal); }
+.stat-card-value.amber { color: var(--amber); }
+.stat-card-value.purple { color: var(--purple); }
+
+.stat-card-icon {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    font-size: 1.8rem;
+    opacity: 0.12;
+    color: var(--text);
+}
+
+/* Filtros de Setor e Estágios */
+.filter-section-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 24px;
+    margin-bottom: 24px;
+}
+
+.filter-group-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+}
+
+.filter-btns-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-btn-pill {
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-btn-pill:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+}
+
+.filter-btn-pill.active {
+    background: var(--blue-dim);
+    border-color: var(--blue);
+    color: white;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
+}
+
+.filter-btn-pill.active.teal {
+    background: rgba(20, 184, 166, 0.15);
+    border-color: var(--teal);
+    color: #5eead4;
+}
+.filter-btn-pill.active.purple {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: var(--purple);
+    color: #c084fc;
+}
+

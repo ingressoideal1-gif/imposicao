@@ -1,4 +1,5 @@
 import math
+import os
 import io
 import fitz       # PyMuPDF
 import qrcode
@@ -359,14 +360,16 @@ class ImpositionEngine:
                 insert_kwargs["fontfile"] = font_file
 
             if angle != 0:
-                # Para rotação, usamos insert_text com morph
+                # Para rotação de texto, usamos insert_text com morph.
+                # O pivot no canvas do frontend é (el_x, el_y).
+                # Usamos fitz.Matrix(-angle) porque o canvas rotaciona no sentido horário,
+                # e a matriz do PyMuPDF rotaciona no sentido anti-horário por padrão.
                 origin = fitz.Point(el_x, el_y + font_size)
-                pivot = fitz.Point(el_x, el_y + font_size / 2)
+                pivot = fitz.Point(el_x, el_y)
                 page.insert_text(
                     origin,
                     val_str,
-                    morph=(pivot, fitz.Matrix(math.cos(math.radians(angle)), -math.sin(math.radians(angle)),
-                                              math.sin(math.radians(angle)),  math.cos(math.radians(angle)), 0, 0)),
+                    morph=(pivot, fitz.Matrix(-angle)),
                     **insert_kwargs
                 )
             else:
@@ -380,10 +383,19 @@ class ImpositionEngine:
         elif t == "QR":
             size = el.get("_size", 42.5)
             qr_bytes = _generate_qr(val_str, color)
-            rect = fitz.Rect(el_x, el_y, el_x + size, el_y + size)
-            if angle != 0:
-                mat = _rotate_rect(rect, angle, page)
-                page.insert_image(rect, stream=qr_bytes, rotate=angle)
+            
+            py_rotate = (360 - angle) % 360
+            if angle == 90:
+                rect = fitz.Rect(el_x - size, el_y, el_x, el_y + size)
+            elif angle == 180:
+                rect = fitz.Rect(el_x - size, el_y - size, el_x, el_y)
+            elif angle == 270:
+                rect = fitz.Rect(el_x, el_y - size, el_x + size, el_y)
+            else:
+                rect = fitz.Rect(el_x, el_y, el_x + size, el_y + size)
+                
+            if py_rotate != 0:
+                page.insert_image(rect, stream=qr_bytes, rotate=py_rotate)
             else:
                 page.insert_image(rect, stream=qr_bytes)
 
@@ -394,15 +406,35 @@ class ImpositionEngine:
             h_mm = el.get("height_mm", 12)
             bc_format = el.get("barcode_format", "code128")
             bc_bytes = _generate_barcode(val_str, w_mm, h_mm, color, bc_format)
-            rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
-            page.insert_image(rect, stream=bc_bytes, rotate=angle, keep_proportion=False)
+            
+            py_rotate = (360 - angle) % 360
+            if angle == 90:
+                rect = fitz.Rect(el_x - h_pt, el_y, el_x, el_y + w_pt)
+            elif angle == 180:
+                rect = fitz.Rect(el_x - w_pt, el_y - h_pt, el_x, el_y)
+            elif angle == 270:
+                rect = fitz.Rect(el_x, el_y - w_pt, el_x + h_pt, el_y)
+            else:
+                rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
+                
+            page.insert_image(rect, stream=bc_bytes, rotate=py_rotate, keep_proportion=False)
 
         elif t == "SVG":
             svg_content = el.get("svg_content") or ""
             if svg_content:
                 w_pt = el.get("width_mm", 20) * MM2PT
                 h_pt = el.get("height_mm", 20) * MM2PT
-                rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
+                
+                py_rotate = (360 - angle) % 360
+                if angle == 90:
+                    rect = fitz.Rect(el_x - h_pt, el_y, el_x, el_y + w_pt)
+                elif angle == 180:
+                    rect = fitz.Rect(el_x - w_pt, el_y - h_pt, el_x, el_y)
+                elif angle == 270:
+                    rect = fitz.Rect(el_x, el_y - w_pt, el_x + h_pt, el_y)
+                else:
+                    rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
+                    
                 try:
                     import io
                     from svglib.svglib import svg2rlg
@@ -417,7 +449,7 @@ class ImpositionEngine:
                     drawing = svg2rlg(io.StringIO(svg_data))
                     pdf_bytes = renderPDF.drawToString(drawing)
                     pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-                    page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=angle, clip=pdf_doc[0].rect)
+                    page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
                 except Exception as ex:
                     print(f"Erro ao impor SVG: {ex}")
 
@@ -452,8 +484,18 @@ class ImpositionEngine:
                     else:
                         w_pt = pdf_doc[0].rect.width
                         h_pt = pdf_doc[0].rect.height
-                    rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
-                    page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=angle, clip=pdf_doc[0].rect)
+                        
+                    py_rotate = (360 - angle) % 360
+                    if angle == 90:
+                        rect = fitz.Rect(el_x - h_pt, el_y, el_x, el_y + w_pt)
+                    elif angle == 180:
+                        rect = fitz.Rect(el_x - w_pt, el_y - h_pt, el_x, el_y)
+                    elif angle == 270:
+                        rect = fitz.Rect(el_x, el_y - w_pt, el_x + h_pt, el_y)
+                    else:
+                        rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
+                        
+                    page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
                     pdf_doc.close()
                     print(f"[engine] Elemento PDF renderizado OK em rect={rect}")
                 except Exception as ex:

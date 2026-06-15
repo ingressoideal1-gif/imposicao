@@ -7,7 +7,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=4">
+    <link rel="stylesheet" href="style.css?v=4">
 </head>
 
 <body>
@@ -32,7 +32,7 @@
         <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
         <aside class="sidebar">
             <div class="sidebar-logo">
-                <img src="/Logo Ideal Dark.png" alt="Ingresso Ideal" style="height: 32px; border-radius: var(--radius-sm); object-fit: contain; flex-shrink: 0;">
+                <img src="Logo Ideal Dark.png" alt="Ingresso Ideal" style="height: 32px; border-radius: var(--radius-sm); object-fit: contain; flex-shrink: 0;">
                 <div class="sidebar-logo-text">
                     <strong>Ideal Imposition</strong>
                     <span>Imposição Gráfica</span>
@@ -1014,6 +1014,52 @@
                     </div>
                 </div>
 
+                <!-- CARDS DE ESTATÍSTICA (Dinâmicos) -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-title">Pedidos em Fila</div>
+                        <div class="stat-card-value blue" id="stat-pedidos-fila">0</div>
+                        <div class="stat-card-icon">📋</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">Itens em Impressão</div>
+                        <div class="stat-card-value purple" id="stat-itens-impressao">0</div>
+                        <div class="stat-card-icon">🖨️</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">Aprovados / Prontos</div>
+                        <div class="stat-card-value teal" id="stat-itens-aprovados">0</div>
+                        <div class="stat-card-icon">🧪</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">Pedidos Concluídos</div>
+                        <div class="stat-card-value amber" id="stat-pedidos-concluidos">0</div>
+                        <div class="stat-card-icon">✅</div>
+                    </div>
+                </div>
+
+                <!-- FILTROS (Setores e Status de Impressão) -->
+                <div class="filter-section-wrapper">
+                    <div>
+                        <div class="filter-group-label">Filtrar por Setor</div>
+                        <div class="filter-btns-container" id="filter-container-setor">
+                            <button class="filter-btn-pill active" onclick="setFiltroSetor('')">🌐 Todos</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetor('FLEXO')">✂️ Flexo</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetor('IMPRESS.')">🖨️ Impressão</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetor('TEXTIL')">👕 Têxtil</button>
+                        </div>
+                    </div>
+                    <div style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 6px;">
+                        <div class="filter-group-label">Estágio de Impressão</div>
+                        <div class="filter-btns-container" id="filter-container-status">
+                            <button class="filter-btn-pill active teal" onclick="setFiltroStatus('')">🌐 Todos</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatus('AGUARD.')">⏳ Aguardando</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatus('PARCIAL')">⚙️ Parcial</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatus('IMPRESSO')">✅ Impresso</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tabela de OS de Impressão -->
                 <div class="card">
                     <div class="card-header">
@@ -1099,6 +1145,52 @@
                             <option value="">🎨 Todos os Designers</option>
                         </select>
                         <button class="btn btn-secondary btn-sm" onclick="loadOrdens()" title="Atualizar lista">🔄 Atualizar</button>
+                    </div>
+                </div>
+
+                <!-- CARDS DE ESTATÍSTICA (Dinâmicos) -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-title">Pedidos em Fila</div>
+                        <div class="stat-card-value blue" id="stat-pedidos-fila-arte">0</div>
+                        <div class="stat-card-icon">📋</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">Aguardando Arte</div>
+                        <div class="stat-card-value purple" id="stat-itens-pendentes-arte">0</div>
+                        <div class="stat-card-icon">🎨</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">Artes Aprovadas</div>
+                        <div class="stat-card-value teal" id="stat-itens-aprovados-arte">0</div>
+                        <div class="stat-card-icon">✅</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-title">Pedidos Concluídos</div>
+                        <div class="stat-card-value amber" id="stat-pedidos-concluidos-arte">0</div>
+                        <div class="stat-card-icon">🏆</div>
+                    </div>
+                </div>
+
+                <!-- FILTROS (Setores e Status de Aprovação) -->
+                <div class="filter-section-wrapper">
+                    <div>
+                        <div class="filter-group-label">Filtrar por Setor</div>
+                        <div class="filter-btns-container" id="filter-container-setor-arte">
+                            <button class="filter-btn-pill active" onclick="setFiltroSetorArte('')">🌐 Todos</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('FLEXO')">✂️ Flexo</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('IMPRESS.')">🖨️ Impressão</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('TEXTIL')">👕 Têxtil</button>
+                        </div>
+                    </div>
+                    <div style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 6px;">
+                        <div class="filter-group-label">Status de Aprovação</div>
+                        <div class="filter-btns-container" id="filter-container-status-arte">
+                            <button class="filter-btn-pill active teal" onclick="setFiltroStatusArte('')">🌐 Todos</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('PENDENTE')">⏳ Pendente</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('APROVADA')">✅ Aprovada</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('REPROVADA')">❌ Reprovada</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1250,14 +1342,14 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/supabase-config.js"></script>
-    <script src="/script.js?v=15"></script>
+    <script src="supabase-config.js"></script>
+    <script src="script.js?v=15"></script>
 
     <!-- PÁGINA PÚBLICA DO CLIENTE (fora do app-shell) -->
     <div id="cliente-page" class="cliente-page" style="display: none;">
         <div class="cliente-container">
             <header class="cliente-header">
-                <img src="/Logo Ideal Dark.png" alt="Ingresso Ideal" style="height: 40px; border-radius: 6px;">
+                <img src="Logo Ideal Dark.png" alt="Ingresso Ideal" style="height: 40px; border-radius: 6px;">
                 <div>
                     <h1 class="cliente-title">Aprovação do Pedido <span id="cliente-pedido-numero" style="color: var(--blue);"></span></h1>
                     <p class="cliente-subtitle" id="cliente-pedido-cliente"></p>
