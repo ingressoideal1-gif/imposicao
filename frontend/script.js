@@ -11219,19 +11219,21 @@ function formatDate(dateStr) {
  */
 function getStatusBadge(status) {
     const map = {
-        'ARTE': { icon: '🎨', cls: 'badge-blue' },
-        'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber' },
-        'FINALIZADA': { icon: '✅', cls: 'badge-teal' },
-        'CANCELADA': { icon: '❌', cls: 'badge-red' },
+        'ARTE': { icon: '🎨', cls: 'badge-blue', label: 'Arte' },
+        'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber', label: 'Produção' },
+        'FINALIZADA': { icon: '✅', cls: 'badge-teal', label: 'Finalizada' },
+        'CANCELADA': { icon: '❌', cls: 'badge-red', label: 'Cancelada' },
         
         // Novos status do fluxo de arte
-        'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-red' },
-        'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple' },
-        'Enviar ARTE': { icon: '📨', cls: 'badge-green' },
-        'Pendente Informação': { icon: '⚠️', cls: 'badge-red' }
+        'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
+        'ARTE_EM_CORRECAO': { icon: '🎨', cls: 'badge-amber', label: 'Arte em Andamento' },
+        'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
+        'Enviar ARTE': { icon: '📨', cls: 'badge-green', label: 'Enviar ARTE' },
+        'Pendente Informação': { icon: '⚠️', cls: 'badge-red', label: 'Pendente Informação' }
     };
-    const s = map[status] || { icon: '❓', cls: '' };
-    return `<span class="badge ${s.cls}">${s.icon} ${status}</span>`;
+    const s = map[status] || { icon: '❓', cls: '', label: status };
+    const label = s.label || status;
+    return `<span class="badge ${s.cls}">${s.icon} ${label}</span>`;
 }
 
 /**
@@ -11526,9 +11528,10 @@ function renderOrdens() {
         return true;
     });
 
-    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO ou novos status do fluxo de arte)
+    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO, ARTE_EM_CORRECAO ou novos status do fluxo de arte)
     let ordensArte = state.ordens.filter(os => 
         os.status === 'ARTE_EM_ANDAMENTO' || 
+        os.status === 'ARTE_EM_CORRECAO' || 
         os.status === 'Enviar ARTE' || 
         os.status === 'Pendente Informação'
     );
@@ -12533,7 +12536,7 @@ async function voltarParaAtendimento() {
 window.voltarParaAtendimento = voltarParaAtendimento;
 
 /**
- * Retorna o status global do pedido para "Arte em Andamento" (ARTE_EM_ANDAMENTO)
+ * Retorna o status global do pedido para "Arte em Andamento" em correção (ARTE_EM_CORRECAO)
  */
 async function voltarParaArte() {
     const osId = state.amostrasOSAtivo;
@@ -12542,7 +12545,7 @@ async function voltarParaArte() {
         return;
     }
 
-    const novoStatus = 'ARTE_EM_ANDAMENTO';
+    const novoStatus = 'ARTE_EM_CORRECAO';
 
     try {
         // Atualizar status global da OS
@@ -12566,7 +12569,7 @@ async function voltarParaArte() {
             if (error) throw error;
         }
 
-        toast(`Pedido #${os ? os.numero : ''} retornado para Arte em Andamento!`, 'info');
+        toast(`Pedido #${os ? os.numero : ''} retornado para Arte em Andamento (Correção)!`, 'info');
 
         // Voltar para a view Lista de Arte e atualizar renderização
         clearAmostrasOS();
