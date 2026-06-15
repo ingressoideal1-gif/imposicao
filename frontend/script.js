@@ -12314,9 +12314,10 @@ function renderAmostrasOSItens(osId) {
         const status = item.amostra_status || 'PENDENTE';
         const obs = item.amostra_obs || '';
         
-        let statusBadge = '<span class="badge badge-yellow">⏳ PENDENTE</span>';
+        let statusBadge = '<span class="badge badge-amber">⏳ PENDENTE</span>';
         if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADA</span>';
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
+        else if (status === 'PRONTO') statusBadge = '<span class="badge badge-blue">🎨 PRONTO</span>';
 
         // Determinar o formato ID do item da OS
         const itemFormatoId = item.formato_id || (item.formato ? matchFormato(item.formato) : null);
@@ -12380,6 +12381,11 @@ function renderAmostrasOSItens(osId) {
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
                         <div class="amostra-decisao-btns">
+                            ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
+                            <button class="btn btn-primary" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')">
+                                🎨 PRONTO
+                            </button>
+                            `}
                             <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
                                 ✅ APROVAR
                             </button>
@@ -13155,7 +13161,21 @@ async function decisionAmostraItem(itemId, osId, status) {
             }
         }
         
-        toast(`Item ${status === 'APROVADA' ? 'aprovado' : 'marcado para alteração'}!`, status === 'APROVADA' ? 'success' : 'warning');
+        let msg = '';
+        let toastType = 'info';
+        if (status === 'APROVADA') {
+            msg = 'Item aprovado!';
+            toastType = 'success';
+        } else if (status === 'REPROVADA') {
+            msg = 'Item marcado para alteração!';
+            toastType = 'warning';
+        } else if (status === 'PRONTO') {
+            msg = 'Item marcado como Pronto!';
+            toastType = 'success';
+        } else {
+            msg = `Status atualizado para ${status}`;
+        }
+        toast(msg, toastType);
         renderAmostrasOSItens(osId);
     } catch (err) {
         console.error('Erro na decisão do item:', err);
