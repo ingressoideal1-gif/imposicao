@@ -12556,21 +12556,21 @@ function atualizarBarraFinalCliente(osId) {
     if (todosAprovados) {
         // Verde, ativo, Finalizar e Aprovar Pedido Completo
         html = `
-            <button class="btn btn-success btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: var(--green); border-color: var(--green);">
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer;">
                 ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
             </button>
         `;
     } else if (algumReprovado) {
         // Tons de laranja e vermelho, ativo, Solicitar Alteração de Arte
         html = `
-            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #f97316, #ef4444); color: white; border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);">
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #f97316, #ef4444); color: #ffffff; border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); cursor: pointer;">
                 ⚠️ SOLICITAR ALTERAÇÃO DE ARTE
             </button>
         `;
     } else {
         // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo
         html = `
-            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #4b5563; color: #9ca3af; border: 1px solid #4b5563; cursor: not-allowed; opacity: 0.6;">
+            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #374151; color: #9ca3af; border: 1px solid #374151; cursor: not-allowed; opacity: 0.6;">
                 ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
             </button>
         `;
@@ -13921,16 +13921,16 @@ async function initClientePage(numero, token) {
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
 
-        if (osStatus === 'ARTE_APROVADA' || osStatus === 'Arte APROVADA') {
+        if (osStatus === 'Enviar ARTE') {
+            // Se for especificamente "Enviar ARTE", exibe normalmente a página com as janelas
+            renderAmostrasOSItens(osId);
+        } else if (osStatus === 'ARTE_APROVADA' || osStatus === 'Arte APROVADA') {
+            // Se for "Arte APROVADA", exibe a mensagem correspondente
             mostrarResultadoCliente('✅', 'Artes APROVADAS!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
-            return;
-        } else if (osStatus === 'ARTE_EM_CORRECAO') {
+        } else {
+            // Para qualquer outro status (incluindo ARTE_EM_CORRECAO, ARTE_EM_ANDAMENTO, etc.), exibe a mensagem de alteração/bloqueio
             mostrarResultadoCliente('⚠️', 'Artes em Alteração', 'Artes em ALTERAÇÃO. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
-            return;
         }
-
-        // Renderizar a tela de amostras combinada idêntica à interna
-        renderAmostrasOSItens(osId);
 
     } catch (e) {
         console.error('Erro ao inicializar página do cliente:', e);
