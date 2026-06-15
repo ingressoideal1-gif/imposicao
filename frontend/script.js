@@ -11225,7 +11225,7 @@ function getStatusBadge(status) {
         'CANCELADA': { icon: '❌', cls: 'badge-red' },
         
         // Novos status do fluxo de arte
-        'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue' },
+        'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-red' },
         'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple' },
         'Enviar ARTE': { icon: '📨', cls: 'badge-green' },
         'Pendente Informação': { icon: '⚠️', cls: 'badge-red' }
@@ -12531,6 +12531,54 @@ async function voltarParaAtendimento() {
 
 // Expor globalmente
 window.voltarParaAtendimento = voltarParaAtendimento;
+
+/**
+ * Retorna o status global do pedido para "Arte em Andamento" (ARTE_EM_ANDAMENTO)
+ */
+async function voltarParaArte() {
+    const osId = state.amostrasOSAtivo;
+    if (!osId) {
+        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
+        return;
+    }
+
+    const novoStatus = 'ARTE_EM_ANDAMENTO';
+
+    try {
+        // Atualizar status global da OS
+        // 1. Atualizar no localstorage vibe_status_overrides
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        // 2. Atualizar no estado local em memória
+        const os = state.ordens.find(o => o.id === osId);
+        if (os) {
+            os.status = novoStatus;
+        }
+
+        // 3. Atualizar no banco Supabase se for OS local (não começa com vibe_)
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
+            const { error } = await supabaseClient
+                .from('producao_ordens_servico')
+                .update({ status: novoStatus })
+                .eq('id', osId);
+            if (error) throw error;
+        }
+
+        toast(`Pedido #${os ? os.numero : ''} retornado para Arte em Andamento!`, 'info');
+
+        // Voltar para a view Lista de Arte e atualizar renderização
+        clearAmostrasOS();
+        showView('view-lista-arte');
+    } catch (err) {
+        console.error('Erro ao voltar para arte:', err);
+        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
+    }
+}
+
+// Expor globalmente
+window.voltarParaArte = voltarParaArte;
 
 /**
  * Ao selecionar cor em um card dinâmico, filtrar numerações compatíveis
