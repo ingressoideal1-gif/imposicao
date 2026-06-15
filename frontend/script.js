@@ -11227,6 +11227,8 @@ function getStatusBadge(status) {
         // Novos status do fluxo de arte
         'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
         'ARTE_EM_CORRECAO': { icon: '🎨', cls: 'badge-amber', label: 'Arte em Andamento' },
+        'ARTE_APROVADA': { icon: '✅', cls: 'badge-amber', label: 'Arte APROVADA' },
+        'Arte APROVADA': { icon: '✅', cls: 'badge-amber', label: 'Arte APROVADA' },
         'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
         'Enviar ARTE': { icon: '📨', cls: 'badge-green', label: 'Enviar ARTE' },
         'Pendente Informação': { icon: '⚠️', cls: 'badge-red', label: 'Pendente Informação' }
@@ -11528,10 +11530,12 @@ function renderOrdens() {
         return true;
     });
 
-    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO, ARTE_EM_CORRECAO ou novos status do fluxo de arte)
+    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO, ARTE_EM_CORRECAO, ARTE_APROVADA ou novos status do fluxo de arte)
     let ordensArte = state.ordens.filter(os => 
         os.status === 'ARTE_EM_ANDAMENTO' || 
         os.status === 'ARTE_EM_CORRECAO' || 
+        os.status === 'ARTE_APROVADA' || 
+        os.status === 'Arte APROVADA' || 
         os.status === 'Enviar ARTE' || 
         os.status === 'Pendente Informação'
     );
@@ -12469,7 +12473,54 @@ function renderAmostrasOSItens(osId) {
                 renderItemAmostraCombinada(idx, osId);
             }
         });
+        // Atualizar a barra final de ações do cliente dinamicamente
+        atualizarBarraFinalCliente(osId);
     }, 50);
+}
+
+/**
+ * Atualiza a barra final dinamicamente no link do cliente
+ */
+function atualizarBarraFinalCliente(osId) {
+    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') return;
+
+    const containerActions = document.querySelector('.cliente-actions');
+    if (!containerActions) return;
+
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) return;
+
+    // Verificar se todos os modelos estão aprovados
+    const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
+
+    // Verificar se pelo menos um modelo está reprovado (alteração)
+    const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
+
+    let html = '';
+    if (todosAprovados) {
+        // Verde, ativo, Finalizar e Aprovar Pedido Completo
+        html = `
+            <button class="btn btn-success btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: var(--green); border-color: var(--green);">
+                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+            </button>
+        `;
+    } else if (algumReprovado) {
+        // Tons de laranja e vermelho, ativo, Solicitar Alteração de Arte
+        html = `
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #f97316, #ef4444); color: white; border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);">
+                ⚠️ SOLICITAR ALTERAÇÃO DE ARTE
+            </button>
+        `;
+    } else {
+        // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo
+        html = `
+            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #4b5563; color: #9ca3af; border: 1px solid #4b5563; cursor: not-allowed; opacity: 0.6;">
+                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+            </button>
+        `;
+    }
+
+    containerActions.innerHTML = html;
 }
 
 /**
@@ -13793,14 +13844,37 @@ async function initClientePage(numero, token) {
         state.ordens = [os];
         state.amostrasOSAtivo = osId;
 
+        // Buscar status da OS na tabela producao_ordens_servico
+        let osStatus = 'ARTE_EM_ANDAMENTO';
+        try {
+            const { data: osData } = await supabaseClient
+                .from('producao_ordens_servico')
+                .select('status')
+                .eq('id', osId)
+                .maybeSingle();
+            if (osData && osData.status) {
+                osStatus = osData.status;
+            }
+        } catch (e) {
+            console.warn('Erro ao buscar status global da OS:', e);
+        }
+
         // Configurar o container de renderização das amostras para o cliente
         state.amostrasContainerId = 'cliente-amostras-itens-container';
 
-        // Renderizar a tela de amostras combinada idêntica à interna
-        renderAmostrasOSItens(osId);
-
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
+
+        if (osStatus === 'ARTE_APROVADA' || osStatus === 'Arte APROVADA') {
+            mostrarResultadoCliente('✅', 'Artes APROVADAS!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+            return;
+        } else if (osStatus === 'ARTE_EM_CORRECAO') {
+            mostrarResultadoCliente('⚠️', 'Artes em Alteração', 'Artes em ALTERAÇÃO. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+            return;
+        }
+
+        // Renderizar a tela de amostras combinada idêntica à interna
+        renderAmostrasOSItens(osId);
 
     } catch (e) {
         console.error('Erro ao inicializar página do cliente:', e);
@@ -13809,56 +13883,104 @@ async function initClientePage(numero, token) {
     }
 }
 
-async function clienteAprovarTudo() {
+async function clienteFinalizarFluxo(fluxoTipo) {
     const osId = clienteState.osId;
     const itens = state.osItens[osId] || [];
     const btnAprovar = document.getElementById('btn-cliente-aprovar-tudo');
 
     if (btnAprovar) {
         btnAprovar.disabled = true;
-        btnAprovar.textContent = '⏳ Processando aprovação de todos os itens...';
+        btnAprovar.textContent = '⏳ Processando...';
     }
 
     try {
-        // Para cada item, salvar status como APROVADA
-        for (const item of itens) {
-            await saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' });
-        }
+        if (fluxoTipo === 'APROVAR_TUDO') {
+            // Salvar status global da OS no Supabase para ARTE_APROVADA (Laranja, rótulo "Arte APROVADA")
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { error } = await supabaseClient
+                    .from('producao_ordens_servico')
+                    .update({ status: 'ARTE_APROVADA' })
+                    .eq('id', osId);
+                if (error) throw error;
+            }
 
-        // Também atualizar o status em pedidos_artes para manter compatibilidade
-        for (const item of itens) {
+            // Para cada item, salvar status como APROVADA no banco
+            for (const item of itens) {
+                await saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' });
+            }
+
+            // Também atualizar o status em pedidos_artes para manter compatibilidade
+            for (const item of itens) {
+                try {
+                    await supabaseClient
+                        .from('pedidos_artes')
+                        .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
+                        .eq('id_modelo', item.id)
+                        .order('versao', { ascending: false })
+                        .limit(1);
+                } catch (e) { /* silencioso */ }
+            }
+
+            // Log no chat da proposta
             try {
-                await supabaseClient
-                    .from('pedidos_artes')
-                    .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
-                    .eq('id_modelo', item.id)
-                    .order('versao', { ascending: false })
-                    .limit(1);
-            } catch (e) { /* silencioso */ }
-        }
+                await supabaseClient.from('propostas_chat').insert({
+                    id_int: parseInt(clienteState.numero),
+                    tipo: 'PRODUCAO',
+                    setor: 'Cliente',
+                    visivel_externo: true,
+                    mensagem: `✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.`,
+                    remetente_nome: 'Cliente (aprovação online)',
+                });
+            } catch (e) { console.error('Erro log chat:', e); }
 
-        // Log no chat da proposta
-        try {
-            await supabaseClient.from('propostas_chat').insert({
-                id_int: parseInt(clienteState.numero),
-                tipo: 'PRODUCAO',
-                setor: 'Cliente',
-                visivel_externo: true,
-                mensagem: `✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.`,
-                remetente_nome: 'Cliente (aprovação online)',
+            // Mostrar tela de sucesso
+            mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+        } 
+        else if (fluxoTipo === 'SOLICITAR_ALTERACAO') {
+            // Salvar status global da OS no Supabase para ARTE_EM_CORRECAO (Laranja, rótulo "Arte em Andamento")
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { error } = await supabaseClient
+                    .from('producao_ordens_servico')
+                    .update({ status: 'ARTE_EM_CORRECAO' })
+                    .eq('id', osId);
+                if (error) throw error;
+            }
+
+            // Coletar observações das alterações de cada item reprovado
+            let observacoesTexto = '';
+            itens.forEach((item, idx) => {
+                if (item.amostra_status === 'REPROVADA') {
+                    observacoesTexto += `\n- Modelo ${idx + 1} (${item.produto}): ${item.amostra_obs || '(Sem observações)'}`;
+                }
             });
-        } catch (e) { console.error('Erro log chat:', e); }
 
-        // Mostrar tela de sucesso
-        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Obrigado! Sua aprovação foi registrada. A gráfica foi notificada e dará andamento à produção do seu pedido.');
+            // Log no chat da proposta
+            try {
+                await supabaseClient.from('propostas_chat').insert({
+                    id_int: parseInt(clienteState.numero),
+                    tipo: 'PRODUCAO',
+                    setor: 'Cliente',
+                    visivel_externo: true,
+                    mensagem: `❌ O CLIENTE SOLICITOU ALTERAÇÃO DE ARTES via link online.${observacoesTexto}`,
+                    remetente_nome: 'Cliente (alteração online)',
+                });
+            } catch (e) { console.error('Erro log chat:', e); }
+
+            // Mostrar tela de sucesso de alteração solicitada
+            mostrarResultadoCliente('⚠️', 'Alteração Solicitada!', 'Artes em ALTERAÇÃO. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+        }
     } catch (e) {
-        console.error('Erro ao aprovar tudo:', e);
-        toast('Erro ao processar aprovação final: ' + e.message, 'error');
+        console.error('Erro ao finalizar fluxo do cliente:', e);
+        toast('Erro ao finalizar pedido: ' + e.message, 'error');
         if (btnAprovar) {
             btnAprovar.disabled = false;
-            btnAprovar.textContent = '✅ FINALIZAR E APROVAR PEDIDO COMPLETO';
+            btnAprovar.textContent = fluxoTipo === 'APROVAR_TUDO' ? '✅ FINALIZAR E APROVAR PEDIDO COMPLETO' : '⚠️ SOLICITAR ALTERAÇÃO DE ARTE';
         }
     }
+}
+
+async function clienteAprovarTudo() {
+    return clienteFinalizarFluxo('APROVAR_TUDO');
 }
 
 function mostrarResultadoCliente(icon, titulo, msg) {
@@ -14099,6 +14221,7 @@ function setFiltroStatusArte(status) {
 // Exportar funções globais
 window.gerarLinkCliente = gerarLinkCliente;
 window.clienteAprovarTudo = clienteAprovarTudo;
+window.clienteFinalizarFluxo = clienteFinalizarFluxo;
 window.openClienteLightbox = openClienteLightbox;
 window.closeClienteLightbox = closeClienteLightbox;
 window.setFiltroSetor = setFiltroSetor;
