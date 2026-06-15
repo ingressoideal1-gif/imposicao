@@ -11283,8 +11283,8 @@ function getStatusBadge(status) {
         // Novos status do fluxo de arte
         'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
         'ARTE_EM_CORRECAO': { icon: '🎨', cls: 'badge-amber', label: 'Arte em Andamento' },
-        'ARTE_APROVADA': { icon: '✅', cls: 'badge-amber', label: 'Arte APROVADA' },
-        'Arte APROVADA': { icon: '✅', cls: 'badge-amber', label: 'Arte APROVADA' },
+        'ARTE_APROVADA': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
+        'Arte APROVADA': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
         'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
         'Enviar ARTE': { icon: '📨', cls: 'badge-green', label: 'Enviar ARTE' },
         'Pendente Informação': { icon: '⚠️', cls: 'badge-red', label: 'Pendente Informação' }
