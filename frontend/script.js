@@ -13896,21 +13896,25 @@ async function clienteFinalizarFluxo(fluxoTipo) {
     try {
         if (fluxoTipo === 'APROVAR_TUDO') {
             // Salvar status global da OS no Supabase para ARTE_APROVADA (Laranja, rótulo "Arte APROVADA")
-            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                const { error } = await supabaseClient
-                    .from('producao_ordens_servico')
-                    .update({ status: 'ARTE_APROVADA' })
-                    .eq('id', osId);
-                if (error) throw error;
+            // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
+            try {
+                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                    const { error } = await supabaseClient
+                        .from('producao_ordens_servico')
+                        .update({ status: 'ARTE_APROVADA' })
+                        .eq('id', osId);
+                    if (error) throw error;
+                }
+            } catch (osErr) {
+                console.warn('Erro ao atualizar status global da OS (pode ser restrição de RLS):', osErr);
             }
 
-            // Para cada item, salvar status como APROVADA no banco
-            for (const item of itens) {
-                await saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' });
-            }
+            // Para cada item, salvar status como APROVADA no banco (Execução paralela)
+            const savePromises = itens.map(item => saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' }));
+            await Promise.all(savePromises);
 
-            // Também atualizar o status em pedidos_artes para manter compatibilidade
-            for (const item of itens) {
+            // Também atualizar o status em pedidos_artes para manter compatibilidade (Execução paralela)
+            const artesPromises = itens.map(async (item) => {
                 try {
                     await supabaseClient
                         .from('pedidos_artes')
@@ -13919,7 +13923,8 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                         .order('versao', { ascending: false })
                         .limit(1);
                 } catch (e) { /* silencioso */ }
-            }
+            });
+            await Promise.all(artesPromises);
 
             // Log no chat da proposta
             try {
@@ -13938,12 +13943,17 @@ async function clienteFinalizarFluxo(fluxoTipo) {
         } 
         else if (fluxoTipo === 'SOLICITAR_ALTERACAO') {
             // Salvar status global da OS no Supabase para ARTE_EM_CORRECAO (Laranja, rótulo "Arte em Andamento")
-            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                const { error } = await supabaseClient
-                    .from('producao_ordens_servico')
-                    .update({ status: 'ARTE_EM_CORRECAO' })
-                    .eq('id', osId);
-                if (error) throw error;
+            // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
+            try {
+                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                    const { error } = await supabaseClient
+                        .from('producao_ordens_servico')
+                        .update({ status: 'ARTE_EM_CORRECAO' })
+                        .eq('id', osId);
+                    if (error) throw error;
+                }
+            } catch (osErr) {
+                console.warn('Erro ao atualizar status global da OS para correção (pode ser restrição de RLS):', osErr);
             }
 
             // Coletar observações das alterações de cada item reprovado
