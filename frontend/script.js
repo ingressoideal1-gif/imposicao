@@ -121,6 +121,13 @@ const state = {
     filtroStatusArte: "",
 };
 
+// ─── Variáveis globais de usuários ───
+let usuariosSupabase = [];
+
+const VENDEDORES_LISTA = [
+    'L. Martins',
+    'Comercial',
+];
 
 
 // ─── Utility — fetchPdfBytes ──────────────────────────────────────────────────
@@ -11262,19 +11269,11 @@ function getImpressaoBadge(imp) {
  */
 /**
 /**
-let usuariosSupabase = [];
-
-/**
  * Lista de designers cadastrados (fonte local até integração com E-deal)
  */
 const DESIGNERS_LISTA = [
     'Amanda Souza',
     'Junior',
-];
-
-const VENDEDORES_LISTA = [
-    'L. Martins',
-    'Comercial',
 ];
 
 /**
