@@ -2223,7 +2223,7 @@ function editNumeracao(id) {
     
     document.getElementById('num-tipo').value = n.tipo || 'SEQUENCIAL';
     document.getElementById('num-ticket-qtd').value = n.ticket_qtd || 1;
-    document.getElementById('num-ticket-logica').value = n.ticket_logica || 'PILHA';
+    document.getElementById('num-ticket-logica').value = n.ticket_logica || 'HORIZONTAL';
     if(window.onTipoSelect) window.onTipoSelect();
 
     document.getElementById('btn-num-cancel').style.display = 'inline-flex';
@@ -2505,7 +2505,7 @@ function cancelNumEdit() {
     
     document.getElementById('num-tipo').value = 'SEQUENCIAL';
     document.getElementById('num-ticket-qtd').value = 1;
-    document.getElementById('num-ticket-logica').value = 'PILHA';
+    document.getElementById('num-ticket-logica').value = 'HORIZONTAL';
     if(window.onTipoSelect) window.onTipoSelect();
 
     document.getElementById('btn-num-cancel').style.display = 'none';
@@ -4825,7 +4825,7 @@ window.saveNumeracao = async function () {
             })(),
 
             ticket_qtd: parseInt(document.getElementById('num-ticket-qtd').value) || 1,
-            ticket_logica: document.getElementById('num-ticket-logica').value || 'PILHA',
+            ticket_logica: document.getElementById('num-ticket-logica').value || 'HORIZONTAL',
 
             csv_filename: state.numCsvFilename || "",
 

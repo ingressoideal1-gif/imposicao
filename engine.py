@@ -793,10 +793,9 @@ class ImpositionEngine:
                             N = int(cfg.ticket_qtd)
                             logic = str(cfg.ticket_logica).strip().upper()
                             Q = int(cfg.total_items)
-                            if logic == "PILHA":
-                                current_val = cfg.seq_start + ((pos - 1) * Q) + item_index
-                            else:
-                                current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+                            # A regra de negócios determinou que TICKET sempre incrementa sequencialmente
+                            # dentro da mesma folha, independentemente do número de folhas geradas.
+                            current_val = cfg.seq_start + (item_index * N) + (pos - 1)
 
                         # Renderiza na página temporária usando coordenadas relativas diretas
                         self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
@@ -988,10 +987,9 @@ class ImpositionEngine:
                                 N = int(cfg.ticket_qtd)
                                 logic = str(cfg.ticket_logica).strip().upper()
                                 Q = int(cfg.total_items)
-                                if logic == "PILHA":
-                                    current_val = cfg.seq_start + ((pos - 1) * Q) + item_index
-                                else:
-                                    current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+                                # A regra de negócios determinou que TICKET sempre incrementa sequencialmente
+                                # dentro da mesma folha, independentemente do número de folhas geradas.
+                                current_val = cfg.seq_start + (item_index * N) + (pos - 1)
 
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
