@@ -2220,6 +2220,8 @@ function editNumeracao(id) {
     document.getElementById('num-name').value = n.name;
 
     document.getElementById('num-formato').value = n.formato_id;
+    
+    document.getElementById('num-tipo').value = n.tipo || 'SEQUENCIAL';
 
     document.getElementById('btn-num-cancel').style.display = 'inline-flex';
 
@@ -2497,6 +2499,8 @@ function cancelNumEdit() {
     document.getElementById('num-name').value = '';
 
     document.getElementById('num-formato').value = '';
+    
+    document.getElementById('num-tipo').value = 'SEQUENCIAL';
 
     document.getElementById('btn-num-cancel').style.display = 'none';
 
@@ -4674,6 +4678,8 @@ window.saveNumeracao = async function () {
     const name = document.getElementById('num-name').value.trim();
 
     const fmtId = document.getElementById('num-formato').value;
+    
+    const tipo = document.getElementById('num-tipo').value || 'SEQUENCIAL';
 
 
 
@@ -4770,6 +4776,8 @@ window.saveNumeracao = async function () {
             name,
 
             formato_id: fmtId,
+            
+            tipo,
 
             preview_jpg: previewJpgBase64,
 
