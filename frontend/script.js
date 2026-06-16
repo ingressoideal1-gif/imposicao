@@ -2851,12 +2851,9 @@ function drawElement(ctx, el, S) {
 
 
     const SAMPLE = el.type === 'FIXED' ? (el.fixed_value || 'TEXTO') :
-
-        el.type === 'TEXT' ? '0001' :
-
+        el.type === 'TEXT' ? String(el.ticket_pos || 1).padStart(el.pad || 6, '0') :
             el.type === 'QR' ? null :
-
-                el.type === 'BARCODE' ? null : '0001';
+                el.type === 'BARCODE' ? null : String(el.ticket_pos || 1).padStart(el.pad || 6, '0');
 
 
 
@@ -2883,11 +2880,8 @@ function drawElement(ctx, el, S) {
         } else {
 
             const padValue = typeof el.pad !== 'undefined' ? el.pad : 6;
-
-            const dummyNum = String(1).padStart(padValue, '0');
-
+            const dummyNum = String(el.ticket_pos || 1).padStart(padValue, '0');
             label = `${el.prefix || ''}${dummyNum}${el.suffix || ''}`;
-
         }
 
         ctx.fillText(label, 0, fs);

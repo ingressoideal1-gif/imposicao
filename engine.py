@@ -173,7 +173,11 @@ class ImpositionConfig:
         elif csv_data:
             self.total_items = len(csv_data)
         else:
-            self.total_items = math.floor((seq_end - seq_start) / seq_increment) + 1
+            total_expected = math.floor((seq_end - seq_start) / seq_increment) + 1
+            if self.num_tipo == "TICKET":
+                self.total_items = math.ceil(total_expected / self.ticket_qtd)
+            else:
+                self.total_items = total_expected
 
         # Elementos VDP da numeração
         self.elements = []
@@ -785,10 +789,10 @@ class ImpositionEngine:
                         current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
 
                         if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
-                            pos = rotated_el.get("ticket_pos", 1)
-                            N = cfg.ticket_qtd
-                            logic = cfg.ticket_logica
-                            Q = cfg.total_items
+                            pos = int(rotated_el.get("ticket_pos", 1))
+                            N = int(cfg.ticket_qtd)
+                            logic = str(cfg.ticket_logica).strip().upper()
+                            Q = int(cfg.total_items)
                             if logic == "PILHA":
                                 current_val = cfg.seq_start + ((pos - 1) * Q) + item_index
                             else:
@@ -980,10 +984,10 @@ class ImpositionEngine:
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
 
                             if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
-                                pos = rotated_el.get("ticket_pos", 1)
-                                N = cfg.ticket_qtd
-                                logic = cfg.ticket_logica
-                                Q = cfg.total_items
+                                pos = int(rotated_el.get("ticket_pos", 1))
+                                N = int(cfg.ticket_qtd)
+                                logic = str(cfg.ticket_logica).strip().upper()
+                                Q = int(cfg.total_items)
                                 if logic == "PILHA":
                                     current_val = cfg.seq_start + ((pos - 1) * Q) + item_index
                                 else:
