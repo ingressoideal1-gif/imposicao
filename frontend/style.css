@@ -532,11 +532,15 @@ input[type="color"].form-control {
     background: rgba(0,0,0,0.25);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 14px;
+    padding: 12px 16px;
     position: relative;
     transition: border-color var(--transition);
     width: 100%;
     min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
 }
 
 .element-card:hover { border-color: var(--border-glow); }
@@ -546,7 +550,8 @@ input[type="color"].form-control {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: 0;
+    min-width: 260px;
 }
 
 .element-card-title {
@@ -559,13 +564,22 @@ input[type="color"].form-control {
 }
 
 .element-card-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.element-card-fields .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 60px;
 }
 
 .element-card-fields .form-group label { font-size: 0.72rem; }
-.element-card-fields .form-control { padding: 7px 10px; font-size: 0.85rem; width: 50%; }
+.element-card-fields .form-control { padding: 6px 8px; font-size: 0.85rem; width: auto; max-width: 150px; }
 
 .add-elements-bar {
     display: flex;
@@ -575,17 +589,19 @@ input[type="color"].form-control {
 }
 
 /* Lista de elementos em grid lado a lado (abaixo do canvas) */
+/* Lista de elementos em grid lado a lado (abaixo do canvas) */
 #elements-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     padding: 10px 4px 14px 4px; /* Padding for shadow */
     min-height: 180px;
 }
 
-/* Campo que ocupa a linha inteira no grid */
+/* Campo que ocupa a linha inteira no flex/grid */
 .el-full {
     grid-column: 1 / -1;
+    flex: 1 1 100%;
 }
 
 /* ─── Canvas Area ───────────────────────────────────────────────────────────── */

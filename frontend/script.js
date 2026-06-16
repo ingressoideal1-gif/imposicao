@@ -4201,7 +4201,7 @@ function renderElementsList() {
 
             <div class="element-card ${isSelected ? 'selected' : ''}" id="elcard-${el.id}" onclick="selectEl('${el.id}', event)">
 
-                <div class="element-card-header" style="flex-wrap: wrap; gap: 8px;">
+                <div class="element-card-header">
 
                     <span class="element-card-title" style="flex: 1; display: flex; align-items: center; gap: 8px;">
 
@@ -4221,7 +4221,7 @@ function renderElementsList() {
 
                 </div>
 
-                <div class="element-card-fields" style="grid-template-columns: 1fr 1fr;">
+                <div class="element-card-fields">
 
                     <div class="form-group"><label>X (mm)</label><input class="form-control el-x" type="number" value="${el.x_mm.toFixed(1)}" step="0.5" onchange="updateEl('${el.id}','x_mm',+this.value)"></div>
 
@@ -4257,7 +4257,7 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group el-full"><label>Fonte</label>
+                <div class="form-group"><label>Fonte</label>
                     ${fontPickerHTML(el.id, el.font_name)}
                 </div>
 
@@ -4279,9 +4279,9 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group el-full"><label>Texto Fixo</label><input class="form-control" type="text" value="${el.fixed_value || ''}" onchange="updateEl('${el.id}','fixed_value',this.value)"></div>
+                <div class="form-group"><label>Texto Fixo</label><input class="form-control" type="text" value="${el.fixed_value || ''}" onchange="updateEl('${el.id}','fixed_value',this.value)"></div>
 
-                <div class="form-group el-full"><label>Fonte</label>
+                <div class="form-group"><label>Fonte</label>
                     ${fontPickerHTML(el.id, el.font_name)}
                 </div>
 
@@ -4291,7 +4291,7 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group el-full"><label>Tamanho (mm)</label><input class="form-control" type="number" value="${el.size_mm}" min="5" max="100" step="0.5" onchange="updateEl('${el.id}','size_mm',+this.value)"></div>
+                <div class="form-group"><label>Tamanho (mm)</label><input class="form-control" type="number" value="${el.size_mm}" min="5" max="100" step="0.5" onchange="updateEl('${el.id}','size_mm',+this.value)"></div>
 
                 <div class="form-group">
 
@@ -4366,7 +4366,7 @@ function renderElementsList() {
                 options += `<option value="${i}" ${(el.ticket_pos || 1) == i ? 'selected' : ''}>Ticket ${i}</option>`;
             }
             ticketPosHTML = `
-                <div class="form-group el-full">
+                <div class="form-group">
                     <label style="color:var(--blue); font-weight: 600;">Posição do Ticket</label>
                     <select class="form-control" style="background: rgba(0, 168, 255, 0.1);" onchange="updateEl('${el.id}','ticket_pos', parseInt(this.value))">
                         ${options}
@@ -4379,7 +4379,7 @@ function renderElementsList() {
 
         <div class="element-card ${isSelected ? 'selected' : ''}" id="elcard-${el.id}" onclick="selectEl('${el.id}', event)">
 
-            <div class="element-card-header" style="flex-wrap: wrap; gap: 8px;">
+            <div class="element-card-header">
 
                 <span class="element-card-title" style="flex: 1; display: flex; align-items: center; gap: 8px;">
 
