@@ -11835,17 +11835,16 @@ function renderOrdens() {
                 const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
                 
                 return `
-                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
-                        <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
-                        <td>
-                            <strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong>
+                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}">
+                        <td onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;" title="Clique para ver os detalhes do pedido">
+                            <strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong>
                             ${valorFormatado}
                         </td>
                         <td><strong>${os.cliente || '—'}</strong></td>
                         <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${os.observacoes || ''}">
                             ${os.observacoes || '—'}
                         </td>
-                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
+                        <td>${renderVendedorSelect(os.id)}</td>
                         <td>${progressBarHtml}</td>
                         <td style="text-align: center; vertical-align: middle;">${previewHtml}</td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
@@ -11853,9 +11852,6 @@ function renderOrdens() {
                         <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
                         <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1);">${frete}</span></td>
                         <td>${getStatusBadge(os.status)}</td>
-                        <td>
-                            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); changeOSStatus('${os.id}', 'ARTE_EM_ANDAMENTO')" title="Mover para a Lista de Arte" style="padding: 4px 8px; font-size: 0.75rem;">🎨 Mover p/ Arte</button>
-                        </td>
                     </tr>
                 `;
             }).join('');
