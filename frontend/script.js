@@ -11832,19 +11832,16 @@ function renderOrdens() {
                 const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
 
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
-                const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
                 
                 return `
                     <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}">
                         <td onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;" title="Clique para ver os detalhes do pedido">
-                            <strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong>
-                            ${valorFormatado}
+                            <strong style="font-size: 1.3rem; color: var(--blue); text-decoration: underline; text-decoration-style: solid; font-weight: 800;">${os.numero}</strong>
                         </td>
                         <td><strong>${os.cliente || '—'}</strong></td>
                         <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${os.observacoes || ''}">
                             ${os.observacoes || '—'}
                         </td>
-                        <td>${renderVendedorSelect(os.id)}</td>
                         <td>${progressBarHtml}</td>
                         <td style="text-align: center; vertical-align: middle;">${previewHtml}</td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
