@@ -11204,7 +11204,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
 function mapVibecodeProdutoToOSItem(p, osId) {
     // Detectar tipo de produto pelo nome
     const nomeProd = (p.nome_produto || '').toUpperCase();
-    let setor = 'IMPRESS.';
+    let setor = 'PVC';
     let produto = nomeProd;
     
     // Mapear nomes conhecidos
