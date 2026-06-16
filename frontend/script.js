@@ -4207,7 +4207,7 @@ function renderElementsList() {
 
                         <span class="badge ${typeBadge[el.type]}">${typeLabel[el.type]}</span>
 
-                        <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
+                        <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 0; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
 
                     </span>
 
@@ -4385,7 +4385,7 @@ function renderElementsList() {
 
                     <span class="badge ${typeBadge[el.type]}">${typeLabel[el.type]}</span>
 
-                    <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
+                    <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 0; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
 
                 </span>
 
@@ -11550,7 +11550,7 @@ function renderDesignerSelect(osId) {
         options += `<option value="${escaped}" ${selected}>${d}</option>`;
     });
 
-    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
+    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 0; background: rgba(30,41,59,0.5);" 
                 onclick="event.stopPropagation()" 
                 onchange="event.stopPropagation(); setOSDesigner('${osId}', this.value)">${options}</select>`;
 }
@@ -11612,7 +11612,7 @@ function renderVendedorSelect(osId) {
         options += `<option value="${escaped}" ${selected}>${v}</option>`;
     });
 
-    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
+    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 0; background: rgba(30,41,59,0.5);" 
                 onclick="event.stopPropagation()" 
                 onchange="event.stopPropagation(); setOSVendedor('${osId}', this.value)">${options}</select>`;
 }
@@ -11833,7 +11833,7 @@ function renderOrdens() {
                 
                 // Barra de progresso do status de impressão
                 const progressBarHtml = `
-                    <div style="width: 100%; min-width: 110px;">
+                    <div style="width: 100%; min-width: 0;">
                         <div style="font-size: 0.72rem; margin-bottom: 3px; color: var(--text-dim); display: flex; justify-content: space-between; font-family: monospace;">
                             <span>${impressosCount}/${totalItens} mod.</span>
                             <strong>${pct}%</strong>
