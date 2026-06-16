@@ -538,7 +538,7 @@ input[type="color"].form-control {
     width: 100%;
     min-width: 0;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap; overflow-x: auto;
     align-items: center;
     gap: 16px;
 }
@@ -549,9 +549,9 @@ input[type="color"].form-control {
 .element-card-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
     margin-bottom: 0;
-    min-width: 260px;
+    flex-shrink: 0;
 }
 
 .element-card-title {
@@ -565,25 +565,27 @@ input[type="color"].form-control {
 
 .element-card-fields {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     flex: 1;
+    overflow-x: auto;
 }
 
 .element-card-fields .form-group {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     gap: 4px;
-    min-width: 60px;
+    white-space: nowrap;
 }
 
-.element-card-fields .form-group label { font-size: 0.72rem; }
+.element-card-fields .form-group label { font-size: 0.75rem; margin-bottom: 0; }
 .element-card-fields .form-control { padding: 6px 8px; font-size: 0.85rem; width: auto; max-width: 150px; }
 
 .add-elements-bar {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap; overflow-x: auto;
     gap: 8px;
     padding: 12px 0;
 }
@@ -639,7 +641,7 @@ input[type="color"].form-control {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap; overflow-x: auto;
     width: 100%;
     padding: 6px 0 2px;
     border-top: 1px solid var(--border);
@@ -1674,7 +1676,7 @@ body.not-logged-in .app-shell {
 
 .filter-btns-container {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap; overflow-x: auto;
     gap: 8px;
 }
 
@@ -1775,7 +1777,7 @@ body.not-logged-in .app-shell {
 @media (max-width: 1024px) {
     .prod-panel-container { flex-direction: column; overflow: auto; }
     .prod-main-area { flex: auto; overflow: visible; }
-    .prod-side-metrics { width: 100%; flex-direction: row; flex-wrap: wrap; }
+    .prod-side-metrics { width: 100%; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; }
     .prod-side-metrics > div { flex: 1 1 calc(50% - 0.5rem); min-width: 150px; }
     .prod-metrics-title { width: 100%; }
 }
