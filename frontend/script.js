@@ -11782,10 +11782,58 @@ function renderOrdens() {
 
             tbodyImpressao.innerHTML = filteredImpressao.map(os => {
                 const isExpanded = state.osExpandedId === os.id;
-                const itensCount = os._itens_count || 0;
+                const osItensList = state.osItens[os.id] || [];
+                const totalItens = osItensList.length;
+                const impressosCount = osItensList.filter(item => item.impressao === 'IMPRESSO').length;
+                const pct = totalItens > 0 ? Math.round((impressosCount / totalItens) * 100) : 0;
+                
+                // Barra de progresso do status de impressão
+                const progressBarHtml = `
+                    <div style="width: 100%; min-width: 110px;">
+                        <div style="font-size: 0.72rem; margin-bottom: 3px; color: var(--text-dim); display: flex; justify-content: space-between; font-family: monospace;">
+                            <span>${impressosCount}/${totalItens} mod.</span>
+                            <strong>${pct}%</strong>
+                        </div>
+                        <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="width: ${pct}%; height: 100%; background: ${pct === 100 ? 'var(--green)' : 'var(--blue)'}; border-radius: 3px; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                `;
+
+                // Preview da arte do 1º modelo
+                const primeiroItem = osItensList[0];
+                let previewHtml = `
+                    <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
+                        🖼️
+                    </div>
+                `;
+                if (primeiroItem && primeiroItem.amostra_arte_base64) {
+                    const isPdf = primeiroItem.amostra_arte_base64.startsWith('data:application/pdf') || primeiroItem.amostra_arte_base64.includes('JVBERi');
+                    if (isPdf) {
+                        previewHtml = `
+                            <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${primeiroItem.amostra_arte_base64}', '_blank')">
+                                📄
+                            </div>
+                        `;
+                    } else {
+                        previewHtml = `
+                            <img src="${primeiroItem.amostra_arte_base64}" 
+                                 style="width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
+                                 onclick="event.stopPropagation(); openClienteLightbox('${primeiroItem.amostra_arte_base64}')" 
+                                 title="Clique para ampliar a arte" />
+                        `;
+                    }
+                }
+
+                // Soma das quantidades de todos os modelos
+                const totalQtd = osItensList.reduce((acc, item) => acc + (item.quantidade || 0), 0);
+
+                // Frete (forma de envio)
+                const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
+
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
                 const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
-                const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
+                
                 return `
                     <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
                         <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
@@ -11794,15 +11842,17 @@ function renderOrdens() {
                             ${valorFormatado}
                         </td>
                         <td><strong>${os.cliente || '—'}</strong></td>
-                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
-                        <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
-                        <td style="font-size: 0.82rem; color: var(--text-dim);">
-                            ${formatDateTime(os.data_liberacao)}
-                            ${dataPedFormatada}
+                        <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${os.observacoes || ''}">
+                            ${os.observacoes || '—'}
                         </td>
+                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
+                        <td>${progressBarHtml}</td>
+                        <td style="text-align: center; vertical-align: middle;">${previewHtml}</td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
+                        <td><span class="badge">${totalItens} ${totalItens === 1 ? 'modelo' : 'modelos'}</span></td>
+                        <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
+                        <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1);">${frete}</span></td>
                         <td>${getStatusBadge(os.status)}</td>
-                        <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
                         <td>
                             <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); changeOSStatus('${os.id}', 'ARTE_EM_ANDAMENTO')" title="Mover para a Lista de Arte" style="padding: 4px 8px; font-size: 0.75rem;">🎨 Mover p/ Arte</button>
                         </td>
