@@ -523,3 +523,7 @@ if __name__ == "__main__":
 @app.get("/api/diag")
 def get_diag():
     return {"logs": DIAG_LOGS}
+
+# Fallback mount to serve static files from root (resolves absolute links like /style.css, /script.js, /supabase-config.js in frontend)
+app.mount("/", StaticFiles(directory="frontend", html=True), name="root_frontend")
+
