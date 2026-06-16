@@ -147,6 +147,10 @@ class ImpositionConfig:
         self.seq_increment = seq_increment
         self.csv_data = csv_data
         
+        self.num_tipo = numeracao.get("tipo", "SEQUENCIAL") if numeracao else "SEQUENCIAL"
+        self.ticket_qtd = numeracao.get("ticket_qtd", 1) if numeracao else 1
+        self.ticket_logica = numeracao.get("ticket_logica", "PILHA") if numeracao else "PILHA"
+        
         if layout_schema == "pdf_multiple":
             # Para Pdf Múltiplo, a quantidade total de itens é baseada na quantidade de páginas
             try:
@@ -780,6 +784,16 @@ class ImpositionEngine:
 
                         current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
 
+                        if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                            pos = rotated_el.get("ticket_pos", 1)
+                            N = cfg.ticket_qtd
+                            logic = cfg.ticket_logica
+                            Q = cfg.total_items
+                            if logic == "PILHA":
+                                current_val = cfg.seq_start + ((pos - 1) * Q) + item_index
+                            else:
+                                current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+
                         # Renderiza na página temporária usando coordenadas relativas diretas
                         self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
@@ -964,6 +978,16 @@ class ImpositionEngine:
                                 rotated_el["font_size"] = el.get("font_size", 12)
 
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
+
+                            if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                                pos = rotated_el.get("ticket_pos", 1)
+                                N = cfg.ticket_qtd
+                                logic = cfg.ticket_logica
+                                Q = cfg.total_items
+                                if logic == "PILHA":
+                                    current_val = cfg.seq_start + ((pos - 1) * Q) + item_index
+                                else:
+                                    current_val = cfg.seq_start + (item_index * N) + (pos - 1)
 
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 

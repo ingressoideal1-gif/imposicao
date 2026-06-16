@@ -326,7 +326,9 @@ def add_numeracao(data: dict) -> str:
             "svg_filename": data.get("svg_filename", ""),
             "elements": data.get("elements", []),
             "preview_jpg": data.get("preview_jpg", ""),
-            "tipo": data.get("tipo", "SEQUENCIAL")
+            "tipo": data.get("tipo", "SEQUENCIAL"),
+            "ticket_qtd": data.get("ticket_qtd", 1),
+            "ticket_logica": data.get("ticket_logica", "PILHA")
         }
         _supabase_request("POST", "producao_numeracoes", clean_data)
         return new_id
@@ -348,7 +350,9 @@ def update_numeracao(num_id: str, data: dict) -> bool:
                 "svg_filename": data.get("svg_filename", ""),
                 "elements": data.get("elements", []),
                 "preview_jpg": data.get("preview_jpg", ""),
-                "tipo": data.get("tipo", "SEQUENCIAL")
+                "tipo": data.get("tipo", "SEQUENCIAL"),
+                "ticket_qtd": data.get("ticket_qtd", 1),
+                "ticket_logica": data.get("ticket_logica", "PILHA")
             }
             res = _supabase_request("PATCH", f"producao_numeracoes?id=eq.{num_id}", clean_data)
             return bool(res)

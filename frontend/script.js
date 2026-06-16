@@ -2222,6 +2222,9 @@ function editNumeracao(id) {
     document.getElementById('num-formato').value = n.formato_id;
     
     document.getElementById('num-tipo').value = n.tipo || 'SEQUENCIAL';
+    document.getElementById('num-ticket-qtd').value = n.ticket_qtd || 1;
+    document.getElementById('num-ticket-logica').value = n.ticket_logica || 'PILHA';
+    if(window.onTipoSelect) window.onTipoSelect();
 
     document.getElementById('btn-num-cancel').style.display = 'inline-flex';
 
@@ -2501,6 +2504,9 @@ function cancelNumEdit() {
     document.getElementById('num-formato').value = '';
     
     document.getElementById('num-tipo').value = 'SEQUENCIAL';
+    document.getElementById('num-ticket-qtd').value = 1;
+    document.getElementById('num-ticket-logica').value = 'PILHA';
+    if(window.onTipoSelect) window.onTipoSelect();
 
     document.getElementById('btn-num-cancel').style.display = 'none';
 
@@ -2540,6 +2546,22 @@ function cancelNumEdit() {
 window.cancelNumEdit = cancelNumEdit;
 
 
+
+window.onTipoSelect = function() {
+    const tipo = document.getElementById('num-tipo').value;
+    const ticketSettings = document.getElementById('num-ticket-settings');
+    if (tipo === 'TICKET') {
+        ticketSettings.style.display = 'block';
+    } else {
+        ticketSettings.style.display = 'none';
+    }
+    // Re-render elements so any ticket_pos dropdowns are created/removed
+    renderElementsList();
+};
+
+window.onTicketQtdChange = function() {
+    renderElementsList();
+};
 
 // Quando o formato é selecionado, mostrar editor e checkboxes de formatos compatíveis
 
@@ -4340,8 +4362,24 @@ function renderElementsList() {
                 <div class="form-group"><label>Altura (mm)</label><input class="form-control" type="number" value="${el.height_mm || 20}" min="5" max="200" step="0.5" onchange="updateEl('${el.id}','height_mm',+this.value)"></div>`;
 
         }
-
-
+        
+        let ticketPosHTML = '';
+        const numTipoSelect = document.getElementById('num-tipo');
+        if (numTipoSelect && numTipoSelect.value === 'TICKET' && ['TEXT', 'QR', 'BARCODE'].includes(el.type)) {
+            const ticketQtd = parseInt(document.getElementById('num-ticket-qtd').value) || 1;
+            let options = '';
+            for (let i = 1; i <= ticketQtd; i++) {
+                options += `<option value="${i}" ${(el.ticket_pos || 1) == i ? 'selected' : ''}>Ticket ${i}</option>`;
+            }
+            ticketPosHTML = `
+                <div class="form-group el-full">
+                    <label style="color:var(--blue); font-weight: 600;">Posição do Ticket</label>
+                    <select class="form-control" style="background: rgba(0, 168, 255, 0.1);" onchange="updateEl('${el.id}','ticket_pos', parseInt(this.value))">
+                        ${options}
+                    </select>
+                </div>
+            `;
+        }
 
         return `
 
@@ -4450,6 +4488,7 @@ function renderElementsList() {
                 ` : ''}
 
                 ${extraFields}
+                ${ticketPosHTML}
 
             </div>
 
@@ -4790,6 +4829,9 @@ window.saveNumeracao = async function () {
                 if (!ids.includes(fmtId)) ids.unshift(fmtId);
                 return ids;
             })(),
+
+            ticket_qtd: parseInt(document.getElementById('num-ticket-qtd').value) || 1,
+            ticket_logica: document.getElementById('num-ticket-logica').value || 'PILHA',
 
             csv_filename: state.numCsvFilename || "",
 
