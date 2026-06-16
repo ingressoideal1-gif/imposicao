@@ -1762,3 +1762,4 @@ body.not-logged-in .app-shell {
     .prod-side-metrics > div { flex: 1 1 calc(50% - 0.5rem); min-width: 150px; }
     .prod-metrics-title { width: 100%; }
 }
+.prod-panel-section.active { display: flex !important; flex-direction: column; padding: 0 !important; }
