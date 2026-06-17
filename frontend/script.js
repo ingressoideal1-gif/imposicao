@@ -115,19 +115,9 @@ const state = {
     loadedOSName: "",
 
     expectedArteName: "",
-    filtroSetor: "",
-    filtroStatus: "",
-    filtroSetorArte: "",
-    filtroStatusArte: "",
+
 };
 
-// ─── Variáveis globais de usuários ───
-let usuariosSupabase = [];
-
-const VENDEDORES_LISTA = [
-    'L. Martins',
-    'Comercial',
-];
 
 
 // ─── Utility — fetchPdfBytes ──────────────────────────────────────────────────
@@ -1967,7 +1957,7 @@ function populateSelects() {
                 const ids = n.formato_ids || [n.formato_id];
                 return ids.some(id => String(id) === String(selectedCor.formato_id));
             })
-            : [];
+            : state.numeracoes;
 
 
         selAmNum.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
@@ -2220,11 +2210,6 @@ function editNumeracao(id) {
     document.getElementById('num-name').value = n.name;
 
     document.getElementById('num-formato').value = n.formato_id;
-    
-    document.getElementById('num-tipo').value = n.tipo || 'SEQUENCIAL';
-    document.getElementById('num-ticket-qtd').value = n.ticket_qtd || 1;
-    document.getElementById('num-ticket-logica').value = n.ticket_logica || 'HORIZONTAL';
-    if(window.onTipoSelect) window.onTipoSelect();
 
     document.getElementById('btn-num-cancel').style.display = 'inline-flex';
 
@@ -2502,11 +2487,6 @@ function cancelNumEdit() {
     document.getElementById('num-name').value = '';
 
     document.getElementById('num-formato').value = '';
-    
-    document.getElementById('num-tipo').value = 'SEQUENCIAL';
-    document.getElementById('num-ticket-qtd').value = 1;
-    document.getElementById('num-ticket-logica').value = 'HORIZONTAL';
-    if(window.onTipoSelect) window.onTipoSelect();
 
     document.getElementById('btn-num-cancel').style.display = 'none';
 
@@ -2546,22 +2526,6 @@ function cancelNumEdit() {
 window.cancelNumEdit = cancelNumEdit;
 
 
-
-window.onTipoSelect = function() {
-    const tipo = document.getElementById('num-tipo').value;
-    const ticketSettings = document.getElementById('num-ticket-settings');
-    if (tipo === 'TICKET') {
-        ticketSettings.style.display = 'block';
-    } else {
-        ticketSettings.style.display = 'none';
-    }
-    // Re-render elements so any ticket_pos dropdowns are created/removed
-    renderElementsList();
-};
-
-window.onTicketQtdChange = function() {
-    renderElementsList();
-};
 
 // Quando o formato é selecionado, mostrar editor e checkboxes de formatos compatíveis
 
@@ -2851,9 +2815,12 @@ function drawElement(ctx, el, S) {
 
 
     const SAMPLE = el.type === 'FIXED' ? (el.fixed_value || 'TEXTO') :
-        el.type === 'TEXT' ? String(el.ticket_pos || 1).padStart(el.pad || 6, '0') :
+
+        el.type === 'TEXT' ? '0001' :
+
             el.type === 'QR' ? null :
-                el.type === 'BARCODE' ? null : String(el.ticket_pos || 1).padStart(el.pad || 6, '0');
+
+                el.type === 'BARCODE' ? null : '0001';
 
 
 
@@ -2880,8 +2847,11 @@ function drawElement(ctx, el, S) {
         } else {
 
             const padValue = typeof el.pad !== 'undefined' ? el.pad : 6;
-            const dummyNum = String(el.ticket_pos || 1).padStart(padValue, '0');
+
+            const dummyNum = String(1).padStart(padValue, '0');
+
             label = `${el.prefix || ''}${dummyNum}${el.suffix || ''}`;
+
         }
 
         ctx.fillText(label, 0, fs);
@@ -4189,7 +4159,9 @@ function renderElementsList() {
 
 
 
-    container.innerHTML = state.numElements.map(el => {
+    const typeOrder = { TEXT: 0, FIXED: 1, QR: 2, BARCODE: 3, SVG: 4, PDF: 5, PICOTE: 6 };
+    const sortedElements = [...state.numElements].sort((a, b) => (typeOrder[a.type] ?? 99) - (typeOrder[b.type] ?? 99));
+    container.innerHTML = sortedElements.map(el => {
 
         const isSelected = isElSelected(el.id);
 
@@ -4201,13 +4173,13 @@ function renderElementsList() {
 
             <div class="element-card ${isSelected ? 'selected' : ''}" id="elcard-${el.id}" onclick="selectEl('${el.id}', event)">
 
-                <div class="element-card-header">
+                <div class="element-card-header" style="flex-wrap: wrap; gap: 8px;">
 
                     <span class="element-card-title" style="flex: 1; display: flex; align-items: center; gap: 8px;">
 
                         <span class="badge ${typeBadge[el.type]}">${typeLabel[el.type]}</span>
 
-                        <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 0; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
+                        <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
 
                     </span>
 
@@ -4221,7 +4193,7 @@ function renderElementsList() {
 
                 </div>
 
-                <div class="element-card-fields">
+                <div class="element-card-fields" style="grid-template-columns: 1fr 1fr;">
 
                     <div class="form-group"><label>X (mm)</label><input class="form-control el-x" type="number" value="${el.x_mm.toFixed(1)}" step="0.5" onchange="updateEl('${el.id}','x_mm',+this.value)"></div>
 
@@ -4257,7 +4229,7 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group"><label>Fonte</label>
+                <div class="form-group el-full"><label>Fonte</label>
                     ${fontPickerHTML(el.id, el.font_name)}
                 </div>
 
@@ -4279,9 +4251,9 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group"><label>Texto Fixo</label><input class="form-control" type="text" value="${el.fixed_value || ''}" onchange="updateEl('${el.id}','fixed_value',this.value)"></div>
+                <div class="form-group el-full"><label>Texto Fixo</label><input class="form-control" type="text" value="${el.fixed_value || ''}" onchange="updateEl('${el.id}','fixed_value',this.value)"></div>
 
-                <div class="form-group"><label>Fonte</label>
+                <div class="form-group el-full"><label>Fonte</label>
                     ${fontPickerHTML(el.id, el.font_name)}
                 </div>
 
@@ -4291,7 +4263,7 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group"><label>Tamanho (mm)</label><input class="form-control" type="number" value="${el.size_mm}" min="5" max="100" step="0.5" onchange="updateEl('${el.id}','size_mm',+this.value)"></div>
+                <div class="form-group el-full"><label>Tamanho (mm)</label><input class="form-control" type="number" value="${el.size_mm}" min="5" max="100" step="0.5" onchange="updateEl('${el.id}','size_mm',+this.value)"></div>
 
                 <div class="form-group">
 
@@ -4356,36 +4328,20 @@ function renderElementsList() {
                 <div class="form-group"><label>Altura (mm)</label><input class="form-control" type="number" value="${el.height_mm || 20}" min="5" max="200" step="0.5" onchange="updateEl('${el.id}','height_mm',+this.value)"></div>`;
 
         }
-        
-        let ticketPosHTML = '';
-        const numTipoSelect = document.getElementById('num-tipo');
-        if (numTipoSelect && numTipoSelect.value === 'TICKET' && ['TEXT', 'QR', 'BARCODE'].includes(el.type)) {
-            const ticketQtd = parseInt(document.getElementById('num-ticket-qtd').value) || 1;
-            let options = '';
-            for (let i = 1; i <= ticketQtd; i++) {
-                options += `<option value="${i}" ${(el.ticket_pos || 1) == i ? 'selected' : ''}>Ticket ${i}</option>`;
-            }
-            ticketPosHTML = `
-                <div class="form-group">
-                    <label style="color:var(--blue); font-weight: 600;">Posição do Ticket</label>
-                    <select class="form-control" style="background: rgba(0, 168, 255, 0.1);" onchange="updateEl('${el.id}','ticket_pos', parseInt(this.value))">
-                        ${options}
-                    </select>
-                </div>
-            `;
-        }
+
+
 
         return `
 
         <div class="element-card ${isSelected ? 'selected' : ''}" id="elcard-${el.id}" onclick="selectEl('${el.id}', event)">
 
-            <div class="element-card-header">
+            <div class="element-card-header" style="flex-wrap: wrap; gap: 8px;">
 
                 <span class="element-card-title" style="flex: 1; display: flex; align-items: center; gap: 8px;">
 
                     <span class="badge ${typeBadge[el.type]}">${typeLabel[el.type]}</span>
 
-                    <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 0; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
+                    <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
 
                 </span>
 
@@ -4482,7 +4438,6 @@ function renderElementsList() {
                 ` : ''}
 
                 ${extraFields}
-                ${ticketPosHTML}
 
             </div>
 
@@ -4711,8 +4666,6 @@ window.saveNumeracao = async function () {
     const name = document.getElementById('num-name').value.trim();
 
     const fmtId = document.getElementById('num-formato').value;
-    
-    const tipo = document.getElementById('num-tipo').value || 'SEQUENCIAL';
 
 
 
@@ -4809,8 +4762,6 @@ window.saveNumeracao = async function () {
             name,
 
             formato_id: fmtId,
-            
-            tipo,
 
             preview_jpg: previewJpgBase64,
 
@@ -4823,9 +4774,6 @@ window.saveNumeracao = async function () {
                 if (!ids.includes(fmtId)) ids.unshift(fmtId);
                 return ids;
             })(),
-
-            ticket_qtd: parseInt(document.getElementById('num-ticket-qtd').value) || 1,
-            ticket_logica: document.getElementById('num-ticket-logica').value || 'HORIZONTAL',
 
             csv_filename: state.numCsvFilename || "",
 
@@ -9151,7 +9099,7 @@ window.onAmostraCorSelect = async function() {
                 const ids = n.formato_ids || [n.formato_id];
                 return ids.some(id => String(id) === String(cor.formato_id));
             })
-            : [];
+            : state.numeracoes;
 
         numSelect.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
 
@@ -10936,94 +10884,16 @@ if (!state.osExpandedId) state.osExpandedId = null;
 if (!state.activeOSItem) state.activeOSItem = null;
 
 /**
- * Sincroniza dinamicamente o status da OS em memória e no banco com base nas decisões de amostra do cliente
- */
-async function sincronizarStatusOrdensDinamico() {
-    // Apenas rodar no painel interno (não na página do cliente)
-    if (state.amostrasContainerId === 'cliente-amostras-itens-container') return;
-
-    for (const os of state.ordens) {
-        const osId = os.id;
-        const itens = state.osItens[osId] || [];
-        if (itens.length === 0) continue;
-
-        // Se o status da OS já estiver finalizado em termos de produção, não fazemos override
-        if (os.status === 'FINALIZADA' || os.status === 'CANCELADA' || os.status === 'PRODUÇÃO' || os.status === 'EM IMPRESSÃO') {
-            continue;
-        }
-
-        // Verificar o status de todas as amostras/itens
-        const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
-        const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
-
-        let novoStatus = null;
-        if (todosAprovados) {
-            novoStatus = 'ARTE_APROVADA';
-        } else if (algumReprovado) {
-            novoStatus = 'ARTE_EM_CORRECAO';
-        }
-
-        if (novoStatus && os.status !== novoStatus) {
-            console.log(`[Sync] Ajustando status da OS #${os.numero} de ${os.status} para ${novoStatus} com base nas amostras.`);
-            
-            // 1. Atualizar em memória
-            os.status = novoStatus;
-
-            // 2. Atualizar no localstorage overrides (comum para ordens Vibecode e Supabase no front)
-            const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-            overrides[osId] = novoStatus;
-            localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
-
-            // 3. Atualizar no banco Supabase (somente se for OS local e não for mock/vibe virtual)
-            if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
-                try {
-                    await supabaseClient
-                        .from('producao_ordens_servico')
-                        .update({ status: novoStatus })
-                        .eq('id', osId);
-                } catch (err) {
-                    console.warn(`[Sync] Falha ao gravar status no Supabase para OS #${os.numero}:`, err);
-                }
-            }
-        }
-    }
-}
-
-/**
  * Carrega todas as OS — Prioridade: Vibecode → Supabase Imposition → API local
  * No Vibecode, cada `id_int` (proposta) = 1 OS. Os produtos_proposta são os itens.
  */
 async function loadOrdens() {
     try {
-        // Carrega usuários do Supabase
-        await loadUsuarios();
-        
-        // Buscar pedidos da tabela comercial se disponível (Apenas Leitura)
-        let pedidosComerciais = [];
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            try {
-                const { data: pedData, error: pedError } = await supabaseClient
-                    .from('pedidos')
-                    .select('*');
-                if (pedError) {
-                    console.error('[Supabase] Erro na resposta da tabela pedidos:', pedError);
-                }
-                if (!pedError && pedData) {
-                    pedidosComerciais = pedData;
-                }
-            } catch (err) {
-                console.error('[Supabase] Falha catastrófica ao carregar tabela pedidos:', err);
-            }
-        }
-        state.hasPedidosComerciais = pedidosComerciais.length > 0;
-        console.log('[Supabase] Pedidos comerciais carregados:', pedidosComerciais.length, pedidosComerciais);
-
         // Fonte 1: Vibecode (ERP do parceiro)
         if (typeof vibeClient !== 'undefined' && vibeClient) {
             console.log('[OS] Carregando do Vibecode...');
-            const loaded = await loadOrdensFromVibecode(pedidosComerciais);
+            const loaded = await loadOrdensFromVibecode();
             if (loaded) {
-                await sincronizarStatusOrdensDinamico();
                 renderOrdens();
                 return;
             }
@@ -11034,39 +10904,18 @@ async function loadOrdens() {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const { data, error } = await supabaseClient
                 .from('producao_ordens_servico')
-                .select('*, producao_os_itens(*)')
+                .select('*, producao_os_itens(id)')
                 .order('created_at', { ascending: false });
             if (error) throw error;
-
-            let ordensFiltradas = data || [];
-            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
-            if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
-                ordensFiltradas = ordensFiltradas.filter(os => {
-                    const osNumeroInt = parseInt(os.numero);
-                    return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
-                });
-            }
-
-            state.ordens = ordensFiltradas.map(os => {
+            state.ordens = (data || []).map(os => {
                 const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const savedStatus = vibeStatusOverrides[os.id];
                 let dbStatus = os.status;
                 if (dbStatus === 'PRODUÇÃO') dbStatus = 'EM IMPRESSÃO';
                 else if (dbStatus === 'ARTE' || dbStatus === 'NOVO') dbStatus = 'ARTE_EM_ANDAMENTO';
-                
-                // Pré-carrega no estado local os itens buscados para agilizar o collapse e as estatísticas
-                if (os.producao_os_itens) {
-                    state.osItens[os.id] = os.producao_os_itens;
-                }
-                
-                // Mapear o status_arte comercial
-                const osNumeroInt = parseInt(os.numero);
-                const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
-                
                 return {
                     ...os,
                     status: savedStatus || dbStatus,
-                    status_arte: pedidoReal?.status_arte || null,
                     cliente: os.cliente || getFallbackCliente(os.numero || 0),
                     vendedor: os.vendedor || getFallbackVendedor(os.numero || 0),
                     data_liberacao: os.data_liberacao || os.created_at,
@@ -11078,31 +10927,11 @@ async function loadOrdens() {
             // Fonte 3: API local (FastAPI)
             const res = await fetch(`${API_BASE_URL}/api/ordens`);
             if (res.ok) {
-                const localData = await res.json();
-                const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
-                
-                const mappedLocalData = localData.map(os => {
-                    const osNumeroInt = parseInt(os.numero);
-                    const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
-                    return {
-                        ...os,
-                        status_arte: pedidoReal?.status_arte || null
-                    };
-                });
-
-                if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
-                    state.ordens = mappedLocalData.filter(os => {
-                        const osNumeroInt = parseInt(os.numero);
-                        return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
-                    });
-                } else {
-                    state.ordens = mappedLocalData;
-                }
+                state.ordens = await res.json();
             } else {
                 state.ordens = [];
             }
         }
-        await sincronizarStatusOrdensDinamico();
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
@@ -11115,7 +10944,7 @@ async function loadOrdens() {
  * Cada id_int = 1 proposta = 1 OS virtual
  * Retorna true se conseguiu carregar, false se não há dados
  */
-async function loadOrdensFromVibecode(pedidosComerciais = []) {
+async function loadOrdensFromVibecode() {
     try {
         // Buscar todos os produtos_proposta
         const { data: produtos, error } = await vibeClient
@@ -11143,38 +10972,10 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
             console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
         }
 
-        // Se pedidosComerciais não foi passado ou está vazio, e temos supabaseClient, tenta carregar
-        if ((!pedidosComerciais || pedidosComerciais.length === 0) && typeof supabaseClient !== 'undefined' && supabaseClient) {
-            try {
-                const { data: pedData, error: pedError } = await supabaseClient
-                    .from('pedidos')
-                    .select('*');
-                if (pedError) {
-                    console.error('[Supabase] Erro na resposta da tabela pedidos:', pedError);
-                }
-                if (!pedError && pedData) {
-                    pedidosComerciais = pedData;
-                }
-            } catch (err) {
-                console.error('[Supabase] Falha ao carregar tabela pedidos:', err);
-            }
-        }
-
-        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
-
         // Agrupar por id_int (cada id_int = 1 proposta = 1 OS)
         const grouped = {};
         produtos.forEach(p => {
             const key = p.id_int;
-
-            // FILTRAR: Se for produção (não-dev) ou se tiver pedidosComerciais populada, filtra
-            if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
-                const existe = pedidosComerciais.some(ped => String(ped.id_int) === String(key));
-                if (!existe) {
-                    return; // ignora este produto e não cria a OS
-                }
-            }
-
             if (!grouped[key]) {
                 const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const osId = `vibe_${key}`;
@@ -11182,9 +10983,6 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
 
                 // Buscar dados reais da proposta
                 const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
-                
-                // Buscar dados do pedido comercial
-                const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(key));
 
                 // Mapear campos com fallbacks determinísticos
                 const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || getFallbackCliente(key);
@@ -11192,20 +10990,13 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
                 const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || p.created_at;
                 const prazoEntrega = propReal?.prazo_entrega || propReal?.prazo || getFallbackPrazo(p.created_at, key);
 
-                // Dados comerciais reais
-                const dataPedido = pedidoReal?.data_pedido || null;
-                const valorTotal = pedidoReal?.valor_total || null;
-
                 grouped[key] = {
                     id: osId,
                     numero: key,
-                    status: savedStatus || 'ARTE_EM_ANDAMENTO',
-                    status_arte: pedidoReal?.status_arte || null,
+                    status: savedStatus || (key % 2 === 0 ? 'EM IMPRESSÃO' : 'ARTE_EM_ANDAMENTO'),
                     cliente: cliente,
                     vendedor: vendedor,
                     data_liberacao: dataLiberacao,
-                    data_pedido: dataPedido,
-                    valor_total: valorTotal,
                     prazo_entrega: prazoEntrega,
                     observacoes: `Proposta #${key} — Vibecode`,
                     criado_por: null,
@@ -11248,7 +11039,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
 function mapVibecodeProdutoToOSItem(p, osId) {
     // Detectar tipo de produto pelo nome
     const nomeProd = (p.nome_produto || '').toUpperCase();
-    let setor = 'PVC';
+    let setor = 'IMPRESS.';
     let produto = nomeProd;
     
     // Mapear nomes conhecidos
@@ -11273,16 +11064,14 @@ function mapVibecodeProdutoToOSItem(p, osId) {
         quantidade: p.qtd || 0,
         num_inicial: 1,
         num_final: p.qtd || 0,
+        cor: 'STD',
         cor_id: null,
         blocos: 'N',
         verso: false,
         numeracao: 'SEQUENCIAL',
         numeracao_id: null,
         aprovacao: 'APROVADA',
-        impressao: (() => {
-            const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
-            return impOverrides[`vibe_item_${p.id}`] || 'AGUARD.';
-        })(),
+        impressao: 'AGUARD.',
         observacoes: p.modelo_descri || p.nome_produto || '',
         created_at: p.created_at,
         updated_at: p.updated_at || p.created_at,
@@ -11306,67 +11095,29 @@ function mapVibecodeProdutoToOSItem(p, osId) {
  */
 async function loadOSItens(osId) {
     try {
-        const os = state.ordens.find(o => o.id === osId);
-        if (!os) return;
+        // Se já pré-carregados (Vibecode ou cache), usar direto
+        if (state.osItens[osId] && state.osItens[osId].length > 0) {
+            renderOSItens(osId);
+            return;
+        }
 
-        // Se não carregado ainda, busca a fonte de dados principal
-        if (!state.osItens[osId] || state.osItens[osId].length === 0) {
-            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                const { data, error } = await supabaseClient
-                    .from('producao_os_itens')
-                    .select('*')
-                    .eq('os_id', osId)
-                    .order('created_at', { ascending: true });
-                if (error) throw error;
-                state.osItens[osId] = data || [];
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { data, error } = await supabaseClient
+                .from('producao_os_itens')
+                .select('*')
+                .eq('os_id', osId)
+                .order('created_at', { ascending: true });
+            if (error) throw error;
+            state.osItens[osId] = data || [];
+        } else {
+            const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
+            if (res.ok) {
+                state.osItens[osId] = await res.json();
             } else {
-                const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
-                if (res.ok) {
-                    state.osItens[osId] = await res.json();
-                } else {
-                    state.osItens[osId] = [];
-                }
+                state.osItens[osId] = [];
             }
         }
-
-        // Buscar dados dinâmicos da arte (pedidos_artes) e mesclar nos itens
-        if (typeof supabaseClient !== 'undefined' && supabaseClient && os.numero) {
-            try {
-                const queryNum = parseInt(os.numero);
-                if (!isNaN(queryNum)) {
-                    const { data: artes, error: artesError } = await supabaseClient
-                        .from('pedidos_artes')
-                        .select('*')
-                        .eq('id_int', queryNum);
-                    
-                    if (!artesError && artes && artes.length > 0) {
-                        state.osItens[osId].forEach(item => {
-                            // Encontrar artes vinculadas a este item
-                            const artesDoItem = artes.filter(a => a.id_modelo === item.id);
-                            if (artesDoItem.length > 0) {
-                                // Ordenar por versão decrescente para pegar a mais recente
-                                artesDoItem.sort((a, b) => b.versao - a.versao);
-                                const ultimaArte = artesDoItem[0];
-                                
-                                // Atualizar metadados de visualização
-                                item.aprovacao = ultimaArte.status;
-                                item.nome_arquivo_arte = ultimaArte.nome_arquivo;
-                                item.versao_arte = ultimaArte.versao;
-                                item.url_arquivo_arte = ultimaArte.url_arquivo;
-                                if (ultimaArte.comentarios_revisao) {
-                                    item.amostra_obs = ultimaArte.comentarios_revisao;
-                                }
-                            }
-                        });
-                    }
-                }
-            } catch (err) {
-                console.warn('[Supabase] Erro ao integrar dados de pedidos_artes:', err);
-            }
-        }
-
         renderOSItens(osId);
-        renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar itens da OS:', e);
         toast('Erro ao carregar itens: ' + e.message, 'error');
@@ -11388,23 +11139,13 @@ function formatDate(dateStr) {
  */
 function getStatusBadge(status) {
     const map = {
-        'ARTE': { icon: '🎨', cls: 'badge-blue', label: 'Arte' },
-        'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber', label: 'Produção' },
-        'FINALIZADA': { icon: '✅', cls: 'badge-teal', label: 'Finalizada' },
-        'CANCELADA': { icon: '❌', cls: 'badge-red', label: 'Cancelada' },
-        
-        // Novos status do fluxo de arte
-        'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
-        'ARTE_EM_CORRECAO': { icon: '🎨', cls: 'badge-amber', label: 'Arte em Andamento' },
-        'ARTE_APROVADA': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
-        'Arte APROVADA': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
-        'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
-        'Enviar ARTE': { icon: '📨', cls: 'badge-green', label: 'Enviar ARTE' },
-        'Pendente Informação': { icon: '⚠️', cls: 'badge-red', label: 'Pendente Informação' }
+        'ARTE': { icon: '🎨', cls: 'badge-blue' },
+        'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber' },
+        'FINALIZADA': { icon: '✅', cls: 'badge-teal' },
+        'CANCELADA': { icon: '❌', cls: 'badge-red' }
     };
-    const s = map[status] || { icon: '❓', cls: '', label: status };
-    const label = s.label || status;
-    return `<span class="badge ${s.cls}">${s.icon} ${label}</span>`;
+    const s = map[status] || { icon: '❓', cls: '' };
+    return `<span class="badge ${s.cls}">${s.icon} ${status}</span>`;
 }
 
 /**
@@ -11412,21 +11153,13 @@ function getStatusBadge(status) {
  */
 function getAprovacaoBadge(aprov) {
     const map = {
-        'EM ARTE': { cls: 'badge-amber', icon: '🎨', text: 'EM ARTE' },
-        'APROVADA': { cls: 'badge-teal', icon: '✅', text: 'APROVADA' },
-        'PRONTA': { cls: 'badge-blue', icon: '📋', text: 'PRONTA' },
-        'REPROVADA': { cls: 'badge-red', icon: '❌', text: 'REPROVADA' },
-        
-        // Novos status da tabela pedidos_artes
-        'EM_REVISAO_INTERNA': { cls: 'badge-amber', icon: '🎨', text: 'Rev. Interna' },
-        'AGUARDANDO_APROVACAO': { cls: 'badge-yellow', icon: '⏳', text: 'Aguard. Cliente' },
-        'APROVADA_CLIENTE': { cls: 'badge-teal', icon: '✅', text: 'Aprov. Cliente' },
-        'REPROVADA_CLIENTE': { cls: 'badge-red', icon: '❌', text: 'Reprov. Cliente' },
-        'LIBERADA': { cls: 'badge-teal', icon: '📋', text: 'Liberada' }
+        'EM ARTE': { cls: 'badge-amber', icon: '🎨' },
+        'APROVADA': { cls: 'badge-teal', icon: '✅' },
+        'PRONTA': { cls: 'badge-blue', icon: '📋' },
+        'REPROVADA': { cls: 'badge-red', icon: '❌' }
     };
-    const key = aprov ? aprov.toUpperCase() : '';
-    const s = map[key] || map[aprov] || { cls: '', icon: '', text: aprov || '—' };
-    return `<span class="badge ${s.cls}">${s.icon} ${s.text}</span>`;
+    const s = map[aprov] || { cls: '', icon: '' };
+    return `<span class="badge ${s.cls}">${s.icon} ${aprov || '—'}</span>`;
 }
 
 /**
@@ -11456,36 +11189,6 @@ const DESIGNERS_LISTA = [
 ];
 
 /**
- * Carrega a lista de usuários da tabela producao_usuarios do Supabase
- */
-async function loadUsuarios() {
-    try {
-        if (!supabaseClient) {
-            console.log("SupabaseClient não inicializado. Usando fallbacks locais para usuários.");
-            return;
-        }
-        const { data, error } = await supabaseClient
-            .from('producao_usuarios')
-            .select('nome')
-            .eq('ativo', true);
-
-        if (error) {
-            console.error("Erro ao carregar usuários do Supabase:", error);
-            return;
-        }
-
-        if (data && data.length > 0) {
-            usuariosSupabase = data.map(u => u.nome).filter(Boolean);
-            console.log("Usuários carregados do Supabase:", usuariosSupabase);
-        } else {
-            console.log("Nenhum usuário ativo retornado do Supabase. Usando fallbacks.");
-        }
-    } catch (err) {
-        console.error("Exceção ao carregar usuários:", err);
-    }
-}
-
-/**
  * Obtém o designer atribuído a uma OS (salvo em localStorage)
  */
 function getOSDesigner(osId) {
@@ -11510,15 +11213,17 @@ function setOSDesigner(osId, designerName) {
 // Expor globalmente
 window.setOSDesigner = setOSDesigner;
 
+/**
+ * Popula o dropdown de filtro de designers com os nomes disponíveis
+ */
 function populateDesignerFilter() {
     const filterSelect = document.getElementById('os-filter-designer');
     if (!filterSelect) return;
 
     const currentValue = filterSelect.value;
     
-    // Coletar designers atribuídos + lista base
-    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
-    const allDesigners = new Set(baseList);
+    // Coletar designers atribuídos + lista fixa
+    const allDesigners = new Set(DESIGNERS_LISTA);
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
 
@@ -11538,8 +11243,7 @@ function populateDesignerFilter() {
  */
 function renderDesignerSelect(osId) {
     const currentDesigner = getOSDesigner(osId);
-    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
-    const allDesigners = new Set(baseList);
+    const allDesigners = new Set(DESIGNERS_LISTA);
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
 
@@ -11550,71 +11254,9 @@ function renderDesignerSelect(osId) {
         options += `<option value="${escaped}" ${selected}>${d}</option>`;
     });
 
-    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 0; background: rgba(30,41,59,0.5);" 
+    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
                 onclick="event.stopPropagation()" 
                 onchange="event.stopPropagation(); setOSDesigner('${osId}', this.value)">${options}</select>`;
-}
-
-/**
- * Obtém o vendedor atribuído a uma OS (salvo em localStorage ou nativo da OS)
- */
-function getOSVendedor(osId) {
-    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
-    if (overrides[osId]) {
-        return overrides[osId];
-    }
-    const os = state.ordens.find(o => o.id === osId);
-    return os ? (os.vendedor || '') : '';
-}
-
-/**
- * Define o vendedor responsável por uma OS (salva em localStorage)
- */
-function setOSVendedor(osId, vendedorName) {
-    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
-    if (vendedorName) {
-        overrides[osId] = vendedorName;
-    } else {
-        delete overrides[osId];
-    }
-    localStorage.setItem('vibe_vendedor_overrides', JSON.stringify(overrides));
-    renderOrdens();
-}
-
-// Expor globalmente
-window.setOSVendedor = setOSVendedor;
-
-/**
- * Gera o HTML do select inline de vendedor para uma OS na tabela
- */
-function renderVendedorSelect(osId) {
-    const currentVendedor = getOSVendedor(osId);
-    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : VENDEDORES_LISTA;
-    const allVendedores = new Set(baseList);
-    
-    if (currentVendedor) {
-        allVendedores.add(currentVendedor);
-    }
-    
-    // Garantir que o vendedor nativo esteja na lista
-    const os = state.ordens.find(o => o.id === osId);
-    if (os && os.vendedor) {
-        allVendedores.add(os.vendedor);
-    }
-
-    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
-    Object.values(overrides).forEach(v => { if (v) allVendedores.add(v); });
-
-    let options = '<option value="">— Atribuir —</option>';
-    [...allVendedores].sort().forEach(v => {
-        const selected = v === currentVendedor ? 'selected' : '';
-        const escaped = v.replace(/'/g, "\\'");
-        options += `<option value="${escaped}" ${selected}>${v}</option>`;
-    });
-
-    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 0; background: rgba(30,41,59,0.5);" 
-                onclick="event.stopPropagation()" 
-                onchange="event.stopPropagation(); setOSVendedor('${osId}', this.value)">${options}</select>`;
 }
 
 /**
@@ -11632,166 +11274,32 @@ function renderOrdens() {
 
     // Fila 1: Impressão (Status EM IMPRESSÃO)
     let ordensImpressao = state.ordens.filter(os => os.status === 'EM IMPRESSÃO');
-
-    // --- Calcular Estatísticas Dinâmicas ---
-    let totalItensImpressao = 0;
-    let totalItensAprovados = 0;
-    let totalPedidosConcluidos = 0;
-
-    ordensImpressao.forEach(os => {
-        const itens = state.osItens[os.id] || [];
-        
-        itens.forEach(item => {
-            const impStatus = item.impressao || 'AGUARD.';
-            if (impStatus === 'IMPRESSO' || impStatus === 'PARCIAL') {
-                totalItensImpressao++;
-            }
-            
-            const ap = (item.aprovacao || '').toUpperCase();
-            if (ap === 'APROVADA' || ap === 'PRONTA' || ap === 'LIBERADA' || ap === 'APROVADA_CLIENTE') {
-                totalItensAprovados++;
-            }
-        });
-
-        if (itens.length > 0 && itens.every(item => item.impressao === 'IMPRESSO')) {
-            totalPedidosConcluidos++;
-        }
-    });
-
-    const statPedidosFilaEl = document.getElementById('stat-pedidos-fila');
-    if (statPedidosFilaEl) statPedidosFilaEl.textContent = ordensImpressao.length;
-
-    const statItensImpressaoEl = document.getElementById('stat-itens-impressao');
-    if (statItensImpressaoEl) statItensImpressaoEl.textContent = totalItensImpressao;
-
-    const statItensAprovadosEl = document.getElementById('stat-itens-aprovados');
-    if (statItensAprovadosEl) statItensAprovadosEl.textContent = totalItensAprovados;
-
-    const statPedidosConcluidosEl = document.getElementById('stat-pedidos-concluidos');
-    if (statPedidosConcluidosEl) statPedidosConcluidosEl.textContent = totalPedidosConcluidos;
-
-    // --- Aplicar Filtros (Busca, Setor e Status) ---
     let filteredImpressao = ordensImpressao.filter(os => {
-        const itens = state.osItens[os.id] || [];
-
-        // 1. Busca textual
         if (searchImpressao) {
             const num = String(os.numero || '');
             const cli = (os.cliente || '').toLowerCase();
-            const vend = getOSVendedor(os.id).toLowerCase();
-            const des = getOSDesigner(os.id).toLowerCase();
-            const matchSearch = num.includes(searchImpressao) || cli.includes(searchImpressao) || vend.includes(searchImpressao) || des.includes(searchImpressao);
-            if (!matchSearch) return false;
+            const vend = (os.vendedor || '').toLowerCase();
+            return num.includes(searchImpressao) || cli.includes(searchImpressao) || vend.includes(searchImpressao);
         }
-
-        // 2. Filtro de Setor
-        if (state.filtroSetor) {
-            const matchSetor = itens.some(item => (item.setor || '').toUpperCase() === state.filtroSetor.toUpperCase());
-            if (!matchSetor) return false;
-        }
-
-        // 3. Filtro de Estágio de Impressão
-        if (state.filtroStatus) {
-            const matchStatus = itens.some(item => (item.impressao || 'AGUARD.').toUpperCase() === state.filtroStatus.toUpperCase());
-            if (!matchStatus) return false;
-        }
-
         return true;
     });
 
-    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO, ARTE_EM_CORRECAO, ARTE_APROVADA ou novos status do fluxo de arte)
-    // E com status_arte === 'PENDENTE' na tabela pedidos comercial
-    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
-    
-    let ordensArte = state.ordens.filter(os => {
-        const matchStatusOS = 
-            os.status === 'ARTE_EM_ANDAMENTO' || 
-            os.status === 'ARTE_EM_CORRECAO' || 
-            os.status === 'ARTE_APROVADA' || 
-            os.status === 'Arte APROVADA' || 
-            os.status === 'Enviar ARTE' || 
-            os.status === 'Pendente Informação';
-        
-        if (!matchStatusOS) return false;
-
-        if (!isDev || state.hasPedidosComerciais) {
-            const statusArteComercial = (os.status_arte || '').toUpperCase();
-            return statusArteComercial === 'PENDENTE';
-        }
-
-        return true;
-    });
-
-    // --- Calcular Estatísticas de Arte ---
-    let totalItensPendentesArte = 0;
-    let totalItensAprovadosArte = 0;
-    let totalPedidosConcluidosArte = 0;
-
-    ordensArte.forEach(os => {
-        const itens = state.osItens[os.id] || [];
-        
-        itens.forEach(item => {
-            const ap = (item.aprovacao || 'PENDENTE').toUpperCase();
-            if (ap === 'PENDENTE' || ap === 'AGUARDANDO') {
-                totalItensPendentesArte++;
-            } else if (ap === 'APROVADA' || ap === 'PRONTA' || ap === 'LIBERADA' || ap === 'APROVADA_CLIENTE') {
-                totalItensAprovadosArte++;
-            }
-        });
-
-        if (itens.length > 0 && itens.every(item => {
-            const ap = (item.aprovacao || '').toUpperCase();
-            return ap === 'APROVADA' || ap === 'PRONTA' || ap === 'LIBERADA' || ap === 'APROVADA_CLIENTE';
-        })) {
-            totalPedidosConcluidosArte++;
-        }
-    });
-
-    const statPedidosFilaArteEl = document.getElementById('stat-pedidos-fila-arte');
-    if (statPedidosFilaArteEl) statPedidosFilaArteEl.textContent = ordensArte.length;
-
-    const statItensPendentesArteEl = document.getElementById('stat-itens-pendentes-arte');
-    if (statItensPendentesArteEl) statItensPendentesArteEl.textContent = totalItensPendentesArte;
-
-    const statItensAprovadosArteEl = document.getElementById('stat-itens-aprovados-arte');
-    if (statItensAprovadosArteEl) statItensAprovadosArteEl.textContent = totalItensAprovadosArte;
-
-    const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
-    if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = totalPedidosConcluidosArte;
-
-    // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---
+    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO)
+    let ordensArte = state.ordens.filter(os => os.status === 'ARTE_EM_ANDAMENTO');
     let filteredArte = ordensArte.filter(os => {
-        const itens = state.osItens[os.id] || [];
-
-        // 1. Busca textual
+        let matchSearch = true;
         if (searchArte) {
             const num = String(os.numero || '');
             const cli = (os.cliente || '').toLowerCase();
-            const vend = getOSVendedor(os.id).toLowerCase();
+            const vend = (os.vendedor || '').toLowerCase();
             const des = getOSDesigner(os.id).toLowerCase();
-            const matchSearch = num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte) || des.includes(searchArte);
-            if (!matchSearch) return false;
+            matchSearch = num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte) || des.includes(searchArte);
         }
-
-        // 2. Filtro de Designer
+        let matchDesigner = true;
         if (filterDesigner) {
-            const matchDesigner = getOSDesigner(os.id) === filterDesigner;
-            if (!matchDesigner) return false;
+            matchDesigner = getOSDesigner(os.id) === filterDesigner;
         }
-
-        // 3. Filtro de Setor
-        if (state.filtroSetorArte) {
-            const matchSetor = itens.some(item => (item.setor || '').toUpperCase() === state.filtroSetorArte.toUpperCase());
-            if (!matchSetor) return false;
-        }
-
-        // 4. Filtro de Status de Aprovação
-        if (state.filtroStatusArte) {
-            const matchStatus = itens.some(item => (item.aprovacao || 'PENDENTE').toUpperCase() === state.filtroStatusArte.toUpperCase());
-            if (!matchStatus) return false;
-        }
-
-        return true;
+        return matchSearch && matchDesigner;
     });
 
     // Atualizar badges da navegação lateral
@@ -11826,73 +11334,21 @@ function renderOrdens() {
 
             tbodyImpressao.innerHTML = filteredImpressao.map(os => {
                 const isExpanded = state.osExpandedId === os.id;
-                const osItensList = state.osItens[os.id] || [];
-                const totalItens = osItensList.length;
-                const impressosCount = osItensList.filter(item => item.impressao === 'IMPRESSO').length;
-                const pct = totalItens > 0 ? Math.round((impressosCount / totalItens) * 100) : 0;
-                
-                // Barra de progresso do status de impressão
-                const progressBarHtml = `
-                    <div style="width: 100%; min-width: 0;">
-                        <div style="font-size: 0.72rem; margin-bottom: 3px; color: var(--text-dim); display: flex; justify-content: space-between; font-family: monospace;">
-                            <span>${impressosCount}/${totalItens} mod.</span>
-                            <strong>${pct}%</strong>
-                        </div>
-                        <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
-                            <div style="width: ${pct}%; height: 100%; background: ${pct === 100 ? 'var(--green)' : 'var(--blue)'}; border-radius: 3px; transition: width 0.3s ease;"></div>
-                        </div>
-                    </div>
-                `;
-
-                // Preview da arte do 1º modelo
-                const primeiroItem = osItensList[0];
-                let previewHtml = `
-                    <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
-                        🖼️
-                    </div>
-                `;
-                if (primeiroItem && primeiroItem.amostra_arte_base64) {
-                    const isPdf = primeiroItem.amostra_arte_base64.startsWith('data:application/pdf') || primeiroItem.amostra_arte_base64.includes('JVBERi');
-                    if (isPdf) {
-                        previewHtml = `
-                            <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${primeiroItem.amostra_arte_base64}', '_blank')">
-                                📄
-                            </div>
-                        `;
-                    } else {
-                        previewHtml = `
-                            <img src="${primeiroItem.amostra_arte_base64}" 
-                                 style="width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
-                                 onclick="event.stopPropagation(); openClienteLightbox('${primeiroItem.amostra_arte_base64}')" 
-                                 title="Clique para ampliar a arte" />
-                        `;
-                    }
-                }
-
-                // Soma das quantidades de todos os modelos
-                const totalQtd = osItensList.reduce((acc, item) => acc + (item.quantidade || 0), 0);
-
-                // Frete (forma de envio)
-                const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
-
+                const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
-                
                 return `
-                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}">
-                        <td onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;" title="Clique para ver os detalhes do pedido">
-                            <strong style="font-size: 1.3rem; color: var(--blue); text-decoration: underline; text-decoration-style: solid; font-weight: 800;">${os.numero}</strong>
-                        </td>
+                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
+                        <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
+                        <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
                         <td><strong>${os.cliente || '—'}</strong></td>
-                        <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${os.observacoes || ''}">
-                            ${os.observacoes || '—'}
-                        </td>
-                        <td>${progressBarHtml}</td>
-                        <td style="text-align: center; vertical-align: middle;">${previewHtml}</td>
+                        <td>${os.vendedor || '—'}</td>
+                        <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
-                        <td><span class="badge">${totalItens} ${totalItens === 1 ? 'modelo' : 'modelos'}</span></td>
-                        <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
-                        <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1);">${frete}</span></td>
                         <td>${getStatusBadge(os.status)}</td>
+                        <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
+                        <td>
+                            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); changeOSStatus('${os.id}', 'ARTE_EM_ANDAMENTO')" title="Mover para a Lista de Arte" style="padding: 4px 8px; font-size: 0.75rem;">🎨 Mover p/ Arte</button>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -11915,22 +11371,14 @@ function renderOrdens() {
             tbodyArte.innerHTML = filteredArte.map(os => {
                 const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
-                const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
-                const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer;" title="Abrir Amostras">
                         <td style="text-align: center; font-size: 1.1rem;">▶</td>
-                        <td>
-                            <strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong>
-                            ${valorFormatado}
-                        </td>
+                        <td><strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong></td>
                         <td><strong>${os.cliente || '—'}</strong></td>
-                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
+                        <td>${os.vendedor || '—'}</td>
                         <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
-                        <td style="font-size: 0.82rem; color: var(--text-dim);">
-                            ${formatDateTime(os.data_liberacao)}
-                            ${dataPedFormatada}
-                        </td>
+                        <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td>${getStatusBadge(os.status)}</td>
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
@@ -12015,21 +11463,9 @@ function renderOSItens(osId) {
             <td>${item.cor || 'STD'}</td>
             <td style="text-align: center;">${item.verso ? '✅' : '—'}</td>
             <td style="text-align: center;">${item.blocos || 'N'}</td>
+            <td>${getAprovacaoBadge(item.aprovacao)}</td>
             <td>
-                ${getAprovacaoBadge(item.aprovacao)}
-                ${item.nome_arquivo_arte ? `
-                    <div style="font-size: 0.72rem; margin-top: 4px; color: var(--text-dim); display: flex; flex-direction: column; gap: 2px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        <span title="${item.nome_arquivo_arte}">
-                            📄 v${item.versao_arte || 1}: ${item.nome_arquivo_arte}
-                        </span>
-                        ${item.url_arquivo_arte ? `
-                            <a href="${item.url_arquivo_arte}" target="_blank" style="color: var(--blue); text-decoration: underline; font-size: 0.68rem;" onclick="event.stopPropagation()">Download</a>
-                        ` : ''}
-                    </div>
-                ` : ''}
-            </td>
-            <td>
-                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
+                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled title="Aguardando aprovação"' : ''}>
                     <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
                     <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
                     <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
@@ -12157,25 +11593,19 @@ function formatDateTime(dateStr) {
  */
 async function updateItemImpressao(itemId, osId, novoStatus) {
     try {
-        if (itemId && itemId.toString().startsWith('vibe_item_')) {
-            const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
-            impOverrides[itemId] = novoStatus;
-            localStorage.setItem('vibe_item_impressao_overrides', JSON.stringify(impOverrides));
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { error } = await supabaseClient
+                .from('producao_os_itens')
+                .update({ impressao: novoStatus })
+                .eq('id', itemId);
+            if (error) throw error;
         } else {
-            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                const { error } = await supabaseClient
-                    .from('producao_os_itens')
-                    .update({ impressao: novoStatus })
-                    .eq('id', itemId);
-                if (error) throw error;
-            } else {
-                const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ impressao: novoStatus })
-                });
-                if (!res.ok) throw new Error('Falha ao atualizar');
-            }
+            const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ impressao: novoStatus })
+            });
+            if (!res.ok) throw new Error('Falha ao atualizar');
         }
 
         // Atualizar estado local
@@ -12185,11 +11615,9 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
         }
 
         toast(`Impressão atualizada: ${novoStatus}`, 'success');
-        renderOrdens();
     } catch (e) {
         console.error('Erro ao atualizar impressão:', e);
-        const errMessage = e.message || e.details || (typeof e === 'object' ? JSON.stringify(e) : String(e));
-        toast('Erro ao atualizar impressão: ' + errMessage, 'error');
+        toast('Erro ao atualizar impressão: ' + e.message, 'error');
         // Recarregar para reverter
         await loadOSItens(osId);
     }
@@ -12556,10 +11984,9 @@ function renderAmostrasOSItens(osId) {
         const status = item.amostra_status || 'PENDENTE';
         const obs = item.amostra_obs || '';
         
-        let statusBadge = '<span class="badge badge-amber">⏳ PENDENTE</span>';
+        let statusBadge = '<span class="badge badge-yellow">⏳ PENDENTE</span>';
         if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADA</span>';
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
-        else if (status === 'PRONTO') statusBadge = '<span class="badge badge-blue">🎨 PRONTO</span>';
 
         // Determinar o formato ID do item da OS
         const itemFormatoId = item.formato_id || (item.formato ? matchFormato(item.formato) : null);
@@ -12573,24 +12000,17 @@ function renderAmostrasOSItens(osId) {
             `<option value="${c.id}" ${c.id === item.amostra_cor_id ? 'selected' : ''}>${c.name}</option>`
         ).join('');
 
-        // Determinar o formato ID da cor selecionada (se houver cor selecionada no item)
-        const selectedCor = item.amostra_cor_id ? (state.cores || []).find(c => c.id === item.amostra_cor_id) : null;
-        const corFormatoId = selectedCor ? selectedCor.formato_id : null;
-
-        // Filtrar numerações com base no formato da cor selecionada
+        // Filtrar numerações com base no formato do produto
         const filteredNumeracoes = (state.numeracoes || []).filter(n => {
-            // Se for a numeração salva neste item, sempre exibe para manter selecionada
-            if (n.id === item.amostra_num_id) return true;
-
             // Se for customizada, só exibe se for vinculada a este item específico
-            if (n.is_custom && n.os_item_id !== item.id) return false;
+            if (n.is_custom && n.id !== item.amostra_num_id && n.os_item_id !== item.id) return false;
             
-            // Se tivermos cor selecionada com formato_id, filtra por ele
-            if (corFormatoId) {
+            // Se tivermos um formato identificado para o produto, verifica compatibilidade
+            if (itemFormatoId) {
                 const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
-                return ids.some(id => String(id) === String(corFormatoId));
+                return ids.some(id => String(id) === String(itemFormatoId));
             }
-            return false;
+            return true;
         });
 
         const numOpts = filteredNumeracoes.map(n =>
@@ -12623,18 +12043,9 @@ function renderAmostrasOSItens(osId) {
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
                         <div class="amostra-decisao-btns">
-                            ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
-                                ? `
-                                <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
-                                    ✅ APROVAR
-                                </button>
-                                ` 
-                                : `
-                                <button class="btn btn-primary" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')">
-                                    🎨 PRONTO
-                                </button>
-                                `
-                            }
+                            <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                                ✅ APROVAR
+                            </button>
                             <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
                                 ❌ ALTERAR
                             </button>
@@ -12698,166 +12109,9 @@ function renderAmostrasOSItens(osId) {
                 renderItemAmostraCombinada(idx, osId);
             }
         });
-        // Atualizar a barra final de ações do cliente dinamicamente
-        atualizarBarraFinalCliente(osId);
     }, 50);
 }
 
-/**
- * Atualiza a barra final dinamicamente no link do cliente
- */
-function atualizarBarraFinalCliente(osId) {
-    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') return;
-
-    const containerActions = document.querySelector('.cliente-actions');
-    if (!containerActions) return;
-
-    const itens = state.osItens[osId] || [];
-    if (itens.length === 0) return;
-
-    // Verificar se todos os modelos estão aprovados
-    const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
-
-    // Verificar se pelo menos um modelo está reprovado (alteração)
-    const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
-
-    let html = '';
-    if (todosAprovados) {
-        // Verde, ativo, Finalizar e Aprovar Pedido Completo
-        html = `
-            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer;">
-                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
-            </button>
-        `;
-    } else if (algumReprovado) {
-        // Tons de laranja e vermelho, ativo, Solicitar Alteração de Arte
-        html = `
-            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #f97316, #ef4444); color: #ffffff; border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); cursor: pointer;">
-                ⚠️ SOLICITAR ALTERAÇÃO DE ARTE
-            </button>
-        `;
-    } else {
-        // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo
-        html = `
-            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #374151; color: #9ca3af; border: 1px solid #374151; cursor: not-allowed; opacity: 0.6;">
-                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
-            </button>
-        `;
-    }
-
-    containerActions.innerHTML = html;
-}
-
-/**
- * Atualiza o status global do pedido para "Enviar ARTE" ou "Pendente Informação"
- * dependendo de todos os modelos estarem marcados como PRONTO em Amostras
- */
-async function voltarParaAtendimento() {
-    const osId = state.amostrasOSAtivo;
-    if (!osId) {
-        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
-        return;
-    }
-
-    const itens = state.osItens[osId] || [];
-    if (itens.length === 0) {
-        toast('Nenhum modelo de item encontrado neste pedido.', 'warning');
-        return;
-    }
-
-    // Verificar se todos os itens possuem amostra_status === 'PRONTO'
-    const todasProntas = itens.every(item => item.amostra_status === 'PRONTO');
-
-    const novoStatus = todasProntas ? 'Enviar ARTE' : 'Pendente Informação';
-
-    try {
-        // Atualizar status global da OS
-        // 1. Atualizar no localstorage vibe_status_overrides
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = novoStatus;
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
-
-        // 2. Atualizar no estado local em memória
-        const os = state.ordens.find(o => o.id === osId);
-        if (os) {
-            os.status = novoStatus;
-        }
-
-        // 3. Atualizar no banco Supabase se for OS local (não começa com vibe_)
-        if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
-            const { error } = await supabaseClient
-                .from('producao_ordens_servico')
-                .update({ status: novoStatus })
-                .eq('id', osId);
-            if (error) throw error;
-        }
-
-        // Exibir feedback adequado
-        if (todasProntas) {
-            toast(`Pedido #${os ? os.numero : ''} concluído com sucesso e enviado para atendimento!`, 'success');
-        } else {
-            toast(`Pedido #${os ? os.numero : ''} retornado com pendências para a Lista de Arte.`, 'warning');
-        }
-
-        // Voltar para a view Lista de Arte e atualizar renderização
-        clearAmostrasOS();
-        showView('view-lista-arte');
-    } catch (err) {
-        console.error('Erro ao voltar para atendimento:', err);
-        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
-    }
-}
-
-// Expor globalmente
-window.voltarParaAtendimento = voltarParaAtendimento;
-
-/**
- * Retorna o status global do pedido para "Arte em Andamento" em correção (ARTE_EM_CORRECAO)
- */
-async function voltarParaArte() {
-    const osId = state.amostrasOSAtivo;
-    if (!osId) {
-        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
-        return;
-    }
-
-    const novoStatus = 'ARTE_EM_CORRECAO';
-
-    try {
-        // Atualizar status global da OS
-        // 1. Atualizar no localstorage vibe_status_overrides
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = novoStatus;
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
-
-        // 2. Atualizar no estado local em memória
-        const os = state.ordens.find(o => o.id === osId);
-        if (os) {
-            os.status = novoStatus;
-        }
-
-        // 3. Atualizar no banco Supabase se for OS local (não começa com vibe_)
-        if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
-            const { error } = await supabaseClient
-                .from('producao_ordens_servico')
-                .update({ status: novoStatus })
-                .eq('id', osId);
-            if (error) throw error;
-        }
-
-        toast(`Pedido #${os ? os.numero : ''} retornado para Arte em Andamento (Correção)!`, 'info');
-
-        // Voltar para a view Lista de Arte e atualizar renderização
-        clearAmostrasOS();
-        showView('view-lista-arte');
-    } catch (err) {
-        console.error('Erro ao voltar para arte:', err);
-        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
-    }
-}
-
-// Expor globalmente
-window.voltarParaArte = voltarParaArte;
 
 /**
  * Ao selecionar cor em um card dinâmico, filtrar numerações compatíveis
@@ -12876,24 +12130,21 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
         saveAmostraToDB(itemId, osId, { amostra_cor_id: corId || null });
     }
 
-    // Filtrar numerações pelo formato da COR selecionada
+    // Filtrar numerações pelo formato do produto
     const curNumVal = numSelect.value;
     const item = state.osItens[osId].find(i => i.id === itemId);
-    const corFormatoId = cor ? cor.formato_id : null;
+    const itemFormatoId = item ? (item.formato_id || (item.formato ? matchFormato(item.formato) : null)) : null;
 
     const filteredNums = (state.numeracoes || []).filter(n => {
-        // Sempre exibe a numeração atualmente selecionada (para não sumir do select)
-        if (curNumVal && n.id === curNumVal) return true;
-
         // Se for customizada, só exibe se for vinculada a este item específico
-        if (n.is_custom && (!item || n.os_item_id !== item.id)) return false;
+        if (n.is_custom && (!item || (n.id !== item.amostra_num_id && n.os_item_id !== item.id))) return false;
         
-        // Se tivermos cor selecionada com formato_id, filtra por ele
-        if (corFormatoId) {
+        // Se tivermos um formato identificado para o produto, verifica compatibilidade
+        if (itemFormatoId) {
             const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
-            return ids.some(id => String(id) === String(corFormatoId));
+            return ids.some(id => String(id) === String(itemFormatoId));
         }
-        return false;
+        return true;
     });
 
     numSelect.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
@@ -12901,8 +12152,6 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
 
     if (filteredNums.some(n => n.id === curNumVal)) {
         numSelect.value = curNumVal;
-    } else {
-        numSelect.value = '';
     }
 
     if (!isInitialLoad) {
@@ -13564,21 +12813,7 @@ async function decisionAmostraItem(itemId, osId, status) {
             }
         }
         
-        let msg = '';
-        let toastType = 'info';
-        if (status === 'APROVADA') {
-            msg = 'Item aprovado!';
-            toastType = 'success';
-        } else if (status === 'REPROVADA') {
-            msg = 'Item marcado para alteração!';
-            toastType = 'warning';
-        } else if (status === 'PRONTO') {
-            msg = 'Item marcado como Pronto!';
-            toastType = 'success';
-        } else {
-            msg = `Status atualizado para ${status}`;
-        }
-        toast(msg, toastType);
+        toast(`Item ${status === 'APROVADA' ? 'aprovado' : 'marcado para alteração'}!`, status === 'APROVADA' ? 'success' : 'warning');
         renderAmostrasOSItens(osId);
     } catch (err) {
         console.error('Erro na decisão do item:', err);
@@ -14069,37 +13304,14 @@ async function initClientePage(numero, token) {
         state.ordens = [os];
         state.amostrasOSAtivo = osId;
 
-        // Buscar status da OS na tabela producao_ordens_servico
-        let osStatus = 'ARTE_EM_ANDAMENTO';
-        try {
-            const { data: osData } = await supabaseClient
-                .from('producao_ordens_servico')
-                .select('status')
-                .eq('id', osId)
-                .maybeSingle();
-            if (osData && osData.status) {
-                osStatus = osData.status;
-            }
-        } catch (e) {
-            console.warn('Erro ao buscar status global da OS:', e);
-        }
-
         // Configurar o container de renderização das amostras para o cliente
         state.amostrasContainerId = 'cliente-amostras-itens-container';
 
+        // Renderizar a tela de amostras combinada idêntica à interna
+        renderAmostrasOSItens(osId);
+
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
-
-        if (osStatus === 'Enviar ARTE') {
-            // Se for especificamente "Enviar ARTE", exibe normalmente a página com as janelas
-            renderAmostrasOSItens(osId);
-        } else if (osStatus === 'ARTE_APROVADA' || osStatus === 'Arte APROVADA') {
-            // Se for "Arte APROVADA", exibe a mensagem correspondente
-            mostrarResultadoCliente('✅', 'Artes APROVADAS!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
-        } else {
-            // Para qualquer outro status (incluindo ARTE_EM_CORRECAO, ARTE_EM_ANDAMENTO, etc.), exibe a mensagem de alteração/bloqueio
-            mostrarResultadoCliente('⚠️', 'Artes em Alteração', 'Artes em ALTERAÇÃO. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
-        }
 
     } catch (e) {
         console.error('Erro ao inicializar página do cliente:', e);
@@ -14108,114 +13320,56 @@ async function initClientePage(numero, token) {
     }
 }
 
-async function clienteFinalizarFluxo(fluxoTipo) {
+async function clienteAprovarTudo() {
     const osId = clienteState.osId;
     const itens = state.osItens[osId] || [];
     const btnAprovar = document.getElementById('btn-cliente-aprovar-tudo');
 
     if (btnAprovar) {
         btnAprovar.disabled = true;
-        btnAprovar.textContent = '⏳ Processando...';
+        btnAprovar.textContent = '⏳ Processando aprovação de todos os itens...';
     }
 
     try {
-        if (fluxoTipo === 'APROVAR_TUDO') {
-            // Salvar status global da OS no Supabase para ARTE_APROVADA (Laranja, rótulo "Arte APROVADA")
-            // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
-            try {
-                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                    const { error } = await supabaseClient
-                        .from('producao_ordens_servico')
-                        .update({ status: 'ARTE_APROVADA' })
-                        .eq('id', osId);
-                    if (error) throw error;
-                }
-            } catch (osErr) {
-                console.warn('Erro ao atualizar status global da OS (pode ser restrição de RLS):', osErr);
-            }
-
-            // Para cada item, salvar status como APROVADA no banco (Execução paralela)
-            const savePromises = itens.map(item => saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' }));
-            await Promise.all(savePromises);
-
-            // Também atualizar o status em pedidos_artes para manter compatibilidade (Execução paralela)
-            const artesPromises = itens.map(async (item) => {
-                try {
-                    await supabaseClient
-                        .from('pedidos_artes')
-                        .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
-                        .eq('id_modelo', item.id)
-                        .order('versao', { ascending: false })
-                        .limit(1);
-                } catch (e) { /* silencioso */ }
-            });
-            await Promise.all(artesPromises);
-
-            // Log no chat da proposta
-            try {
-                await supabaseClient.from('propostas_chat').insert({
-                    id_int: parseInt(clienteState.numero),
-                    tipo: 'PRODUCAO',
-                    setor: 'Cliente',
-                    visivel_externo: true,
-                    mensagem: `✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.`,
-                    remetente_nome: 'Cliente (aprovação online)',
-                });
-            } catch (e) { console.error('Erro log chat:', e); }
-
-            // Mostrar tela de sucesso
-            mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
-        } 
-        else if (fluxoTipo === 'SOLICITAR_ALTERACAO') {
-            // Salvar status global da OS no Supabase para ARTE_EM_CORRECAO (Laranja, rótulo "Arte em Andamento")
-            // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
-            try {
-                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                    const { error } = await supabaseClient
-                        .from('producao_ordens_servico')
-                        .update({ status: 'ARTE_EM_CORRECAO' })
-                        .eq('id', osId);
-                    if (error) throw error;
-                }
-            } catch (osErr) {
-                console.warn('Erro ao atualizar status global da OS para correção (pode ser restrição de RLS):', osErr);
-            }
-
-            // Coletar observações das alterações de cada item reprovado
-            let observacoesTexto = '';
-            itens.forEach((item, idx) => {
-                if (item.amostra_status === 'REPROVADA') {
-                    observacoesTexto += `\n- Modelo ${idx + 1} (${item.produto}): ${item.amostra_obs || '(Sem observações)'}`;
-                }
-            });
-
-            // Log no chat da proposta
-            try {
-                await supabaseClient.from('propostas_chat').insert({
-                    id_int: parseInt(clienteState.numero),
-                    tipo: 'PRODUCAO',
-                    setor: 'Cliente',
-                    visivel_externo: true,
-                    mensagem: `❌ O CLIENTE SOLICITOU ALTERAÇÃO DE ARTES via link online.${observacoesTexto}`,
-                    remetente_nome: 'Cliente (alteração online)',
-                });
-            } catch (e) { console.error('Erro log chat:', e); }
-
-            // Mostrar tela de sucesso de alteração solicitada
-            mostrarResultadoCliente('⚠️', 'Alteração Solicitada!', 'Artes em ALTERAÇÃO. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+        // Para cada item, salvar status como APROVADA
+        for (const item of itens) {
+            await saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' });
         }
+
+        // Também atualizar o status em pedidos_artes para manter compatibilidade
+        for (const item of itens) {
+            try {
+                await supabaseClient
+                    .from('pedidos_artes')
+                    .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
+                    .eq('id_modelo', item.id)
+                    .order('versao', { ascending: false })
+                    .limit(1);
+            } catch (e) { /* silencioso */ }
+        }
+
+        // Log no chat da proposta
+        try {
+            await supabaseClient.from('propostas_chat').insert({
+                id_int: parseInt(clienteState.numero),
+                tipo: 'PRODUCAO',
+                setor: 'Cliente',
+                visivel_externo: true,
+                mensagem: `✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.`,
+                remetente_nome: 'Cliente (aprovação online)',
+            });
+        } catch (e) { console.error('Erro log chat:', e); }
+
+        // Mostrar tela de sucesso
+        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Obrigado! Sua aprovação foi registrada. A gráfica foi notificada e dará andamento à produção do seu pedido.');
     } catch (e) {
-        console.error('Erro ao finalizar fluxo do cliente:', e);
-        toast('Erro ao finalizar pedido: ' + e.message, 'error');
+        console.error('Erro ao aprovar tudo:', e);
+        toast('Erro ao processar aprovação final: ' + e.message, 'error');
         if (btnAprovar) {
             btnAprovar.disabled = false;
-            btnAprovar.textContent = fluxoTipo === 'APROVAR_TUDO' ? '✅ FINALIZAR E APROVAR PEDIDO COMPLETO' : '⚠️ SOLICITAR ALTERAÇÃO DE ARTE';
+            btnAprovar.textContent = '✅ FINALIZAR E APROVAR PEDIDO COMPLETO';
         }
     }
-}
-
-async function clienteAprovarTudo() {
-    return clienteFinalizarFluxo('APROVAR_TUDO');
 }
 
 function mostrarResultadoCliente(icon, titulo, msg) {
@@ -14371,98 +13525,11 @@ function closeClienteLightbox() {
     }
 }
 
-function setFiltroSetor(setor) {
-    state.filtroSetor = setor;
-    
-    // Atualizar botões de setor no HTML
-    const container = document.getElementById('filter-container-setor');
-    if (container) {
-        const btns = container.querySelectorAll('.filter-btn-pill');
-        btns.forEach(btn => {
-            const clickAttr = btn.getAttribute('onclick') || '';
-            if (clickAttr.includes(`'${setor}'`)) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-    }
-    renderOrdens();
-}
-
-function setFiltroStatus(status) {
-    state.filtroStatus = status;
-    
-    // Atualizar botões de status no HTML
-    const container = document.getElementById('filter-container-status');
-    if (container) {
-        const btns = container.querySelectorAll('.filter-btn-pill');
-        btns.forEach(btn => {
-            const clickAttr = btn.getAttribute('onclick') || '';
-            if (clickAttr.includes(`'${status}'`)) {
-                btn.classList.add('active');
-                if (status === '') btn.classList.add('teal');
-                else btn.classList.remove('teal');
-            } else {
-                btn.classList.remove('active');
-                btn.classList.remove('teal');
-            }
-        });
-    }
-    renderOrdens();
-}
-
-function setFiltroSetorArte(setor) {
-    state.filtroSetorArte = setor;
-    
-    // Atualizar botões de setor no HTML
-    const container = document.getElementById('filter-container-setor-arte');
-    if (container) {
-        const btns = container.querySelectorAll('.filter-btn-pill');
-        btns.forEach(btn => {
-            const clickAttr = btn.getAttribute('onclick') || '';
-            if (clickAttr.includes(`'${setor}'`)) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-    }
-    renderOrdens();
-}
-
-function setFiltroStatusArte(status) {
-    state.filtroStatusArte = status;
-    
-    // Atualizar botões de status no HTML
-    const container = document.getElementById('filter-container-status-arte');
-    if (container) {
-        const btns = container.querySelectorAll('.filter-btn-pill');
-        btns.forEach(btn => {
-            const clickAttr = btn.getAttribute('onclick') || '';
-            if (clickAttr.includes(`'${status}'`)) {
-                btn.classList.add('active');
-                if (status === '') btn.classList.add('teal');
-                else btn.classList.remove('teal');
-            } else {
-                btn.classList.remove('active');
-                btn.classList.remove('teal');
-            }
-        });
-    }
-    renderOrdens();
-}
-
 // Exportar funções globais
 window.gerarLinkCliente = gerarLinkCliente;
 window.clienteAprovarTudo = clienteAprovarTudo;
-window.clienteFinalizarFluxo = clienteFinalizarFluxo;
 window.openClienteLightbox = openClienteLightbox;
 window.closeClienteLightbox = closeClienteLightbox;
-window.setFiltroSetor = setFiltroSetor;
-window.setFiltroStatus = setFiltroStatus;
-window.setFiltroSetorArte = setFiltroSetorArte;
-window.setFiltroStatusArte = setFiltroStatusArte;
 
 // ─── ROUTER: Verificar rota do cliente no carregamento ───
 document.addEventListener('DOMContentLoaded', () => {

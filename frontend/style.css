@@ -539,9 +539,8 @@ input[type="color"].form-control {
     width: 100%;
     min-width: 0;
     display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 16px;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .element-card:hover { border-color: var(--border-glow); }
@@ -550,7 +549,7 @@ input[type="color"].form-control {
 .element-card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 0;
     flex-shrink: 0;
 }
@@ -565,49 +564,71 @@ input[type="color"].form-control {
 }
 
 .element-card-fields {
-    display: flex;
-    min-width: 0;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    }
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px 10px;
+    width: 100%;
+    align-items: end;
+}
 
 .element-card-fields .form-group {
     display: flex;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
     gap: 4px;
-    white-space: nowrap;
     min-width: 0;
-    flex: 1;
 }
 
-.element-card-fields .form-group label { font-size: 0.75rem; margin-bottom: 0; }
-.element-card-fields .form-control { padding: 6px 8px; font-size: 0.85rem; width: 100%; min-width: 40px; }
+.element-card-fields .form-group label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
 
+.element-card-fields .form-control {
+    padding: 5px 8px;
+    font-size: 0.82rem;
+    width: 100%;
+    height: 30px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    min-width: 0;
+}
+
+input[type="color"].element-card-fields .form-control,
+.element-card-fields input[type="color"].form-control {
+    padding: 3px 4px;
+    height: 30px;
+    cursor: pointer;
+}
+
+/* Campo que ocupa a linha inteira no grid */
+.el-full {
+    grid-column: 1 / -1;
+}
+
+/* Barra de botões "Adicionar Elemento" */
 .add-elements-bar {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 8px;
     padding: 12px 0;
 }
 
-/* Lista de elementos em grid lado a lado (abaixo do canvas) */
-/* Lista de elementos em grid lado a lado (abaixo do canvas) */
+/* Lista de elementos empilhados verticalmente */
 #elements-list {
     display: flex;
-    min-width: 0;
     flex-direction: column;
-    gap: 12px;
-    padding: 10px 4px 14px 4px; /* Padding for shadow */
-    min-height: 180px;
-}
-
-/* Campo que ocupa a linha inteira no flex/grid */
-.el-full {
-    grid-column: 1 / -1;
-    flex: 1 1 100%;
+    gap: 10px;
+    padding: 4px 2px 14px 2px;
+    min-height: 120px;
+    width: 100%;
+    min-width: 0;
 }
 
 /* ─── Canvas Area ───────────────────────────────────────────────────────────── */
