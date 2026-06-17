@@ -1,10 +1,10 @@
-// ─── VDP Engine — Frontend Script ────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ VDP Engine ÔÇö Frontend Script ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 'use strict';
 
 
 
-// ─── Utility — Parse Decimal BR (aceita vírgula como separador) ──────────────
+// ÔöÇÔöÇÔöÇ Utility ÔÇö Parse Decimal BR (aceita v├¡rgula como separador) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 function parseDecimalBR(value) {
 
@@ -12,7 +12,7 @@ function parseDecimalBR(value) {
 
     value = value.trim().replace(/\s*mm\s*$/i, '').trim();
 
-    // Aceitar vírgula como separador decimal (padrão brasileiro)
+    // Aceitar v├¡rgula como separador decimal (padr├úo brasileiro)
 
     value = value.replace(',', '.');
 
@@ -44,7 +44,7 @@ function validateOffsetField(inputEl) {
 
 
 
-// ─── State ───────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ State ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 const state = {
 
@@ -58,9 +58,9 @@ const state = {
 
     modelosImposicao: [],
 
-    fmtRotations: {}, // mapeia índice de célula -> ângulo (0, 90, 180, 270)
+    fmtRotations: {}, // mapeia ├¡ndice de c├®lula -> ├óngulo (0, 90, 180, 270)
 
-    fmtSelectedCellIndex: null, // índice da célula selecionada no preview
+    fmtSelectedCellIndex: null, // ├¡ndice da c├®lula selecionada no preview
 
     printMode: "front",
 
@@ -68,7 +68,7 @@ const state = {
 
 
 
-    // Editor de Numeração
+    // Editor de Numera├º├úo
 
     numFormato: null,       // formato selecionado no editor
 
@@ -90,7 +90,7 @@ const state = {
 
 
 
-    // Preview de Imposição
+    // Preview de Imposi├º├úo
 
     impArtImage: null,
 
@@ -115,16 +115,26 @@ const state = {
     loadedOSName: "",
 
     expectedArteName: "",
-
+    filtroSetor: "",
+    filtroStatus: "",
+    filtroSetorArte: "",
+    filtroStatusArte: "",
 };
 
+// ÔöÇÔöÇÔöÇ Vari├íveis globais de usu├írios ÔöÇÔöÇÔöÇ
+let usuariosSupabase = [];
+
+const VENDEDORES_LISTA = [
+    'L. Martins',
+    'Comercial',
+];
 
 
-// ─── Utility — fetchPdfBytes ──────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Utility ÔÇö fetchPdfBytes ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 // Busca os bytes de um PDF a partir de uma URL ou string base64.
-// Para URLs: tenta fetch DIRETO primeiro (funciona para URLs do Supabase que têm CORS público).
-// Só usa o proxy como fallback quando API_BASE_URL está disponível (backend local).
-// Isso evita o erro 404 no Vercel onde não há rota /api/proxy.
+// Para URLs: tenta fetch DIRETO primeiro (funciona para URLs do Supabase que t├¬m CORS p├║blico).
+// S├│ usa o proxy como fallback quando API_BASE_URL est├í dispon├¡vel (backend local).
+// Isso evita o erro 404 no Vercel onde n├úo h├í rota /api/proxy.
 async function fetchPdfBytes(content) {
     if (!content) return null;
 
@@ -137,24 +147,24 @@ async function fetchPdfBytes(content) {
         return bytes.buffer;
     }
 
-    // É uma URL — tenta fetch direto primeiro (Supabase tem CORS público)
+    // ├ë uma URL ÔÇö tenta fetch direto primeiro (Supabase tem CORS p├║blico)
     try {
         const resp = await fetch(content);
         if (resp.ok) return await resp.arrayBuffer();
         throw new Error(`HTTP ${resp.status}`);
     } catch (directErr) {
-        // Fallback: usa proxy se API_BASE_URL estiver disponível (backend local)
+        // Fallback: usa proxy se API_BASE_URL estiver dispon├¡vel (backend local)
         const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
         if (baseUrl) {
             const resp = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(content)}`);
             if (resp.ok) return await resp.arrayBuffer();
             throw new Error(`Proxy falhou: HTTP ${resp.status}`);
         }
-        throw new Error(`Não foi possível buscar o PDF: ${directErr.message}`);
+        throw new Error(`N├úo foi poss├¡vel buscar o PDF: ${directErr.message}`);
     }
 }
-// ─── Utility — getFontCSS ─────────────────────────────────────────────────────
-// Converte font_name do elemento para string CSS para renderização no canvas.
+// ÔöÇÔöÇÔöÇ Utility ÔÇö getFontCSS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// Converte font_name do elemento para string CSS para renderiza├º├úo no canvas.
 // Suporta fontes Base-14 (helv, helv-bold, times...) e fontes do sistema (system:NomeDaFonte).
 function getFontCSS(font_name) {
     if (!font_name || font_name === 'helv') return 'Inter, Arial, sans-serif';
@@ -163,7 +173,7 @@ function getFontCSS(font_name) {
     if (font_name === 'times-bold') return 'bold "Times New Roman", Times, serif';
     if (font_name === 'cour') return '"Courier New", Courier, monospace';
     if (font_name === 'cour-bold') return 'bold "Courier New", Courier, monospace';
-    // Fonte do sistema: "system:Arial Bold" → bold "Arial Bold"
+    // Fonte do sistema: "system:Arial Bold" ÔåÆ bold "Arial Bold"
     if (font_name.startsWith('system:')) {
         const parts = font_name.slice(7).split('|'); // "NomeFamilia|bold|italic"
         const family = parts[0];
@@ -174,7 +184,7 @@ function getFontCSS(font_name) {
     return `"${font_name}", sans-serif`;
 }
 
-// ─── State — Fontes do Sistema ────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ State ÔÇö Fontes do Sistema ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const state_fonts = {
     system: [],           // [{ family, fullName, style }]
     loaded: false,        // true quando qualquer lista foi carregada (API ou fallback)
@@ -194,21 +204,21 @@ const BUILTIN_FONTS = [
 ];
 
 // Carrega fontes do sistema via Local Font Access API (Chrome 103+).
-// forceRequest = true → ignora estado anterior e pede permissão novamente.
+// forceRequest = true ÔåÆ ignora estado anterior e pede permiss├úo novamente.
 async function loadSystemFonts(forceRequest = false) {
     if (state_fonts.loading) return;
-    // Se já carregou da API real, não precisa recarregar (a menos que forçado)
+    // Se j├í carregou da API real, n├úo precisa recarregar (a menos que for├ºado)
     if (state_fonts.loadedFromAPI && !forceRequest) return;
     state_fonts.loading = true;
     state_fonts.permissionDenied = false;
 
     try {
         if ('queryLocalFonts' in window) {
-            // Esta chamada dispara o prompt de permissão do Chrome (requer gesto do usuário
-            // ou permissão prévia concedida). Lança NotAllowedError se negada.
+            // Esta chamada dispara o prompt de permiss├úo do Chrome (requer gesto do usu├írio
+            // ou permiss├úo pr├®via concedida). Lan├ºa NotAllowedError se negada.
             const fonts = await window.queryLocalFonts();
 
-            // Deduplica por família + estilo normalizado
+            // Deduplica por fam├¡lia + estilo normalizado
             const seen = new Set();
             const systemFonts = [];
             for (const f of fonts) {
@@ -223,24 +233,24 @@ async function loadSystemFonts(forceRequest = false) {
                 systemFonts.push({ family: f.family, fullName: value, style: f.style });
             }
 
-            // Ordenar por família A→Z, depois por estilo
+            // Ordenar por fam├¡lia AÔåÆZ, depois por estilo
             systemFonts.sort((a, b) => {
                 const fc = a.family.localeCompare(b.family);
                 return fc !== 0 ? fc : a.style.localeCompare(b.style);
             });
 
             state_fonts.system       = [...BUILTIN_FONTS, ...systemFonts];
-            state_fonts.loadedFromAPI = true;  // ✅ API real usada com sucesso
+            state_fonts.loadedFromAPI = true;  // Ô£à API real usada com sucesso
             console.info(`[Fonts] ${systemFonts.length} fontes do sistema carregadas via API.`);
         } else {
-            throw new Error('queryLocalFonts não disponível neste navegador');
+            throw new Error('queryLocalFonts n├úo dispon├¡vel neste navegador');
         }
     } catch (e) {
         if (e.name === 'NotAllowedError') {
             state_fonts.permissionDenied = true;
-            console.warn('[Fonts] Permissão negada pelo usuário.');
+            console.warn('[Fonts] Permiss├úo negada pelo usu├írio.');
         } else {
-            console.info('[Fonts] queryLocalFonts indisponível. Usando lista curada.');
+            console.info('[Fonts] queryLocalFonts indispon├¡vel. Usando lista curada.');
         }
 
         // Fallback: lista curada de fontes comuns Windows + Mac
@@ -273,15 +283,15 @@ async function loadSystemFonts(forceRequest = false) {
     state_fonts.loading = false;
 }
 
-// ⚠️ NÃO pré-carregamos em background:
-// queryLocalFonts() sem gesto do usuário pode não mostrar o prompt de permissão
+// ÔÜá´©Å N├âO pr├®-carregamos em background:
+// queryLocalFonts() sem gesto do usu├írio pode n├úo mostrar o prompt de permiss├úo
 // no Chrome, resultando em NotAllowedError silencioso e bloqueando futuras tentativas.
-// O carregamento é feito sob demanda ao abrir o font picker pela primeira vez.
+// O carregamento ├® feito sob demanda ao abrir o font picker pela primeira vez.
 
 
 
 
-// ─── Font Picker Component ────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Font Picker Component ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 // Cria um font picker interativo com busca, preview e suporte a fontes do sistema.
 function createFontPicker(elId, currentValue, onChange) {
     const wrap = document.createElement('div');
@@ -300,7 +310,7 @@ function createFontPicker(elId, currentValue, onChange) {
         if (v.startsWith('system:')) {
             const parts = v.slice(7).split('|');
             const style = parts.slice(1).join(' ');
-            return parts[0] + (style ? ` — ${style}` : '');
+            return parts[0] + (style ? ` ÔÇö ${style}` : '');
         }
         return v;
     };
@@ -309,7 +319,7 @@ function createFontPicker(elId, currentValue, onChange) {
         const label = getLabelForValue(v);
         const css   = getFontCSS(v);
         const fam   = css.replace(/^(bold |italic )*/, '');
-        return `<span class="fp-preview" style="font-family:${fam}">${label}</span><span class="fp-arrow">▾</span>`;
+        return `<span class="fp-preview" style="font-family:${fam}">${label}</span><span class="fp-arrow">Ôû¥</span>`;
     };
 
     wrap.innerHTML = `
@@ -318,10 +328,10 @@ function createFontPicker(elId, currentValue, onChange) {
         </button>
         <div class="font-picker-dropdown" id="fpd-${elId}">
             <div class="font-picker-search">
-                <input type="text" placeholder="🔍 Buscar fonte..." id="fps-${elId}" autocomplete="off">
+                <input type="text" placeholder="­ƒöì Buscar fonte..." id="fps-${elId}" autocomplete="off">
             </div>
             <div class="font-picker-list" id="fpl-${elId}">
-                <div class="font-picker-loading">Carregando fontes…</div>
+                <div class="font-picker-loading">Carregando fontesÔÇª</div>
             </div>
         </div>
     `;
@@ -334,7 +344,7 @@ function createFontPicker(elId, currentValue, onChange) {
     let currentFont = currentValue || 'helv';
     let allFonts    = [];
 
-    // Declarado antes de renderList (que o referencia), definido logo após.
+    // Declarado antes de renderList (que o referencia), definido logo ap├│s.
     let doReloadFonts;
 
     const renderList = (filter = '') => {
@@ -346,7 +356,7 @@ function createFontPicker(elId, currentValue, onChange) {
 
         let html = '';
 
-        // ── Fontes embutidas ──
+        // ÔöÇÔöÇ Fontes embutidas ÔöÇÔöÇ
         const bFiltered = builtins.filter(match);
         if (bFiltered.length) {
             html += `<div class="font-picker-group-label">Fontes Embutidas (PDF)</div>`;
@@ -362,7 +372,7 @@ function createFontPicker(elId, currentValue, onChange) {
             }
         }
 
-        // ── Fontes do sistema ──
+        // ÔöÇÔöÇ Fontes do sistema ÔöÇÔöÇ
         const sFiltered = system.filter(match);
         if (sFiltered.length) {
             const apiLabel = ('queryLocalFonts' in window) ? `Fontes do PC (${sFiltered.length})` : `Fontes Comuns (${sFiltered.length})`;
@@ -378,16 +388,16 @@ function createFontPicker(elId, currentValue, onChange) {
             }
         }
 
-        // ── Botão para carregar/recarregar fontes do PC ──
+        // ÔöÇÔöÇ Bot├úo para carregar/recarregar fontes do PC ÔöÇÔöÇ
         if ('queryLocalFonts' in window && !state_fonts.permissionDenied) {
             const btnLabel = state_fonts.loadedFromAPI
-                ? '🔄 Recarregar fontes do PC'
-                : '🖥️ Carregar fontes instaladas no PC';
+                ? '­ƒöä Recarregar fontes do PC'
+                : '­ƒûÑ´©Å Carregar fontes instaladas no PC';
             html += `<div class="fp-permission-row"><button class="fp-reload-btn" data-fp-reload="1">${btnLabel}</button></div>`;
         } else if (!('queryLocalFonts' in window)) {
-            html += `<div class="fp-permission-row fp-tip">💡 Use o Chrome para acessar fontes instaladas no PC</div>`;
+            html += `<div class="fp-permission-row fp-tip">­ƒÆí Use o Chrome para acessar fontes instaladas no PC</div>`;
         } else if (state_fonts.permissionDenied) {
-            html += `<div class="fp-permission-row fp-tip">⚠️ Permissão negada. Clique no ícone 🔒 na barra de endereço do Chrome e libere "Fontes locais".</div>`;
+            html += `<div class="fp-permission-row fp-tip">ÔÜá´©Å Permiss├úo negada. Clique no ├¡cone ­ƒöÆ na barra de endere├ºo do Chrome e libere "Fontes locais".</div>`;
         }
 
         if (!bFiltered.length && !sFiltered.length) {
@@ -396,7 +406,7 @@ function createFontPicker(elId, currentValue, onChange) {
 
         list.innerHTML = html;
 
-        // Bind do botão de reload (usa o closure doReloadFonts deste picker)
+        // Bind do bot├úo de reload (usa o closure doReloadFonts deste picker)
         const reloadBtn = list.querySelector('[data-fp-reload]');
         if (reloadBtn) reloadBtn.addEventListener('mousedown', e => { e.preventDefault(); doReloadFonts(); });
 
@@ -416,16 +426,16 @@ function createFontPicker(elId, currentValue, onChange) {
         if (sel) sel.scrollIntoView({ block: 'nearest' });
     };
 
-    // Reload de fontes: closure por instância (não global sobrescrito)
-    // Isso garante que cada picker aponte para seu próprio `list` e `searchInput`.
+    // Reload de fontes: closure por inst├óncia (n├úo global sobrescrito)
+    // Isso garante que cada picker aponte para seu pr├│prio `list` e `searchInput`.
     doReloadFonts = async () => {
-        state_fonts.loadedFromAPI = false; // forçar nova tentativa com a API
-        list.innerHTML = `<div class="font-picker-loading">🔄 Solicitando acesso às fontes do PC…</div>`;
+        state_fonts.loadedFromAPI = false; // for├ºar nova tentativa com a API
+        list.innerHTML = `<div class="font-picker-loading">­ƒöä Solicitando acesso ├ás fontes do PCÔÇª</div>`;
         await loadSystemFonts(true);
         allFonts = state_fonts.system;
         renderList(searchInput.value);
     };
-    // Expõe no elemento wrap para o onclick inline do botão encontrar o closure certo
+    // Exp├Áe no elemento wrap para o onclick inline do bot├úo encontrar o closure certo
     wrap._reloadFonts = doReloadFonts;
 
     const openDropdown = async () => {
@@ -438,7 +448,7 @@ function createFontPicker(elId, currentValue, onChange) {
         const firstTime = !state_fonts.loaded;
 
         if (firstTime || needLoad) {
-            list.innerHTML = `<div class="font-picker-loading">🔄 Carregando fontes do PC…</div>`;
+            list.innerHTML = `<div class="font-picker-loading">­ƒöä Carregando fontes do PCÔÇª</div>`;
             await loadSystemFonts();
         }
         allFonts = state_fonts.system;
@@ -472,9 +482,9 @@ function createFontPicker(elId, currentValue, onChange) {
 }
 
 // Gera o HTML do grupo de Fonte para uso em template strings de elementos
-// (será montado depois via JS, não inline HTML, pois precisa do DOM)
+// (ser├í montado depois via JS, n├úo inline HTML, pois precisa do DOM)
 function fontPickerHTML(elId, currentValue) {
-    // Retorna um placeholder que será substituído após inserção no DOM
+    // Retorna um placeholder que ser├í substitu├¡do ap├│s inser├º├úo no DOM
     return `<div class="font-picker-mount" data-el-id="${elId}" data-current="${currentValue || 'helv'}"></div>`;
 }
 
@@ -494,11 +504,11 @@ function mountFontPickers() {
 
 
 
-// ─── Utility — Toast ─────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Utility ÔÇö Toast ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 function toast(msg, type = 'info') {
 
-    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    const icons = { success: 'Ô£à', error: 'ÔØî', info: 'Ôä╣´©Å' };
 
     const tc = document.getElementById('toast-container');
 
@@ -516,7 +526,7 @@ function toast(msg, type = 'info') {
 
 
 
-// ─── Navigation ──────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Navigation ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -535,7 +545,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 
 
-// ─── API Helpers ──────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ API Helpers ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 async function api(method, path, body = null) {
 
@@ -625,7 +635,7 @@ async function api(method, path, body = null) {
 
             } else if (method === 'PUT') {
 
-                if (!docId) throw new Error('ID ausente para atualização');
+                if (!docId) throw new Error('ID ausente para atualiza├º├úo');
 
                 let updateData;
 
@@ -651,7 +661,7 @@ async function api(method, path, body = null) {
 
             } else if (method === 'DELETE') {
 
-                if (!docId) throw new Error('ID ausente para exclusão');
+                if (!docId) throw new Error('ID ausente para exclus├úo');
 
                 const { error } = await supabaseClient.from(col).delete().eq('id', docId);
 
@@ -699,7 +709,7 @@ async function api(method, path, body = null) {
 
 
 
-// ─── Load All Data ────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Load All Data ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 async function loadAll() {
 
@@ -777,7 +787,7 @@ function updateBadges() {
 
 
 
-// ─── FORMATOS ─────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ FORMATOS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 function renderFormatos() {
 
@@ -803,19 +813,19 @@ function renderFormatos() {
 
             <td>${f.name}</td>
 
-            <td>${f.width_mm} × ${f.height_mm} mm</td>
+            <td>${f.width_mm} ├ù ${f.height_mm} mm</td>
 
-            <td><span class="badge badge-blue">${f.cols} × ${f.rows}</span></td>
+            <td><span class="badge badge-blue">${f.cols} ├ù ${f.rows}</span></td>
 
-            <td>${f.gap_h_mm} × ${f.gap_v_mm} mm</td>
+            <td>${f.gap_h_mm} ├ù ${f.gap_v_mm} mm</td>
 
             <td class="actions-cell">
 
-                <button class="btn btn-secondary btn-sm" onclick="duplicateFmt('${f.id}')" title="Duplicar Formato">⧉</button>
+                <button class="btn btn-secondary btn-sm" onclick="duplicateFmt('${f.id}')" title="Duplicar Formato">Ôºë</button>
 
-                <button class="btn btn-sm btn-ghost" onclick="editFmt('${f.id}')">✏️ Editar</button>
+                <button class="btn btn-sm btn-ghost" onclick="editFmt('${f.id}')">Ô£Å´©Å Editar</button>
 
-                <button class="btn btn-danger btn-sm" onclick="deleteFmt('${f.id}')">🗑️</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteFmt('${f.id}')">­ƒùæ´©Å</button>
 
             </td>
 
@@ -833,7 +843,7 @@ async function saveFmt() {
 
 
 
-    // Validar campos de offset (aceita vírgula como separador decimal)
+    // Validar campos de offset (aceita v├¡rgula como separador decimal)
 
     const offhEl = document.getElementById('fmt-offh');
 
@@ -843,7 +853,7 @@ async function saveFmt() {
 
     const offV = validateOffsetField(offvEl);
 
-    if (offH === null || offV === null) return toast('Valor de offset inválido. Use números decimais (ex: 10,2).', 'error');
+    if (offH === null || offV === null) return toast('Valor de offset inv├ílido. Use n├║meros decimais (ex: 10,2).', 'error');
 
 
 
@@ -917,7 +927,7 @@ function editFmt(id) {
 
 
 
-    // Ativar view de formatos para edição
+    // Ativar view de formatos para edi├º├úo
 
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
@@ -989,7 +999,7 @@ function cancelFmtEdit() {
 
     document.getElementById('fmt-offv').value = '0';
 
-    // Remover classes de validação
+    // Remover classes de valida├º├úo
 
     document.getElementById('fmt-offh').classList.remove('invalid');
 
@@ -1001,7 +1011,7 @@ function cancelFmtEdit() {
 
     
 
-    // Limpar estados de rotação
+    // Limpar estados de rota├º├úo
 
     state.fmtRotations = {};
 
@@ -1029,7 +1039,7 @@ async function duplicateFmt(id) {
 
     try {
         const clone = {
-            name: f.name + ' (cópia)',
+            name: f.name + ' (c├│pia)',
             width_mm: parseFloat(f.width_mm),
             height_mm: parseFloat(f.height_mm),
             cols: parseInt(f.cols),
@@ -1061,7 +1071,7 @@ async function deleteFmt(id) {
 
         await api('DELETE', `/formatos/${id}`);
 
-        toast('Formato excluído.', 'success');
+        toast('Formato exclu├¡do.', 'success');
 
         await loadAll();
 
@@ -1073,7 +1083,7 @@ window.deleteFmt = deleteFmt;
 
 
 
-// ─── SAÍDAS ───────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ SA├ìDAS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 function renderSaidas() {
 
@@ -1099,15 +1109,15 @@ function renderSaidas() {
 
             <td>${s.name}</td>
 
-            <td>${s.width_mm} × ${s.height_mm} mm</td>
+            <td>${s.width_mm} ├ù ${s.height_mm} mm</td>
 
             <td><span class="badge badge-teal">${(s.file_format || 'pdf').toUpperCase()}</span></td>
 
             <td class="actions-cell">
 
-                <button class="btn btn-sm btn-ghost" onclick="editSai('${s.id}')">✏️ Editar</button>
+                <button class="btn btn-sm btn-ghost" onclick="editSai('${s.id}')">Ô£Å´©Å Editar</button>
 
-                <button class="btn btn-danger btn-sm" onclick="deleteSai('${s.id}')">🗑️</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteSai('${s.id}')">­ƒùæ´©Å</button>
 
             </td>
 
@@ -1135,7 +1145,7 @@ async function saveSaida() {
 
     };
 
-    if (!data.name) return toast('Informe um nome para a saída.', 'error');
+    if (!data.name) return toast('Informe um nome para a sa├¡da.', 'error');
 
     try {
 
@@ -1143,13 +1153,13 @@ async function saveSaida() {
 
             await api('PUT', `/saidas/${id}`, data);
 
-            toast('Saída atualizada!', 'success');
+            toast('Sa├¡da atualizada!', 'success');
 
         } else {
 
             await api('POST', '/saidas', data);
 
-            toast('Saída salva!', 'success');
+            toast('Sa├¡da salva!', 'success');
 
         }
 
@@ -1185,7 +1195,7 @@ function editSai(id) {
 
     document.getElementById('sai-format').value = s.file_format || 'pdf';
 
-    document.getElementById('sai-form-title').textContent = 'Editar Saída';
+    document.getElementById('sai-form-title').textContent = 'Editar Sa├¡da';
 
     document.getElementById('btn-sai-cancel').style.display = 'inline-flex';
 
@@ -1209,7 +1219,7 @@ function cancelSaiEdit() {
 
     document.getElementById('sai-format').value = 'pdf';
 
-    document.getElementById('sai-form-title').textContent = 'Nova Saída';
+    document.getElementById('sai-form-title').textContent = 'Nova Sa├¡da';
 
     document.getElementById('btn-sai-cancel').style.display = 'none';
 
@@ -1219,13 +1229,13 @@ function cancelSaiEdit() {
 
 async function deleteSai(id) {
 
-    if (!confirm('Excluir esta saída?')) return;
+    if (!confirm('Excluir esta sa├¡da?')) return;
 
     try {
 
         await api('DELETE', `/saidas/${id}`);
 
-        toast('Saída excluída.', 'success');
+        toast('Sa├¡da exclu├¡da.', 'success');
 
         await loadAll();
 
@@ -1247,7 +1257,7 @@ window.setPreset = (w, h) => {
 
 
 
-// ─── CORES ───────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ CORES ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 let corPdfBase64 = "";
 
@@ -1255,7 +1265,7 @@ let corPdfFilename = "";
 
 
 
-// Função para renderizar a primeira página do PDF de referência no Canvas
+// Fun├º├úo para renderizar a primeira p├ígina do PDF de refer├¬ncia no Canvas
 
 async function renderPdfPreview(pdfBase64) {
 
@@ -1277,9 +1287,9 @@ async function renderPdfPreview(pdfBase64) {
 
             emptyEl.innerHTML = `
 
-                <div style="font-size: 3rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                <div style="font-size: 3rem; margin-bottom: 12px; opacity: 0.7;">­ƒôä</div>
 
-                <p style="font-size: 0.9rem; font-weight: 500;">Selecione uma cor para editar ou faça upload de um PDF para visualizar.</p>
+                <p style="font-size: 0.9rem; font-weight: 500;">Selecione uma cor para editar ou fa├ºa upload de um PDF para visualizar.</p>
 
             `;
 
@@ -1371,7 +1381,7 @@ async function renderPdfPreview(pdfBase64) {
 
             emptyEl.style.display = 'block';
 
-            emptyEl.innerHTML = '<div style="font-size: 2rem; color: var(--red); margin-bottom:10px;">✕</div><p style="font-size:0.88rem; font-weight:500;">Falha ao carregar visualização do PDF.</p>';
+            emptyEl.innerHTML = '<div style="font-size: 2rem; color: var(--red); margin-bottom:10px;">Ô£ò</div><p style="font-size:0.88rem; font-weight:500;">Falha ao carregar visualiza├º├úo do PDF.</p>';
 
         }
 
@@ -1411,11 +1421,11 @@ document.getElementById('cor-pdf-file')?.addEventListener('change', function(e) 
 
         corPdfFilename = file.name;
 
-        document.getElementById('cor-pdf-file-name').textContent = "📎 " + file.name;
+        document.getElementById('cor-pdf-file-name').textContent = "­ƒôÄ " + file.name;
 
         document.getElementById('btn-remove-cor-pdf').style.display = 'inline-flex';
 
-        renderPdfPreview(corPdfBase64); // Exibir preview do PDF recém-carregado
+        renderPdfPreview(corPdfBase64); // Exibir preview do PDF rec├®m-carregado
 
     };
 
@@ -1443,7 +1453,7 @@ function clearCorPdfFile() {
 
     if (btnRemove) btnRemove.style.display = 'none';
 
-    renderPdfPreview(null); // Limpar visualização
+    renderPdfPreview(null); // Limpar visualiza├º├úo
 
 }
 
@@ -1525,7 +1535,7 @@ function renderCores() {
 
         const fmt = state.formatos.find(f => f.id === formatoId);
 
-        const fmtName = fmt ? fmt.name : 'Formato Excluído/Não Identificado';
+        const fmtName = fmt ? fmt.name : 'Formato Exclu├¡do/N├úo Identificado';
 
         const coresDoFormato = grouped[formatoId];
 
@@ -1537,7 +1547,7 @@ function renderCores() {
 
                 <div class="card-header" style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border);">
 
-                    <span class="card-title">📐 ${fmtName}</span>
+                    <span class="card-title">­ƒôÉ ${fmtName}</span>
 
                     <span class="badge badge-teal">${coresDoFormato.length} ${coresDoFormato.length === 1 ? 'cor' : 'cores'}</span>
 
@@ -1555,7 +1565,7 @@ function renderCores() {
 
                             <th>Arquivo PDF</th>
 
-                            <th style="text-align: right; width: 120px;">Ações</th>
+                            <th style="text-align: right; width: 120px;">A├º├Áes</th>
 
                         </tr>
 
@@ -1567,7 +1577,7 @@ function renderCores() {
 
                             const pdfLink = c.pdf_base64 
 
-                                ? `<a href="${c.pdf_base64}" download="${c.pdf_filename || 'referencia.pdf'}" class="badge badge-teal" style="text-decoration:none;" onclick="event.stopPropagation();">📥 Baixar PDF</a>`
+                                ? `<a href="${c.pdf_base64}" download="${c.pdf_filename || 'referencia.pdf'}" class="badge badge-teal" style="text-decoration:none;" onclick="event.stopPropagation();">­ƒôÑ Baixar PDF</a>`
 
                                 : '<span style="color:var(--text-faint)">Sem arquivo</span>';
 
@@ -1579,14 +1589,14 @@ function renderCores() {
 
                                     <td><strong>${c.name}</strong></td>
 
-                                    <td>${c.width_mm} × ${c.height_mm} mm</td>
+                                    <td>${c.width_mm} ├ù ${c.height_mm} mm</td>
 
                                     <td>${pdfLink}</td>
 
                                     <td class="actions-cell" style="text-align: right;" onclick="event.stopPropagation();">
-                                        <button class="btn btn-secondary btn-sm" onclick="duplicateCor('${c.id}')" title="Duplicar Cor">⧉</button>
-                                        <button class="btn btn-sm btn-ghost" onclick="editCor('${c.id}')">✏️ Editar</button>
-                                        <button class="btn btn-danger btn-sm" onclick="deleteCor('${c.id}')">🗑️</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="duplicateCor('${c.id}')" title="Duplicar Cor">Ôºë</button>
+                                        <button class="btn btn-sm btn-ghost" onclick="editCor('${c.id}')">Ô£Å´©Å Editar</button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteCor('${c.id}')">­ƒùæ´©Å</button>
                                     </td>
 
                                 </tr>
@@ -1619,7 +1629,7 @@ async function duplicateCor(id) {
 
     try {
         const clone = {
-            name: c.name + ' (cópia)',
+            name: c.name + ' (c├│pia)',
             formato_id: c.formato_id,
             width_mm: parseFloat(c.width_mm),
             height_mm: parseFloat(c.height_mm),
@@ -1656,7 +1666,7 @@ async function saveCor() {
 
     if (!formatoId) return toast('Selecione um formato base.', 'error');
 
-    if (isNaN(w) || w <= 0 || isNaN(h) || h <= 0) return toast('Informe dimensões de tamanho válidas.', 'error');
+    if (isNaN(w) || w <= 0 || isNaN(h) || h <= 0) return toast('Informe dimens├Áes de tamanho v├ílidas.', 'error');
 
 
 
@@ -1700,7 +1710,7 @@ async function saveCor() {
 
         
 
-        // Redirecionar para a página Listar Cores após salvar
+        // Redirecionar para a p├ígina Listar Cores ap├│s salvar
 
         const navListaCores = document.getElementById('nav-lista-cores');
 
@@ -1726,7 +1736,7 @@ function editCor(id) {
 
     
 
-    // Redirecionar para a página Cores (de cadastro) ao editar
+    // Redirecionar para a p├ígina Cores (de cadastro) ao editar
 
     const navCores = document.getElementById('nav-cores');
 
@@ -1752,7 +1762,7 @@ function editCor(id) {
 
         corPdfFilename = c.pdf_filename || "referencia.pdf";
 
-        document.getElementById('cor-pdf-file-name').textContent = "📎 " + corPdfFilename;
+        document.getElementById('cor-pdf-file-name').textContent = "­ƒôÄ " + corPdfFilename;
 
         document.getElementById('btn-remove-cor-pdf').style.display = 'inline-flex';
 
@@ -1812,7 +1822,7 @@ async function deleteCor(id) {
 
         await api('DELETE', `/cores/${id}`);
 
-        toast('Cor excluída.', 'success');
+        toast('Cor exclu├¡da.', 'success');
 
         await loadAll();
 
@@ -1828,19 +1838,19 @@ window.deleteCor = deleteCor;
 
 
 
-// ─── SELECTS (população) ──────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ SELECTS (popula├º├úo) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 function populateSelects() {
 
-    // Numeração — select de formatos
+    // Numera├º├úo ÔÇö select de formatos
 
     const selNumFmt = document.getElementById('num-formato');
 
     const curNumFmt = selNumFmt.value;
 
-    selNumFmt.innerHTML = '<option value="">— Selecione um Formato —</option>' +
+    selNumFmt.innerHTML = '<option value="">ÔÇö Selecione um Formato ÔÇö</option>' +
 
-        state.formatos.map(f => `<option value="${f.id}">${f.name} (${f.width_mm}×${f.height_mm}mm)</option>`).join('');
+        state.formatos.map(f => `<option value="${f.id}">${f.name} (${f.width_mm}├ù${f.height_mm}mm)</option>`).join('');
 
     if (curNumFmt) selNumFmt.value = curNumFmt;
 
@@ -1854,7 +1864,7 @@ function populateSelects() {
 
         const curCorFmt = selCorFmt.value;
 
-        selCorFmt.innerHTML = '<option value="">— Selecione —</option>' +
+        selCorFmt.innerHTML = '<option value="">ÔÇö Selecione ÔÇö</option>' +
 
             state.formatos.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
 
@@ -1864,7 +1874,7 @@ function populateSelects() {
 
 
 
-    // Catálogo - filtro de formato
+    // Cat├ílogo - filtro de formato
 
     const selCatFmt = document.getElementById('catalogo-filter-format');
 
@@ -1874,7 +1884,7 @@ function populateSelects() {
 
         selCatFmt.innerHTML = '<option value="">Todos os Formatos</option>' +
 
-            state.formatos.map(f => `<option value="${f.id}">${f.name} (${f.width_mm}×${f.height_mm}mm)</option>`).join('');
+            state.formatos.map(f => `<option value="${f.id}">${f.name} (${f.width_mm}├ù${f.height_mm}mm)</option>`).join('');
 
         if (curCatFmt) selCatFmt.value = curCatFmt;
 
@@ -1882,29 +1892,29 @@ function populateSelects() {
 
 
 
-    // Imposição — formato e saída
+    // Imposi├º├úo ÔÇö formato e sa├¡da
     const selImpFmt = document.getElementById('imp-formato');
     if (selImpFmt) {
         const cur = selImpFmt.value;
-        selImpFmt.innerHTML = '<option value="">— Selecione —</option>' +
-            state.formatos.map(f => `<option value="${f.id}">${f.name} (${f.width_mm}×${f.height_mm}mm)</option>`).join('');
+        selImpFmt.innerHTML = '<option value="">ÔÇö Selecione ÔÇö</option>' +
+            state.formatos.map(f => `<option value="${f.id}">${f.name} (${f.width_mm}├ù${f.height_mm}mm)</option>`).join('');
         if (cur) selImpFmt.value = cur;
     }
 
     const selImpSaida = document.getElementById('imp-saida');
     if (selImpSaida) {
         const cur = selImpSaida.value;
-        selImpSaida.innerHTML = '<option value="">— Selecione —</option>' +
+        selImpSaida.innerHTML = '<option value="">ÔÇö Selecione ÔÇö</option>' +
             state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
         if (cur) selImpSaida.value = cur;
     }
 
-    // Imposição — numerações (filtradas por tamanho do formato selecionado)
+    // Imposi├º├úo ÔÇö numera├º├Áes (filtradas por tamanho do formato selecionado)
     populateImpNumeracoes();
 
 
 
-    // Modelos de Imposição Selector
+    // Modelos de Imposi├º├úo Selector
 
     const selModelo = document.getElementById('imp-modelo-selector');
 
@@ -1912,7 +1922,7 @@ function populateSelects() {
 
         const curMod = selModelo.value;
 
-        selModelo.innerHTML = '<option value="">— Carregar Modelo —</option>' +
+        selModelo.innerHTML = '<option value="">ÔÇö Carregar Modelo ÔÇö</option>' +
 
             (state.modelosImposicao || []).map(m => `<option value="${m.id}">${m.name}</option>`).join('');
 
@@ -1930,7 +1940,7 @@ function populateSelects() {
 
         const cur = selAmCor.value;
 
-        selAmCor.innerHTML = '<option value="">— Selecione uma Cor —</option>' +
+        selAmCor.innerHTML = '<option value="">ÔÇö Selecione uma Cor ÔÇö</option>' +
 
             state.cores.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
@@ -1952,15 +1962,15 @@ function populateSelects() {
 
         const filteredNums = (selectedCor && selectedCor.formato_id)
             ? state.numeracoes.filter(n => {
-                // formato_ids é o array de formatos compatíveis (novo campo)
-                // fallback: se não existir, usa [formato_id] (dados antigos)
+                // formato_ids ├® o array de formatos compat├¡veis (novo campo)
+                // fallback: se n├úo existir, usa [formato_id] (dados antigos)
                 const ids = n.formato_ids || [n.formato_id];
                 return ids.some(id => String(id) === String(selectedCor.formato_id));
             })
-            : state.numeracoes;
+            : [];
 
 
-        selAmNum.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
+        selAmNum.innerHTML = '<option value="">ÔÇö Selecione uma Numera├º├úo ÔÇö</option>' +
 
             filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
 
@@ -1973,19 +1983,19 @@ function populateSelects() {
 }
 
 
-// ─── Popula Numeração 1 e 2 na Imposição, filtradas por TAMANHO do formato ───
+// ÔöÇÔöÇÔöÇ Popula Numera├º├úo 1 e 2 na Imposi├º├úo, filtradas por TAMANHO do formato ÔöÇÔöÇÔöÇ
 function populateImpNumeracoes() {
     const fmtSel = document.getElementById('imp-formato');
     if (!fmtSel) return;
 
     const selectedFmtId = fmtSel.value;
 
-    // Filtra numerações cujo formato_ids inclui o formato selecionado
+    // Filtra numera├º├Áes cujo formato_ids inclui o formato selecionado
     let filteredNums;
     if (selectedFmtId) {
         filteredNums = state.numeracoes.filter(n => {
-            // formato_ids é o array de formatos compatíveis (novo campo)
-            // fallback: se não existir, usa [formato_id] (dados antigos)
+            // formato_ids ├® o array de formatos compat├¡veis (novo campo)
+            // fallback: se n├úo existir, usa [formato_id] (dados antigos)
             const ids = n.formato_ids || [n.formato_id];
             return ids.some(id => String(id) === String(selectedFmtId));
         });
@@ -1993,20 +2003,20 @@ function populateImpNumeracoes() {
         filteredNums = state.numeracoes;
     }
 
-    // Popula Numeração 1 e Numeração 2
+    // Popula Numera├º├úo 1 e Numera├º├úo 2
     ['imp-numeracao', 'imp-numeracao-2'].forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
         const cur = sel.value;
 
-        sel.innerHTML = '<option value="">— Sem numeração —</option>' +
+        sel.innerHTML = '<option value="">ÔÇö Sem numera├º├úo ÔÇö</option>' +
             filteredNums.map(n => {
                 const nFmt = state.formatos.find(f => String(f.id) === String(n.formato_id));
                 const label = nFmt ? ` (${nFmt.name})` : '';
                 return `<option value="${n.id}">${n.name}${label}</option>`;
             }).join('');
 
-        // Restaurar seleção anterior se ainda existir na lista filtrada
+        // Restaurar sele├º├úo anterior se ainda existir na lista filtrada
         if (cur && filteredNums.some(n => String(n.id) === String(cur))) {
             sel.value = cur;
         } else {
@@ -2017,7 +2027,7 @@ function populateImpNumeracoes() {
 
 
 
-// ─── NUMERAÇÃO EDITOR ─────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ NUMERA├ç├âO EDITOR ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 
 
@@ -2089,7 +2099,7 @@ function renderNumeracoes() {
 
         const fmt = state.formatos.find(f => f.id === fmtId);
 
-        const fmtName = fmt ? `${fmt.name} (${fmt.width_mm}×${fmt.height_mm}mm)` : 'Formato Excluído';
+        const fmtName = fmt ? `${fmt.name} (${fmt.width_mm}├ù${fmt.height_mm}mm)` : 'Formato Exclu├¡do';
 
 
 
@@ -2099,9 +2109,9 @@ function renderNumeracoes() {
 
             <div class="card-header" style="background: var(--bg-body); border-bottom: 1px solid var(--border);">
 
-                <span class="card-title"><span class="icon">📐</span> ${fmtName}</span>
+                <span class="card-title"><span class="icon">­ƒôÉ</span> ${fmtName}</span>
 
-                <span class="badge badge-purple">${grouped[fmtId].length} numerações</span>
+                <span class="badge badge-purple">${grouped[fmtId].length} numera├º├Áes</span>
 
             </div>
 
@@ -2109,7 +2119,7 @@ function renderNumeracoes() {
 
                 <thead>
 
-                    <tr><th>Nome</th><th>Elementos</th><th>Ações</th></tr>
+                    <tr><th>Nome</th><th>Elementos</th><th>A├º├Áes</th></tr>
 
                 </thead>
 
@@ -2133,15 +2143,15 @@ function renderNumeracoes() {
 
                     <td><strong>${n.name}</strong></td>
 
-                    <td>${typeBadges || '—'} <small style="color:var(--text-faint)">(${(n.elements || []).length} itens)</small></td>
+                    <td>${typeBadges || 'ÔÇö'} <small style="color:var(--text-faint)">(${(n.elements || []).length} itens)</small></td>
 
                     <td class="actions-cell">
 
-                        <button class="btn btn-secondary btn-sm" onclick="duplicateCatalogNumeracao('${n.id}')" title="Duplicar Numeração Completa">⧉</button>
+                        <button class="btn btn-secondary btn-sm" onclick="duplicateCatalogNumeracao('${n.id}')" title="Duplicar Numera├º├úo Completa">Ôºë</button>
 
-                        <button class="btn btn-sm btn-ghost" onclick="editNumeracao('${n.id}')">✏️ Editar</button>
+                        <button class="btn btn-sm btn-ghost" onclick="editNumeracao('${n.id}')">Ô£Å´©Å Editar</button>
 
-                        <button class="btn btn-danger btn-sm" onclick="deleteNumeracao('${n.id}')">🗑️</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteNumeracao('${n.id}')">­ƒùæ´©Å</button>
 
                     </td>
 
@@ -2193,7 +2203,7 @@ function editNumeracao(id) {
 
 
 
-    // Ativar view de numeração
+    // Ativar view de numera├º├úo
 
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
@@ -2210,15 +2220,20 @@ function editNumeracao(id) {
     document.getElementById('num-name').value = n.name;
 
     document.getElementById('num-formato').value = n.formato_id;
+    
+    document.getElementById('num-tipo').value = n.tipo || 'SEQUENCIAL';
+    document.getElementById('num-ticket-qtd').value = n.ticket_qtd || 1;
+    document.getElementById('num-ticket-logica').value = n.ticket_logica || 'HORIZONTAL';
+    if(window.onTipoSelect) window.onTipoSelect();
 
     document.getElementById('btn-num-cancel').style.display = 'inline-flex';
 
-    // Restaurar checkboxes de formatos compatíveis
-    // onFormatoSelect(false) renderiza os checkboxes com auto-marcação por tamanho;
+    // Restaurar checkboxes de formatos compat├¡veis
+    // onFormatoSelect(false) renderiza os checkboxes com auto-marca├º├úo por tamanho;
     // depois sobrescrevemos com os formato_ids salvos.
     // (chamado mais abaixo via onFormatoSelect(false))
 
-    // Carregar elementos e recalcular contador para evitar colisões de ID (Bug 3)
+    // Carregar elementos e recalcular contador para evitar colis├Áes de ID (Bug 3)
 
 
     state.numElements = (n.elements || []).map(e => ({ ...e }));
@@ -2279,7 +2294,7 @@ function editNumeracao(id) {
 
         if (btn) btn.style.display = 'inline-flex';
 
-        if (name) name.textContent = '📎 ' + state.numSvgFilename;
+        if (name) name.textContent = '­ƒôÄ ' + state.numSvgFilename;
 
     } else {
 
@@ -2293,7 +2308,7 @@ function editNumeracao(id) {
 
     state.numPdfContent = n.pdf_content || "";
 
-    // Fallback: se o pdf_content da numeração estiver vazio mas algum elemento PDF tiver conteúdo,
+    // Fallback: se o pdf_content da numera├º├úo estiver vazio mas algum elemento PDF tiver conte├║do,
     // usar o pdf_content desse elemento como source (evita perder o PDF ao re-salvar sem recarregar)
     if (!state.numPdfContent) {
         const pdfEl = (state.numElements || []).find(el => el.type === 'PDF' && el.pdf_content);
@@ -2311,7 +2326,7 @@ function editNumeracao(id) {
 
         if (btn) btn.style.display = 'inline-flex';
 
-        if (name) name.textContent = '📎 ' + state.numPdfFilename;
+        if (name) name.textContent = '­ƒôÄ ' + state.numPdfFilename;
 
 
 
@@ -2367,7 +2382,7 @@ function editNumeracao(id) {
 
     onFormatoSelect(false);
 
-    // Restaurar checkboxes de formatos compatíveis a partir dos formato_ids salvos
+    // Restaurar checkboxes de formatos compat├¡veis a partir dos formato_ids salvos
     if (n.formato_ids && n.formato_ids.length) {
         const savedIds = new Set(n.formato_ids);
         document.querySelectorAll('#num-formatos-checks input[type="checkbox"]').forEach(cb => {
@@ -2384,8 +2399,8 @@ function editNumeracao(id) {
 
     drawCanvas();
 
-    // Pré-carregar _pdfCanvas para cada elemento PDF presente na numeração
-    // para garantir renderização correta (respeitando width_mm x height_mm do elemento)
+    // Pr├®-carregar _pdfCanvas para cada elemento PDF presente na numera├º├úo
+    // para garantir renderiza├º├úo correta (respeitando width_mm x height_mm do elemento)
     (async () => {
         for (const el of state.numElements) {
             if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
@@ -2403,7 +2418,7 @@ function editNumeracao(id) {
                         await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
                         el._pdfCanvas = offCanvas;
 
-                        // Atualizar originalW/H se ainda não definidos
+                        // Atualizar originalW/H se ainda n├úo definidos
                         if (!state.numPdfOriginalW) {
                             const vpOrig = page.getViewport({ scale: 1 });
                             state.numPdfOriginalW = vpOrig.width * (25.4 / 72);
@@ -2411,7 +2426,7 @@ function editNumeracao(id) {
                         }
                     }
                 } catch (err) {
-                    console.warn('[Editor] Erro pré-carregando _pdfCanvas do elemento:', err);
+                    console.warn('[Editor] Erro pr├®-carregando _pdfCanvas do elemento:', err);
                 } finally {
                     delete el._pdfLoading;
                 }
@@ -2428,13 +2443,13 @@ window.editNumeracao = editNumeracao;
 
 async function deleteNumeracao(id) {
 
-    if (!confirm('Excluir esta numeração?')) return;
+    if (!confirm('Excluir esta numera├º├úo?')) return;
 
     try {
 
         await api('DELETE', `/numeracoes/${id}`);
 
-        toast('Numeração excluída.', 'success');
+        toast('Numera├º├úo exclu├¡da.', 'success');
 
         await loadAll();
 
@@ -2452,7 +2467,7 @@ window.duplicateCatalogNumeracao = async function (id) {
 
     try {
         const clone = {
-            name: n.name + ' (cópia)',
+            name: n.name + ' (c├│pia)',
             formato_id: n.formato_id,
             formato_ids: n.formato_ids || [n.formato_id],
             csv_filename: n.csv_filename || "",
@@ -2471,7 +2486,7 @@ window.duplicateCatalogNumeracao = async function (id) {
         };
 
         await api('POST', '/numeracoes', clone);
-        toast('Numeração duplicada!', 'success');
+        toast('Numera├º├úo duplicada!', 'success');
         await loadAll();
     } catch (e) {
         toast('Erro ao duplicar: ' + e.message, 'error');
@@ -2487,10 +2502,15 @@ function cancelNumEdit() {
     document.getElementById('num-name').value = '';
 
     document.getElementById('num-formato').value = '';
+    
+    document.getElementById('num-tipo').value = 'SEQUENCIAL';
+    document.getElementById('num-ticket-qtd').value = 1;
+    document.getElementById('num-ticket-logica').value = 'HORIZONTAL';
+    if(window.onTipoSelect) window.onTipoSelect();
 
     document.getElementById('btn-num-cancel').style.display = 'none';
 
-    // Esconder checkboxes de formatos compatíveis
+    // Esconder checkboxes de formatos compat├¡veis
     const compatContainer = document.getElementById('num-formatos-compat');
     if (compatContainer) compatContainer.style.display = 'none';
 
@@ -2527,7 +2547,23 @@ window.cancelNumEdit = cancelNumEdit;
 
 
 
-// Quando o formato é selecionado, mostrar editor e checkboxes de formatos compatíveis
+window.onTipoSelect = function() {
+    const tipo = document.getElementById('num-tipo').value;
+    const ticketSettings = document.getElementById('num-ticket-settings');
+    if (tipo === 'TICKET') {
+        ticketSettings.style.display = 'block';
+    } else {
+        ticketSettings.style.display = 'none';
+    }
+    // Re-render elements so any ticket_pos dropdowns are created/removed
+    renderElementsList();
+};
+
+window.onTicketQtdChange = function() {
+    renderElementsList();
+};
+
+// Quando o formato ├® selecionado, mostrar editor e checkboxes de formatos compat├¡veis
 
 window.onFormatoSelect = function (clearElements = true) {
 
@@ -2544,13 +2580,13 @@ window.onFormatoSelect = function (clearElements = true) {
     state.numFormato = state.formatos.find(f => f.id === fmtId);
     if (!state.numFormato) return;
 
-    // ── Renderizar checkboxes de formatos compatíveis ──
+    // ÔöÇÔöÇ Renderizar checkboxes de formatos compat├¡veis ÔöÇÔöÇ
     if (compatContainer && checksDiv) {
         const selectedFmt = state.numFormato;
         const selW = parseFloat(selectedFmt.width_mm);
         const selH = parseFloat(selectedFmt.height_mm);
 
-        // Coletar formatos já marcados manualmente (para preservar ao trocar formato)
+        // Coletar formatos j├í marcados manualmente (para preservar ao trocar formato)
         const previouslyChecked = new Set();
         checksDiv.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
             previouslyChecked.add(cb.value);
@@ -2565,7 +2601,7 @@ window.onFormatoSelect = function (clearElements = true) {
             const isBase = f.id === fmtId ? ' style="font-weight:700;color:var(--blue);"' : '';
             return `<label style="display:flex;align-items:center;gap:4px;font-size:0.82rem;cursor:pointer;padding:4px 0;"${isBase}>
                 <input type="checkbox" value="${f.id}" ${checked} ${f.id === fmtId ? 'disabled' : ''}>
-                ${f.name} <span style="color:var(--text-dim);font-size:0.75rem;">(${f.width_mm}×${f.height_mm}mm)</span>
+                ${f.name} <span style="color:var(--text-dim);font-size:0.75rem;">(${f.width_mm}├ù${f.height_mm}mm)</span>
             </label>`;
         }).join('');
 
@@ -2584,7 +2620,7 @@ window.onFormatoSelect = function (clearElements = true) {
 
 
 
-// ─── CANVAS ──────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ CANVAS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 const CANVAS_MAX_W = 2000;
 
@@ -2600,7 +2636,7 @@ function initCanvas() {
 
 
 
-    // Calcular escala para caber no espaço
+    // Calcular escala para caber no espa├ºo
 
     const scaleX = CANVAS_MAX_W / fmt.width_mm;
 
@@ -2618,7 +2654,7 @@ function initCanvas() {
 
 
 
-    document.getElementById('canvas-dim-label').textContent = `${fmt.width_mm} × ${fmt.height_mm} mm`;
+    document.getElementById('canvas-dim-label').textContent = `${fmt.width_mm} ├ù ${fmt.height_mm} mm`;
 
     document.getElementById('canvas-scale-label').textContent = `1mm = ${state.canvasScale.toFixed(1)}px`;
 
@@ -2669,7 +2705,7 @@ function drawCanvas() {
         refBg = state.numPdfImage || state.numSvgImage;
     }
 
-    // Arte de fundo (camada de referência semitransparente em tamanho original e centralizada)
+    // Arte de fundo (camada de refer├¬ncia semitransparente em tamanho original e centralizada)
     if (refBg) {
         const MM2PT = 2.8346;
         let originalW_mm = 0;
@@ -2686,7 +2722,7 @@ function drawCanvas() {
             originalH_mm = (refBg.height / dpi) * 25.4;
         }
 
-        // Fallback: se a largura não for calculada direito (ex: SVG), usar as dimensões do formato base
+        // Fallback: se a largura n├úo for calculada direito (ex: SVG), usar as dimens├Áes do formato base
         if (!originalW_mm || originalW_mm < 1) {
             if (state.numFormato) {
                 originalW_mm = state.numFormato.width_mm;
@@ -2706,7 +2742,7 @@ function drawCanvas() {
 
 
 
-    // Grid de milímetros (cada 5mm)
+    // Grid de mil├¡metros (cada 5mm)
 
     ctx.strokeStyle = '#e8eef8';
 
@@ -2815,12 +2851,9 @@ function drawElement(ctx, el, S) {
 
 
     const SAMPLE = el.type === 'FIXED' ? (el.fixed_value || 'TEXTO') :
-
-        el.type === 'TEXT' ? '0001' :
-
+        el.type === 'TEXT' ? String(el.ticket_pos || 1).padStart(el.pad || 6, '0') :
             el.type === 'QR' ? null :
-
-                el.type === 'BARCODE' ? null : '0001';
+                el.type === 'BARCODE' ? null : String(el.ticket_pos || 1).padStart(el.pad || 6, '0');
 
 
 
@@ -2847,11 +2880,8 @@ function drawElement(ctx, el, S) {
         } else {
 
             const padValue = typeof el.pad !== 'undefined' ? el.pad : 6;
-
-            const dummyNum = String(1).padStart(padValue, '0');
-
+            const dummyNum = String(el.ticket_pos || 1).padStart(padValue, '0');
             label = `${el.prefix || ''}${dummyNum}${el.suffix || ''}`;
-
         }
 
         ctx.fillText(label, 0, fs);
@@ -2956,7 +2986,7 @@ function drawElement(ctx, el, S) {
 
         }
 
-        // Repaint (determinístico baseado no i)
+        // Repaint (determin├¡stico baseado no i)
 
         ctx.clearRect(0, 0, bw, bh);
 
@@ -2988,7 +3018,7 @@ function drawElement(ctx, el, S) {
 
 
 
-        // Adicionar texto indicando o tipo de código de barras
+        // Adicionar texto indicando o tipo de c├│digo de barras
 
         ctx.fillStyle = color;
 
@@ -3022,9 +3052,9 @@ function drawElement(ctx, el, S) {
 
         ctx.beginPath();
 
-        // A linha é vertical e cruza o formato inteiro.
+        // A linha ├® vertical e cruza o formato inteiro.
 
-        // Como o contexto foi transladado para (x, y), a coordenada local Y vai de -y até (h_px - y)
+        // Como o contexto foi transladado para (x, y), a coordenada local Y vai de -y at├® (h_px - y)
 
         ctx.moveTo(0, -y);
 
@@ -3087,7 +3117,7 @@ function drawElement(ctx, el, S) {
 
         ctx.restore();
 
-        // Borda do bounding box (desenhada fora do clip para ficar sempre visível)
+        // Borda do bounding box (desenhada fora do clip para ficar sempre vis├¡vel)
         ctx.strokeStyle = isSelected ? '#3b82f6' : color;
         ctx.lineWidth = isSelected ? 2 : 1;
         if (isSelected) {
@@ -3102,7 +3132,7 @@ function drawElement(ctx, el, S) {
 
 
 
-    // Indicador de posição quando selecionado
+    // Indicador de posi├º├úo quando selecionado
 
     if (isSelected) {
 
@@ -3124,7 +3154,7 @@ function drawElement(ctx, el, S) {
 
 
 
-// ─── Canvas Mouse Events ──────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Canvas Mouse Events ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 function getCanvasPos(canvas, e) {
 
@@ -3150,7 +3180,7 @@ function hitTest(el, mx, my) {
 
     if (el.type === 'PICOTE') {
 
-        // Para o Picote, a colisão ocorre na linha vertical (qualquer Y, mas X próximo de el.x_mm)
+        // Para o Picote, a colis├úo ocorre na linha vertical (qualquer Y, mas X pr├│ximo de el.x_mm)
 
         return Math.abs(mx - el.x_mm) <= 2;
 
@@ -3192,7 +3222,7 @@ function onCanvasMouseDown(e) {
 
 
 
-    // Verificar hit em sentido inverso (último = mais ao topo)
+    // Verificar hit em sentido inverso (├║ltimo = mais ao topo)
 
     let hit = null;
 
@@ -3350,7 +3380,7 @@ function onCanvasMouseMove(e) {
 
 
 
-        // Sync com campos numéricos
+        // Sync com campos num├®ricos
 
         const card = document.getElementById(`elcard-${el.id}`);
 
@@ -3384,7 +3414,7 @@ function onCanvasMouseUp() {
 
 
 
-// ─── Ferramentas de Alinhamento ──────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Ferramentas de Alinhamento ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 function isElSelected(id) {
 
@@ -3420,13 +3450,13 @@ function selectElId(id, multi = false) {
 
     }
 
-    // Sincronizar selectedElId com o último selecionado
+    // Sincronizar selectedElId com o ├║ltimo selecionado
 
     state.selectedElId = state.selectedElIds.length > 0 ? state.selectedElIds[state.selectedElIds.length - 1] : null;
 
 
 
-    // Atualizar UI de seleção nos cards
+    // Atualizar UI de sele├º├úo nos cards
 
     document.querySelectorAll('.element-card').forEach(c => c.classList.remove('selected'));
 
@@ -3440,7 +3470,7 @@ function selectElId(id, multi = false) {
 
 
 
-    // Rolar até o último selecionado
+    // Rolar at├® o ├║ltimo selecionado
 
     if (state.selectedElId) {
 
@@ -3448,7 +3478,7 @@ function selectElId(id, multi = false) {
 
         if (card) {
 
-            // Desativado scrollIntoView automático para evitar rolagem incômoda da página inteira
+            // Desativado scrollIntoView autom├ítico para evitar rolagem inc├┤moda da p├ígina inteira
 
             // card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
@@ -3634,7 +3664,7 @@ window.alignSelectedElement = function (alignment) {
 
 
 
-// ─── Arte de Fundo no Canvas (Bug 5) ────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Arte de Fundo no Canvas (Bug 5) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 
 
@@ -3674,7 +3704,7 @@ async function loadBgImage(file) {
 
             if (typeof pdfjsLib === 'undefined') {
 
-                return toast('PDF.js não disponível. Use JPG/PNG.', 'error');
+                return toast('PDF.js n├úo dispon├¡vel. Use JPG/PNG.', 'error');
 
             }
 
@@ -3712,7 +3742,7 @@ async function loadBgImage(file) {
 
             
 
-            // Guardar dimensões originais do PDF (em pontos / scale=1) para que drawCanvas possa escalar corretamente
+            // Guardar dimens├Áes originais do PDF (em pontos / scale=1) para que drawCanvas possa escalar corretamente
 
             const vpOrig = page.getViewport({ scale: 1 });
 
@@ -3742,7 +3772,7 @@ async function loadBgImage(file) {
 
         if (btn) btn.style.display = 'inline-flex';
 
-        if (name) name.textContent = '📎 ' + file.name;
+        if (name) name.textContent = '­ƒôÄ ' + file.name;
 
         drawCanvas();
 
@@ -3836,7 +3866,7 @@ async function loadNumSvgFile(file) {
 
         if (btn) btn.style.display = 'inline-flex';
 
-        if (name) name.textContent = '📎 ' + file.name;
+        if (name) name.textContent = '­ƒôÄ ' + file.name;
 
 
 
@@ -3910,7 +3940,7 @@ async function loadNumPdfFile(file) {
 
             off.height = Math.round(vpRender.height);
 
-            // background: 'rgba(0,0,0,0)' garante que o PDF.js não preencha o canvas com branco
+            // background: 'rgba(0,0,0,0)' garante que o PDF.js n├úo preencha o canvas com branco
 
             await page.render({ canvasContext: octx, viewport: vpRender, background: 'rgba(0,0,0,0)' }).promise;
 
@@ -3927,7 +3957,7 @@ async function loadNumPdfFile(file) {
             // Guardar o canvas renderizado para uso direto nos elementos PDF
             state.numPdfOffCanvas = off;
 
-            // Atualizar o _pdfCanvas de qualquer elemento PDF já existente (ex: ao trocar arquivo)
+            // Atualizar o _pdfCanvas de qualquer elemento PDF j├í existente (ex: ao trocar arquivo)
             state.numElements.forEach(el => {
                 if (el.type === 'PDF') el._pdfCanvas = off;
             });
@@ -3966,7 +3996,7 @@ async function loadNumPdfFile(file) {
 
         if (btn) btn.style.display = 'inline-flex';
 
-        if (name) name.textContent = '📎 ' + file.name;
+        if (name) name.textContent = '­ƒôÄ ' + file.name;
 
 
 
@@ -3982,7 +4012,7 @@ async function loadNumPdfFile(file) {
 
 
 
-// Listeners dos inputs de arquivo (configurados uma única vez após DOM pronto)
+// Listeners dos inputs de arquivo (configurados uma ├║nica vez ap├│s DOM pronto)
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -4018,7 +4048,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-// Fallback: se DOMContentLoaded já passou, configura imediatamente
+// Fallback: se DOMContentLoaded j├í passou, configura imediatamente
 
 (function () {
 
@@ -4072,7 +4102,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-// ─── ELEMENTOS VDP ────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ ELEMENTOS VDP ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 window.addElement = function (type) {
 
@@ -4133,7 +4163,7 @@ function renderElementsList() {
 
         empty.id = 'empty-elements';
 
-        empty.innerHTML = '<div class="empty-state-icon">🎯</div><p>Adicione elementos acima</p>';
+        empty.innerHTML = '<div class="empty-state-icon">­ƒÄ»</div><p>Adicione elementos acima</p>';
 
     }
 
@@ -4153,7 +4183,7 @@ function renderElementsList() {
 
 
 
-    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PICOTE: '✂️ Picote' };
+    const typeLabel = { TEXT: '­ƒöñ Numera├º├úo', FIXED: '­ƒöá Texto Fixo', QR: '­ƒô▒ QR Code', BARCODE: 'ÔûîÔûî Barcode', SVG: '­ƒÄ¿ SVG', PICOTE: 'Ô£é´©Å Picote' };
 
     const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray' };
 
@@ -4162,6 +4192,7 @@ function renderElementsList() {
     const typeOrder = { TEXT: 0, FIXED: 1, QR: 2, BARCODE: 3, SVG: 4, PDF: 5, PICOTE: 6 };
     const sortedElements = [...state.numElements].sort((a, b) => (typeOrder[a.type] ?? 99) - (typeOrder[b.type] ?? 99));
     container.innerHTML = sortedElements.map(el => {
+
 
         const isSelected = isElSelected(el.id);
 
@@ -4185,9 +4216,9 @@ function renderElementsList() {
 
                     <div style="display:flex; gap:4px;">
 
-                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">⧉</button>
+                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">Ôºë</button>
 
-                        <button class="btn btn-danger btn-sm" style="padding: 2px 8px;" onclick="removeEl('${el.id}');event.stopPropagation()" title="Excluir">✕</button>
+                        <button class="btn btn-danger btn-sm" style="padding: 2px 8px;" onclick="removeEl('${el.id}');event.stopPropagation()" title="Excluir">Ô£ò</button>
 
                     </div>
 
@@ -4237,9 +4268,9 @@ function renderElementsList() {
 
                 <div class="form-group">
 
-                    <label>Zeros (pad) <span id="pad-hint-${el.id}" style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${el.pad} dígitos = ${el.pad > 0 ? '0'.repeat(el.pad - 1) + '1' : '1'})</span></label>
+                    <label>Zeros (pad) <span id="pad-hint-${el.id}" style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${el.pad} d├¡gitos = ${el.pad > 0 ? '0'.repeat(el.pad - 1) + '1' : '1'})</span></label>
 
-                    <input class="form-control" type="number" value="${el.pad}" min="0" max="10" oninput="const hint = document.getElementById('pad-hint-${el.id}'); const val = +this.value; hint.textContent = '(' + val + ' dígitos = ' + (val > 0 ? '0'.repeat(val - 1) + '1' : '1') + ')'; updateEl('${el.id}','pad',val)">
+                    <input class="form-control" type="number" value="${el.pad}" min="0" max="10" oninput="const hint = document.getElementById('pad-hint-${el.id}'); const val = +this.value; hint.textContent = '(' + val + ' d├¡gitos = ' + (val > 0 ? '0'.repeat(val - 1) + '1' : '1') + ')'; updateEl('${el.id}','pad',val)">
 
                 </div>
 
@@ -4267,9 +4298,9 @@ function renderElementsList() {
 
                 <div class="form-group">
 
-                    <label>Zeros (pad) <span id="pad-hint-${el.id}" style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${(el.pad || 0)} dígitos = ${(el.pad || 0) > 0 ? '0'.repeat((el.pad || 0) - 1) + '1' : '1'})</span></label>
+                    <label>Zeros (pad) <span id="pad-hint-${el.id}" style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${(el.pad || 0)} d├¡gitos = ${(el.pad || 0) > 0 ? '0'.repeat((el.pad || 0) - 1) + '1' : '1'})</span></label>
 
-                    <input class="form-control" type="number" value="${el.pad || 0}" min="0" max="10" oninput="const hint = document.getElementById('pad-hint-${el.id}'); const val = +this.value; hint.textContent = '(' + val + ' dígitos = ' + (val > 0 ? '0'.repeat(val - 1) + '1' : '1') + ')'; updateEl('${el.id}','pad',val)">
+                    <input class="form-control" type="number" value="${el.pad || 0}" min="0" max="10" oninput="const hint = document.getElementById('pad-hint-${el.id}'); const val = +this.value; hint.textContent = '(' + val + ' d├¡gitos = ' + (val > 0 ? '0'.repeat(val - 1) + '1' : '1') + ')'; updateEl('${el.id}','pad',val)">
 
                 </div>
 
@@ -4281,7 +4312,7 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group"><label>Tipo de Código</label>
+                <div class="form-group"><label>Tipo de C├│digo</label>
 
                     <select class="form-control" onchange="updateEl('${el.id}','barcode_format',this.value)">
 
@@ -4309,9 +4340,9 @@ function renderElementsList() {
 
                 <div class="form-group">
 
-                    <label>Zeros (pad) <span id="pad-hint-${el.id}" style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${(el.pad || 0)} dígitos = ${(el.pad || 0) > 0 ? '0'.repeat((el.pad || 0) - 1) + '1' : '1'})</span></label>
+                    <label>Zeros (pad) <span id="pad-hint-${el.id}" style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${(el.pad || 0)} d├¡gitos = ${(el.pad || 0) > 0 ? '0'.repeat((el.pad || 0) - 1) + '1' : '1'})</span></label>
 
-                    <input class="form-control" type="number" value="${el.pad || 0}" min="0" max="10" oninput="const hint = document.getElementById('pad-hint-${el.id}'); const val = +this.value; hint.textContent = '(' + val + ' dígitos = ' + (val > 0 ? '0'.repeat(val - 1) + '1' : '1') + ')'; updateEl('${el.id}','pad',val)">
+                    <input class="form-control" type="number" value="${el.pad || 0}" min="0" max="10" oninput="const hint = document.getElementById('pad-hint-${el.id}'); const val = +this.value; hint.textContent = '(' + val + ' d├¡gitos = ' + (val > 0 ? '0'.repeat(val - 1) + '1' : '1') + ')'; updateEl('${el.id}','pad',val)">
 
                 </div>
 
@@ -4328,8 +4359,24 @@ function renderElementsList() {
                 <div class="form-group"><label>Altura (mm)</label><input class="form-control" type="number" value="${el.height_mm || 20}" min="5" max="200" step="0.5" onchange="updateEl('${el.id}','height_mm',+this.value)"></div>`;
 
         }
-
-
+        
+        let ticketPosHTML = '';
+        const numTipoSelect = document.getElementById('num-tipo');
+        if (numTipoSelect && numTipoSelect.value === 'TICKET' && ['TEXT', 'QR', 'BARCODE'].includes(el.type)) {
+            const ticketQtd = parseInt(document.getElementById('num-ticket-qtd').value) || 1;
+            let options = '';
+            for (let i = 1; i <= ticketQtd; i++) {
+                options += `<option value="${i}" ${(el.ticket_pos || 1) == i ? 'selected' : ''}>Ticket ${i}</option>`;
+            }
+            ticketPosHTML = `
+                <div class="form-group el-full">
+                    <label style="color:var(--blue); font-weight: 600;">Posi├º├úo do Ticket</label>
+                    <select class="form-control" style="background: rgba(0, 168, 255, 0.1);" onchange="updateEl('${el.id}','ticket_pos', parseInt(this.value))">
+                        ${options}
+                    </select>
+                </div>
+            `;
+        }
 
         return `
 
@@ -4347,9 +4394,9 @@ function renderElementsList() {
 
                 <div style="display:flex; gap:4px;">
 
-                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">⧉</button>
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">Ôºë</button>
 
-                    <button class="btn btn-danger btn-sm" style="padding: 2px 8px;" onclick="removeEl('${el.id}');event.stopPropagation()" title="Excluir">✕</button>
+                    <button class="btn btn-danger btn-sm" style="padding: 2px 8px;" onclick="removeEl('${el.id}');event.stopPropagation()" title="Excluir">Ô£ò</button>
 
                 </div>
 
@@ -4361,17 +4408,17 @@ function renderElementsList() {
 
                 <div class="form-group"><label>Y (mm)</label><input class="form-control el-y" type="number" value="${el.y_mm.toFixed(1)}" step="0.5" onchange="updateEl('${el.id}','y_mm',+this.value)"></div>
 
-                <div class="form-group"><label>Rotação (°)</label>
+                <div class="form-group"><label>Rota├º├úo (┬░)</label>
 
                     <select class="form-control" onchange="updateEl('${el.id}','rotation',+this.value)">
 
-                        <option value="0" ${el.rotation === 0 ? 'selected' : ''}>0°</option>
+                        <option value="0" ${el.rotation === 0 ? 'selected' : ''}>0┬░</option>
 
-                        <option value="90" ${el.rotation === 90 ? 'selected' : ''}>90°</option>
+                        <option value="90" ${el.rotation === 90 ? 'selected' : ''}>90┬░</option>
 
-                        <option value="180" ${el.rotation === 180 ? 'selected' : ''}>180°</option>
+                        <option value="180" ${el.rotation === 180 ? 'selected' : ''}>180┬░</option>
 
-                        <option value="270" ${el.rotation === 270 ? 'selected' : ''}>270°</option>
+                        <option value="270" ${el.rotation === 270 ? 'selected' : ''}>270┬░</option>
 
                     </select>
 
@@ -4421,7 +4468,7 @@ function renderElementsList() {
 
                     <select class="form-control" onchange="updateEl('${el.id}','csv_column',this.value)">
 
-                        <option value="">— Selecione —</option>
+                        <option value="">ÔÇö Selecione ÔÇö</option>
 
                         ${state.numCsvHeaders.map(col => `<option value="${col}" ${el.csv_column === col ? 'selected' : ''}>${col}</option>`).join('')}
 
@@ -4438,6 +4485,7 @@ function renderElementsList() {
                 ` : ''}
 
                 ${extraFields}
+                ${ticketPosHTML}
 
             </div>
 
@@ -4524,7 +4572,7 @@ window.duplicateEl = function (id) {
 
     clone.id = newId;
 
-    clone.x_mm += 5; // Desloca levemente para não sobrepor perfeitamente
+    clone.x_mm += 5; // Desloca levemente para n├úo sobrepor perfeitamente
 
     if (clone.type === 'PICOTE') {
 
@@ -4536,7 +4584,7 @@ window.duplicateEl = function (id) {
 
     }
 
-    if (clone.name) clone.name += ' (cópia)';
+    if (clone.name) clone.name += ' (c├│pia)';
 
 
 
@@ -4576,7 +4624,7 @@ function selectElementCard(id) {
 
         card.classList.add('selected');
 
-        // Desativado scrollIntoView automático para evitar rolagem incômoda da página inteira
+        // Desativado scrollIntoView autom├ítico para evitar rolagem inc├┤moda da p├ígina inteira
 
         // card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
@@ -4594,7 +4642,7 @@ function deselectAllCards() {
 
 
 
-// ─── Salvar Numeração ─────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Salvar Numera├º├úo ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 async function uploadToStorage(content, fileName, path) {
     if (!content) return content;
@@ -4612,7 +4660,7 @@ async function uploadToStorage(content, fileName, path) {
             blob = new Blob([content], { type: 'image/svg+xml' });
         }
     } catch (fetchErr) {
-        console.warn("Erro ao converter conteúdo em Blob usando fetch, tentando conversão manual:", fetchErr);
+        console.warn("Erro ao converter conte├║do em Blob usando fetch, tentando convers├úo manual:", fetchErr);
         try {
             if (typeof content === 'string' && content.startsWith('data:')) {
                 const parts = content.split(',');
@@ -4628,8 +4676,8 @@ async function uploadToStorage(content, fileName, path) {
                 throw fetchErr;
             }
         } catch (convErr) {
-            console.error("Falha na conversão manual do base64:", convErr);
-            return content; // Fallback: retorna o conteúdo original (base64)
+            console.error("Falha na convers├úo manual do base64:", convErr);
+            return content; // Fallback: retorna o conte├║do original (base64)
         }
     }
 
@@ -4652,7 +4700,7 @@ async function uploadToStorage(content, fileName, path) {
 
         return publicUrlData.publicUrl;
     } catch (uploadErr) {
-        console.warn("Falha de rede/exceção ao enviar para o Supabase Storage, salvando como Base64:", uploadErr);
+        console.warn("Falha de rede/exce├º├úo ao enviar para o Supabase Storage, salvando como Base64:", uploadErr);
         return content; // Fallback: retorna o base64 para salvar diretamente no DB
     }
 }
@@ -4666,10 +4714,12 @@ window.saveNumeracao = async function () {
     const name = document.getElementById('num-name').value.trim();
 
     const fmtId = document.getElementById('num-formato').value;
+    
+    const tipo = document.getElementById('num-tipo').value || 'SEQUENCIAL';
 
 
 
-    if (!name) return toast('Informe um nome para a numeração.', 'error');
+    if (!name) return toast('Informe um nome para a numera├º├úo.', 'error');
 
     if (!fmtId) return toast('Selecione um formato.', 'error');
 
@@ -4680,7 +4730,7 @@ window.saveNumeracao = async function () {
 
 
     try {
-        // ─── GERAR PREVIEW JPG 100 DPI ───
+        // ÔöÇÔöÇÔöÇ GERAR PREVIEW JPG 100 DPI ÔöÇÔöÇÔöÇ
         let previewJpgBase64 = "";
         const fmt = state.formatos.find(f => String(f.id) === String(fmtId));
         if (fmt) {
@@ -4723,7 +4773,7 @@ window.saveNumeracao = async function () {
                 pctx.drawImage(refBg, drawX, drawY, drawW, drawH);
             }
 
-            // 3. Desenhar elementos de numeração sem a borda de seleção azul
+            // 3. Desenhar elementos de numera├º├úo sem a borda de sele├º├úo azul
             pctx.save();
             pctx.beginPath();
             pctx.rect(0, 0, previewCanvas.width, previewCanvas.height);
@@ -4762,6 +4812,8 @@ window.saveNumeracao = async function () {
             name,
 
             formato_id: fmtId,
+            
+            tipo,
 
             preview_jpg: previewJpgBase64,
 
@@ -4770,10 +4822,13 @@ window.saveNumeracao = async function () {
                 const checks = document.querySelectorAll('#num-formatos-checks input[type="checkbox"]');
                 const ids = [];
                 checks.forEach(cb => { if (cb.checked || cb.value === fmtId) ids.push(cb.value); });
-                // Garantir que o formato base está sempre incluído
+                // Garantir que o formato base est├í sempre inclu├¡do
                 if (!ids.includes(fmtId)) ids.unshift(fmtId);
                 return ids;
             })(),
+
+            ticket_qtd: parseInt(document.getElementById('num-ticket-qtd').value) || 1,
+            ticket_logica: document.getElementById('num-ticket-logica').value || 'HORIZONTAL',
 
             csv_filename: state.numCsvFilename || "",
 
@@ -4785,7 +4840,7 @@ window.saveNumeracao = async function () {
 
             svg_filename: state.numSvgFilename || "",
 
-            // pdf_content da numeração: usar pdfUrl se válido, senão manter o conteúdo anterior de state
+            // pdf_content da numera├º├úo: usar pdfUrl se v├ílido, sen├úo manter o conte├║do anterior de state
             // (que pode ter sido recuperado de um elemento PDF no editNumeracao como fallback)
             pdf_content: pdfUrl || state.numPdfContent || "",
 
@@ -4795,14 +4850,14 @@ os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.it
 
             elements: state.numElements.map(el => {
 
-                // Remover propriedades internas do frontend (não serializáveis)
+                // Remover propriedades internas do frontend (n├úo serializ├íveis)
                 const { _pdfCanvas, _pdfLoading, _svgImage, _pdfPreview, ...e } = el;
 
                 if (e.type === 'FIXED') e.fixed = true;
 
                 if (e.type === 'SVG') e.svg_content = svgUrl || e.svg_content || "";
 
-                // Para PDF: usar pdfUrl se válido, senão manter o pdf_content original do elemento
+                // Para PDF: usar pdfUrl se v├ílido, sen├úo manter o pdf_content original do elemento
                 // Isso evita apagar o PDF ao re-editar sem recarregar o arquivo
                 if (e.type === 'PDF') e.pdf_content = pdfUrl || e.pdf_content || "";
 
@@ -4818,7 +4873,7 @@ os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.it
 
             await api('PUT', `/numeracoes/${id}`, data);
 
-            toast('Numeração atualizada!', 'success');
+            toast('Numera├º├úo atualizada!', 'success');
 
         } else {
 
@@ -4832,13 +4887,13 @@ os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.it
 
                 await api('PUT', `/numeracoes/${existing.id}`, data);
 
-                toast('Numeração substituída!', 'success');
+                toast('Numera├º├úo substitu├¡da!', 'success');
 
             } else {
 
                 await api('POST', '/numeracoes', data);
 
-                toast('Numeração salva!', 'success');
+                toast('Numera├º├úo salva!', 'success');
 
             }
 
@@ -4864,13 +4919,13 @@ if (window.customNumeracaoEditState) {
         if (typeof renderAmostrasOSItens === 'function') {
             renderAmostrasOSItens(customState.osId);
         }
-        toast('Numeração customizada salva e aplicada à amostra!', 'success');
+        toast('Numera├º├úo customizada salva e aplicada ├á amostra!', 'success');
     } else if (customState.view === 'imposicao') {
         showView('view-imposicao');
         if (newNum) {
             const numSelect = document.getElementById(customState.fieldId);
             if (numSelect) {
-                // Atualizar as opções do select caso a numeração seja nova
+                // Atualizar as op├º├Áes do select caso a numera├º├úo seja nova
                 if (!Array.from(numSelect.options).some(o => o.value === newNum.id)) {
                     const opt = document.createElement('option');
                     opt.value = newNum.id;
@@ -4887,7 +4942,7 @@ if (window.customNumeracaoEditState) {
                 }
             }
         }
-        toast('Numeração customizada salva e aplicada ao modelo de imposição!', 'success');
+        toast('Numera├º├úo customizada salva e aplicada ao modelo de imposi├º├úo!', 'success');
     }
 } else {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -4904,9 +4959,9 @@ if (window.customNumeracaoEditState) {
 
 
 
-// ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ IMPOSI├ç├âO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
-// Detecta o DPI real de um arquivo de imagem (JPEG ou PNG) a partir dos seus metadados binários
+// Detecta o DPI real de um arquivo de imagem (JPEG ou PNG) a partir dos seus metadados bin├írios
 
 async function getDpi(file) {
 
@@ -4918,7 +4973,7 @@ async function getDpi(file) {
 
         
 
-        // Verifica se é JPEG (começa com FF D8)
+        // Verifica se ├® JPEG (come├ºa com FF D8)
 
         if (view.byteLength > 4 && view.getUint16(0) === 0xFFD8) {
 
@@ -4962,7 +5017,7 @@ async function getDpi(file) {
 
         
 
-        // Verifica se é PNG (começa com 89 50 4E 47)
+        // Verifica se ├® PNG (come├ºa com 89 50 4E 47)
 
         if (view.byteLength > 8 && view.getUint32(0) === 0x89504E47) {
 
@@ -5002,13 +5057,13 @@ async function getDpi(file) {
 
     }
 
-    return 300; // Padrão de 300 DPI para artes gráficas profissionais
+    return 300; // Padr├úo de 300 DPI para artes gr├íficas profissionais
 
 }
 
 
 
-// ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ IMPOSI├ç├âO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 async function loadImpArtFile(file) {
 
@@ -5020,7 +5075,7 @@ async function loadImpArtFile(file) {
 
             if (typeof pdfjsLib === 'undefined') {
 
-                return toast('PDF.js não disponível. Use JPG/PNG.', 'error');
+                return toast('PDF.js n├úo dispon├¡vel. Use JPG/PNG.', 'error');
 
             }
 
@@ -5034,7 +5089,7 @@ async function loadImpArtFile(file) {
 
             
 
-            // Salvar documento PDF e inicializar caches para paginação especial de Pdf Múltiplo
+            // Salvar documento PDF e inicializar caches para pagina├º├úo especial de Pdf M├║ltiplo
 
             state.impArtPdfDoc = pdf;
 
@@ -5050,7 +5105,7 @@ async function loadImpArtFile(file) {
 
 
 
-            const scale = 2; // Renderizar em maior resolução para melhor qualidade de preview
+            const scale = 2; // Renderizar em maior resolu├º├úo para melhor qualidade de preview
 
             const off = document.createElement('canvas');
 
@@ -5076,7 +5131,7 @@ async function loadImpArtFile(file) {
 
             
 
-            // Se estiver em Pdf Múltiplo, atualiza limites
+            // Se estiver em Pdf M├║ltiplo, atualiza limites
 
             const schema = document.getElementById('imp-schema').value;
 
@@ -5106,7 +5161,7 @@ async function loadImpArtFile(file) {
 
         } else {
 
-            // Se for imagem normal, limpa referências de PDF
+            // Se for imagem normal, limpa refer├¬ncias de PDF
 
             state.impArtPdfDoc = null;
 
@@ -5142,7 +5197,7 @@ async function loadImpArtFile(file) {
 
         toast('Arte carregada para preview!', 'success');
 
-        updateImpSummary(); // Recalcular sumário e forçar redesenho do preview
+        updateImpSummary(); // Recalcular sum├írio e for├ºar redesenho do preview
 
     } catch (e) {
 
@@ -5204,9 +5259,9 @@ function drawPreview() {
 
         ctx.textAlign = 'center';
 
-        ctx.fillText('Aguardando formato e saída...', 150, 100);
+        ctx.fillText('Aguardando formato e sa├¡da...', 150, 100);
 
-        document.getElementById('preview-sheet-num').textContent = 'Sem Configuração';
+        document.getElementById('preview-sheet-num').textContent = 'Sem Configura├º├úo';
 
         return;
 
@@ -5350,7 +5405,7 @@ function drawPreview() {
 
 
 
-            // Centro da célula para rotação
+            // Centro da c├®lula para rota├º├úo
 
             const centerX = (cell_x0 + item_w / 2) * scale;
 
@@ -5358,7 +5413,7 @@ function drawPreview() {
 
             
 
-            // Inverter a rotação da célula no verso para bater frente/verso
+            // Inverter a rota├º├úo da c├®lula no verso para bater frente/verso
 
             const cellRotationFrente = fmt.rotations ? (parseInt(fmt.rotations[P]) || 0) : 0;
 
@@ -5388,7 +5443,7 @@ function drawPreview() {
 
 
 
-            // Clipping restrito à célula (impede que artes com sangria vazem)
+            // Clipping restrito ├á c├®lula (impede que artes com sangria vazem)
 
             ctx.beginPath();
 
@@ -5458,9 +5513,9 @@ function drawPreview() {
 
             if (activeImage || activePdfDoc) {
 
-                // Centralizar a arte na célula + aplicar offset do formato (em relação ao centro da célula que é 0,0)
+                // Centralizar a arte na c├®lula + aplicar offset do formato (em rela├º├úo ao centro da c├®lula que ├® 0,0)
 
-                // (positivo H = direita, positivo V = para cima → negar Y)
+                // (positivo H = direita, positivo V = para cima ÔåÆ negar Y)
 
                 const offH = fmt_off_h * scale;
 
@@ -5478,7 +5533,7 @@ function drawPreview() {
 
                     if (activePdfDoc) {
 
-                        // Determinar qual página física real do PDF base exibir
+                        // Determinar qual p├ígina f├¡sica real do PDF base exibir
 
                         let pageNum = 1;
 
@@ -5574,7 +5629,7 @@ function drawPreview() {
 
                                         } catch (err) {
 
-                                            console.error(`Erro ao renderizar pág. ${pageNum}:`, err);
+                                            console.error(`Erro ao renderizar p├íg. ${pageNum}:`, err);
 
                                         } finally {
 
@@ -5588,7 +5643,7 @@ function drawPreview() {
 
                                 
 
-                                // Placeholder enquanto carrega a página
+                                // Placeholder enquanto carrega a p├ígina
 
                                 ctx.fillStyle = '#f1f5f9';
 
@@ -5608,13 +5663,13 @@ function drawPreview() {
 
                                 ctx.textBaseline = 'middle';
 
-                                ctx.fillText(`Carregando Pág. ${pageNum}...`, offH, offV);
+                                ctx.fillText(`Carregando P├íg. ${pageNum}...`, offH, offV);
 
                             }
 
                         } else {
 
-                            // Página excedente ou sem verso, desenha vazio
+                            // P├ígina excedente ou sem verso, desenha vazio
 
                             ctx.fillStyle = '#ffffff';
 
@@ -5632,7 +5687,7 @@ function drawPreview() {
 
                         if (isBack) {
 
-                            // Imagem única não tem verso de arte
+                            // Imagem ├║nica n├úo tem verso de arte
 
                             ctx.fillStyle = '#ffffff';
 
@@ -5678,7 +5733,7 @@ function drawPreview() {
 
                 ctx.textBaseline = 'middle';
 
-                ctx.fillText(`Posição ${P + 1}`, 0, 0);
+                ctx.fillText(`Posi├º├úo ${P + 1}`, 0, 0);
 
             }
 
@@ -5695,18 +5750,18 @@ function drawPreview() {
                 ctx.fillStyle = nomeColor;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                // Posição X: 0mm da lateral esquerda da célula
-                // Após rotação -90°, textBaseline='middle' centraliza horizontalmente,
-                // então o ponto de translate é o CENTRO do texto rotacionado.
+                // Posi├º├úo X: 0mm da lateral esquerda da c├®lula
+                // Ap├│s rota├º├úo -90┬░, textBaseline='middle' centraliza horizontalmente,
+                // ent├úo o ponto de translate ├® o CENTRO do texto rotacionado.
                 // Para a borda esquerda do texto ficar a 0mm: center_x = -cw/2 + fontSize/2
                 ctx.translate(-cw / 2 + nomeFontSizePx / 2, 0);
                 ctx.rotate(-Math.PI / 2);
-                // textAlign='center' centraliza o texto verticalmente (eixo X pré-rotação = eixo Y pós-rotação)
+                // textAlign='center' centraliza o texto verticalmente (eixo X pr├®-rota├º├úo = eixo Y p├│s-rota├º├úo)
                 ctx.fillText(nomeTxt, 0, 0);
                 ctx.restore();
             }
 
-            // Elementos variáveis (VDP) - Suporte a 2 numerações sobrepostas
+            // Elementos vari├íveis (VDP) - Suporte a 2 numera├º├Áes sobrepostas
 
         const drawVdpElements = (currentNum, source_id) => {
 
@@ -5728,13 +5783,13 @@ function drawPreview() {
 
 
 
-                    // Pular elementos que não são da face ativa
+                    // Pular elementos que n├úo s├úo da face ativa
 
                     if (isBack && effectiveFace === 'front') return;
 
                     if (!isBack && effectiveFace === 'back') return;
 
-                    // Posição do elemento relativa ao canto superior esquerdo da célula
+                    // Posi├º├úo do elemento relativa ao canto superior esquerdo da c├®lula
 
                     const el_x = el.x_mm * MM2PT * scale;
 
@@ -5742,7 +5797,7 @@ function drawPreview() {
 
 
 
-                    // Converter para coordenadas relativas ao centro da célula (0,0)
+                    // Converter para coordenadas relativas ao centro da c├®lula (0,0)
 
                     const el_x_rel = el_x - cw / 2;
 
@@ -5906,13 +5961,13 @@ function drawPreview() {
 
                         if (el._pdfCanvas) {
 
-                            // Já carregado: desenhar diretamente
+                            // J├í carregado: desenhar diretamente
 
                             ctx.drawImage(el._pdfCanvas, 0, 0, sz_w, sz_h);
 
                         } else if (el.pdf_content && !el._pdfLoading) {
 
-                            // Carregar assincronamente e cachear no próprio elemento
+                            // Carregar assincronamente e cachear no pr├│prio elemento
 
                             el._pdfLoading = true;
 
@@ -5984,7 +6039,7 @@ function drawPreview() {
 
                         } else if (!el.pdf_content) {
 
-                            // Sem conteúdo: placeholder vazio
+                            // Sem conte├║do: placeholder vazio
 
                             ctx.fillStyle = '#f8fafc';
 
@@ -6004,7 +6059,7 @@ function drawPreview() {
 
                             ctx.textBaseline = 'middle';
 
-                            ctx.fillText('📄 PDF', sz_w / 2, sz_h / 2);
+                            ctx.fillText('­ƒôä PDF', sz_w / 2, sz_h / 2);
 
                             ctx.textAlign = 'left';
 
@@ -6022,7 +6077,7 @@ function drawPreview() {
 
         };
 
-        // Para multi_artes, usar a numeração específica de cada arte
+        // Para multi_artes, usar a numera├º├úo espec├¡fica de cada arte
         if (schema === 'multi_artes' && multiArteItem) {
             drawVdpElements(multiArteItem.numeracao, 1);
             drawVdpElements(multiArteItem.numeracao_2, 2);
@@ -6218,13 +6273,13 @@ window.uploadMultiArtePdf = async function(index, fileInput) {
 
     try {
 
-        // Agora nós guardamos o arquivo cru na memória em vez de fazer upload para o Supabase
+        // Agora n├│s guardamos o arquivo cru na mem├│ria em vez de fazer upload para o Supabase
 
         state.impMultiArtes[index].rawFile = file;
 
         state.impMultiArtes[index].pdf_name = file.name;
 
-        // Definimos uma url falsa apenas para controle interno e para evitar erros com lógicas legadas que verificam se pdf_url existe
+        // Definimos uma url falsa apenas para controle interno e para evitar erros com l├│gicas legadas que verificam se pdf_url existe
 
         state.impMultiArtes[index].pdf_url = "local_file"; 
 
@@ -6292,7 +6347,7 @@ window.renderMultiArtes = function() {
 
 
 
-    // Gerar options das numerações filtradas pelo formato da imposição
+    // Gerar options das numera├º├Áes filtradas pelo formato da imposi├º├úo
     const fmtSelect = document.getElementById('imp-formato');
     const selectedFmtId = fmtSelect ? fmtSelect.value : '';
     let filteredNums = state.numeracoes;
@@ -6318,12 +6373,12 @@ window.renderMultiArtes = function() {
 
                     <button class="btn btn-sm ${(a.pdf_url && (a.pdf_url !== 'local_file' || a.rawFile)) ? 'btn-outline' : 'btn-primary'}" id="btn-upload-multi-${i}" onclick="document.getElementById('file-multi-${i}').click()" style="width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${a.pdf_name || 'Upload PDF'}">
 
-                        ${a.rawFile ? '📄 ' + a.pdf_name : (a.pdf_url === 'local_file' ? '⚠️ Reenviar: ' + a.pdf_name : '📁 Escolher PDF')}
+                        ${a.rawFile ? '­ƒôä ' + a.pdf_name : (a.pdf_url === 'local_file' ? 'ÔÜá´©Å Reenviar: ' + a.pdf_name : '­ƒôü Escolher PDF')}
 
                     </button>
 
 
-                    ${a.pdf_url === 'local_file' && !a.rawFile ? `<span style="color:#f59e0b;font-size:0.7rem;">⚠️ Faça o upload novamente</span>` : ''}
+                    ${a.pdf_url === 'local_file' && !a.rawFile ? `<span style="color:#f59e0b;font-size:0.7rem;">ÔÜá´©Å Fa├ºa o upload novamente</span>` : ''}
                     <input type="file" id="file-multi-${i}" accept=".pdf" style="display:none" onchange="uploadMultiArtePdf(${i}, this)">
 
                 </div>
@@ -6340,7 +6395,7 @@ window.renderMultiArtes = function() {
 
             <div style="flex:1.5">
 
-                <label style="font-size:0.75rem; color:var(--text-dim); display:block; margin-bottom:4px;">Nome (6 dígitos)</label>
+                <label style="font-size:0.75rem; color:var(--text-dim); display:block; margin-bottom:4px;">Nome (6 d├¡gitos)</label>
 
                 <div style="display:flex; gap:4px; align-items:center;">
 
@@ -6354,7 +6409,7 @@ window.renderMultiArtes = function() {
 
             <div style="flex:2">
 
-                <label style="font-size:0.75rem; color:var(--text-dim); display:block; margin-bottom:4px;">${document.getElementById('imp-print-mode')?.value === 'duplex' ? 'Numeração FRENTE' : 'Numeração 1'}</label>
+                <label style="font-size:0.75rem; color:var(--text-dim); display:block; margin-bottom:4px;">${document.getElementById('imp-print-mode')?.value === 'duplex' ? 'Numera├º├úo FRENTE' : 'Numera├º├úo 1'}</label>
 
                 <select class="form-control" style="height:32px; padding:0 5px;" onchange="updateMultiArte(${i}, 'num1_id', this.value)">
 
@@ -6366,7 +6421,7 @@ window.renderMultiArtes = function() {
 
             <div style="flex:2">
 
-                <label style="font-size:0.75rem; color:var(--text-dim); display:block; margin-bottom:4px;">${document.getElementById('imp-print-mode')?.value === 'duplex' ? 'Numeração VERSO' : 'Numeração 2'}</label>
+                <label style="font-size:0.75rem; color:var(--text-dim); display:block; margin-bottom:4px;">${document.getElementById('imp-print-mode')?.value === 'duplex' ? 'Numera├º├úo VERSO' : 'Numera├º├úo 2'}</label>
 
                 <select class="form-control" style="height:32px; padding:0 5px;" onchange="updateMultiArte(${i}, 'num2_id', this.value)">
 
@@ -6406,15 +6461,15 @@ function updateImpSummary() {
 
         if (printMode === 'duplex') {
 
-            lblNum1.innerHTML = '2. Numeração <b style="color:var(--blue)">FRENTE</b> (opcional)';
+            lblNum1.innerHTML = '2. Numera├º├úo <b style="color:var(--blue)">FRENTE</b> (opcional)';
 
-            lblNum2.innerHTML = '3. Numeração <b style="color:var(--blue)">VERSO</b> (opcional)';
+            lblNum2.innerHTML = '3. Numera├º├úo <b style="color:var(--blue)">VERSO</b> (opcional)';
 
         } else {
 
-            lblNum1.innerHTML = '2. Numeração 1 (opcional)';
+            lblNum1.innerHTML = '2. Numera├º├úo 1 (opcional)';
 
-            lblNum2.innerHTML = '3. Numeração 2 (opcional)';
+            lblNum2.innerHTML = '3. Numera├º├úo 2 (opcional)';
 
         }
 
@@ -6449,7 +6504,7 @@ function updateImpSummary() {
 
         
 
-        const optionsHtml = '<option value="">— Sem numeração —</option>' + 
+        const optionsHtml = '<option value="">ÔÇö Sem numera├º├úo ÔÇö</option>' + 
 
             filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
 
@@ -6527,7 +6582,7 @@ function updateImpSummary() {
 
     }
 
-    // Pré-carregar canvas de cada elemento PDF da numeração selecionada
+    // Pr├®-carregar canvas de cada elemento PDF da numera├º├úo selecionada
 
     function preloadNumPdfElements(numeracao) {
 
@@ -6571,7 +6626,7 @@ function updateImpSummary() {
 
                     } catch (err) {
 
-                        console.error('[Preview] Erro pré-carregando PDF do elemento:', err);
+                        console.error('[Preview] Erro pr├®-carregando PDF do elemento:', err);
 
                         delete el._pdfLoading;
 
@@ -6595,7 +6650,7 @@ function updateImpSummary() {
 
 
 
-    // Atualizar modo de impressão no estado global
+    // Atualizar modo de impress├úo no estado global
 
     const printModeEl = document.getElementById('imp-print-mode');
 
@@ -6795,15 +6850,15 @@ function updateImpSummary() {
 
     box.style.display = 'grid';
 
-    document.getElementById('sum-formato').textContent = `${fmt.name} (${fmt.width_mm}×${fmt.height_mm}mm)`;
+    document.getElementById('sum-formato').textContent = `${fmt.name} (${fmt.width_mm}├ù${fmt.height_mm}mm)`;
 
-    document.getElementById('sum-grade').textContent = `${fmt.cols} × ${fmt.rows} = ${perSheet} itens/folha`;
+    document.getElementById('sum-grade').textContent = `${fmt.cols} ├ù ${fmt.rows} = ${perSheet} itens/folha`;
 
     document.getElementById('sum-total').textContent = total.toLocaleString('pt-BR');
 
     document.getElementById('sum-folhas').textContent = sheets.toLocaleString('pt-BR') + ' folha(s)';
 
-    document.getElementById('sum-saida').textContent = `${sai.name} — ${(sai.file_format || 'pdf').toUpperCase()}`;
+    document.getElementById('sum-saida').textContent = `${sai.name} ÔÇö ${(sai.file_format || 'pdf').toUpperCase()}`;
 
 
 
@@ -6875,11 +6930,11 @@ function showFileInfo() {
 
 
 
-        // Validação da OS Ativa
+        // Valida├º├úo da OS Ativa
 
         if (state.expectedArteName && f.name !== state.expectedArteName) {
 
-            toast(`Erro: O arquivo selecionado "${f.name}" não coincide com a arte esperada pela OS ("${state.expectedArteName}").`, 'error');
+            toast(`Erro: O arquivo selecionado "${f.name}" n├úo coincide com a arte esperada pela OS ("${state.expectedArteName}").`, 'error');
 
             impFile.value = ''; // Reseta input
 
@@ -6889,7 +6944,7 @@ function showFileInfo() {
 
             if (impInfo) {
 
-                impInfo.innerHTML = `<span style="color: var(--blue); font-weight: bold;">⚠️ Selecione o arquivo novamente:</span> "${state.expectedArteName}"`;
+                impInfo.innerHTML = `<span style="color: var(--blue); font-weight: bold;">ÔÜá´©Å Selecione o arquivo novamente:</span> "${state.expectedArteName}"`;
 
                 impInfo.style.display = 'block';
 
@@ -6903,7 +6958,7 @@ function showFileInfo() {
 
         const kb = (f.size / 1024).toFixed(0);
 
-        impInfo.textContent = `✅ ${f.name} (${kb} KB)`;
+        impInfo.textContent = `Ô£à ${f.name} (${kb} KB)`;
 
         impInfo.style.display = 'block';
 
@@ -6945,19 +7000,19 @@ window.runImposition = async function () {
 
     if (!fmtId) return toast('Selecione um Formato.', 'error');
 
-    if (!saiId) return toast('Selecione uma Saída.', 'error');
+    if (!saiId) return toast('Selecione uma Sa├¡da.', 'error');
 
     
 
     if (schema === 'multi_artes') {
 
-        // Valida se todas as artes da lista têm PDF carregado
+        // Valida se todas as artes da lista t├¬m PDF carregado
 
         for (let i = 0; i < state.impMultiArtes.length; i++) {
 
             if (!state.impMultiArtes[i].pdf_url || (state.impMultiArtes[i].pdf_url === 'local_file' && !state.impMultiArtes[i].rawFile)) {
 
-                return toast(`Arte ${i + 1}: faça o upload do PDF da arte (necessário a cada sessão).`, 'error');
+                return toast(`Arte ${i + 1}: fa├ºa o upload do PDF da arte (necess├írio a cada sess├úo).`, 'error');
 
             }
 
@@ -6973,7 +7028,7 @@ window.runImposition = async function () {
 
     if (schema !== 'multi_artes' && schema !== 'pdf_multiple') {
 
-        if (start > end) return toast('Número inicial deve ser menor que o final.', 'error');
+        if (start > end) return toast('N├║mero inicial deve ser menor que o final.', 'error');
 
     }
 
@@ -6985,7 +7040,7 @@ window.runImposition = async function () {
 
 
 
-    // 1. SOLICITAR DESTINO DO ARQUIVO IMEDIATAMENTE (dentro do clique do usuário para manter o gesto ativo)
+    // 1. SOLICITAR DESTINO DO ARQUIVO IMEDIATAMENTE (dentro do clique do usu├írio para manter o gesto ativo)
 
     let fileHandle = null;
 
@@ -7021,7 +7076,7 @@ window.runImposition = async function () {
 
         } catch (err) {
 
-            // Se o usuário cancelou o diálogo de salvamento, interrompe o processo antes de chamar o servidor
+            // Se o usu├írio cancelou o di├ílogo de salvamento, interrompe o processo antes de chamar o servidor
 
             if (err.name === 'AbortError') {
 
@@ -7029,7 +7084,7 @@ window.runImposition = async function () {
 
             }
 
-            console.error("Erro ao abrir showSaveFilePicker no início:", err);
+            console.error("Erro ao abrir showSaveFilePicker no in├¡cio:", err);
 
         }
 
@@ -7143,7 +7198,7 @@ window.runImposition = async function () {
 
     formData.append('payload', JSON.stringify(payload, (key, value) => {
 
-        // Filtrar propriedades internas do frontend (não-serializáveis ou irrelevantes ao backend)
+        // Filtrar propriedades internas do frontend (n├úo-serializ├íveis ou irrelevantes ao backend)
 
         if (key === '_svgImage' || key === '_pdfPreview' || key === '_pdfCanvas' || key === '_pdfLoading' ||
 
@@ -7209,7 +7264,7 @@ window.runImposition = async function () {
 
 
 
-    // Instancia o AbortController e associa ao botão de cancelamento
+    // Instancia o AbortController e associa ao bot├úo de cancelamento
 
     impositionAbortController = new AbortController();
 
@@ -7261,7 +7316,7 @@ window.runImposition = async function () {
 
         
 
-        // 1. Verificar primeiro se o servidor FastAPI principal está rodando localmente (porta 8080)
+        // 1. Verificar primeiro se o servidor FastAPI principal est├í rodando localmente (porta 8080)
 
         let localApiActive = false;
 
@@ -7291,7 +7346,7 @@ window.runImposition = async function () {
 
 
 
-        // 2. Verificar se o Agente Local (porta 9000) está ativo
+        // 2. Verificar se o Agente Local (porta 9000) est├í ativo
 
         let localActive = false;
 
@@ -7335,7 +7390,7 @@ window.runImposition = async function () {
 
             baseUrl = "http://localhost:8080";
 
-            console.log("[Imposition] ✅ Servidor local (porta 8080) detectado — processando localmente para máxima velocidade");
+            console.log("[Imposition] Ô£à Servidor local (porta 8080) detectado ÔÇö processando localmente para m├íxima velocidade");
 
             if (sub) sub.textContent = `Gerando ${total.toLocaleString('pt-BR')} itens... (Servidor Local)`;
 
@@ -7367,7 +7422,7 @@ window.runImposition = async function () {
 
             } catch (e) {
 
-                console.error("Erro ao obter Firebase ID Token para imposição:", e);
+                console.error("Erro ao obter Firebase ID Token para imposi├º├úo:", e);
 
             }
 
@@ -7399,7 +7454,7 @@ window.runImposition = async function () {
 
         
 
-        // Salvar os dados na pasta e arquivo já escolhidos pelo usuário
+        // Salvar os dados na pasta e arquivo j├í escolhidos pelo usu├írio
 
         if (fileHandle) {
 
@@ -7413,7 +7468,7 @@ window.runImposition = async function () {
 
                 toast('PDF salvo com sucesso!', 'success');
 
-                // Auto-atualizar status de impressão do item ativo da OS
+                // Auto-atualizar status de impress├úo do item ativo da OS
                 if (state.activeOSItem && state.activeOSItem.itemId) {
                     await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
                     if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
@@ -7435,7 +7490,7 @@ window.runImposition = async function () {
 
         const filename = prompt('Digite o nome do arquivo para salvar o PDF:', defaultFilename);
 
-        if (filename === null) return; // cancelado pelo usuário
+        if (filename === null) return; // cancelado pelo usu├írio
 
         
 
@@ -7459,7 +7514,7 @@ window.runImposition = async function () {
 
         toast('PDF baixado com sucesso!', 'success');
 
-        // Auto-atualizar status de impressão do item ativo da OS
+        // Auto-atualizar status de impress├úo do item ativo da OS
         if (state.activeOSItem && state.activeOSItem.itemId) {
             await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
             if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
@@ -7469,7 +7524,7 @@ window.runImposition = async function () {
 
         if (err.name === 'AbortError') {
 
-            toast('Geração do PDF cancelada pelo usuário.', 'info');
+            toast('Gera├º├úo do PDF cancelada pelo usu├írio.', 'info');
 
         } else {
 
@@ -7483,13 +7538,13 @@ window.runImposition = async function () {
 
         if (pBar) pBar.style.width = '100%';
 
-        if (pText) pText.textContent = 'Concluído! (100%)';
+        if (pText) pText.textContent = 'Conclu├¡do! (100%)';
 
         setTimeout(() => {
             overlay.classList.remove('active');
             const btn = document.getElementById('btn-impose');
             btn.disabled = false;
-            btn.innerHTML = '⚙️ Gerar PDF de Alta Resolução';
+            btn.innerHTML = 'ÔÜÖ´©Å Gerar PDF de Alta Resolu├º├úo';
             btn.style.opacity = '1';
             btn.style.pointerEvents = 'auto';
         }, 400);
@@ -7501,13 +7556,13 @@ window.runImposition = async function () {
 
 
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Init ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 loadAll();
 
 
 
-// ─── Formato Preview ──────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ Formato Preview ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 function drawFormatPreview() {
 
@@ -7535,7 +7590,7 @@ function drawFormatPreview() {
 
 
 
-    // Validação visual inline enquanto digita
+    // Valida├º├úo visual inline enquanto digita
 
     const offhEl = document.getElementById('fmt-offh');
 
@@ -7553,11 +7608,11 @@ function drawFormatPreview() {
 
     if (badge) {
 
-        let badgeText = `Grade: ${cols}×${rows} · Total: ${cols * rows} itens`;
+        let badgeText = `Grade: ${cols}├ù${rows} ┬À Total: ${cols * rows} itens`;
 
         if (off_h !== 0 || off_v !== 0) {
 
-            badgeText += ` · Offset: ${off_h.toFixed(1)}×${off_v.toFixed(1)}mm`;
+            badgeText += ` ┬À Offset: ${off_h.toFixed(1)}├ù${off_v.toFixed(1)}mm`;
 
         }
 
@@ -7617,7 +7672,7 @@ function drawFormatPreview() {
 
 
 
-    // Desenhar fundo da "folha" ou área da grade
+    // Desenhar fundo da "folha" ou ├írea da grade
 
     ctx.strokeStyle = 'rgba(99, 120, 180, 0.2)';
 
@@ -7653,7 +7708,7 @@ function drawFormatPreview() {
 
 
 
-            // Retângulo do item (célula)
+            // Ret├óngulo do item (c├®lula)
 
             ctx.fillStyle = isSelected ? 'rgba(59, 130, 246, 0.16)' : 'rgba(59, 130, 246, 0.08)';
 
@@ -7677,7 +7732,7 @@ function drawFormatPreview() {
 
                 const dx = off_h * scale;
 
-                const dy = -off_v * scale; // positivo V = para cima → negativo no canvas
+                const dy = -off_v * scale; // positivo V = para cima ÔåÆ negativo no canvas
 
                 const tx = cx + dx;
 
@@ -7717,7 +7772,7 @@ function drawFormatPreview() {
 
 
 
-                // Crosshair no centro (referência)
+                // Crosshair no centro (refer├¬ncia)
 
                 ctx.strokeStyle = 'rgba(99, 120, 180, 0.4)';
 
@@ -7739,7 +7794,7 @@ function drawFormatPreview() {
 
 
 
-            // Conteúdo fictício simples (ex: "#1", "#2", ...) com rotação individual
+            // Conte├║do fict├¡cio simples (ex: "#1", "#2", ...) com rota├º├úo individual
 
             const rotationDeg = state.fmtRotations[cellIdx] || 0;
 
@@ -7751,7 +7806,7 @@ function drawFormatPreview() {
 
 
 
-            // Desenhar pequena seta indicando o topo da página se houver rotação (ou sempre para ajudar visualmente)
+            // Desenhar pequena seta indicando o topo da p├ígina se houver rota├º├úo (ou sempre para ajudar visualmente)
 
             ctx.strokeStyle = '#94a3b8';
 
@@ -7779,7 +7834,7 @@ function drawFormatPreview() {
 
             const num = cellIdx + 1;
 
-            ctx.fillText(`#${num} (${rotationDeg}°)`, 0, 0);
+            ctx.fillText(`#${num} (${rotationDeg}┬░)`, 0, 0);
 
             ctx.restore();
 
@@ -7789,7 +7844,7 @@ function drawFormatPreview() {
 
 
 
-    // Desenhar marcações de Gap se houver mais de 1 col/row
+    // Desenhar marca├º├Áes de Gap se houver mais de 1 col/row
 
     ctx.fillStyle = '#8b5cf6';
 
@@ -7883,7 +7938,7 @@ function drawFormatPreview() {
 
 
 
-    // Exibir área total em mm na parte inferior do canvas
+    // Exibir ├írea total em mm na parte inferior do canvas
 
     ctx.fillStyle = '#94a3b8';
 
@@ -7891,7 +7946,7 @@ function drawFormatPreview() {
 
     ctx.textAlign = 'right';
 
-    ctx.fillText(`${total_w_mm.toFixed(1)} × ${total_h_mm.toFixed(1)} mm`, max_w - 8, max_h - 8);
+    ctx.fillText(`${total_w_mm.toFixed(1)} ├ù ${total_h_mm.toFixed(1)} mm`, max_w - 8, max_h - 8);
 
 }
 
@@ -7907,7 +7962,7 @@ function drawFormatPreview() {
 
         el.addEventListener('input', () => {
 
-            // Se mudar a quantidade de linhas ou colunas, reseta as rotações que ficarem órfãs
+            // Se mudar a quantidade de linhas ou colunas, reseta as rota├º├Áes que ficarem ├│rf├ús
 
             const cols = Math.max(1, parseInt(document.getElementById('fmt-cols').value) || 0);
 
@@ -7943,7 +7998,7 @@ function drawFormatPreview() {
 
 
 
-// Funções para controle de rotação individual de páginas/células do formato
+// Fun├º├Áes para controle de rota├º├úo individual de p├íginas/c├®lulas do formato
 
 function updateRotationButtons() {
 
@@ -7955,7 +8010,7 @@ function updateRotationButtons() {
 
     if (state.fmtSelectedCellIndex === null) {
 
-        if (label) label.textContent = 'Nenhuma célula selecionada (clique em uma página acima)';
+        if (label) label.textContent = 'Nenhuma c├®lula selecionada (clique em uma p├ígina acima)';
 
         buttons.forEach(btn => { if (btn) btn.disabled = true; });
 
@@ -7965,7 +8020,7 @@ function updateRotationButtons() {
 
         const currentRot = state.fmtRotations[state.fmtSelectedCellIndex] || 0;
 
-        if (label) label.textContent = `Página #${pageNum} selecionada (Rotação atual: ${currentRot}°)`;
+        if (label) label.textContent = `P├ígina #${pageNum} selecionada (Rota├º├úo atual: ${currentRot}┬░)`;
 
         
 
@@ -7975,7 +8030,7 @@ function updateRotationButtons() {
 
                 btn.disabled = false;
 
-                // Destacar botão da rotação ativa
+                // Destacar bot├úo da rota├º├úo ativa
 
                 const angle = parseInt(btn.id.replace('btn-rot-', ''));
 
@@ -8011,7 +8066,7 @@ function setCellRotation(angle) {
 
     if (angle === 0) {
 
-        // 0° é o padrão, removemos a chave para limpar o dicionário
+        // 0┬░ ├® o padr├úo, removemos a chave para limpar o dicion├írio
 
         delete state.fmtRotations[state.fmtSelectedCellIndex];
 
@@ -8031,7 +8086,7 @@ window.setCellRotation = setCellRotation;
 
 
 
-// Registrar clique no canvas do formato para selecionar a célula
+// Registrar clique no canvas do formato para selecionar a c├®lula
 
 const fmtCanvas = document.getElementById('fmt-preview-canvas');
 
@@ -8083,7 +8138,7 @@ if (fmtCanvas) {
 
 
 
-        // Verificar em qual célula o clique caiu
+        // Verificar em qual c├®lula o clique caiu
 
         let clickedIndex = null;
 
@@ -8149,7 +8204,7 @@ window.drawFormatPreview = drawFormatPreview;
 
 
 
-// ─── LÓGICA DE BANCO DE DADOS (CSV) ──────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ L├ôGICA DE BANCO DE DADOS (CSV) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 window.clearCsvFile = function() {
 
@@ -8263,7 +8318,7 @@ async function handleCsvSelected() {
 
             const infoEl = document.getElementById('csv-file-info');
 
-            infoEl.textContent = `✅ CSV carregado: ${file.name} (${state.csvData.length} registros)`;
+            infoEl.textContent = `Ô£à CSV carregado: ${file.name} (${state.csvData.length} registros)`;
 
             infoEl.style.display = 'block';
 
@@ -8413,7 +8468,7 @@ async function handleNumCsvSelected() {
 
             if (!rows.length) {
 
-                throw new Error("O arquivo CSV está vazio ou é inválido.");
+                throw new Error("O arquivo CSV est├í vazio ou ├® inv├ílido.");
 
             }
 
@@ -8477,7 +8532,7 @@ window.clearNumCsvFile = function() {
 
     if (fileEl) {
 
-        // Clonar o input file para limpar completamente o estado do navegador e forçar o reset
+        // Clonar o input file para limpar completamente o estado do navegador e for├ºar o reset
 
         const newFileEl = fileEl.cloneNode(true);
 
@@ -8525,7 +8580,7 @@ function renderNumCsvInterface() {
 
     
 
-    if (nameEl) nameEl.textContent = `📎 ${state.numCsvFilename} (${state.numCsvData ? state.numCsvData.length : 0} linhas)`;
+    if (nameEl) nameEl.textContent = `­ƒôÄ ${state.numCsvFilename} (${state.numCsvData ? state.numCsvData.length : 0} linhas)`;
 
     if (btnRemove) btnRemove.style.display = 'inline-flex';
 
@@ -8537,7 +8592,7 @@ function renderNumCsvInterface() {
 
         bar.innerHTML = state.numCsvHeaders.map(col => `
 
-            <button class="btn btn-sm btn-secondary" onclick="addCsvColumnElement('${col}')" title="Adicionar como texto variável">📊 ${col}</button>
+            <button class="btn btn-sm btn-secondary" onclick="addCsvColumnElement('${col}')" title="Adicionar como texto vari├ível">­ƒôè ${col}</button>
 
         `).join('');
 
@@ -8611,7 +8666,7 @@ window.addCsvColumnElement = function(colName) {
 
 
 
-// ─── LÓGICA DE AUTENTICAÇÃO E ADMINISTRAÇÃO ───────────────────────────────────
+// ÔöÇÔöÇÔöÇ L├ôGICA DE AUTENTICA├ç├âO E ADMINISTRA├ç├âO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 let authMode = 'login'; // 'login' ou 'register'
 
@@ -8635,13 +8690,13 @@ window.toggleAuthMode = function(e) {
 
         authMode = 'register';
 
-        title.textContent = 'Ideal Imposition — Cadastro';
+        title.textContent = 'Ideal Imposition ÔÇö Cadastro';
 
-        p.textContent = 'Crie sua conta para começar';
+        p.textContent = 'Crie sua conta para come├ºar';
 
         btnSubmit.textContent = 'Cadastrar';
 
-        toggleLink.textContent = 'Já tem uma conta? Entrar';
+        toggleLink.textContent = 'J├í tem uma conta? Entrar';
 
     } else {
 
@@ -8649,7 +8704,7 @@ window.toggleAuthMode = function(e) {
 
         title.textContent = 'Ideal Imposition';
 
-        p.textContent = 'Faça login para acessar o painel online';
+        p.textContent = 'Fa├ºa login para acessar o painel online';
 
         btnSubmit.textContent = 'Entrar';
 
@@ -8769,7 +8824,7 @@ window.handleSignOut = async function() {
 
 
 
-// Monitora o estado de autenticação do Firebase Auth
+// Monitora o estado de autentica├º├úo do Firebase Auth
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -8787,7 +8842,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 
 
-                // Mostrar informações do perfil
+                // Mostrar informa├º├Áes do perfil
 
                 const profileBar = document.getElementById('user-profile-bar');
 
@@ -8799,7 +8854,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-                // Obter claims personalizadas (para saber se é admin)
+                // Obter claims personalizadas (para saber se ├® admin)
 
                 try {
 
@@ -8855,7 +8910,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-// Lógica do Painel de Administração (Lista usuários e altera permissões)
+// L├│gica do Painel de Administra├º├úo (Lista usu├írios e altera permiss├Áes)
 
 window.loadAdminUsers = async function() {
 
@@ -8865,7 +8920,7 @@ window.loadAdminUsers = async function() {
 
     
 
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando usuários...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando usu├írios...</td></tr>';
 
     
 
@@ -8875,7 +8930,7 @@ window.loadAdminUsers = async function() {
 
         if (!users || !users.length) {
 
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum usuário retornado.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum usu├írio retornado.</td></tr>';
 
             return;
 
@@ -8925,7 +8980,7 @@ window.loadAdminUsers = async function() {
 
         tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--red);">Erro: ${e.message}</td></tr>`;
 
-        toast('Erro ao obter usuários: ' + e.message, 'error');
+        toast('Erro ao obter usu├írios: ' + e.message, 'error');
 
     }
 
@@ -8935,7 +8990,7 @@ window.loadAdminUsers = async function() {
 
 window.changeUserRole = async function(uid, newRole) {
 
-    if (!confirm(`Deseja alterar a função deste usuário para ${newRole.toUpperCase()}?`)) {
+    if (!confirm(`Deseja alterar a fun├º├úo deste usu├írio para ${newRole.toUpperCase()}?`)) {
 
         loadAdminUsers();
 
@@ -8949,13 +9004,13 @@ window.changeUserRole = async function(uid, newRole) {
 
         await api('POST', `/admin/users/${uid}/role`, { role: newRole });
 
-        toast('Função de usuário atualizada!', 'success');
+        toast('Fun├º├úo de usu├írio atualizada!', 'success');
 
         loadAdminUsers();
 
     } catch (e) {
 
-        toast('Erro ao alterar função: ' + e.message, 'error');
+        toast('Erro ao alterar fun├º├úo: ' + e.message, 'error');
 
         loadAdminUsers();
 
@@ -8965,7 +9020,7 @@ window.changeUserRole = async function(uid, newRole) {
 
 
 
-// Vincula clique na aba de administração para carregar usuários automaticamente
+// Vincula clique na aba de administra├º├úo para carregar usu├írios automaticamente
 
 document.getElementById('nav-admin')?.addEventListener('click', () => {
 
@@ -8975,7 +9030,7 @@ document.getElementById('nav-admin')?.addEventListener('click', () => {
 
 
 
-// ─── LÓGICA DA TELA DE AMOSTRAS ──────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ L├ôGICA DA TELA DE AMOSTRAS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 let amostraArteImage = null;
 
@@ -8985,7 +9040,7 @@ let amostraArteHeight = 0;
 
 
 
-// Helper para obter dimensões do formato ativo em Amostras
+// Helper para obter dimens├Áes do formato ativo em Amostras
 
 function getAmostraFormato() {
 
@@ -9015,7 +9070,7 @@ function getAmostraFormato() {
 
         if (cor) {
 
-            // Retorna dimensões do formato correspondentes à cor
+            // Retorna dimens├Áes do formato correspondentes ├á cor
 
             return {
 
@@ -9035,13 +9090,13 @@ function getAmostraFormato() {
 
 
 
-// Helper para calcular a escala (px/mm) ideal para que todos os canvas tenham o mesmo tamanho e mantenham paridade 1:1 física
+// Helper para calcular a escala (px/mm) ideal para que todos os canvas tenham o mesmo tamanho e mantenham paridade 1:1 f├¡sica
 
 function getAmostraScale(fmt, canvasElement) {
 
-    // Para manter a paridade 1:1 física absoluta de escala entre todas as 3 janelas fonte e a combinada,
+    // Para manter a paridade 1:1 f├¡sica absoluta de escala entre todas as 3 janelas fonte e a combinada,
 
-    // a escala (pixels por milímetro) deve ser uma constante global calculada com base no formato unificado.
+    // a escala (pixels por mil├¡metro) deve ser uma constante global calculada com base no formato unificado.
 
     const activeFmt = getAmostraFormato();
 
@@ -9049,7 +9104,7 @@ function getAmostraScale(fmt, canvasElement) {
 
     
 
-    // Usamos o container da Amostra Combinada ou o container ativo para definir a escala padrão
+    // Usamos o container da Amostra Combinada ou o container ativo para definir a escala padr├úo
 
     const refCanvas = document.getElementById('amostra-comb-canvas') || canvasElement;
 
@@ -9084,7 +9139,7 @@ window.onAmostraCorSelect = async function() {
 
     
 
-    // Filtrar as numerações com base no formato associado a esta cor
+    // Filtrar as numera├º├Áes com base no formato associado a esta cor
 
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
 
@@ -9099,9 +9154,9 @@ window.onAmostraCorSelect = async function() {
                 const ids = n.formato_ids || [n.formato_id];
                 return ids.some(id => String(id) === String(cor.formato_id));
             })
-            : state.numeracoes;
+            : [];
 
-        numSelect.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
+        numSelect.innerHTML = '<option value="">ÔÇö Selecione uma Numera├º├úo ÔÇö</option>' +
 
             filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
 
@@ -9115,7 +9170,7 @@ window.onAmostraCorSelect = async function() {
 
             numSelect.value = "";
 
-            // Disparar atualização visual se limpou a numeração
+            // Disparar atualiza├º├úo visual se limpou a numera├º├úo
 
             window.onAmostraNumeracaoSelect();
 
@@ -9133,7 +9188,7 @@ window.onAmostraCorSelect = async function() {
 
             empty.style.display = 'block';
 
-            empty.innerHTML = `<div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div><p style="font-size: 0.85rem; font-weight: 500;">Selecione uma cor para visualizar.</p>`;
+            empty.innerHTML = `<div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">­ƒÄ¿</div><p style="font-size: 0.85rem; font-weight: 500;">Selecione uma cor para visualizar.</p>`;
 
         }
 
@@ -9203,7 +9258,7 @@ window.onAmostraCorSelect = async function() {
 
             
 
-            // Escala final de renderização
+            // Escala final de renderiza├º├úo
 
             const scaledViewport = page.getViewport({ scale: pdfScale * (scalePxMm / 2.8346) });
 
@@ -9239,7 +9294,7 @@ window.onAmostraCorSelect = async function() {
 
                 empty.style.display = 'block';
 
-                empty.innerHTML = '<div style="font-size: 2rem; color: var(--red); margin-bottom:10px;">✕</div><p style="font-size:0.85rem; font-weight:500;">Erro ao carregar PDF de referência da cor.</p>';
+                empty.innerHTML = '<div style="font-size: 2rem; color: var(--red); margin-bottom:10px;">Ô£ò</div><p style="font-size:0.85rem; font-weight:500;">Erro ao carregar PDF de refer├¬ncia da cor.</p>';
 
             }
 
@@ -9257,7 +9312,7 @@ window.onAmostraCorSelect = async function() {
 
             empty.style.display = 'block';
 
-            empty.innerHTML = `<div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div><p style="font-size: 0.85rem; font-weight: 500;">Esta cor não possui PDF de referência cadastrado.</p>`;
+            empty.innerHTML = `<div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">­ƒÄ¿</div><p style="font-size: 0.85rem; font-weight: 500;">Esta cor n├úo possui PDF de refer├¬ncia cadastrado.</p>`;
 
         }
 
@@ -9289,7 +9344,7 @@ window.onAmostraNumeracaoSelect = function() {
 
         if (empty) empty.style.display = 'block';
 
-        if (badge) badge.textContent = 'Sem Numeração';
+        if (badge) badge.textContent = 'Sem Numera├º├úo';
 
         renderAmostraCombinada();
 
@@ -9319,7 +9374,7 @@ window.onAmostraNumeracaoSelect = function() {
 
             empty.style.display = 'block';
 
-            empty.innerHTML = `<p style="font-size:0.85rem; color:var(--red);">Formato base desta numeração foi excluído.</p>`;
+            empty.innerHTML = `<p style="font-size:0.85rem; color:var(--red);">Formato base desta numera├º├úo foi exclu├¡do.</p>`;
 
         }
 
@@ -9331,7 +9386,7 @@ window.onAmostraNumeracaoSelect = function() {
 
 
 
-    // Desenhar a numeração fictícia no Canvas de Amostras
+    // Desenhar a numera├º├úo fict├¡cia no Canvas de Amostras
 
     if (empty) empty.style.display = 'none';
 
@@ -9548,7 +9603,7 @@ window.clearAmostraArteFile = function() {
 
         empty.style.display = 'block';
 
-        empty.innerHTML = `<div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">🖼️</div><p style="font-size: 0.85rem; font-weight: 500;">Carregue uma arte em PDF ou imagem para visualizar.</p>`;
+        empty.innerHTML = `<div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">­ƒû╝´©Å</div><p style="font-size: 0.85rem; font-weight: 500;">Carregue uma arte em PDF ou imagem para visualizar.</p>`;
 
     }
 
@@ -9594,7 +9649,7 @@ async function loadAmostraArteFile(file) {
 
             if (typeof pdfjsLib === 'undefined') {
 
-                return toast('PDF.js não disponível. Use JPG/PNG.', 'error');
+                return toast('PDF.js n├úo dispon├¡vel. Use JPG/PNG.', 'error');
 
             }
 
@@ -9650,7 +9705,7 @@ async function loadAmostraArteFile(file) {
 
             
 
-            // Adotar 300 DPI se não conseguirmos ler
+            // Adotar 300 DPI se n├úo conseguirmos ler
 
             const dpi = 300;
 
@@ -9660,7 +9715,7 @@ async function loadAmostraArteFile(file) {
 
             
 
-            // Usar o tamanho do formato (se houver) ou o tamanho físico da imagem na mesma escala S
+            // Usar o tamanho do formato (se houver) ou o tamanho f├¡sico da imagem na mesma escala S
 
             const targetW = fmt ? fmt.width_mm : originalW_mm;
 
@@ -9676,7 +9731,7 @@ async function loadAmostraArteFile(file) {
 
             
 
-            // Desenhar a imagem preenchendo/centralizando proporcionalmente se as dimensões diferirem do formato
+            // Desenhar a imagem preenchendo/centralizando proporcionalmente se as dimens├Áes diferirem do formato
 
             context.drawImage(img, 0, 0, canvas.width, canvas.height);
 
@@ -9692,7 +9747,7 @@ async function loadAmostraArteFile(file) {
 
         document.getElementById('btn-remove-amostra-arte').style.display = 'inline-flex';
 
-        document.getElementById('amostra-arte-file-name').textContent = '📎 ' + file.name;
+        document.getElementById('amostra-arte-file-name').textContent = '­ƒôÄ ' + file.name;
 
         toast('Arte de amostra carregada!', 'success');
 
@@ -9710,7 +9765,7 @@ async function loadAmostraArteFile(file) {
 
 
 
-// Função para renderizar a Amostra Combinada (Cor + Arte + Numeração) com Multiply
+// Fun├º├úo para renderizar a Amostra Combinada (Cor + Arte + Numera├º├úo) com Multiply
 
 function renderAmostraCombinada() {
 
@@ -9766,13 +9821,13 @@ function renderAmostraCombinada() {
 
 
 
-    // A escala global unificada que mantém a paridade física 1:1 absoluta
+    // A escala global unificada que mant├®m a paridade f├¡sica 1:1 absoluta
 
     const S = getAmostraScale(fmt, canvasComb);
 
 
 
-    // O canvas de Amostra Combinada deve possuir o tamanho físico estrito da Cor
+    // O canvas de Amostra Combinada deve possuir o tamanho f├¡sico estrito da Cor
 
     const cor = state.cores.find(c => c.id === corId);
 
@@ -9820,7 +9875,7 @@ function renderAmostraCombinada() {
 
 
 
-    // 1. Desenhar a Camada 1: Cor (se estiver disponível, centralizada no canvasComb caso divirjam)
+    // 1. Desenhar a Camada 1: Cor (se estiver dispon├¡vel, centralizada no canvasComb caso divirjam)
 
     if (corId && corCanvas && corCanvas.width > 0) {
 
@@ -9832,7 +9887,7 @@ function renderAmostraCombinada() {
 
     } else {
 
-        // Se não tiver cor selecionada, desenha uma base branca para podermos visualizar as outras camadas
+        // Se n├úo tiver cor selecionada, desenha uma base branca para podermos visualizar as outras camadas
 
         ctx.fillStyle = '#ffffff';
 
@@ -9842,7 +9897,7 @@ function renderAmostraCombinada() {
 
 
 
-    // 2. Desenhar a Camada 2: Arte com efeito similar ao Photoshop Multiply (lendo a dimensão e centralizando em um canvas intermediário do tamanho da Cor)
+    // 2. Desenhar a Camada 2: Arte com efeito similar ao Photoshop Multiply (lendo a dimens├úo e centralizando em um canvas intermedi├írio do tamanho da Cor)
 
     if (hasArte && arteCanvas && arteCanvas.width > 0) {
 
@@ -9858,7 +9913,7 @@ function renderAmostraCombinada() {
 
 
 
-        // Criar um canvas temporário do tamanho exato da Cor
+        // Criar um canvas tempor├írio do tamanho exato da Cor
 
         const tempArteCanvas = document.createElement('canvas');
 
@@ -9870,13 +9925,13 @@ function renderAmostraCombinada() {
 
         
 
-        // Aplicar filtros de cores nativos via Canvas context filter (Saturação, Contraste, Brilho)
+        // Aplicar filtros de cores nativos via Canvas context filter (Satura├º├úo, Contraste, Brilho)
 
         tempArteCtx.filter = `saturate(${satVal}%) contrast(${conVal}%) brightness(${briVal}%)`;
 
 
 
-        // Desenha a arte original centralizada no canvas temporário
+        // Desenha a arte original centralizada no canvas tempor├írio
 
         const dx = (finalWidth - arteCanvas.width) / 2;
 
@@ -9886,13 +9941,13 @@ function renderAmostraCombinada() {
 
         
 
-        // Resetar o filtro para futuras operações
+        // Resetar o filtro para futuras opera├º├Áes
 
         tempArteCtx.filter = 'none';
 
         
 
-        // Aplicar efeito Sharpen (Nitidez) usando convolução proporcional ao valor (0% a 100%)
+        // Aplicar efeito Sharpen (Nitidez) usando convolu├º├úo proporcional ao valor (0% a 100%)
 
         if (shpVal > 0) {
 
@@ -9908,13 +9963,13 @@ function renderAmostraCombinada() {
 
                 
 
-                // Criar cópia para ler os valores originais
+                // Criar c├│pia para ler os valores originais
 
                 const copy = new Uint8ClampedArray(data);
 
                 
 
-                // Fator de nitidez proporcional ao controle (máximo 1.8 de atenuação negativa)
+                // Fator de nitidez proporcional ao controle (m├íximo 1.8 de atenua├º├úo negativa)
 
                 const factor = (shpVal / 100) * 1.8;
 
@@ -9922,7 +9977,7 @@ function renderAmostraCombinada() {
 
                 
 
-                // Matriz de convolução dinâmica:
+                // Matriz de convolu├º├úo din├ómica:
 
                 //  0     -factor      0
 
@@ -9948,7 +10003,7 @@ function renderAmostraCombinada() {
 
                 
 
-                // Convolução de pixel por pixel
+                // Convolu├º├úo de pixel por pixel
 
                 for (let y = 1; y < height - 1; y++) {
 
@@ -10012,7 +10067,7 @@ function renderAmostraCombinada() {
 
         
 
-        // Aplica o canvas temporário com multiply
+        // Aplica o canvas tempor├írio com multiply
 
         ctx.save();
 
@@ -10026,11 +10081,11 @@ function renderAmostraCombinada() {
 
 
 
-    // 3. Desenhar a Camada 3: Numeração com efeito similar ao Photoshop Multiply (lendo a dimensão e centralizando em um canvas intermediário do tamanho da Cor)
+    // 3. Desenhar a Camada 3: Numera├º├úo com efeito similar ao Photoshop Multiply (lendo a dimens├úo e centralizando em um canvas intermedi├írio do tamanho da Cor)
 
     if (numId && numCanvas && numCanvas.width > 0) {
 
-        // Criar um canvas temporário do tamanho exato da Cor
+        // Criar um canvas tempor├írio do tamanho exato da Cor
 
         const tempNumCanvas = document.createElement('canvas');
 
@@ -10042,7 +10097,7 @@ function renderAmostraCombinada() {
 
         
 
-        // Desenha a numeração original centralizada no canvas temporário
+        // Desenha a numera├º├úo original centralizada no canvas tempor├írio
 
         const dx = (finalWidth - numCanvas.width) / 2;
 
@@ -10052,7 +10107,7 @@ function renderAmostraCombinada() {
 
         
 
-        // Aplica o canvas temporário com multiply
+        // Aplica o canvas tempor├írio com multiply
 
         ctx.save();
 
@@ -10084,7 +10139,7 @@ function renderAmostraCombinada() {
 
 window.renderAmostraCombinada = renderAmostraCombinada;
 
-// LÓGICA DE DECISÕES DA AMOSTRA COMBINADA (APROVAR/ALTERAR)
+// L├ôGICA DE DECIS├òES DA AMOSTRA COMBINADA (APROVAR/ALTERAR)
 function updateAmostraDecisaoUI() {
     const corId = document.getElementById('amostra-cor')?.value;
     const numId = document.getElementById('amostra-numeracao')?.value;
@@ -10095,7 +10150,7 @@ function updateAmostraDecisaoUI() {
 
     if (!corId || !numId) {
         badge.className = 'badge';
-        badge.textContent = '⏳ Sem Seleção';
+        badge.textContent = 'ÔÅ│ Sem Sele├º├úo';
         badge.style.background = 'rgba(255,255,255,0.05)';
         badge.style.color = 'var(--text-dim)';
         if (obsText) {
@@ -10115,30 +10170,30 @@ function updateAmostraDecisaoUI() {
             if (obsText) obsText.value = decisao.obs || '';
             if (decisao.status === 'APROVADA') {
                 badge.className = 'badge badge-teal';
-                badge.textContent = '✅ Aprovada';
+                badge.textContent = 'Ô£à Aprovada';
                 badge.style.background = 'rgba(20, 184, 166, 0.15)';
                 badge.style.color = 'var(--teal)';
             } else if (decisao.status === 'REPROVADA') {
                 badge.className = 'badge badge-red';
-                badge.textContent = '❌ Alteração Solicitada';
+                badge.textContent = 'ÔØî Altera├º├úo Solicitada';
                 badge.style.background = 'rgba(239, 68, 68, 0.15)';
                 badge.style.color = 'var(--red)';
             } else {
                 badge.className = 'badge';
-                badge.textContent = '⏳ Pendente';
+                badge.textContent = 'ÔÅ│ Pendente';
                 badge.style.background = 'rgba(245, 158, 11, 0.15)';
                 badge.style.color = 'var(--amber)';
             }
         } catch (e) {
             badge.className = 'badge';
-            badge.textContent = '⏳ Pendente';
+            badge.textContent = 'ÔÅ│ Pendente';
             badge.style.background = 'rgba(245, 158, 11, 0.15)';
             badge.style.color = 'var(--amber)';
             if (obsText) obsText.value = '';
         }
     } else {
         badge.className = 'badge';
-        badge.textContent = '⏳ Pendente';
+        badge.textContent = 'ÔÅ│ Pendente';
         badge.style.background = 'rgba(245, 158, 11, 0.15)';
         badge.style.color = 'var(--amber)';
         if (obsText) obsText.value = '';
@@ -10154,11 +10209,11 @@ window.decisionAmostra = function(status) {
     const obs = obsText ? obsText.value.trim() : '';
 
     if (!corId || !numId) {
-        return toast('Selecione uma Cor e uma Numeração antes de salvar a decisão.', 'error');
+        return toast('Selecione uma Cor e uma Numera├º├úo antes de salvar a decis├úo.', 'error');
     }
 
     if (status === 'REPROVADA' && !obs) {
-        return toast('Por favor, descreva as observações da alteração solicitada.', 'warning');
+        return toast('Por favor, descreva as observa├º├Áes da altera├º├úo solicitada.', 'warning');
     }
 
     const key = `amostra_decisao_${corId}_${numId}`;
@@ -10174,11 +10229,11 @@ window.decisionAmostra = function(status) {
     if (status === 'APROVADA') {
         toast('Amostra Aprovada com sucesso!', 'success');
     } else {
-        toast('Solicitação de alteração registrada!', 'warning');
+        toast('Solicita├º├úo de altera├º├úo registrada!', 'warning');
     }
 };
 
-// Configuração de listeners para Amostras
+// Configura├º├úo de listeners para Amostras
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -10270,7 +10325,7 @@ window.setPreviewFace = function (face) {
 
 
 
-// ─── MODELOS DE IMPOSIÇÃO E OS ────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ MODELOS DE IMPOSI├ç├âO E OS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
 async function renderModelosImposicao() {
 
@@ -10300,11 +10355,11 @@ async function renderModelosImposicao() {
 
         const fmt = state.formatos.find(f => f.id === m.formato_id);
 
-        const fmtName = fmt ? fmt.name : 'Não selecionado';
+        const fmtName = fmt ? fmt.name : 'N├úo selecionado';
 
         const sai = state.saidas.find(s => s.id === m.saida_id);
 
-        const saiName = sai ? sai.name : 'Não selecionado';
+        const saiName = sai ? sai.name : 'N├úo selecionado';
 
         
 
@@ -10336,9 +10391,9 @@ async function renderModelosImposicao() {
 
                 <td class="actions-cell">
 
-                    <button class="btn btn-sm btn-ghost" onclick="loadSelectedModelo('${m.id}')" title="Carregar este modelo no painel">📂 Carregar</button>
+                    <button class="btn btn-sm btn-ghost" onclick="loadSelectedModelo('${m.id}')" title="Carregar este modelo no painel">­ƒôé Carregar</button>
 
-                    <button class="btn btn-danger btn-sm" onclick="deleteModeloImposicao('${m.id}')" title="Excluir este modelo">🗑️</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteModeloImposicao('${m.id}')" title="Excluir este modelo">­ƒùæ´©Å</button>
 
                 </td>
 
@@ -10356,13 +10411,13 @@ window.renderModelosImposicao = renderModelosImposicao;
 
 async function deleteModeloImposicao(modId) {
 
-    if (!confirm('Excluir este modelo de imposição?')) return;
+    if (!confirm('Excluir este modelo de imposi├º├úo?')) return;
 
     try {
 
         await api('DELETE', `/modelos_imposicao/${modId}`);
 
-        toast('Modelo excluído com sucesso!', 'success');
+        toast('Modelo exclu├¡do com sucesso!', 'success');
 
         await loadAll();
 
@@ -10380,7 +10435,7 @@ window.deleteModeloImposicao = deleteModeloImposicao;
 
 async function promptSaveModelo() {
 
-    const name = prompt('Digite o nome do novo modelo de imposição:');
+    const name = prompt('Digite o nome do novo modelo de imposi├º├úo:');
 
     if (!name || !name.trim()) return;
 
@@ -10410,7 +10465,7 @@ async function promptSaveModelo() {
 
         const res = await api('POST', '/modelos_imposicao', payload);
 
-        toast('Modelo de imposição criado com sucesso!', 'success');
+        toast('Modelo de imposi├º├úo criado com sucesso!', 'success');
 
         await loadAll();
 
@@ -10438,7 +10493,7 @@ async function loadSelectedModelo(modId) {
 
     const m = state.modelosImposicao.find(x => x.id === modId);
 
-    if (!m) return toast('Modelo não encontrado.', 'error');
+    if (!m) return toast('Modelo n├úo encontrado.', 'error');
 
 
 
@@ -10566,7 +10621,7 @@ async function exportOS() {
 
 
 
-    // Tenta usar a API File System Access se disponível (permite escolher pasta e renomear)
+    // Tenta usar a API File System Access se dispon├¡vel (permite escolher pasta e renomear)
 
     if (window.showSaveFilePicker) {
 
@@ -10598,13 +10653,13 @@ async function exportOS() {
 
             await writable.close();
 
-            toast('Ordem de Serviço (OS) salva com sucesso!', 'success');
+            toast('Ordem de Servi├ºo (OS) salva com sucesso!', 'success');
 
             return;
 
         } catch (err) {
 
-            // Se o usuário cancelou o diálogo, não faz nada
+            // Se o usu├írio cancelou o di├ílogo, n├úo faz nada
 
             if (err.name === 'AbortError') {
 
@@ -10624,7 +10679,7 @@ async function exportOS() {
 
     const filename = prompt('Digite o nome do arquivo para salvar a OS:', defaultFilename);
 
-    if (filename === null) return; // cancelado pelo usuário
+    if (filename === null) return; // cancelado pelo usu├írio
 
     
 
@@ -10644,7 +10699,7 @@ async function exportOS() {
 
     downloadAnchor.remove();
 
-    toast('Ordem de Serviço (OS) exportada localmente!', 'success');
+    toast('Ordem de Servi├ºo (OS) exportada localmente!', 'success');
 
 }
 
@@ -10670,7 +10725,7 @@ function importOS(input) {
 
             if (!config.formato_id) {
 
-                throw new Error('Arquivo JSON inválido. Campo formato_id obrigatório.');
+                throw new Error('Arquivo JSON inv├ílido. Campo formato_id obrigat├│rio.');
 
             }
 
@@ -10776,13 +10831,13 @@ function importOS(input) {
 
                 if (infoEl) {
 
-                    infoEl.innerHTML = `<span style="color: var(--blue); font-weight: bold;">⚠️ Selecione o arquivo novamente:</span> "${config.arte_filename}"`;
+                    infoEl.innerHTML = `<span style="color: var(--blue); font-weight: bold;">ÔÜá´©Å Selecione o arquivo novamente:</span> "${config.arte_filename}"`;
 
                     infoEl.style.display = 'block';
 
                 }
 
-                // Marcar o passo 4 como ativo para guiar o usuário
+                // Marcar o passo 4 como ativo para guiar o usu├írio
 
                 document.getElementById('step-4')?.classList.add('active');
 
@@ -10866,16 +10921,16 @@ function clearActiveOS() {
 
 
 
-    toast('OS desvinculada. Validações de arquivo liberadas.', 'info');
+    toast('OS desvinculada. Valida├º├Áes de arquivo liberadas.', 'info');
 
 }
 
 window.clearActiveOS = clearActiveOS;
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ORDENS DE SERVIÇO — Integração com banco de dados compartilhado
-// ═══════════════════════════════════════════════════════════════════════════════
+// ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+// ORDENS DE SERVI├çO ÔÇö Integra├º├úo com banco de dados compartilhado
+// ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
 
 // Estado local de OS
 if (!state.ordens) state.ordens = [];
@@ -10884,38 +10939,137 @@ if (!state.osExpandedId) state.osExpandedId = null;
 if (!state.activeOSItem) state.activeOSItem = null;
 
 /**
- * Carrega todas as OS — Prioridade: Vibecode → Supabase Imposition → API local
- * No Vibecode, cada `id_int` (proposta) = 1 OS. Os produtos_proposta são os itens.
+ * Sincroniza dinamicamente o status da OS em mem├│ria e no banco com base nas decis├Áes de amostra do cliente
+ */
+async function sincronizarStatusOrdensDinamico() {
+    // Apenas rodar no painel interno (n├úo na p├ígina do cliente)
+    if (state.amostrasContainerId === 'cliente-amostras-itens-container') return;
+
+    for (const os of state.ordens) {
+        const osId = os.id;
+        const itens = state.osItens[osId] || [];
+        if (itens.length === 0) continue;
+
+        // Se o status da OS j├í estiver finalizado em termos de produ├º├úo, n├úo fazemos override
+        if (os.status === 'FINALIZADA' || os.status === 'CANCELADA' || os.status === 'PRODU├ç├âO' || os.status === 'EM IMPRESS├âO') {
+            continue;
+        }
+
+        // Verificar o status de todas as amostras/itens
+        const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
+        const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
+
+        let novoStatus = null;
+        if (todosAprovados) {
+            novoStatus = 'ARTE_APROVADA';
+        } else if (algumReprovado) {
+            novoStatus = 'ARTE_EM_CORRECAO';
+        }
+
+        if (novoStatus && os.status !== novoStatus) {
+            console.log(`[Sync] Ajustando status da OS #${os.numero} de ${os.status} para ${novoStatus} com base nas amostras.`);
+            
+            // 1. Atualizar em mem├│ria
+            os.status = novoStatus;
+
+            // 2. Atualizar no localstorage overrides (comum para ordens Vibecode e Supabase no front)
+            const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+            overrides[osId] = novoStatus;
+            localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+            // 3. Atualizar no banco Supabase (somente se for OS local e n├úo for mock/vibe virtual)
+            if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
+                try {
+                    await supabaseClient
+                        .from('producao_ordens_servico')
+                        .update({ status: novoStatus })
+                        .eq('id', osId);
+                } catch (err) {
+                    console.warn(`[Sync] Falha ao gravar status no Supabase para OS #${os.numero}:`, err);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Carrega todas as OS ÔÇö Prioridade: Vibecode ÔåÆ Supabase Imposition ÔåÆ API local
+ * No Vibecode, cada `id_int` (proposta) = 1 OS. Os produtos_proposta s├úo os itens.
  */
 async function loadOrdens() {
     try {
+        // Carrega usu├írios do Supabase
+        await loadUsuarios();
+        
+        // Buscar pedidos da tabela comercial se dispon├¡vel (Apenas Leitura)
+        let pedidosComerciais = [];
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            try {
+                const { data: pedData, error: pedError } = await supabaseClient
+                    .from('pedidos')
+                    .select('*');
+                if (pedError) {
+                    console.error('[Supabase] Erro na resposta da tabela pedidos:', pedError);
+                }
+                if (!pedError && pedData) {
+                    pedidosComerciais = pedData;
+                }
+            } catch (err) {
+                console.error('[Supabase] Falha catastr├│fica ao carregar tabela pedidos:', err);
+            }
+        }
+        state.hasPedidosComerciais = pedidosComerciais.length > 0;
+        console.log('[Supabase] Pedidos comerciais carregados:', pedidosComerciais.length, pedidosComerciais);
+
         // Fonte 1: Vibecode (ERP do parceiro)
         if (typeof vibeClient !== 'undefined' && vibeClient) {
             console.log('[OS] Carregando do Vibecode...');
-            const loaded = await loadOrdensFromVibecode();
+            const loaded = await loadOrdensFromVibecode(pedidosComerciais);
             if (loaded) {
+                await sincronizarStatusOrdensDinamico();
                 renderOrdens();
                 return;
             }
             console.log('[OS] Vibecode sem dados, tentando fallback...');
         }
 
-        // Fonte 2: Supabase do Imposition (Banco único do Vibecode)
+        // Fonte 2: Supabase do Imposition (Banco ├║nico do Vibecode)
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const { data, error } = await supabaseClient
                 .from('producao_ordens_servico')
-                .select('*, producao_os_itens(id)')
+                .select('*, producao_os_itens(*)')
                 .order('created_at', { ascending: false });
             if (error) throw error;
-            state.ordens = (data || []).map(os => {
+
+            let ordensFiltradas = data || [];
+            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+            if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
+                ordensFiltradas = ordensFiltradas.filter(os => {
+                    const osNumeroInt = parseInt(os.numero);
+                    return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
+                });
+            }
+
+            state.ordens = ordensFiltradas.map(os => {
                 const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const savedStatus = vibeStatusOverrides[os.id];
                 let dbStatus = os.status;
-                if (dbStatus === 'PRODUÇÃO') dbStatus = 'EM IMPRESSÃO';
+                if (dbStatus === 'PRODU├ç├âO') dbStatus = 'EM IMPRESS├âO';
                 else if (dbStatus === 'ARTE' || dbStatus === 'NOVO') dbStatus = 'ARTE_EM_ANDAMENTO';
+                
+                // Pr├®-carrega no estado local os itens buscados para agilizar o collapse e as estat├¡sticas
+                if (os.producao_os_itens) {
+                    state.osItens[os.id] = os.producao_os_itens;
+                }
+                
+                // Mapear o status_arte comercial
+                const osNumeroInt = parseInt(os.numero);
+                const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
+                
                 return {
                     ...os,
                     status: savedStatus || dbStatus,
+                    status_arte: pedidoReal?.status_arte || null,
                     cliente: os.cliente || getFallbackCliente(os.numero || 0),
                     vendedor: os.vendedor || getFallbackVendedor(os.numero || 0),
                     data_liberacao: os.data_liberacao || os.created_at,
@@ -10927,24 +11081,44 @@ async function loadOrdens() {
             // Fonte 3: API local (FastAPI)
             const res = await fetch(`${API_BASE_URL}/api/ordens`);
             if (res.ok) {
-                state.ordens = await res.json();
+                const localData = await res.json();
+                const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+                
+                const mappedLocalData = localData.map(os => {
+                    const osNumeroInt = parseInt(os.numero);
+                    const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
+                    return {
+                        ...os,
+                        status_arte: pedidoReal?.status_arte || null
+                    };
+                });
+
+                if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
+                    state.ordens = mappedLocalData.filter(os => {
+                        const osNumeroInt = parseInt(os.numero);
+                        return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
+                    });
+                } else {
+                    state.ordens = mappedLocalData;
+                }
             } else {
                 state.ordens = [];
             }
         }
+        await sincronizarStatusOrdensDinamico();
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
-        toast('Erro ao carregar Ordens de Serviço: ' + e.message, 'error');
+        toast('Erro ao carregar Ordens de Servi├ºo: ' + e.message, 'error');
     }
 }
 
 /**
  * Carrega OS do Vibecode agrupando produtos_proposta por id_int
  * Cada id_int = 1 proposta = 1 OS virtual
- * Retorna true se conseguiu carregar, false se não há dados
+ * Retorna true se conseguiu carregar, false se n├úo h├í dados
  */
-async function loadOrdensFromVibecode() {
+async function loadOrdensFromVibecode(pedidosComerciais = []) {
     try {
         // Buscar todos os produtos_proposta
         const { data: produtos, error } = await vibeClient
@@ -10959,7 +11133,7 @@ async function loadOrdensFromVibecode() {
 
         if (!produtos || produtos.length === 0) return false;
 
-        // Buscar propostas (tabela pai) se existir e for acessível
+        // Buscar propostas (tabela pai) se existir e for acess├¡vel
         let propostas = [];
         try {
             const { data: propData, error: propError } = await vibeClient
@@ -10969,13 +11143,41 @@ async function loadOrdensFromVibecode() {
                 propostas = propData;
             }
         } catch (pe) {
-            console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
+            console.warn('[Vibecode] N├úo foi poss├¡vel ler tabela propostas (usando fallbacks):', pe);
         }
+
+        // Se pedidosComerciais n├úo foi passado ou est├í vazio, e temos supabaseClient, tenta carregar
+        if ((!pedidosComerciais || pedidosComerciais.length === 0) && typeof supabaseClient !== 'undefined' && supabaseClient) {
+            try {
+                const { data: pedData, error: pedError } = await supabaseClient
+                    .from('pedidos')
+                    .select('*');
+                if (pedError) {
+                    console.error('[Supabase] Erro na resposta da tabela pedidos:', pedError);
+                }
+                if (!pedError && pedData) {
+                    pedidosComerciais = pedData;
+                }
+            } catch (err) {
+                console.error('[Supabase] Falha ao carregar tabela pedidos:', err);
+            }
+        }
+
+        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
 
         // Agrupar por id_int (cada id_int = 1 proposta = 1 OS)
         const grouped = {};
         produtos.forEach(p => {
             const key = p.id_int;
+
+            // FILTRAR: Se for produ├º├úo (n├úo-dev) ou se tiver pedidosComerciais populada, filtra
+            if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
+                const existe = pedidosComerciais.some(ped => String(ped.id_int) === String(key));
+                if (!existe) {
+                    return; // ignora este produto e n├úo cria a OS
+                }
+            }
+
             if (!grouped[key]) {
                 const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const osId = `vibe_${key}`;
@@ -10983,22 +11185,32 @@ async function loadOrdensFromVibecode() {
 
                 // Buscar dados reais da proposta
                 const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
+                
+                // Buscar dados do pedido comercial
+                const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(key));
 
-                // Mapear campos com fallbacks determinísticos
+                // Mapear campos com fallbacks determin├¡sticos
                 const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || getFallbackCliente(key);
                 const vendedor = propReal?.vendedor || propReal?.vendedor_nome || getFallbackVendedor(key);
                 const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || p.created_at;
                 const prazoEntrega = propReal?.prazo_entrega || propReal?.prazo || getFallbackPrazo(p.created_at, key);
 
+                // Dados comerciais reais
+                const dataPedido = pedidoReal?.data_pedido || null;
+                const valorTotal = pedidoReal?.valor_total || null;
+
                 grouped[key] = {
                     id: osId,
                     numero: key,
-                    status: savedStatus || (key % 2 === 0 ? 'EM IMPRESSÃO' : 'ARTE_EM_ANDAMENTO'),
+                    status: savedStatus || 'ARTE_EM_ANDAMENTO',
+                    status_arte: pedidoReal?.status_arte || null,
                     cliente: cliente,
                     vendedor: vendedor,
                     data_liberacao: dataLiberacao,
+                    data_pedido: dataPedido,
+                    valor_total: valorTotal,
                     prazo_entrega: prazoEntrega,
-                    observacoes: `Proposta #${key} — Vibecode`,
+                    observacoes: `Proposta #${key} ÔÇö Vibecode`,
                     criado_por: null,
                     created_at: p.created_at,
                     updated_at: p.updated_at || p.created_at,
@@ -11016,10 +11228,10 @@ async function loadOrdensFromVibecode() {
             }
         });
 
-        // Converter para array ordenado por número (desc)
+        // Converter para array ordenado por n├║mero (desc)
         state.ordens = Object.values(grouped).sort((a, b) => b.numero - a.numero);
 
-        // Pré-carregar itens no formato esperado pelo Imposition
+        // Pr├®-carregar itens no formato esperado pelo Imposition
         state.ordens.forEach(os => {
             state.osItens[os.id] = (os._itens_raw || []).map(p => mapVibecodeProdutoToOSItem(p, os.id));
             delete os._itens_raw; // limpar dados brutos
@@ -11034,23 +11246,23 @@ async function loadOrdensFromVibecode() {
 }
 
 /**
- * Transforma um produto_proposta do Vibecode → formato os_itens do Imposition
+ * Transforma um produto_proposta do Vibecode ÔåÆ formato os_itens do Imposition
  */
 function mapVibecodeProdutoToOSItem(p, osId) {
     // Detectar tipo de produto pelo nome
     const nomeProd = (p.nome_produto || '').toUpperCase();
-    let setor = 'IMPRESS.';
+    let setor = 'PVC';
     let produto = nomeProd;
     
     // Mapear nomes conhecidos
     if (nomeProd.includes('TRIBAND')) produto = 'TRIBAND';
     else if (nomeProd.includes('MOBI')) produto = 'MOBI';
     else if (nomeProd.includes('BRACELETE')) produto = 'TEX PLUS';
-    else if (nomeProd.includes('CORD')) produto = 'CORDÃO';
+    else if (nomeProd.includes('CORD')) produto = 'CORD├âO';
     else if (nomeProd.includes('TEX')) produto = 'TEX';
     else if (nomeProd.includes('PULSEIRA')) produto = 'TEX';
 
-    // Extrair formato da descrição (ex: "25×2cm" → "Mobi")
+    // Extrair formato da descri├º├úo (ex: "25├ù2cm" ÔåÆ "Mobi")
     const formato = p.modelo_descri || 'Mobi';
 
     return {
@@ -11060,18 +11272,20 @@ function mapVibecodeProdutoToOSItem(p, osId) {
         produto: produto,
         modelo: `VIBE-${p.id_int}-${p.id}`,
         formato: formato,
-        formato_id: null, // matching automático vai preencher
+        formato_id: null, // matching autom├ítico vai preencher
         quantidade: p.qtd || 0,
         num_inicial: 1,
         num_final: p.qtd || 0,
-        cor: 'STD',
         cor_id: null,
         blocos: 'N',
         verso: false,
         numeracao: 'SEQUENCIAL',
         numeracao_id: null,
         aprovacao: 'APROVADA',
-        impressao: 'AGUARD.',
+        impressao: (() => {
+            const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
+            return impOverrides[`vibe_item_${p.id}`] || 'AGUARD.';
+        })(),
         observacoes: p.modelo_descri || p.nome_produto || '',
         created_at: p.created_at,
         updated_at: p.updated_at || p.created_at,
@@ -11091,33 +11305,71 @@ function mapVibecodeProdutoToOSItem(p, osId) {
 }
 
 /**
- * Carrega os itens de uma OS específica
+ * Carrega os itens de uma OS espec├¡fica
  */
 async function loadOSItens(osId) {
     try {
-        // Se já pré-carregados (Vibecode ou cache), usar direto
-        if (state.osItens[osId] && state.osItens[osId].length > 0) {
-            renderOSItens(osId);
-            return;
-        }
+        const os = state.ordens.find(o => o.id === osId);
+        if (!os) return;
 
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { data, error } = await supabaseClient
-                .from('producao_os_itens')
-                .select('*')
-                .eq('os_id', osId)
-                .order('created_at', { ascending: true });
-            if (error) throw error;
-            state.osItens[osId] = data || [];
-        } else {
-            const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
-            if (res.ok) {
-                state.osItens[osId] = await res.json();
+        // Se n├úo carregado ainda, busca a fonte de dados principal
+        if (!state.osItens[osId] || state.osItens[osId].length === 0) {
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { data, error } = await supabaseClient
+                    .from('producao_os_itens')
+                    .select('*')
+                    .eq('os_id', osId)
+                    .order('created_at', { ascending: true });
+                if (error) throw error;
+                state.osItens[osId] = data || [];
             } else {
-                state.osItens[osId] = [];
+                const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
+                if (res.ok) {
+                    state.osItens[osId] = await res.json();
+                } else {
+                    state.osItens[osId] = [];
+                }
             }
         }
+
+        // Buscar dados din├ómicos da arte (pedidos_artes) e mesclar nos itens
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && os.numero) {
+            try {
+                const queryNum = parseInt(os.numero);
+                if (!isNaN(queryNum)) {
+                    const { data: artes, error: artesError } = await supabaseClient
+                        .from('pedidos_artes')
+                        .select('*')
+                        .eq('id_int', queryNum);
+                    
+                    if (!artesError && artes && artes.length > 0) {
+                        state.osItens[osId].forEach(item => {
+                            // Encontrar artes vinculadas a este item
+                            const artesDoItem = artes.filter(a => a.id_modelo === item.id);
+                            if (artesDoItem.length > 0) {
+                                // Ordenar por vers├úo decrescente para pegar a mais recente
+                                artesDoItem.sort((a, b) => b.versao - a.versao);
+                                const ultimaArte = artesDoItem[0];
+                                
+                                // Atualizar metadados de visualiza├º├úo
+                                item.aprovacao = ultimaArte.status;
+                                item.nome_arquivo_arte = ultimaArte.nome_arquivo;
+                                item.versao_arte = ultimaArte.versao;
+                                item.url_arquivo_arte = ultimaArte.url_arquivo;
+                                if (ultimaArte.comentarios_revisao) {
+                                    item.amostra_obs = ultimaArte.comentarios_revisao;
+                                }
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('[Supabase] Erro ao integrar dados de pedidos_artes:', err);
+            }
+        }
+
         renderOSItens(osId);
+        renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar itens da OS:', e);
         toast('Erro ao carregar itens: ' + e.message, 'error');
@@ -11125,10 +11377,10 @@ async function loadOSItens(osId) {
 }
 
 /**
- * Formata data para exibição
+ * Formata data para exibi├º├úo
  */
 function formatDate(dateStr) {
-    if (!dateStr) return '—';
+    if (!dateStr) return 'ÔÇö';
     const d = new Date(dateStr);
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
         ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -11139,41 +11391,59 @@ function formatDate(dateStr) {
  */
 function getStatusBadge(status) {
     const map = {
-        'ARTE': { icon: '🎨', cls: 'badge-blue' },
-        'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber' },
-        'FINALIZADA': { icon: '✅', cls: 'badge-teal' },
-        'CANCELADA': { icon: '❌', cls: 'badge-red' }
+        'ARTE': { icon: '­ƒÄ¿', cls: 'badge-blue', label: 'Arte' },
+        'PRODU├ç├âO': { icon: '­ƒÅ¡', cls: 'badge-amber', label: 'Produ├º├úo' },
+        'FINALIZADA': { icon: 'Ô£à', cls: 'badge-teal', label: 'Finalizada' },
+        'CANCELADA': { icon: 'ÔØî', cls: 'badge-red', label: 'Cancelada' },
+        
+        // Novos status do fluxo de arte
+        'ARTE_EM_ANDAMENTO': { icon: '­ƒÄ¿', cls: 'badge-blue', label: 'Arte em Andamento' },
+        'ARTE_EM_CORRECAO': { icon: '­ƒÄ¿', cls: 'badge-amber', label: 'Arte em Andamento' },
+        'ARTE_APROVADA': { icon: 'Ô£à', cls: 'badge-green', label: 'Arte APROVADA' },
+        'Arte APROVADA': { icon: 'Ô£à', cls: 'badge-green', label: 'Arte APROVADA' },
+        'EM IMPRESS├âO': { icon: '­ƒû¿´©Å', cls: 'badge-purple', label: 'Em Impress├úo' },
+        'Enviar ARTE': { icon: '­ƒô¿', cls: 'badge-green', label: 'Enviar ARTE' },
+        'Pendente Informa├º├úo': { icon: 'ÔÜá´©Å', cls: 'badge-red', label: 'Pendente Informa├º├úo' }
     };
-    const s = map[status] || { icon: '❓', cls: '' };
-    return `<span class="badge ${s.cls}">${s.icon} ${status}</span>`;
+    const s = map[status] || { icon: 'ÔØô', cls: '', label: status };
+    const label = s.label || status;
+    return `<span class="badge ${s.cls}">${s.icon} ${label}</span>`;
 }
 
 /**
- * Retorna badge HTML para aprovação
+ * Retorna badge HTML para aprova├º├úo
  */
 function getAprovacaoBadge(aprov) {
     const map = {
-        'EM ARTE': { cls: 'badge-amber', icon: '🎨' },
-        'APROVADA': { cls: 'badge-teal', icon: '✅' },
-        'PRONTA': { cls: 'badge-blue', icon: '📋' },
-        'REPROVADA': { cls: 'badge-red', icon: '❌' }
+        'EM ARTE': { cls: 'badge-amber', icon: '­ƒÄ¿', text: 'EM ARTE' },
+        'APROVADA': { cls: 'badge-teal', icon: 'Ô£à', text: 'APROVADA' },
+        'PRONTA': { cls: 'badge-blue', icon: '­ƒôï', text: 'PRONTA' },
+        'REPROVADA': { cls: 'badge-red', icon: 'ÔØî', text: 'REPROVADA' },
+        
+        // Novos status da tabela pedidos_artes
+        'EM_REVISAO_INTERNA': { cls: 'badge-amber', icon: '­ƒÄ¿', text: 'Rev. Interna' },
+        'AGUARDANDO_APROVACAO': { cls: 'badge-yellow', icon: 'ÔÅ│', text: 'Aguard. Cliente' },
+        'APROVADA_CLIENTE': { cls: 'badge-teal', icon: 'Ô£à', text: 'Aprov. Cliente' },
+        'REPROVADA_CLIENTE': { cls: 'badge-red', icon: 'ÔØî', text: 'Reprov. Cliente' },
+        'LIBERADA': { cls: 'badge-teal', icon: '­ƒôï', text: 'Liberada' }
     };
-    const s = map[aprov] || { cls: '', icon: '' };
-    return `<span class="badge ${s.cls}">${s.icon} ${aprov || '—'}</span>`;
+    const key = aprov ? aprov.toUpperCase() : '';
+    const s = map[key] || map[aprov] || { cls: '', icon: '', text: aprov || 'ÔÇö' };
+    return `<span class="badge ${s.cls}">${s.icon} ${s.text}</span>`;
 }
 
 /**
- * Retorna badge HTML para impressão
+ * Retorna badge HTML para impress├úo
  */
 function getImpressaoBadge(imp) {
     const map = {
-        'AGUARD.': { cls: 'badge-amber', icon: '⏳' },
-        'PARCIAL': { cls: 'badge-blue', icon: '🔄' },
-        'IMPRESSO': { cls: 'badge-teal', icon: '✅' },
-        'ERRO': { cls: 'badge-red', icon: '❌' }
+        'AGUARD.': { cls: 'badge-amber', icon: 'ÔÅ│' },
+        'PARCIAL': { cls: 'badge-blue', icon: '­ƒöä' },
+        'IMPRESSO': { cls: 'badge-teal', icon: 'Ô£à' },
+        'ERRO': { cls: 'badge-red', icon: 'ÔØî' }
     };
     const s = map[imp] || { cls: '', icon: '' };
-    return `<span class="badge ${s.cls}">${s.icon} ${imp || '—'}</span>`;
+    return `<span class="badge ${s.cls}">${s.icon} ${imp || 'ÔÇö'}</span>`;
 }
 
 /**
@@ -11181,7 +11451,7 @@ function getImpressaoBadge(imp) {
  */
 /**
 /**
- * Lista de designers cadastrados (fonte local até integração com E-deal)
+ * Lista de designers cadastrados (fonte local at├® integra├º├úo com E-deal)
  */
 const DESIGNERS_LISTA = [
     'Amanda Souza',
@@ -11189,7 +11459,37 @@ const DESIGNERS_LISTA = [
 ];
 
 /**
- * Obtém o designer atribuído a uma OS (salvo em localStorage)
+ * Carrega a lista de usu├írios da tabela producao_usuarios do Supabase
+ */
+async function loadUsuarios() {
+    try {
+        if (!supabaseClient) {
+            console.log("SupabaseClient n├úo inicializado. Usando fallbacks locais para usu├írios.");
+            return;
+        }
+        const { data, error } = await supabaseClient
+            .from('producao_usuarios')
+            .select('nome')
+            .eq('ativo', true);
+
+        if (error) {
+            console.error("Erro ao carregar usu├írios do Supabase:", error);
+            return;
+        }
+
+        if (data && data.length > 0) {
+            usuariosSupabase = data.map(u => u.nome).filter(Boolean);
+            console.log("Usu├írios carregados do Supabase:", usuariosSupabase);
+        } else {
+            console.log("Nenhum usu├írio ativo retornado do Supabase. Usando fallbacks.");
+        }
+    } catch (err) {
+        console.error("Exce├º├úo ao carregar usu├írios:", err);
+    }
+}
+
+/**
+ * Obt├®m o designer atribu├¡do a uma OS (salvo em localStorage)
  */
 function getOSDesigner(osId) {
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
@@ -11197,7 +11497,7 @@ function getOSDesigner(osId) {
 }
 
 /**
- * Define o designer responsável por uma OS (salva em localStorage)
+ * Define o designer respons├ível por uma OS (salva em localStorage)
  */
 function setOSDesigner(osId, designerName) {
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
@@ -11213,21 +11513,19 @@ function setOSDesigner(osId, designerName) {
 // Expor globalmente
 window.setOSDesigner = setOSDesigner;
 
-/**
- * Popula o dropdown de filtro de designers com os nomes disponíveis
- */
 function populateDesignerFilter() {
     const filterSelect = document.getElementById('os-filter-designer');
     if (!filterSelect) return;
 
     const currentValue = filterSelect.value;
     
-    // Coletar designers atribuídos + lista fixa
-    const allDesigners = new Set(DESIGNERS_LISTA);
+    // Coletar designers atribu├¡dos + lista base
+    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
+    const allDesigners = new Set(baseList);
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
 
-    filterSelect.innerHTML = '<option value="">🎨 Todos os Designers</option>';
+    filterSelect.innerHTML = '<option value="">­ƒÄ¿ Todos os Designers</option>';
     [...allDesigners].sort().forEach(d => {
         const opt = document.createElement('option');
         opt.value = d;
@@ -11243,11 +11541,12 @@ function populateDesignerFilter() {
  */
 function renderDesignerSelect(osId) {
     const currentDesigner = getOSDesigner(osId);
-    const allDesigners = new Set(DESIGNERS_LISTA);
+    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
+    const allDesigners = new Set(baseList);
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
 
-    let options = '<option value="">— Atribuir —</option>';
+    let options = '<option value="">ÔÇö Atribuir ÔÇö</option>';
     [...allDesigners].sort().forEach(d => {
         const selected = d === currentDesigner ? 'selected' : '';
         const escaped = d.replace(/'/g, "\\'");
@@ -11260,7 +11559,69 @@ function renderDesignerSelect(osId) {
 }
 
 /**
- * Renderiza as tabelas de OS (Fila de Impressão e Fila de Arte) na view
+ * Obt├®m o vendedor atribu├¡do a uma OS (salvo em localStorage ou nativo da OS)
+ */
+function getOSVendedor(osId) {
+    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
+    if (overrides[osId]) {
+        return overrides[osId];
+    }
+    const os = state.ordens.find(o => o.id === osId);
+    return os ? (os.vendedor || '') : '';
+}
+
+/**
+ * Define o vendedor respons├ível por uma OS (salva em localStorage)
+ */
+function setOSVendedor(osId, vendedorName) {
+    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
+    if (vendedorName) {
+        overrides[osId] = vendedorName;
+    } else {
+        delete overrides[osId];
+    }
+    localStorage.setItem('vibe_vendedor_overrides', JSON.stringify(overrides));
+    renderOrdens();
+}
+
+// Expor globalmente
+window.setOSVendedor = setOSVendedor;
+
+/**
+ * Gera o HTML do select inline de vendedor para uma OS na tabela
+ */
+function renderVendedorSelect(osId) {
+    const currentVendedor = getOSVendedor(osId);
+    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : VENDEDORES_LISTA;
+    const allVendedores = new Set(baseList);
+    
+    if (currentVendedor) {
+        allVendedores.add(currentVendedor);
+    }
+    
+    // Garantir que o vendedor nativo esteja na lista
+    const os = state.ordens.find(o => o.id === osId);
+    if (os && os.vendedor) {
+        allVendedores.add(os.vendedor);
+    }
+
+    const overrides = JSON.parse(localStorage.getItem('vibe_vendedor_overrides') || '{}');
+    Object.values(overrides).forEach(v => { if (v) allVendedores.add(v); });
+
+    let options = '<option value="">ÔÇö Atribuir ÔÇö</option>';
+    [...allVendedores].sort().forEach(v => {
+        const selected = v === currentVendedor ? 'selected' : '';
+        const escaped = v.replace(/'/g, "\\'");
+        options += `<option value="${escaped}" ${selected}>${v}</option>`;
+    });
+
+    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
+                onclick="event.stopPropagation()" 
+                onchange="event.stopPropagation(); setOSVendedor('${osId}', this.value)">${options}</select>`;
+}
+
+/**
+ * Renderiza as tabelas de OS (Fila de Impress├úo e Fila de Arte) na view
  */
 function renderOrdens() {
     const tbodyImpressao = document.getElementById('tbody-impressao');
@@ -11272,37 +11633,171 @@ function renderOrdens() {
     const searchArte = (document.getElementById('os-search-arte')?.value || '').trim().toLowerCase();
     const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
 
-    // Fila 1: Impressão (Status EM IMPRESSÃO)
-    let ordensImpressao = state.ordens.filter(os => os.status === 'EM IMPRESSÃO');
+    // Fila 1: Impress├úo (Status EM IMPRESS├âO)
+    let ordensImpressao = state.ordens.filter(os => os.status === 'EM IMPRESS├âO');
+
+    // --- Calcular Estat├¡sticas Din├ómicas ---
+    let totalItensImpressao = 0;
+    let totalItensAprovados = 0;
+    let totalPedidosConcluidos = 0;
+
+    ordensImpressao.forEach(os => {
+        const itens = state.osItens[os.id] || [];
+        
+        itens.forEach(item => {
+            const impStatus = item.impressao || 'AGUARD.';
+            if (impStatus === 'IMPRESSO' || impStatus === 'PARCIAL') {
+                totalItensImpressao++;
+            }
+            
+            const ap = (item.aprovacao || '').toUpperCase();
+            if (ap === 'APROVADA' || ap === 'PRONTA' || ap === 'LIBERADA' || ap === 'APROVADA_CLIENTE') {
+                totalItensAprovados++;
+            }
+        });
+
+        if (itens.length > 0 && itens.every(item => item.impressao === 'IMPRESSO')) {
+            totalPedidosConcluidos++;
+        }
+    });
+
+    const statPedidosFilaEl = document.getElementById('stat-pedidos-fila');
+    if (statPedidosFilaEl) statPedidosFilaEl.textContent = ordensImpressao.length;
+
+    const statItensImpressaoEl = document.getElementById('stat-itens-impressao');
+    if (statItensImpressaoEl) statItensImpressaoEl.textContent = totalItensImpressao;
+
+    const statItensAprovadosEl = document.getElementById('stat-itens-aprovados');
+    if (statItensAprovadosEl) statItensAprovadosEl.textContent = totalItensAprovados;
+
+    const statPedidosConcluidosEl = document.getElementById('stat-pedidos-concluidos');
+    if (statPedidosConcluidosEl) statPedidosConcluidosEl.textContent = totalPedidosConcluidos;
+
+    // --- Aplicar Filtros (Busca, Setor e Status) ---
     let filteredImpressao = ordensImpressao.filter(os => {
+        const itens = state.osItens[os.id] || [];
+
+        // 1. Busca textual
         if (searchImpressao) {
             const num = String(os.numero || '');
             const cli = (os.cliente || '').toLowerCase();
-            const vend = (os.vendedor || '').toLowerCase();
-            return num.includes(searchImpressao) || cli.includes(searchImpressao) || vend.includes(searchImpressao);
+            const vend = getOSVendedor(os.id).toLowerCase();
+            const des = getOSDesigner(os.id).toLowerCase();
+            const matchSearch = num.includes(searchImpressao) || cli.includes(searchImpressao) || vend.includes(searchImpressao) || des.includes(searchImpressao);
+            if (!matchSearch) return false;
         }
+
+        // 2. Filtro de Setor
+        if (state.filtroSetor) {
+            const matchSetor = itens.some(item => (item.setor || '').toUpperCase() === state.filtroSetor.toUpperCase());
+            if (!matchSetor) return false;
+        }
+
+        // 3. Filtro de Est├ígio de Impress├úo
+        if (state.filtroStatus) {
+            const matchStatus = itens.some(item => (item.impressao || 'AGUARD.').toUpperCase() === state.filtroStatus.toUpperCase());
+            if (!matchStatus) return false;
+        }
+
         return true;
     });
 
-    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO)
-    let ordensArte = state.ordens.filter(os => os.status === 'ARTE_EM_ANDAMENTO');
+    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO, ARTE_EM_CORRECAO, ARTE_APROVADA ou novos status do fluxo de arte)
+    // E com status_arte === 'PENDENTE' na tabela pedidos comercial
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+    
+    let ordensArte = state.ordens.filter(os => {
+        const matchStatusOS = 
+            os.status === 'ARTE_EM_ANDAMENTO' || 
+            os.status === 'ARTE_EM_CORRECAO' || 
+            os.status === 'ARTE_APROVADA' || 
+            os.status === 'Arte APROVADA' || 
+            os.status === 'Enviar ARTE' || 
+            os.status === 'Pendente Informa├º├úo';
+        
+        if (!matchStatusOS) return false;
+
+        if (!isDev || state.hasPedidosComerciais) {
+            const statusArteComercial = (os.status_arte || '').toUpperCase();
+            return statusArteComercial === 'PENDENTE';
+        }
+
+        return true;
+    });
+
+    // --- Calcular Estat├¡sticas de Arte ---
+    let totalItensPendentesArte = 0;
+    let totalItensAprovadosArte = 0;
+    let totalPedidosConcluidosArte = 0;
+
+    ordensArte.forEach(os => {
+        const itens = state.osItens[os.id] || [];
+        
+        itens.forEach(item => {
+            const ap = (item.aprovacao || 'PENDENTE').toUpperCase();
+            if (ap === 'PENDENTE' || ap === 'AGUARDANDO') {
+                totalItensPendentesArte++;
+            } else if (ap === 'APROVADA' || ap === 'PRONTA' || ap === 'LIBERADA' || ap === 'APROVADA_CLIENTE') {
+                totalItensAprovadosArte++;
+            }
+        });
+
+        if (itens.length > 0 && itens.every(item => {
+            const ap = (item.aprovacao || '').toUpperCase();
+            return ap === 'APROVADA' || ap === 'PRONTA' || ap === 'LIBERADA' || ap === 'APROVADA_CLIENTE';
+        })) {
+            totalPedidosConcluidosArte++;
+        }
+    });
+
+    const statPedidosFilaArteEl = document.getElementById('stat-pedidos-fila-arte');
+    if (statPedidosFilaArteEl) statPedidosFilaArteEl.textContent = ordensArte.length;
+
+    const statItensPendentesArteEl = document.getElementById('stat-itens-pendentes-arte');
+    if (statItensPendentesArteEl) statItensPendentesArteEl.textContent = totalItensPendentesArte;
+
+    const statItensAprovadosArteEl = document.getElementById('stat-itens-aprovados-arte');
+    if (statItensAprovadosArteEl) statItensAprovadosArteEl.textContent = totalItensAprovadosArte;
+
+    const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
+    if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = totalPedidosConcluidosArte;
+
+    // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---
     let filteredArte = ordensArte.filter(os => {
-        let matchSearch = true;
+        const itens = state.osItens[os.id] || [];
+
+        // 1. Busca textual
         if (searchArte) {
             const num = String(os.numero || '');
             const cli = (os.cliente || '').toLowerCase();
-            const vend = (os.vendedor || '').toLowerCase();
+            const vend = getOSVendedor(os.id).toLowerCase();
             const des = getOSDesigner(os.id).toLowerCase();
-            matchSearch = num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte) || des.includes(searchArte);
+            const matchSearch = num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte) || des.includes(searchArte);
+            if (!matchSearch) return false;
         }
-        let matchDesigner = true;
+
+        // 2. Filtro de Designer
         if (filterDesigner) {
-            matchDesigner = getOSDesigner(os.id) === filterDesigner;
+            const matchDesigner = getOSDesigner(os.id) === filterDesigner;
+            if (!matchDesigner) return false;
         }
-        return matchSearch && matchDesigner;
+
+        // 3. Filtro de Setor
+        if (state.filtroSetorArte) {
+            const matchSetor = itens.some(item => (item.setor || '').toUpperCase() === state.filtroSetorArte.toUpperCase());
+            if (!matchSetor) return false;
+        }
+
+        // 4. Filtro de Status de Aprova├º├úo
+        if (state.filtroStatusArte) {
+            const matchStatus = itens.some(item => (item.aprovacao || 'PENDENTE').toUpperCase() === state.filtroStatusArte.toUpperCase());
+            if (!matchStatus) return false;
+        }
+
+        return true;
     });
 
-    // Atualizar badges da navegação lateral
+    // Atualizar badges da navega├º├úo lateral
     const badgeImpressao = document.getElementById('badge-impressao');
     if (badgeImpressao) badgeImpressao.textContent = ordensImpressao.length;
 
@@ -11319,7 +11814,7 @@ function renderOrdens() {
     // Popular filtro de designers
     populateDesignerFilter();
 
-    // Renderizar Fila de Impressão
+    // Renderizar Fila de Impress├úo
     if (tbodyImpressao) {
         const emptyImpressao = document.getElementById('empty-impressao');
         const tableImpressao = document.getElementById('table-impressao');
@@ -11334,20 +11829,79 @@ function renderOrdens() {
 
             tbodyImpressao.innerHTML = filteredImpressao.map(os => {
                 const isExpanded = state.osExpandedId === os.id;
-                const itensCount = os._itens_count || 0;
+                const osItensList = state.osItens[os.id] || [];
+                const totalItens = osItensList.length;
+                const impressosCount = osItensList.filter(item => item.impressao === 'IMPRESSO').length;
+                const pct = totalItens > 0 ? Math.round((impressosCount / totalItens) * 100) : 0;
+                
+                // Barra de progresso do status de impress├úo
+                const progressBarHtml = `
+                    <div style="width: 100%; min-width: 110px;">
+                        <div style="font-size: 0.72rem; margin-bottom: 3px; color: var(--text-dim); display: flex; justify-content: space-between; font-family: monospace;">
+                            <span>${impressosCount}/${totalItens} mod.</span>
+                            <strong>${pct}%</strong>
+                        </div>
+                        <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="width: ${pct}%; height: 100%; background: ${pct === 100 ? 'var(--green)' : 'var(--blue)'}; border-radius: 3px; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                `;
+
+                // Preview da arte do 1┬║ modelo
+                const primeiroItem = osItensList[0];
+                let previewHtml = `
+                    <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
+                        ­ƒû╝´©Å
+                    </div>
+                `;
+                if (primeiroItem && primeiroItem.amostra_arte_base64) {
+                    const isPdf = primeiroItem.amostra_arte_base64.startsWith('data:application/pdf') || primeiroItem.amostra_arte_base64.includes('JVBERi');
+                    if (isPdf) {
+                        previewHtml = `
+                            <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${primeiroItem.amostra_arte_base64}', '_blank')">
+                                ­ƒôä
+                            </div>
+                        `;
+                    } else {
+                        previewHtml = `
+                            <img src="${primeiroItem.amostra_arte_base64}" 
+                                 style="width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
+                                 onclick="event.stopPropagation(); openClienteLightbox('${primeiroItem.amostra_arte_base64}')" 
+                                 title="Clique para ampliar a arte" />
+                        `;
+                    }
+                }
+
+                // Soma das quantidades de todos os modelos
+                const totalQtd = osItensList.reduce((acc, item) => acc + (item.quantidade || 0), 0);
+
+                // Frete (forma de envio)
+                const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
+
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
+                const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
+                
                 return `
                     <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
-                        <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? '▼' : '▶'}</td>
-                        <td><strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong></td>
-                        <td><strong>${os.cliente || '—'}</strong></td>
-                        <td>${os.vendedor || '—'}</td>
-                        <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
-                        <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
-                        <td>${getStatusBadge(os.status)}</td>
-                        <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
+                        <td style="text-align: center; font-size: 1.1rem;">${isExpanded ? 'Ôû╝' : 'ÔûÂ'}</td>
                         <td>
-                            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); changeOSStatus('${os.id}', 'ARTE_EM_ANDAMENTO')" title="Mover para a Lista de Arte" style="padding: 4px 8px; font-size: 0.75rem;">🎨 Mover p/ Arte</button>
+                            <strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong>
+                            ${valorFormatado}
+                        </td>
+                        <td><strong>${os.cliente || 'ÔÇö'}</strong></td>
+                        <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${os.observacoes || ''}">
+                            ${os.observacoes || 'ÔÇö'}
+                        </td>
+                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
+                        <td>${progressBarHtml}</td>
+                        <td style="text-align: center; vertical-align: middle;">${previewHtml}</td>
+                        <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
+                        <td><span class="badge">${totalItens} ${totalItens === 1 ? 'modelo' : 'modelos'}</span></td>
+                        <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
+                        <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1);">${frete}</span></td>
+                        <td>${getStatusBadge(os.status)}</td>
+                        <td>
+                            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); changeOSStatus('${os.id}', 'ARTE_EM_ANDAMENTO')" title="Mover para a Lista de Arte" style="padding: 4px 8px; font-size: 0.75rem;">­ƒÄ¿ Mover p/ Arte</button>
                         </td>
                     </tr>
                 `;
@@ -11371,19 +11925,27 @@ function renderOrdens() {
             tbodyArte.innerHTML = filteredArte.map(os => {
                 const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
+                const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
+                const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Cria├º├úo do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer;" title="Abrir Amostras">
-                        <td style="text-align: center; font-size: 1.1rem;">▶</td>
-                        <td><strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong></td>
-                        <td><strong>${os.cliente || '—'}</strong></td>
-                        <td>${os.vendedor || '—'}</td>
+                        <td style="text-align: center; font-size: 1.1rem;">ÔûÂ</td>
+                        <td>
+                            <strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong>
+                            ${valorFormatado}
+                        </td>
+                        <td><strong>${os.cliente || 'ÔÇö'}</strong></td>
+                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
                         <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
-                        <td style="font-size: 0.82rem; color: var(--text-dim);">${formatDateTime(os.data_liberacao)}</td>
+                        <td style="font-size: 0.82rem; color: var(--text-dim);">
+                            ${formatDateTime(os.data_liberacao)}
+                            ${dataPedFormatada}
+                        </td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td>${getStatusBadge(os.status)}</td>
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
                         <td>
-                            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); gerarLinkCliente('${os.id}', '${os.numero}')" title="Gerar link público para aprovação do cliente" style="padding: 4px 8px; font-size: 0.75rem;">🔗 Link do Cliente</button>
+                            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); gerarLinkCliente('${os.id}', '${os.numero}')" title="Gerar link p├║blico para aprova├º├úo do cliente" style="padding: 4px 8px; font-size: 0.75rem;">­ƒöù Link do Cliente</button>
                         </td>
                     </tr>
                 `;
@@ -11399,7 +11961,7 @@ async function toggleOSDetail(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) return;
 
-    const isImpressao = os.status === 'EM IMPRESSÃO';
+    const isImpressao = os.status === 'EM IMPRESS├âO';
     const activeCard = document.getElementById(isImpressao ? 'os-detail-card-impressao' : 'os-detail-card-arte');
     const inactiveCard = document.getElementById(isImpressao ? 'os-detail-card-arte' : 'os-detail-card-impressao');
 
@@ -11430,7 +11992,7 @@ async function toggleOSDetail(osId) {
     renderOrdens();
     await loadOSItens(osId);
 
-    // Scroll suave até o card de detalhes
+    // Scroll suave at├® o card de detalhes
     activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -11441,7 +12003,7 @@ function renderOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) return;
 
-    const isImpressao = os.status === 'EM IMPRESSÃO';
+    const isImpressao = os.status === 'EM IMPRESS├âO';
     const tbody = document.getElementById(isImpressao ? 'tbody-os-itens-impressao' : 'tbody-os-itens-arte');
     if (!tbody) return;
 
@@ -11454,32 +12016,44 @@ function renderOSItens(osId) {
 
     tbody.innerHTML = itens.map(item => `
         <tr>
-            <td>${item.setor || '—'}</td>
-            <td><strong>${item.produto || '—'}</strong></td>
-            <td style="font-family: monospace; font-size: 0.85rem;">${item.modelo || '—'}</td>
-            <td><span class="badge">${item.formato || '—'}</span></td>
-            <td style="text-align: center;"><strong>${item.quantidade || 0}</strong><br><span style="font-size:0.72rem;color:var(--text-dim);">${item.num_inicial}→${item.num_final}</span></td>
-            <td>${item.numeracao || '—'}</td>
+            <td>${item.setor || 'ÔÇö'}</td>
+            <td><strong>${item.produto || 'ÔÇö'}</strong></td>
+            <td style="font-family: monospace; font-size: 0.85rem;">${item.modelo || 'ÔÇö'}</td>
+            <td><span class="badge">${item.formato || 'ÔÇö'}</span></td>
+            <td style="text-align: center;"><strong>${item.quantidade || 0}</strong><br><span style="font-size:0.72rem;color:var(--text-dim);">${item.num_inicial}ÔåÆ${item.num_final}</span></td>
+            <td>${item.numeracao || 'ÔÇö'}</td>
             <td>${item.cor || 'STD'}</td>
-            <td style="text-align: center;">${item.verso ? '✅' : '—'}</td>
+            <td style="text-align: center;">${item.verso ? 'Ô£à' : 'ÔÇö'}</td>
             <td style="text-align: center;">${item.blocos || 'N'}</td>
-            <td>${getAprovacaoBadge(item.aprovacao)}</td>
             <td>
-                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled title="Aguardando aprovação"' : ''}>
-                    <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
-                    <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
-                    <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
-                    <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>❌ Erro</option>
+                ${getAprovacaoBadge(item.aprovacao)}
+                ${item.nome_arquivo_arte ? `
+                    <div style="font-size: 0.72rem; margin-top: 4px; color: var(--text-dim); display: flex; flex-direction: column; gap: 2px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <span title="${item.nome_arquivo_arte}">
+                            ­ƒôä v${item.versao_arte || 1}: ${item.nome_arquivo_arte}
+                        </span>
+                        ${item.url_arquivo_arte ? `
+                            <a href="${item.url_arquivo_arte}" target="_blank" style="color: var(--blue); text-decoration: underline; font-size: 0.68rem;" onclick="event.stopPropagation()">Download</a>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            </td>
+            <td>
+                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprova├º├úo"' : ''}>
+                    <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>ÔÅ│ Aguard.</option>
+                    <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>­ƒöä Parcial</option>
+                    <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>Ô£à Impresso</option>
+                    <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>ÔØî Erro</option>
                 </select>
             </td>
             <td style="display: flex; gap: 6px; flex-wrap: wrap;">
                 ${!isImpressao ? `
                 <button class="btn btn-sm btn-secondary" onclick="openArtesModal('${item.id}', '${osId}')" title="Gerenciar Artes do Modelo">
-                    🎨 Artes
+                    ­ƒÄ¿ Artes
                 </button>
                 ` : ''}
-                <button class="btn btn-sm btn-primary" onclick="enviarParaImposicao('${item.id}', '${osId}')" title="Enviar para Imposição" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled' : ''}>
-                    🖨️ Impor
+                <button class="btn btn-sm btn-primary" onclick="enviarParaImposicao('${item.id}', '${osId}')" title="Enviar para Imposi├º├úo" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled' : ''}>
+                    ­ƒû¿´©Å Impor
                 </button>
             </td>
         </tr>
@@ -11494,7 +12068,7 @@ function changeOSStatus(osId, newStatus) {
     overrides[osId] = newStatus;
     localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
 
-    // Atualizar no estado local em memória
+    // Atualizar no estado local em mem├│ria
     const os = state.ordens.find(o => o.id === osId);
     if (os) {
         os.status = newStatus;
@@ -11510,21 +12084,21 @@ function changeOSStatus(osId, newStatus) {
     }
 
     renderOrdens();
-    toast(`Pedido #${os ? os.numero : ''} atualizado para ${newStatus === 'EM IMPRESSÃO' ? 'Impressão' : 'Arte'}!`, 'success');
+    toast(`Pedido #${os ? os.numero : ''} atualizado para ${newStatus === 'EM IMPRESS├âO' ? 'Impress├úo' : 'Arte'}!`, 'success');
 }
 
 /**
- * Funções auxiliares para dados de propostas e prazos do E-deal (Vibecode)
+ * Fun├º├Áes auxiliares para dados de propostas e prazos do E-deal (Vibecode)
  */
 function getFallbackCliente(numero) {
     const clientes = [
         "Art & Show Eventos Ltda",
         "Hospital Metropolitano",
-        "Clube Atlético Ideal",
+        "Clube Atl├®tico Ideal",
         "Arena de Show Brasil",
         "Prefeitura Municipal",
         "Cervejaria Artesanal Express",
-        "Associação Atlética Acadêmica"
+        "Associa├º├úo Atl├®tica Acad├¬mica"
     ];
     return clientes[numero % clientes.length];
 }
@@ -11532,7 +12106,7 @@ function getFallbackCliente(numero) {
 function getFallbackVendedor(numero) {
     const vendedores = [
         "Carlos Souza",
-        "Ana Júlia Silva",
+        "Ana J├║lia Silva",
         "Marcos Oliveira",
         "Juliana Ribeiro",
         "Fernanda Costa"
@@ -11552,12 +12126,12 @@ function getFallbackPrazo(createdAtStr, numero) {
 }
 
 function formatPrazoDestaque(prazoStr) {
-    if (!prazoStr) return { text: '—', style: '' };
+    if (!prazoStr) return { text: 'ÔÇö', style: '' };
     try {
         const date = new Date(prazoStr);
         const now = new Date();
 
-        // Zerar horas para cálculo de dias
+        // Zerar horas para c├ílculo de dias
         const d1 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const d2 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -11579,7 +12153,7 @@ function formatPrazoDestaque(prazoStr) {
 }
 
 function formatDateTime(dateStr) {
-    if (!dateStr) return '—';
+    if (!dateStr) return 'ÔÇö';
     try {
         const date = new Date(dateStr);
         return date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).replace(',', '');
@@ -11589,23 +12163,29 @@ function formatDateTime(dateStr) {
 }
 
 /**
- * Atualiza status de impressão de um item
+ * Atualiza status de impress├úo de um item
  */
 async function updateItemImpressao(itemId, osId, novoStatus) {
     try {
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { error } = await supabaseClient
-                .from('producao_os_itens')
-                .update({ impressao: novoStatus })
-                .eq('id', itemId);
-            if (error) throw error;
+        if (itemId && itemId.toString().startsWith('vibe_item_')) {
+            const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
+            impOverrides[itemId] = novoStatus;
+            localStorage.setItem('vibe_item_impressao_overrides', JSON.stringify(impOverrides));
         } else {
-            const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ impressao: novoStatus })
-            });
-            if (!res.ok) throw new Error('Falha ao atualizar');
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { error } = await supabaseClient
+                    .from('producao_os_itens')
+                    .update({ impressao: novoStatus })
+                    .eq('id', itemId);
+                if (error) throw error;
+            } else {
+                const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ impressao: novoStatus })
+                });
+                if (!res.ok) throw new Error('Falha ao atualizar');
+            }
         }
 
         // Atualizar estado local
@@ -11614,22 +12194,24 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             if (item) item.impressao = novoStatus;
         }
 
-        toast(`Impressão atualizada: ${novoStatus}`, 'success');
+        toast(`Impress├úo atualizada: ${novoStatus}`, 'success');
+        renderOrdens();
     } catch (e) {
-        console.error('Erro ao atualizar impressão:', e);
-        toast('Erro ao atualizar impressão: ' + e.message, 'error');
+        console.error('Erro ao atualizar impress├úo:', e);
+        const errMessage = e.message || e.details || (typeof e === 'object' ? JSON.stringify(e) : String(e));
+        toast('Erro ao atualizar impress├úo: ' + errMessage, 'error');
         // Recarregar para reverter
         await loadOSItens(osId);
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MATCHING INTELIGENTE — OS → Catálogo do Imposition
-// ═══════════════════════════════════════════════════════════════════════════════
+// ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+// MATCHING INTELIGENTE ÔÇö OS ÔåÆ Cat├ílogo do Imposition
+// ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
 
 /**
- * Matching inteligente: texto do formato da OS → formato_id do catálogo
- * Ex: "35X2" → busca formato com width_mm=35 e (cols=2 ou nome contém "35X2")
+ * Matching inteligente: texto do formato da OS ÔåÆ formato_id do cat├ílogo
+ * Ex: "35X2" ÔåÆ busca formato com width_mm=35 e (cols=2 ou nome cont├®m "35X2")
  */
 function matchFormato(formatoText) {
     if (!formatoText || !state.formatos.length) return null;
@@ -11637,11 +12219,11 @@ function matchFormato(formatoText) {
     // 1. Match exato por nome
     let match = state.formatos.find(f => f.name.toUpperCase() === text);
     if (match) return match.id;
-    // 2. Match parcial por nome (contém)
+    // 2. Match parcial por nome (cont├®m)
     match = state.formatos.find(f => f.name.toUpperCase().includes(text) || text.includes(f.name.toUpperCase()));
     if (match) return match.id;
-    // 3. Parse "NNxM" → width_mm=NN
-    const parts = text.match(/^(\d+)[Xx×](\d+)$/);
+    // 3. Parse "NNxM" ÔåÆ width_mm=NN
+    const parts = text.match(/^(\d+)[Xx├ù](\d+)$/);
     if (parts) {
         const w = parseInt(parts[1]);
         match = state.formatos.find(f => Math.round(f.width_mm) === w);
@@ -11651,7 +12233,7 @@ function matchFormato(formatoText) {
 }
 
 /**
- * Matching inteligente: nome da cor da OS → cor_id do catálogo
+ * Matching inteligente: nome da cor da OS ÔåÆ cor_id do cat├ílogo
  */
 function matchCor(corText, formatoId) {
     if (!corText || !state.cores || !state.cores.length) return null;
@@ -11666,7 +12248,7 @@ function matchCor(corText, formatoId) {
 }
 
 /**
- * Matching inteligente: tipo de numeração da OS → numeracao_id do catálogo
+ * Matching inteligente: tipo de numera├º├úo da OS ÔåÆ numeracao_id do cat├ílogo
  */
 function matchNumeracao(numText, formatoId) {
     if (!numText || !state.numeracoes.length) return null;
@@ -11682,7 +12264,7 @@ function matchNumeracao(numText, formatoId) {
     if (match) return match.id;
     match = pool.find(n => n.name.toUpperCase().includes(text) || text.includes(n.name.toUpperCase()));
     if (match) return match.id;
-    const typeMap = { 'QR': 'QR', 'BARRAS': 'BARR', 'SEQUENCIAL': 'SEQ', 'PADRÃO': 'PADR', 'BANCO D.': 'BANC', 'TICKET': 'TICK', 'TEATRO': 'TEAT' };
+    const typeMap = { 'QR': 'QR', 'BARRAS': 'BARR', 'SEQUENCIAL': 'SEQ', 'PADR├âO': 'PADR', 'BANCO D.': 'BANC', 'TICKET': 'TICK', 'TEATRO': 'TEAT' };
     const keyword = typeMap[text];
     if (keyword) {
         match = pool.find(n => n.name.toUpperCase().includes(keyword));
@@ -11719,28 +12301,28 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
 }
 
 /**
- * Envia um item da OS para a tela de Imposição, preenchendo os campos automaticamente
- * com matching inteligente de formato, cor e numeração
+ * Envia um item da OS para a tela de Imposi├º├úo, preenchendo os campos automaticamente
+ * com matching inteligente de formato, cor e numera├º├úo
  */
 async function enviarParaImposicao(itemId, osId) {
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => i.id === itemId);
-    if (!item) return toast('Item não encontrado.', 'error');
+    if (!item) return toast('Item n├úo encontrado.', 'error');
 
-    // Guardar referência ao item ativo para atualização automática pós-imposição
+    // Guardar refer├¬ncia ao item ativo para atualiza├º├úo autom├ítica p├│s-imposi├º├úo
     state.activeOSItem = { itemId, osId };
 
-    // Navegar para a view de Imposição
+    // Navegar para a view de Imposi├º├úo
     const navBtn = document.querySelector('[data-view="view-imposicao"]');
     if (navBtn) navBtn.click();
 
-    // --- MATCHING AUTOMÁTICO DE FORMATO ---
+    // --- MATCHING AUTOM├üTICO DE FORMATO ---
     let formatoId = item.formato_id;
     if (!formatoId && item.formato) {
         formatoId = matchFormato(item.formato);
         if (formatoId) {
             autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OS→Imp] Formato matched: "${item.formato}" → ${formatoId}`);
+            console.log(`[OSÔåÆImp] Formato matched: "${item.formato}" ÔåÆ ${formatoId}`);
         }
     }
     if (formatoId) {
@@ -11751,14 +12333,14 @@ async function enviarParaImposicao(itemId, osId) {
         }
     }
 
-    // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
+    // --- MATCHING AUTOM├üTICO DE NUMERA├ç├âO ---
     setTimeout(() => {
         let numId = item.numeracao_id;
         if (!numId && item.numeracao) {
             numId = matchNumeracao(item.numeracao, formatoId);
             if (numId) {
                 autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
-                console.log(`[OS→Imp] Numeração matched: "${item.numeracao}" → ${numId}`);
+                console.log(`[OSÔåÆImp] Numera├º├úo matched: "${item.numeracao}" ÔåÆ ${numId}`);
             }
         }
         if (numId) {
@@ -11773,7 +12355,7 @@ async function enviarParaImposicao(itemId, osId) {
         }
     }, 300);
 
-    // --- PREENCHER FAIXA DE NUMERAÇÃO ---
+    // --- PREENCHER FAIXA DE NUMERA├ç├âO ---
     setTimeout(() => {
         const numStart = document.getElementById('imp-start');
         const numEnd = document.getElementById('imp-end');
@@ -11781,7 +12363,7 @@ async function enviarParaImposicao(itemId, osId) {
         if (numEnd && item.num_final) numEnd.value = item.num_final;
     }, 400);
 
-    // --- PREENCHER MODO DE IMPRESSÃO ---
+    // --- PREENCHER MODO DE IMPRESS├âO ---
     setTimeout(() => {
         if (item.verso) {
             const printMode = document.getElementById('imp-print-mode');
@@ -11805,15 +12387,15 @@ async function enviarParaImposicao(itemId, osId) {
 
     const os = state.ordens.find(o => o.id === osId);
     const osNum = os ? os.numero : '';
-    toast(`Item "${item.produto} — ${item.formato}" da OS #${osNum} carregado na Imposição!`, 'info');
+    toast(`Item "${item.produto} ÔÇö ${item.formato}" da OS #${osNum} carregado na Imposi├º├úo!`, 'info');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PAINEL DE ITENS OS PENDENTES — na view de Imposição
-// ═══════════════════════════════════════════════════════════════════════════════
+// ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
+// PAINEL DE ITENS OS PENDENTES ÔÇö na view de Imposi├º├úo
+// ÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉÔòÉ
 
 /**
- * Renderiza a fila de itens pendentes da OS na view de Imposição
+ * Renderiza a fila de itens pendentes da OS na view de Imposi├º├úo
  */
 function renderImpOSQueue() {
     const container = document.getElementById('imp-os-queue');
@@ -11849,18 +12431,18 @@ function renderImpOSQueue() {
         return `
             <tr style="${rowBg}">
                 <td style="padding: 5px 8px;">
-                    ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                    <strong>${item.produto || '—'}</strong>
+                    ${isActive ? '<strong style="color: var(--blue);">ÔûÂ</strong> ' : ''}
+                    <strong>${item.produto || 'ÔÇö'}</strong>
                 </td>
-                <td style="padding: 5px 8px;"><span class="badge">${item.formato || '—'}</span></td>
+                <td style="padding: 5px 8px;"><span class="badge">${item.formato || 'ÔÇö'}</span></td>
                 <td style="padding: 5px 8px; text-align: center;">${item.quantidade || 0}</td>
                 <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
                 <td style="padding: 5px 8px; text-align: center;">
                     ${isActive
                         ? '<span style="font-size: 0.72rem; color: var(--blue); font-weight: 600;">ATIVO</span>'
                         : (isApproved && isPending
-                            ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); enviarParaImposicao(\'' + item.id + '\', \'' + osId + '\')" style="padding: 2px 8px; font-size: 0.72rem;">▶ Carregar</button>'
-                            : '<span style="font-size: 0.72rem; color: var(--text-dim);">—</span>')}
+                            ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); enviarParaImposicao(\'' + item.id + '\', \'' + osId + '\')" style="padding: 2px 8px; font-size: 0.72rem;">ÔûÂ Carregar</button>'
+                            : '<span style="font-size: 0.72rem; color: var(--text-dim);">ÔÇö</span>')}
                 </td>
             </tr>
         `;
@@ -11876,14 +12458,14 @@ function toggleImpOSQueue() {
     if (!body) return;
     if (body.style.display === 'none') {
         body.style.display = '';
-        if (arrow) arrow.textContent = '▼';
+        if (arrow) arrow.textContent = 'Ôû╝';
     } else {
         body.style.display = 'none';
-        if (arrow) arrow.textContent = '▶';
+        if (arrow) arrow.textContent = 'ÔûÂ';
     }
 }
 
-// Função global de navegação entre views
+// Fun├º├úo global de navega├º├úo entre views
 window.showView = function(viewId) {
     // Trocar a view ativa
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -11907,12 +12489,12 @@ window.showView = function(viewId) {
 };
 
 /**
- * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
+ * Navega da Lista de Arte para a p├ígina de Amostras carregando os itens do pedido
  */
 async function navigateToAmostrasFromOS(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) {
-        toast('Pedido não encontrado.', 'error');
+        toast('Pedido n├úo encontrado.', 'error');
         return;
     }
 
@@ -11921,7 +12503,7 @@ async function navigateToAmostrasFromOS(osId) {
         await loadOSItens(osId);
     }
 
-    // Garantir que cores e numerações estejam carregados (necessários para os selects)
+    // Garantir que cores e numera├º├Áes estejam carregados (necess├írios para os selects)
     if (!state.cores || state.cores.length === 0 || !state.numeracoes || state.numeracoes.length === 0) {
         try {
             await loadAll();
@@ -11941,8 +12523,8 @@ async function navigateToAmostrasFromOS(osId) {
 }
 
 /**
- * Renderiza os cards de itens do pedido na página de Amostras
- * Cada item gera um card com: Produto, Setor, Quantidade, NI→NF, Verso, Cor, Numeração + Decisão
+ * Renderiza os cards de itens do pedido na p├ígina de Amostras
+ * Cada item gera um card com: Produto, Setor, Quantidade, NIÔåÆNF, Verso, Cor, Numera├º├úo + Decis├úo
  */
 function renderAmostrasOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
@@ -11973,7 +12555,7 @@ function renderAmostrasOSItens(osId) {
         container.innerHTML = `
             <div class="card" style="border: 1px dashed var(--border);">
                 <div style="padding: 40px; text-align: center; color: var(--text-dim);">
-                    <div style="font-size: 2.5rem; margin-bottom: 12px;">📦</div>
+                    <div style="font-size: 2.5rem; margin-bottom: 12px;">­ƒôª</div>
                     <p>Nenhum modelo encontrado neste pedido.</p>
                 </div>
             </div>`;
@@ -11984,9 +12566,10 @@ function renderAmostrasOSItens(osId) {
         const status = item.amostra_status || 'PENDENTE';
         const obs = item.amostra_obs || '';
         
-        let statusBadge = '<span class="badge badge-yellow">⏳ PENDENTE</span>';
-        if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADA</span>';
-        else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
+        let statusBadge = '<span class="badge badge-amber">ÔÅ│ PENDENTE</span>';
+        if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">Ô£à APROVADA</span>';
+        else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">ÔØî ALTERA├ç├âO</span>';
+        else if (status === 'PRONTO') statusBadge = '<span class="badge badge-blue">­ƒÄ¿ PRONTO</span>';
 
         // Determinar o formato ID do item da OS
         const itemFormatoId = item.formato_id || (item.formato ? matchFormato(item.formato) : null);
@@ -12000,17 +12583,24 @@ function renderAmostrasOSItens(osId) {
             `<option value="${c.id}" ${c.id === item.amostra_cor_id ? 'selected' : ''}>${c.name}</option>`
         ).join('');
 
-        // Filtrar numerações com base no formato do produto
+        // Determinar o formato ID da cor selecionada (se houver cor selecionada no item)
+        const selectedCor = item.amostra_cor_id ? (state.cores || []).find(c => c.id === item.amostra_cor_id) : null;
+        const corFormatoId = selectedCor ? selectedCor.formato_id : null;
+
+        // Filtrar numera├º├Áes com base no formato da cor selecionada
         const filteredNumeracoes = (state.numeracoes || []).filter(n => {
-            // Se for customizada, só exibe se for vinculada a este item específico
-            if (n.is_custom && n.id !== item.amostra_num_id && n.os_item_id !== item.id) return false;
+            // Se for a numera├º├úo salva neste item, sempre exibe para manter selecionada
+            if (n.id === item.amostra_num_id) return true;
+
+            // Se for customizada, s├│ exibe se for vinculada a este item espec├¡fico
+            if (n.is_custom && n.os_item_id !== item.id) return false;
             
-            // Se tivermos um formato identificado para o produto, verifica compatibilidade
-            if (itemFormatoId) {
+            // Se tivermos cor selecionada com formato_id, filtra por ele
+            if (corFormatoId) {
                 const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
-                return ids.some(id => String(id) === String(itemFormatoId));
+                return ids.some(id => String(id) === String(corFormatoId));
             }
-            return true;
+            return false;
         });
 
         const numOpts = filteredNumeracoes.map(n =>
@@ -12020,57 +12610,66 @@ function renderAmostrasOSItens(osId) {
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <span class="card-title">🧪 <strong>Modelo ${idx + 1}: ${item.produto || '—'}</strong> — ${item.formato || ''}</span>
+                <span class="card-title">­ƒº¬ <strong>Modelo ${idx + 1}: ${item.produto || 'ÔÇö'}</strong> ÔÇö ${item.formato || ''}</span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                    <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
-                    <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} → NF: ${item.num_final || item.quantidade || 0}</span>
-                    <span class="badge" style="font-size: 0.72rem;">${item.verso ? '✅ Verso' : '— S/ Verso'}</span>
-                    <span class="badge" style="font-size: 0.72rem;">🏭 ${item.setor || '—'}</span>
+                    <span class="badge" style="font-size: 0.72rem;">­ƒôª Qtd: ${item.quantidade || 0}</span>
+                    <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} ÔåÆ NF: ${item.num_final || item.quantidade || 0}</span>
+                    <span class="badge" style="font-size: 0.72rem;">${item.verso ? 'Ô£à Verso' : 'ÔÇö S/ Verso'}</span>
+                    <span class="badge" style="font-size: 0.72rem;">­ƒÅ¡ ${item.setor || 'ÔÇö'}</span>
                     ${statusBadge}
                 </div>
             </div>
             <div style="padding: 24px;">
                 <div class="amostra-mid-row" style="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'grid-template-columns: 1fr;' : ''}">
                     <div class="amostra-decisao-panel">
-                        <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
+                        <div class="amostra-decisao-title">ÔÜû´©Å Decis├úo de Qualidade</div>
                         <div class="amostra-decisao-status-box">
                             <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
                             ${statusBadge}
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
-                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
+                            <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anota├º├Áes / Observa├º├Áes de Altera├º├úo</label>
+                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" placeholder="Insira aqui os detalhes das altera├º├Áes solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
                         <div class="amostra-decisao-btns">
-                            <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
-                                ✅ APROVAR
-                            </button>
+                            ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
+                                ? `
+                                <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                                    Ô£à APROVAR
+                                </button>
+                                ` 
+                                : `
+                                <button class="btn btn-primary" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')">
+                                    ­ƒÄ¿ PRONTO
+                                </button>
+                                `
+                            }
                             <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
-                                ❌ ALTERAR
+                                ÔØî ALTERAR
                             </button>
                         </div>
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                     <div class="amostra-config-panel">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
-                            ⚙️ Configurações da Amostra
+                            ÔÜÖ´©Å Configura├º├Áes da Amostra
                         </h3>
                         <div style="display: flex; flex-direction: column; gap: 14px;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
                                 <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
-                                    <option value="">— Selecione uma Cor —</option>
+                                    <option value="">ÔÇö Selecione uma Cor ÔÇö</option>
                                     ${corsOpts}
                                 </select>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
-                                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>`}
+                                    <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numera├º├úo Cadastrada</label>
+                                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numera├º├úo exclusivamente para este Modelo">Ô£Å´©Å</button>`}
                                 </div>
                                 <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
-                                    <option value="">— Selecione uma Numeração —</option>
+                                    <option value="">ÔÇö Selecione uma Numera├º├úo ÔÇö</option>
                                     ${numOpts}
                                 </select>
                             </div>
@@ -12078,11 +12677,11 @@ function renderAmostrasOSItens(osId) {
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
                                 <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
                                     <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">
-                                        🖼️ Upload Arte
+                                        ­ƒû╝´©Å Upload Arte
                                     </label>
                                     <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                         onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}')">
-                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}')">✕ Remover</button>
+                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}')">Ô£ò Remover</button>
                                     <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.amostra_arte_base64 ? '(Arte Salva)' : ''}</span>
                                 </div>
                             </div>
@@ -12094,9 +12693,9 @@ function renderAmostrasOSItens(osId) {
                     <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'cursor: zoom-in;' : ''}"
                         onclick="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? `openClienteLightbox('amostra-item-canvas-${idx}')` : ''}"></canvas>
                     <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                        <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
-                        <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
-                        <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
+                        <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">­ƒÄ¿</div>
+                        <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numera├º├úo e carregue uma Arte</p>
+                        <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualiza├º├úo combinada aparecer├í em tempo real neste espa├ºo.</p>
                     </div>
                 </div>
             </div>
@@ -12109,13 +12708,170 @@ function renderAmostrasOSItens(osId) {
                 renderItemAmostraCombinada(idx, osId);
             }
         });
+        // Atualizar a barra final de a├º├Áes do cliente dinamicamente
+        atualizarBarraFinalCliente(osId);
     }, 50);
 }
 
+/**
+ * Atualiza a barra final dinamicamente no link do cliente
+ */
+function atualizarBarraFinalCliente(osId) {
+    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') return;
+
+    const containerActions = document.querySelector('.cliente-actions');
+    if (!containerActions) return;
+
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) return;
+
+    // Verificar se todos os modelos est├úo aprovados
+    const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
+
+    // Verificar se pelo menos um modelo est├í reprovado (altera├º├úo)
+    const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
+
+    let html = '';
+    if (todosAprovados) {
+        // Verde, ativo, Finalizar e Aprovar Pedido Completo
+        html = `
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer;">
+                Ô£à FINALIZAR E APROVAR PEDIDO COMPLETO
+            </button>
+        `;
+    } else if (algumReprovado) {
+        // Tons de laranja e vermelho, ativo, Solicitar Altera├º├úo de Arte
+        html = `
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(135deg, #f97316, #ef4444); color: #ffffff; border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); cursor: pointer;">
+                ÔÜá´©Å SOLICITAR ALTERA├ç├âO DE ARTE
+            </button>
+        `;
+    } else {
+        // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo
+        html = `
+            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #374151; color: #9ca3af; border: 1px solid #374151; cursor: not-allowed; opacity: 0.6;">
+                Ô£à FINALIZAR E APROVAR PEDIDO COMPLETO
+            </button>
+        `;
+    }
+
+    containerActions.innerHTML = html;
+}
 
 /**
- * Ao selecionar cor em um card dinâmico, filtrar numerações compatíveis
- * (idêntico ao onAmostraCorSelect do card avulso)
+ * Atualiza o status global do pedido para "Enviar ARTE" ou "Pendente Informa├º├úo"
+ * dependendo de todos os modelos estarem marcados como PRONTO em Amostras
+ */
+async function voltarParaAtendimento() {
+    const osId = state.amostrasOSAtivo;
+    if (!osId) {
+        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
+        return;
+    }
+
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) {
+        toast('Nenhum modelo de item encontrado neste pedido.', 'warning');
+        return;
+    }
+
+    // Verificar se todos os itens possuem amostra_status === 'PRONTO'
+    const todasProntas = itens.every(item => item.amostra_status === 'PRONTO');
+
+    const novoStatus = todasProntas ? 'Enviar ARTE' : 'Pendente Informa├º├úo';
+
+    try {
+        // Atualizar status global da OS
+        // 1. Atualizar no localstorage vibe_status_overrides
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        // 2. Atualizar no estado local em mem├│ria
+        const os = state.ordens.find(o => o.id === osId);
+        if (os) {
+            os.status = novoStatus;
+        }
+
+        // 3. Atualizar no banco Supabase se for OS local (n├úo come├ºa com vibe_)
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
+            const { error } = await supabaseClient
+                .from('producao_ordens_servico')
+                .update({ status: novoStatus })
+                .eq('id', osId);
+            if (error) throw error;
+        }
+
+        // Exibir feedback adequado
+        if (todasProntas) {
+            toast(`Pedido #${os ? os.numero : ''} conclu├¡do com sucesso e enviado para atendimento!`, 'success');
+        } else {
+            toast(`Pedido #${os ? os.numero : ''} retornado com pend├¬ncias para a Lista de Arte.`, 'warning');
+        }
+
+        // Voltar para a view Lista de Arte e atualizar renderiza├º├úo
+        clearAmostrasOS();
+        showView('view-lista-arte');
+    } catch (err) {
+        console.error('Erro ao voltar para atendimento:', err);
+        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
+    }
+}
+
+// Expor globalmente
+window.voltarParaAtendimento = voltarParaAtendimento;
+
+/**
+ * Retorna o status global do pedido para "Arte em Andamento" em corre├º├úo (ARTE_EM_CORRECAO)
+ */
+async function voltarParaArte() {
+    const osId = state.amostrasOSAtivo;
+    if (!osId) {
+        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
+        return;
+    }
+
+    const novoStatus = 'ARTE_EM_CORRECAO';
+
+    try {
+        // Atualizar status global da OS
+        // 1. Atualizar no localstorage vibe_status_overrides
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        // 2. Atualizar no estado local em mem├│ria
+        const os = state.ordens.find(o => o.id === osId);
+        if (os) {
+            os.status = novoStatus;
+        }
+
+        // 3. Atualizar no banco Supabase se for OS local (n├úo come├ºa com vibe_)
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
+            const { error } = await supabaseClient
+                .from('producao_ordens_servico')
+                .update({ status: novoStatus })
+                .eq('id', osId);
+            if (error) throw error;
+        }
+
+        toast(`Pedido #${os ? os.numero : ''} retornado para Arte em Andamento (Corre├º├úo)!`, 'info');
+
+        // Voltar para a view Lista de Arte e atualizar renderiza├º├úo
+        clearAmostrasOS();
+        showView('view-lista-arte');
+    } catch (err) {
+        console.error('Erro ao voltar para arte:', err);
+        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
+    }
+}
+
+// Expor globalmente
+window.voltarParaArte = voltarParaArte;
+
+/**
+ * Ao selecionar cor em um card din├ómico, filtrar numera├º├Áes compat├¡veis
+ * (id├¬ntico ao onAmostraCorSelect do card avulso)
  */
 function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
     const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
@@ -12130,28 +12886,33 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
         saveAmostraToDB(itemId, osId, { amostra_cor_id: corId || null });
     }
 
-    // Filtrar numerações pelo formato do produto
+    // Filtrar numera├º├Áes pelo formato da COR selecionada
     const curNumVal = numSelect.value;
     const item = state.osItens[osId].find(i => i.id === itemId);
-    const itemFormatoId = item ? (item.formato_id || (item.formato ? matchFormato(item.formato) : null)) : null;
+    const corFormatoId = cor ? cor.formato_id : null;
 
     const filteredNums = (state.numeracoes || []).filter(n => {
-        // Se for customizada, só exibe se for vinculada a este item específico
-        if (n.is_custom && (!item || (n.id !== item.amostra_num_id && n.os_item_id !== item.id))) return false;
+        // Sempre exibe a numera├º├úo atualmente selecionada (para n├úo sumir do select)
+        if (curNumVal && n.id === curNumVal) return true;
+
+        // Se for customizada, s├│ exibe se for vinculada a este item espec├¡fico
+        if (n.is_custom && (!item || n.os_item_id !== item.id)) return false;
         
-        // Se tivermos um formato identificado para o produto, verifica compatibilidade
-        if (itemFormatoId) {
+        // Se tivermos cor selecionada com formato_id, filtra por ele
+        if (corFormatoId) {
             const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
-            return ids.some(id => String(id) === String(itemFormatoId));
+            return ids.some(id => String(id) === String(corFormatoId));
         }
-        return true;
+        return false;
     });
 
-    numSelect.innerHTML = '<option value="">— Selecione uma Numeração —</option>' +
+    numSelect.innerHTML = '<option value="">ÔÇö Selecione uma Numera├º├úo ÔÇö</option>' +
         filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
 
     if (filteredNums.some(n => n.id === curNumVal)) {
         numSelect.value = curNumVal;
+    } else {
+        numSelect.value = '';
     }
 
     if (!isInitialLoad) {
@@ -12242,11 +13003,11 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
 
 /**
  * Renderiza o canvas de preview combinada para um card de item individual.
- * Usa exatamente a mesma lógica do card avulso:
+ * Usa exatamente a mesma l├│gica do card avulso:
  * - Cor: renderiza PDF via pdf.js em offscreen canvas
- * - Numeração: desenha elements (TEXT, FIXED, QR, BARCODE) em offscreen canvas
+ * - Numera├º├úo: desenha elements (TEXT, FIXED, QR, BARCODE) em offscreen canvas
  * - Arte: carrega imagem do upload
- * - Compõe tudo no canvas final
+ * - Comp├Áe tudo no canvas final
  */
 function preloadAmostraItemPdfElements(numeracao, idx, osId) {
     if (!numeracao || !numeracao.elements) return;
@@ -12283,7 +13044,7 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
 
                     renderItemAmostraCombinada(idx, osId);
                 } catch (err) {
-                    console.error('[Amostra Item] Erro pré-carregando PDF do elemento:', err);
+                    console.error('[Amostra Item] Erro pr├®-carregando PDF do elemento:', err);
                     delete el._pdfLoading;
                 }
             })();
@@ -12308,7 +13069,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
     const hasSavedArte = !!(item && item.amostra_arte_base64);
 
-    // Mostrar nome do arquivo e botão remover
+    // Mostrar nome do arquivo e bot├úo remover
     if (arteNameSpan) {
         if (hasArte) arteNameSpan.textContent = arteInput.files[0].name;
         else if (hasSavedArte) arteNameSpan.textContent = '(Arte Salva)';
@@ -12343,11 +13104,11 @@ async function renderItemAmostraCombinada(idx, osId) {
         fmt = state.formatos[0];
     }
     if (!fmt) {
-        // Sem formato — fallback básico
+        // Sem formato ÔÇö fallback b├ísico
         fmt = { width_mm: 180, height_mm: 50 };
     }
 
-    // Calcular escala (150 DPI apenas no link do cliente para nitidez retina/HiDPI, senão usar largura do container)
+    // Calcular escala (150 DPI apenas no link do cliente para nitidez retina/HiDPI, sen├úo usar largura do container)
     const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
     let S;
     if (isClientePage) {
@@ -12520,19 +13281,19 @@ async function renderItemAmostraCombinada(idx, osId) {
         }
     }
 
-    // ====== CAMADA 3: NUMERAÇÃO (desenhar elements como o card avulso) ======
+    // ====== CAMADA 3: NUMERA├ç├âO (desenhar elements como o card avulso) ======
     if (num && num.elements && num.elements.length > 0) {
         const numCanvas = document.createElement('canvas');
         numCanvas.width = Math.round(fmt.width_mm * S);
         numCanvas.height = Math.round(fmt.height_mm * S);
         const numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
 
-        // Fundo transparente — contorno do formato
+        // Fundo transparente ÔÇö contorno do formato
         numCtx.strokeStyle = '#64748b';
         numCtx.lineWidth = 1;
         numCtx.strokeRect(0, 0, numCanvas.width, numCanvas.height);
 
-        // Desenhar cada elemento da numeração
+        // Desenhar cada elemento da numera├º├úo
         num.elements.forEach(el => {
             const x = el.x_mm * S;
             const y = el.y_mm * S;
@@ -12659,7 +13420,7 @@ async function renderItemAmostraCombinada(idx, osId) {
             numCtx.restore();
         });
 
-        // Compor numeração sobre o canvas final (centralizado)
+        // Compor numera├º├úo sobre o canvas final (centralizado)
         const ndx = (finalWidth - numCanvas.width) / 2;
         const ndy = (finalHeight - numCanvas.height) / 2;
         ctx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
@@ -12679,7 +13440,7 @@ window.customNumeracaoEditState = null;
 function editCustomNumeracao(idx, osId, itemId) {
     const numSelect = document.getElementById(`amostra-item-num-${idx}`);
     if (!numSelect || !numSelect.value) {
-        toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
+        toast('Selecione uma numera├º├úo base primeiro antes de editar!', 'warning');
         return;
     }
     
@@ -12712,7 +13473,7 @@ function editCustomNumeracao(idx, osId, itemId) {
             document.getElementById('num-id').value = '';
             document.getElementById('num-name').value = modelName;
             
-            toast(`Editando numeração exclusivamente para o modelo: ${modelName}`, 'info');
+            toast(`Editando numera├º├úo exclusivamente para o modelo: ${modelName}`, 'info');
         }, 150);
     }, 100);
 }
@@ -12740,36 +13501,36 @@ window.toggleImpNumEditButtons = function() {
 window.editImposicaoCustomNumeracao = function(fieldId) {
     const numSelect = document.getElementById(fieldId);
     if (!numSelect || !numSelect.value) {
-        toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
+        toast('Selecione uma numera├º├úo base primeiro antes de editar!', 'warning');
         return;
     }
     
-    const impName = document.getElementById('imp-name').value.trim() || 'Modelo Imposição';
+    const impName = document.getElementById('imp-name').value.trim() || 'Modelo Imposi├º├úo';
     const numId = numSelect.value;
     const baseNum = state.numeracoes.find(n => n.id === numId);
     if (!baseNum) return;
     
-    // Configura o state para que no saveNumeracao volte para Imposição
+    // Configura o state para que no saveNumeracao volte para Imposi├º├úo
     window.customNumeracaoEditState = {
         view: 'imposicao',
         fieldId: fieldId,
         modeloName: impName
     };
     
-    // Abre a numeração
+    // Abre a numera├º├úo
     editNumeracao(numId);
     
-    // Força o nome no editor da numeração
+    // For├ºa o nome no editor da numera├º├úo
     const suffix = fieldId === 'imp-numeracao' ? ' Num1' : ' Num2';
     document.getElementById('num-name').value = impName + suffix;
     
     // Marca como um novo cadastro (clone)
     document.getElementById('num-id').value = '';
-    toast(`Clonando base "${baseNum.name}" para edição customizada.`, 'info');
+    toast(`Clonando base "${baseNum.name}" para edi├º├úo customizada.`, 'info');
 };
 
 /**
- * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
+ * Salva a decis├úo (APROVADA/REPROVADA) de um item de amostra
  */
 async function decisionAmostraItem(itemId, osId, status) {
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
@@ -12778,7 +13539,7 @@ async function decisionAmostraItem(itemId, osId, status) {
     try {
         await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs });
         
-        // Se for na página do cliente, vamos notificar no chat do pedido!
+        // Se for na p├ígina do cliente, vamos notificar no chat do pedido!
         const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
         if (isClientePage) {
             const item = state.osItens[osId].find(i => i.id === itemId);
@@ -12792,15 +13553,15 @@ async function decisionAmostraItem(itemId, osId, status) {
                     setor: 'Cliente',
                     visivel_externo: true,
                     mensagem: status === 'APROVADA' 
-                        ? `✅ O cliente APROVOU a amostra do item: "${prodNome}".`
-                        : `❌ O cliente solicitou ALTERAÇÃO na amostra do item: "${prodNome}".\nObservações: ${obs || '(Sem observações)'}`,
+                        ? `Ô£à O cliente APROVOU a amostra do item: "${prodNome}".`
+                        : `ÔØî O cliente solicitou ALTERA├ç├âO na amostra do item: "${prodNome}".\nObserva├º├Áes: ${obs || '(Sem observa├º├Áes)'}`,
                     remetente_nome: 'Cliente (via link)',
                 });
             } catch (chatErr) {
                 console.warn('Erro ao inserir mensagem no chat:', chatErr);
             }
             
-            // Se for reprovado e for o fluxo do cliente, podemos atualizar a tabela pedidos_artes também
+            // Se for reprovado e for o fluxo do cliente, podemos atualizar a tabela pedidos_artes tamb├®m
             if (status === 'REPROVADA') {
                 try {
                     await supabaseClient
@@ -12813,16 +13574,30 @@ async function decisionAmostraItem(itemId, osId, status) {
             }
         }
         
-        toast(`Item ${status === 'APROVADA' ? 'aprovado' : 'marcado para alteração'}!`, status === 'APROVADA' ? 'success' : 'warning');
+        let msg = '';
+        let toastType = 'info';
+        if (status === 'APROVADA') {
+            msg = 'Item aprovado!';
+            toastType = 'success';
+        } else if (status === 'REPROVADA') {
+            msg = 'Item marcado para altera├º├úo!';
+            toastType = 'warning';
+        } else if (status === 'PRONTO') {
+            msg = 'Item marcado como Pronto!';
+            toastType = 'success';
+        } else {
+            msg = `Status atualizado para ${status}`;
+        }
+        toast(msg, toastType);
         renderAmostrasOSItens(osId);
     } catch (err) {
-        console.error('Erro na decisão do item:', err);
-        toast('Erro ao registrar decisão: ' + err.message, 'error');
+        console.error('Erro na decis├úo do item:', err);
+        toast('Erro ao registrar decis├úo: ' + err.message, 'error');
     }
 }
 
 /**
- * Salva a observação de um item de amostra
+ * Salva a observa├º├úo de um item de amostra
  */
 function saveAmostraItemObs(itemId, osId, obs) {
     saveAmostraToDB(itemId, osId, { amostra_obs: obs });
@@ -12842,7 +13617,7 @@ function clearAmostrasOS() {
     if (avulsa) avulsa.style.display = '';
 }
 
-// Expor funções globais
+// Expor fun├º├Áes globais
 window.loadOrdens = loadOrdens;
 window.loadOrdensFromVibecode = loadOrdensFromVibecode;
 window.mapVibecodeProdutoToOSItem = mapVibecodeProdutoToOSItem;
@@ -12882,7 +13657,7 @@ async function openArtesModal(itemId, osId) {
     artesModalState.itemId = itemId;
     artesModalState.osId = osId;
     artesModalState.id_int = os.numero || osId.replace('vibe_', '');
-    artesModalState.modeloNome = item.modelo || 'Padrão';
+    artesModalState.modeloNome = item.modelo || 'Padr├úo';
     
     document.getElementById('modal-artes-modelo-nome').textContent = artesModalState.modeloNome;
     document.getElementById('modal-artes').style.display = 'flex';
@@ -12898,10 +13673,10 @@ function closeArtesModal() {
 
 async function loadArtesDoModelo() {
     const container = document.getElementById('modal-artes-timeline');
-    container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Carregando histórico...</div>';
+    container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Carregando hist├│rico...</div>';
     
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
-        container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Supabase não configurado.</div>';
+        container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Supabase n├úo configurado.</div>';
         return;
     }
     
@@ -12914,7 +13689,7 @@ async function loadArtesDoModelo() {
             
         if (error) {
             if (error.code === '42P01') { 
-                container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Tabela pedidos_artes não existe no banco.</div>'; 
+                container.innerHTML = '<div style="text-align: center; color: var(--text-dim);">Tabela pedidos_artes n├úo existe no banco.</div>'; 
                 return; 
             }
             throw error;
@@ -12944,15 +13719,15 @@ function renderArtesTimeline() {
         return `
         <div style="border: 1px solid ${isLatest ? 'var(--blue)' : 'var(--border)'}; border-radius: 6px; padding: 12px; background: var(--bg-card); opacity: ${isLatest ? '1' : '0.8'};">
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <strong>Versão ${arte.versao} ${isLatest ? ' (Atual)' : ''}</strong>
+                <strong>Vers├úo ${arte.versao} ${isLatest ? ' (Atual)' : ''}</strong>
                 <span class="badge ${badgeClass}">${arte.status}</span>
             </div>
             <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 8px;">
-                📅 ${new Date(arte.created_at).toLocaleString('pt-BR')} <br>
-                👤 Enviado por: ${arte.enviado_por || 'Sistema'}
+                ­ƒôà ${new Date(arte.created_at).toLocaleString('pt-BR')} <br>
+                ­ƒæñ Enviado por: ${arte.enviado_por || 'Sistema'}
             </div>
-            ${arte.url_arquivo ? `<div><a href="${arte.url_arquivo}" target="_blank" class="btn btn-sm btn-secondary" style="font-size: 0.75rem;">👁️ Ver Arquivo</a></div>` : ''}
-            ${arte.comentarios_revisao ? `<div style="margin-top: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; font-size: 0.85rem;">💬 ${arte.comentarios_revisao}</div>` : ''}
+            ${arte.url_arquivo ? `<div><a href="${arte.url_arquivo}" target="_blank" class="btn btn-sm btn-secondary" style="font-size: 0.75rem;">­ƒæü´©Å Ver Arquivo</a></div>` : ''}
+            ${arte.comentarios_revisao ? `<div style="margin-top: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; font-size: 0.85rem;">­ƒÆ¼ ${arte.comentarios_revisao}</div>` : ''}
         </div>
         `;
     }).join('');
@@ -12970,7 +13745,7 @@ async function submitNovaArte() {
     
     const file = fileInput.files[0];
     btn.disabled = true;
-    btn.textContent = '⏳ Enviando...';
+    btn.textContent = 'ÔÅ│ Enviando...';
     
     try {
         let proximaVersao = artesModalState.artes.length > 0 ? artesModalState.artes[0].versao + 1 : 1;
@@ -13000,15 +13775,15 @@ async function submitNovaArte() {
                 mime_type: file.type,
                 tamanho_bytes: file.size,
                 status: 'EM_REVISAO_INTERNA',
-                enviado_por: 'Usuário do Sistema',
+                enviado_por: 'Usu├írio do Sistema',
                 comentarios_revisao: comment
             });
             
         if (insertError) throw insertError;
         
-        await logToChatIdeal(`Arte enviada para o Modelo ${artesModalState.modeloNome} (versão ${proximaVersao}). Aguardando análise.\\nObs: ${comment}`);
+        await logToChatIdeal(`Arte enviada para o Modelo ${artesModalState.modeloNome} (vers├úo ${proximaVersao}). Aguardando an├ílise.\\nObs: ${comment}`);
         
-        toast('Nova versão enviada com sucesso!', 'success');
+        toast('Nova vers├úo enviada com sucesso!', 'success');
         fileInput.value = '';
         document.getElementById('modal-artes-comment').value = '';
         await loadArtesDoModelo();
@@ -13018,7 +13793,7 @@ async function submitNovaArte() {
         toast(e.message, 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = '📤 Enviar Nova Versão';
+        btn.textContent = '­ƒôñ Enviar Nova Vers├úo';
     }
 }
 
@@ -13040,7 +13815,7 @@ async function logToChatIdeal(mensagem) {
 
 async function setStatusArteAtual(novoStatus) {
     if (artesModalState.artes.length === 0) {
-        toast('Não há arte atual.', 'warning');
+        toast('N├úo h├í arte atual.', 'warning');
         return;
     }
     const arteAtual = artesModalState.artes[0];
@@ -13064,8 +13839,8 @@ async function setStatusArteAtual(novoStatus) {
             .eq('id_item', artesModalState.itemId)
             .catch(e => console.warn('Sem sync modelo:', e));
             
-        const statusTexto = novoStatus === 'LIBERADA' ? 'LIBERADA PARA IMPRESSÃO' : novoStatus;
-        await logToChatIdeal(`Arte do Modelo ${artesModalState.modeloNome} (versão ${arteAtual.versao}) alterada para: ${statusTexto}.\\n${comment ? 'Obs: '+comment : ''}`);
+        const statusTexto = novoStatus === 'LIBERADA' ? 'LIBERADA PARA IMPRESS├âO' : novoStatus;
+        await logToChatIdeal(`Arte do Modelo ${artesModalState.modeloNome} (vers├úo ${arteAtual.versao}) alterada para: ${statusTexto}.\\n${comment ? 'Obs: '+comment : ''}`);
         
         toast(`Arte atualizada para ${statusTexto}`, 'success');
         document.getElementById('modal-artes-comment').value = '';
@@ -13084,11 +13859,11 @@ window.liberarArteAtual = () => setStatusArteAtual('LIBERADA');
 window.reprovarArteAtual = () => setStatusArteAtual('REPROVADA_CLIENTE');
 
 // ==========================================
-// LINK DO CLIENTE — PÁGINA PÚBLICA (FASE 2)
+// LINK DO CLIENTE ÔÇö P├üGINA P├ÜBLICA (FASE 2)
 // ==========================================
 
 /**
- * Gera token alfanumérico aleatório de 6 caracteres
+ * Gera token alfanum├®rico aleat├│rio de 6 caracteres
  */
 function generateClientToken(length = 6) {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -13102,16 +13877,16 @@ function generateClientToken(length = 6) {
 }
 
 /**
- * Gera ou recupera o link público do cliente para uma OS
+ * Gera ou recupera o link p├║blico do cliente para uma OS
  */
 async function gerarLinkCliente(osId, numero) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
-        toast('Supabase não configurado. Não é possível gerar o link.', 'error');
+        toast('Supabase n├úo configurado. N├úo ├® poss├¡vel gerar o link.', 'error');
         return;
     }
 
     try {
-        // Verificar se já existe um link para esta OS
+        // Verificar se j├í existe um link para esta OS
         const { data: existing, error: fetchError } = await supabaseClient
             .from('pedidos_links_cliente')
             .select('*')
@@ -13121,7 +13896,7 @@ async function gerarLinkCliente(osId, numero) {
 
         if (fetchError && fetchError.code !== 'PGRST116') {
             if (fetchError.code === '42P01') {
-                toast('Tabela pedidos_links_cliente ainda não existe no banco. Execute o SQL de criação.', 'warning');
+                toast('Tabela pedidos_links_cliente ainda n├úo existe no banco. Execute o SQL de cria├º├úo.', 'warning');
                 return;
             }
             throw fetchError;
@@ -13149,10 +13924,10 @@ async function gerarLinkCliente(osId, numero) {
         const baseUrl = window.location.origin;
         const linkUrl = `${baseUrl}/cliente/${numero}-${token}`;
 
-        // Copiar para a área de transferência
+        // Copiar para a ├írea de transfer├¬ncia
         try {
             await navigator.clipboard.writeText(linkUrl);
-            toast(`Link copiado! 📋\n${linkUrl}`, 'success');
+            toast(`Link copiado! ­ƒôï\n${linkUrl}`, 'success');
         } catch (clipErr) {
             // Fallback: mostrar em prompt
             prompt('Copie o link abaixo:', linkUrl);
@@ -13165,8 +13940,8 @@ async function gerarLinkCliente(osId, numero) {
 }
 
 /**
- * Router SPA — detecta se estamos em /cliente/{numero}-{token}
- * Deve rodar no carregamento da página
+ * Router SPA ÔÇö detecta se estamos em /cliente/{numero}-{token}
+ * Deve rodar no carregamento da p├ígina
  */
 function checkClienteRoute() {
     const path = window.location.pathname;
@@ -13176,7 +13951,7 @@ function checkClienteRoute() {
         const numero = match[1];
         const token = match[2];
 
-        // Esconder o app principal e mostrar a página do cliente
+        // Esconder o app principal e mostrar a p├ígina do cliente
         const appShell = document.querySelector('.app-shell');
         const clientePage = document.getElementById('cliente-page');
 
@@ -13199,7 +13974,7 @@ let clienteState = {
 };
 
 /**
- * Inicializa a página do cliente com validação de token
+ * Inicializa a p├ígina do cliente com valida├º├úo de token
  */
 async function initClientePage(numero, token) {
     clienteState.numero = numero;
@@ -13266,7 +14041,7 @@ async function initClientePage(numero, token) {
 
         if (clienteEl) clienteEl.textContent = osCliente;
 
-        // Carregar formatos, cores e numerações para o state global do front
+        // Carregar formatos, cores e numera├º├Áes para o state global do front
         try {
             const [coresRes, numeracoesRes, formatosRes] = await Promise.all([
                 supabaseClient.from('producao_cores').select('*').order('name', { ascending: true }),
@@ -13288,7 +14063,7 @@ async function initClientePage(numero, token) {
                 .select('*')
                 .eq('id_int', parseInt(numero));
             rawItens = prodData || [];
-        } catch (e) { console.warn('Itens não encontrados via produtos_proposta:', e); }
+        } catch (e) { console.warn('Itens n├úo encontrados via produtos_proposta:', e); }
 
         // Mapear itens como os_itens e salvar no state global
         const osId = clienteState.osId;
@@ -13304,72 +14079,153 @@ async function initClientePage(numero, token) {
         state.ordens = [os];
         state.amostrasOSAtivo = osId;
 
-        // Configurar o container de renderização das amostras para o cliente
-        state.amostrasContainerId = 'cliente-amostras-itens-container';
+        // Buscar status da OS na tabela producao_ordens_servico
+        let osStatus = 'ARTE_EM_ANDAMENTO';
+        try {
+            const { data: osData } = await supabaseClient
+                .from('producao_ordens_servico')
+                .select('status')
+                .eq('id', osId)
+                .maybeSingle();
+            if (osData && osData.status) {
+                osStatus = osData.status;
+            }
+        } catch (e) {
+            console.warn('Erro ao buscar status global da OS:', e);
+        }
 
-        // Renderizar a tela de amostras combinada idêntica à interna
-        renderAmostrasOSItens(osId);
+        // Configurar o container de renderiza├º├úo das amostras para o cliente
+        state.amostrasContainerId = 'cliente-amostras-itens-container';
 
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
 
+        if (osStatus === 'Enviar ARTE') {
+            // Se for especificamente "Enviar ARTE", exibe normalmente a p├ígina com as janelas
+            renderAmostrasOSItens(osId);
+        } else if (osStatus === 'ARTE_APROVADA' || osStatus === 'Arte APROVADA') {
+            // Se for "Arte APROVADA", exibe a mensagem correspondente
+            mostrarResultadoCliente('Ô£à', 'Artes APROVADAS!', 'Artes j├í foram APROVADAS. Para qualquer altera├º├úo entre em contato com seu ATENDIMENTO.');
+        } else {
+            // Para qualquer outro status (incluindo ARTE_EM_CORRECAO, ARTE_EM_ANDAMENTO, etc.), exibe a mensagem de altera├º├úo/bloqueio
+            mostrarResultadoCliente('ÔÜá´©Å', 'Artes em Altera├º├úo', 'Artes em ALTERA├ç├âO. Para qualquer altera├º├úo entre em contato com seu ATENDIMENTO.');
+        }
+
     } catch (e) {
-        console.error('Erro ao inicializar página do cliente:', e);
+        console.error('Erro ao inicializar p├ígina do cliente:', e);
         if (loadingEl) loadingEl.style.display = 'none';
         if (errorEl) errorEl.style.display = 'block';
     }
 }
 
-async function clienteAprovarTudo() {
+async function clienteFinalizarFluxo(fluxoTipo) {
     const osId = clienteState.osId;
     const itens = state.osItens[osId] || [];
     const btnAprovar = document.getElementById('btn-cliente-aprovar-tudo');
 
     if (btnAprovar) {
         btnAprovar.disabled = true;
-        btnAprovar.textContent = '⏳ Processando aprovação de todos os itens...';
+        btnAprovar.textContent = 'ÔÅ│ Processando...';
     }
 
     try {
-        // Para cada item, salvar status como APROVADA
-        for (const item of itens) {
-            await saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' });
-        }
-
-        // Também atualizar o status em pedidos_artes para manter compatibilidade
-        for (const item of itens) {
+        if (fluxoTipo === 'APROVAR_TUDO') {
+            // Salvar status global da OS no Supabase para ARTE_APROVADA (Laranja, r├│tulo "Arte APROVADA")
+            // Protegido por try-catch para evitar que restri├º├Áes RLS em producao_ordens_servico quebrem a finaliza├º├úo do cliente
             try {
-                await supabaseClient
-                    .from('pedidos_artes')
-                    .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
-                    .eq('id_modelo', item.id)
-                    .order('versao', { ascending: false })
-                    .limit(1);
-            } catch (e) { /* silencioso */ }
-        }
+                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                    const { error } = await supabaseClient
+                        .from('producao_ordens_servico')
+                        .update({ status: 'ARTE_APROVADA' })
+                        .eq('id', osId);
+                    if (error) throw error;
+                }
+            } catch (osErr) {
+                console.warn('Erro ao atualizar status global da OS (pode ser restri├º├úo de RLS):', osErr);
+            }
 
-        // Log no chat da proposta
-        try {
-            await supabaseClient.from('propostas_chat').insert({
-                id_int: parseInt(clienteState.numero),
-                tipo: 'PRODUCAO',
-                setor: 'Cliente',
-                visivel_externo: true,
-                mensagem: `✅ PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprovação online.`,
-                remetente_nome: 'Cliente (aprovação online)',
+            // Para cada item, salvar status como APROVADA no banco (Execu├º├úo paralela)
+            const savePromises = itens.map(item => saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' }));
+            await Promise.all(savePromises);
+
+            // Tamb├®m atualizar o status em pedidos_artes para manter compatibilidade (Execu├º├úo paralela)
+            const artesPromises = itens.map(async (item) => {
+                try {
+                    await supabaseClient
+                        .from('pedidos_artes')
+                        .update({ status: 'APROVADA_CLIENTE', aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
+                        .eq('id_modelo', item.id)
+                        .order('versao', { ascending: false })
+                        .limit(1);
+                } catch (e) { /* silencioso */ }
             });
-        } catch (e) { console.error('Erro log chat:', e); }
+            await Promise.all(artesPromises);
 
-        // Mostrar tela de sucesso
-        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Obrigado! Sua aprovação foi registrada. A gráfica foi notificada e dará andamento à produção do seu pedido.');
+            // Log no chat da proposta
+            try {
+                await supabaseClient.from('propostas_chat').insert({
+                    id_int: parseInt(clienteState.numero),
+                    tipo: 'PRODUCAO',
+                    setor: 'Cliente',
+                    visivel_externo: true,
+                    mensagem: `Ô£à PEDIDO COMPLETO APROVADO PELO CLIENTE via link de aprova├º├úo online.`,
+                    remetente_nome: 'Cliente (aprova├º├úo online)',
+                });
+            } catch (e) { console.error('Erro log chat:', e); }
+
+            // Mostrar tela de sucesso
+            mostrarResultadoCliente('Ô£à', 'Pedido Aprovado com Sucesso!', 'Artes j├í foram APROVADAS. Para qualquer altera├º├úo entre em contato com seu ATENDIMENTO.');
+        } 
+        else if (fluxoTipo === 'SOLICITAR_ALTERACAO') {
+            // Salvar status global da OS no Supabase para ARTE_EM_CORRECAO (Laranja, r├│tulo "Arte em Andamento")
+            // Protegido por try-catch para evitar que restri├º├Áes RLS em producao_ordens_servico quebrem a finaliza├º├úo do cliente
+            try {
+                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                    const { error } = await supabaseClient
+                        .from('producao_ordens_servico')
+                        .update({ status: 'ARTE_EM_CORRECAO' })
+                        .eq('id', osId);
+                    if (error) throw error;
+                }
+            } catch (osErr) {
+                console.warn('Erro ao atualizar status global da OS para corre├º├úo (pode ser restri├º├úo de RLS):', osErr);
+            }
+
+            // Coletar observa├º├Áes das altera├º├Áes de cada item reprovado
+            let observacoesTexto = '';
+            itens.forEach((item, idx) => {
+                if (item.amostra_status === 'REPROVADA') {
+                    observacoesTexto += `\n- Modelo ${idx + 1} (${item.produto}): ${item.amostra_obs || '(Sem observa├º├Áes)'}`;
+                }
+            });
+
+            // Log no chat da proposta
+            try {
+                await supabaseClient.from('propostas_chat').insert({
+                    id_int: parseInt(clienteState.numero),
+                    tipo: 'PRODUCAO',
+                    setor: 'Cliente',
+                    visivel_externo: true,
+                    mensagem: `ÔØî O CLIENTE SOLICITOU ALTERA├ç├âO DE ARTES via link online.${observacoesTexto}`,
+                    remetente_nome: 'Cliente (altera├º├úo online)',
+                });
+            } catch (e) { console.error('Erro log chat:', e); }
+
+            // Mostrar tela de sucesso de altera├º├úo solicitada
+            mostrarResultadoCliente('ÔÜá´©Å', 'Altera├º├úo Solicitada!', 'Artes em ALTERA├ç├âO. Para qualquer altera├º├úo entre em contato com seu ATENDIMENTO.');
+        }
     } catch (e) {
-        console.error('Erro ao aprovar tudo:', e);
-        toast('Erro ao processar aprovação final: ' + e.message, 'error');
+        console.error('Erro ao finalizar fluxo do cliente:', e);
+        toast('Erro ao finalizar pedido: ' + e.message, 'error');
         if (btnAprovar) {
             btnAprovar.disabled = false;
-            btnAprovar.textContent = '✅ FINALIZAR E APROVAR PEDIDO COMPLETO';
+            btnAprovar.textContent = fluxoTipo === 'APROVAR_TUDO' ? 'Ô£à FINALIZAR E APROVAR PEDIDO COMPLETO' : 'ÔÜá´©Å SOLICITAR ALTERA├ç├âO DE ARTE';
         }
     }
+}
+
+async function clienteAprovarTudo() {
+    return clienteFinalizarFluxo('APROVAR_TUDO');
 }
 
 function mostrarResultadoCliente(icon, titulo, msg) {
@@ -13379,7 +14235,7 @@ function mostrarResultadoCliente(icon, titulo, msg) {
     const tituloEl = document.getElementById('cliente-resultado-titulo');
     const msgEl = document.getElementById('cliente-resultado-msg');
 
-    // Esconder o container de itens e o botão de aprovação, mostrar resultado
+    // Esconder o container de itens e o bot├úo de aprova├º├úo, mostrar resultado
     const container = document.getElementById('cliente-amostras-itens-container');
     const actions = document.querySelector('.cliente-actions');
     if (container) container.style.display = 'none';
@@ -13403,13 +14259,13 @@ function openClienteLightbox(canvasId) {
     img.src = canvas.toDataURL('image/png');
     overlay.style.display = 'flex';
     
-    // Resetar transformações
+    // Resetar transforma├º├Áes
     let scale = 1.0;
     let posX = 0;
     let posY = 0;
     img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
     
-    // Configurar interações de arrastar (pan) e zoom
+    // Configurar intera├º├Áes de arrastar (pan) e zoom
     let isDragging = false;
     let startX = 0;
     let startY = 0;
@@ -13433,7 +14289,7 @@ function openClienteLightbox(canvasId) {
             startX = clientX - posX;
             startY = clientY - posY;
             img.style.cursor = 'grabbing';
-            img.style.transition = 'none'; // Desativar transição durante drag
+            img.style.transition = 'none'; // Desativar transi├º├úo durante drag
         }
     };
     
@@ -13461,7 +14317,7 @@ function openClienteLightbox(canvasId) {
         isDragging = false;
         initialDist = 0;
         img.style.cursor = 'grab';
-        img.style.transition = 'transform 0.1s ease'; // Reativar transição suave
+        img.style.transition = 'transform 0.1s ease'; // Reativar transi├º├úo suave
     };
     
     // Duplo toque/clique para alternar zoom (1.0x <-> 2.5x)
@@ -13503,7 +14359,7 @@ function openClienteLightbox(canvasId) {
     };
     overlay.addEventListener('click', onOverlayClick);
     
-    // Salvar referências para remover eventos ao fechar
+    // Salvar refer├¬ncias para remover eventos ao fechar
     window.clienteLightboxCleanup = () => {
         img.removeEventListener('mousedown', onStart);
         window.removeEventListener('mousemove', onMove);
@@ -13525,13 +14381,100 @@ function closeClienteLightbox() {
     }
 }
 
-// Exportar funções globais
+function setFiltroSetor(setor) {
+    state.filtroSetor = setor;
+    
+    // Atualizar bot├Áes de setor no HTML
+    const container = document.getElementById('filter-container-setor');
+    if (container) {
+        const btns = container.querySelectorAll('.filter-btn-pill');
+        btns.forEach(btn => {
+            const clickAttr = btn.getAttribute('onclick') || '';
+            if (clickAttr.includes(`'${setor}'`)) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+    renderOrdens();
+}
+
+function setFiltroStatus(status) {
+    state.filtroStatus = status;
+    
+    // Atualizar bot├Áes de status no HTML
+    const container = document.getElementById('filter-container-status');
+    if (container) {
+        const btns = container.querySelectorAll('.filter-btn-pill');
+        btns.forEach(btn => {
+            const clickAttr = btn.getAttribute('onclick') || '';
+            if (clickAttr.includes(`'${status}'`)) {
+                btn.classList.add('active');
+                if (status === '') btn.classList.add('teal');
+                else btn.classList.remove('teal');
+            } else {
+                btn.classList.remove('active');
+                btn.classList.remove('teal');
+            }
+        });
+    }
+    renderOrdens();
+}
+
+function setFiltroSetorArte(setor) {
+    state.filtroSetorArte = setor;
+    
+    // Atualizar bot├Áes de setor no HTML
+    const container = document.getElementById('filter-container-setor-arte');
+    if (container) {
+        const btns = container.querySelectorAll('.filter-btn-pill');
+        btns.forEach(btn => {
+            const clickAttr = btn.getAttribute('onclick') || '';
+            if (clickAttr.includes(`'${setor}'`)) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+    renderOrdens();
+}
+
+function setFiltroStatusArte(status) {
+    state.filtroStatusArte = status;
+    
+    // Atualizar bot├Áes de status no HTML
+    const container = document.getElementById('filter-container-status-arte');
+    if (container) {
+        const btns = container.querySelectorAll('.filter-btn-pill');
+        btns.forEach(btn => {
+            const clickAttr = btn.getAttribute('onclick') || '';
+            if (clickAttr.includes(`'${status}'`)) {
+                btn.classList.add('active');
+                if (status === '') btn.classList.add('teal');
+                else btn.classList.remove('teal');
+            } else {
+                btn.classList.remove('active');
+                btn.classList.remove('teal');
+            }
+        });
+    }
+    renderOrdens();
+}
+
+// Exportar fun├º├Áes globais
 window.gerarLinkCliente = gerarLinkCliente;
 window.clienteAprovarTudo = clienteAprovarTudo;
+window.clienteFinalizarFluxo = clienteFinalizarFluxo;
 window.openClienteLightbox = openClienteLightbox;
 window.closeClienteLightbox = closeClienteLightbox;
+window.setFiltroSetor = setFiltroSetor;
+window.setFiltroStatus = setFiltroStatus;
+window.setFiltroSetorArte = setFiltroSetorArte;
+window.setFiltroStatusArte = setFiltroStatusArte;
 
-// ─── ROUTER: Verificar rota do cliente no carregamento ───
+// ÔöÇÔöÇÔöÇ ROUTER: Verificar rota do cliente no carregamento ÔöÇÔöÇÔöÇ
 document.addEventListener('DOMContentLoaded', () => {
     checkClienteRoute();
 });
