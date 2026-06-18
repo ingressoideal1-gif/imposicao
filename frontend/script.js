@@ -12109,10 +12109,19 @@ function changeOSStatus(osId, newStatus) {
 
     // Sincronizar com Supabase para que a página do cliente veja o status atualizado
     if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-        supabaseClient
-            .from('producao_ordens_servico')
-            .upsert({ id: osId, status: newStatus, numero: os ? os.numero : null }, { onConflict: 'id' })
-            .then(({error}) => { if(error) console.warn('Erro ao sync status:', error) });
+        if (osId.startsWith('vibe_')) {
+            // Pedidos Vibecode: salvar status em pedidos_links_cliente.status_arte (texto)
+            supabaseClient
+                .from('pedidos_links_cliente')
+                .update({ status_arte: newStatus })
+                .eq('os_id', osId)
+                .then(({error}) => { if(error) console.warn('Erro ao sync status_arte em links:', error) });
+        } else {
+            supabaseClient
+                .from('producao_ordens_servico')
+                .upsert({ id: osId, status: newStatus, numero: os ? os.numero : null }, { onConflict: 'id' })
+                .then(({error}) => { if(error) console.warn('Erro ao sync status:', error) });
+        }
     }
 
     // Se o card de detalhes da OS estiver aberto, fechar
@@ -12836,10 +12845,18 @@ async function voltarParaAtendimento() {
 
         // 3. Atualizar no banco Supabase para TODAS as OSs (garante que cliente leia o status atualizado)
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { error } = await supabaseClient
-                .from('producao_ordens_servico')
-                .upsert({ id: osId, status: novoStatus, numero: os ? os.numero : null }, { onConflict: 'id' });
-            if (error) console.warn('Erro ao atualizar status no Supabase:', error);
+            if (osId.startsWith('vibe_')) {
+                const { error } = await supabaseClient
+                    .from('pedidos_links_cliente')
+                    .update({ status_arte: novoStatus })
+                    .eq('os_id', osId);
+                if (error) console.warn('Erro ao atualizar status_arte em links:', error);
+            } else {
+                const { error } = await supabaseClient
+                    .from('producao_ordens_servico')
+                    .upsert({ id: osId, status: novoStatus, numero: os ? os.numero : null }, { onConflict: 'id' });
+                if (error) console.warn('Erro ao atualizar status no Supabase:', error);
+            }
         }
 
         // Se status = "Enviar ARTE", gerar link automaticamente e exibir
@@ -12901,13 +12918,21 @@ async function voltarParaArte() {
             os.status = novoStatus;
         }
 
-        // 3. Atualizar no banco Supabase se for OS local (não começa com vibe_)
-        if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
-            const { error } = await supabaseClient
-                .from('producao_ordens_servico')
-                .update({ status: novoStatus })
-                .eq('id', osId);
-            if (error) throw error;
+        // 3. Atualizar no banco Supabase
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (osId.startsWith('vibe_')) {
+                const { error } = await supabaseClient
+                    .from('pedidos_links_cliente')
+                    .update({ status_arte: novoStatus })
+                    .eq('os_id', osId);
+                if (error) throw error;
+            } else {
+                const { error } = await supabaseClient
+                    .from('producao_ordens_servico')
+                    .update({ status: novoStatus })
+                    .eq('id', osId);
+                if (error) throw error;
+            }
         }
 
         toast(`Pedido #${os ? os.numero : ''} retornado para Arte em Andamento (Correção)!`, 'info');
@@ -14128,19 +14153,23 @@ async function initClientePage(numero, token) {
         const osId = clienteState.osId;
         let itensCarregados = [];
 
-        // 1. Tentar buscar de producao_os_itens (onde as artes base64 e dados locais estão salvos)
-        try {
-            const { data: prodItems } = await supabaseClient
-                .from('producao_os_itens')
-                .select('*')
-                .eq('os_id', osId)
-                .order('created_at', { ascending: true });
-            if (prodItems && prodItems.length > 0) {
-                itensCarregados = prodItems;
-            }
-        } catch (e) { console.warn('Erro ao buscar producao_os_itens:', e); }
+        // 1. Carregar itens do pedido
+        const isVibeOS = osId.startsWith('vibe_');
+        if (!isVibeOS) {
+            // OS local: buscar de producao_os_itens (UUID compativel)
+            try {
+                const { data: prodItems } = await supabaseClient
+                    .from('producao_os_itens')
+                    .select('*')
+                    .eq('os_id', osId)
+                    .order('created_at', { ascending: true });
+                if (prodItems && prodItems.length > 0) {
+                    itensCarregados = prodItems;
+                }
+            } catch (e) { console.warn('Erro ao buscar producao_os_itens:', e); }
+        }
 
-        // 2. Se vazio, buscar de produtos_proposta (fallback para quando ainda não foi salvo nada localmente)
+        // 2. Fallback (ou unica fonte para Vibecode): buscar de produtos_proposta
         if (itensCarregados.length === 0) {
             try {
                 const { data: prodData } = await supabaseClient
@@ -14150,7 +14179,7 @@ async function initClientePage(numero, token) {
                 if (prodData && prodData.length > 0) {
                     itensCarregados = prodData.map(p => mapVibecodeProdutoToOSItem(p, osId));
                 }
-            } catch (e) { console.warn('Itens não encontrados via produtos_proposta:', e); }
+            } catch (e) { console.warn('Itens nao encontrados via produtos_proposta:', e); }
         }
 
         state.osItens[osId] = itensCarregados;
@@ -14195,19 +14224,27 @@ async function initClientePage(numero, token) {
         state.ordens = [os];
         state.amostrasOSAtivo = osId;
 
-        // Buscar status da OS na tabela producao_ordens_servico
+        // Buscar status da OS
         let osStatus = 'ARTE_EM_ANDAMENTO';
-        try {
-            const { data: osData } = await supabaseClient
-                .from('producao_ordens_servico')
-                .select('status')
-                .eq('id', osId)
-                .maybeSingle();
-            if (osData && osData.status) {
-                osStatus = osData.status;
+        if (isVibeOS) {
+            // Pedidos Vibecode: status vem de pedidos_links_cliente.status_arte (ja carregado no linkData)
+            if (linkData.status_arte) {
+                osStatus = linkData.status_arte;
             }
-        } catch (e) {
-            console.warn('Erro ao buscar status global da OS:', e);
+        } else {
+            // OS local: buscar de producao_ordens_servico (UUID compativel)
+            try {
+                const { data: osData } = await supabaseClient
+                    .from('producao_ordens_servico')
+                    .select('status')
+                    .eq('id', osId)
+                    .maybeSingle();
+                if (osData && osData.status) {
+                    osStatus = osData.status;
+                }
+            } catch (e) {
+                console.warn('Erro ao buscar status global da OS:', e);
+            }
         }
 
         // Configurar o container de renderização das amostras para o cliente
@@ -14299,13 +14336,21 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
             try {
                 if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                    const { error } = await supabaseClient
-                        .from('producao_ordens_servico')
-                        .upsert({ id: osId, status: 'ARTE_APROVADA', numero: clienteState.numero }, { onConflict: 'id' });
-                    if (error) throw error;
+                    if (osId.startsWith('vibe_')) {
+                        const { error } = await supabaseClient
+                            .from('pedidos_links_cliente')
+                            .update({ status_arte: 'ARTE_APROVADA' })
+                            .eq('os_id', osId);
+                        if (error) throw error;
+                    } else {
+                        const { error } = await supabaseClient
+                            .from('producao_ordens_servico')
+                            .upsert({ id: osId, status: 'ARTE_APROVADA', numero: clienteState.numero }, { onConflict: 'id' });
+                        if (error) throw error;
+                    }
                 }
             } catch (osErr) {
-                console.warn('Erro ao atualizar status global da OS (pode ser restrição de RLS):', osErr);
+                console.warn('Erro ao atualizar status global da OS (pode ser restricao de RLS):', osErr);
             }
 
             // Para cada item, salvar status como APROVADA no banco (Execução paralela)
@@ -14345,13 +14390,21 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
             try {
                 if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                    const { error } = await supabaseClient
-                        .from('producao_ordens_servico')
-                        .upsert({ id: osId, status: 'ARTE_EM_CORRECAO', numero: clienteState.numero }, { onConflict: 'id' });
-                    if (error) throw error;
+                    if (osId.startsWith('vibe_')) {
+                        const { error } = await supabaseClient
+                            .from('pedidos_links_cliente')
+                            .update({ status_arte: 'ARTE_EM_CORRECAO' })
+                            .eq('os_id', osId);
+                        if (error) throw error;
+                    } else {
+                        const { error } = await supabaseClient
+                            .from('producao_ordens_servico')
+                            .upsert({ id: osId, status: 'ARTE_EM_CORRECAO', numero: clienteState.numero }, { onConflict: 'id' });
+                        if (error) throw error;
+                    }
                 }
             } catch (osErr) {
-                console.warn('Erro ao atualizar status global da OS para correção (pode ser restrição de RLS):', osErr);
+                console.warn('Erro ao atualizar status global da OS para correcao (pode ser restricao de RLS):', osErr);
             }
 
             // Coletar observações das alterações de cada item reprovado
