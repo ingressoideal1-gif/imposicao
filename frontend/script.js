@@ -13108,13 +13108,17 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
 }
 
 async function renderItemAmostraCombinada(idx, osId) {
-    const canvas = document.getElementById(`amostra-item-canvas-${idx}`);
-    const empty = document.getElementById(`amostra-item-empty-${idx}`);
-    const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
-    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
-    const arteInput = document.getElementById(`amostra-item-arte-${idx}`);
-    const arteNameSpan = document.getElementById(`amostra-item-arte-name-${idx}`);
-    const removeBtn = document.getElementById(`btn-remove-amostra-arte-${idx}`);
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const canvas = container.querySelector(`#amostra-item-canvas-${idx}`);
+    const empty = container.querySelector(`#amostra-item-empty-${idx}`);
+    const corSelect = container.querySelector(`#amostra-item-cor-${idx}`);
+    const numSelect = container.querySelector(`#amostra-item-num-${idx}`);
+    const arteInput = container.querySelector(`#amostra-item-arte-${idx}`);
+    const arteNameSpan = container.querySelector(`#amostra-item-arte-name-${idx}`);
+    const removeBtn = container.querySelector(`#btn-remove-amostra-arte-${idx}`);
 
     if (!canvas) return;
 
