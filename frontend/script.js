@@ -14163,16 +14163,15 @@ async function initClientePage(numero, token) {
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
 
-        if (osStatus === 'Enviar ARTE') {
-            // Se for especificamente "Enviar ARTE", exibe normalmente a página com as janelas
-            renderAmostrasOSItens(osId);
-        } else if (osStatus === 'ARTE_APROVADA' || osStatus === 'Arte APROVADA') {
-            // Se for "Arte APROVADA", exibe a mensagem correspondente
+        if (osStatus === 'ARTE_APROVADA' || osStatus === 'Arte APROVADA') {
+            // Se já aprovado definitivamente, exibe mensagem de confirmação
             mostrarResultadoCliente('✅', 'Artes APROVADAS!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
         } else {
-            // Para qualquer outro status (incluindo ARTE_EM_CORRECAO, ARTE_EM_ANDAMENTO, etc.), exibe a mensagem de alteração/bloqueio
-            mostrarResultadoCliente('⚠️', 'Artes em Alteração', 'Artes em ALTERAÇÃO. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+            // Para qualquer outro status (Enviar ARTE, ARTE_EM_CORRECAO, ARTE_EM_ANDAMENTO, etc.)
+            // exibe as janelas de aprovação para o cliente revisar e decidir
+            renderAmostrasOSItens(osId);
         }
+
 
     } catch (e) {
         console.error('Erro ao inicializar página do cliente:', e);
