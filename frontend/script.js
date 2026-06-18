@@ -11024,6 +11024,7 @@ async function loadOrdens() {
             const loaded = await loadOrdensFromVibecode(pedidosComerciais);
             if (loaded) {
                 await sincronizarStatusOrdensDinamico();
+                await carregarLinksExistentes();
                 renderOrdens();
                 return;
             }
@@ -11103,10 +11104,37 @@ async function loadOrdens() {
             }
         }
         await sincronizarStatusOrdensDinamico();
+        await carregarLinksExistentes();
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
         toast('Erro ao carregar Ordens de Serviço: ' + e.message, 'error');
+    }
+}
+
+/**
+ * Busca todos os links ativos no banco e popula state.linksCliente
+ * para que a Fila de Arte exiba os links já existentes ao carregar.
+ */
+async function carregarLinksExistentes() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('pedidos_links_cliente')
+            .select('os_id, numero_pedido, token')
+            .eq('ativo', true);
+        if (error) {
+            if (error.code === '42P01') return; // tabela ainda não existe
+            throw error;
+        }
+        if (!state.linksCliente) state.linksCliente = {};
+        const base = window.location.origin;
+        (data || []).forEach(row => {
+            state.linksCliente[row.os_id] = `${base}/cliente/${row.numero_pedido}-${row.token}`;
+        });
+        console.log(`[Links] ${(data || []).length} link(s) de cliente carregado(s).`);
+    } catch (e) {
+        console.warn('[Links] Erro ao carregar links existentes:', e.message);
     }
 }
 
@@ -11941,8 +11969,20 @@ function renderOrdens() {
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td>${getStatusBadge(os.status)}</td>
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
-                        <td>
-                            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); gerarLinkCliente('${os.id}', '${os.numero}')" title="Gerar link público para aprovação do cliente" style="padding: 4px 8px; font-size: 0.75rem;">🔗 Link do Cliente</button>
+                        <td onclick="event.stopPropagation();">
+                            ${(() => {
+                                // Se o status é "Enviar ARTE" ou já há link gerado no state, mostrar URL diretamente
+                                const linkSalvo = state.linksCliente && state.linksCliente[os.id];
+                                const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'ARTE_APROVADA' || os.status === 'ARTE_EM_CORRECAO';
+                                if (linkSalvo) {
+                                    return `
+                                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                                            <a href="${linkSalvo}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--blue);text-decoration:underline;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${linkSalvo}">🔗 Abrir Link</a>
+                                            <button class="btn btn-secondary btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar link" style="padding:3px 7px;font-size:0.72rem;">📋 Copiar</button>
+                                        </div>`;
+                                }
+                                return `<button class="btn btn-secondary btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Gerar link público para aprovação do cliente" style="padding:4px 8px;font-size:0.75rem;${statusProntoParaLink ? 'border-color:var(--blue);color:var(--blue);' : ''}">🔗 ${statusProntoParaLink ? 'Gerar Link' : 'Link do Cliente'}</button>`;
+                            })()}
                         </td>
                     </tr>
                 `;
@@ -12799,9 +12839,24 @@ async function voltarParaAtendimento() {
             if (error) throw error;
         }
 
-        // Exibir feedback adequado
+        // Se status = "Enviar ARTE", gerar link automaticamente e exibir
         if (todasProntas) {
-            toast(`Pedido #${os ? os.numero : ''} concluído com sucesso e enviado para atendimento!`, 'success');
+            const numero = os ? os.numero : '';
+            toast(`Pedido #${numero} concluído! Gerando link do cliente...`, 'success');
+            const linkUrl = await getOrCreateLinkCliente(osId, numero);
+            if (linkUrl) {
+                // Copiar para clipboard
+                try { await navigator.clipboard.writeText(linkUrl); } catch (_) {}
+                // Exibir toast com link clicável e botão de copiar
+                toast(
+                    `🔗 Link do cliente gerado e copiado!\n` +
+                    `Pedido #${numero} → ${linkUrl}`,
+                    'success'
+                );
+                // Guardar no state para exibir na lista
+                if (!state.linksCliente) state.linksCliente = {};
+                state.linksCliente[osId] = linkUrl;
+            }
         } else {
             toast(`Pedido #${os ? os.numero : ''} retornado com pendências para a Lista de Arte.`, 'warning');
         }
@@ -13876,14 +13931,14 @@ function generateClientToken(length = 6) {
 /**
  * Gera ou recupera o link público do cliente para uma OS
  */
-async function gerarLinkCliente(osId, numero) {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
-        toast('Supabase não configurado. Não é possível gerar o link.', 'error');
-        return;
-    }
-
+/**
+ * Cria ou recupera o link do cliente para uma OS.
+ * Retorna a URL completa, ou null em caso de erro.
+ * Uso interno — não copia nem exibe toast.
+ */
+async function getOrCreateLinkCliente(osId, numero) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return null;
     try {
-        // Verificar se já existe um link para esta OS
         const { data: existing, error: fetchError } = await supabaseClient
             .from('pedidos_links_cliente')
             .select('*')
@@ -13892,10 +13947,7 @@ async function gerarLinkCliente(osId, numero) {
             .maybeSingle();
 
         if (fetchError && fetchError.code !== 'PGRST116') {
-            if (fetchError.code === '42P01') {
-                toast('Tabela pedidos_links_cliente ainda não existe no banco. Execute o SQL de criação.', 'warning');
-                return;
-            }
+            if (fetchError.code === '42P01') return null; // tabela não existe ainda
             throw fetchError;
         }
 
@@ -13903,7 +13955,6 @@ async function gerarLinkCliente(osId, numero) {
         if (existing) {
             token = existing.token;
         } else {
-            // Gerar novo token
             token = generateClientToken(6);
             const os = state.ordens.find(o => o.id === osId);
             const { error: insertError } = await supabaseClient
@@ -13917,19 +13968,34 @@ async function gerarLinkCliente(osId, numero) {
             if (insertError) throw insertError;
         }
 
-        // Montar URL
-        const baseUrl = window.location.origin;
-        const linkUrl = `${baseUrl}/cliente/${numero}-${token}`;
+        return `${window.location.origin}/cliente/${numero}-${token}`;
+    } catch (e) {
+        console.error('Erro ao obter/criar link do cliente:', e);
+        return null;
+    }
+}
 
-        // Copiar para a área de transferência
+/**
+ * Gera (ou recupera) o link do cliente, copia para a área de transferência
+ * e exibe um toast de confirmação.
+ */
+async function gerarLinkCliente(osId, numero) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        toast('Supabase não configurado. Não é possível gerar o link.', 'error');
+        return;
+    }
+    try {
+        const linkUrl = await getOrCreateLinkCliente(osId, numero);
+        if (!linkUrl) {
+            toast('Tabela de links ainda não existe no banco. Execute o SQL de criação.', 'warning');
+            return;
+        }
         try {
             await navigator.clipboard.writeText(linkUrl);
-            toast(`Link copiado! 📋\n${linkUrl}`, 'success');
+            toast(`Link copiado! 📋 ${linkUrl}`, 'success');
         } catch (clipErr) {
-            // Fallback: mostrar em prompt
             prompt('Copie o link abaixo:', linkUrl);
         }
-
     } catch (e) {
         console.error('Erro ao gerar link do cliente:', e);
         toast('Erro ao gerar o link: ' + e.message, 'error');
