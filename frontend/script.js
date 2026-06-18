@@ -11909,9 +11909,9 @@ function renderOrdens() {
                 return `
                     <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
                         <td>
-                            <strong style="font-size: 1.05rem; color: var(--blue);">#${os.numero}</strong>
-                            ${valorFormatado}
+                            <strong style="font-size: 1.2rem; color: var(--blue); letter-spacing: 0.5px;">#${os.numero}</strong>
                         </td>
+
                         <td><strong>${os.cliente || '--'}</strong></td>
                         <td style="max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${os.evento || os.observacoes || ''}">
                             ${os.evento || os.observacoes || '--'}
