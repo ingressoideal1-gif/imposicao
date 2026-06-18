@@ -12107,6 +12107,14 @@ function changeOSStatus(osId, newStatus) {
         os.status = newStatus;
     }
 
+    // Sincronizar com Supabase para que a página do cliente veja o status atualizado
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        supabaseClient
+            .from('producao_ordens_servico')
+            .upsert({ id: osId, status: newStatus, numero: os ? os.numero : null }, { onConflict: 'id' })
+            .then(({error}) => { if(error) console.warn('Erro ao sync status:', error) });
+    }
+
     // Se o card de detalhes da OS estiver aberto, fechar
     if (state.osExpandedId === osId) {
         state.osExpandedId = null;
@@ -12826,13 +12834,12 @@ async function voltarParaAtendimento() {
             os.status = novoStatus;
         }
 
-        // 3. Atualizar no banco Supabase se for OS local (não começa com vibe_)
-        if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
+        // 3. Atualizar no banco Supabase para TODAS as OSs (garante que cliente leia o status atualizado)
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const { error } = await supabaseClient
                 .from('producao_ordens_servico')
-                .update({ status: novoStatus })
-                .eq('id', osId);
-            if (error) throw error;
+                .upsert({ id: osId, status: novoStatus, numero: os ? os.numero : null }, { onConflict: 'id' });
+            if (error) console.warn('Erro ao atualizar status no Supabase:', error);
         }
 
         // Se status = "Enviar ARTE", gerar link automaticamente e exibir
@@ -14244,8 +14251,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                 if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                     const { error } = await supabaseClient
                         .from('producao_ordens_servico')
-                        .update({ status: 'ARTE_APROVADA' })
-                        .eq('id', osId);
+                        .upsert({ id: osId, status: 'ARTE_APROVADA', numero: clienteState.numero }, { onConflict: 'id' });
                     if (error) throw error;
                 }
             } catch (osErr) {
@@ -14291,8 +14297,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                 if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                     const { error } = await supabaseClient
                         .from('producao_ordens_servico')
-                        .update({ status: 'ARTE_EM_CORRECAO' })
-                        .eq('id', osId);
+                        .upsert({ id: osId, status: 'ARTE_EM_CORRECAO', numero: clienteState.numero }, { onConflict: 'id' });
                     if (error) throw error;
                 }
             } catch (osErr) {
