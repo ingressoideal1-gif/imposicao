@@ -11952,9 +11952,9 @@ function renderOrdens() {
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer;" title="Abrir Amostras">
                         <td style="text-align: center; font-size: 1.1rem;">▶</td>
                         <td>
-                            <strong style="font-size: 1.05rem; color: var(--blue); text-decoration: underline; text-decoration-style: dotted;">#${os.numero}</strong>
-                            ${valorFormatado}
+                            <strong style="font-size: 1.2rem; color: var(--blue); letter-spacing: 0.5px;">#${os.numero}</strong>
                         </td>
+
                         <td><strong>${os.cliente || '--'}</strong></td>
                         <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
                         <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
