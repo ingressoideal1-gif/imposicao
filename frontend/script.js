@@ -14186,7 +14186,7 @@ async function initClientePage(numero, token) {
             id: osId,
             numero: numero,
             cliente: osCliente,
-            _itens_raw: rawItens
+            _itens_raw: itensCarregados
         };
         state.ordens = [os];
         state.amostrasOSAtivo = osId;
