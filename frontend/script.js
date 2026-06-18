@@ -14159,13 +14159,63 @@ async function initClientePage(numero, token) {
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
 
-        if (osStatus === 'ARTE_APROVADA' || osStatus === 'Arte APROVADA') {
-            // Se já aprovado definitivamente, exibe mensagem de confirmação
-            mostrarResultadoCliente('✅', 'Artes APROVADAS!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
-        } else {
-            // Para qualquer outro status (Enviar ARTE, ARTE_EM_CORRECAO, ARTE_EM_ANDAMENTO, etc.)
-            // exibe as janelas de aprovação para o cliente revisar e decidir
-            renderAmostrasOSItens(osId);
+        // Exibe janelas de aprovacao APENAS se status = "Enviar ARTE"
+        // Cada outro status tem sua propria mensagem para o cliente
+        switch (osStatus) {
+
+            case 'Enviar ARTE':
+                // Unico status que libera as janelas de aprovacao
+                renderAmostrasOSItens(osId);
+                break;
+
+            case 'ARTE_APROVADA':
+            case 'Arte APROVADA':
+                mostrarResultadoCliente(
+                    '✅',
+                    'Artes Aprovadas!',
+                    'Suas artes já foram APROVADAS. Em breve seu pedido entrará em produção. Para qualquer dúvida, entre em contato com seu ATENDIMENTO.'
+                );
+                break;
+
+            case 'ARTE_EM_CORRECAO':
+                mostrarResultadoCliente(
+                    '🔧',
+                    'Artes em Correção',
+                    'Recebemos sua solicitação de alteração e nossa equipe está realizando as correções. Em breve você receberá um novo link para aprovação.'
+                );
+                break;
+
+            case 'ARTE_EM_ANDAMENTO':
+                mostrarResultadoCliente(
+                    '🎨',
+                    'Arte em Produção',
+                    'Nossa equipe está trabalhando nas artes do seu pedido. Assim que estiverem prontas, você receberá um link para aprovação.'
+                );
+                break;
+
+            case 'Pendente Informação':
+                mostrarResultadoCliente(
+                    '📋',
+                    'Aguardando Informações',
+                    'Precisamos de informações adicionais para prosseguir com as artes do seu pedido. Entre em contato com seu ATENDIMENTO.'
+                );
+                break;
+
+            case 'EM IMPRESSÃO':
+                mostrarResultadoCliente(
+                    '🖨️',
+                    'Pedido em Produção',
+                    'Suas artes foram aprovadas e seu pedido já está em impressão. Para qualquer dúvida, entre em contato com seu ATENDIMENTO.'
+                );
+                break;
+
+            default:
+                mostrarResultadoCliente(
+                    'ℹ️',
+                    'Pedido em Processamento',
+                    'Seu pedido está sendo processado. Para mais informações, entre em contato com seu ATENDIMENTO.'
+                );
+                break;
         }
 
 
