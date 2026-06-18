@@ -14121,19 +14121,65 @@ async function initClientePage(numero, token) {
             console.error('Erro ao carregar dados auxiliares do Supabase:', err);
         }
 
-        // Buscar itens do pedido (tabela produtos_proposta)
-        let rawItens = [];
-        try {
-            const { data: prodData } = await supabaseClient
-                .from('produtos_proposta')
-                .select('*')
-                .eq('id_int', parseInt(numero));
-            rawItens = prodData || [];
-        } catch (e) { console.warn('Itens não encontrados via produtos_proposta:', e); }
-
-        // Mapear itens como os_itens e salvar no state global
         const osId = clienteState.osId;
-        state.osItens[osId] = rawItens.map(p => mapVibecodeProdutoToOSItem(p, osId));
+        let itensCarregados = [];
+
+        // 1. Tentar buscar de producao_os_itens (onde as artes base64 e dados locais estão salvos)
+        try {
+            const { data: prodItems } = await supabaseClient
+                .from('producao_os_itens')
+                .select('*')
+                .eq('os_id', osId)
+                .order('created_at', { ascending: true });
+            if (prodItems && prodItems.length > 0) {
+                itensCarregados = prodItems;
+            }
+        } catch (e) { console.warn('Erro ao buscar producao_os_itens:', e); }
+
+        // 2. Se vazio, buscar de produtos_proposta (fallback para quando ainda não foi salvo nada localmente)
+        if (itensCarregados.length === 0) {
+            try {
+                const { data: prodData } = await supabaseClient
+                    .from('produtos_proposta')
+                    .select('*')
+                    .eq('id_int', parseInt(numero));
+                if (prodData && prodData.length > 0) {
+                    itensCarregados = prodData.map(p => mapVibecodeProdutoToOSItem(p, osId));
+                }
+            } catch (e) { console.warn('Itens não encontrados via produtos_proposta:', e); }
+        }
+
+        state.osItens[osId] = itensCarregados;
+
+        // 3. Mesclar dados de pedidos_artes (arquivos PDF, revisões e urls)
+        try {
+            const queryNum = parseInt(numero);
+            if (!isNaN(queryNum)) {
+                const { data: artes } = await supabaseClient
+                    .from('pedidos_artes')
+                    .select('*')
+                    .eq('id_int', queryNum);
+                
+                if (artes && artes.length > 0) {
+                    state.osItens[osId].forEach(item => {
+                        const artesDoItem = artes.filter(a => a.id_modelo === item.id);
+                        if (artesDoItem.length > 0) {
+                            artesDoItem.sort((a, b) => b.versao - a.versao);
+                            const ultimaArte = artesDoItem[0];
+                            
+                            item.aprovacao = ultimaArte.status;
+                            item.nome_arquivo_arte = ultimaArte.nome_arquivo;
+                            item.versao_arte = ultimaArte.versao;
+                            item.url_arquivo_arte = ultimaArte.url_arquivo;
+                            if (ultimaArte.comentarios_revisao) {
+                                item.amostra_obs = ultimaArte.comentarios_revisao;
+                            }
+                        }
+                    });
+                }
+            }
+        } catch (err) { console.warn('Erro ao mesclar pedidos_artes:', err); }
+
 
         // Salvar a OS no state.ordens
         const os = {
