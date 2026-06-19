@@ -184,6 +184,20 @@ function getFontCSS(font_name) {
     return `"${font_name}", sans-serif`;
 }
 
+// Monta a string de font para ctx.font no Canvas 2D.
+// O canvas exige a ordem: [font-style] [font-weight] size family
+// getFontCSS pode retornar "bold Inter" ou "italic bold 'Montserrat'",
+// com weight/style misturados antes da family. Esta funcao reorganiza corretamente.
+function buildCanvasFont(fontSizePx, fontName) {
+    const css = getFontCSS(fontName);
+    let weight = '';
+    let style = '';
+    let family = css;
+    if (family.startsWith('italic ')) { style = 'italic '; family = family.slice(7); }
+    if (family.startsWith('bold '))   { weight = 'bold '; family = family.slice(5); }
+    return `${style}${weight}${fontSizePx}px ${family}`;
+}
+
 // - State -- Fontes do Sistema -
 const state_fonts = {
     system: [],           // [{ family, fullName, style }]
@@ -2809,6 +2823,16 @@ function drawCanvas() {
 
 
 
+    // Migracao automatica: converter elementos TEXT/FIXED de ancoragem top-left para center
+    state.numElements.forEach(el => {
+        if ((el.type === 'TEXT' || el.type === 'FIXED') && !el._centerAnchor) {
+            const { w, h } = getElementSizeMM(el);
+            el.x_mm += w / 2;
+            el.y_mm += h / 2;
+            el._centerAnchor = true;
+        }
+    });
+
     // Renderizar elementos (com clipping no formato para evitar overflow para fora dos limites)
     ctx.save();
     ctx.beginPath();
@@ -2854,9 +2878,7 @@ function drawElement(ctx, el, S) {
 
         const fs = (el.font_size || 12) * S / 2.8346;
 
-        const fontStyle = getFontCSS(el.font_name);
-
-        ctx.font = `${fs}px ${fontStyle}`;
+        ctx.font = buildCanvasFont(fs, el.font_name);
 
         ctx.fillStyle = color;
 
@@ -2877,27 +2899,26 @@ function drawElement(ctx, el, S) {
             label = `${el.prefix || ''}${dummyNum}${el.suffix || ''}`;
         }
 
-        ctx.fillText(label, 0, fs);
+        // Desenhar texto centralizado no ponto de ancoragem (centro real do elemento)
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, 0, 0);
 
-
-
-        // Selection box
-
+        // Indicador de selecao: underline sutil (sem box tracejado)
         if (isSelected) {
-
             const mw = ctx.measureText(label).width;
-
+            const halfH = fs / 2;
             ctx.strokeStyle = '#3b82f6';
-
-            ctx.lineWidth = 1.5;
-
-            ctx.setLineDash([4, 2]);
-
-            ctx.strokeRect(-3, -3, mw + 6, fs + 6);
-
-            ctx.setLineDash([]);
-
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-mw / 2, halfH + 3);
+            ctx.lineTo(mw / 2, halfH + 3);
+            ctx.stroke();
         }
+
+        // Restaurar defaults do canvas
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
 
 
 
@@ -3173,33 +3194,31 @@ function hitTest(el, mx, my) {
 
     if (el.type === 'PICOTE') {
 
-        // Para o Picote, a colisão ocorre na linha vertical (qualquer Y, mas X próximo de el.x_mm)
+        // Para o Picote, a colisao ocorre na linha vertical (qualquer Y, mas X proximo de el.x_mm)
 
         return Math.abs(mx - el.x_mm) <= 2;
 
     }
 
+    const { w, h } = getElementSizeMM(el);
 
+    if (el.type === 'TEXT' || el.type === 'FIXED') {
+        // Ancoragem central: (x_mm, y_mm) e o centro do elemento
+        const cx = el.x_mm, cy = el.y_mm;
+        const hw = w / 2, hh = h / 2;
+        const rot = -(el.rotation || 0) * Math.PI / 180; // rotacao inversa
 
-    const S = 1;
+        // Transformar ponto do mouse para espaco local do elemento
+        const dx = mx - cx, dy = my - cy;
+        const lx = dx * Math.cos(rot) - dy * Math.sin(rot);
+        const ly = dx * Math.sin(rot) + dy * Math.cos(rot);
 
+        const margin = 3; // margem de tolerancia em mm
+        return lx >= -hw - margin && lx <= hw + margin && ly >= -hh - margin && ly <= hh + margin;
+    }
+
+    // Demais tipos: ancoragem top-left
     const ex = el.x_mm, ey = el.y_mm;
-
-    let w = 20, h = 8;
-
-
-
-    if (el.type === 'TEXT' || el.type === 'FIXED') { w = 30; h = (el.font_size || 12) / 2.8346; }
-
-    else if (el.type === 'QR') { w = el.size_mm || 15; h = w; }
-
-    else if (el.type === 'BARCODE') { w = el.width_mm || 40; h = el.height_mm || 10; }
-
-    else if (el.type === 'SVG') { w = el.width_mm || 20; h = el.height_mm || 20; }
-
-    else if (el.type === 'PDF') { w = el.width_mm || 20; h = el.height_mm || 20; }
-
-
 
     return mx >= ex - 2 && mx <= ex + w + 2 && my >= ey - 2 && my <= ey + h + 2;
 
@@ -3507,9 +3526,7 @@ function getElementSizeMM(el) {
 
             const fs = (el.font_size || 12) * S / 2.8346;
 
-            const fontStyle = getFontCSS(el.font_name);
-
-            ctx.font = `${fs}px ${fontStyle}`;
+            ctx.font = buildCanvasFont(fs, el.font_name);
 
             
 
@@ -3585,38 +3602,25 @@ window.alignSelectedElement = function (alignment) {
 
         const { w, h } = getElementSizeMM(el);
 
-
+        const isCenterAnchor = (el.type === 'TEXT' || el.type === 'FIXED');
 
         if (alignment === 'left') {
-
-            el.x_mm = 0;
-
+            el.x_mm = isCenterAnchor ? w / 2 : 0;
         } else if (alignment === 'center-h') {
-
-            el.x_mm = Math.max(0, (fmt.width_mm - w) / 2);
-
+            // Centro horizontal: posicionar no meio exato do formato
+            el.x_mm = fmt.width_mm / 2;
         } else if (alignment === 'right') {
-
-            el.x_mm = Math.max(0, fmt.width_mm - w);
-
+            el.x_mm = isCenterAnchor ? fmt.width_mm - w / 2 : Math.max(0, fmt.width_mm - w);
         } else if (alignment === 'top') {
-
             if (el.type === 'PICOTE') return;
-
-            el.y_mm = 0;
-
+            el.y_mm = isCenterAnchor ? h / 2 : 0;
         } else if (alignment === 'center-v') {
-
             if (el.type === 'PICOTE') return;
-
-            el.y_mm = Math.max(0, (fmt.height_mm - h) / 2);
-
+            // Centro vertical: posicionar no meio exato do formato
+            el.y_mm = fmt.height_mm / 2;
         } else if (alignment === 'bottom') {
-
             if (el.type === 'PICOTE') return;
-
-            el.y_mm = Math.max(0, fmt.height_mm - h);
-
+            el.y_mm = isCenterAnchor ? fmt.height_mm - h / 2 : Math.max(0, fmt.height_mm - h);
         }
 
 
@@ -4107,9 +4111,9 @@ window.addElement = function (type) {
 
 
 
-    if (type === 'TEXT') Object.assign(base, { font_size: 12, font_name: 'helv', pad: 6, prefix: '', suffix: '' });
+    if (type === 'TEXT') Object.assign(base, { font_size: 12, font_name: 'helv', pad: 6, prefix: '', suffix: '', _centerAnchor: true });
 
-    if (type === 'FIXED') Object.assign(base, { font_size: 12, font_name: 'helv', fixed: true, fixed_value: 'Texto' });
+    if (type === 'FIXED') Object.assign(base, { font_size: 12, font_name: 'helv', fixed: true, fixed_value: 'Texto', _centerAnchor: true });
 
     if (type === 'QR') Object.assign(base, { size_mm: 15, pad: 4, prefix: '', suffix: '' });
 
@@ -5849,15 +5853,15 @@ function drawPreview() {
 
                         const fs = (el.font_size || 12) * scale;
 
-                        const fontStyle = getFontCSS(el.font_name);
-
-                        ctx.font = `${fs}px ${fontStyle}`;
+                        ctx.font = buildCanvasFont(fs, el.font_name);
 
                         ctx.fillStyle = color;
 
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(val_str, 0, 0);
                         ctx.textAlign = 'left';
-
-                        ctx.fillText(val_str, 0, fs);
+                        ctx.textBaseline = 'alphabetic';
 
                     } else if (el.type === 'QR') {
 
@@ -8636,7 +8640,9 @@ window.addCsvColumnElement = function(colName) {
 
         source: 'database',
 
-        csv_column: colName
+        csv_column: colName,
+
+        _centerAnchor: true
 
     };
 
@@ -9444,9 +9450,7 @@ window.onAmostraNumeracaoSelect = function() {
 
                 const fs = (el.font_size || 12) * S / 2.8346;
 
-                const fontStyle = getFontCSS(el.font_name);
-
-                ctx.font = `${fs}px ${fontStyle}`;
+                ctx.font = buildCanvasFont(fs, el.font_name);
 
                 ctx.fillStyle = color;
 
@@ -9466,7 +9470,11 @@ window.onAmostraNumeracaoSelect = function() {
 
                 }
 
-                ctx.fillText(label, 0, fs);
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(label, 0, 0);
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
 
             } else if (el.type === 'QR') {
 
@@ -13381,8 +13389,7 @@ async function renderItemAmostraCombinada(idx, osId) {
 
             if (el.type === 'TEXT' || el.type === 'FIXED') {
                 const fs = (el.font_size || 12) * S / 2.8346;
-                const fontStyle = typeof getFontCSS === 'function' ? getFontCSS(el.font_name) : (el.font_name || 'monospace');
-                numCtx.font = `${fs}px ${fontStyle}`;
+                numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
                 numCtx.fillStyle = color;
 
                 let label = '';
@@ -13392,7 +13399,11 @@ async function renderItemAmostraCombinada(idx, osId) {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                     label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
                 }
-                numCtx.fillText(label, 0, fs);
+                numCtx.textAlign = 'center';
+                numCtx.textBaseline = 'middle';
+                numCtx.fillText(label, 0, 0);
+                numCtx.textAlign = 'left';
+                numCtx.textBaseline = 'alphabetic';
             } else if (el.type === 'QR') {
                 const sz = (el.size_mm || 15) * S;
                 numCtx.fillStyle = color;
