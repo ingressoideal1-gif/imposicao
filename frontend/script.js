@@ -2823,9 +2823,9 @@ function drawCanvas() {
 
 
 
-    // Migracao automatica: converter elementos TEXT/FIXED de ancoragem top-left para center
+    // Migracao automatica: converter elementos de ancoragem top-left para center
     state.numElements.forEach(el => {
-        if ((el.type === 'TEXT' || el.type === 'FIXED') && !el._centerAnchor) {
+        if (el.type !== 'PICOTE' && !el._centerAnchor) {
             const { w, h } = getElementSizeMM(el);
             el.x_mm += w / 2;
             el.y_mm += h / 2;
@@ -2925,12 +2925,13 @@ function drawElement(ctx, el, S) {
     } else if (el.type === 'QR') {
 
         const sz = (el.size_mm || 15) * S;
+        const hsz = sz / 2; // half-size para ancoragem central
 
         ctx.fillStyle = color;
 
-        // Desenhar QR placeholder
+        // Desenhar QR placeholder centrado no ponto de ancoragem
 
-        ctx.fillRect(0, 0, sz, sz);
+        ctx.fillRect(-hsz, -hsz, sz, sz);
 
         ctx.fillStyle = '#fff';
 
@@ -2942,11 +2943,11 @@ function drawElement(ctx, el, S) {
 
             ctx.fillStyle = '#fff';
 
-            ctx.fillRect(cx * cell, cy * cell, 3 * cell, 3 * cell);
+            ctx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
 
             ctx.fillStyle = color;
 
-            ctx.fillRect(cx * cell + cell * 0.5, cy * cell + cell * 0.5, 2 * cell, 2 * cell);
+            ctx.fillRect(-hsz + cx * cell + cell * 0.5, -hsz + cy * cell + cell * 0.5, 2 * cell, 2 * cell);
 
         }
 
@@ -2955,10 +2956,12 @@ function drawElement(ctx, el, S) {
         ctx.fillStyle = '#fff';
 
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
 
-        ctx.fillText('QR', sz / 2, sz / 2 + sz * 0.05);
+        ctx.fillText('QR', 0, 0);
 
         ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
 
 
 
@@ -2970,7 +2973,7 @@ function drawElement(ctx, el, S) {
 
             ctx.setLineDash([4, 2]);
 
-            ctx.strokeRect(-2, -2, sz + 4, sz + 4);
+            ctx.strokeRect(-hsz - 2, -hsz - 2, sz + 4, sz + 4);
 
             ctx.setLineDash([]);
 
@@ -2983,34 +2986,19 @@ function drawElement(ctx, el, S) {
         const bw = (el.width_mm || 40) * S;
 
         const bh = (el.height_mm || 10) * S;
+        const hbw = bw / 2, hbh = bh / 2; // half-sizes para ancoragem central
 
-        // Desenhar barras
+        // Desenhar barras (deterministico)
 
         ctx.fillStyle = color;
 
         const barW = bw / 40;
 
-        for (let i = 0; i < 40; i++) {
-
-            if (Math.random() > 0.4 || i % 3 === 0) {
-
-                ctx.fillRect(i * barW, 0, barW * 0.6, bh);
-
-            }
-
-        }
-
-        // Repaint (determinístico baseado no i)
-
-        ctx.clearRect(0, 0, bw, bh);
-
-        ctx.fillStyle = color;
-
         const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
 
         for (let i = 0; i < pattern.length; i++) {
 
-            if (pattern[i]) ctx.fillRect(i * barW, 0, barW * 0.7, bh);
+            if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
 
         }
 
@@ -3024,7 +3012,7 @@ function drawElement(ctx, el, S) {
 
             ctx.setLineDash([4, 2]);
 
-            ctx.strokeRect(-2, -2, bw + 4, bh + 4);
+            ctx.strokeRect(-hbw - 2, -hbh - 2, bw + 4, bh + 4);
 
             ctx.setLineDash([]);
 
@@ -3032,17 +3020,19 @@ function drawElement(ctx, el, S) {
 
 
 
-        // Adicionar texto indicando o tipo de código de barras
+        // Texto indicando o tipo de codigo de barras
 
         ctx.fillStyle = color;
 
         ctx.font = `${Math.max(6, bh * 0.35)}px Inter, sans-serif`;
 
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
 
-        ctx.fillText((el.barcode_format || 'CODE128').toUpperCase(), bw / 2, bh + Math.max(6, bh * 0.35));
+        ctx.fillText((el.barcode_format || 'CODE128').toUpperCase(), 0, hbh + 2);
 
         ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
 
     } else if (el.type === 'PICOTE') {
 
@@ -3083,11 +3073,12 @@ function drawElement(ctx, el, S) {
         const w = (el.width_mm || 20) * S;
 
         const h = (el.height_mm || 20) * S;
+        const hw = w / 2, hh = h / 2; // half-sizes para ancoragem central
 
-        // Aplicar clipping para que a imagem nunca ultrapasse o bounding box do elemento
+        // Aplicar clipping centrado no ponto de ancoragem
         ctx.save();
         ctx.beginPath();
-        ctx.rect(0, 0, w, h);
+        ctx.rect(-hw, -hh, w, h);
         ctx.clip();
 
         if (el.type === 'PDF') {
@@ -3097,16 +3088,18 @@ function drawElement(ctx, el, S) {
             const imgObj = pdfCanvas || state.numPdfImage;
 
             if (imgObj) {
-                ctx.drawImage(imgObj, 0, 0, w, h);
+                ctx.drawImage(imgObj, -hw, -hh, w, h);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
-                ctx.strokeRect(0, 0, w, h);
+                ctx.strokeRect(-hw, -hh, w, h);
                 ctx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
                 ctx.fillStyle = color;
                 ctx.textAlign = 'center';
-                ctx.fillText('PDF (Sem arquivo)', w / 2, h / 2 + (h * 0.05));
+                ctx.textBaseline = 'middle';
+                ctx.fillText('PDF (Sem arquivo)', 0, 0);
                 ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
             }
 
         } else {
@@ -3115,31 +3108,33 @@ function drawElement(ctx, el, S) {
             const imgObj = state.numSvgImage;
 
             if (imgObj) {
-                ctx.drawImage(imgObj, 0, 0, w, h);
+                ctx.drawImage(imgObj, -hw, -hh, w, h);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
-                ctx.strokeRect(0, 0, w, h);
+                ctx.strokeRect(-hw, -hh, w, h);
                 ctx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
                 ctx.fillStyle = color;
                 ctx.textAlign = 'center';
-                ctx.fillText('SVG (Sem arquivo)', w / 2, h / 2 + (h * 0.05));
+                ctx.textBaseline = 'middle';
+                ctx.fillText('SVG (Sem arquivo)', 0, 0);
                 ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
             }
 
         }
 
         ctx.restore();
 
-        // Borda do bounding box (desenhada fora do clip para ficar sempre visível)
+        // Borda do bounding box (desenhada fora do clip para ficar sempre visivel)
         ctx.strokeStyle = isSelected ? '#3b82f6' : color;
         ctx.lineWidth = isSelected ? 2 : 1;
         if (isSelected) {
             ctx.setLineDash([4, 2]);
-            ctx.strokeRect(-2, -2, w + 4, h + 4);
+            ctx.strokeRect(-hw - 2, -hh - 2, w + 4, h + 4);
             ctx.setLineDash([]);
         } else {
-            ctx.strokeRect(0, 0, w, h);
+            ctx.strokeRect(-hw, -hh, w, h);
         }
 
     }
@@ -3202,25 +3197,18 @@ function hitTest(el, mx, my) {
 
     const { w, h } = getElementSizeMM(el);
 
-    if (el.type === 'TEXT' || el.type === 'FIXED') {
-        // Ancoragem central: (x_mm, y_mm) e o centro do elemento
-        const cx = el.x_mm, cy = el.y_mm;
-        const hw = w / 2, hh = h / 2;
-        const rot = -(el.rotation || 0) * Math.PI / 180; // rotacao inversa
+    // Ancoragem central para todos os tipos: (x_mm, y_mm) e o centro do elemento
+    const cx = el.x_mm, cy = el.y_mm;
+    const hw = w / 2, hh = h / 2;
+    const rot = -(el.rotation || 0) * Math.PI / 180; // rotacao inversa
 
-        // Transformar ponto do mouse para espaco local do elemento
-        const dx = mx - cx, dy = my - cy;
-        const lx = dx * Math.cos(rot) - dy * Math.sin(rot);
-        const ly = dx * Math.sin(rot) + dy * Math.cos(rot);
+    // Transformar ponto do mouse para espaco local do elemento
+    const dx = mx - cx, dy = my - cy;
+    const lx = dx * Math.cos(rot) - dy * Math.sin(rot);
+    const ly = dx * Math.sin(rot) + dy * Math.cos(rot);
 
-        const margin = 3; // margem de tolerancia em mm
-        return lx >= -hw - margin && lx <= hw + margin && ly >= -hh - margin && ly <= hh + margin;
-    }
-
-    // Demais tipos: ancoragem top-left
-    const ex = el.x_mm, ey = el.y_mm;
-
-    return mx >= ex - 2 && mx <= ex + w + 2 && my >= ey - 2 && my <= ey + h + 2;
+    const margin = 3; // margem de tolerancia em mm
+    return lx >= -hw - margin && lx <= hw + margin && ly >= -hh - margin && ly <= hh + margin;
 
 }
 
@@ -3602,25 +3590,22 @@ window.alignSelectedElement = function (alignment) {
 
         const { w, h } = getElementSizeMM(el);
 
-        const isCenterAnchor = (el.type === 'TEXT' || el.type === 'FIXED');
-
+        // Todos os tipos usam ancoragem central (exceto PICOTE)
         if (alignment === 'left') {
-            el.x_mm = isCenterAnchor ? w / 2 : 0;
+            el.x_mm = w / 2;
         } else if (alignment === 'center-h') {
-            // Centro horizontal: posicionar no meio exato do formato
             el.x_mm = fmt.width_mm / 2;
         } else if (alignment === 'right') {
-            el.x_mm = isCenterAnchor ? fmt.width_mm - w / 2 : Math.max(0, fmt.width_mm - w);
+            el.x_mm = fmt.width_mm - w / 2;
         } else if (alignment === 'top') {
             if (el.type === 'PICOTE') return;
-            el.y_mm = isCenterAnchor ? h / 2 : 0;
+            el.y_mm = h / 2;
         } else if (alignment === 'center-v') {
             if (el.type === 'PICOTE') return;
-            // Centro vertical: posicionar no meio exato do formato
             el.y_mm = fmt.height_mm / 2;
         } else if (alignment === 'bottom') {
             if (el.type === 'PICOTE') return;
-            el.y_mm = isCenterAnchor ? fmt.height_mm - h / 2 : Math.max(0, fmt.height_mm - h);
+            el.y_mm = fmt.height_mm - h / 2;
         }
 
 
@@ -4107,13 +4092,13 @@ window.addElement = function (type) {
 
     const id = `el_${state.numElCounter}`;
 
-    const base = { id, type, x_mm: type === 'PICOTE' ? 25 : 5, y_mm: type === 'PICOTE' ? 0 : 5, rotation: 0, color: type === 'PICOTE' ? '#ef4444' : '#000000', face: 'both' };
+    const base = { id, type, x_mm: type === 'PICOTE' ? 25 : 5, y_mm: type === 'PICOTE' ? 0 : 5, rotation: 0, color: type === 'PICOTE' ? '#ef4444' : '#000000', face: 'both', _centerAnchor: type !== 'PICOTE' };
 
 
 
-    if (type === 'TEXT') Object.assign(base, { font_size: 12, font_name: 'helv', pad: 6, prefix: '', suffix: '', _centerAnchor: true });
+    if (type === 'TEXT') Object.assign(base, { font_size: 12, font_name: 'helv', pad: 6, prefix: '', suffix: '' });
 
-    if (type === 'FIXED') Object.assign(base, { font_size: 12, font_name: 'helv', fixed: true, fixed_value: 'Texto', _centerAnchor: true });
+    if (type === 'FIXED') Object.assign(base, { font_size: 12, font_name: 'helv', fixed: true, fixed_value: 'Texto' });
 
     if (type === 'QR') Object.assign(base, { size_mm: 15, pad: 4, prefix: '', suffix: '' });
 
@@ -5866,10 +5851,11 @@ function drawPreview() {
                     } else if (el.type === 'QR') {
 
                         const sz = (el.size_mm || 15) * MM2PT * scale;
+                        const hsz = sz / 2;
 
                         ctx.fillStyle = color;
 
-                        ctx.fillRect(0, 0, sz, sz);
+                        ctx.fillRect(-hsz, -hsz, sz, sz);
 
                         ctx.fillStyle = '#ffffff';
 
@@ -5879,11 +5865,11 @@ function drawPreview() {
 
                             ctx.fillStyle = '#ffffff';
 
-                            ctx.fillRect(cx * cell, cy * cell, 3 * cell, 3 * cell);
+                            ctx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
 
                             ctx.fillStyle = color;
 
-                            ctx.fillRect(cx * cell + cell * 0.5, cy * cell + cell * 0.5, 2 * cell, 2 * cell);
+                            ctx.fillRect(-hsz + cx * cell + cell * 0.5, -hsz + cy * cell + cell * 0.5, 2 * cell, 2 * cell);
 
                         }
 
@@ -5892,6 +5878,7 @@ function drawPreview() {
                         const bw = (el.width_mm || 40) * MM2PT * scale;
 
                         const bh = (el.height_mm || 10) * MM2PT * scale;
+                        const hbw = bw / 2, hbh = bh / 2;
 
                         ctx.fillStyle = color;
 
@@ -5901,7 +5888,7 @@ function drawPreview() {
 
                         for (let i = 0; i < pattern.length; i++) {
 
-                            if (pattern[i]) ctx.fillRect(i * barW, 0, barW * 0.7, bh);
+                            if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
 
                         }
 
@@ -5910,22 +5897,25 @@ function drawPreview() {
                         ctx.font = `${Math.max(5, bh * 0.3)}px Inter, sans-serif`;
 
                         ctx.textAlign = 'center';
+                        ctx.textBaseline = 'top';
 
-                        ctx.fillText((el.barcode_format || 'CODE128').toUpperCase(), bw / 2, bh + Math.max(5, bh * 0.35));
+                        ctx.fillText((el.barcode_format || 'CODE128').toUpperCase(), 0, hbh + 2);
 
                         ctx.textAlign = 'left';
+                        ctx.textBaseline = 'alphabetic';
 
                     } else if (el.type === 'SVG') {
 
                         const sz_w = (el.width_mm || 20) * MM2PT * scale;
 
                         const sz_h = (el.height_mm || 20) * MM2PT * scale;
+                        const hw = sz_w / 2, hh = sz_h / 2;
 
                         const svgImg = currentNum && currentNum._svgImage;
 
                         if (svgImg) {
 
-                            ctx.drawImage(svgImg, 0, 0, sz_w, sz_h);
+                            ctx.drawImage(svgImg, -hw, -hh, sz_w, sz_h);
 
                         } else {
 
@@ -5933,17 +5923,19 @@ function drawPreview() {
 
                             ctx.lineWidth = 0.5 * scale;
 
-                            ctx.strokeRect(0, 0, sz_w, sz_h);
+                            ctx.strokeRect(-hw, -hh, sz_w, sz_h);
 
                             ctx.font = `${Math.max(5, sz_h * 0.15)}px Inter, sans-serif`;
 
                             ctx.fillStyle = color;
 
                             ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
 
-                            ctx.fillText('SVG', sz_w / 2, sz_h / 2 + (sz_h * 0.05));
+                            ctx.fillText('SVG', 0, 0);
 
                             ctx.textAlign = 'left';
+                            ctx.textBaseline = 'alphabetic';
 
                         }
 
@@ -5952,16 +5944,13 @@ function drawPreview() {
                         const sz_w = (el.width_mm || 20) * MM2PT * scale;
 
                         const sz_h = (el.height_mm || 20) * MM2PT * scale;
+                        const hw = sz_w / 2, hh = sz_h / 2;
 
                         if (el._pdfCanvas) {
 
-                            // Já carregado: desenhar diretamente
-
-                            ctx.drawImage(el._pdfCanvas, 0, 0, sz_w, sz_h);
+                            ctx.drawImage(el._pdfCanvas, -hw, -hh, sz_w, sz_h);
 
                         } else if (el.pdf_content && !el._pdfLoading) {
-
-                            // Carregar assincronamente e cachear no próprio elemento
 
                             el._pdfLoading = true;
 
@@ -6009,13 +5998,13 @@ function drawPreview() {
 
                             ctx.fillStyle = '#f1f5f9';
 
-                            ctx.fillRect(0, 0, sz_w, sz_h);
+                            ctx.fillRect(-hw, -hh, sz_w, sz_h);
 
                             ctx.strokeStyle = '#94a3b8';
 
                             ctx.lineWidth = 0.5;
 
-                            ctx.strokeRect(0, 0, sz_w, sz_h);
+                            ctx.strokeRect(-hw, -hh, sz_w, sz_h);
 
                             ctx.fillStyle = '#64748b';
 
@@ -6025,7 +6014,7 @@ function drawPreview() {
 
                             ctx.textBaseline = 'middle';
 
-                            ctx.fillText('PDF...', sz_w / 2, sz_h / 2);
+                            ctx.fillText('PDF...', 0, 0);
 
                             ctx.textAlign = 'left';
 
@@ -6033,17 +6022,15 @@ function drawPreview() {
 
                         } else if (!el.pdf_content) {
 
-                            // Sem conteúdo: placeholder vazio
-
                             ctx.fillStyle = '#f8fafc';
 
-                            ctx.fillRect(0, 0, sz_w, sz_h);
+                            ctx.fillRect(-hw, -hh, sz_w, sz_h);
 
                             ctx.strokeStyle = '#94a3b8';
 
                             ctx.lineWidth = 0.5;
 
-                            ctx.strokeRect(0, 0, sz_w, sz_h);
+                            ctx.strokeRect(-hw, -hh, sz_w, sz_h);
 
                             ctx.fillStyle = '#94a3b8';
 
@@ -6053,7 +6040,7 @@ function drawPreview() {
 
                             ctx.textBaseline = 'middle';
 
-                            ctx.fillText('📄 PDF', sz_w / 2, sz_h / 2);
+                            ctx.fillText('PDF', 0, 0);
 
                             ctx.textAlign = 'left';
 
@@ -9479,10 +9466,11 @@ window.onAmostraNumeracaoSelect = function() {
             } else if (el.type === 'QR') {
 
                 const sz = (el.size_mm || 15) * S;
+                const hsz = sz / 2;
 
                 ctx.fillStyle = color;
 
-                ctx.fillRect(0, 0, sz, sz);
+                ctx.fillRect(-hsz, -hsz, sz, sz);
 
                 ctx.fillStyle = '#ffffff';
 
@@ -9492,11 +9480,11 @@ window.onAmostraNumeracaoSelect = function() {
 
                     ctx.fillStyle = '#ffffff';
 
-                    ctx.fillRect(cx * cell, cy * cell, 3 * cell, 3 * cell);
+                    ctx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
 
                     ctx.fillStyle = color;
 
-                    ctx.fillRect(cx * cell + cell * 0.5, cy * cell + cell * 0.5, 2 * cell, 2 * cell);
+                    ctx.fillRect(-hsz + cx * cell + cell * 0.5, -hsz + cy * cell + cell * 0.5, 2 * cell, 2 * cell);
 
                 }
 
@@ -9505,6 +9493,7 @@ window.onAmostraNumeracaoSelect = function() {
                 const bw = (el.width_mm || 40) * S;
 
                 const bh = (el.height_mm || 10) * S;
+                const hbw = bw / 2, hbh = bh / 2;
 
                 ctx.fillStyle = color;
 
@@ -9514,7 +9503,7 @@ window.onAmostraNumeracaoSelect = function() {
 
                 for (let i = 0; i < pattern.length; i++) {
 
-                    if (pattern[i]) ctx.fillRect(i * barW, 0, barW * 0.7, bh);
+                    if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
 
                 }
 
@@ -9539,20 +9528,24 @@ window.onAmostraNumeracaoSelect = function() {
                 const sz_w = (el.width_mm || 20) * S;
 
                 const sz_h = (el.height_mm || 20) * S;
+                const hw = sz_w / 2, hh = sz_h / 2;
 
                 ctx.strokeStyle = color;
 
                 ctx.lineWidth = 1;
 
-                ctx.strokeRect(0, 0, sz_w, sz_h);
+                ctx.strokeRect(-hw, -hh, sz_w, sz_h);
 
                 ctx.font = `${Math.max(6, sz_h * 0.15)}px Inter, sans-serif`;
 
                 ctx.fillStyle = color;
 
                 ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
 
-                ctx.fillText('SVG', sz_w / 2, sz_h / 2 + (sz_h * 0.05));
+                ctx.fillText('SVG', 0, 0);
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
 
             }
 
@@ -13406,24 +13399,26 @@ async function renderItemAmostraCombinada(idx, osId) {
                 numCtx.textBaseline = 'alphabetic';
             } else if (el.type === 'QR') {
                 const sz = (el.size_mm || 15) * S;
+                const hsz = sz / 2;
                 numCtx.fillStyle = color;
-                numCtx.fillRect(0, 0, sz, sz);
+                numCtx.fillRect(-hsz, -hsz, sz, sz);
                 numCtx.fillStyle = '#ffffff';
                 const cell = sz / 7;
                 for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
-                    numCtx.fillRect(cx * cell, cy * cell, 3 * cell, 3 * cell);
+                    numCtx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
                     numCtx.fillStyle = color;
-                    numCtx.fillRect(cx * cell + cell, cy * cell + cell, cell, cell);
+                    numCtx.fillRect(-hsz + cx * cell + cell, -hsz + cy * cell + cell, cell, cell);
                     numCtx.fillStyle = '#ffffff';
                 }
             } else if (el.type === 'BARCODE') {
                 const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
                 const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
+                const hbw = bw / 2, hbh = bh / 2;
                 numCtx.fillStyle = color;
                 const barW = bw / 40;
                 const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
                 for (let i = 0; i < pattern.length; i++) {
-                    if (pattern[i]) numCtx.fillRect(i * barW, 0, barW * 0.7, bh);
+                    if (pattern[i]) numCtx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
                 }
             } else if (el.type === 'PICOTE') {
                 numCtx.strokeStyle = color;
@@ -13437,25 +13432,28 @@ async function renderItemAmostraCombinada(idx, osId) {
             } else if (el.type === 'SVG' || el.type === 'PDF') {
                 const w = (el.width_mm || 20) * S;
                 const h = (el.height_mm || 20) * S;
+                const hw = w / 2, hh_el = h / 2;
 
                 numCtx.save();
                 numCtx.beginPath();
-                numCtx.rect(0, 0, w, h);
+                numCtx.rect(-hw, -hh_el, w, h);
                 numCtx.clip();
 
                 if (el.type === 'PDF') {
                     const imgObj = el._pdfCanvas || null;
                     if (imgObj) {
-                        numCtx.drawImage(imgObj, 0, 0, w, h);
+                        numCtx.drawImage(imgObj, -hw, -hh_el, w, h);
                     } else {
                         numCtx.strokeStyle = color;
                         numCtx.lineWidth = 1;
-                        numCtx.strokeRect(0, 0, w, h);
+                        numCtx.strokeRect(-hw, -hh_el, w, h);
                         numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
                         numCtx.fillStyle = color;
                         numCtx.textAlign = 'center';
-                        numCtx.fillText('PDF (Carregando...)', w / 2, h / 2 + (h * 0.05));
+                        numCtx.textBaseline = 'middle';
+                        numCtx.fillText('PDF', 0, 0);
                         numCtx.textAlign = 'left';
+                        numCtx.textBaseline = 'alphabetic';
                     }
                 } else {
                     // SVG
@@ -13479,26 +13477,30 @@ async function renderItemAmostraCombinada(idx, osId) {
                             }
                         }
                         if (el._svgImage) {
-                            numCtx.drawImage(el._svgImage, 0, 0, w, h);
+                            numCtx.drawImage(el._svgImage, -hw, -hh_el, w, h);
                         } else {
                             numCtx.strokeStyle = color;
                             numCtx.lineWidth = 1;
-                            numCtx.strokeRect(0, 0, w, h);
+                            numCtx.strokeRect(-hw, -hh_el, w, h);
                             numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
                             numCtx.fillStyle = color;
                             numCtx.textAlign = 'center';
-                            numCtx.fillText('SVG (Carregando...)', w / 2, h / 2 + (h * 0.05));
+                            numCtx.textBaseline = 'middle';
+                            numCtx.fillText('SVG', 0, 0);
                             numCtx.textAlign = 'left';
+                            numCtx.textBaseline = 'alphabetic';
                         }
                     } else {
                         numCtx.strokeStyle = color;
                         numCtx.lineWidth = 1;
-                        numCtx.strokeRect(0, 0, w, h);
+                        numCtx.strokeRect(-hw, -hh_el, w, h);
                         numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
                         numCtx.fillStyle = color;
                         numCtx.textAlign = 'center';
-                        numCtx.fillText('SVG', w / 2, h / 2 + (h * 0.05));
+                        numCtx.textBaseline = 'middle';
+                        numCtx.fillText('SVG', 0, 0);
                         numCtx.textAlign = 'left';
+                        numCtx.textBaseline = 'alphabetic';
                     }
                 }
                 numCtx.restore();
