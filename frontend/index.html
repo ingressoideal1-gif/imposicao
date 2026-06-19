@@ -405,15 +405,14 @@
                         </div>
                         <div class="canvas-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                <label class="btn btn-sm btn-secondary canvas-bg-label" for="canvas-bg-file" style="margin: 0;">
+                                <label class="btn btn-sm btn-secondary canvas-bg-label" for="canvas-bg-file" style="margin: 0;" title="Carregar arte de fundo para visualização">
                                     🖼️ Arte de Fundo
                                 </label>
                                 <input type="file" id="canvas-bg-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
-                                <button class="btn btn-sm btn-ghost" id="btn-remove-bg" style="display:none; padding: 4px 8px;"
-                                    onclick="clearBgImage()">
+                                <span id="bg-file-name" style="font-size: 0.85rem; color: var(--blue); font-weight: 500; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                                <button class="btn btn-sm btn-danger" id="btn-remove-bg" style="display:none; padding: 4px 8px;" onclick="clearBgImage()" title="Remover arte de fundo">
                                     ✕ Remover
                                 </button>
-                                <span id="bg-file-name" class="canvas-bg-name"></span>
                             </div>
                             
                             <!-- Ferramentas de Alinhamento Compactas -->
