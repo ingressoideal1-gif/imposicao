@@ -11904,12 +11904,11 @@ function renderOrdens() {
                 const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
 
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
-                const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
                 
                 return `
                     <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
                         <td>
-                            <strong style="font-size: 1.2rem; color: var(--blue); letter-spacing: 0.5px;">#${os.numero}</strong>
+                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
                         </td>
 
                         <td><strong>${os.cliente || '--'}</strong></td>
@@ -11946,13 +11945,12 @@ function renderOrdens() {
             tbodyArte.innerHTML = filteredArte.map(os => {
                 const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
-                const valorFormatado = os.valor_total ? `<br><span style="font-size: 0.75rem; color: var(--text-dim); font-weight: normal;">R$ ${parseFloat(os.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : '';
                 const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer;" title="Abrir Amostras">
                         <td style="text-align: center; font-size: 1.1rem;">▶</td>
                         <td>
-                            <strong style="font-size: 1.2rem; color: var(--blue); letter-spacing: 0.5px;">#${os.numero}</strong>
+                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
                         </td>
 
                         <td><strong>${os.cliente || '--'}</strong></td>
