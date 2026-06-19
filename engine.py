@@ -270,9 +270,43 @@ class ImpositionEngine:
 
 
     def _render_element(self, page: fitz.Page, el: dict, cell_x0: float, cell_y0: float, val: int, csv_row: dict | None = None):
-        """Renderiza um elemento VDP na posição absoluta da célula."""
-        el_x = cell_x0 + el["_x"]
-        el_y = cell_y0 + el["_y"]
+        """Renderiza um elemento VDP na posicao absoluta da celula."""
+        # O frontend usa ancoragem central: (x_mm, y_mm) = centro do elemento.
+        # Converter para top-left (canto superior esquerdo) para o PyMuPDF.
+        t = el["type"]
+        cx = cell_x0 + el["_x"]  # centro X em pt
+        cy = cell_y0 + el["_y"]  # centro Y em pt
+
+        # Calcular half-width e half-height baseado no tipo
+        hw = 0.0
+        hh = 0.0
+        if t in ("TEXT", "FIXED"):
+            # Para texto, o tamanho depende da string e da fonte — usamos font_size como altura
+            # e a largura nao precisa de offset pois insert_text usa ponto de baseline
+            font_size = el.get("font_size", 12)
+            # Estimativa de largura do texto: ~0.5 * font_size * num_chars (heuristica)
+            # Mas para o PyMuPDF, precisamos do ponto de insercao baseado no centro
+            hh = font_size / 2.0
+            # hw sera calculado depois para o text_length real
+        elif t == "QR":
+            s = el.get("_size", 42.5)
+            hw = s / 2.0
+            hh = s / 2.0
+        elif t == "BARCODE":
+            w_pt = el.get("_w", 60 * MM2PT)
+            h_pt = el.get("_h", 12 * MM2PT)
+            hw = w_pt / 2.0
+            hh = h_pt / 2.0
+        elif t in ("SVG", "PDF"):
+            w_pt = el.get("width_mm", 20) * MM2PT
+            h_pt = el.get("height_mm", 20) * MM2PT
+            hw = w_pt / 2.0
+            hh = h_pt / 2.0
+
+        # Posicao top-left do bounding box
+        el_x = cx - hw
+        el_y = cy - hh
+
         color = el.get("color", "#000000")
         rgb = _hex_to_rgb(color)
         angle = el.get("rotation", 0)
@@ -323,7 +357,6 @@ class ImpositionEngine:
                     "/System/Library/Fonts",
                     os.path.expanduser("~/Library/Fonts"),
                 ]
-                # Normaliza o nome da família para comparação: "Arial" → "arial"
                 family_lower = family.lower().replace(" ", "")
                 found_file = None
                 for fdir in font_dirs:
@@ -338,7 +371,6 @@ class ImpositionEngine:
                             if base.startswith(fam_norm) and bold_match and italic_match:
                                 found_file = fpath
                                 break
-                            # Match menos restritivo: nome da família está no arquivo
                             if fam_norm in base and not found_file:
                                 if bold_match and italic_match:
                                     found_file = fpath
@@ -348,17 +380,15 @@ class ImpositionEngine:
                         break
 
                 if found_file:
-                    font_name = family  # Nome único para embutir no PDF
+                    font_name = family
                     font_file = found_file
                 else:
-                    # Fallback para fonte embutida
                     font_name = "hebo" if is_bold else "helv"
                     font_file = None
-                    print(f"[engine] Fonte '{family}' não encontrada no sistema, usando Helvetica{'Bold' if is_bold else ''}")
+                    print(f"[engine] Fonte '{family}' nao encontrada no sistema, usando Helvetica{'Bold' if is_bold else ''}")
             else:
                 font_name = font_map.get(raw_font_name, "helv")
 
-            # Ponto de inserção Y em PyMuPDF é baseline; ajustamos pela font_size
             insert_kwargs = {
                 "fontsize": font_size,
                 "fontname": font_name,
@@ -367,13 +397,18 @@ class ImpositionEngine:
             if font_file:
                 insert_kwargs["fontfile"] = font_file
 
+            # Medir largura real do texto para centralizar horizontalmente
+            text_width = fitz.get_text_length(val_str, fontname=font_name, fontsize=font_size, fontfile=font_file)
+
+            # Ancoragem central: cx, cy = centro do texto
+            # insert_text origin: X = centro - metade da largura, Y = centro + metade da altura (baseline)
+            origin_x = cx - text_width / 2.0
+            origin_y = cy + font_size / 2.0  # baseline fica ~font_size abaixo do topo
+
             if angle != 0:
-                # Para rotação de texto, usamos insert_text com morph.
-                # O pivot no canvas do frontend é (el_x, el_y).
-                # Usamos fitz.Matrix(-angle) porque o canvas rotaciona no sentido horário,
-                # e a matriz do PyMuPDF rotaciona no sentido anti-horário por padrão.
-                origin = fitz.Point(el_x, el_y + font_size)
-                pivot = fitz.Point(el_x, el_y)
+                # O pivot de rotacao e o centro do texto (cx, cy)
+                origin = fitz.Point(origin_x, origin_y)
+                pivot = fitz.Point(cx, cy)
                 page.insert_text(
                     origin,
                     val_str,
@@ -382,7 +417,7 @@ class ImpositionEngine:
                 )
             else:
                 page.insert_text(
-                    (el_x, el_y + font_size),
+                    (origin_x, origin_y),
                     val_str,
                     **insert_kwargs
                 )
@@ -391,17 +426,8 @@ class ImpositionEngine:
         elif t == "QR":
             size = el.get("_size", 42.5)
             qr_bytes = _generate_qr(val_str, color)
-            
+            rect = fitz.Rect(el_x, el_y, el_x + size, el_y + size)
             py_rotate = (360 - angle) % 360
-            if angle == 90:
-                rect = fitz.Rect(el_x - size, el_y, el_x, el_y + size)
-            elif angle == 180:
-                rect = fitz.Rect(el_x - size, el_y - size, el_x, el_y)
-            elif angle == 270:
-                rect = fitz.Rect(el_x, el_y - size, el_x + size, el_y)
-            else:
-                rect = fitz.Rect(el_x, el_y, el_x + size, el_y + size)
-                
             if py_rotate != 0:
                 page.insert_image(rect, stream=qr_bytes, rotate=py_rotate)
             else:
@@ -414,17 +440,8 @@ class ImpositionEngine:
             h_mm = el.get("height_mm", 12)
             bc_format = el.get("barcode_format", "code128")
             bc_bytes = _generate_barcode(val_str, w_mm, h_mm, color, bc_format)
-            
+            rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
             py_rotate = (360 - angle) % 360
-            if angle == 90:
-                rect = fitz.Rect(el_x - h_pt, el_y, el_x, el_y + w_pt)
-            elif angle == 180:
-                rect = fitz.Rect(el_x - w_pt, el_y - h_pt, el_x, el_y)
-            elif angle == 270:
-                rect = fitz.Rect(el_x, el_y - w_pt, el_x + h_pt, el_y)
-            else:
-                rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
-                
             page.insert_image(rect, stream=bc_bytes, rotate=py_rotate, keep_proportion=False)
 
         elif t == "SVG":
@@ -432,17 +449,8 @@ class ImpositionEngine:
             if svg_content:
                 w_pt = el.get("width_mm", 20) * MM2PT
                 h_pt = el.get("height_mm", 20) * MM2PT
-                
+                rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
                 py_rotate = (360 - angle) % 360
-                if angle == 90:
-                    rect = fitz.Rect(el_x - h_pt, el_y, el_x, el_y + w_pt)
-                elif angle == 180:
-                    rect = fitz.Rect(el_x - w_pt, el_y - h_pt, el_x, el_y)
-                elif angle == 270:
-                    rect = fitz.Rect(el_x, el_y - w_pt, el_x + h_pt, el_y)
-                else:
-                    rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
-                    
                 try:
                     import io
                     from svglib.svglib import svg2rlg
@@ -468,17 +476,12 @@ class ImpositionEngine:
                     import base64
                     import traceback
                     
-                    content_preview = pdf_content[:120] if isinstance(pdf_content, str) else f"[tipo: {type(pdf_content).__name__}]"
-                    print(f"[engine] Elemento PDF: preview={content_preview!r}")
-                    
                     if not isinstance(pdf_content, str) or not pdf_content.strip():
-                        print(f"[engine] Elemento PDF ignorado — pdf_content inválido")
+                        print(f"[engine] Elemento PDF ignorado - pdf_content invalido")
                         return
                     
                     if pdf_content.startswith("http"):
-                        print(f"[engine] Baixando PDF da URL: {pdf_content[:80]}...")
                         pdf_bytes = self._get_url_bytes(pdf_content)
-                        print(f"[engine] PDF baixado: {len(pdf_bytes)} bytes")
                     else:
                         if pdf_content.startswith("data:"):
                             pdf_content = pdf_content.split(",", 1)[-1]
@@ -492,25 +495,15 @@ class ImpositionEngine:
                     else:
                         w_pt = pdf_doc[0].rect.width
                         h_pt = pdf_doc[0].rect.height
-                        
+                    rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
                     py_rotate = (360 - angle) % 360
-                    if angle == 90:
-                        rect = fitz.Rect(el_x - h_pt, el_y, el_x, el_y + w_pt)
-                    elif angle == 180:
-                        rect = fitz.Rect(el_x - w_pt, el_y - h_pt, el_x, el_y)
-                    elif angle == 270:
-                        rect = fitz.Rect(el_x, el_y - w_pt, el_x + h_pt, el_y)
-                    else:
-                        rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
-                        
                     page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
                     pdf_doc.close()
-                    print(f"[engine] Elemento PDF renderizado OK em rect={rect}")
                 except Exception as ex:
                     print(f"[engine] ERRO ao impor elemento PDF: {ex}")
                     traceback.print_exc()
             else:
-                print(f"[engine] Elemento PDF sem pdf_content — ignorado")
+                print(f"[engine] Elemento PDF sem pdf_content - ignorado")
 
 
     def process(self):
