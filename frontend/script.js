@@ -2707,33 +2707,26 @@ function drawCanvas() {
 
     // Arte de fundo (camada de referência semitransparente em tamanho original e centralizada)
     if (refBg) {
-        const MM2PT = 2.8346;
-        let originalW_mm = 0;
-        let originalH_mm = 0;
+        // Para garantir escala 100% (tamanho máximo no canvas) sem distorção, usamos o aspect ratio
+        const imgW = refBg.originalPdfWidthPt || refBg.width;
+        const imgH = refBg.originalPdfHeightPt || refBg.height;
+        
+        const imgAspect = imgW / imgH;
+        const canvasAspect = W / H;
 
-        if (refBg.originalPdfWidthPt) {
-            // Se for PDF, usar os pontos originais dividindo por MM2PT (72 / 25.4 = 2.8346)
-            originalW_mm = refBg.originalPdfWidthPt / MM2PT;
-            originalH_mm = refBg.originalPdfHeightPt / MM2PT;
+        let drawW, drawH;
+
+        // Ajusta (contain) a imagem ao tamanho exato do formato/canvas sem distorcer
+        if (imgAspect > canvasAspect) {
+            drawW = W;
+            drawH = W / imgAspect;
         } else {
-            // Se for imagem (JPG/PNG/SVG), obter o DPI lido ou adotar 300 DPI como fallback
-            const dpi = refBg.dpiValue || 300;
-            originalW_mm = (refBg.width / dpi) * 25.4;
-            originalH_mm = (refBg.height / dpi) * 25.4;
+            drawH = H;
+            drawW = H * imgAspect;
         }
 
-        // Fallback: se a largura não for calculada direito (ex: SVG), usar as dimensões do formato base
-        if (!originalW_mm || originalW_mm < 1) {
-            if (state.numFormato) {
-                originalW_mm = state.numFormato.width_mm;
-                originalH_mm = state.numFormato.height_mm;
-            }
-        }
-
-        const drawW = originalW_mm * state.canvasScale;
-        const drawH = originalH_mm * state.canvasScale;
-        const drawX = (canvas.width - drawW) / 2;
-        const drawY = (canvas.height - drawH) / 2;
+        const drawX = (W - drawW) / 2;
+        const drawY = (H - drawH) / 2;
 
         ctx.globalAlpha = 0.55;
         ctx.drawImage(refBg, drawX, drawY, drawW, drawH);
