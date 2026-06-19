@@ -9077,34 +9077,9 @@ function getAmostraFormato() {
 
 function getAmostraScale(fmt, canvasElement) {
 
-    // Para manter a paridade 1:1 física absoluta de escala entre todas as 3 janelas fonte e a combinada,
-
-    // a escala (pixels por milímetro) deve ser uma constante global calculada com base no formato unificado.
-
-    const activeFmt = getAmostraFormato();
-
-    if (!activeFmt) return 3.5;
-
-    
-
-    // Usamos o container da Amostra Combinada ou o container ativo para definir a escala padrão
-
-    const refCanvas = document.getElementById('amostra-comb-canvas') || canvasElement;
-
-    if (!refCanvas) return 3.5;
-
-    
-
-    const parent = refCanvas.parentElement;
-    if (!parent) return 3.5;
-
-    const containerW = parent.clientWidth - 30; // compensar padding
-    if (containerW <= 0) {
-        // Fallback seguro se o container estiver oculto
-        return 3.5;
-    }
-
-    return containerW / activeFmt.width_mm;
+    // Escala fixa em 150 DPI para alta nitidez em todas as janelas de amostra
+    // O canvas e renderizado em alta resolucao e exibido via CSS (max-width: 100%)
+    return 150 / 25.4;
 
 }
 
@@ -12732,8 +12707,8 @@ function renderAmostrasOSItens(osId) {
                     `}
                 </div>
                 <div class="amostra-preview-container" style="margin-top: 20px;">
-                    <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'cursor: zoom-in;' : ''}"
-                        onclick="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? `openClienteLightbox('amostra-item-canvas-${idx}')` : ''}"></canvas>
+                    <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;"
+                        onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
                     <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                         <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                         <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
@@ -13184,16 +13159,9 @@ async function renderItemAmostraCombinada(idx, osId) {
         fmt = { width_mm: 180, height_mm: 50 };
     }
 
-    // Calcular escala (150 DPI apenas no link do cliente para nitidez retina/HiDPI, senão usar largura do container)
-    const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
-    let S;
-    if (isClientePage) {
-        // 150 DPI = 150 pixels por polegada (25.4 mm)
-        S = 150 / 25.4;
-    } else {
-        const containerWidth = canvas.parentElement ? canvas.parentElement.clientWidth - 4 : 600;
-        S = containerWidth / fmt.width_mm;
-    }
+    // Escala de renderizacao: 150 DPI para alta nitidez em todas as visualizacoes
+    // O canvas e renderizado em alta resolucao e exibido via CSS (max-width: 100%)
+    const S = 150 / 25.4;
 
     let targetW = fmt.width_mm;
     let targetH = fmt.height_mm;
