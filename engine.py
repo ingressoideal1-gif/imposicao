@@ -324,7 +324,6 @@ class ImpositionEngine:
             raw = str(val).zfill(pad) if pad > 0 else str(val)
             val_str = f"{prefix}{raw}{suffix}"
 
-        t = el["type"]
 
         if t in ("TEXT", "FIXED"):
             font_size = el.get("font_size", 12)
@@ -398,7 +397,12 @@ class ImpositionEngine:
                 insert_kwargs["fontfile"] = font_file
 
             # Medir largura real do texto para centralizar horizontalmente
-            text_width = fitz.get_text_length(val_str, fontname=font_name, fontsize=font_size, fontfile=font_file)
+            if font_file:
+                # Fontes de sistema: get_text_length nao suporta fontfile,
+                # usamos estimativa baseada no tamanho medio de um caractere
+                text_width = font_size * 0.55 * len(val_str)
+            else:
+                text_width = fitz.get_text_length(val_str, fontname=font_name, fontsize=font_size)
 
             # Ancoragem central: cx, cy = centro do texto
             # insert_text origin: X = centro - metade da largura, Y = centro + metade da altura (baseline)
