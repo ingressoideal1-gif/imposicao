@@ -86,21 +86,21 @@ def sync_heartbeat():
         now_iso = datetime.datetime.utcnow().isoformat()
 
     
-    # Atualiza ou insere (UPSERT)
-    payload = {
-        "id": AGENT_ID,
-        "name": AGENT_NAME,
-        "status": "online",
-        "last_seen": now_iso,
-        "printers_json": printers_json
-    }
-    url = f"{db.SUPABASE_URL}/rest/v1/print_agents"
-    headers = {
-        "apikey": db.SUPABASE_KEY,
-        "Authorization": f"Bearer {db.SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates"
-    }
+        # Atualiza ou insere (UPSERT)
+        payload = {
+            "id": AGENT_ID,
+            "name": AGENT_NAME,
+            "status": "online",
+            "last_seen": now_iso,
+            "printers_json": printers_json
+        }
+        url = f"{db.SUPABASE_URL}/rest/v1/print_agents"
+        headers = {
+            "apikey": db.SUPABASE_KEY,
+            "Authorization": f"Bearer {db.SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+        }
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
         try:
             urllib.request.urlopen(req, timeout=10)
@@ -119,11 +119,11 @@ def process_queue():
 
         for job in jobs:
 
-        job_id = job.get("id")
-        file_url = job.get("file_url")
-        printer_name = job.get("printer_name")
-        ppd_options = job.get("ppd_options", {})
-        
+            job_id = job.get("id")
+            file_url = job.get("file_url")
+            printer_name = job.get("printer_name")
+            ppd_options = job.get("ppd_options", {})
+            
             _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "printing"})
             print(f"[agent_worker] Processando Job {job_id} para {printer_name}...", flush=True)
             
@@ -134,34 +134,33 @@ def process_queue():
                 _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
                 continue
 
-            
-        selected_codes = {}
-        mapping = print_service.load_printer_ppd_map()
-        ppd_file = mapping.get(printer_name)
-        if ppd_file:
-            ppd_path = os.path.join(print_service.PPD_DIR, ppd_file)
-            if os.path.exists(ppd_path):
-                try:
-                    parser = ppd_parser.PPDParser(ppd_path)
-                    for opt_key, choice_key in ppd_options.items():
-                        if opt_key in parser.options and choice_key in parser.options[opt_key]["choices"]:
-                            selected_codes[opt_key] = parser.options[opt_key]["choices"][choice_key]["code"]
-                except Exception as e:
-                    print(f"[agent_worker] Erro ao ler PPD: {e}")
+            selected_codes = {}
+            mapping = print_service.load_printer_ppd_map()
+            ppd_file = mapping.get(printer_name)
+            if ppd_file:
+                ppd_path = os.path.join(print_service.PPD_DIR, ppd_file)
+                if os.path.exists(ppd_path):
+                    try:
+                        parser = ppd_parser.PPDParser(ppd_path)
+                        for opt_key, choice_key in ppd_options.items():
+                            if opt_key in parser.options and choice_key in parser.options[opt_key]["choices"]:
+                                selected_codes[opt_key] = parser.options[opt_key]["choices"][choice_key]["code"]
+                    except Exception as e:
+                        print(f"[agent_worker] Erro ao ler PPD: {e}")
 
-        success, msg = print_service.send_print_job(
-            printer_name=printer_name,
-            pdf_path=temp_pdf.name,
-            selected_options_codes=selected_codes,
-            job_title=f"Cloud Print Job {job_id[:8]}"
-        )
-        
-        try:
-            if os.path.exists(temp_pdf.name):
-                os.remove(temp_pdf.name)
-        except:
-            pass
+            success, msg = print_service.send_print_job(
+                printer_name=printer_name,
+                pdf_path=temp_pdf.name,
+                selected_options_codes=selected_codes,
+                job_title=f"Cloud Print Job {job_id[:8]}"
+            )
             
+            try:
+                if os.path.exists(temp_pdf.name):
+                    os.remove(temp_pdf.name)
+            except:
+                pass
+                
             final_status = "completed" if success else "error"
             _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": final_status})
             print(f"[agent_worker] Job {job_id} {final_status}: {msg}", flush=True)
