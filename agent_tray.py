@@ -145,17 +145,23 @@ def quit_agent(icon, item):
 
 def setup_tray(icon):
     icon.visible = True
-    start_server_thread()
 
 
 def main():
+    # Iniciar servidor ANTES do tray para garantir que a porta fica ativa
+    print("[agent] Iniciando servidor na porta %d..." % AGENT_PORT)
+    start_server_thread()
+    print("[agent] Servidor iniciado com sucesso!")
+
     try:
         import pystray
         from PIL import Image
     except ImportError as e:
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(0, f"Dependencia ausente: {e}", "Ideal Agent - Erro", 0)
-        sys.exit(1)
+        print(f"[agent] pystray nao disponivel: {e} - rodando apenas servidor")
+        # Manter o processo vivo mesmo sem tray
+        import signal
+        signal.pause() if hasattr(signal, 'pause') else threading.Event().wait()
+        return
 
     tray_image = create_tray_image()
 
