@@ -4479,6 +4479,8 @@ function renderElementsList() {
 
 
 
+
+
 window.updateEl = function (id, field, value) {
 
     const el = state.numElements.find(e => e.id === id);
@@ -6460,6 +6462,7 @@ function updateImpSummary() {
 
     if (document.getElementById('imp-schema')?.value === 'multi_artes') {
 
+        
         renderMultiArtes();
 
     }
@@ -14674,63 +14677,67 @@ async function checkPrinterAgent() {
     const navBtn = document.getElementById('nav-impressoras');
     const badge = document.getElementById('badge-impressoras');
 
-    const urls = ['http://127.0.0.1:9000/', 'http://localhost:9000/'];
     _printerAgentActive = false;
-    _printerAgentUrl = '';
+    _printerAgentUrl = ''; // Não usamos mais URL direta
+    window._activeAgentData = null;
 
-    for (const url of urls) {
-        if (_printerAgentActive) break;
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
         try {
-            const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 2000);
-            const r = await fetch(url, { method: 'GET', mode: 'cors', signal: ctrl.signal }).catch(() => null);
-            clearTimeout(tid);
-            if (r && r.ok) {
-                const data = await r.json().catch(() => ({}));
-                if (data.status === 'running') {
-                    _printerAgentActive = true;
-                    _printerAgentUrl = url.replace(/\/$/, '');
-                }
+            // Considerar online quem deu heartbeat nos ultimos 2 minutos
+            const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+            const { data } = await supabaseClient
+                .from('print_agents')
+                .select('*')
+                .eq('status', 'online')
+                .gte('last_seen', twoMinutesAgo)
+                .order('last_seen', { ascending: false })
+                .limit(1);
+
+            if (data && data.length > 0) {
+                _printerAgentActive = true;
+                window._activeAgentData = data[0];
             }
-        } catch (_) {}
+        } catch (e) {
+            console.error('Erro ao checar print_agents no Supabase:', e);
+        }
     }
 
     if (_printerAgentActive) {
         if (indicator) indicator.style.background = '#22c55e';
         if (label) label.textContent = 'Agente Local Ativo';
-        if (detail) detail.textContent = `Conectado em ${_printerAgentUrl}`;
+        if (detail) detail.textContent = `Conectado via Nuvem (${window._activeAgentData.name})`;
         if (printerCard) { printerCard.style.opacity = '1'; printerCard.style.pointerEvents = 'auto'; }
         if (ppdCard) { ppdCard.style.opacity = '1'; ppdCard.style.pointerEvents = 'auto'; }
         if (navBtn) navBtn.style.display = '';
         if (badge) { badge.style.display = 'inline-block'; }
-        // Habilitar botao Imprimir na tela de imposicao
+        
         const btnPrint = document.getElementById('btn-impose-print');
         if (btnPrint) { btnPrint.disabled = false; btnPrint.style.opacity = '1'; }
-        // Carregar dados automaticamente
+        
         await loadPrinters();
         await loadPPDs();
         await loadPPDMap();
     } else {
         if (indicator) indicator.style.background = '#ef4444';
         if (label) label.textContent = 'Agente Local Inativo';
-        if (detail) detail.textContent = 'Inicie o IdealImpositionAgent.exe para habilitar impressao direta.';
+        if (detail) detail.textContent = 'Inicie o IdealImpositionAgent.exe no computador da impressora.';
         if (printerCard) { printerCard.style.opacity = '0.5'; printerCard.style.pointerEvents = 'none'; }
         if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; }
         if (badge) badge.style.display = 'none';
-        // Desabilitar botao Imprimir na tela de imposicao
+        
         const btnPrint = document.getElementById('btn-impose-print');
         if (btnPrint) { btnPrint.disabled = true; btnPrint.style.opacity = '0.5'; }
     }
     return _printerAgentActive;
 }
 
-// Listar impressoras instaladas
 async function loadPrinters() {
-    if (!_printerAgentActive) return;
+    if (!_printerAgentActive || !window._activeAgentData) return;
     const body = document.getElementById('printer-list-body');
     try {
-        const r = await fetch(`${_printerAgentUrl}/api/printers`);
-        _printerList = await r.json();
+        const json = window._activeAgentData.printers_json || {};
+        const printers = json.printers || [];
+        _printerList = printers.map(p => p.name);
         renderPrinterList();
     } catch (e) {
         if (body) body.innerHTML = `<p style="color:#ef4444;font-size:0.85rem;">Erro ao carregar impressoras: ${e.message}</p>`;
@@ -14772,13 +14779,14 @@ function onPPDMapChange() {
     if (btn) btn.disabled = false;
 }
 
-// Listar PPDs carregados
 async function loadPPDs() {
-    if (!_printerAgentActive) return;
+    if (!_printerAgentActive || !window._activeAgentData) return;
     const body = document.getElementById('ppd-list-body');
     try {
-        const r = await fetch(`${_printerAgentUrl}/api/ppds`);
-        _ppdList = await r.json();
+        const json = window._activeAgentData.printers_json || {};
+        const ppds = json.ppds || [];
+        // agent sends list of strings, make it array of objects to keep compatibility
+        _ppdList = ppds.map(p => ({ filename: p, options: {} }));
         renderPPDList();
         renderPrinterList(); // atualizar selects
     } catch (e) {
@@ -14807,49 +14815,26 @@ function renderPPDList() {
 
 // Upload de PPD
 async function uploadPPD(input) {
-    if (!input.files.length || !_printerAgentActive) return;
-    const file = input.files[0];
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-        const r = await fetch(`${_printerAgentUrl}/api/ppds/upload`, { method: 'POST', body: formData });
-        if (!r.ok) throw new Error(await r.text());
-        toast(`PPD "${file.name}" carregado com sucesso!`, 'success');
-        await loadPPDs();
-    } catch (e) {
-        toast(`Erro ao carregar PPD: ${e.message}`, 'error');
-    }
+    toast('No modo Cloud Relay, copie os arquivos PPD diretamente para a pasta "ppds" na maquina do Agente Local.', 'warning');
     input.value = '';
 }
 
 // Carregar mapeamento salvo
 async function loadPPDMap() {
-    if (!_printerAgentActive) return;
+    if (!_printerAgentActive || !window._activeAgentData) return;
     try {
-        const r = await fetch(`${_printerAgentUrl}/api/printers/ppd-map`);
-        _ppdMap = await r.json();
+        const json = window._activeAgentData.printers_json || {};
+        _ppdMap = json.ppd_map || {};
         renderPrinterList();
     } catch (_) {}
 }
 
 // Salvar mapeamento
 async function savePrinterPPDMap() {
-    if (!_printerAgentActive) return;
-    const newMap = {};
-    document.querySelectorAll('#printer-list-body select[data-printer]').forEach(sel => {
-        const printer = sel.getAttribute('data-printer');
-        if (sel.value) newMap[printer] = sel.value;
-    });
-    try {
-        await fetch(`${_printerAgentUrl}/api/printers/ppd-map`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newMap)
-        });
-        _ppdMap = newMap;
-        toast('Mapeamento salvo com sucesso!', 'success');
-        const btn = document.getElementById('btn-save-ppd-map');
-        if (btn) btn.disabled = true;
+    toast('No modo Cloud Relay, os mapeamentos e uploads de PPD devem ser feitos na maquina do Agente Local (pasta ppds e printer_ppd_map.json).', 'warning');
+    const btn = document.getElementById('btn-save-ppd-map');
+    if (btn) btn.disabled = true;
+
     } catch (e) {
         toast(`Erro ao salvar: ${e.message}`, 'error');
     }
@@ -14925,34 +14910,48 @@ function onPrintPrinterChange() {
     });
 }
 
-// Enviar job de impressao
+// Enviar job de impressao via Supabase Queue
 async function sendPrintJob() {
-    if (!_lastImposedBlob || !_printerAgentActive) return;
+    if (!_lastImposedBlob || !_printerAgentActive || !window._activeAgentData) return;
     const sel = document.getElementById('print-direct-printer');
     const printerName = sel ? sel.value : '';
     if (!printerName) { toast('Selecione uma impressora.', 'error'); return; }
 
-    // Coletar opcoes PPD selecionadas
     const options = {};
     document.querySelectorAll('#print-direct-options select[data-ppd-option]').forEach(s => {
         options[s.getAttribute('data-ppd-option')] = s.value;
     });
 
     const btnSend = document.getElementById('btn-send-print');
-    if (btnSend) { btnSend.disabled = true; btnSend.textContent = 'Enviando...'; }
+    if (btnSend) { btnSend.disabled = true; btnSend.textContent = 'Enviando para Nuvem...'; }
 
     try {
-        const formData = new FormData();
-        formData.append('file', _lastImposedBlob, 'imposicao.pdf');
-        formData.append('printer_name', printerName);
-        formData.append('options', JSON.stringify(options));
+        const fileExt = 'pdf';
+        const fileName = `print_job_${Date.now()}_${Math.floor(Math.random()*1000)}.${fileExt}`;
+        const filePath = `${window._activeAgentData.id}/${fileName}`;
+        
+        const { data: uploadData, error: uploadError } = await supabaseClient
+            .storage
+            .from('print_jobs')
+            .upload(filePath, _lastImposedBlob, { contentType: 'application/pdf', upsert: false });
+            
+        if (uploadError) throw new Error(`Falha no upload do arquivo: ${uploadError.message}`);
+        
+        const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
+        
+        const { error: dbError } = await supabaseClient
+            .from('print_queue')
+            .insert({
+                agent_id: window._activeAgentData.id,
+                file_url: urlData.publicUrl,
+                printer_name: printerName,
+                ppd_options: options,
+                status: 'pending'
+            });
+            
+        if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
 
-        const r = await fetch(`${_printerAgentUrl}/api/print/submit`, { method: 'POST', body: formData });
-        if (!r.ok) {
-            const err = await r.json().catch(() => ({ detail: 'Erro desconhecido' }));
-            throw new Error(err.detail || 'Erro ao enviar');
-        }
-        toast(`Enviado para "${printerName}" com sucesso!`, 'success');
+        toast(`Enviado para "${printerName}" com sucesso! O Agente Local iniciara a impressao em breve.`, 'success');
         closePrintModal();
     } catch (e) {
         toast(`Erro na impressao: ${e.message}`, 'error');
@@ -15002,3 +15001,4 @@ window.setFiltroStatusArte = setFiltroStatusArte;
 document.addEventListener('DOMContentLoaded', () => {
     checkClienteRoute();
 });
+

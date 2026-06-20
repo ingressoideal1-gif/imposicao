@@ -27,13 +27,9 @@ else:
     EXE_DIR = BASE_DIR
     os.chdir(BASE_DIR)
 
-import uvicorn
-from local_print_agent import app as fastapi_app
+import agent_worker
 
-AGENT_PORT = 9000
-AGENT_HOST = "127.0.0.1"
 server_thread = None
-_server_instance = None
 
 
 def find_icon():
@@ -65,38 +61,20 @@ def create_tray_image():
     return img
 
 
-def is_port_in_use(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(("127.0.0.1", port)) == 0
-
-
-def run_server():
-    config = uvicorn.Config(
-        app=fastapi_app,
-        host=AGENT_HOST,
-        port=AGENT_PORT,
-        log_level="warning",
-        access_log=False,
-    )
-    global _server_instance
-    _server_instance = uvicorn.Server(config)
-    _server_instance.run()
-
+def run_worker():
+    agent_worker.run_loop()
 
 def start_server_thread():
     global server_thread
-    if is_port_in_use(AGENT_PORT):
-        return
-    server_thread = threading.Thread(target=run_server, daemon=True, name="IdealAgentServer")
+    server_thread = threading.Thread(target=run_worker, daemon=True, name="IdealAgentServer")
     server_thread.start()
-    for _ in range(50):
-        if is_port_in_use(AGENT_PORT):
-            break
-        time.sleep(0.1)
+    time.sleep(1)
 
 
 def open_panel(icon=None, item=None):
-    webbrowser.open(f"http://{AGENT_HOST}:{AGENT_PORT}/")
+    # Pode manter abrindo o vercel app com um parametro para gerenciar a pagina de agentes locais, ou apenas a home.
+    # O "panel" local nao existira mais com a porta 9000
+    webbrowser.open("https://supabase-imposicao-pm1w.vercel.app")
 
 
 def add_to_startup(icon=None, item=None):
@@ -136,22 +114,17 @@ def remove_from_startup(icon=None, item=None):
         import ctypes
         ctypes.windll.user32.MessageBoxW(0, f"Erro: {e}", "Ideal Agent", 0)
 
-
 def quit_agent(icon, item):
-    if _server_instance:
-        _server_instance.should_exit = True
     icon.stop()
-
 
 def setup_tray(icon):
     icon.visible = True
 
 
 def main():
-    # Iniciar servidor ANTES do tray para garantir que a porta fica ativa
-    print("[agent] Iniciando servidor na porta %d..." % AGENT_PORT)
+    print("[agent] Iniciando worker do Supabase Cloud Relay...")
     start_server_thread()
-    print("[agent] Servidor iniciado com sucesso!")
+    print("[agent] Worker iniciado com sucesso!")
 
     try:
         import pystray
@@ -168,9 +141,9 @@ def main():
     menu = pystray.Menu(
         pystray.MenuItem("Ideal Imposition Agent", None, enabled=False),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem(f"Ativo - Porta {AGENT_PORT}", None, enabled=False),
+        pystray.MenuItem(f"Ativo - Cloud Relay", None, enabled=False),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Abrir Painel Local", open_panel),
+        pystray.MenuItem("Abrir Web App", open_panel),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Iniciar com o Windows", add_to_startup),
         pystray.MenuItem("Remover do Inicio", remove_from_startup),
