@@ -14703,9 +14703,9 @@ async function checkPrinterAgent() {
         if (ppdCard) { ppdCard.style.opacity = '1'; ppdCard.style.pointerEvents = 'auto'; }
         if (navBtn) navBtn.style.display = '';
         if (badge) { badge.style.display = 'inline-block'; }
-        // Mostrar botao Imprimir na tela de imposicao
+        // Habilitar botao Imprimir na tela de imposicao
         const btnPrint = document.getElementById('btn-impose-print');
-        if (btnPrint) btnPrint.style.display = '';
+        if (btnPrint) { btnPrint.disabled = false; btnPrint.style.opacity = '1'; }
         // Carregar dados automaticamente
         await loadPrinters();
         await loadPPDs();
@@ -14717,9 +14717,9 @@ async function checkPrinterAgent() {
         if (printerCard) { printerCard.style.opacity = '0.5'; printerCard.style.pointerEvents = 'none'; }
         if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; }
         if (badge) badge.style.display = 'none';
-        // Ocultar botao Imprimir na tela de imposicao
+        // Desabilitar botao Imprimir na tela de imposicao
         const btnPrint = document.getElementById('btn-impose-print');
-        if (btnPrint) btnPrint.style.display = 'none';
+        if (btnPrint) { btnPrint.disabled = true; btnPrint.style.opacity = '0.5'; }
     }
     return _printerAgentActive;
 }
