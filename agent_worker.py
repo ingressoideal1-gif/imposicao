@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import time
+import datetime
 import json
 import os
 import uuid
@@ -71,21 +72,26 @@ def download_file(file_url: str, dest_path: str):
         return False
 
 def sync_heartbeat():
-    printers = print_service.get_printers()
-    ppds = print_service.get_ppd_list()
-    ppd_map = print_service.load_printer_ppd_map()
-    
-    printers_json = {
-        "printers": printers,
-        "ppds": ppds,
-        "ppd_map": ppd_map
-    }
+    try:
+        printers = print_service.get_printers()
+        ppds = print_service.get_ppd_list()
+        ppd_map = print_service.load_printer_ppd_map()
+        
+        printers_json = {
+            "printers": printers,
+            "ppds": ppds,
+            "ppd_map": ppd_map
+        }
+        
+        now_iso = datetime.datetime.utcnow().isoformat()
+
     
     # Atualiza ou insere (UPSERT)
     payload = {
         "id": AGENT_ID,
         "name": AGENT_NAME,
         "status": "online",
+        "last_seen": now_iso,
         "printers_json": printers_json
     }
     url = f"{db.SUPABASE_URL}/rest/v1/print_agents"
@@ -95,34 +101,39 @@ def sync_heartbeat():
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates"
     }
-    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-    try:
-        urllib.request.urlopen(req, timeout=10)
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        try:
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            print(f"[agent_worker] Falha no heartbeat: {e}", flush=True)
     except Exception as e:
-        print(f"[agent_worker] Falha no heartbeat: {e}")
+        print(f"[agent_worker] Erro fatal no sync_heartbeat: {e}", flush=True)
 
 def process_queue():
-    path = f"print_queue?agent_id=eq.{AGENT_ID}&status=eq.pending&order=created_at.asc&limit=1"
-    jobs = _supabase_request("GET", path)
-    
-    if not jobs:
-        return
+    try:
+        path = f"print_queue?agent_id=eq.{AGENT_ID}&status=eq.pending&order=created_at.asc&limit=1"
+        jobs = _supabase_request("GET", path)
+        
+        if not jobs:
+            return
 
-    for job in jobs:
+        for job in jobs:
+
         job_id = job.get("id")
         file_url = job.get("file_url")
         printer_name = job.get("printer_name")
         ppd_options = job.get("ppd_options", {})
         
-        _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "printing"})
-        print(f"[agent_worker] Processando Job {job_id} para {printer_name}...")
-        
-        temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        temp_pdf.close()
-        
-        if not download_file(file_url, temp_pdf.name):
-            _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
-            continue
+            _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "printing"})
+            print(f"[agent_worker] Processando Job {job_id} para {printer_name}...", flush=True)
+            
+            temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            temp_pdf.close()
+            
+            if not download_file(file_url, temp_pdf.name):
+                _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
+                continue
+
             
         selected_codes = {}
         mapping = print_service.load_printer_ppd_map()
@@ -151,12 +162,14 @@ def process_queue():
         except:
             pass
             
-        final_status = "completed" if success else "error"
-        _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": final_status})
-        print(f"[agent_worker] Job {job_id} {final_status}: {msg}")
+            final_status = "completed" if success else "error"
+            _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": final_status})
+            print(f"[agent_worker] Job {job_id} {final_status}: {msg}", flush=True)
+    except Exception as e:
+        print(f"[agent_worker] Erro fatal no process_queue: {e}", flush=True)
 
 def run_loop():
-    print(f"Iniciando Agent Worker (Cloud Relay) - ID: {AGENT_ID}")
+    print(f"Iniciando Agent Worker (Cloud Relay) - ID: {AGENT_ID}", flush=True)
     heartbeat_timer = 0
     while True:
         try:
@@ -167,8 +180,10 @@ def run_loop():
             time.sleep(5)
             heartbeat_timer -= 5
         except Exception as e:
-            print(f"[agent_worker] Erro no loop principal: {e}")
+            print(f"[agent_worker] Erro no loop principal: {e}", flush=True)
             time.sleep(5)
+            heartbeat_timer -= 5 # Garantir decremento
+
 
 if __name__ == "__main__":
     run_loop()

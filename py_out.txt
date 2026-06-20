@@ -1,0 +1,4 @@
+[db.py] Supabase do Vibecode ativo: https://vwbtitjlpelrcnsytzqw.supabase.co
+[agent] Iniciando worker do Supabase Cloud Relay...
+Iniciando Agent Worker (Cloud Relay) - ID: 45147a4a-7090-42f9-8984-ce50ef16e9f4
+[agent] Worker iniciado com sucesso!

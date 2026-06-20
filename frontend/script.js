@@ -7034,7 +7034,7 @@ window.runImposition = async function (mode) {
 
 
 
-    if (window.showSaveFilePicker) {
+    if (window.showSaveFilePicker && mode !== 'print') {
 
         try {
 
@@ -7529,7 +7529,7 @@ window.runImposition = async function (mode) {
             overlay.classList.remove('active');
             const btn = document.getElementById('btn-impose');
             btn.disabled = false;
-            btn.innerHTML = '⚙️ Gerar PDF de Alta Resolução';
+            btn.innerHTML = '🚀 Gerar PDF';
             btn.style.opacity = '1';
             btn.style.pointerEvents = 'auto';
         }, 400);
