@@ -6959,7 +6959,7 @@ let impositionAbortController = null;
 
 
 
-window.runImposition = async function () {
+window.runImposition = async function (mode) {
 
     const fmtId = document.getElementById('imp-formato').value;
 
@@ -7460,11 +7460,19 @@ window.runImposition = async function () {
 
 
 
+
+        // Modo impressao direta: abrir modal em vez de download
+        if (mode === 'print' && _printerAgentActive) {
+            openPrintModal(blob);
+            toast('PDF gerado! Selecione a impressora.', 'success');
+            return;
+        }
+
         // Fallback: Prompt para nome do arquivo + download convencional
 
         const filename = prompt('Digite o nome do arquivo para salvar o PDF:', defaultFilename);
 
-        if (filename === null) return; // cancelado pelo usuário
+        if (filename === null) return; // cancelado pelo usuario
 
         
 
@@ -7488,7 +7496,7 @@ window.runImposition = async function () {
 
         toast('PDF baixado com sucesso!', 'success');
 
-        // Auto-atualizar status de impressão do item ativo da OS
+        // Auto-atualizar status de impressao do item ativo da OS
         if (state.activeOSItem && state.activeOSItem.itemId) {
             await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
             if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
@@ -14644,7 +14652,342 @@ function setFiltroStatusArte(status) {
     renderOrdens();
 }
 
-// Exportar funções globais
+// ============================================================================
+// MODULO: IMPRESSORAS E PPDs (Agente Local)
+// ============================================================================
+
+// Estado do modulo de impressoras
+let _printerAgentUrl = '';
+let _printerAgentActive = false;
+let _printerList = [];
+let _ppdList = [];
+let _ppdMap = {};
+let _lastImposedBlob = null; // blob do ultimo PDF imposto para impressao direta
+
+// Detectar e verificar agente local
+async function checkPrinterAgent() {
+    const indicator = document.getElementById('printer-agent-indicator');
+    const label = document.getElementById('printer-agent-label');
+    const detail = document.getElementById('printer-agent-detail');
+    const printerCard = document.getElementById('printer-list-card');
+    const ppdCard = document.getElementById('ppd-list-card');
+    const navBtn = document.getElementById('nav-impressoras');
+    const badge = document.getElementById('badge-impressoras');
+
+    const urls = ['http://127.0.0.1:9000/', 'http://localhost:9000/'];
+    _printerAgentActive = false;
+    _printerAgentUrl = '';
+
+    for (const url of urls) {
+        if (_printerAgentActive) break;
+        try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 2000);
+            const r = await fetch(url, { method: 'GET', mode: 'cors', signal: ctrl.signal }).catch(() => null);
+            clearTimeout(tid);
+            if (r && r.ok) {
+                const data = await r.json().catch(() => ({}));
+                if (data.status === 'running') {
+                    _printerAgentActive = true;
+                    _printerAgentUrl = url.replace(/\/$/, '');
+                }
+            }
+        } catch (_) {}
+    }
+
+    if (_printerAgentActive) {
+        if (indicator) indicator.style.background = '#22c55e';
+        if (label) label.textContent = 'Agente Local Ativo';
+        if (detail) detail.textContent = `Conectado em ${_printerAgentUrl}`;
+        if (printerCard) { printerCard.style.opacity = '1'; printerCard.style.pointerEvents = 'auto'; }
+        if (ppdCard) { ppdCard.style.opacity = '1'; ppdCard.style.pointerEvents = 'auto'; }
+        if (navBtn) navBtn.style.display = '';
+        if (badge) { badge.style.display = 'inline-block'; }
+        // Mostrar botao Imprimir na tela de imposicao
+        const btnPrint = document.getElementById('btn-impose-print');
+        if (btnPrint) btnPrint.style.display = '';
+        // Carregar dados automaticamente
+        await loadPrinters();
+        await loadPPDs();
+        await loadPPDMap();
+    } else {
+        if (indicator) indicator.style.background = '#ef4444';
+        if (label) label.textContent = 'Agente Local Inativo';
+        if (detail) detail.textContent = 'Inicie o IdealImpositionAgent.exe para habilitar impressao direta.';
+        if (printerCard) { printerCard.style.opacity = '0.5'; printerCard.style.pointerEvents = 'none'; }
+        if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; }
+        if (badge) badge.style.display = 'none';
+        // Ocultar botao Imprimir na tela de imposicao
+        const btnPrint = document.getElementById('btn-impose-print');
+        if (btnPrint) btnPrint.style.display = 'none';
+    }
+    return _printerAgentActive;
+}
+
+// Listar impressoras instaladas
+async function loadPrinters() {
+    if (!_printerAgentActive) return;
+    const body = document.getElementById('printer-list-body');
+    try {
+        const r = await fetch(`${_printerAgentUrl}/api/printers`);
+        _printerList = await r.json();
+        renderPrinterList();
+    } catch (e) {
+        if (body) body.innerHTML = `<p style="color:#ef4444;font-size:0.85rem;">Erro ao carregar impressoras: ${e.message}</p>`;
+    }
+}
+
+// Renderizar lista de impressoras com seletor de PPD
+function renderPrinterList() {
+    const body = document.getElementById('printer-list-body');
+    if (!body) return;
+    if (!_printerList.length) {
+        body.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">Nenhuma impressora encontrada.</p>';
+        return;
+    }
+    const ppdOpts = _ppdList.map(p => `<option value="${p.filename}">${p.nick_name || p.model_name || p.filename}</option>`).join('');
+
+    body.innerHTML = _printerList.map(name => {
+        const mapped = _ppdMap[name] || '';
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+            <span style="flex:1;font-size:0.9rem;font-weight:500;">${name}</span>
+            <select class="form-control" style="max-width:220px;font-size:0.8rem;" data-printer="${name}" onchange="onPPDMapChange()">
+                <option value="">Sem PPD</option>
+                ${ppdOpts}
+            </select>
+        </div>`;
+    }).join('');
+
+    // Marcar PPDs ja mapeados
+    body.querySelectorAll('select[data-printer]').forEach(sel => {
+        const printerName = sel.getAttribute('data-printer');
+        if (_ppdMap[printerName]) sel.value = _ppdMap[printerName];
+    });
+}
+
+// Detectar mudanca no mapeamento
+function onPPDMapChange() {
+    const btn = document.getElementById('btn-save-ppd-map');
+    if (btn) btn.disabled = false;
+}
+
+// Listar PPDs carregados
+async function loadPPDs() {
+    if (!_printerAgentActive) return;
+    const body = document.getElementById('ppd-list-body');
+    try {
+        const r = await fetch(`${_printerAgentUrl}/api/ppds`);
+        _ppdList = await r.json();
+        renderPPDList();
+        renderPrinterList(); // atualizar selects
+    } catch (e) {
+        if (body) body.innerHTML = `<p style="color:#ef4444;font-size:0.85rem;">Erro ao carregar PPDs: ${e.message}</p>`;
+    }
+}
+
+function renderPPDList() {
+    const body = document.getElementById('ppd-list-body');
+    if (!body) return;
+    if (!_ppdList.length) {
+        body.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">Nenhum PPD carregado. Faca upload de um arquivo .ppd para configurar opcoes de impressao.</p>';
+        return;
+    }
+    body.innerHTML = _ppdList.map(p => {
+        const optCount = Object.keys(p.options || {}).length;
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+            <div style="flex:1;">
+                <div style="font-size:0.9rem;font-weight:500;">${p.nick_name || p.model_name}</div>
+                <div style="font-size:0.75rem;color:var(--text-dim);">${p.filename} - ${optCount} opcoes</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// Upload de PPD
+async function uploadPPD(input) {
+    if (!input.files.length || !_printerAgentActive) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const r = await fetch(`${_printerAgentUrl}/api/ppds/upload`, { method: 'POST', body: formData });
+        if (!r.ok) throw new Error(await r.text());
+        toast(`PPD "${file.name}" carregado com sucesso!`, 'success');
+        await loadPPDs();
+    } catch (e) {
+        toast(`Erro ao carregar PPD: ${e.message}`, 'error');
+    }
+    input.value = '';
+}
+
+// Carregar mapeamento salvo
+async function loadPPDMap() {
+    if (!_printerAgentActive) return;
+    try {
+        const r = await fetch(`${_printerAgentUrl}/api/printers/ppd-map`);
+        _ppdMap = await r.json();
+        renderPrinterList();
+    } catch (_) {}
+}
+
+// Salvar mapeamento
+async function savePrinterPPDMap() {
+    if (!_printerAgentActive) return;
+    const newMap = {};
+    document.querySelectorAll('#printer-list-body select[data-printer]').forEach(sel => {
+        const printer = sel.getAttribute('data-printer');
+        if (sel.value) newMap[printer] = sel.value;
+    });
+    try {
+        await fetch(`${_printerAgentUrl}/api/printers/ppd-map`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newMap)
+        });
+        _ppdMap = newMap;
+        toast('Mapeamento salvo com sucesso!', 'success');
+        const btn = document.getElementById('btn-save-ppd-map');
+        if (btn) btn.disabled = true;
+    } catch (e) {
+        toast(`Erro ao salvar: ${e.message}`, 'error');
+    }
+}
+
+// ---- Modal de Impressao Direta ----
+
+function openPrintModal(blob) {
+    _lastImposedBlob = blob;
+    const modal = document.getElementById('modal-print-direct');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    // Popular select de impressoras
+    const sel = document.getElementById('print-direct-printer');
+    if (sel) {
+        sel.innerHTML = '<option value="">Selecione a impressora...</option>';
+        _printerList.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            sel.appendChild(opt);
+        });
+    }
+    document.getElementById('print-direct-options').innerHTML = '';
+    document.getElementById('btn-send-print').disabled = true;
+}
+
+function closePrintModal() {
+    const modal = document.getElementById('modal-print-direct');
+    if (modal) modal.style.display = 'none';
+}
+
+// Ao mudar impressora no modal, mostrar opcoes PPD
+function onPrintPrinterChange() {
+    const sel = document.getElementById('print-direct-printer');
+    const optDiv = document.getElementById('print-direct-options');
+    const btnSend = document.getElementById('btn-send-print');
+
+    const printerName = sel ? sel.value : '';
+    btnSend.disabled = !printerName;
+
+    if (!optDiv) return;
+    optDiv.innerHTML = '';
+
+    if (!printerName) return;
+
+    const ppdFile = _ppdMap[printerName];
+    if (!ppdFile) {
+        optDiv.innerHTML = '<p style="font-size:0.8rem;color:var(--text-dim);">Nenhum PPD mapeado para esta impressora. Opcoes padrao serao usadas.</p>';
+        return;
+    }
+
+    const ppd = _ppdList.find(p => p.filename === ppdFile);
+    if (!ppd || !ppd.options || !Object.keys(ppd.options).length) {
+        optDiv.innerHTML = '<p style="font-size:0.8rem;color:var(--text-dim);">PPD sem opcoes configuraveis.</p>';
+        return;
+    }
+
+    Object.entries(ppd.options).forEach(([key, opt]) => {
+        const choices = Object.entries(opt.choices || {});
+        if (!choices.length) return;
+        const choiceHtml = choices.map(([ck, cv]) =>
+            `<option value="${ck}" ${ck === opt.default ? 'selected' : ''}>${cv.translation || ck}</option>`
+        ).join('');
+        optDiv.innerHTML += `
+        <div class="form-group" style="margin-bottom:10px;">
+            <label class="form-label" style="font-size:0.8rem;">${opt.translation || key}</label>
+            <select class="form-control" style="font-size:0.8rem;" data-ppd-option="${key}">
+                ${choiceHtml}
+            </select>
+        </div>`;
+    });
+}
+
+// Enviar job de impressao
+async function sendPrintJob() {
+    if (!_lastImposedBlob || !_printerAgentActive) return;
+    const sel = document.getElementById('print-direct-printer');
+    const printerName = sel ? sel.value : '';
+    if (!printerName) { toast('Selecione uma impressora.', 'error'); return; }
+
+    // Coletar opcoes PPD selecionadas
+    const options = {};
+    document.querySelectorAll('#print-direct-options select[data-ppd-option]').forEach(s => {
+        options[s.getAttribute('data-ppd-option')] = s.value;
+    });
+
+    const btnSend = document.getElementById('btn-send-print');
+    if (btnSend) { btnSend.disabled = true; btnSend.textContent = 'Enviando...'; }
+
+    try {
+        const formData = new FormData();
+        formData.append('file', _lastImposedBlob, 'imposicao.pdf');
+        formData.append('printer_name', printerName);
+        formData.append('options', JSON.stringify(options));
+
+        const r = await fetch(`${_printerAgentUrl}/api/print/submit`, { method: 'POST', body: formData });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ detail: 'Erro desconhecido' }));
+            throw new Error(err.detail || 'Erro ao enviar');
+        }
+        toast(`Enviado para "${printerName}" com sucesso!`, 'success');
+        closePrintModal();
+    } catch (e) {
+        toast(`Erro na impressao: ${e.message}`, 'error');
+    } finally {
+        if (btnSend) { btnSend.disabled = false; btnSend.textContent = '🖨️ Enviar para Impressora'; }
+    }
+}
+
+// Verificar agente ao abrir aba de impressoras
+const _origSwitchView = window.switchView || null;
+function switchViewWithPrinterCheck(viewId) {
+    if (_origSwitchView) _origSwitchView(viewId);
+    if (viewId === 'view-impressoras') checkPrinterAgent();
+}
+
+// Inicializar: verificar agente silenciosamente ao carregar
+(async function initPrinterModule() {
+    try {
+        await checkPrinterAgent();
+    } catch (_) {}
+})();
+
+// Exportar funcoes globais
+window.checkPrinterAgent = checkPrinterAgent;
+window.loadPrinters = loadPrinters;
+window.loadPPDs = loadPPDs;
+window.uploadPPD = uploadPPD;
+window.savePrinterPPDMap = savePrinterPPDMap;
+window.openPrintModal = openPrintModal;
+window.closePrintModal = closePrintModal;
+window.onPrintPrinterChange = onPrintPrinterChange;
+window.sendPrintJob = sendPrintJob;
+window.onPPDMapChange = onPPDMapChange;
+
+// Exportar funcoes globais (existentes)
 window.gerarLinkCliente = gerarLinkCliente;
 window.clienteAprovarTudo = clienteAprovarTudo;
 window.clienteFinalizarFluxo = clienteFinalizarFluxo;
