@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import multiprocessing
 multiprocessing.freeze_support()
 
@@ -14,6 +14,14 @@ if getattr(sys, 'frozen', False):
     EXE_DIR = os.path.dirname(sys.executable)
     sys.path.insert(0, BASE_DIR)
     os.chdir(EXE_DIR)
+    # Redirecionar stdout/stderr para log (console=False nao tem saida)
+    _log_path = os.path.join(EXE_DIR, "agent_log.txt")
+    try:
+        _log_file = open(_log_path, "w", encoding="utf-8", buffering=1)
+        sys.stdout = _log_file
+        sys.stderr = _log_file
+    except Exception:
+        pass
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     EXE_DIR = BASE_DIR
@@ -175,4 +183,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        if getattr(sys, 'frozen', False):
+            # Gravar erro em arquivo para diagnostico
+            err_path = os.path.join(EXE_DIR, "agent_crash.txt")
+            with open(err_path, "w", encoding="utf-8") as f:
+                traceback.print_exc(file=f)
