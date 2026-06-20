@@ -7371,9 +7371,9 @@ window.runImposition = async function () {
 
             baseUrl = "http://localhost:8080";
 
-            console.log("[Imposition] ✅ Servidor local (porta 8080) detectado -- processando localmente para máxima velocidade");
+            console.log("[Imposition] Servidor local (porta 8080) detectado -- processando localmente para maxima velocidade");
 
-            if (sub) sub.textContent = `Gerando ${total.toLocaleString('pt-BR')} itens... (Servidor Local)`;
+            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... <span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;box-shadow:0 2px 8px rgba(34,197,94,0.35);vertical-align:middle;">&#9889; SERVIDOR LOCAL</span>`;
 
         } else if (localActive) {
 
@@ -7381,11 +7381,13 @@ window.runImposition = async function () {
 
             console.log("[Imposition] Processando via agente local (porta 9000)");
 
+            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... <span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;box-shadow:0 2px 8px rgba(34,197,94,0.35);vertical-align:middle;">&#9889; AGENTE LOCAL</span>`;
+
         } else {
 
             console.log("[Imposition] Processando na nuvem (Render)");
 
-            if (sub) sub.textContent = `Gerando ${total.toLocaleString('pt-BR')} itens... (Aguardando servidor na nuvem...)`;
+            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... <span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,0.35);vertical-align:middle;">&#9729; NUVEM</span>`;
 
         }
 
