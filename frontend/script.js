@@ -7327,42 +7327,33 @@ window.runImposition = async function () {
 
 
 
-        // 2. Verificar se o Agente Local (porta 9000) está ativo
-
+        // 2. Verificar se o Agente Local (porta 9000) esta ativo
+        // Tenta 127.0.0.1 e localhost (HTTPS->HTTP mixed content e tratado como excecao para loopback)
         let localActive = false;
+        let agentBaseUrl = "";
 
         if (!localApiActive) {
-
-            try {
-
-                const controller = new AbortController();
-
-                const timeoutId = setTimeout(() => controller.abort(), 300);
-
-                const agentCheck = await fetch("http://localhost:9000/", { 
-
-                    method: "GET",
-
-                    signal: controller.signal 
-
-                }).catch(() => null);
-
-                clearTimeout(timeoutId);
-
-                if (agentCheck && agentCheck.ok) {
-
-                    const checkData = await agentCheck.json().catch(() => ({}));
-
-                    if (checkData.status === "running") {
-
-                        localActive = true;
-
+            const agentUrls = ["http://127.0.0.1:9000/", "http://localhost:9000/"];
+            for (const url of agentUrls) {
+                if (localActive) break;
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2000);
+                    const agentCheck = await fetch(url, {
+                        method: "GET",
+                        mode: "cors",
+                        signal: controller.signal
+                    }).catch(() => null);
+                    clearTimeout(timeoutId);
+                    if (agentCheck && agentCheck.ok) {
+                        const checkData = await agentCheck.json().catch(() => ({}));
+                        if (checkData.status === "running") {
+                            localActive = true;
+                            agentBaseUrl = url.replace(/\/$/, "");
+                        }
                     }
-
-                }
-
-            } catch (_) {}
-
+                } catch (_) {}
+            }
         }
 
 
@@ -7377,7 +7368,7 @@ window.runImposition = async function () {
 
         } else if (localActive) {
 
-            baseUrl = "http://localhost:9000";
+            baseUrl = agentBaseUrl;
 
             console.log("[Imposition] Processando via agente local (porta 9000)");
 
