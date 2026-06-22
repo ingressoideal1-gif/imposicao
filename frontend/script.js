@@ -11162,7 +11162,8 @@ async function carregarArtesGlobais() {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
-            .select('id_int, status, nome_evento, designer_nome');
+            .select('id_int, status, nome_evento, designer_nome')
+            .order('created_at', { ascending: false });
         if (error) {
             if (error.code === '42P01') return; // tabela não existe
             throw error;
@@ -11562,8 +11563,9 @@ function getOSDesigner(osId, osNumero) {
     if (osNumero && state.todasArtes) {
         const osNumeroInt = parseInt(osNumero);
         const artes = state.todasArtes.filter(a => a.id_int === osNumeroInt);
-        if (artes.length > 0 && artes[0].designer_nome) {
-            return artes[0].designer_nome;
+        const arteComDesigner = artes.find(a => a.designer_nome);
+        if (arteComDesigner) {
+            return arteComDesigner.designer_nome;
         }
     }
     
@@ -12012,8 +12014,9 @@ function renderOrdens() {
                     : '';
                     
                 let nomeEventoHtml = '';
-                if (artesDaOS.length > 0 && artesDaOS[0].nome_evento) {
-                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${artesDaOS[0].nome_evento}</span>`;
+                const arteComEvento = artesDaOS.find(a => a.nome_evento);
+                if (arteComEvento) {
+                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${arteComEvento.nome_evento}</span>`;
                 }
 
                 return `
