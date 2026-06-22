@@ -11162,7 +11162,7 @@ async function carregarArtesGlobais() {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
-            .select('id_int, status, nome_evento');
+            .select('id_int, status, nome_evento, designer_nome');
         if (error) {
             if (error.code === '42P01') return; // tabela não existe
             throw error;
@@ -11555,9 +11555,19 @@ async function loadUsuarios() {
 /**
  * Obtém o designer atribuído a uma OS (salvo em localStorage)
  */
-function getOSDesigner(osId) {
+function getOSDesigner(osId, osNumero) {
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
-    return overrides[osId] || '';
+    if (overrides[osId]) return overrides[osId];
+    
+    if (osNumero && state.todasArtes) {
+        const osNumeroInt = parseInt(osNumero);
+        const artes = state.todasArtes.filter(a => a.id_int === osNumeroInt);
+        if (artes.length > 0 && artes[0].designer_nome) {
+            return artes[0].designer_nome;
+        }
+    }
+    
+    return '';
 }
 
 /**
@@ -11603,8 +11613,8 @@ function populateDesignerFilter() {
 /**
  * Gera o HTML do select inline de designer para uma OS na tabela
  */
-function renderDesignerSelect(osId) {
-    const currentDesigner = getOSDesigner(osId);
+function renderDesignerSelect(osId, osNumero) {
+    const currentDesigner = getOSDesigner(osId, osNumero);
     const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
     const allDesigners = new Set(baseList);
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
@@ -12015,7 +12025,7 @@ function renderOrdens() {
 
                         <td><strong>${os.cliente || '--'}</strong>${nomeEventoHtml}</td>
                         <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
-                        <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
+                        <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id, os.numero)}</td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">
                             ${formatDateTime(os.data_liberacao)}
                             ${dataPedFormatada}
