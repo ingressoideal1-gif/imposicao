@@ -64,10 +64,18 @@ def create_tray_image():
 def run_worker():
     agent_worker.run_loop()
 
+def run_server():
+    import uvicorn
+    from local_print_agent import app
+    uvicorn.run(app, host="127.0.0.1", port=9000, log_level="warning")
+
 def start_server_thread():
     global server_thread
-    server_thread = threading.Thread(target=run_worker, daemon=True, name="IdealAgentServer")
+    server_thread = threading.Thread(target=run_server, daemon=True, name="IdealAgentServer")
     server_thread.start()
+    
+    worker_thread = threading.Thread(target=run_worker, daemon=True, name="IdealAgentWorker")
+    worker_thread.start()
     time.sleep(1)
 
 
