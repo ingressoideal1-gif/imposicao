@@ -105,9 +105,8 @@ def start_server_thread():
 
 
 def open_panel(icon=None, item=None):
-    # Pode manter abrindo o vercel app com um parametro para gerenciar a pagina de agentes locais, ou apenas a home.
-    # O "panel" local nao existira mais com a porta 9000
-    webbrowser.open("https://supabase-imposicao-pm1w.vercel.app")
+    # Abre a aplicacao online que detecta automaticamente o agente local (porta 9000)
+    webbrowser.open("https://imposicao.onrender.com/app/index.html")
 
 
 def add_to_startup(icon=None, item=None):
