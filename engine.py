@@ -748,7 +748,13 @@ class ImpositionEngine:
                     cell_rotation = int(cfg.rotations.get(str(P), 0))
                     arte_nome = arte_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
 
-                    if cell_rotation == 0 and not arte_nome:
+                    # Fast path: render direto sem temp_doc
+                    # - Windows: save() local e rapido, compressao final nao e gargalo
+                    # - Linux/Render: save(garbage=4,deflate=True,clean=True) com 1000 XObjects
+                    #   unicos (QR) e catastrofico em CPU compartilhada -> usar temp_doc
+                    use_fast_path = (cell_rotation == 0 and not arte_nome and sys.platform == "win32")
+
+                    if use_fast_path:
                         # FAST PATH: renderizar arte e VDP diretamente na folha de saida
                         # Elimina temp_doc + tobytes(garbage=3) + reopen por celula
                         if current_doc_base:
