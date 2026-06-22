@@ -252,9 +252,8 @@ async def impose_file(
         )
 
         engine = ImpositionEngine(config)
-        # Rodar em thread pool: engine.process() é CPU-bound e não deve bloquear o event loop
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, engine.process)
+        # Chamada sincrona: fitz/PyMuPDF nao e thread-safe, run_in_executor causa lentidao
+        engine.process()
 
         suffix_fn = f"CSV_{len(csv_data)}" if csv_data else f"{data.get('seq_start', 1)}-{data.get('seq_end', 100)}"
         download_name = f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
