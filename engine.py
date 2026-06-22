@@ -1,6 +1,5 @@
 import math
 import os
-import sys
 import io
 import fitz       # PyMuPDF
 import qrcode
@@ -741,156 +740,130 @@ class ImpositionEngine:
                     cell_y0 = start_y + row * (cfg.item_h + cfg.gap_v)
                     cell_x1 = cell_x0 + cfg.item_w
                     cell_y1 = cell_y0 + cfg.item_h
+
                     cell_rotation = int(cfg.rotations.get(str(P), 0))
-                    arte_nome = arte_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
 
-                    if cell_rotation == 0 and not arte_nome:
-                        # FAST PATH (Windows apenas): render arte e VDP diretamente na folha
-                        # Elimina temp_doc + tobytes(garbage=3) + reopen por celula
-                        # No Linux/Render: esta logica aumenta o save() final - nao usar
-                        if current_doc_base:
-                            art_out_x0 = cell_x0 + (cfg.item_w - base_w) / 2 + cfg.offset_h
-                            art_out_y0 = cell_y0 + (cfg.item_h - base_h) / 2 - cfg.offset_v
-                            out_page_front.show_pdf_page(
-                                fitz.Rect(art_out_x0, art_out_y0, art_out_x0 + base_w, art_out_y0 + base_h),
-                                current_doc_base, page_idx_front,
-                                keep_proportion=False, clip=page_base.rect
-                            )
-                        else:
-                            out_page_front.insert_textbox(
-                                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-                                "ERR: base_file nulo", fontsize=8, color=(1, 0, 0))
-                        csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
-                        for el in current_elements:
-                            if el.get("face", "both") == "back":
-                                continue
-                            rotated_el = dict(el)
-                            rotated_el["rotation"] = el.get("rotation", 0)
-                            if "size_mm" in el:
-                                rotated_el["_size"] = el["size_mm"] * MM2PT
-                            if "width_mm" in el and el["type"] == "BARCODE":
-                                rotated_el["_w"] = el["width_mm"] * MM2PT
-                                rotated_el["_h"] = el.get("height_mm", 10) * MM2PT
-                            if "width_mm" in el and el["type"] == "SVG":
-                                rotated_el["width_mm"] = el["width_mm"]
-                                rotated_el["height_mm"] = el.get("height_mm", 20)
-                            if el["type"] in ("TEXT", "FIXED"):
-                                rotated_el["font_size"] = el.get("font_size", 12)
-                            current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
-                            if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
-                                pos = int(rotated_el.get("ticket_pos", 1))
-                                N = int(cfg.ticket_qtd)
-                                current_val = cfg.seq_start + (item_index * N) + (pos - 1)
-                            self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
+                    # 1. Criar PDF temporário para renderizar o item + elementos VDP (sem rotação da célula inicialmente)
+                    temp_doc = fitz.open()
+                    temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
 
+                    # Centralizar e aplicar offset no plano da célula temporária
+                    art_temp_x0 = (cfg.item_w - base_w) / 2 + cfg.offset_h
+                    art_temp_y0 = (cfg.item_h - base_h) / 2 - cfg.offset_v
+                    art_temp_x1 = art_temp_x0 + base_w
+                    art_temp_y1 = art_temp_y0 + base_h
+                    rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
+
+                    # Inserir arte na página temporária
+                    if current_doc_base:
+                        temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base.rect)
                     else:
-                        # PATH ORIGINAL: temp_doc (Linux/Render, rotacao de celula, arte_nome)
-                        # 1. Criar PDF temporário para renderizar o item + elementos VDP
-                        temp_doc = fitz.open()
-                        temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+                        err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}" if cfg.layout_schema == "multi_artes" else "ERR: base_file nulo"
+                        temp_page.insert_textbox(rect_art_temp, err_msg, fontsize=8, color=(1,0,0))
 
-                        # Centralizar e aplicar offset no plano da célula temporária
-                        art_temp_x0 = (cfg.item_w - base_w) / 2 + cfg.offset_h
-                        art_temp_y0 = (cfg.item_h - base_h) / 2 - cfg.offset_v
-                        art_temp_x1 = art_temp_x0 + base_w
-                        art_temp_y1 = art_temp_y0 + base_h
-                        rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
+                    csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
 
-                        # Inserir arte na página temporária
-                        if current_doc_base:
-                            temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base.rect)
-                        else:
-                            err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}" if cfg.layout_schema == "multi_artes" else "ERR: base_file nulo"
-                            temp_page.insert_textbox(rect_art_temp, err_msg, fontsize=8, color=(1,0,0))
+                    for el in current_elements:
+                        # Filtrar elementos que são apenas para verso
+                        if el.get("face", "both") == "back":
+                            continue
 
-                        csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
+                        # Mantemos a rotação configurada original do elemento, mas não a rotação da célula (que será aplicada na folha inteira)
+                        rotated_el = dict(el)
+                        rotated_el["rotation"] = el.get("rotation", 0)
 
-                        for el in current_elements:
-                            # Filtrar elementos que são apenas para verso
-                            if el.get("face", "both") == "back":
-                                continue
+                        if "size_mm" in el:
+                            rotated_el["_size"] = el["size_mm"] * MM2PT
+                        if "width_mm" in el and el["type"] == "BARCODE":
+                            rotated_el["_w"] = el["width_mm"] * MM2PT
+                            rotated_el["_h"] = el.get("height_mm", 10) * MM2PT
+                        if "width_mm" in el and el["type"] == "SVG":
+                            rotated_el["width_mm"] = el["width_mm"]
+                            rotated_el["height_mm"] = el.get("height_mm", 20)
+                        if el["type"] in ("TEXT", "FIXED"):
+                            rotated_el["font_size"] = el.get("font_size", 12)
 
-                            # Mantemos a rotação configurada original do elemento, mas não a rotação da célula
-                            rotated_el = dict(el)
-                            rotated_el["rotation"] = el.get("rotation", 0)
+                        current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
 
-                            if "size_mm" in el:
-                                rotated_el["_size"] = el["size_mm"] * MM2PT
-                            if "width_mm" in el and el["type"] == "BARCODE":
-                                rotated_el["_w"] = el["width_mm"] * MM2PT
-                                rotated_el["_h"] = el.get("height_mm", 10) * MM2PT
-                            if "width_mm" in el and el["type"] == "SVG":
-                                rotated_el["width_mm"] = el["width_mm"]
-                                rotated_el["height_mm"] = el.get("height_mm", 20)
-                            if el["type"] in ("TEXT", "FIXED"):
-                                rotated_el["font_size"] = el.get("font_size", 12)
+                        if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                            pos = int(rotated_el.get("ticket_pos", 1))
+                            N = int(cfg.ticket_qtd)
+                            logic = str(cfg.ticket_logica).strip().upper()
+                            Q = int(cfg.total_items)
+                            # A regra de negócios determinou que TICKET sempre incrementa sequencialmente
+                            # dentro da mesma folha, independentemente do número de folhas geradas.
+                            current_val = cfg.seq_start + (item_index * N) + (pos - 1)
 
-                            current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
+                        # Renderiza na página temporária usando coordenadas relativas diretas
+                        self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
-                            if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
-                                pos = int(rotated_el.get("ticket_pos", 1))
-                                N = int(cfg.ticket_qtd)
-                                logic = str(cfg.ticket_logica).strip().upper()
-                                Q = int(cfg.total_items)
-                                current_val = cfg.seq_start + (item_index * N) + (pos - 1)
-
-                            # Renderiza na página temporária usando coordenadas relativas diretas
-                            self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
-
-                        # Renderizar nome da arte (Multi-Artes) - rotacionado 90°
-                        if arte_nome:
-                            nome_str = str(arte_nome).zfill(6)
-                            nome_color_hex = arte_data.get("nome_color", "#000000")
-                            nome_rgb = _hex_to_rgb(nome_color_hex)
-                            nome_font_size = 14
-                            nome_x = nome_font_size
-                            import os as _os
-                            _impact_candidates = [
-                                "C:/Windows/Fonts/impact.ttf",
-                                "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
-                                "/usr/share/fonts/impact/impact.ttf",
-                            ]
-                            _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
-                            _font_name_calc = "Impact" if _impact_file else "hebo"
-                            _font_file_calc = _impact_file
-                            try:
-                                text_width = fitz.get_text_length(nome_str, fontname=_font_name_calc,
-                                                                  fontsize=nome_font_size,
-                                                                  fontfile=_font_file_calc)
-                            except Exception:
-                                text_width = len(nome_str) * nome_font_size * 0.6
-                            nome_y = (cfg.item_h + text_width) / 2
-                            origin = fitz.Point(nome_x, nome_y)
-                            pivot  = fitz.Point(nome_x, nome_y)
-                            _nome_insert_kwargs = dict(
-                                fontsize=nome_font_size,
-                                color=nome_rgb,
-                                morph=(pivot, fitz.Matrix(math.cos(math.radians(-90)), -math.sin(math.radians(-90)),
-                                                          math.sin(math.radians(-90)),  math.cos(math.radians(-90)), 0, 0))
-                            )
-                            if _impact_file:
-                                _nome_insert_kwargs["fontname"] = "Impact"
-                                _nome_insert_kwargs["fontfile"] = _impact_file
-                            else:
-                                _nome_insert_kwargs["fontname"] = "hebo"
-                            temp_page.insert_text(origin, nome_str, **_nome_insert_kwargs)
-
-                        # 2. Impor a pagina temporaria completa (arte + VDP) na folha final
-                        # FIX: materializar temp_doc para bytes antes de usar como fonte
-                        # Evita XObject encadeado que gera paginas em branco no Linux/Render
-                        _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
-                        temp_doc.close()
-                        _temp_doc_m = fitz.open("pdf", _temp_bytes)
-                        out_page_front.show_pdf_page(
-                            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-                            _temp_doc_m,
-                            0,
-                            keep_proportion=False,
-                            rotate=cell_rotation,
-                            clip=_temp_doc_m[0].rect
+                    # Renderizar nome da arte (Multi-Artes) - rotacionado 90°, alinhado à esquerda, centralizado na altura
+                    arte_nome = arte_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
+                    if arte_nome:
+                        nome_str = str(arte_nome).zfill(6)
+                        nome_color_hex = arte_data.get("nome_color", "#000000")
+                        nome_rgb = _hex_to_rgb(nome_color_hex)
+                        nome_font_size = 14
+                        # Posição X: 0mm da lateral esquerda da célula (em pontos PDF)
+                        # O texto é rotacionado -90°, então X define a distância do canto esq.
+                        # Com rotação -90°: o eixo do texto vai de baixo pra cima.
+                        # Para colocar a 0mm da lateral esquerda: nome_x = font_size (apenas o pivot)
+                        nome_x = nome_font_size  # pivot X = altura da fonte (0mm de margem)
+                        # Centralizar verticalmente: calcular largura real do texto e deslocar
+                        # origin.y por metade para que o texto fique centrado na célula.
+                        # Determinar fontname/fontfile antes para calcular text_length
+                        import os as _os
+                        _impact_candidates = [
+                            "C:/Windows/Fonts/impact.ttf",               # Windows
+                            "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",  # Linux msttcorefonts
+                            "/usr/share/fonts/impact/impact.ttf",         # Linux alternativo
+                        ]
+                        _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
+                        _font_name_calc = "Impact" if _impact_file else "hebo"
+                        _font_file_calc = _impact_file  # None se não encontrou
+                        # Calcular largura do texto para centralizar verticalmente
+                        try:
+                            text_width = fitz.get_text_length(nome_str, fontname=_font_name_calc,
+                                                              fontsize=nome_font_size,
+                                                              fontfile=_font_file_calc)
+                        except Exception:
+                            text_width = len(nome_str) * nome_font_size * 0.6  # fallback aproximado
+                        nome_y = (cfg.item_h + text_width) / 2   # deslocar para baixo metade do texto
+                        # origin: ponto de inserção do texto (baseline) antes da rotação
+                        # pivot: ponto de rotação = mesmo ponto (gira em torno de si)
+                        # Com rotação -90°, o texto vai de baixo para cima a partir de origin.
+                        # Como origin.y = centro + metade_texto, o texto fica centrado.
+                        origin = fitz.Point(nome_x, nome_y)
+                        pivot  = fitz.Point(nome_x, nome_y)
+                        # Montar kwargs para insert_text (fonte Impact 14pt)
+                        _nome_insert_kwargs = dict(
+                            fontsize=nome_font_size,
+                            color=nome_rgb,
+                            morph=(pivot, fitz.Matrix(math.cos(math.radians(-90)), -math.sin(math.radians(-90)),
+                                                      math.sin(math.radians(-90)),  math.cos(math.radians(-90)), 0, 0))
                         )
-                        _temp_doc_m.close()
+                        if _impact_file:
+                            _nome_insert_kwargs["fontname"] = "Impact"
+                            _nome_insert_kwargs["fontfile"] = _impact_file
+                        else:
+                            _nome_insert_kwargs["fontname"] = "hebo"  # Helvetica Bold como fallback
+                        temp_page.insert_text(origin, nome_str, **_nome_insert_kwargs)
 
+                    # 2. Impor a pagina temporaria completa (arte + VDP) na folha final
+                    # FIX: materializar temp_doc para bytes antes de usar como fonte
+                    # Evita XObject encadeado que gera paginas em branco no Linux/Render
+                    _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
+                    temp_doc.close()
+                    _temp_doc_m = fitz.open("pdf", _temp_bytes)
+                    out_page_front.show_pdf_page(
+                        fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                        _temp_doc_m,
+                        0,
+                        keep_proportion=False,
+                        rotate=cell_rotation,
+                        clip=_temp_doc_m[0].rect
+                    )
+                    _temp_doc_m.close()
 
             # 2. RENDERIZAR VERSO DA FOLHA (SE DUPLEX)
             if is_duplex:
@@ -1019,7 +992,7 @@ class ImpositionEngine:
 
                         # 2. Impor a pagina temporaria de verso na folha final
                         # FIX: materializar temp_doc para bytes (fix paginas em branco)
-                        _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
+                        _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
                         temp_doc.close()
                         _temp_doc_m = fitz.open("pdf", _temp_bytes)
                         out_page_back.show_pdf_page(
@@ -1032,7 +1005,7 @@ class ImpositionEngine:
                         )
                         _temp_doc_m.close()
 
-        doc_out.save(cfg.out_pdf, garbage=3, deflate=True)
+        doc_out.save(cfg.out_pdf, garbage=4, deflate=True, clean=True)
         if doc_base:
             doc_base.close()
         for doc in pdf_cache.values():
