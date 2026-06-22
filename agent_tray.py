@@ -130,18 +130,14 @@ def setup_tray(icon):
 
 
 def main():
-    print("[agent] Iniciando worker do Supabase Cloud Relay...")
-    start_server_thread()
-    print("[agent] Worker iniciado com sucesso!")
-
     try:
         import pystray
         from PIL import Image
     except ImportError as e:
+        # Sem tray: iniciar servidor direto e manter vivo
         print(f"[agent] pystray nao disponivel: {e} - rodando apenas servidor")
-        # Manter o processo vivo mesmo sem tray
-        import signal
-        signal.pause() if hasattr(signal, 'pause') else threading.Event().wait()
+        start_server_thread()
+        threading.Event().wait()
         return
 
     tray_image = create_tray_image()
@@ -165,6 +161,14 @@ def main():
         title="Ideal Imposition Agent - Ativo",
         menu=menu,
     )
+
+    def setup_tray(icon):
+        icon.visible = True
+        # Iniciar as threads DEPOIS do icone estar criado no thread principal
+        # Isso resolve o problema do exe PyInstaller onde o icone nao aparece
+        print("[agent] Iniciando worker e servidor...")
+        start_server_thread()
+        print("[agent] Worker e servidor iniciados com sucesso!")
 
     icon.run(setup=setup_tray)
 
