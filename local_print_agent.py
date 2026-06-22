@@ -68,9 +68,7 @@ if _FRONTEND_DIR:
 
 @app.get("/", include_in_schema=False)
 def root_redirect():
-    """Redireciona a raiz para o frontend local."""
-    if _FRONTEND_DIR:
-        return RedirectResponse(url="/app/index.html")
+    """Retorna status JSON (compatibilidade) e serve como health check."""
     return {"status": "running", "message": "Ideal Imposition Agent ativo", "capabilities": ["impose", "print"]}
 
 @app.get("/api/status")
