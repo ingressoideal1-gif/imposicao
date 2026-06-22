@@ -11738,8 +11738,11 @@ function renderOrdens() {
         // Pega as artes associadas a esta OS
         const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
         
-        // Verifica se alguma dessas artes tem o status "Em Arte"
-        const temArteEmAndamento = artesDaOS.some(a => (a.status || '').toUpperCase() === 'EM ARTE');
+        // Verifica se alguma dessas artes tem o status correspondente a 'Em Arte'
+        const temArteEmAndamento = artesDaOS.some(a => {
+            const st = (a.status || '').toUpperCase();
+            return st === 'EM ARTE' || st === 'ARTE_EM_ANDAMENTO' || st === 'PENDENTE' || st === 'EM_ARTE';
+        });
         
         return temArteEmAndamento;
     });
