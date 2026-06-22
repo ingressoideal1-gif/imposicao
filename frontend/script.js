@@ -10998,6 +10998,8 @@ async function loadOrdens() {
         state.hasPedidosComerciais = pedidosComerciais.length > 0;
         console.log('[Supabase] Pedidos comerciais carregados:', pedidosComerciais.length, pedidosComerciais);
 
+        await carregarArtesGlobais();
+
         // Fonte 1: Vibecode (ERP do parceiro)
         if (typeof vibeClient !== 'undefined' && vibeClient) {
             console.log('[OS] Carregando do Vibecode...');
@@ -11005,7 +11007,6 @@ async function loadOrdens() {
             if (loaded) {
                 await sincronizarStatusOrdensDinamico();
                 await carregarLinksExistentes();
-                await carregarArtesGlobais();
                 renderOrdens();
                 return;
             }
@@ -11025,7 +11026,9 @@ async function loadOrdens() {
             if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
                 ordensFiltradas = ordensFiltradas.filter(os => {
                     const osNumeroInt = parseInt(os.numero);
-                    return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
+                    const temNoComercial = pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
+                    const temNasArtes = (state.todasArtes || []).some(a => String(a.id_int) === String(osNumeroInt));
+                    return temNoComercial || temNasArtes;
                 });
             }
 
@@ -11075,7 +11078,9 @@ async function loadOrdens() {
                 if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
                     state.ordens = mappedLocalData.filter(os => {
                         const osNumeroInt = parseInt(os.numero);
-                        return pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
+                        const temNoComercial = pedidosComerciais.some(ped => String(ped.id_int) === String(osNumeroInt));
+                        const temNasArtes = (state.todasArtes || []).some(a => String(a.id_int) === String(osNumeroInt));
+                        return temNoComercial || temNasArtes;
                     });
                 } else {
                     state.ordens = mappedLocalData;
@@ -11086,7 +11091,6 @@ async function loadOrdens() {
         }
         await sincronizarStatusOrdensDinamico();
         await carregarLinksExistentes();
-        await carregarArtesGlobais();
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
@@ -11200,8 +11204,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
 
             // FILTRAR: Se for produção (não-dev) ou se tiver pedidosComerciais populada, filtra
             if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
-                const existe = pedidosComerciais.some(ped => String(ped.id_int) === String(key));
-                if (!existe) {
+                const existeComercial = pedidosComerciais.some(ped => String(ped.id_int) === String(key));
+                const existeArtes = (state.todasArtes || []).some(a => String(a.id_int) === String(key));
+                if (!existeComercial && !existeArtes) {
                     return; // ignora este produto e não cria a OS
                 }
             }
