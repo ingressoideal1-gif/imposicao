@@ -12013,7 +12013,7 @@ function renderOrdens() {
                     
                 let nomeEventoHtml = '';
                 if (artesDaOS.length > 0 && artesDaOS[0].nome_evento) {
-                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: var(--text-dim);">${artesDaOS[0].nome_evento}</span>`;
+                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${artesDaOS[0].nome_evento}</span>`;
                 }
 
                 return `
@@ -12023,9 +12023,13 @@ function renderOrdens() {
                             <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, ${isAllApproved ? 'var(--green), #16a34a' : 'var(--blue), #2563eb'}); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px ${isAllApproved ? 'rgba(34, 197, 94, 0.4)' : 'rgba(59, 130, 246, 0.4)'}; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
                         </td>
 
-                        <td><strong>${os.cliente || '--'}</strong>${nomeEventoHtml}</td>
-                        <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
-                        <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id, os.numero)}</td>
+                        <td>
+                            <strong style="color: white;">${os.cliente || '--'}</strong>${nomeEventoHtml}
+                        </td>
+                        <td onclick="event.stopPropagation();">
+                            <strong style="color: white; font-size: 0.85rem; display: block; margin-bottom: 4px;">${os.vendedor || '--'}</strong>
+                            ${renderDesignerSelect(os.id, os.numero)}
+                        </td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">
                             ${formatDateTime(os.data_liberacao)}
                             ${dataPedFormatada}
