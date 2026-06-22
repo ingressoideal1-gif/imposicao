@@ -7336,26 +7336,33 @@ window.runImposition = async function (mode) {
         let agentBaseUrl = "";
 
         if (!localApiActive) {
-            const agentUrls = ["http://127.0.0.1:9000/api/status", "http://localhost:9000/api/status"];
-            for (const url of agentUrls) {
-                if (localActive) break;
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 2000);
-                    const agentCheck = await fetch(url, {
-                        method: "GET",
-                        mode: "cors",
-                        signal: controller.signal
-                    }).catch(() => null);
-                    clearTimeout(timeoutId);
-                    if (agentCheck && agentCheck.ok) {
-                        const checkData = await agentCheck.json().catch(() => ({}));
-                        if (checkData.status === "running") {
-                            localActive = true;
-                            agentBaseUrl = url.replace(/\/api\/status$/, "");
+            // Testa / e /api/status para compatibilidade com todas as versoes do exe
+            const agentBases = ["http://127.0.0.1:9000", "http://localhost:9000"];
+            outerLoop:
+            for (const base of agentBases) {
+                for (const path of ["/api/status", "/"]) {
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 2000);
+                        const agentCheck = await fetch(`${base}${path}`, {
+                            method: "GET",
+                            mode: "cors",
+                            signal: controller.signal
+                        }).catch(() => null);
+                        clearTimeout(timeoutId);
+                        if (agentCheck && agentCheck.ok) {
+                            const ct = agentCheck.headers.get("content-type") || "";
+                            if (ct.includes("application/json")) {
+                                const checkData = await agentCheck.json().catch(() => ({}));
+                                if (checkData.status === "running") {
+                                    localActive = true;
+                                    agentBaseUrl = base;
+                                    break outerLoop;
+                                }
+                            }
                         }
-                    }
-                } catch (_) {}
+                    } catch (_) {}
+                }
             }
         }
 
