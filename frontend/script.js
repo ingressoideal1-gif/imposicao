@@ -11199,7 +11199,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
         try {
             const { data: propData, error: propError } = await vibeClient
                 .from('propostas')
-                .select('*');
+                .select('*')
+                .order('id_int', { ascending: false })
+                .limit(2000);
             if (!propError && propData) {
                 propostas = propData;
             }
