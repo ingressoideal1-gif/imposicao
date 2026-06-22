@@ -105,8 +105,8 @@ def start_server_thread():
 
 
 def open_panel(icon=None, item=None):
-    # Abre a aplicacao online que detecta automaticamente o agente local (porta 9000)
-    webbrowser.open("https://imposicao.onrender.com/app/index.html")
+    # Abre a interface local - 100% offline, sem depender da internet
+    webbrowser.open("http://127.0.0.1:9000/app/index.html")
 
 
 def add_to_startup(icon=None, item=None):
