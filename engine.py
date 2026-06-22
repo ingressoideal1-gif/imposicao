@@ -1,6 +1,7 @@
 import math
 import os
 import io
+import sys
 import fitz       # PyMuPDF
 import qrcode
 from PIL import Image
@@ -115,7 +116,8 @@ class ImpositionConfig:
                  print_mode: str = "front",
                  numeracao_2: dict | None = None,
                  rotate_page: bool = False,
-                 multi_artes: list[dict] | None = None):
+                 multi_artes: list[dict] | None = None,
+                 fast_mode: bool | None = None):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -124,6 +126,9 @@ class ImpositionConfig:
         self.print_mode = print_mode
         self.rotate_page = rotate_page
         self.multi_artes = multi_artes or []
+        # fast_mode=True: pula tobytes/reopen por celula (Windows local)
+        # Se nao especificado, detecta automaticamente: Windows=fast, Linux=safe
+        self.fast_mode = fast_mode if fast_mode is not None else (sys.platform == "win32")
 
         # Formato (tamanho do item + grade + gaps)
         self.item_w = formato["width_mm"] * MM2PT
@@ -850,20 +855,32 @@ class ImpositionEngine:
                         temp_page.insert_text(origin, nome_str, **_nome_insert_kwargs)
 
                     # 2. Impor a pagina temporaria completa (arte + VDP) na folha final
-                    # FIX: materializar temp_doc para bytes antes de usar como fonte
-                    # Evita XObject encadeado que gera paginas em branco no Linux/Render
-                    _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
-                    temp_doc.close()
-                    _temp_doc_m = fitz.open("pdf", _temp_bytes)
-                    out_page_front.show_pdf_page(
-                        fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-                        _temp_doc_m,
-                        0,
-                        keep_proportion=False,
-                        rotate=cell_rotation,
-                        clip=_temp_doc_m[0].rect
-                    )
-                    _temp_doc_m.close()
+                    if self.cfg.fast_mode:
+                        # Windows/local: usar temp_doc diretamente (sem tobytes)
+                        # Evita ciclo encode/decode por celula - 3-5x mais rapido
+                        out_page_front.show_pdf_page(
+                            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                            temp_doc,
+                            0,
+                            keep_proportion=False,
+                            rotate=cell_rotation,
+                            clip=temp_doc[0].rect
+                        )
+                        temp_doc.close()
+                    else:
+                        # Linux/Render: materializar para bytes (fix paginas em branco)
+                        _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
+                        temp_doc.close()
+                        _temp_doc_m = fitz.open("pdf", _temp_bytes)
+                        out_page_front.show_pdf_page(
+                            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                            _temp_doc_m,
+                            0,
+                            keep_proportion=False,
+                            rotate=cell_rotation,
+                            clip=_temp_doc_m[0].rect
+                        )
+                        _temp_doc_m.close()
 
             # 2. RENDERIZAR VERSO DA FOLHA (SE DUPLEX)
             if is_duplex:
@@ -991,21 +1008,35 @@ class ImpositionEngine:
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
                         # 2. Impor a pagina temporaria de verso na folha final
-                        # FIX: materializar temp_doc para bytes (fix paginas em branco)
-                        _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
-                        temp_doc.close()
-                        _temp_doc_m = fitz.open("pdf", _temp_bytes)
-                        out_page_back.show_pdf_page(
-                            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-                            _temp_doc_m,
-                            0,
-                            keep_proportion=False,
-                            rotate=cell_rotation,
-                            clip=_temp_doc_m[0].rect
-                        )
-                        _temp_doc_m.close()
+                        if self.cfg.fast_mode:
+                            # Windows/local: usar temp_doc diretamente
+                            out_page_back.show_pdf_page(
+                                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                                temp_doc,
+                                0,
+                                keep_proportion=False,
+                                rotate=cell_rotation,
+                                clip=temp_doc[0].rect
+                            )
+                            temp_doc.close()
+                        else:
+                            # Linux/Render: fix paginas em branco
+                            _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
+                            temp_doc.close()
+                            _temp_doc_m = fitz.open("pdf", _temp_bytes)
+                            out_page_back.show_pdf_page(
+                                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                                _temp_doc_m,
+                                0,
+                                keep_proportion=False,
+                                rotate=cell_rotation,
+                                clip=_temp_doc_m[0].rect
+                            )
+                            _temp_doc_m.close()
 
-        doc_out.save(cfg.out_pdf, garbage=4, deflate=True, clean=True)
+        # fast_mode: compressao minima (local) / maxima (nuvem)
+        save_opts = dict(garbage=1, deflate=False) if self.cfg.fast_mode else dict(garbage=4, deflate=True, clean=True)
+        doc_out.save(cfg.out_pdf, **save_opts)
         if doc_base:
             doc_base.close()
         for doc in pdf_cache.values():
