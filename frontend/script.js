@@ -10998,6 +10998,21 @@ async function loadOrdens() {
         state.hasPedidosComerciais = pedidosComerciais.length > 0;
         console.log('[Supabase] Pedidos comerciais carregados:', pedidosComerciais.length, pedidosComerciais);
 
+        // Buscar propostas da tabela pai para sobrescrever cliente e vendedor
+        let propostasComerciais = [];
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            try {
+                const { data: propData, error: propError } = await supabaseClient
+                    .from('propostas')
+                    .select('id_int, cliente, cliente_nome, dados_cliente, vendedor, vendedor_nome');
+                if (!propError && propData) {
+                    propostasComerciais = propData;
+                }
+            } catch (err) {
+                console.warn('[Supabase] Falha ao carregar tabela propostas:', err);
+            }
+        }
+
         await carregarArtesGlobais();
 
         // Fonte 1: Vibecode (ERP do parceiro)
@@ -11048,12 +11063,17 @@ async function loadOrdens() {
                 const osNumeroInt = parseInt(os.numero);
                 const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
                 
+                // Sobrescrever cliente e vendedor usando a tabela propostas
+                const propReal = propostasComerciais.find(pr => String(pr.id_int) === String(osNumeroInt));
+                const clienteProposta = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || os.cliente || getFallbackCliente(osNumeroInt);
+                const vendedorProposta = propReal?.vendedor || propReal?.vendedor_nome || os.vendedor || getFallbackVendedor(osNumeroInt);
+                
                 return {
                     ...os,
                     status: savedStatus || dbStatus,
                     status_arte: pedidoReal?.status_arte || null,
-                    cliente: os.cliente || getFallbackCliente(os.numero || 0),
-                    vendedor: os.vendedor || getFallbackVendedor(os.numero || 0),
+                    cliente: clienteProposta,
+                    vendedor: vendedorProposta,
                     data_liberacao: os.data_liberacao || os.created_at,
                     prazo_entrega: os.prazo_entrega || getFallbackPrazo(os.created_at, os.numero || 0),
                     _itens_count: os.producao_os_itens ? os.producao_os_itens.length : 0
@@ -11069,8 +11089,15 @@ async function loadOrdens() {
                 const mappedLocalData = localData.map(os => {
                     const osNumeroInt = parseInt(os.numero);
                     const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
+                    
+                    const propReal = propostasComerciais.find(pr => String(pr.id_int) === String(osNumeroInt));
+                    const clienteProposta = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || os.cliente || getFallbackCliente(osNumeroInt);
+                    const vendedorProposta = propReal?.vendedor || propReal?.vendedor_nome || os.vendedor || getFallbackVendedor(osNumeroInt);
+                    
                     return {
                         ...os,
+                        cliente: clienteProposta,
+                        vendedor: vendedorProposta,
                         status_arte: pedidoReal?.status_arte || null
                     };
                 });
