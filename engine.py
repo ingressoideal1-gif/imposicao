@@ -538,6 +538,8 @@ class ImpositionEngine:
         start_y = (cfg.sheet_h - used_h) / 2
 
         total_sheets = math.ceil(cfg.total_items / poses_per_sheet)
+        _fast_path_enabled = (sys.platform == "win32")
+        print(f"[engine] platform={sys.platform} fast_path={'ON (Windows)' if _fast_path_enabled else 'OFF (Linux - temp_doc)'} total_sheets={total_sheets} items={cfg.total_items}")
 
         doc_out = fitz.open()
         doc_base = self._load_base_as_pdf()
