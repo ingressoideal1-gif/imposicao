@@ -855,10 +855,9 @@ class ImpositionEngine:
                         temp_page.insert_text(origin, nome_str, **_nome_insert_kwargs)
 
                     # 2. Impor a pagina temporaria completa (arte + VDP) na folha final
-                    # Materializar para bytes antes de usar como fonte
-                    # Evita XObject encadeado que gera paginas em branco
-                    # garbage=0, deflate=False: serializacao minima - mais rapido que garbage=3
-                    _temp_bytes = temp_doc.tobytes(garbage=0, deflate=False)
+                    # FIX: materializar temp_doc para bytes antes de usar como fonte
+                    # Evita XObject encadeado que gera paginas em branco no Linux/Render
+                    _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
                     temp_doc.close()
                     _temp_doc_m = fitz.open("pdf", _temp_bytes)
                     out_page_front.show_pdf_page(
@@ -998,8 +997,8 @@ class ImpositionEngine:
 
                         # 2. Impor a pagina temporaria de verso na folha final
                         # 2. Impor a pagina temporaria de verso na folha final
-                        # garbage=0, deflate=False: serializacao minima
-                        _temp_bytes = temp_doc.tobytes(garbage=0, deflate=False)
+                        # FIX: materializar temp_doc para bytes (fix paginas em branco)
+                        _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
                         temp_doc.close()
                         _temp_doc_m = fitz.open("pdf", _temp_bytes)
                         out_page_back.show_pdf_page(
@@ -1012,13 +1011,7 @@ class ImpositionEngine:
                         )
                         _temp_doc_m.close()
 
-        # Windows: garbage=1+deflate=False (rapido, sem compressao)
-        # Linux/Render: garbage=4+deflate=True+clean (menor arquivo, melhor para rede)
-        if sys.platform == "win32":
-            doc_out.save(cfg.out_pdf, garbage=1, deflate=False)
-        else:
-            doc_out.save(cfg.out_pdf, garbage=4, deflate=True, clean=True)
-        # Fechar documentos
+        doc_out.save(cfg.out_pdf, garbage=4, deflate=True, clean=True)
         if doc_base:
             doc_base.close()
         for doc in pdf_cache.values():
