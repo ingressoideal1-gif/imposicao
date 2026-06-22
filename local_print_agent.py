@@ -11,7 +11,8 @@ import io
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 import print_service
 import ppd_parser
@@ -52,7 +53,27 @@ app.add_middleware(
     allow_private_network=True,
 )
 
-@app.get("/")
+# Montar frontend estático (mesma pasta que o exe ou repositório)
+_FRONTEND_DIR = None
+for _candidate in [
+    os.path.join(os.path.dirname(sys.executable), "frontend"),  # ao lado do exe
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend"),  # ao lado do .py
+]:
+    if os.path.isdir(_candidate):
+        _FRONTEND_DIR = _candidate
+        break
+
+if _FRONTEND_DIR:
+    app.mount("/app", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
+
+@app.get("/", include_in_schema=False)
+def root_redirect():
+    """Redireciona a raiz para o frontend local."""
+    if _FRONTEND_DIR:
+        return RedirectResponse(url="/app/index.html")
+    return {"status": "running", "message": "Ideal Imposition Agent ativo", "capabilities": ["impose", "print"]}
+
+@app.get("/api/status")
 def read_root():
     return {"status": "running", "message": "Ideal Imposition Agent ativo", "capabilities": ["impose", "print"]}
 

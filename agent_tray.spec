@@ -12,6 +12,7 @@ a = Analysis(
         ('agent_icon.ico', '.'),
         ('Logo Ideal Dark.png', '.'),
         ('ppds', 'ppds'),
+        ('frontend', 'frontend'),
     ],
     hiddenimports=[
         'uvicorn.logging',

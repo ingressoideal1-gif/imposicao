@@ -7336,7 +7336,7 @@ window.runImposition = async function (mode) {
         let agentBaseUrl = "";
 
         if (!localApiActive) {
-            const agentUrls = ["http://127.0.0.1:9000/", "http://localhost:9000/"];
+            const agentUrls = ["http://127.0.0.1:9000/api/status", "http://localhost:9000/api/status"];
             for (const url of agentUrls) {
                 if (localActive) break;
                 try {
@@ -7352,7 +7352,7 @@ window.runImposition = async function (mode) {
                         const checkData = await agentCheck.json().catch(() => ({}));
                         if (checkData.status === "running") {
                             localActive = true;
-                            agentBaseUrl = url.replace(/\/$/, "");
+                            agentBaseUrl = url.replace(/\/api\/status$/, "");
                         }
                     }
                 } catch (_) {}
