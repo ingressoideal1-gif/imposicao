@@ -11133,7 +11133,7 @@ async function carregarArtesGlobais() {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
-            .select('id_int, status');
+            .select('id_int, status, nome_evento');
         if (error) {
             if (error.code === '42P01') return; // tabela não existe
             throw error;
@@ -11956,25 +11956,24 @@ function renderOrdens() {
                 const osNumeroInt = parseInt(os.numero);
                 const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
                 const itensList = state.osItens[os.id] || [];
-                let aprCount = 0;
-                if (itensList.length > 0) {
-                    itensList.forEach(item => {
-                        const artesDoItem = artesDaOS.filter(a => a.id_modelo === item.id);
-                        let statusItem = 'PENDENTE';
-                        if (artesDoItem.length > 0) {
-                            artesDoItem.sort((a, b) => b.versao - a.versao);
-                            statusItem = artesDoItem[0].status;
-                        }
-                        if (statusItem === 'APROVADA' || statusItem === 'APROVADA_CLIENTE' || statusItem === 'LIBERADA') {
-                            aprCount++;
-                        }
-                    });
+                
+                let isAllApproved = false;
+                let statusGlobalArte = 'PENDENTE';
+                if (artesDaOS.length > 0) {
+                    statusGlobalArte = (artesDaOS[0].status || 'PENDENTE').toUpperCase();
+                }
+                if (statusGlobalArte === 'APROVADA' || statusGlobalArte === 'APROVADA_CLIENTE' || statusGlobalArte === 'LIBERADA') {
+                    isAllApproved = true;
                 }
                 
-                const isAllApproved = itensList.length > 0 && aprCount === itensList.length;
                 const artProgressHtml = itensList.length > 0 
-                    ? `<div style="font-size: 0.72rem; margin-top: 5px; font-weight: ${isAllApproved ? 'bold' : 'normal'}; color: ${isAllApproved ? 'var(--green)' : 'var(--text-dim)'};">${aprCount}/${itensList.length} Aprovadas</div>`
+                    ? `<div style="font-size: 0.72rem; margin-top: 5px; font-weight: ${isAllApproved ? 'bold' : 'normal'}; color: ${isAllApproved ? 'var(--green)' : 'var(--text-dim)'};">${isAllApproved ? itensList.length : 0}/${itensList.length} Aprovadas</div>`
                     : '';
+                    
+                let nomeEventoHtml = '';
+                if (artesDaOS.length > 0 && artesDaOS[0].nome_evento) {
+                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: var(--text-dim);">${artesDaOS[0].nome_evento}</span>`;
+                }
 
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
@@ -11983,7 +11982,7 @@ function renderOrdens() {
                             <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, ${isAllApproved ? 'var(--green), #16a34a' : 'var(--blue), #2563eb'}); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px ${isAllApproved ? 'rgba(34, 197, 94, 0.4)' : 'rgba(59, 130, 246, 0.4)'}; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
                         </td>
 
-                        <td><strong>${os.cliente || '--'}</strong></td>
+                        <td><strong>${os.cliente || '--'}</strong>${nomeEventoHtml}</td>
                         <td onclick="event.stopPropagation();">${renderVendedorSelect(os.id)}</td>
                         <td onclick="event.stopPropagation();">${renderDesignerSelect(os.id)}</td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">
