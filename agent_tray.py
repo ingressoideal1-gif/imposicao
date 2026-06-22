@@ -10,11 +10,29 @@ import socket
 import time
 
 if getattr(sys, 'frozen', False):
+    # ── Modo executavel (PyInstaller) ──────────────────────────────────────
+    # Com console=False, o subsistema Win32 de mensagens nao e inicializado
+    # corretamente, causando crash silencioso do pystray.
+    # AllocConsole() + FreeConsole() forcam a inicializacao sem mostrar janela.
+    import ctypes
+    try:
+        ctypes.windll.kernel32.AllocConsole()
+        ctypes.windll.kernel32.FreeConsole()
+    except Exception:
+        pass
+    # Ocultar qualquer janela de console que possa ter aparecido
+    try:
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+    except Exception:
+        pass
+
     BASE_DIR = sys._MEIPASS
     EXE_DIR = os.path.dirname(sys.executable)
     sys.path.insert(0, BASE_DIR)
     os.chdir(EXE_DIR)
-    # Redirecionar stdout/stderr para log (console=False nao tem saida)
+    # Redirecionar stdout/stderr para log
     _log_path = os.path.join(EXE_DIR, "agent_log.txt")
     try:
         _log_file = open(_log_path, "w", encoding="utf-8", buffering=1)
@@ -164,11 +182,12 @@ def main():
 
     def setup_tray(icon):
         icon.visible = True
-        # Iniciar as threads DEPOIS do icone estar criado no thread principal
-        # Isso resolve o problema do exe PyInstaller onde o icone nao aparece
-        print("[agent] Iniciando worker e servidor...")
-        start_server_thread()
-        print("[agent] Worker e servidor iniciados com sucesso!")
+
+    # Iniciar servidor e worker ANTES do icon.run()
+    # (o AllocConsole/FreeConsole no topo ja garantiu o Win32 message pump)
+    print("[agent] Iniciando worker e servidor...")
+    start_server_thread()
+    print("[agent] Worker e servidor iniciados com sucesso!")
 
     icon.run(setup=setup_tray)
 
