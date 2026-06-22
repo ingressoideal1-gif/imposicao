@@ -14895,10 +14895,6 @@ async function savePrinterPPDMap() {
     toast('No modo Cloud Relay, os mapeamentos e uploads de PPD devem ser feitos na maquina do Agente Local (pasta ppds e printer_ppd_map.json).', 'warning');
     const btn = document.getElementById('btn-save-ppd-map');
     if (btn) btn.disabled = true;
-
-    } catch (e) {
-        toast(`Erro ao salvar: ${e.message}`, 'error');
-    }
 }
 
 // ---- Modal de Impressao Direta ----
