@@ -3,6 +3,7 @@ import time
 import datetime
 import json
 import os
+import sys
 import uuid
 import tempfile
 import urllib.request
@@ -12,8 +13,9 @@ import db
 import print_service
 import ppd_parser
 
-# Tentar carregar ou gerar um ID único para este agente
-CONFIG_FILE = "agent_config.json"
+# Garante que o agent_config.json fique sempre ao lado do .exe ou do script
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+CONFIG_FILE = os.path.join(_SCRIPT_DIR, "agent_config.json")
 AGENT_ID = None
 
 if os.path.exists(CONFIG_FILE):
@@ -83,10 +85,10 @@ def sync_heartbeat():
             "ppd_map": ppd_map
         }
         
-        now_iso = datetime.datetime.utcnow().isoformat()
+        # Formato UTC explícito com timezone, exigido pelo Supabase
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-    
-        # Atualiza ou insere (UPSERT)
+        # UPSERT via POST com Prefer: resolution=merge-duplicates
         payload = {
             "id": AGENT_ID,
             "name": AGENT_NAME,
@@ -104,6 +106,9 @@ def sync_heartbeat():
         req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
         try:
             urllib.request.urlopen(req, timeout=10)
+            print(f"[agent_worker] Heartbeat OK - {now_iso}", flush=True)
+        except urllib.error.HTTPError as e:
+            print(f"[agent_worker] Falha no heartbeat HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}", flush=True)
         except Exception as e:
             print(f"[agent_worker] Falha no heartbeat: {e}", flush=True)
     except Exception as e:
