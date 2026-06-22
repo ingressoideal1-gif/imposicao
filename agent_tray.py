@@ -83,9 +83,16 @@ def run_worker():
     agent_worker.run_loop()
 
 def run_server():
+    import asyncio
     import uvicorn
     from local_print_agent import app
-    uvicorn.run(app, host="127.0.0.1", port=9000, log_level="warning")
+    # Criar um event loop asyncio dedicado para o uvicorn neste thread
+    # Evita conflito com o loop do pystray/Win32 no thread principal
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    config = uvicorn.Config(app, host="127.0.0.1", port=9000, log_level="warning", loop="none")
+    server = uvicorn.Server(config)
+    loop.run_until_complete(server.serve())
 
 def start_server_thread():
     global server_thread
