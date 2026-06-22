@@ -11005,6 +11005,7 @@ async function loadOrdens() {
             if (loaded) {
                 await sincronizarStatusOrdensDinamico();
                 await carregarLinksExistentes();
+                await carregarArtesGlobais();
                 renderOrdens();
                 return;
             }
@@ -11085,6 +11086,7 @@ async function loadOrdens() {
         }
         await sincronizarStatusOrdensDinamico();
         await carregarLinksExistentes();
+        await carregarArtesGlobais();
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
@@ -11115,6 +11117,27 @@ async function carregarLinksExistentes() {
         console.log(`[Links] ${(data || []).length} link(s) de cliente carregado(s).`);
     } catch (e) {
         console.warn('[Links] Erro ao carregar links existentes:', e.message);
+    }
+}
+
+/**
+ * Busca a tabela pedidos_artes de forma global (simplificada) para 
+ * montar as estatísticas reais na Lista de Arte sem depender de cliques individuais.
+ */
+async function carregarArtesGlobais() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('pedidos_artes')
+            .select('id_int, id_modelo, status, versao');
+        if (error) {
+            if (error.code === '42P01') return; // tabela não existe
+            throw error;
+        }
+        state.todasArtes = data || [];
+        console.log(`[Artes] ${state.todasArtes.length} registros de arte carregados globalmente.`);
+    } catch (e) {
+        console.warn('[Artes] Erro ao carregar artes globais:', e.message);
     }
 }
 
@@ -11707,50 +11730,58 @@ function renderOrdens() {
         return true;
     });
 
-    // Fila 2: Arte (Status ARTE_EM_ANDAMENTO, ARTE_EM_CORRECAO, ARTE_APROVADA ou novos status do fluxo de arte)
+    // Fila 2: Arte
     // E com status_arte === 'PENDENTE' na tabela pedidos comercial
     const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
     
     let ordensArte = state.ordens.filter(os => {
-        const matchStatusOS = 
-            os.status === 'ARTE_EM_ANDAMENTO' || 
-            os.status === 'ARTE_EM_CORRECAO' || 
-            os.status === 'ARTE_APROVADA' || 
-            os.status === 'Arte APROVADA' || 
-            os.status === 'Enviar ARTE' || 
-            os.status === 'Pendente Informação';
+        const osNumeroInt = parseInt(os.numero);
         
-        if (!matchStatusOS) return false;
+        // Regra base: entra se o comercial disse que a arte tá pendente 
+        // OU se o status da OS for de arte (fallback pra DEV/testes)
+        const statusArteComercial = (os.status_arte || '').toUpperCase();
+        const isInArteStage = (!isDev || state.hasPedidosComerciais) 
+            ? (statusArteComercial === 'PENDENTE')
+            : (os.status === 'ARTE_EM_ANDAMENTO' || os.status === 'ARTE_EM_CORRECAO' || os.status === 'ARTE_APROVADA' || os.status === 'Arte APROVADA' || os.status === 'Enviar ARTE' || os.status === 'Pendente Informação');
 
-        if (!isDev || state.hasPedidosComerciais) {
-            const statusArteComercial = (os.status_arte || '').toUpperCase();
-            return statusArteComercial === 'PENDENTE';
-        }
+        if (!isInArteStage) return false;
 
+        // Como a regra de "tirar da fila automaticamente" pode esconder pedidos 
+        // cujo status comercial ainda é PENDENTE, vamos manter na fila,
+        // mas a UI mostrará que está 100% concluído para o designer ver e despachar.
         return true;
     });
 
-    // --- Calcular Estatísticas de Arte ---
+    // --- Calcular Estatísticas de Arte com pedidos_artes ---
     let totalItensPendentesArte = 0;
     let totalItensAprovadosArte = 0;
     let totalPedidosConcluidosArte = 0;
 
     ordensArte.forEach(os => {
         const itens = state.osItens[os.id] || [];
+        const osNumeroInt = parseInt(os.numero);
+        const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
+        
+        let pedidoAprovado = true;
         
         itens.forEach(item => {
-            const ap = (item.aprovacao || 'PENDENTE').toUpperCase();
-            if (ap === 'PENDENTE' || ap === 'AGUARDANDO') {
-                totalItensPendentesArte++;
-            } else if (ap === 'APROVADA' || ap === 'PRONTA' || ap === 'LIBERADA' || ap === 'APROVADA_CLIENTE') {
+            const artesDoItem = artesDaOS.filter(a => a.id_modelo === item.id);
+            let statusItem = 'PENDENTE'; 
+            
+            if (artesDoItem.length > 0) {
+                artesDoItem.sort((a, b) => b.versao - a.versao);
+                statusItem = artesDoItem[0].status;
+            }
+            
+            if (statusItem === 'APROVADA' || statusItem === 'APROVADA_CLIENTE' || statusItem === 'LIBERADA') {
                 totalItensAprovadosArte++;
+            } else {
+                totalItensPendentesArte++;
+                pedidoAprovado = false;
             }
         });
 
-        if (itens.length > 0 && itens.every(item => {
-            const ap = (item.aprovacao || '').toUpperCase();
-            return ap === 'APROVADA' || ap === 'PRONTA' || ap === 'LIBERADA' || ap === 'APROVADA_CLIENTE';
-        })) {
+        if (itens.length > 0 && pedidoAprovado) {
             totalPedidosConcluidosArte++;
         }
     });
@@ -11926,11 +11957,36 @@ function renderOrdens() {
                 const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
                 const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
+                
+                // Progresso das artes
+                const osNumeroInt = parseInt(os.numero);
+                const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
+                const itensList = state.osItens[os.id] || [];
+                let aprCount = 0;
+                if (itensList.length > 0) {
+                    itensList.forEach(item => {
+                        const artesDoItem = artesDaOS.filter(a => a.id_modelo === item.id);
+                        let statusItem = 'PENDENTE';
+                        if (artesDoItem.length > 0) {
+                            artesDoItem.sort((a, b) => b.versao - a.versao);
+                            statusItem = artesDoItem[0].status;
+                        }
+                        if (statusItem === 'APROVADA' || statusItem === 'APROVADA_CLIENTE' || statusItem === 'LIBERADA') {
+                            aprCount++;
+                        }
+                    });
+                }
+                
+                const isAllApproved = itensList.length > 0 && aprCount === itensList.length;
+                const artProgressHtml = itensList.length > 0 
+                    ? `<div style="font-size: 0.72rem; margin-top: 5px; font-weight: ${isAllApproved ? 'bold' : 'normal'}; color: ${isAllApproved ? 'var(--green)' : 'var(--text-dim)'};">${aprCount}/${itensList.length} Aprovadas</div>`
+                    : '';
+
                 return `
-                    <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer;" title="Abrir Amostras">
-                        <td style="text-align: center; font-size: 1.1rem;">▶</td>
+                    <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
+                        <td style="text-align: center; font-size: 1.1rem; color: ${isAllApproved ? 'var(--green)' : 'inherit'};">▶</td>
                         <td>
-                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
+                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, ${isAllApproved ? 'var(--green), #16a34a' : 'var(--blue), #2563eb'}); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px ${isAllApproved ? 'rgba(34, 197, 94, 0.4)' : 'rgba(59, 130, 246, 0.4)'}; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
                         </td>
 
                         <td><strong>${os.cliente || '--'}</strong></td>
@@ -11941,7 +11997,10 @@ function renderOrdens() {
                             ${dataPedFormatada}
                         </td>
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
-                        <td>${getStatusBadge(os.status)}</td>
+                        <td style="text-align: center;">
+                            ${getStatusBadge(os.status)}
+                            ${artProgressHtml}
+                        </td>
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
                         <td onclick="event.stopPropagation();">
                             ${(() => {
