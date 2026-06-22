@@ -1,5 +1,6 @@
 import math
 import os
+import sys
 import io
 import fitz       # PyMuPDF
 import qrcode
