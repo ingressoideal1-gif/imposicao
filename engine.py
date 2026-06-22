@@ -541,6 +541,7 @@ class ImpositionEngine:
 
         doc_out = fitz.open()
         doc_base = self._load_base_as_pdf()
+        _temp_docs_to_close = []  # fast_mode: manter vivos ate apos o save()
         
         is_duplex = (cfg.print_mode == "duplex")
 
@@ -857,7 +858,7 @@ class ImpositionEngine:
                     # 2. Impor a pagina temporaria completa (arte + VDP) na folha final
                     if self.cfg.fast_mode:
                         # Windows/local: usar temp_doc diretamente (sem tobytes)
-                        # Evita ciclo encode/decode por celula - 3-5x mais rapido
+                        # Manter vivo em _temp_docs_to_close ate apos save()
                         out_page_front.show_pdf_page(
                             fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
                             temp_doc,
@@ -866,7 +867,7 @@ class ImpositionEngine:
                             rotate=cell_rotation,
                             clip=temp_doc[0].rect
                         )
-                        temp_doc.close()
+                        _temp_docs_to_close.append(temp_doc)  # fechar so apos save()
                     else:
                         # Linux/Render: materializar para bytes (fix paginas em branco)
                         _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
@@ -1018,7 +1019,7 @@ class ImpositionEngine:
                                 rotate=cell_rotation,
                                 clip=temp_doc[0].rect
                             )
-                            temp_doc.close()
+                            _temp_docs_to_close.append(temp_doc)  # fechar so apos save()
                         else:
                             # Linux/Render: fix paginas em branco
                             _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
@@ -1037,6 +1038,10 @@ class ImpositionEngine:
         # fast_mode: compressao minima (local) / maxima (nuvem)
         save_opts = dict(garbage=1, deflate=False) if self.cfg.fast_mode else dict(garbage=4, deflate=True, clean=True)
         doc_out.save(cfg.out_pdf, **save_opts)
+        # Agora e seguro fechar os temp_docs do fast_mode
+        for _td in _temp_docs_to_close:
+            try: _td.close()
+            except: pass
         if doc_base:
             doc_base.close()
         for doc in pdf_cache.values():
