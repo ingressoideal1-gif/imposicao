@@ -1,7 +1,6 @@
 import math
 import os
 import io
-import sys
 import fitz       # PyMuPDF
 import qrcode
 from PIL import Image
@@ -116,8 +115,7 @@ class ImpositionConfig:
                  print_mode: str = "front",
                  numeracao_2: dict | None = None,
                  rotate_page: bool = False,
-                 multi_artes: list[dict] | None = None,
-                 fast_mode: bool | None = None):
+                 multi_artes: list[dict] | None = None):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -126,9 +124,6 @@ class ImpositionConfig:
         self.print_mode = print_mode
         self.rotate_page = rotate_page
         self.multi_artes = multi_artes or []
-        # fast_mode=True: pula tobytes/reopen por celula (Windows local)
-        # Se nao especificado, detecta automaticamente: Windows=fast, Linux=safe
-        self.fast_mode = fast_mode if fast_mode is not None else (sys.platform == "win32")
 
         # Formato (tamanho do item + grade + gaps)
         self.item_w = formato["width_mm"] * MM2PT
@@ -538,8 +533,6 @@ class ImpositionEngine:
         start_y = (cfg.sheet_h - used_h) / 2
 
         total_sheets = math.ceil(cfg.total_items / poses_per_sheet)
-        _fast_path_enabled = (sys.platform == "win32")
-        print(f"[engine] platform={sys.platform} fast_path={'ON (Windows)' if _fast_path_enabled else 'OFF (Linux - temp_doc)'} total_sheets={total_sheets} items={cfg.total_items}")
 
         doc_out = fitz.open()
         doc_base = self._load_base_as_pdf()
@@ -750,29 +743,22 @@ class ImpositionEngine:
                     cell_rotation = int(cfg.rotations.get(str(P), 0))
                     arte_nome = arte_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
 
-                    # Fast path: render direto sem temp_doc
-                    # - Windows: save() local e rapido, compressao final nao e gargalo
-                    # - Linux/Render: save(garbage=4,deflate=True,clean=True) com 1000 XObjects
-                    #   unicos (QR) e catastrofico em CPU compartilhada -> usar temp_doc
-                    use_fast_path = (cell_rotation == 0 and not arte_nome and sys.platform == "win32")
-
-                    if use_fast_path:
-                        # FAST PATH: renderizar arte e VDP diretamente na folha de saida
+                    if cell_rotation == 0 and not arte_nome and sys.platform == "win32":
+                        # FAST PATH (Windows apenas): render arte e VDP diretamente na folha
                         # Elimina temp_doc + tobytes(garbage=3) + reopen por celula
+                        # No Linux/Render: esta logica aumenta o save() final - nao usar
                         if current_doc_base:
                             art_out_x0 = cell_x0 + (cfg.item_w - base_w) / 2 + cfg.offset_h
                             art_out_y0 = cell_y0 + (cfg.item_h - base_h) / 2 - cfg.offset_v
                             out_page_front.show_pdf_page(
-                                fitz.Rect(art_out_x0, art_out_y0,
-                                          art_out_x0 + base_w, art_out_y0 + base_h),
+                                fitz.Rect(art_out_x0, art_out_y0, art_out_x0 + base_w, art_out_y0 + base_h),
                                 current_doc_base, page_idx_front,
                                 keep_proportion=False, clip=page_base.rect
                             )
                         else:
-                            err_rect = fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1)
-                            err_msg = f"ERR: doc_base nulo!" if cfg.layout_schema == "multi_artes" else "ERR: base_file nulo"
-                            out_page_front.insert_textbox(err_rect, err_msg, fontsize=8, color=(1, 0, 0))
-
+                            out_page_front.insert_textbox(
+                                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                                "ERR: base_file nulo", fontsize=8, color=(1, 0, 0))
                         csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
                         for el in current_elements:
                             if el.get("face", "both") == "back":
@@ -797,28 +783,36 @@ class ImpositionEngine:
                             self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
 
                     else:
-                        # PATH ORIGINAL: temp_doc necessario para rotacao individual ou arte_nome
+                        # PATH ORIGINAL: temp_doc (Linux/Render, rotacao de celula, arte_nome)
+                        # 1. Criar PDF temporário para renderizar o item + elementos VDP
                         temp_doc = fitz.open()
                         temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
 
+                        # Centralizar e aplicar offset no plano da célula temporária
                         art_temp_x0 = (cfg.item_w - base_w) / 2 + cfg.offset_h
                         art_temp_y0 = (cfg.item_h - base_h) / 2 - cfg.offset_v
                         art_temp_x1 = art_temp_x0 + base_w
                         art_temp_y1 = art_temp_y0 + base_h
                         rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
 
+                        # Inserir arte na página temporária
                         if current_doc_base:
                             temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base.rect)
                         else:
                             err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}" if cfg.layout_schema == "multi_artes" else "ERR: base_file nulo"
-                            temp_page.insert_textbox(rect_art_temp, err_msg, fontsize=8, color=(1, 0, 0))
+                            temp_page.insert_textbox(rect_art_temp, err_msg, fontsize=8, color=(1,0,0))
 
                         csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
+
                         for el in current_elements:
+                            # Filtrar elementos que são apenas para verso
                             if el.get("face", "both") == "back":
                                 continue
+
+                            # Mantemos a rotação configurada original do elemento, mas não a rotação da célula
                             rotated_el = dict(el)
                             rotated_el["rotation"] = el.get("rotation", 0)
+
                             if "size_mm" in el:
                                 rotated_el["_size"] = el["size_mm"] * MM2PT
                             if "width_mm" in el and el["type"] == "BARCODE":
@@ -829,16 +823,20 @@ class ImpositionEngine:
                                 rotated_el["height_mm"] = el.get("height_mm", 20)
                             if el["type"] in ("TEXT", "FIXED"):
                                 rotated_el["font_size"] = el.get("font_size", 12)
+
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
+
                             if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
                                 pos = int(rotated_el.get("ticket_pos", 1))
                                 N = int(cfg.ticket_qtd)
                                 logic = str(cfg.ticket_logica).strip().upper()
                                 Q = int(cfg.total_items)
                                 current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+
+                            # Renderiza na página temporária usando coordenadas relativas diretas
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
-                        # Renderizar nome da arte (Multi-Artes) - rotacionado 90 graus
+                        # Renderizar nome da arte (Multi-Artes) - rotacionado 90°
                         if arte_nome:
                             nome_str = str(arte_nome).zfill(6)
                             nome_color_hex = arte_data.get("nome_color", "#000000")
@@ -876,13 +874,16 @@ class ImpositionEngine:
                                 _nome_insert_kwargs["fontname"] = "hebo"
                             temp_page.insert_text(origin, nome_str, **_nome_insert_kwargs)
 
-                        # Materializar temp_doc e impor na folha (necessario por rotacao ou arte_nome)
+                        # 2. Impor a pagina temporaria completa (arte + VDP) na folha final
+                        # FIX: materializar temp_doc para bytes antes de usar como fonte
+                        # Evita XObject encadeado que gera paginas em branco no Linux/Render
                         _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
                         temp_doc.close()
                         _temp_doc_m = fitz.open("pdf", _temp_bytes)
                         out_page_front.show_pdf_page(
                             fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-                            _temp_doc_m, 0,
+                            _temp_doc_m,
+                            0,
                             keep_proportion=False,
                             rotate=cell_rotation,
                             clip=_temp_doc_m[0].rect
@@ -1015,7 +1016,6 @@ class ImpositionEngine:
 
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
-                        # 2. Impor a pagina temporaria de verso na folha final
                         # 2. Impor a pagina temporaria de verso na folha final
                         # FIX: materializar temp_doc para bytes (fix paginas em branco)
                         _temp_bytes = temp_doc.tobytes(garbage=3, deflate=True)
