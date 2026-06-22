@@ -14,9 +14,10 @@ def _patched_init(self, *args, **kwargs):
 starlette.formparsers.MultiPartParser.__init__ = _patched_init
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, BackgroundTasks
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+import io
 
 DIAG_LOGS = []
 def log_diag(msg: str):
@@ -47,6 +48,11 @@ app.mount("/app", StaticFiles(directory="frontend", html=True), name="frontend")
 def root_redirect():
     """Redireciona a raiz para o frontend."""
     return RedirectResponse(url="/app/index.html")
+
+@app.get("/api/health")
+def health_check():
+    """Endpoint de health check — usado pelo frontend para pré-aquecer o servidor."""
+    return {"status": "ok"}
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -391,6 +397,11 @@ async def impose_file(
         engine.process()
 
         suffix_fn = f"CSV_{len(csv_data)}" if csv_data else f"{data.get('seq_start', 1)}-{data.get('seq_end', 100)}"
+        download_name = f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
+
+        # Lê PDF gerado para memória e agenda remoção do temp em background
+        with open(out_pdf_path, "rb") as f_pdf:
+            pdf_bytes = f_pdf.read()
 
         if background_tasks:
             if base_file_path and os.path.exists(base_file_path):
@@ -398,12 +409,17 @@ async def impose_file(
             for temp_path in ma_files_map.values():
                 if os.path.exists(temp_path):
                     background_tasks.add_task(os.remove, temp_path)
-            background_tasks.add_task(os.remove, out_pdf_path)
+            if os.path.exists(out_pdf_path):
+                background_tasks.add_task(os.remove, out_pdf_path)
 
-        return FileResponse(
-            out_pdf_path,
+        # StreamingResponse: envia da RAM sem travar aguardando disco
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
             media_type="application/pdf",
-            filename=f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
+            headers={
+                "Content-Disposition": f'attachment; filename="{download_name}"',
+                "Content-Length": str(len(pdf_bytes))
+            }
         )
 
     except ValueError as ve:

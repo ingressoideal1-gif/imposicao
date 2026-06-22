@@ -1005,7 +1005,7 @@ class ImpositionEngine:
                         )
                         _temp_doc_m.close()
 
-        doc_out.save(cfg.out_pdf, garbage=3, deflate=True)
+        doc_out.save(cfg.out_pdf, garbage=4, deflate=True, clean=True)
         if doc_base:
             doc_base.close()
         for doc in pdf_cache.values():

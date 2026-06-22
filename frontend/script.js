@@ -15002,3 +15002,14 @@ document.addEventListener('DOMContentLoaded', () => {
     checkClienteRoute();
 });
 
+
+// - PRE-AQUECIMENTO DO SERVIDOR CLOUD (evita cold start do Render) -
+// Dispara um ping silencioso logo ao carregar a pagina.
+// Somente quando o frontend esta na nuvem (nao em localhost).
+(function _prewarmRenderServer() {
+    var isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocalhost) return;
+    fetch('https://imposicao.onrender.com/api/health', { method: 'GET', mode: 'cors', cache: 'no-store' })
+        .then(function(r) { if (r.ok) console.log('[Render] Servidor cloud pre-aquecido'); })
+        .catch(function() {});
+})();
