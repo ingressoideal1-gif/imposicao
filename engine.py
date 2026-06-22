@@ -533,6 +533,9 @@ class ImpositionEngine:
         start_y = (cfg.sheet_h - used_h) / 2
 
         total_sheets = math.ceil(cfg.total_items / poses_per_sheet)
+        import time as _time
+        _t0 = _time.monotonic()
+        print(f"[engine] total_sheets={total_sheets} items={cfg.total_items} poses={poses_per_sheet}")
 
         doc_out = fitz.open()
         doc_base = self._load_base_as_pdf()
@@ -677,6 +680,8 @@ class ImpositionEngine:
                     })
 
         for S in range(total_sheets):
+            if S % 25 == 0:
+                print(f"[engine] sheet {S}/{total_sheets} elapsed={_time.monotonic()-_t0:.1f}s")
             # 1. RENDERIZAR FRENTE DA FOLHA
             out_page_front = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
             if cfg.rotate_page:
@@ -1005,7 +1010,9 @@ class ImpositionEngine:
                         )
                         _temp_doc_m.close()
 
+        print(f"[engine] loop done elapsed={_time.monotonic()-_t0:.1f}s, saving...")
         doc_out.save(cfg.out_pdf, garbage=4, deflate=True, clean=True)
+        print(f"[engine] save done elapsed={_time.monotonic()-_t0:.1f}s")
         if doc_base:
             doc_base.close()
         for doc in pdf_cache.values():
