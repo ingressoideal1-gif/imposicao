@@ -11004,7 +11004,7 @@ async function loadOrdens() {
             try {
                 const { data: propData, error: propError } = await supabaseClient
                     .from('propostas')
-                    .select('id_int, cliente, cliente_nome, dados_cliente, vendedor, vendedor_nome');
+                    .select('id_int, cliente, vendedor');
                 if (!propError && propData) {
                     propostasComerciais = propData;
                 }
