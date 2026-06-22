@@ -11731,25 +11731,17 @@ function renderOrdens() {
     });
 
     // Fila 2: Arte
-    // E com status_arte === 'PENDENTE' na tabela pedidos comercial
-    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
-    
+    // Somente pedidos que possuem registros na tabela pedidos_artes com status "Em Arte" (agrupados por id_int)
     let ordensArte = state.ordens.filter(os => {
         const osNumeroInt = parseInt(os.numero);
         
-        // Regra base: entra se o comercial disse que a arte tá pendente 
-        // OU se o status da OS for de arte (fallback pra DEV/testes)
-        const statusArteComercial = (os.status_arte || '').toUpperCase();
-        const isInArteStage = (!isDev || state.hasPedidosComerciais) 
-            ? (statusArteComercial === 'PENDENTE')
-            : (os.status === 'ARTE_EM_ANDAMENTO' || os.status === 'ARTE_EM_CORRECAO' || os.status === 'ARTE_APROVADA' || os.status === 'Arte APROVADA' || os.status === 'Enviar ARTE' || os.status === 'Pendente Informação');
-
-        if (!isInArteStage) return false;
-
-        // Como a regra de "tirar da fila automaticamente" pode esconder pedidos 
-        // cujo status comercial ainda é PENDENTE, vamos manter na fila,
-        // mas a UI mostrará que está 100% concluído para o designer ver e despachar.
-        return true;
+        // Pega as artes associadas a esta OS
+        const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
+        
+        // Verifica se alguma dessas artes tem o status "Em Arte"
+        const temArteEmAndamento = artesDaOS.some(a => (a.status || '').toUpperCase() === 'EM ARTE');
+        
+        return temArteEmAndamento;
     });
 
     // --- Calcular Estatísticas de Arte com pedidos_artes ---
