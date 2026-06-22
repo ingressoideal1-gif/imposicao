@@ -6,10 +6,12 @@ import os
 import shutil
 import tempfile
 import json
+import hashlib
+import io
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 import print_service
 import ppd_parser
@@ -17,6 +19,29 @@ from engine import ImpositionConfig, ImpositionEngine
 import db
 
 app = FastAPI(title="Local Print Agent", description="Agente local para impressao direta e imposicao de PDFs.")
+
+# ─────────────────────────────────────────────────────────────
+# Cache de arte em memória: evita re-salvar o arquivo temp
+# quando o mesmo PDF/imagem é enviado em jobs consecutivos.
+# Chave = sha256 dos bytes do arquivo. Valor = caminho temp em disco.
+# O arquivo temp permanece enquanto o agente estiver rodando.
+# ─────────────────────────────────────────────────────────────
+_ART_CACHE: dict[str, str] = {}
+_ART_CACHE_PATHS: list[str] = []  # para limpeza ao encerrar
+
+def _get_cached_art_path(content_bytes: bytes, ext: str) -> str:
+    """Retorna caminho de arquivo temp já existente para este conteúdo,
+    ou cria um novo arquivo temp e o armazena no cache."""
+    file_hash = hashlib.sha256(content_bytes).hexdigest()
+    if file_hash in _ART_CACHE and os.path.exists(_ART_CACHE[file_hash]):
+        return _ART_CACHE[file_hash]
+    # Criar arquivo temp persistente (delete=False — gerenciado pelo cache)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        tmp.write(content_bytes)
+        tmp_path = tmp.name
+    _ART_CACHE[file_hash] = tmp_path
+    _ART_CACHE_PATHS.append(tmp_path)
+    return tmp_path
 
 app.add_middleware(
     CORSMiddleware,
@@ -141,17 +166,15 @@ async def impose_file(
             ext = os.path.splitext(original_name)[1].lower() or ".pdf"
             if ext not in [".pdf", ".jpg", ".jpeg", ".png"]:
                 raise HTTPException(status_code=400, detail=f"Formato de arquivo nao suportado: {ext}")
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_in:
-                shutil.copyfileobj(file.file, tmp_in)
-                base_file_path = tmp_in.name
+            # Usa cache: se o mesmo arquivo já foi enviado antes, reutiliza o temp em disco
+            art_bytes = await file.read()
+            base_file_path = _get_cached_art_path(art_bytes, ext)
         elif data.get("schema") != "multi_artes":
             raise HTTPException(status_code=400, detail="Arquivo principal nao enviado.")
 
-        if base_file_path:
-            out_pdf_path = base_file_path.rsplit(".", 1)[0] + "_imposed.pdf"
-        else:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_out:
-                out_pdf_path = tmp_out.name
+        # Saída: arquivo temp para o engine escrever
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_out:
+            out_pdf_path = tmp_out.name
 
         multi_artes_list = data.get("multi_artes", [])
         ma_files_map = {}
@@ -212,19 +235,27 @@ async def impose_file(
         engine.process()
 
         suffix_fn = f"CSV_{len(csv_data)}" if csv_data else f"{data.get('seq_start', 1)}-{data.get('seq_end', 100)}"
+        download_name = f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
 
+        # Lê o PDF gerado para memória e remove o arquivo temp imediatamente
+        with open(out_pdf_path, "rb") as f_pdf:
+            pdf_bytes = f_pdf.read()
+
+        # Limpeza em background: apenas arquivos temp de multi_artes e o out_pdf
+        # (base_file_path fica no cache, não é apagado)
         if background_tasks:
-            if base_file_path and os.path.exists(base_file_path):
-                background_tasks.add_task(os.remove, base_file_path)
             for temp_path in temp_paths_ma:
                 if os.path.exists(temp_path):
                     background_tasks.add_task(os.remove, temp_path)
-            background_tasks.add_task(os.remove, out_pdf_path)
+            if os.path.exists(out_pdf_path):
+                background_tasks.add_task(os.remove, out_pdf_path)
 
-        return FileResponse(
-            out_pdf_path,
+        # StreamingResponse: envia direto da memória sem precisar do arquivo em disco
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
             media_type="application/pdf",
-            filename=f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
+            headers={"Content-Disposition": f'attachment; filename="{download_name}"',
+                     "Content-Length": str(len(pdf_bytes))}
         )
 
     except ValueError as ve:
