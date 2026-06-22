@@ -54,6 +54,11 @@ def health_check():
     """Endpoint de health check — usado pelo frontend para pré-aquecer o servidor."""
     return {"status": "ok"}
 
+@app.get("/api/version")
+def version_info():
+    """Retorna versão/commit para confirmar qual código está rodando."""
+    return {"commit": "232da0a", "desc": "tobytes(garbage=0)", "engine": "original+garbage0"}
+
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
