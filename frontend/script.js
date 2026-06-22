@@ -11133,7 +11133,7 @@ async function carregarArtesGlobais() {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
-            .select('id_int, id_modelo, status, versao');
+            .select('id_int, status');
         if (error) {
             if (error.code === '42P01') return; // tabela não existe
             throw error;
@@ -11759,26 +11759,23 @@ function renderOrdens() {
         const osNumeroInt = parseInt(os.numero);
         const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
         
-        let pedidoAprovado = true;
+        let pedidoAprovado = false;
         
-        itens.forEach(item => {
-            const artesDoItem = artesDaOS.filter(a => a.id_modelo === item.id);
-            let statusItem = 'PENDENTE'; 
-            
-            if (artesDoItem.length > 0) {
-                artesDoItem.sort((a, b) => b.versao - a.versao);
-                statusItem = artesDoItem[0].status;
-            }
-            
-            if (statusItem === 'APROVADA' || statusItem === 'APROVADA_CLIENTE' || statusItem === 'LIBERADA') {
-                totalItensAprovadosArte++;
-            } else {
-                totalItensPendentesArte++;
-                pedidoAprovado = false;
-            }
-        });
+        // Como pedidos_artes tem 1 linha por OS e não por item, o status é global da OS.
+        let statusDaOS = 'PENDENTE';
+        if (artesDaOS.length > 0) {
+            statusDaOS = (artesDaOS[0].status || 'PENDENTE').toUpperCase();
+        }
+        
+        if (statusDaOS === 'APROVADA' || statusDaOS === 'APROVADA_CLIENTE' || statusDaOS === 'LIBERADA') {
+            pedidoAprovado = true;
+            // Se aprovado, considera que todos os itens estão aprovados (para fins estatísticos)
+            totalItensAprovadosArte += itens.length || 1;
+        } else {
+            totalItensPendentesArte += itens.length || 1;
+        }
 
-        if (itens.length > 0 && pedidoAprovado) {
+        if ((itens.length > 0 || artesDaOS.length > 0) && pedidoAprovado) {
             totalPedidosConcluidosArte++;
         }
     });
