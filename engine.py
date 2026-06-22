@@ -744,7 +744,7 @@ class ImpositionEngine:
                     cell_rotation = int(cfg.rotations.get(str(P), 0))
                     arte_nome = arte_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
 
-                    if cell_rotation == 0 and not arte_nome and sys.platform == "win32":
+                    if cell_rotation == 0 and not arte_nome:
                         # FAST PATH (Windows apenas): render arte e VDP diretamente na folha
                         # Elimina temp_doc + tobytes(garbage=3) + reopen por celula
                         # No Linux/Render: esta logica aumenta o save() final - nao usar
@@ -1032,7 +1032,7 @@ class ImpositionEngine:
                         )
                         _temp_doc_m.close()
 
-        doc_out.save(cfg.out_pdf, garbage=4, deflate=True, clean=True)
+        doc_out.save(cfg.out_pdf, garbage=3, deflate=True)
         if doc_base:
             doc_base.close()
         for doc in pdf_cache.values():
