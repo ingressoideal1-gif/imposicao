@@ -12889,52 +12889,95 @@ function renderAmostrasOSItens(osId) {
     let finalHtml = itemsHtml;
     
     if (isInternal) {
-        const briefingText = os.obs ? os.obs.replace(/\n/g, '<br>') : '<span style="color: var(--text-dim); font-style: italic;">Nenhum briefing cadastrado para este pedido.</span>';
-        
+        let obsAccordionHtml = itens.map((item) => {
+            return `
+                <div style="border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px;">
+                    <div style="padding: 10px; background: rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-dim);"><i class="fa-solid fa-cube" style="margin-right: 6px;"></i> Ref: ${item.quantidade || 0} un. - ${item.nome_produto_real || item.produto || 'Item'}</span>
+                    </div>
+                    <div style="padding: 8px;">
+                        <textarea id="briefing-obs-item-${item.id}" oninput="saveBriefingField(${os.id_int}, null, this.value, true, '${item.id}')" rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-size: 0.85rem; resize: vertical; background: rgba(0,0,0,0.05); color: var(--text);" placeholder="Observações específicas para este produto..."></textarea>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
         finalHtml = `
             <div style="display: grid; grid-template-columns: 1fr 350px; gap: 24px; align-items: start;">
                 <div style="display: flex; flex-direction: column; gap: 20px;">
                     ${itemsHtml}
                 </div>
                 
-                <div style="display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px;">
+                <div style="display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; padding-right: 8px;">
                     <!-- Briefing Base -->
                     <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
-                        <div class="card-header" style="background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid var(--border); padding: 12px 16px;">
-                            <span style="font-weight: 700; color: #d97706; display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-clipboard-list"></i> Briefing Base do Evento
-                            </span>
+                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px;">
+                            <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                Briefing Base do Evento
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 4px;">
+                                Dados preenchidos pelo comercial para guiar a criação da arte.
+                            </div>
                         </div>
-                        <div class="card-body" style="padding: 16px; font-size: 0.85rem; color: var(--text); line-height: 1.5; max-height: 300px; overflow-y: auto;">
-                            ${briefingText}
+                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
+                                <input type="text" id="briefing-nome-${osId}" class="form-control" oninput="saveBriefingField(${os.id_int}, 'nome_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px;" placeholder="Nome do Evento">
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-calendar" style="margin-right: 4px;"></i> Data do Evento</label>
+                                    <input type="text" id="briefing-data-${osId}" class="form-control" oninput="saveBriefingField(${os.id_int}, 'data_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px;" placeholder="DD/MM/AAAA">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i> Local da Festa/Evento</label>
+                                    <input type="text" id="briefing-local-${osId}" class="form-control" oninput="saveBriefingField(${os.id_int}, 'local_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px;" placeholder="Local">
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 8px;">
+                                <div style="font-size: 0.8rem; font-weight: 700; color: var(--teal); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-list-check"></i> Observações por produto
+                                </div>
+                                ${obsAccordionHtml}
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Arquivos -->
+                    <!-- Designers Ideal -->
                     <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
-                        <div class="card-header" style="background: rgba(59, 130, 246, 0.1); border-bottom: 1px solid var(--border); padding: 12px 16px;">
-                            <span style="font-weight: 700; color: var(--blue); display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-paperclip"></i> Arquivos de Referência
-                            </span>
-                        </div>
-                        <div class="card-body" style="padding: 16px; font-size: 0.85rem;">
-                            <div style="display: flex; flex-direction: column; gap: 10px;">
-                                <!-- Mocks -->
-                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(0,0,0,0.02); border: 1px solid var(--border); border-radius: 4px;">
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <i class="fa-regular fa-file-pdf" style="color: #ef4444; font-size: 1.2rem;"></i>
-                                        <span style="color: var(--text); font-weight: 500;">Logo_Evento.pdf</span>
-                                    </div>
-                                    <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;"><i class="fa-solid fa-download"></i></button>
-                                </div>
-                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(0,0,0,0.02); border: 1px solid var(--border); border-radius: 4px;">
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <i class="fa-regular fa-file-image" style="color: #10b981; font-size: 1.2rem;"></i>
-                                        <span style="color: var(--text); font-weight: 500;">Mapa_Assentos.png</span>
-                                    </div>
-                                    <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;"><i class="fa-solid fa-download"></i></button>
-                                </div>
+                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px;">
+                            <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                Designers Ideal
                             </div>
+                            <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 4px;">
+                                Equipe de design responsável pela criação de artes.
+                            </div>
+                        </div>
+                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+                            ${[
+                                {uid: 'edison-uid', nome: 'Edison Jr', email: 'ingressoideal1@gmail.com', init: 'E'},
+                                {uid: 'emily-uid', nome: 'Emily Boeira', email: 'emilyboeira51@gmail.com', init: 'E'},
+                                {uid: 'vitoria-uid', nome: 'Vitória Colbeich', email: 'vitoria.dseg@gmail.com', init: 'V'}
+                            ].map(d => `
+                                <div class="designer-card" data-uid="${d.uid}" onclick="selectDesigner(${os.id_int}, '${d.uid}', '${d.nome}')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.01);">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <div style="width: 36px; height: 36px; border-radius: 50%; background: #a7f3d0; color: #065f46; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">
+                                            ${d.init}
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; color: var(--text); font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
+                                                ${d.nome} <span class="designer-badge badge badge-teal" style="display: none; font-size: 0.6rem; padding: 2px 6px;">Selecionado</span>
+                                            </div>
+                                            <div style="font-size: 0.75rem; color: var(--text-dim);">${d.email}</div>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right; font-size: 0.7rem; color: var(--text-dim);">
+                                        Pedidos: <strong>0</strong><br>
+                                        Modelos: <strong>0</strong>
+                                    </div>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
 
@@ -12981,6 +13024,10 @@ function renderAmostrasOSItens(osId) {
     // Com display grid, podemos precisar de css. Para o painel principal, vamos assumir que o CSS do painel é robusto.
 
     container.innerHTML = finalHtml;
+    
+    if (isInternal) {
+        loadBriefingBase(osId, os.id_int);
+    }
 
     setTimeout(() => {
         itens.forEach((item, idx) => {
@@ -13942,6 +13989,142 @@ function clearAmostrasOS() {
     if (banner) banner.style.display = 'none';
     if (avulsa) avulsa.style.display = '';
 }
+
+// --- Funções de Briefing e Designers (Tabela: pedidos_artes) ---
+
+async function loadBriefingBase(osId, osIntId) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('pedidos_artes')
+            .select('*')
+            .eq('id_int', osIntId)
+            .limit(1);
+            
+        if (error) {
+            if (error.code !== '42P01') throw error;
+            console.warn("Tabela pedidos_artes não existe.");
+            return;
+        }
+        
+        state.pedidosArtesCurrent = data && data.length > 0 ? data[0] : null;
+        updateBriefingUI(osId);
+    } catch (e) {
+        console.error("Erro ao carregar briefing:", e);
+    }
+}
+
+function updateBriefingUI(osId) {
+    const data = state.pedidosArtesCurrent || {};
+    
+    // Atualiza campos do Briefing
+    const nomeEl = document.getElementById(`briefing-nome-${osId}`);
+    const dataEl = document.getElementById(`briefing-data-${osId}`);
+    const localEl = document.getElementById(`briefing-local-${osId}`);
+    
+    if (nomeEl) nomeEl.value = data.nome_evento || '';
+    if (dataEl) dataEl.value = data.data_evento || '';
+    if (localEl) localEl.value = data.local_evento || '';
+    
+    // Atualiza observações por produto (accordion)
+    const obsObj = data.observacoes || {};
+    const itens = state.osItens[osId] || [];
+    itens.forEach(item => {
+        const obsEl = document.getElementById(`briefing-obs-item-${item.id}`);
+        if (obsEl) {
+            obsEl.value = obsObj[item.id] || '';
+        }
+    });
+
+    // Atualiza Designer Ideal Selecionado
+    const designerUid = data.designer_uid;
+    document.querySelectorAll('.designer-card').forEach(card => {
+        const uid = card.getAttribute('data-uid');
+        if (uid === designerUid) {
+            card.classList.add('selected');
+            card.querySelector('.designer-badge').style.display = 'inline-block';
+            card.style.borderColor = 'var(--teal)';
+            card.style.background = 'rgba(16, 185, 129, 0.05)';
+        } else {
+            card.classList.remove('selected');
+            card.querySelector('.designer-badge').style.display = 'none';
+            card.style.borderColor = 'var(--border)';
+            card.style.background = 'rgba(0,0,0,0.01)';
+        }
+    });
+}
+
+let briefingSaveTimeout = null;
+async function saveBriefingField(osIntId, field, value, isObs = false, itemId = null) {
+    if (!osIntId || typeof supabaseClient === 'undefined') return;
+    
+    if (isObs) {
+        if (!state.pedidosArtesCurrent) state.pedidosArtesCurrent = { observacoes: {} };
+        if (!state.pedidosArtesCurrent.observacoes) state.pedidosArtesCurrent.observacoes = {};
+        state.pedidosArtesCurrent.observacoes[itemId] = value;
+    } else {
+        if (!state.pedidosArtesCurrent) state.pedidosArtesCurrent = {};
+        state.pedidosArtesCurrent[field] = value;
+    }
+
+    clearTimeout(briefingSaveTimeout);
+    briefingSaveTimeout = setTimeout(async () => {
+        try {
+            const current = state.pedidosArtesCurrent;
+            const payload = {
+                id_int: osIntId,
+                nome_evento: current.nome_evento || null,
+                data_evento: current.data_evento || null,
+                local_evento: current.local_evento || null,
+                observacoes: current.observacoes || {},
+                designer_uid: current.designer_uid || null,
+                designer_nome: current.designer_nome || null
+            };
+
+            const { error } = await supabaseClient
+                .from('pedidos_artes')
+                .upsert(payload, { onConflict: 'id_int' });
+
+            if (error) throw error;
+            console.log("Briefing salvo via debounced upsert.");
+        } catch (e) {
+            console.error("Erro ao salvar briefing:", e);
+        }
+    }, 1000); // 1 segundo de debounce
+}
+
+async function selectDesigner(osIntId, uid, nome) {
+    if (!state.pedidosArtesCurrent) state.pedidosArtesCurrent = {};
+    state.pedidosArtesCurrent.designer_uid = uid;
+    state.pedidosArtesCurrent.designer_nome = nome;
+    
+    // Atualiza a UI imediatamente para sensação de resposta instantânea
+    const activeOs = document.getElementById('active-os-name') ? document.getElementById('active-os-name').dataset.osId : null;
+    if (activeOs) updateBriefingUI(activeOs);
+
+    // Salva direto no banco
+    if (!osIntId || typeof supabaseClient === 'undefined') return;
+    try {
+        const { error } = await supabaseClient
+            .from('pedidos_artes')
+            .upsert({
+                id_int: osIntId,
+                designer_uid: uid,
+                designer_nome: nome
+            }, { onConflict: 'id_int' });
+
+        if (error) throw error;
+        showToast("Designer atribuído com sucesso!", "success");
+    } catch (e) {
+        console.error("Erro ao salvar designer:", e);
+        showToast("Erro ao atribuir designer.", "error");
+    }
+}
+
+// Expõe para o window
+window.loadBriefingBase = loadBriefingBase;
+window.saveBriefingField = saveBriefingField;
+window.selectDesigner = selectDesigner;
 
 // Expor funções globais
 window.loadOrdens = loadOrdens;
