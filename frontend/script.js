@@ -13378,7 +13378,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         if (error) throw error;
         
         // Atualizar state local
-        const item = state.osItens[osId].find(i => i.id === itemId);
+        const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
         if (item) {
             Object.assign(item, dataToUpdate);
         }
