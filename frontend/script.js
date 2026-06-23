@@ -11417,6 +11417,17 @@ async function loadOSItens(osId) {
                     .eq('id_int', queryNum)
                     .order('ordem', { ascending: true });
                 if (error) throw error;
+                console.log('[loadOSItens] pedidos_modelos query id_int=' + queryNum + ', resultados=' + (data ? data.length : 0), data);
+                if ((!data || data.length === 0) && queryNum) {
+                    toast('DEBUG: pedidos_modelos retornou 0 para id_int=' + queryNum + '. Verificando produtos_proposta...', 'warning');
+                    // Fallback: tentar buscar de produtos_proposta diretamente
+                    const { data: ppData } = await supabaseClient
+                        .from('produtos_proposta')
+                        .select('*')
+                        .eq('id_int', queryNum);
+                    console.log('[loadOSItens] produtos_proposta fallback id_int=' + queryNum + ':', ppData);
+                    toast('DEBUG: produtos_proposta retornou ' + (ppData ? ppData.length : 0) + ' para id_int=' + queryNum, 'info');
+                }
                 
                 // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
                 const { data: propData } = await supabaseClient
