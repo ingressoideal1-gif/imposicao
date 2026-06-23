@@ -12836,7 +12836,7 @@ function renderAmostrasOSItens(osId) {
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                     <div class="amostra-config-panel">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
-                            ⚙️ Configurações da Amostra <span style="font-size:10px; background: #333; padding: 2px 5px; border-radius: 4px;">ID: ${item.id}</span>
+                            ⚙️ Configurações da Amostra
                         </h3>
                         <div style="display: flex; flex-direction: column; gap: 14px;">
                             <div class="form-group" style="margin-bottom: 0;">
