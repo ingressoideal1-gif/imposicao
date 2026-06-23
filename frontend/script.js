@@ -12889,14 +12889,31 @@ function renderAmostrasOSItens(osId) {
     let finalHtml = itemsHtml;
     
     if (isInternal) {
-        let obsAccordionHtml = itens.map((item) => {
+        let uniqueProductsMap = new Map();
+        itens.forEach(item => {
+            let prodId = item.id_produto_proposta_origem || item.nome_produto_real || item.produto || item.id;
+            if (!uniqueProductsMap.has(prodId)) {
+                uniqueProductsMap.set(prodId, {
+                    id: prodId,
+                    nome: item.nome_produto_real || item.produto || 'Item',
+                    quantidade: parseInt(item.quantidade) || 0
+                });
+            } else {
+                let existing = uniqueProductsMap.get(prodId);
+                existing.quantidade += (parseInt(item.quantidade) || 0);
+            }
+        });
+        
+        let uniqueProducts = Array.from(uniqueProductsMap.values());
+
+        let obsAccordionHtml = uniqueProducts.map((prod) => {
             return `
                 <div style="border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px;">
                     <div style="padding: 10px; background: rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
-                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-dim);"><i class="fa-solid fa-cube" style="margin-right: 6px;"></i> Ref: ${item.quantidade || 0} un. - ${item.nome_produto_real || item.produto || 'Item'}</span>
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-dim);"><i class="fa-solid fa-cube" style="margin-right: 6px;"></i> Ref: ${prod.quantidade || 0} un. - ${prod.nome}</span>
                     </div>
                     <div style="padding: 8px;">
-                        <textarea id="briefing-obs-item-${item.id}" oninput="saveBriefingField(${os.id_int}, null, this.value, true, '${item.id}')" rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-size: 0.85rem; resize: vertical; background: rgba(0,0,0,0.05); color: var(--text);" placeholder="Observações específicas para este produto..."></textarea>
+                        <textarea id="briefing-obs-item-${prod.id}" oninput="saveBriefingField(${os.id_int}, null, this.value, true, '${prod.id}')" rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-size: 0.85rem; resize: vertical; background: rgba(0,0,0,0.05); color: var(--text);" placeholder="Observações específicas para este produto..."></textarea>
                     </div>
                 </div>
             `;
@@ -14026,13 +14043,19 @@ function updateBriefingUI(osId) {
     if (dataEl) dataEl.value = data.data_evento || '';
     if (localEl) localEl.value = data.local_evento || '';
     
-    // Atualiza observações por produto (accordion)
+    // Atualiza observações por produto (accordion) agrupando pelo produto pai
     const obsObj = data.observacoes || {};
     const itens = state.osItens[osId] || [];
+    let uniqueProductsSet = new Set();
+    
     itens.forEach(item => {
-        const obsEl = document.getElementById(`briefing-obs-item-${item.id}`);
-        if (obsEl) {
-            obsEl.value = obsObj[item.id] || '';
+        let prodId = item.id_produto_proposta_origem || item.nome_produto_real || item.produto || item.id;
+        if (!uniqueProductsSet.has(prodId)) {
+            uniqueProductsSet.add(prodId);
+            const obsEl = document.getElementById(`briefing-obs-item-${prodId}`);
+            if (obsEl) {
+                obsEl.value = obsObj[prodId] || '';
+            }
         }
     });
 
