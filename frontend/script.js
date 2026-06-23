@@ -12654,8 +12654,9 @@ async function navigateToAmostrasFromOS(osId) {
         return;
     }
 
-    // Garantir que os itens estejam carregados
-    if (!state.osItens[osId] || state.osItens[osId].length === 0) {
+    // Garantir que os itens estejam carregados com todos os dados (ignorar cache simples do Vibecode)
+    const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i.padrao === undefined);
+    if (needsFullLoad) {
         await loadOSItens(osId);
     }
 
@@ -12765,7 +12766,6 @@ function renderAmostrasOSItens(osId) {
             if (matchedNum) resolvedNumId = matchedNum.id;
         }
 
-        console.log(`[Item ${idx} ${item.produto}] Padrao: ${item.padrao} -> CorId: ${resolvedCorId} | TipoNum: ${item.tipo_numeracao} -> NumId: ${resolvedNumId}`);
 
         // Filtrar numerações com base no formato da cor selecionada
         const filteredNumeracoes = (state.numeracoes || []).filter(n => {
@@ -12787,7 +12787,8 @@ function renderAmostrasOSItens(osId) {
             `<option value="${n.id}" ${n.id === resolvedNumId ? 'selected' : ''}>${n.name}</option>`
         ).join('');
 
-        const debugInfo = `<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:5px; line-height: 1.1;">DEBUG INFO<br>padrao: ${item.padrao}<br>tipo_num: ${item.tipo_numeracao}<br>corId(db): ${item.amostra_cor_id}<br>corId(resolvido): ${resolvedCorId}<br>numId(resolvido): ${resolvedNumId}</div>`;
+        const debugKeys = Object.keys(item).join(', ');
+        const debugInfo = `<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:5px; line-height: 1.1;">DEBUG INFO<br>padrao: ${item.padrao}<br>corId(db): ${item.amostra_cor_id}<br>KEYS: ${debugKeys}</div>`;
 
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
