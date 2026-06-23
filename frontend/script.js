@@ -12724,8 +12724,8 @@ function renderAmostrasOSItens(osId) {
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
         else if (status === 'PRONTO') statusBadge = '<span class="badge badge-blue">🎨 PRONTO</span>';
 
-        // Função simples para normalizar strings para busca
-        const normStr = (s) => s ? String(s).toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+        // Função simples para normalizar strings para busca (ignora acentos, cedilha, maiúsculas)
+        const normStr = (s) => s ? String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '') : '';
         const fuzzyMatch = (a, b) => {
             const na = normStr(a), nb = normStr(b);
             if (!na || !nb) return false;
