@@ -12874,6 +12874,9 @@ function renderAmostrasOSItens(osId) {
                     `}
                 </div>
                 <div class="amostra-preview-container" style="margin-top: 20px;">
+                    <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 8px; display: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+                        ${item.nome_modelo || `Modelo ${idx + 1}`}
+                    </div>
                     <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;"
                         onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
                     <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
@@ -13277,6 +13280,7 @@ async function renderItemAmostraCombinada(idx, osId) {
 
     const canvas = container.querySelector(`#amostra-item-canvas-${idx}`);
     const empty = container.querySelector(`#amostra-item-empty-${idx}`);
+    const header = container.querySelector(`#amostra-item-header-${idx}`);
     const corSelect = container.querySelector(`#amostra-item-cor-${idx}`);
     const numSelect = container.querySelector(`#amostra-item-num-${idx}`);
     const arteInput = container.querySelector(`#amostra-item-arte-${idx}`);
@@ -13303,6 +13307,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     if (!corId && !numId && !hasArte && !hasSavedArte) {
         canvas.style.display = 'none';
         if (empty) empty.style.display = 'block';
+        if (header) header.style.display = 'none';
         return;
     }
 
@@ -13349,6 +13354,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     canvas.height = finalHeight;
     canvas.style.display = 'block';
     if (empty) empty.style.display = 'none';
+    if (header) header.style.display = 'block';
 
     const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
     ctx.clearRect(0, 0, finalWidth, finalHeight);
@@ -13657,36 +13663,6 @@ async function renderItemAmostraCombinada(idx, osId) {
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, finalWidth, finalHeight);
-
-    // Desenhar nome_modelo de forma destacada no quadrante superior esquerdo
-    if (item && item.nome_modelo) {
-        ctx.save();
-        const fontSize = Math.max(16, Math.min(36, finalHeight * 0.2));
-        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
-        ctx.textBaseline = 'top';
-        ctx.textAlign = 'left';
-        
-        const padX = finalWidth * 0.02; // 2% margem
-        const padY = finalHeight * 0.05; // 5% margem
-        const text = String(item.nome_modelo).toUpperCase();
-        const textMetrics = ctx.measureText(text);
-        const textWidth = textMetrics.width;
-        
-        const boxPadX = fontSize * 0.4;
-        const boxPadY = fontSize * 0.3;
-
-        // Fundo escuro semi-transparente para destaque
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-        ctx.beginPath();
-        ctx.roundRect(padX, padY, textWidth + (boxPadX * 2), fontSize + (boxPadY * 2), 4);
-        ctx.fill();
-
-        // Texto em branco
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(text, padX + boxPadX, padY + boxPadY);
-        
-        ctx.restore();
-    }
 }
 
 // Expor globalmente
