@@ -11057,9 +11057,10 @@ async function loadOrdens() {
                 else if (dbStatus === 'ARTE' || dbStatus === 'NOVO') dbStatus = 'ARTE_EM_ANDAMENTO';
                 
                 // Pré-carrega no estado local os itens buscados para agilizar o collapse e as estatísticas
-                if (os.producao_os_itens) {
-                    state.osItens[os.id] = os.producao_os_itens;
-                }
+                // COMENTADO: O cache via producao_os_itens foi removido, pois agora usamos pedidos_modelos em loadOSItens
+                // if (os.producao_os_itens) {
+                //     state.osItens[os.id] = os.producao_os_itens;
+                // }
                 
                 // Mapear o status_arte comercial
                 const osNumeroInt = parseInt(os.numero);
