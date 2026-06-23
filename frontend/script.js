@@ -12903,7 +12903,7 @@ function renderAmostrasOSItens(osId) {
         }).join('');
 
         finalHtml = `
-            <div style="display: grid; grid-template-columns: 1fr 350px; gap: 24px; align-items: start;">
+            <div style="display: grid; grid-template-columns: 55fr 45fr; gap: 24px; align-items: start;">
                 <div style="display: flex; flex-direction: column; gap: 20px;">
                     ${itemsHtml}
                 </div>
