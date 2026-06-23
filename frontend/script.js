@@ -12724,12 +12724,63 @@ function renderAmostrasOSItens(osId) {
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
         else if (status === 'PRONTO') statusBadge = '<span class="badge badge-blue">🎨 PRONTO</span>';
 
-        // Carregar do banco (pedidos_modelos): coluna 'padrao' e 'tipo_numeracao'
-        const corValue = item.padrao || 'Sem Cor Definida';
-        const corsOpts = `<option value="${corValue}" selected>${corValue}</option>`;
+        // Função simples para normalizar strings para busca
+        const normStr = (s) => s ? String(s).toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+        const fuzzyMatch = (a, b) => {
+            const na = normStr(a), nb = normStr(b);
+            if (!na || !nb) return false;
+            return na === nb || na.includes(nb) || nb.includes(na);
+        };
 
-        const numValue = item.tipo_numeracao || 'Sem Numeração Definida';
-        const numOpts = `<option value="${numValue}" selected>${numValue}</option>`;
+        // Determinar o formato ID do item da OS
+        const itemFormatoId = item.formato_id || (item.formato ? matchFormato(item.formato) : null);
+
+        // Filtrar cores com base no formato do produto
+        const filteredCores = itemFormatoId
+            ? (state.cores || []).filter(c => String(c.formato_id) === String(itemFormatoId))
+            : (state.cores || []);
+
+        // Tentar descobrir a cor selecionada (pelo banco, ou pelo padrao escrito)
+        let resolvedCorId = item.amostra_cor_id;
+        if (!resolvedCorId && item.padrao) {
+            const matchedCor = filteredCores.find(c => fuzzyMatch(c.name, item.padrao));
+            if (matchedCor) resolvedCorId = matchedCor.id;
+        }
+
+        const corsOpts = filteredCores.map(c =>
+            `<option value="${c.id}" ${c.id === resolvedCorId ? 'selected' : ''}>${c.name}</option>`
+        ).join('');
+
+        // Determinar o formato ID da cor selecionada
+        const selectedCor = resolvedCorId ? (state.cores || []).find(c => c.id === resolvedCorId) : null;
+        const corFormatoId = selectedCor ? selectedCor.formato_id : null;
+
+        // Tentar descobrir a numeracao selecionada
+        let resolvedNumId = item.amostra_num_id;
+        if (!resolvedNumId && item.tipo_numeracao) {
+            const matchedNum = (state.numeracoes || []).find(n => fuzzyMatch(n.name, item.tipo_numeracao));
+            if (matchedNum) resolvedNumId = matchedNum.id;
+        }
+
+        // Filtrar numerações com base no formato da cor selecionada
+        const filteredNumeracoes = (state.numeracoes || []).filter(n => {
+            // Se for a numeração salva neste item, sempre exibe
+            if (n.id === resolvedNumId) return true;
+
+            // Se for customizada, só exibe se for vinculada a este item específico
+            if (n.is_custom && n.os_item_id !== item.id) return false;
+            
+            // Se tivermos cor selecionada com formato_id, filtra por ele
+            if (corFormatoId) {
+                const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
+                return ids.some(id => String(id) === String(corFormatoId));
+            }
+            return false;
+        });
+
+        const numOpts = filteredNumeracoes.map(n =>
+            `<option value="${n.id}" ${n.id === resolvedNumId ? 'selected' : ''}>${n.name}</option>`
+        ).join('');
 
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
@@ -12782,7 +12833,8 @@ function renderAmostrasOSItens(osId) {
                         <div style="display: flex; flex-direction: column; gap: 14px;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
-                                <select class="form-control" id="amostra-item-cor-${idx}" disabled style="appearance: none; background: rgba(255,255,255,0.05); color: var(--text-color); opacity: 1;">
+                                <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
+                                    <option value="">-- Selecione uma Cor --</option>
                                     ${corsOpts}
                                 </select>
                             </div>
@@ -12791,7 +12843,8 @@ function renderAmostrasOSItens(osId) {
                                     <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
                                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>`}
                                 </div>
-                                <select class="form-control" id="amostra-item-num-${idx}" disabled style="appearance: none; background: rgba(255,255,255,0.05); color: var(--text-color); opacity: 1;">
+                                <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
+                                    <option value="">-- Selecione uma Numeração --</option>
                                     ${numOpts}
                                 </select>
                             </div>
