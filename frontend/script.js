@@ -12705,6 +12705,7 @@ async function navigateToAmostrasFromOS(osId) {
  */
 function renderAmostrasOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
+    const osNum = os ? (os.id_int || os.id) : osId;
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
     const banner = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-banner' : 'cliente-os-banner');
