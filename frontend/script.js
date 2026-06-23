@@ -12719,7 +12719,7 @@ function renderAmostrasOSItens(osId) {
         return;
     }
 
-    container.innerHTML = itens.map((item, idx) => {
+    const itemsHtml = itens.map((item, idx) => {
         const status = item.amostra_status || 'PENDENTE';
         const obs = item.amostra_obs || '';
         
@@ -12883,6 +12883,104 @@ function renderAmostrasOSItens(osId) {
             </div>
         </div>`;
     }).join('');
+
+    const isInternal = containerId === 'amostras-itens-container';
+    
+    let finalHtml = itemsHtml;
+    
+    if (isInternal) {
+        const briefingText = os.obs ? os.obs.replace(/\n/g, '<br>') : '<span style="color: var(--text-dim); font-style: italic;">Nenhum briefing cadastrado para este pedido.</span>';
+        
+        finalHtml = `
+            <div style="display: grid; grid-template-columns: 1fr 350px; gap: 24px; align-items: start;">
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    ${itemsHtml}
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px;">
+                    <!-- Briefing Base -->
+                    <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
+                        <div class="card-header" style="background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid var(--border); padding: 12px 16px;">
+                            <span style="font-weight: 700; color: #d97706; display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-clipboard-list"></i> Briefing Base do Evento
+                            </span>
+                        </div>
+                        <div class="card-body" style="padding: 16px; font-size: 0.85rem; color: var(--text); line-height: 1.5; max-height: 300px; overflow-y: auto;">
+                            ${briefingText}
+                        </div>
+                    </div>
+
+                    <!-- Arquivos -->
+                    <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
+                        <div class="card-header" style="background: rgba(59, 130, 246, 0.1); border-bottom: 1px solid var(--border); padding: 12px 16px;">
+                            <span style="font-weight: 700; color: var(--blue); display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-paperclip"></i> Arquivos de Referência
+                            </span>
+                        </div>
+                        <div class="card-body" style="padding: 16px; font-size: 0.85rem;">
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <!-- Mocks -->
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(0,0,0,0.02); border: 1px solid var(--border); border-radius: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <i class="fa-regular fa-file-pdf" style="color: #ef4444; font-size: 1.2rem;"></i>
+                                        <span style="color: var(--text); font-weight: 500;">Logo_Evento.pdf</span>
+                                    </div>
+                                    <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;"><i class="fa-solid fa-download"></i></button>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: rgba(0,0,0,0.02); border: 1px solid var(--border); border-radius: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <i class="fa-regular fa-file-image" style="color: #10b981; font-size: 1.2rem;"></i>
+                                        <span style="color: var(--text); font-weight: 500;">Mapa_Assentos.png</span>
+                                    </div>
+                                    <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;"><i class="fa-solid fa-download"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ultimos Pedidos -->
+                    <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
+                        <div class="card-header" style="background: rgba(16, 185, 129, 0.1); border-bottom: 1px solid var(--border); padding: 12px 16px;">
+                            <span style="font-weight: 700; color: var(--teal); display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-clock-rotate-left"></i> Últimos Pedidos
+                            </span>
+                        </div>
+                        <div class="card-body" style="padding: 0;">
+                            <div style="display: flex; flex-direction: column;">
+                                <!-- Mocks -->
+                                <div style="padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 0.85rem; color: var(--text);">Pedido #17800</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-dim);">Há 2 dias</div>
+                                    </div>
+                                    <span class="badge badge-teal" style="font-size: 0.65rem;">Concluído</span>
+                                </div>
+                                <div style="padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 0.85rem; color: var(--text);">Pedido #17650</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-dim);">Há 15 dias</div>
+                                    </div>
+                                    <span class="badge badge-teal" style="font-size: 0.65rem;">Concluído</span>
+                                </div>
+                                <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 0.85rem; color: var(--text);">Pedido #17120</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-dim);">Há 2 meses</div>
+                                    </div>
+                                    <span class="badge badge-teal" style="font-size: 0.65rem;">Concluído</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Media query hack for responsiveness inline if needed, but flex-wrap handles smaller screens if we used flex. 
+    // Com display grid, podemos precisar de css. Para o painel principal, vamos assumir que o CSS do painel é robusto.
+
+    container.innerHTML = finalHtml;
 
     setTimeout(() => {
         itens.forEach((item, idx) => {
