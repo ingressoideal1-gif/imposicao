@@ -13857,7 +13857,7 @@ function editCustomNumeracao(idx, osId, itemId) {
     };
     
     // Mudar view
-    showView('view-numeracoes');
+    showView('view-numeracao');
     
     setTimeout(() => {
         // Carrega numerao base
