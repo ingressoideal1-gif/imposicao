@@ -11191,7 +11191,7 @@ async function carregarArtesGlobais() {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
-            .select('id_int, status, nome_evento, designer_nome')
+            .select('id_int, status, nome_evento, designer_nome, designer_uid')
             .order('created_at', { ascending: false });
         if (error) {
             if (error.code === '42P01') return; // tabela não existe
@@ -13005,11 +13005,33 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
-                            ${[
-                                {uid: 'edison-uid', nome: 'Edison Jr', email: 'ingressoideal1@gmail.com', init: 'E'},
-                                {uid: 'emily-uid', nome: 'Emily Boeira', email: 'emilyboeira51@gmail.com', init: 'E'},
-                                {uid: 'vitoria-uid', nome: 'Vitória Colbeich', email: 'vitoria.dseg@gmail.com', init: 'V'}
-                            ].map(d => `
+                            ${(() => {
+                                const designers = [
+                                    {uid: 'edison-uid', nome: 'Edison Jr', email: 'ingressoideal1@gmail.com', init: 'E'},
+                                    {uid: 'emily-uid', nome: 'Emily Boeira', email: 'emilyboeira51@gmail.com', init: 'E'},
+                                    {uid: 'vitoria-uid', nome: 'Vitória Colbeich', email: 'vitoria.dseg@gmail.com', init: 'V'}
+                                ];
+                                // Contar pedidos e modelos por designer
+                                const artes = state.todasArtes || [];
+                                const allOrdens = state.ordens || [];
+                                return designers.map(d => {
+                                    // Pedidos: quantos pedidos únicos têm este designer atribuído
+                                    const pedidosSet = new Set();
+                                    artes.forEach(a => {
+                                        if (a.designer_uid === d.uid || a.designer_nome === d.nome) {
+                                            pedidosSet.add(a.id_int);
+                                        }
+                                    });
+                                    const pedidosCount = pedidosSet.size;
+                                    // Modelos: soma de modelos de todos os pedidos designados
+                                    let modelosCount = 0;
+                                    pedidosSet.forEach(idInt => {
+                                        const os = allOrdens.find(o => String(o.numero) === String(idInt));
+                                        if (os && state.osItens[os.id]) {
+                                            modelosCount += state.osItens[os.id].length;
+                                        }
+                                    });
+                                    return `
                                 <div class="designer-card" data-uid="${d.uid}" onclick="selectDesigner('${osNum}', '${d.uid}', '${d.nome}')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.01);">
                                     <div style="display: flex; align-items: center; gap: 12px;">
                                         <div style="width: 36px; height: 36px; border-radius: 50%; background: #a7f3d0; color: #065f46; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">
@@ -13023,11 +13045,13 @@ function renderAmostrasOSItens(osId) {
                                         </div>
                                     </div>
                                     <div style="text-align: right; font-size: 0.7rem; color: var(--text-dim);">
-                                        Pedidos: <strong>0</strong><br>
-                                        Modelos: <strong>0</strong>
+                                        Pedidos: <strong>${pedidosCount}</strong><br>
+                                        Modelos: <strong>${modelosCount}</strong>
                                     </div>
                                 </div>
-                            `).join('')}
+                                    `;
+                                }).join('');
+                            })()}
                         </div>
                     </div>
 
@@ -14157,14 +14181,8 @@ function updateBriefingUI(osId) {
     if (dataEl) dataEl.value = data.data_evento ? data.data_evento.split('T')[0].split('-').reverse().join('/') : '';
     if (localEl) localEl.value = data.local_evento || '';
     
-    // Debug visual temporário
-    if (data.nome_evento) {
-        toast('Dados do Briefing Lidos: ' + data.nome_evento, 'success');
-    } else {
-        toast('Briefing Vazio ou não encontrado', 'warning');
-    }
     
-    console.log("updateBriefingUI executado para osId:", osId, "Elementos DOM:", {nomeEl: !!nomeEl, dataEl: !!dataEl, localEl: !!localEl}, "Dados recebidos:", data);
+    console.log("updateBriefingUI executado para osId:", osId, "Dados recebidos:", data);
     
     // Atualiza observações por produto (accordion) agrupando pelo produto pai
     const obsObj = data.observacoes || {};
@@ -14183,7 +14201,18 @@ function updateBriefingUI(osId) {
     });
 
     // Atualiza Designer Ideal Selecionado
-    const designerUid = data.designer_uid;
+    let designerUid = data.designer_uid;
+    
+    // Se não tem designer_uid salvo, tentar pegar da lista de arte (via designer_nome)
+    if (!designerUid && data.designer_nome) {
+        const designerMap = {
+            'Edison Jr': 'edison-uid',
+            'Emily Boeira': 'emily-uid',
+            'Vitória Colbeich': 'vitoria-uid'
+        };
+        designerUid = designerMap[data.designer_nome] || null;
+    }
+    
     document.querySelectorAll('.designer-card').forEach(card => {
         const uid = card.getAttribute('data-uid');
         if (uid === designerUid) {
