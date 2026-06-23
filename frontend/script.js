@@ -12761,8 +12761,8 @@ function renderAmostrasOSItens(osId) {
 
         // Tentar descobrir a numeracao selecionada
         let resolvedNumId = item.amostra_num_id;
-        if (!resolvedNumId && item.tipo_numeracao) {
-            const matchedNum = (state.numeracoes || []).find(n => fuzzyMatch(n.name, item.tipo_numeracao));
+        if (!resolvedNumId && item.gabarito_operacional) {
+            const matchedNum = (state.numeracoes || []).find(n => fuzzyMatch(n.name, item.gabarito_operacional));
             if (matchedNum) resolvedNumId = matchedNum.id;
         }
 
