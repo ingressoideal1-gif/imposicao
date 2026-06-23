@@ -14024,6 +14024,7 @@ async function loadBriefingBase(osId, osIntId) {
         
         let mergedData = null;
         if (data && data.length > 0) {
+             console.log("loadBriefingBase: encontrou dados em pedidos_artes", data);
              mergedData = { observacoes: {} };
              data.forEach(row => {
                   if (row.nome_evento) mergedData.nome_evento = row.nome_evento;
@@ -14127,8 +14128,17 @@ function updateBriefingUI(osId) {
     const localEl = document.getElementById(`briefing-local-${osId}`);
     
     if (nomeEl) nomeEl.value = data.nome_evento || '';
-    if (dataEl) dataEl.value = data.data_evento || '';
+    if (dataEl) dataEl.value = data.data_evento ? data.data_evento.split('T')[0].split('-').reverse().join('/') : '';
     if (localEl) localEl.value = data.local_evento || '';
+    
+    // Debug visual temporário
+    if (data.nome_evento) {
+        toast('Dados do Briefing Lidos: ' + data.nome_evento, 'success');
+    } else {
+        toast('Briefing Vazio ou não encontrado', 'warning');
+    }
+    
+    console.log("updateBriefingUI executado para osId:", osId, "Elementos DOM:", {nomeEl: !!nomeEl, dataEl: !!dataEl, localEl: !!localEl}, "Dados recebidos:", data);
     
     // Atualiza observações por produto (accordion) agrupando pelo produto pai
     const obsObj = data.observacoes || {};
