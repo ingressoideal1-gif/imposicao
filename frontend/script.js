@@ -15685,7 +15685,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- Exportação de PDF dos Modelos ---
 async function exportarPdfModelos() {
-    const osId = state.amostrasCurrentOsId;
+    const osId = state.amostrasOSAtivo;
     if (!osId) return;
     const os = state.ordens.find(o => o.id === osId);
     const itens = state.osItens[osId] || [];
