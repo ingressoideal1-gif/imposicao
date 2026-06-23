@@ -15754,6 +15754,12 @@ async function exportarPdfModelos() {
 
             const imgData = canvas.toDataURL('image/jpeg', 0.98);
             pdf.addImage(imgData, 'JPEG', 0, 0, targetW, targetH);
+            
+            // Adiciona o modelo ao índice (Outline/Bookmark) do PDF com seu número (id)
+            try {
+                const numModelo = item.id ? String(item.id) : `Modelo ${idx + 1}`;
+                pdf.outline.add(null, numModelo, { pageNumber: idx + 1 });
+            } catch(e) { console.warn("Erro ao adicionar bookmark", e); }
         }
 
         if (pdf !== null) {
