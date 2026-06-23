@@ -13022,34 +13022,11 @@ function renderAmostrasOSItens(osId) {
                     <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
                         <div class="card-header" style="background: rgba(16, 185, 129, 0.1); border-bottom: 1px solid var(--border); padding: 12px 16px;">
                             <span style="font-weight: 700; color: var(--teal); display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-clock-rotate-left"></i> Últimos Pedidos
+                                <i class="fa-solid fa-clock-rotate-left"></i> Últimos Pedidos do Cliente
                             </span>
                         </div>
-                        <div class="card-body" style="padding: 0;">
-                            <div style="display: flex; flex-direction: column;">
-                                <!-- Mocks -->
-                                <div style="padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 0.85rem; color: var(--text);">Pedido #17800</div>
-                                        <div style="font-size: 0.75rem; color: var(--text-dim);">Há 2 dias</div>
-                                    </div>
-                                    <span class="badge badge-teal" style="font-size: 0.65rem;">Concluído</span>
-                                </div>
-                                <div style="padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 0.85rem; color: var(--text);">Pedido #17650</div>
-                                        <div style="font-size: 0.75rem; color: var(--text-dim);">Há 15 dias</div>
-                                    </div>
-                                    <span class="badge badge-teal" style="font-size: 0.65rem;">Concluído</span>
-                                </div>
-                                <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 0.85rem; color: var(--text);">Pedido #17120</div>
-                                        <div style="font-size: 0.75rem; color: var(--text-dim);">Há 2 meses</div>
-                                    </div>
-                                    <span class="badge badge-teal" style="font-size: 0.65rem;">Concluído</span>
-                                </div>
-                            </div>
+                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;" id="ultimos-pedidos-container-${osId}">
+                            <div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;"><i class="fa-solid fa-spinner fa-spin"></i> Buscando histórico...</div>
                         </div>
                     </div>
                 </div>
@@ -13064,6 +13041,7 @@ function renderAmostrasOSItens(osId) {
     
     if (isInternal) {
         loadBriefingBase(osId, osNum);
+        loadUltimosPedidos(osId, os.cliente);
     }
 
     setTimeout(() => {
@@ -14062,6 +14040,79 @@ async function loadBriefingBase(osId, osIntId) {
         updateBriefingUI(osId);
     } catch (e) {
         console.error("Erro ao carregar briefing:", e);
+    }
+}
+
+async function loadUltimosPedidos(osId, clienteNome) {
+    if (!clienteNome || typeof supabaseClient === 'undefined') return;
+    
+    try {
+        // 1. Buscar os últimos 5 pedidos em propostas para este cliente
+        const { data: propostas, error: errProp } = await supabaseClient
+            .from('propostas')
+            .select('id_int, created_at')
+            .eq('cliente', clienteNome)
+            .order('created_at', { ascending: false })
+            .limit(5);
+            
+        if (errProp) throw errProp;
+        if (!propostas || propostas.length === 0) {
+            const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
+            if (container) container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 16px; background: rgba(0,0,0,0.02); border-radius: 8px;">Nenhum pedido anterior encontrado para<br><strong>${clienteNome}</strong></div>`;
+            return;
+        }
+        
+        const idInts = propostas.map(p => p.id_int);
+        
+        // 2. Buscar dados dos eventos na tabela pedidos_artes
+        const { data: artes, error: errArtes } = await supabaseClient
+            .from('pedidos_artes')
+            .select('id_int, nome_evento, data_evento')
+            .in('id_int', idInts);
+            
+        if (errArtes && errArtes.code !== '42P01') throw errArtes;
+        
+        // Mapear primeiro evento encontrado de cada pedido
+        const eventoMap = {};
+        if (artes) {
+            artes.forEach(a => {
+                if (a.nome_evento || a.data_evento) {
+                    if (!eventoMap[a.id_int]) eventoMap[a.id_int] = a;
+                }
+            });
+        }
+        
+        // 3. Montar HTML de exibição
+        const html = propostas.map(p => {
+            const ev = eventoMap[p.id_int] || {};
+            const nome = ev.nome_evento ? ev.nome_evento : 'Evento não informado no Briefing';
+            const dataEv = ev.data_evento ? `<div style="margin-top: 4px; font-size: 0.75rem; color: var(--text-dim)"><i class="fa-regular fa-calendar"></i> Evento: ${ev.data_evento}</div>` : '';
+            let dataCriacao = '';
+            if (p.created_at) {
+                const d = new Date(p.created_at);
+                dataCriacao = d.toLocaleDateString('pt-BR');
+            }
+            return `
+                <div style="padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); transition: all 0.2s;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                        <span style="font-weight: 800; font-size: 0.95rem; color: var(--primary);">#${p.id_int}</span>
+                        <span style="font-size: 0.75rem; color: var(--text-dim); background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 12px;">${dataCriacao}</span>
+                    </div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: var(--text);">
+                        ${nome}
+                    </div>
+                    ${dataEv}
+                </div>
+            `;
+        }).join('');
+        
+        const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
+        if (container) container.innerHTML = html;
+        
+    } catch (e) {
+        console.error("Erro ao carregar últimos pedidos:", e);
+        const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
+        if (container) container.innerHTML = `<div style="font-size: 0.8rem; color: var(--red); text-align: center;">Erro ao carregar histórico.</div>`;
     }
 }
 
