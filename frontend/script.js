@@ -12959,17 +12959,17 @@ function renderAmostrasOSItens(osId) {
                         </div>
                         <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                             <div class="form-group" style="margin: 0;">
-                                <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
-                                <input type="text" id="briefing-nome-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'nome_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px;" placeholder="Nome do Evento">
+                                <label style="font-size: 0.75rem; color: #f59e0b; font-weight: 600;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
+                                <input type="text" id="briefing-nome-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'nome_evento', this.value)" style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b; font-weight: 600; margin-top: 4px;" placeholder="Nome do Evento">
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                                 <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-calendar" style="margin-right: 4px;"></i> Data do Evento</label>
-                                    <input type="text" id="briefing-data-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'data_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px;" placeholder="DD/MM/AAAA">
+                                    <label style="font-size: 0.75rem; color: #f59e0b; font-weight: 600;"><i class="fa-regular fa-calendar" style="margin-right: 4px;"></i> Data do Evento</label>
+                                    <input type="text" id="briefing-data-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'data_evento', this.value)" style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b; font-weight: 600; margin-top: 4px;" placeholder="DD/MM/AAAA">
                                 </div>
                                 <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i> Local da Festa/Evento</label>
-                                    <input type="text" id="briefing-local-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'local_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px;" placeholder="Local">
+                                    <label style="font-size: 0.75rem; color: #f59e0b; font-weight: 600;"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i> Local da Festa/Evento</label>
+                                    <input type="text" id="briefing-local-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'local_evento', this.value)" style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b; font-weight: 600; margin-top: 4px;" placeholder="Local">
                                 </div>
                             </div>
 
@@ -13834,8 +13834,11 @@ function editCustomNumeracao(idx, osId, itemId) {
     }
     
     const baseNumId = numSelect.value;
-    const baseNum = state.numeracoes.find(n => n.id === baseNumId);
-    if (!baseNum) return;
+    const baseNum = state.numeracoes.find(n => String(n.id) === String(baseNumId));
+    if (!baseNum) {
+        toast('Numeração base não encontrada em state. Tente recarregar a página.', 'warning');
+        return;
+    }
     
     const item = state.osItens[osId].find(i => i.id === itemId);
     const modelName = `${item.produto} (Modelo ${idx + 1})`;
