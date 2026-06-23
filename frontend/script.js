@@ -14047,11 +14047,12 @@ async function loadUltimosPedidos(osId, clienteNome) {
     if (!clienteNome || typeof supabaseClient === 'undefined') return;
     
     try {
-        // 1. Buscar os últimos 5 pedidos em propostas para este cliente
+        console.log("Buscando histórico para o cliente:", clienteNome);
+        // 1. Buscar os últimos 5 pedidos em propostas para este cliente (ilike para ignorar maiúsculas/minúsculas)
         const { data: propostas, error: errProp } = await supabaseClient
             .from('propostas')
             .select('id_int, created_at')
-            .eq('cliente', clienteNome)
+            .ilike('cliente', `%${clienteNome.trim()}%`)
             .order('created_at', { ascending: false })
             .limit(5);
             
