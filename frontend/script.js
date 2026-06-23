@@ -12851,7 +12851,6 @@ function renderAmostrasOSItens(osId) {
                                     <option value="">-- Selecione uma Numeração --</option>
                                     ${numOpts}
                                 </select>
-                                ${debugInfo}
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
