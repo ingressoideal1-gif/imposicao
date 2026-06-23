@@ -12025,6 +12025,12 @@ function renderOrdens() {
                     nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${arteComEvento.nome_evento}</span>`;
                 }
 
+                let nomeDesignerHtml = '';
+                const arteComDesigner = artesDaOS.find(a => a.designer_nome);
+                if (arteComDesigner) {
+                    nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${arteComDesigner.designer_nome}</span>`;
+                }
+
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
                         <td style="text-align: center; font-size: 1.1rem; color: ${isAllApproved ? 'var(--green)' : 'inherit'};">▶</td>
@@ -12035,9 +12041,8 @@ function renderOrdens() {
                         <td>
                             <strong style="color: white;">${os.cliente || '--'}</strong>${nomeEventoHtml}
                         </td>
-                        <td onclick="event.stopPropagation();">
-                            <strong style="color: white; font-size: 0.85rem; display: block; margin-bottom: 4px;">${os.vendedor || '--'}</strong>
-                            ${renderDesignerSelect(os.id, os.numero)}
+                        <td>
+                            <strong style="color: white;">${os.vendedor || '--'}</strong>${nomeDesignerHtml}
                         </td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">
                             ${formatDateTime(os.data_liberacao)}
