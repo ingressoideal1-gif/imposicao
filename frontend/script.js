@@ -12891,6 +12891,10 @@ function renderAmostrasOSItens(osId) {
                                         onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}')">
                                     <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}')">✕ Remover</button>
                                     <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.amostra_arte_base64 ? '(Arte Salva)' : ''}</span>
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 0.75rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
+                                        <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
+                                        <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
+                                    </span>
                                 </div>
                             </div>
                         </div>
