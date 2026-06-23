@@ -12888,7 +12888,11 @@ function renderAmostrasOSItens(osId) {
 
     setTimeout(() => {
         itens.forEach((item, idx) => {
-            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64) {
+            const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
+            const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+            const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
+            
+            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || hasSelectValue) {
                 renderItemAmostraCombinada(idx, osId);
             }
         });
