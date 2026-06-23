@@ -12786,10 +12786,6 @@ function renderAmostrasOSItens(osId) {
         const numOpts = filteredNumeracoes.map(n =>
             `<option value="${n.id}" ${n.id === resolvedNumId ? 'selected' : ''}>${n.name}</option>`
         ).join('');
-
-        const debugKeys = Object.keys(item).join(', ');
-        const debugInfo = `<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:5px; line-height: 1.1;">DEBUG INFO<br>padrao: ${item.padrao}<br>corId(db): ${item.amostra_cor_id}<br>KEYS: ${debugKeys}</div>`;
-
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
