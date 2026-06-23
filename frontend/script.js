@@ -4903,6 +4903,9 @@ os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.it
 
         }
 
+        // Guardar o nome da numeração ANTES de limpar o formulário
+        const savedNumName = document.getElementById('num-name').value.trim();
+        
         cancelNumEdit();
 await loadAll();
 
@@ -4910,14 +4913,18 @@ if (window.customNumeracaoEditState) {
     const customState = window.customNumeracaoEditState;
     window.customNumeracaoEditState = null;
     
-    // Encontrar a numeracao recem criada (pelo nome)
-    const newNumName = customState.modelName || customState.modeloName;
-    const newNum = state.numeracoes.find(n => n.name === newNumName || n.name === document.getElementById('num-name').value.trim());
+    // Encontrar a numeracao recem criada (pelo nome salvo antes do cancel)
+    const newNumName = savedNumName || customState.modelName || customState.modeloName;
+    toast('Buscando numeração: "' + newNumName + '" em ' + state.numeracoes.length + ' numerações', 'info');
+    const newNum = state.numeracoes.find(n => n.name === newNumName);
     
     if (customState.active || customState.view === 'amostras') {
         if (newNum) {
+            toast('Numeração encontrada: ' + newNum.name + ' (ID: ' + newNum.id + ')', 'success');
             // Associar a amostra
             await saveAmostraToDB(customState.itemId, customState.osId, { amostra_num_id: newNum.id });
+        } else {
+            toast('Numeração "' + newNumName + '" NÃO encontrada após salvar!', 'error');
         }
         showView('view-amostras');
         if (typeof renderAmostrasOSItens === 'function') {
