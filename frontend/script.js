@@ -12606,6 +12606,9 @@ function toggleImpOSQueue() {
 
 // Função global de navegação entre views
 window.showView = function(viewId) {
+    // Salvar no localStorage para persistir após F5
+    localStorage.setItem('activeView', viewId);
+
     // Trocar a view ativa
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
@@ -15103,6 +15106,13 @@ window.setFiltroStatusArte = setFiltroStatusArte;
 // - ROUTER: Verificar rota do cliente no carregamento -
 document.addEventListener('DOMContentLoaded', () => {
     checkClienteRoute();
+
+    // Restaurar a aba salva no localStorage
+    const savedView = localStorage.getItem('activeView');
+    if (savedView && typeof window.showView === 'function') {
+        // Pequeno atraso para garantir que a interface já tenha sido construída
+        setTimeout(() => window.showView(savedView), 50);
+    }
 });
 
 
