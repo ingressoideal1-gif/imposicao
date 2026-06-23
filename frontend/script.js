@@ -13855,7 +13855,7 @@ function editCustomNumeracao(idx, osId, itemId) {
         return;
     }
     
-    const item = osItens.find(i => i.id === itemId);
+    const item = osItens.find(i => String(i.id) === String(itemId));
     if (!item) {
         toast('LAPIS: item ' + itemId + ' não encontrado nos itens da OS!', 'error');
         return;
