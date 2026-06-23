@@ -14011,10 +14011,13 @@ function clearAmostrasOS() {
 async function loadBriefingBase(osId, osIntId) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     try {
+        toast('Buscando ID: ' + osIntId, 'info');
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
             .select('*')
             .eq('id_int', osIntId);
+            
+        toast('Retorno: ' + (data ? data.length : 0) + ' linhas', 'info');
             
         if (error) {
             if (error.code !== '42P01') throw error;
