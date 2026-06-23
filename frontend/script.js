@@ -12801,10 +12801,10 @@ function renderAmostrasOSItens(osId) {
         // Filtrar numerações com base no formato da cor selecionada
         const filteredNumeracoes = (state.numeracoes || []).filter(n => {
             // Se for a numeração salva neste item, sempre exibe
-            if (n.id === resolvedNumId) return true;
+            if (String(n.id) === String(resolvedNumId)) return true;
 
             // Se for customizada, só exibe se for vinculada a este item específico
-            if (n.is_custom && n.os_item_id !== item.id) return false;
+            if (n.is_custom && String(n.os_item_id) !== String(item.id)) return false;
             
             // Se tivermos cor selecionada com formato_id, filtra por ele
             if (corFormatoId) {
@@ -12815,7 +12815,7 @@ function renderAmostrasOSItens(osId) {
         });
 
         const numOpts = filteredNumeracoes.map(n =>
-            `<option value="${n.id}" ${n.id === resolvedNumId ? 'selected' : ''}>${n.name}</option>`
+            `<option value="${n.id}" ${String(n.id) === String(resolvedNumId) ? 'selected' : ''}>${n.name}</option>`
         ).join('');
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
