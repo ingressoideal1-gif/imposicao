@@ -12028,7 +12028,7 @@ function renderOrdens() {
                 let nomeDesignerHtml = '';
                 const arteComDesigner = artesDaOS.find(a => a.designer_nome);
                 if (arteComDesigner) {
-                    nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${arteComDesigner.designer_nome}</span>`;
+                    nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #3b82f6;">${arteComDesigner.designer_nome}</span>`;
                 }
 
                 return `
