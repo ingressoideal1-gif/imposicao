@@ -11388,11 +11388,21 @@ async function loadOSItens(osId) {
                     .order('ordem', { ascending: true });
                 if (error) throw error;
                 
-                state.osItens[osId] = (data || []).map(item => ({
-                    ...item,
-                    produto: item.nome_modelo || 'Modelo',
-                    os_id: osId
-                }));
+                // Buscar nome do produto original da proposta
+                const { data: propData } = await supabaseClient
+                    .from('produtos_proposta')
+                    .select('id, nome_produto')
+                    .eq('id_int', queryNum);
+                
+                state.osItens[osId] = (data || []).map(item => {
+                    const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
+                    return {
+                        ...item,
+                        produto: item.nome_modelo || 'Modelo',
+                        nome_produto_real: prop ? prop.nome_produto : null,
+                        os_id: osId
+                    };
+                });
             } else {
                 const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
                 if (res.ok) {
@@ -12752,7 +12762,7 @@ function renderAmostrasOSItens(osId) {
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <span class="card-title">🧪 <strong>Modelo ${idx + 1}: ${item.produto || '--'}</strong> -- ${item.formato || ''}</span>
+                <span class="card-title">🧪 <strong>Modelo: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
                     <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} → NF: ${item.num_final || item.quantidade || 0}</span>
@@ -14259,12 +14269,22 @@ async function initClientePage(numero, token) {
                 .eq('id_int', queryNum)
                 .order('ordem', { ascending: true });
             
+            // Buscar nome do produto original da proposta
+            const { data: propData } = await supabaseClient
+                .from('produtos_proposta')
+                .select('id, nome_produto')
+                .eq('id_int', queryNum);
+            
             if (prodItems && prodItems.length > 0) {
-                itensCarregados = prodItems.map(item => ({
-                    ...item,
-                    produto: item.nome_modelo || 'Modelo',
-                    os_id: osId
-                }));
+                itensCarregados = prodItems.map(item => {
+                    const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
+                    return {
+                        ...item,
+                        produto: item.nome_modelo || 'Modelo',
+                        nome_produto_real: prop ? prop.nome_produto : null,
+                        os_id: osId
+                    };
+                });
             }
         } catch (e) { console.warn('Erro ao buscar pedidos_modelos:', e); }
 
