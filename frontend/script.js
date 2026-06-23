@@ -12779,12 +12779,14 @@ function renderAmostrasOSItens(osId) {
                 const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
                 return ids.some(id => String(id) === String(corFormatoId));
             }
-            return false;
+            return true; // Se não tiver cor selecionada, mostra todas as numerações
         });
 
         const numOpts = filteredNumeracoes.map(n =>
             `<option value="${n.id}" ${n.id === resolvedNumId ? 'selected' : ''}>${n.name}</option>`
         ).join('');
+
+        const debugInfo = `<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:5px; line-height: 1.1;">DEBUG INFO<br>padrao: ${item.padrao}<br>tipo_num: ${item.tipo_numeracao}<br>corId(db): ${item.amostra_cor_id}<br>corId(resolvido): ${resolvedCorId}<br>numId(resolvido): ${resolvedNumId}</div>`;
 
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
@@ -12832,7 +12834,7 @@ function renderAmostrasOSItens(osId) {
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                     <div class="amostra-config-panel">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
-                            ⚙️ Configurações da Amostra
+                            ⚙️ Configurações da Amostra <span style="font-size:10px; background: #333; padding: 2px 5px; border-radius: 4px;">ID: ${item.id}</span>
                         </h3>
                         <div style="display: flex; flex-direction: column; gap: 14px;">
                             <div class="form-group" style="margin-bottom: 0;">
@@ -12851,6 +12853,7 @@ function renderAmostrasOSItens(osId) {
                                     <option value="">-- Selecione uma Numeração --</option>
                                     ${numOpts}
                                 </select>
+                                ${debugInfo}
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
