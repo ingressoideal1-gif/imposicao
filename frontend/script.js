@@ -11378,8 +11378,9 @@ async function loadOSItens(osId) {
         const os = state.ordens.find(o => o.id === osId);
         if (!os) return;
 
-        // Se não carregado ainda, busca a fonte de dados principal
-        if (!state.osItens[osId] || state.osItens[osId].length === 0) {
+        // Se não carregado ainda, ou se tem apenas o cache básico do Vibecode (padrao undefined), busca a fonte de dados principal
+        const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i.padrao === undefined);
+        if (needsFullLoad) {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const queryNum = parseInt(os.numero);
                 const { data, error } = await supabaseClient
