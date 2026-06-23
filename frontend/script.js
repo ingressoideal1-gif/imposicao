@@ -13830,6 +13830,8 @@ window.renderItemAmostraCombinada = renderItemAmostraCombinada;
 window.customNumeracaoEditState = null;
 
 function editCustomNumeracao(idx, osId, itemId) {
+    toast('LAPIS: Iniciando editCustomNumeracao idx=' + idx, 'info');
+    
     const numSelect = document.getElementById(`amostra-item-num-${idx}`);
     if (!numSelect || !numSelect.value) {
         toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
@@ -13837,14 +13839,30 @@ function editCustomNumeracao(idx, osId, itemId) {
     }
     
     const baseNumId = numSelect.value;
+    toast('LAPIS: baseNumId=' + baseNumId + ', state.numeracoes.length=' + state.numeracoes.length, 'info');
+    
     const baseNum = state.numeracoes.find(n => String(n.id) === String(baseNumId));
     if (!baseNum) {
-        toast('Numeração base não encontrada em state. Tente recarregar a página.', 'warning');
+        toast('Numeração ID ' + baseNumId + ' não encontrada. IDs disponíveis: ' + state.numeracoes.slice(0,5).map(n => n.id).join(', '), 'warning');
         return;
     }
     
-    const item = state.osItens[osId].find(i => i.id === itemId);
+    toast('LAPIS: baseNum encontrada: ' + baseNum.name, 'success');
+    
+    const osItens = state.osItens[osId];
+    if (!osItens) {
+        toast('LAPIS: state.osItens[' + osId + '] está vazio!', 'error');
+        return;
+    }
+    
+    const item = osItens.find(i => i.id === itemId);
+    if (!item) {
+        toast('LAPIS: item ' + itemId + ' não encontrado nos itens da OS!', 'error');
+        return;
+    }
+    
     const modelName = `${item.produto} (Modelo ${idx + 1})`;
+    toast('LAPIS: modelName=' + modelName + '. Abrindo editor...', 'success');
     
     // Set custom state
     window.customNumeracaoEditState = {
