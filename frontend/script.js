@@ -1083,7 +1083,12 @@ async function deleteFmt(id) {
 
     try {
 
-        await api('DELETE', `/formatos/${id}`);
+        if (typeof supabaseClient !== 'undefined') {
+            const { error } = await supabaseClient.from('producao_formatos').delete().eq('id', id);
+            if (error) throw error;
+        } else {
+            await api('DELETE', `/formatos/${id}`);
+        }
 
         toast('Formato excluído.', 'success');
 
@@ -1247,7 +1252,12 @@ async function deleteSai(id) {
 
     try {
 
-        await api('DELETE', `/saidas/${id}`);
+        if (typeof supabaseClient !== 'undefined') {
+            const { error } = await supabaseClient.from('producao_saidas').delete().eq('id', id);
+            if (error) throw error;
+        } else {
+            await api('DELETE', `/saidas/${id}`);
+        }
 
         toast('Saída excluída.', 'success');
 
@@ -1834,7 +1844,12 @@ async function deleteCor(id) {
 
     try {
 
-        await api('DELETE', `/cores/${id}`);
+        if (typeof supabaseClient !== 'undefined') {
+            const { error } = await supabaseClient.from('producao_cores').delete().eq('id', id);
+            if (error) throw error;
+        } else {
+            await api('DELETE', `/cores/${id}`);
+        }
 
         toast('Cor excluída.', 'success');
 
@@ -2461,7 +2476,12 @@ async function deleteNumeracao(id) {
 
     try {
 
-        await api('DELETE', `/numeracoes/${id}`);
+        if (typeof supabaseClient !== 'undefined') {
+            const { error } = await supabaseClient.from('producao_numeracoes').delete().eq('id', id);
+            if (error) throw error;
+        } else {
+            await api('DELETE', `/numeracoes/${id}`);
+        }
 
         toast('Numeração excluída.', 'success');
 
