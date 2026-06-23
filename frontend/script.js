@@ -11380,13 +11380,19 @@ async function loadOSItens(osId) {
         // Se não carregado ainda, busca a fonte de dados principal
         if (!state.osItens[osId] || state.osItens[osId].length === 0) {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const queryNum = parseInt(os.numero);
                 const { data, error } = await supabaseClient
-                    .from('producao_os_itens')
+                    .from('pedidos_modelos')
                     .select('*')
-                    .eq('os_id', osId)
-                    .order('created_at', { ascending: true });
+                    .eq('id_int', queryNum)
+                    .order('ordem', { ascending: true });
                 if (error) throw error;
-                state.osItens[osId] = data || [];
+                
+                state.osItens[osId] = (data || []).map(item => ({
+                    ...item,
+                    produto: item.nome_modelo || 'Modelo',
+                    os_id: osId
+                }));
             } else {
                 const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
                 if (res.ok) {
@@ -14236,34 +14242,23 @@ async function initClientePage(numero, token) {
         const osId = clienteState.osId;
         let itensCarregados = [];
 
-        // 1. Carregar itens do pedido
-        const isVibeOS = osId.startsWith('vibe_');
-        if (!isVibeOS) {
-            // OS local: buscar de producao_os_itens (UUID compativel)
-            try {
-                const { data: prodItems } = await supabaseClient
-                    .from('producao_os_itens')
-                    .select('*')
-                    .eq('os_id', osId)
-                    .order('created_at', { ascending: true });
-                if (prodItems && prodItems.length > 0) {
-                    itensCarregados = prodItems;
-                }
-            } catch (e) { console.warn('Erro ao buscar producao_os_itens:', e); }
-        }
-
-        // 2. Fallback (ou unica fonte para Vibecode): buscar de produtos_proposta
-        if (itensCarregados.length === 0) {
-            try {
-                const { data: prodData } = await supabaseClient
-                    .from('produtos_proposta')
-                    .select('*')
-                    .eq('id_int', parseInt(numero));
-                if (prodData && prodData.length > 0) {
-                    itensCarregados = prodData.map(p => mapVibecodeProdutoToOSItem(p, osId));
-                }
-            } catch (e) { console.warn('Itens nao encontrados via produtos_proposta:', e); }
-        }
+        // 1. Carregar itens do pedido via pedidos_modelos
+        try {
+            const queryNum = parseInt(numero);
+            const { data: prodItems } = await supabaseClient
+                .from('pedidos_modelos')
+                .select('*')
+                .eq('id_int', queryNum)
+                .order('ordem', { ascending: true });
+            
+            if (prodItems && prodItems.length > 0) {
+                itensCarregados = prodItems.map(item => ({
+                    ...item,
+                    produto: item.nome_modelo || 'Modelo',
+                    os_id: osId
+                }));
+            }
+        } catch (e) { console.warn('Erro ao buscar pedidos_modelos:', e); }
 
         state.osItens[osId] = itensCarregados;
 
