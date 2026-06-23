@@ -4915,12 +4915,10 @@ if (window.customNumeracaoEditState) {
     
     // Encontrar a numeracao recem criada (pelo nome salvo antes do cancel)
     const newNumName = savedNumName || customState.modelName || customState.modeloName;
-    toast('Buscando numeração: "' + newNumName + '" em ' + state.numeracoes.length + ' numerações', 'info');
     const newNum = state.numeracoes.find(n => n.name === newNumName);
     
     if (customState.active || customState.view === 'amostras') {
         if (newNum) {
-            toast('Numeração encontrada: ' + newNum.name + ' (ID: ' + newNum.id + ')', 'success');
             // Associar a amostra
             await saveAmostraToDB(customState.itemId, customState.osId, { amostra_num_id: newNum.id });
         } else {
@@ -13837,8 +13835,6 @@ window.renderItemAmostraCombinada = renderItemAmostraCombinada;
 window.customNumeracaoEditState = null;
 
 function editCustomNumeracao(idx, osId, itemId) {
-    toast('LAPIS: Iniciando editCustomNumeracao idx=' + idx, 'info');
-    
     const numSelect = document.getElementById(`amostra-item-num-${idx}`);
     if (!numSelect || !numSelect.value) {
         toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
@@ -13846,30 +13842,25 @@ function editCustomNumeracao(idx, osId, itemId) {
     }
     
     const baseNumId = numSelect.value;
-    toast('LAPIS: baseNumId=' + baseNumId + ', state.numeracoes.length=' + state.numeracoes.length, 'info');
-    
     const baseNum = state.numeracoes.find(n => String(n.id) === String(baseNumId));
     if (!baseNum) {
         toast('Numeração ID ' + baseNumId + ' não encontrada. IDs disponíveis: ' + state.numeracoes.slice(0,5).map(n => n.id).join(', '), 'warning');
         return;
     }
     
-    toast('LAPIS: baseNum encontrada: ' + baseNum.name, 'success');
-    
     const osItens = state.osItens[osId];
     if (!osItens) {
-        toast('LAPIS: state.osItens[' + osId + '] está vazio!', 'error');
+        toast('Itens da OS não carregados. Tente recarregar.', 'error');
         return;
     }
     
     const item = osItens.find(i => String(i.id) === String(itemId));
     if (!item) {
-        toast('LAPIS: item ' + itemId + ' não encontrado nos itens da OS!', 'error');
+        toast('Item não encontrado nos itens da OS.', 'error');
         return;
     }
     
     const modelName = `${item.produto} (Modelo ${idx + 1})`;
-    toast('LAPIS: modelName=' + modelName + '. Abrindo editor...', 'success');
     
     // Set custom state
     window.customNumeracaoEditState = {
@@ -14042,13 +14033,10 @@ function clearAmostrasOS() {
 async function loadBriefingBase(osId, osIntId) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     try {
-        toast('Buscando ID: ' + osIntId, 'info');
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
             .select('*')
             .eq('id_int', osIntId);
-            
-        toast('Retorno: ' + (data ? data.length : 0) + ' linhas', 'info');
             
         if (error) {
             if (error.code !== '42P01') throw error;
