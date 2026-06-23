@@ -14015,8 +14015,7 @@ async function loadBriefingBase(osId, osIntId) {
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
             .select('*')
-            .eq('id_int', osIntId)
-            .limit(1);
+            .eq('id_int', osIntId);
             
         if (error) {
             if (error.code !== '42P01') throw error;
@@ -14024,7 +14023,22 @@ async function loadBriefingBase(osId, osIntId) {
             return;
         }
         
-        state.pedidosArtesCurrent = data && data.length > 0 ? data[0] : null;
+        let mergedData = null;
+        if (data && data.length > 0) {
+             mergedData = { observacoes: {} };
+             data.forEach(row => {
+                  if (row.nome_evento) mergedData.nome_evento = row.nome_evento;
+                  if (row.data_evento) mergedData.data_evento = row.data_evento;
+                  if (row.local_evento) mergedData.local_evento = row.local_evento;
+                  if (row.designer_uid) mergedData.designer_uid = row.designer_uid;
+                  if (row.designer_nome) mergedData.designer_nome = row.designer_nome;
+                  if (row.observacoes && Object.keys(row.observacoes).length > 0) {
+                      mergedData.observacoes = Object.assign(mergedData.observacoes, row.observacoes);
+                  }
+             });
+        }
+        
+        state.pedidosArtesCurrent = mergedData;
         updateBriefingUI(osId);
     } catch (e) {
         console.error("Erro ao carregar briefing:", e);
@@ -14104,12 +14118,28 @@ async function saveBriefingField(osIntId, field, value, isObs = false, itemId = 
                 designer_nome: current.designer_nome || null
             };
 
-            const { error } = await supabaseClient
+            const { data: existingData } = await supabaseClient
                 .from('pedidos_artes')
-                .upsert(payload, { onConflict: 'id_int' });
+                .select('id')
+                .eq('id_int', osIntId)
+                .limit(1);
+                
+            let opError;
+            if (existingData && existingData.length > 0) {
+                const res = await supabaseClient
+                    .from('pedidos_artes')
+                    .update(payload)
+                    .eq('id_int', osIntId);
+                opError = res.error;
+            } else {
+                const res = await supabaseClient
+                    .from('pedidos_artes')
+                    .insert(payload);
+                opError = res.error;
+            }
 
-            if (error) throw error;
-            console.log("Briefing salvo via debounced upsert.");
+            if (opError) throw opError;
+            console.log("Briefing salvo via debounced update/insert.");
         } catch (e) {
             console.error("Erro ao salvar briefing:", e);
         }
