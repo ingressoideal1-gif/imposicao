@@ -11389,10 +11389,10 @@ async function loadOSItens(osId) {
                     .order('ordem', { ascending: true });
                 if (error) throw error;
                 
-                // Buscar nome do produto original da proposta
+                // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
                 const { data: propData } = await supabaseClient
                     .from('produtos_proposta')
-                    .select('id, nome_produto')
+                    .select('id, nome_produto, amostra_cor_id, amostra_num_id')
                     .eq('id_int', queryNum);
                 
                 state.osItens[osId] = (data || []).map(item => {
@@ -11401,6 +11401,8 @@ async function loadOSItens(osId) {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',
                         nome_produto_real: prop ? prop.nome_produto : null,
+                        amostra_cor_id: prop ? prop.amostra_cor_id : null,
+                        amostra_num_id: prop ? prop.amostra_num_id : null,
                         os_id: osId
                     };
                 });
@@ -12761,6 +12763,8 @@ function renderAmostrasOSItens(osId) {
             const matchedNum = (state.numeracoes || []).find(n => fuzzyMatch(n.name, item.tipo_numeracao));
             if (matchedNum) resolvedNumId = matchedNum.id;
         }
+
+        console.log(`[Item ${idx} ${item.produto}] Padrao: ${item.padrao} -> CorId: ${resolvedCorId} | TipoNum: ${item.tipo_numeracao} -> NumId: ${resolvedNumId}`);
 
         // Filtrar numerações com base no formato da cor selecionada
         const filteredNumeracoes = (state.numeracoes || []).filter(n => {
