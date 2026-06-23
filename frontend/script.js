@@ -13657,6 +13657,36 @@ async function renderItemAmostraCombinada(idx, osId) {
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, finalWidth, finalHeight);
+
+    // Desenhar nome_modelo de forma destacada no quadrante superior esquerdo
+    if (item && item.nome_modelo) {
+        ctx.save();
+        const fontSize = Math.max(16, Math.min(36, finalHeight * 0.2));
+        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'left';
+        
+        const padX = finalWidth * 0.02; // 2% margem
+        const padY = finalHeight * 0.05; // 5% margem
+        const text = String(item.nome_modelo).toUpperCase();
+        const textMetrics = ctx.measureText(text);
+        const textWidth = textMetrics.width;
+        
+        const boxPadX = fontSize * 0.4;
+        const boxPadY = fontSize * 0.3;
+
+        // Fundo escuro semi-transparente para destaque
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.beginPath();
+        ctx.roundRect(padX, padY, textWidth + (boxPadX * 2), fontSize + (boxPadY * 2), 4);
+        ctx.fill();
+
+        // Texto em branco
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(text, padX + boxPadX, padY + boxPadY);
+        
+        ctx.restore();
+    }
 }
 
 // Expor globalmente
