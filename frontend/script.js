@@ -11417,35 +11417,51 @@ async function loadOSItens(osId) {
                     .eq('id_int', queryNum)
                     .order('ordem', { ascending: true });
                 if (error) throw error;
-                console.log('[loadOSItens] pedidos_modelos query id_int=' + queryNum + ', resultados=' + (data ? data.length : 0), data);
-                if ((!data || data.length === 0) && queryNum) {
-                    toast('DEBUG: pedidos_modelos retornou 0 para id_int=' + queryNum + '. Verificando produtos_proposta...', 'warning');
-                    // Fallback: tentar buscar de produtos_proposta diretamente
-                    const { data: ppData } = await supabaseClient
-                        .from('produtos_proposta')
-                        .select('*')
-                        .eq('id_int', queryNum);
-                    console.log('[loadOSItens] produtos_proposta fallback id_int=' + queryNum + ':', ppData);
-                    toast('DEBUG: produtos_proposta retornou ' + (ppData ? ppData.length : 0) + ' para id_int=' + queryNum, 'info');
-                }
                 
                 // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
                 const { data: propData } = await supabaseClient
                     .from('produtos_proposta')
-                    .select('id, nome_produto, amostra_cor_id, amostra_num_id')
+                    .select('id, nome_produto, amostra_cor_id, amostra_num_id, id_int, gabarito_operacional, padrao, largura, altura, qtd, created_at, updated_at')
                     .eq('id_int', queryNum);
                 
-                state.osItens[osId] = (data || []).map(item => {
-                    const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
-                    return {
-                        ...item,
-                        produto: item.nome_modelo || 'Modelo',
-                        nome_produto_real: prop ? prop.nome_produto : null,
-                        amostra_cor_id: prop ? prop.amostra_cor_id : null,
-                        amostra_num_id: prop ? prop.amostra_num_id : null,
-                        os_id: osId
-                    };
-                });
+                if (data && data.length > 0) {
+                    // Usar pedidos_modelos como fonte principal
+                    state.osItens[osId] = data.map(item => {
+                        const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
+                        return {
+                            ...item,
+                            produto: item.nome_modelo || 'Modelo',
+                            nome_produto_real: prop ? prop.nome_produto : null,
+                            amostra_cor_id: prop ? prop.amostra_cor_id : null,
+                            amostra_num_id: prop ? prop.amostra_num_id : null,
+                            os_id: osId
+                        };
+                    });
+                } else if (propData && propData.length > 0) {
+                    // Fallback: usar produtos_proposta diretamente quando pedidos_modelos está vazio
+                    console.log('[loadOSItens] Fallback: usando produtos_proposta para id_int=' + queryNum);
+                    state.osItens[osId] = propData.map((pp, idx) => ({
+                        id: pp.id,
+                        id_int: pp.id_int,
+                        nome_modelo: pp.nome_produto || `Modelo ${idx + 1}`,
+                        produto: pp.nome_produto || `Modelo ${idx + 1}`,
+                        nome_produto_real: pp.nome_produto,
+                        gabarito_operacional: pp.gabarito_operacional || null,
+                        padrao: pp.padrao || null,
+                        largura: pp.largura || null,
+                        altura: pp.altura || null,
+                        qtd: pp.qtd || null,
+                        amostra_cor_id: pp.amostra_cor_id || null,
+                        amostra_num_id: pp.amostra_num_id || null,
+                        ordem: idx + 1,
+                        os_id: osId,
+                        id_produto_proposta_origem: pp.id,
+                        created_at: pp.created_at,
+                        updated_at: pp.updated_at
+                    }));
+                } else {
+                    state.osItens[osId] = [];
+                }
             } else {
                 const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`);
                 if (res.ok) {
