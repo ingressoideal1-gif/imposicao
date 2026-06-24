@@ -13458,6 +13458,10 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     const isModel = !String(itemId).startsWith('vibe_item_');
+    console.log('--- DEBUG SALVAMENTO ---');
+    console.log('itemId sendo salvo:', itemId);
+    console.log('itemLocal encontrado no state:', itemLocal);
+    console.log('isModel?', isModel);
     
     let vibeId = null;
     if (itemLocal && itemLocal.id_produto_proposta_origem) {
