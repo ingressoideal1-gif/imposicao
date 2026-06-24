@@ -12391,7 +12391,7 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
                 const { error } = await supabaseClient
                     .from('producao_os_itens')
                     .update({ impressao: novoStatus })
-                    .eq('id', itemId);
+                    .eq('id_item', itemId);
                 if (error) throw error;
             } else {
                 const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
@@ -12497,7 +12497,7 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
             const { error } = await supabaseClient
                 .from('producao_os_itens')
                 .update({ [field]: value })
-                .eq('id', itemId);
+                .eq('id_item', itemId);
             if (error) console.error(`[OS] Erro ao auto-salvar ${field}:`, error);
         } else {
             await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
@@ -13472,7 +13472,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             const { error } = await vibeClient
                 .from('pedidos_modelos')
                 .update(dataToUpdate)
-                .eq('id', itemId);
+                .eq('id_item', itemId);
             if (error) throw error;
         } else if (vibeId) {
             const { error } = await vibeClient
