@@ -11421,7 +11421,7 @@ async function loadOSItens(osId) {
                 // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
                 const { data: propData } = await supabaseClient
                     .from('produtos_proposta')
-                    .select('id, nome_produto, amostra_cor_id, amostra_num_id, id_int, gabarito_operacional, padrao, largura, altura, qtd, created_at, updated_at')
+                    .select('id, nome_produto, amostra_cor_id, amostra_num_id, id_int, gabarito_operacional, padrao, largura, altura, qtd, created_at, updated_at, amostra_arte_base64')
                     .eq('id_int', queryNum);
                 
                 if (data && data.length > 0) {
@@ -11434,6 +11434,7 @@ async function loadOSItens(osId) {
                             nome_produto_real: prop ? prop.nome_produto : null,
                             amostra_cor_id: prop ? prop.amostra_cor_id : null,
                             amostra_num_id: prop ? prop.amostra_num_id : null,
+                            amostra_arte_base64: prop ? prop.amostra_arte_base64 : null,
                             os_id: osId
                         };
                     });
@@ -11453,6 +11454,7 @@ async function loadOSItens(osId) {
                         qtd: pp.qtd || null,
                         amostra_cor_id: pp.amostra_cor_id || null,
                         amostra_num_id: pp.amostra_num_id || null,
+                        amostra_arte_base64: pp.amostra_arte_base64 || null,
                         ordem: idx + 1,
                         os_id: osId,
                         id_produto_proposta_origem: pp.id,
