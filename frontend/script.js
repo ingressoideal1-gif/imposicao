@@ -11421,7 +11421,7 @@ async function loadOSItens(osId) {
                 // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
                 const { data: propData } = await supabaseClient
                     .from('produtos_proposta')
-                    .select('id, nome_produto, amostra_cor_id, amostra_num_id, id_int, padrao, largura, altura, qtd, created_at, updated_at, amostra_arte_base64, arte_url')
+                    .select('*')
                     .eq('id_int', queryNum);
                 
                 if (data && data.length > 0) {
@@ -11445,7 +11445,7 @@ async function loadOSItens(osId) {
                 } else if (propData && propData.length > 0) {
                     // Fallback: usar produtos_proposta diretamente quando pedidos_modelos está vazio
                     console.log('[loadOSItens] Fallback: usando produtos_proposta para id_int=' + queryNum);
-                    state.osItens[osId] = propData.map((pp, idx) => ({
+                    const mappedItems = propData.map((pp, idx) => ({
                         id: pp.id,
                         id_int: pp.id_int,
                         nome_modelo: pp.nome_produto || `Modelo ${idx + 1}`,
@@ -11467,6 +11467,47 @@ async function loadOSItens(osId) {
                         updated_at: pp.updated_at,
                         _dbLoaded: true
                     }));
+
+                    // Auto-criar registros em pedidos_modelos para que salvamentos futuros funcionem
+                    try {
+                        const insertPayloads = propData.map((pp, idx) => ({
+                            id_int: pp.id_int,
+                            id_produto_proposta_origem: pp.id,
+                            nome_modelo: pp.nome_produto || `Modelo ${idx + 1}`,
+                            quantidade: pp.qtd || 0,
+                            ordem: idx + 1,
+                            status_arte: 'PENDENTE',
+                            status_producao: 'PENDENTE',
+                            amostra_cor_id: pp.amostra_cor_id || null,
+                            amostra_num_id: pp.amostra_num_id || null,
+                            amostra_arte_base64: pp.amostra_arte_base64 || null,
+                            arte_url: pp.arte_url || null,
+                            gabarito_operacional: pp.gabarito_operacional || null
+                        }));
+
+                        const { data: insertedModelos, error: insertError } = await supabaseClient
+                            .from('pedidos_modelos')
+                            .insert(insertPayloads)
+                            .select('id, id_produto_proposta_origem');
+
+                        if (!insertError && insertedModelos) {
+                            // Atualizar itens no state com _pedidoModeloId dos registros criados
+                            mappedItems.forEach(item => {
+                                const modelo = insertedModelos.find(m => String(m.id_produto_proposta_origem) === String(item.id_produto_proposta_origem));
+                                if (modelo) {
+                                    item._pedidoModeloId = modelo.id;
+                                    item.id = modelo.id; // Usar o ID real de pedidos_modelos
+                                }
+                            });
+                            console.log(`[loadOSItens] Auto-criou ${insertedModelos.length} registros em pedidos_modelos para id_int=${queryNum}`);
+                        } else if (insertError) {
+                            console.warn('[loadOSItens] Erro ao auto-criar pedidos_modelos:', insertError);
+                        }
+                    } catch (autoCreateErr) {
+                        console.warn('[loadOSItens] Falha no auto-create de pedidos_modelos:', autoCreateErr);
+                    }
+
+                    state.osItens[osId] = mappedItems;
                 } else {
                     state.osItens[osId] = [];
                 }
@@ -13228,6 +13269,30 @@ async function voltarParaAtendimento() {
                     .upsert({ id: osId, status: novoStatus, numero: os ? os.numero : null }, { onConflict: 'id' });
                 if (error) console.warn('Erro ao atualizar status no Supabase:', error);
             }
+
+            // 4. Sincronizar status_arte em pedidos_modelos para cada item do pedido
+            try {
+                const osNumero = os ? parseInt(os.numero) : null;
+                if (osNumero && !isNaN(osNumero)) {
+                    // Mapear status do item individual baseado no amostra_status
+                    const updatePromises = itens.map(item => {
+                        const modeloId = item._pedidoModeloId || item.id;
+                        if (!modeloId) return Promise.resolve();
+                        const statusArteModelo = item.amostra_status === 'PRONTO' ? 'AGUARDANDO_CLIENTE' : 'EM_CRIACAO';
+                        return supabaseClient
+                            .from('pedidos_modelos')
+                            .update({ status_arte: statusArteModelo })
+                            .eq('id', modeloId)
+                            .then(({ error }) => {
+                                if (error) console.warn(`[voltarParaAtendimento] Erro ao sync pedidos_modelos id=${modeloId}:`, error);
+                            });
+                    });
+                    await Promise.all(updatePromises);
+                    console.log(`[voltarParaAtendimento] Sincronizou status_arte em pedidos_modelos para ${itens.length} itens`);
+                }
+            } catch (syncErr) {
+                console.warn('[voltarParaAtendimento] Erro ao sincronizar pedidos_modelos:', syncErr);
+            }
         }
 
         // Se status = "Enviar ARTE", gerar link automaticamente e exibir
@@ -13457,45 +13522,66 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     // Localiza o item no state para obter metadados
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     if (!itemLocal) {
-        console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId);
+        console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId, '| osId=', osId, '| total itens=', (state.osItens[osId] || []).length, '| ids disponiveis=', (state.osItens[osId] || []).map(i => i.id));
         return;
     }
 
+    // Prioridade: _pedidoModeloId (set pelo loadOSItens quando veio de pedidos_modelos)
+    // Fallback: se o id é numérico E diferente de id_produto_proposta_origem, é PK de pedidos_modelos
     const itemDbId    = parseInt(itemLocal.id, 10);
     const itemPropId  = parseInt(itemLocal.id_produto_proposta_origem, 10);
 
-    // Detecta se o item veio da tabela pedidos_modelos:
-    // - Se tem _pedidoModeloId (novo campo mapeado), usa ele diretamente
-    // - Senao, se seu id (itemDbId) eh DIFERENTE de id_produto_proposta_origem (itemPropId), entao
-    //   itemDbId é o PK real de pedidos_modelos
     const modeloId = itemLocal._pedidoModeloId
-        || ((!isNaN(itemDbId) && !isNaN(itemPropId) && itemDbId !== itemPropId) ? itemDbId : null);
+        || ((!isNaN(itemDbId) && !isNaN(itemPropId) && itemDbId !== itemPropId) ? itemDbId : null)
+        || itemLocal.id;  // Último fallback: usar o id direto (pode ser UUID de pedidos_modelos)
 
-    // Se nao for de pedidos_modelos, usa o id do produto_proposta para o fallback
+    // Só usa propId se modeloId não estiver disponível
     const propId = (!isNaN(itemPropId) && itemPropId > 0) ? itemPropId
                  : (!isNaN(itemDbId) && itemDbId > 0) ? itemDbId
                  : null;
 
-    console.log('[SAVE] itemId=', itemId, '| itemDbId=', itemDbId, '| itemPropId=', itemPropId, '| modeloId=', modeloId, '| propId=', propId, '| data=', JSON.stringify(dataToUpdate));
+    console.log('[SAVE] itemId=', itemId, '| _pedidoModeloId=', itemLocal._pedidoModeloId, '| itemDbId=', itemDbId, '| itemPropId=', itemPropId, '| modeloId=', modeloId, '| propId=', propId, '| data=', JSON.stringify(dataToUpdate));
 
     try {
+        // Tenta salvar em pedidos_modelos primeiro (tabela principal)
         if (modeloId) {
-            // Salva na linha correta de pedidos_modelos
-            const { error } = await vibeClient
+            const { data: updateResult, error } = await vibeClient
                 .from('pedidos_modelos')
                 .update(dataToUpdate)
-                .eq('id', modeloId);
-            if (error) throw error;
-            console.log('[SAVE] OK -> pedidos_modelos id=', modeloId);
-        } else if (propId) {
-            // Fallback para produtos_proposta (remove campos que nao existem la)
+                .eq('id', modeloId)
+                .select('id');
+            
+            if (error) {
+                console.error('[SAVE] Erro Supabase pedidos_modelos:', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint);
+                // Se o erro for coluna inexistente ou tabela, tenta fallback
+                if (error.code === '42703' || error.code === '42P01') {
+                    console.warn('[SAVE] Coluna ou tabela nao encontrada, tentando fallback para produtos_proposta');
+                } else {
+                    throw error;
+                }
+            } else {
+                const rowsUpdated = updateResult ? updateResult.length : 0;
+                console.log('[SAVE] OK -> pedidos_modelos id=', modeloId, '| rows updated=', rowsUpdated);
+                if (rowsUpdated === 0) {
+                    console.warn('[SAVE] AVISO: 0 linhas atualizadas em pedidos_modelos! O id', modeloId, 'pode nao existir na tabela.');
+                }
+                Object.assign(itemLocal, dataToUpdate);
+                return;
+            }
+        }
+        
+        // Fallback para produtos_proposta
+        if (propId) {
             const safeData = { ...dataToUpdate };
             delete safeData.gabarito_operacional;
             const { error } = await vibeClient
                 .from('produtos_proposta')
                 .update(safeData)
                 .eq('id', propId);
-            if (error) throw error;
+            if (error) {
+                console.error('[SAVE] Erro Supabase produtos_proposta:', error.message, '| code:', error.code);
+                throw error;
+            }
             console.log('[SAVE] OK -> produtos_proposta id=', propId);
         } else {
             console.warn('[SAVE] SKIP: nenhum ID valido encontrado');
@@ -13505,7 +13591,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         // Atualiza o state local imediatamente
         Object.assign(itemLocal, dataToUpdate);
     } catch (e) {
-        console.error('[SAVE] Erro:', e);
+        console.error('[SAVE] Erro final:', e);
         throw e;
     }
 }
@@ -14674,7 +14760,7 @@ async function setStatusArteAtual(novoStatus) {
         
         await supabaseClient.from('pedidos_modelos')
             .update({ status_arte: novoStatus })
-            .eq('id_item', artesModalState.itemId)
+            .eq('id', artesModalState.itemId)
             .catch(e => console.warn('Sem sync modelo:', e));
             
         const statusTexto = novoStatus === 'LIBERADA' ? 'LIBERADA PARA IMPRESSÃO' : novoStatus;
