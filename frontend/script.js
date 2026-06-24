@@ -11432,10 +11432,11 @@ async function loadOSItens(osId) {
                             ...item,
                             produto: item.nome_modelo || 'Modelo',
                             nome_produto_real: prop ? prop.nome_produto : null,
-                            amostra_cor_id: prop ? prop.amostra_cor_id : null,
-                            amostra_num_id: prop ? prop.amostra_num_id : null,
-                            amostra_arte_base64: prop ? prop.amostra_arte_base64 : null,
-                            arte_url: prop ? prop.arte_url : null,
+                            amostra_cor_id: item.amostra_cor_id || (prop ? prop.amostra_cor_id : null),
+                            amostra_num_id: item.amostra_num_id || (prop ? prop.amostra_num_id : null),
+                            amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
+                            arte_url: item.arte_url || (prop ? prop.arte_url : null),
+                            gabarito_operacional: item.gabarito_operacional || (prop ? prop.gabarito_operacional : null),
                             os_id: osId,
                             _dbLoaded: true
                         };
@@ -13373,7 +13374,14 @@ function onItemNumSelect(idx, osId, itemId) {
     const numSelect = document.getElementById(`amostra-item-num-${idx}`);
     if (!numSelect) return;
     
-    saveAmostraToDB(itemId, osId, { amostra_num_id: numSelect.value || null });
+    const numId = numSelect.value;
+    const numObj = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+    const numNome = numObj ? numObj.name : null;
+    
+    saveAmostraToDB(itemId, osId, { 
+        amostra_num_id: numId || null,
+        gabarito_operacional: numNome || null
+    });
     renderItemAmostraCombinada(idx, osId);
 }
 
@@ -13449,22 +13457,30 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     }
     
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    const isModel = !String(itemId).startsWith('vibe_item_');
     
     let vibeId = null;
     if (itemLocal && itemLocal.id_produto_proposta_origem) {
         vibeId = parseInt(itemLocal.id_produto_proposta_origem, 10);
-    } else {
+    } else if (!isModel) {
         const vibeIdStr = String(itemId).replace('vibe_item_', '');
         vibeId = parseInt(vibeIdStr, 10);
     }
     
     try {
-        const { error } = await vibeClient
-            .from('produtos_proposta')
-            .update(dataToUpdate)
-            .eq('id', vibeId);
-            
-        if (error) throw error;
+        if (isModel) {
+            const { error } = await vibeClient
+                .from('pedidos_modelos')
+                .update(dataToUpdate)
+                .eq('id', parseInt(itemId, 10));
+            if (error) throw error;
+        } else if (vibeId) {
+            const { error } = await vibeClient
+                .from('produtos_proposta')
+                .update(dataToUpdate)
+                .eq('id', vibeId);
+            if (error) throw error;
+        }
         
         // Atualizar state local
         const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
@@ -13475,6 +13491,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         console.error('Erro ao salvar no Supabase:', e);
         throw e; // Lança o erro para que a interface capture (Payload too large, etc)
     }
+}
 }
 
 /**
