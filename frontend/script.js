@@ -11421,7 +11421,7 @@ async function loadOSItens(osId) {
                 // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
                 const { data: propData } = await supabaseClient
                     .from('produtos_proposta')
-                    .select('id, nome_produto, amostra_cor_id, amostra_num_id, id_int, gabarito_operacional, padrao, largura, altura, qtd, created_at, updated_at, amostra_arte_base64')
+                    .select('id, nome_produto, amostra_cor_id, amostra_num_id, id_int, gabarito_operacional, padrao, largura, altura, qtd, created_at, updated_at, amostra_arte_base64, arte_url')
                     .eq('id_int', queryNum);
                 
                 if (data && data.length > 0) {
@@ -11435,6 +11435,7 @@ async function loadOSItens(osId) {
                             amostra_cor_id: prop ? prop.amostra_cor_id : null,
                             amostra_num_id: prop ? prop.amostra_num_id : null,
                             amostra_arte_base64: prop ? prop.amostra_arte_base64 : null,
+                            arte_url: prop ? prop.arte_url : null,
                             os_id: osId
                         };
                     });
@@ -11455,6 +11456,7 @@ async function loadOSItens(osId) {
                         amostra_cor_id: pp.amostra_cor_id || null,
                         amostra_num_id: pp.amostra_num_id || null,
                         amostra_arte_base64: pp.amostra_arte_base64 || null,
+                        arte_url: pp.arte_url || null,
                         ordem: idx + 1,
                         os_id: osId,
                         id_produto_proposta_origem: pp.id,
@@ -12934,8 +12936,11 @@ function renderAmostrasOSItens(osId) {
                     <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 8px; display: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
                         ${item.nome_modelo || `Modelo ${idx + 1}`}
                     </div>
-                    <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;"
-                        onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
+                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ?
+                        `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; height: auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`
+                    :
+                        `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>`
+                    }
                     <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                         <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                         <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
@@ -13380,28 +13385,40 @@ function onItemArteUpload(idx, osId, itemId) {
         nameLabel.textContent = file.name;
         removeBtn.style.display = 'inline-block';
         
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-            const base64 = e.target.result;
+        try {
+            toast('Enviando arte original para o servidor...', 'info');
+            const fileExt = file.name.split('.').pop();
+            const fileName = `arte_${osId}_${itemId}_${Date.now()}.${fileExt}`;
+            
+            const { data, error } = await supabaseClient
+                .storage
+                .from('artes')
+                .upload(fileName, file, { cacheControl: '3600', upsert: true });
+                
+            if (error) throw error;
+            
+            const { data: urlData } = supabaseClient
+                .storage
+                .from('artes')
+                .getPublicUrl(fileName);
+                
+            const publicUrl = urlData.publicUrl;
+
             // Atualizar o state PRIMEIRO
             const osItems = state.osItens[osId];
             const item = osItems.find(i => String(i.id) === String(itemId));
-            if (item) item.amostra_arte_base64 = base64;
+            if (item) item.arte_url = publicUrl;
             
             // Renderizar IMEDIATAMENTE a arte
             renderItemAmostraCombinada(idx, osId);
 
             // Salvar no banco
-            try {
-                await saveAmostraToDB(itemId, osId, { amostra_arte_base64: base64 });
-                toast('Arte salva no banco com sucesso!', 'success');
-            } catch(e) {
-                toast('Falha ao enviar arte para o banco: muito pesada ou sem rede.', 'error');
-            }
-            // Renderizar
-            renderItemAmostraCombinada(idx, osId);
-        };
-        reader.readAsDataURL(file);
+            await saveAmostraToDB(itemId, osId, { arte_url: publicUrl });
+            toast('Arte enviada com sucesso!', 'success');
+        } catch(e) {
+            console.error('Upload falhou:', e);
+            toast('Falha ao enviar arte: ' + e.message, 'error');
+        }
     }
 }
 
@@ -13415,12 +13432,12 @@ function onItemArteRemove(idx, osId, itemId) {
     removeBtn.style.display = 'none';
     
     const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
-    if (item) item.amostra_arte_base64 = null;
+    if (item) item.arte_url = null;
     renderItemAmostraCombinada(idx, osId);
 
-    saveAmostraToDB(itemId, osId, { amostra_arte_base64: null })
+    saveAmostraToDB(itemId, osId, { arte_url: null })
         .then(() => toast('Arte removida do banco!', 'success'))
-        .catch(() => toast('Falha ao remover arte do banco.', 'error'));
+        .catch(() => toast('Falha ao remover arte.', 'error'));
 }
 
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
@@ -13529,12 +13546,12 @@ async function renderItemAmostraCombinada(idx, osId) {
     const corId = corSelect ? corSelect.value : (item ? item.amostra_cor_id : '');
     const numId = numSelect ? numSelect.value : (item ? item.amostra_num_id : '');
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
-    const hasSavedArte = !!(item && item.amostra_arte_base64);
+    const hasSavedArte = !!(item && item.arte_url);
 
     // Mostrar nome do arquivo e botão remover
     if (arteNameSpan) {
         if (hasArte) arteNameSpan.textContent = arteInput.files[0].name;
-        else if (hasSavedArte) arteNameSpan.textContent = '(Arte Salva)';
+        else if (hasSavedArte) arteNameSpan.textContent = '(Arte Salva na Nuvem)';
         else arteNameSpan.textContent = '';
     }
     if (removeBtn) removeBtn.style.display = (hasArte || hasSavedArte) ? '' : 'none';
@@ -13642,7 +13659,7 @@ async function renderItemAmostraCombinada(idx, osId) {
                 file = arteInput.files[0];
                 isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
             } else {
-                isPdf = item.amostra_arte_base64 && (item.amostra_arte_base64.startsWith('data:application/pdf') || item.amostra_arte_base64.includes('JVBERi'));
+                isPdf = item.arte_url && (item.arte_url.toLowerCase().endsWith('.pdf') || item.arte_url.includes('data:application/pdf'));
             }
 
             if (isPdf && typeof pdfjsLib !== 'undefined') {
@@ -13654,10 +13671,14 @@ async function renderItemAmostraCombinada(idx, osId) {
                     const arrayBuffer = await file.arrayBuffer();
                     bytes = new Uint8Array(arrayBuffer);
                 } else {
-                    const base64Data = item.amostra_arte_base64.includes('base64,') ? item.amostra_arte_base64.split('base64,')[1] : item.amostra_arte_base64;
-                    const binStr = atob(base64Data);
-                    bytes = new Uint8Array(binStr.length);
-                    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    if (item.arte_url.startsWith('http') || item.arte_url.startsWith('/')) {
+                        bytes = await fetchPdfBytes(item.arte_url);
+                    } else {
+                        const base64Data = item.arte_url.includes('base64,') ? item.arte_url.split('base64,')[1] : item.arte_url;
+                        const binStr = atob(base64Data);
+                        bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    }
                 }
 
                 const loadingTask = pdfjsLib.getDocument({ data: bytes });
@@ -13695,7 +13716,7 @@ async function renderItemAmostraCombinada(idx, osId) {
                 if (hasArte) {
                     url = URL.createObjectURL(file);
                 } else {
-                    url = item.amostra_arte_base64;
+                    url = item.arte_url;
                 }
                 const arteImg = new Image();
                 await new Promise((resolve, reject) => {
@@ -13899,6 +13920,41 @@ async function renderItemAmostraCombinada(idx, osId) {
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, finalWidth, finalHeight);
+
+    // Snapshot para o link do cliente se não for a própria visão do cliente
+    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+        if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
+        item._snapshotTimer = setTimeout(() => {
+            snapshotAmostraAndUpload(idx, osId, item, canvas);
+        }, 2000);
+    }
+}
+
+async function snapshotAmostraAndUpload(idx, osId, item, canvas) {
+    if (!supabaseClient) return;
+    try {
+        canvas.toBlob(async (blob) => {
+            if (!blob) return;
+            const fileName = `amostra_${osId}_${item.id}_${Date.now()}.jpg`;
+            const { error } = await supabaseClient
+                .storage
+                .from('amostras_renderizadas')
+                .upload(fileName, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: true });
+            
+            if (error) {
+                console.warn('[Snapshot] Não pôde enviar render final (bucket existe?):', error);
+                return;
+            }
+
+            const { data: urlData } = supabaseClient.storage.from('amostras_renderizadas').getPublicUrl(fileName);
+            const publicUrl = urlData.publicUrl;
+            
+            await saveAmostraToDB(item.id, osId, { amostra_arte_base64: publicUrl });
+            item.amostra_arte_base64 = publicUrl;
+        }, 'image/jpeg', 0.85);
+    } catch(e) {
+        console.warn('[Snapshot] Erro ao gerar snapshot:', e);
+    }
 }
 
 // Expor globalmente
@@ -15122,16 +15178,23 @@ function mostrarResultadoCliente(icon, titulo, msg) {
     if (msgEl) msgEl.textContent = msg;
 }
 
-function openClienteLightbox(canvasId) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
+function openClienteLightbox(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
     
     const overlay = document.getElementById('cliente-lightbox-overlay');
     const img = document.getElementById('cliente-lightbox-img');
     const container = document.getElementById('cliente-lightbox-container');
     if (!overlay || !img) return;
     
-    img.src = canvas.toDataURL('image/png');
+    if (el.tagName === 'CANVAS') {
+        img.src = el.toDataURL('image/png');
+    } else if (el.tagName === 'IMG') {
+        img.src = el.src;
+    } else if (typeof el === 'string' && el.startsWith('http')) {
+        img.src = el; // Fallback se passar a URL direta
+    }
+    
     overlay.style.display = 'flex';
     
     // Resetar transformações
