@@ -15906,3 +15906,129 @@ async function exportarPdfSomenteArte() {
         btn.disabled = false;
     }
 }
+
+// --- Exportação de PDF Somente Gabarito (Numeração) ---
+async function exportarPdfGabarito() {
+    const osId = state.amostrasOSAtivo;
+    if (!osId) return;
+    const os = state.ordens.find(o => o.id === osId);
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) {
+        toast('Nenhum modelo para exportar.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-export-pdf-gabarito');
+    if (!btn) return;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gerando...';
+    btn.disabled = true;
+
+    try {
+        if (typeof window.PDFLib === 'undefined') {
+            toast('Carregando biblioteca PDF...', 'info');
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        const { PDFDocument, PDFName, PDFString, PDFNumber } = window.PDFLib;
+        const pdfDoc = await PDFDocument.create();
+        const nums = [];
+        let addedPages = 0;
+
+        for (let idx = 0; idx < itens.length; idx++) {
+            const item = itens[idx];
+            
+            const corId = document.getElementById(`amostra-item-cor-${idx}`)?.value || item.amostra_cor_id;
+            const numId = document.getElementById(`amostra-item-num-${idx}`)?.value || item.amostra_num_id;
+            const cor = corId ? state.cores.find(c => String(c.id) === String(corId)) : null;
+            const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+            
+            let fmt = null;
+            if (cor && cor.formato_id) fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
+            if (!fmt && num && num.formato_id) fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
+            if (!fmt && state.formatos.length > 0) fmt = state.formatos[0];
+            if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+
+            let targetW = fmt.width_mm;
+            let targetH = fmt.height_mm;
+            if (cor && cor.width_mm && cor.height_mm) {
+                targetW = cor.width_mm;
+                targetH = cor.height_mm;
+            }
+
+            const ptW = targetW * (72 / 25.4);
+            const ptH = targetH * (72 / 25.4);
+
+            let pageAdded = false;
+
+            if (num) {
+                // Tentar localizar um PDF dentro da numeração
+                let rawPdfContent = num.pdf_content;
+                if (!rawPdfContent && num.elements) {
+                    const pdfEl = num.elements.find(e => e.type === 'PDF' && e.pdf_content);
+                    if (pdfEl) rawPdfContent = pdfEl.pdf_content;
+                }
+
+                if (rawPdfContent) {
+                    try {
+                        // Utiliza a função global fetchPdfBytes existente no script.js
+                        const pdfData = await fetchPdfBytes(rawPdfContent);
+                        if (pdfData) {
+                            const originalDoc = await PDFDocument.load(pdfData);
+                            const [copiedPage] = await pdfDoc.copyPages(originalDoc, [0]);
+                            pdfDoc.addPage(copiedPage);
+                            pageAdded = true;
+                        }
+                    } catch (e) {
+                        console.warn(`Falha ao embutir gabarito do modelo ${idx}:`, e);
+                    }
+                }
+            }
+
+            if (!pageAdded) {
+                // Página em branco no tamanho do formato
+                pdfDoc.addPage([ptW, ptH]);
+            }
+
+            const numModelo = item.id ? String(item.id) : `Modelo ${idx + 1}`;
+            nums.push(PDFNumber.of(addedPages));
+            nums.push(pdfDoc.context.obj({
+                Type: 'PageLabel',
+                P: PDFString.of(numModelo)
+            }));
+
+            addedPages++;
+        }
+
+        if (addedPages > 0) {
+            const numTree = pdfDoc.context.obj({ Nums: nums });
+            pdfDoc.catalog.set(PDFName.of('PageLabels'), numTree);
+
+            const pdfBytes = await pdfDoc.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            
+            const pedidoNum = os ? os.numero : osId;
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Gabaritos_Pedido_${pedidoNum}.pdf`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+
+            toast('PDF de Gabaritos gerado com sucesso!', 'success');
+        } else {
+            toast('Nenhuma página pôde ser gerada.', 'warning');
+        }
+    } catch (e) {
+        console.error("Erro ao exportar PDF Gabarito:", e);
+        toast('Erro ao gerar o PDF de Gabaritos.', 'error');
+    } finally {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }
+}
