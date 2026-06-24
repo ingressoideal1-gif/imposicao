@@ -13472,7 +13472,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             const { error } = await vibeClient
                 .from('pedidos_modelos')
                 .update(dataToUpdate)
-                .eq('id', parseInt(itemId, 10));
+                .eq('id', itemId);
             if (error) throw error;
         } else if (vibeId) {
             const { error } = await vibeClient
