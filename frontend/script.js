@@ -11438,6 +11438,7 @@ async function loadOSItens(osId) {
                             arte_url: item.arte_url || (prop ? prop.arte_url : null),
                             gabarito_operacional: item.gabarito_operacional || (prop ? prop.gabarito_operacional : null),
                             os_id: osId,
+                            _pedidoModeloId: item.id,
                             _dbLoaded: true
                         };
                     });
@@ -13452,33 +13453,33 @@ function onItemArteRemove(idx, osId, itemId) {
 
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
-        console.warn('Supabase no configurado, dados salvos apenas em memria.');
+        console.warn('Supabase nao configurado, dados salvos apenas em memoria.');
         return;
     }
-    
+
+    // Localiza o item no state para obter metadados
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
-    const isModel = !String(itemId).startsWith('vibe_item_');
-    console.log('--- DEBUG SALVAMENTO ---');
-    console.log('itemId sendo salvo:', itemId);
-    console.log('itemLocal encontrado no state:', itemLocal);
-    console.log('isModel?', isModel);
-    
-    let vibeId = null;
-    if (itemLocal && itemLocal.id_produto_proposta_origem) {
-        vibeId = parseInt(itemLocal.id_produto_proposta_origem, 10);
-    } else if (!isModel) {
-        const vibeIdStr = String(itemId).replace('vibe_item_', '');
-        vibeId = parseInt(vibeIdStr, 10);
-    }
-    
+
+    // _pedidoModeloId é o PK real da tabela pedidos_modelos (ex: 1000068)
+    const pedidoModeloId = itemLocal ? (itemLocal._pedidoModeloId || null) : null;
+
+    // vibeId é o ID da tabela produtos_proposta (fallback)
+    const vibeIdRaw = itemLocal ? itemLocal.id_produto_proposta_origem : null;
+    const vibeId = vibeIdRaw ? parseInt(vibeIdRaw, 10) : null;
+
+    console.log('[SAVE] itemId=', itemId, 'pedidoModeloId=', pedidoModeloId, 'vibeId=', vibeId, 'data=', JSON.stringify(dataToUpdate));
+
     try {
-        if (isModel) {
+        if (pedidoModeloId) {
+            // Caminho principal: salvar direto na linha correta de pedidos_modelos pelo PK real
             const { error } = await vibeClient
                 .from('pedidos_modelos')
                 .update(dataToUpdate)
-                .eq('id', parseInt(itemId, 10));
+                .eq('id', pedidoModeloId);
             if (error) throw error;
+            console.log('[SAVE] Salvo em pedidos_modelos id=', pedidoModeloId);
         } else if (vibeId) {
+            // Fallback: salvar em produtos_proposta (sem campos que não existem lá)
             const safeData = { ...dataToUpdate };
             delete safeData.gabarito_operacional;
             const { error } = await vibeClient
@@ -13486,16 +13487,20 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                 .update(safeData)
                 .eq('id', vibeId);
             if (error) throw error;
+            console.log('[SAVE] Salvo em produtos_proposta id=', vibeId);
+        } else {
+            console.warn('[SAVE] Nenhum ID válido encontrado para salvar. itemId=', itemId, 'itemLocal=', itemLocal);
+            return;
         }
-        
+
         // Atualizar state local
-        const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
+        const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
         if (item) {
             Object.assign(item, dataToUpdate);
         }
     } catch (e) {
-        console.error('Erro ao salvar no Supabase:', e);
-        throw e; // Lança o erro para que a interface capture (Payload too large, etc)
+        console.error('[SAVE] Erro ao salvar no Supabase:', e);
+        throw e;
     }
 }
 
