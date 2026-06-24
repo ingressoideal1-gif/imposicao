@@ -13672,7 +13672,8 @@ async function renderItemAmostraCombinada(idx, osId) {
                     bytes = new Uint8Array(arrayBuffer);
                 } else {
                     if (item.arte_url.startsWith('http') || item.arte_url.startsWith('/')) {
-                        bytes = await fetchPdfBytes(item.arte_url);
+                        const bufferData = await fetchPdfBytes(item.arte_url);
+                        bytes = new Uint8Array(bufferData);
                     } else {
                         const base64Data = item.arte_url.includes('base64,') ? item.arte_url.split('base64,')[1] : item.arte_url;
                         const binStr = atob(base64Data);
@@ -13719,6 +13720,7 @@ async function renderItemAmostraCombinada(idx, osId) {
                     url = item.arte_url;
                 }
                 const arteImg = new Image();
+                arteImg.crossOrigin = "Anonymous";
                 await new Promise((resolve, reject) => {
                     arteImg.onload = resolve;
                     arteImg.onerror = reject;
