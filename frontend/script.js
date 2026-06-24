@@ -13420,9 +13420,15 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         return;
     }
     
-    // O itemId do front comea com "vibe_item_". O ID no banco  numrico.
-    const vibeIdStr = itemId.replace('vibe_item_', '');
-    const vibeId = parseInt(vibeIdStr, 10);
+    const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    
+    let vibeId = null;
+    if (itemLocal && itemLocal.id_produto_proposta_origem) {
+        vibeId = parseInt(itemLocal.id_produto_proposta_origem, 10);
+    } else {
+        const vibeIdStr = String(itemId).replace('vibe_item_', '');
+        vibeId = parseInt(vibeIdStr, 10);
+    }
     
     try {
         const { error } = await vibeClient
