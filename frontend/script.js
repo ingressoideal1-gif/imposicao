@@ -11421,7 +11421,7 @@ async function loadOSItens(osId) {
                 // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
                 const { data: propData } = await supabaseClient
                     .from('produtos_proposta')
-                    .select('id, nome_produto, amostra_cor_id, amostra_num_id, id_int, gabarito_operacional, padrao, largura, altura, qtd, created_at, updated_at, amostra_arte_base64, arte_url')
+                    .select('id, nome_produto, amostra_cor_id, amostra_num_id, id_int, padrao, largura, altura, qtd, created_at, updated_at, amostra_arte_base64, arte_url')
                     .eq('id_int', queryNum);
                 
                 if (data && data.length > 0) {
@@ -13479,9 +13479,11 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                 .eq('id', parseInt(itemId, 10));
             if (error) throw error;
         } else if (vibeId) {
+            const safeData = { ...dataToUpdate };
+            delete safeData.gabarito_operacional;
             const { error } = await vibeClient
                 .from('produtos_proposta')
-                .update(dataToUpdate)
+                .update(safeData)
                 .eq('id', vibeId);
             if (error) throw error;
         }
