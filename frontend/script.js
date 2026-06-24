@@ -13519,21 +13519,15 @@ function onItemArteRemove(idx, osId, itemId) {
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
 
-    // Localiza o item no state para obter metadados
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     if (!itemLocal) {
-        console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId, '| osId=', osId, '| total itens=', (state.osItens[osId] || []).length, '| ids disponiveis=', (state.osItens[osId] || []).map(i => i.id));
-        toast('[SAVE] Item não encontrado no state! itemId=' + itemId, 'error');
+        console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId, '| osId=', osId);
         return;
     }
 
-    // Prioridade: _pedidoModeloId (set pelo loadOSItens quando veio de pedidos_modelos)
     const modeloId = itemLocal._pedidoModeloId || itemLocal.id;
 
-    console.log('[SAVE] itemId=', itemId, '| _pedidoModeloId=', itemLocal._pedidoModeloId, '| modeloId=', modeloId, '| data=', JSON.stringify(dataToUpdate));
-
     try {
-        // Salvar em pedidos_modelos (tabela principal)
         const { data: updateResult, error } = await vibeClient
             .from('pedidos_modelos')
             .update(dataToUpdate)
@@ -13541,24 +13535,20 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             .select('id');
         
         if (error) {
-            console.error('[SAVE] Erro Supabase pedidos_modelos:', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint);
-            toast(`[SAVE] ERRO pedidos_modelos: ${error.message} (code: ${error.code})`, 'error');
+            console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code);
             throw error;
         }
 
         const rowsUpdated = updateResult ? updateResult.length : 0;
-        console.log('[SAVE] OK -> pedidos_modelos id=', modeloId, '| rows updated=', rowsUpdated);
-        
         if (rowsUpdated === 0) {
-            console.warn('[SAVE] AVISO: 0 linhas atualizadas! id=', modeloId, 'nao existe em pedidos_modelos');
-            toast(`[SAVE] 0 linhas atualizadas! id=${modeloId} não encontrado em pedidos_modelos`, 'warning');
+            console.warn('[SAVE] 0 linhas atualizadas! id=', modeloId);
         } else {
-            toast(`[SAVE] OK → pedidos_modelos id=${modeloId} (${rowsUpdated} linha(s))`, 'success');
+            console.log('[SAVE] OK -> pedidos_modelos id=', modeloId);
         }
 
         Object.assign(itemLocal, dataToUpdate);
     } catch (e) {
-        console.error('[SAVE] Erro final:', e);
+        console.error('[SAVE] Erro:', e);
         throw e;
     }
 }
