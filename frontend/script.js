@@ -13452,54 +13452,60 @@ function onItemArteRemove(idx, osId, itemId) {
 }
 
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
-        console.warn('Supabase nao configurado, dados salvos apenas em memoria.');
-        return;
-    }
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
 
     // Localiza o item no state para obter metadados
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    if (!itemLocal) {
+        console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId);
+        return;
+    }
 
-    // _pedidoModeloId é o PK real da tabela pedidos_modelos (ex: 1000068)
-    const pedidoModeloId = itemLocal ? (itemLocal._pedidoModeloId || null) : null;
+    const itemDbId    = parseInt(itemLocal.id, 10);
+    const itemPropId  = parseInt(itemLocal.id_produto_proposta_origem, 10);
 
-    // vibeId é o ID da tabela produtos_proposta (fallback)
-    const vibeIdRaw = itemLocal ? itemLocal.id_produto_proposta_origem : null;
-    const vibeId = vibeIdRaw ? parseInt(vibeIdRaw, 10) : null;
+    // Detecta se o item veio da tabela pedidos_modelos:
+    // - Se tem _pedidoModeloId (novo campo mapeado), usa ele diretamente
+    // - Senao, se seu id (itemDbId) eh DIFERENTE de id_produto_proposta_origem (itemPropId), entao
+    //   itemDbId é o PK real de pedidos_modelos
+    const modeloId = itemLocal._pedidoModeloId
+        || ((!isNaN(itemDbId) && !isNaN(itemPropId) && itemDbId !== itemPropId) ? itemDbId : null);
 
-    console.log('[SAVE] itemId=', itemId, 'pedidoModeloId=', pedidoModeloId, 'vibeId=', vibeId, 'data=', JSON.stringify(dataToUpdate));
+    // Se nao for de pedidos_modelos, usa o id do produto_proposta para o fallback
+    const propId = (!isNaN(itemPropId) && itemPropId > 0) ? itemPropId
+                 : (!isNaN(itemDbId) && itemDbId > 0) ? itemDbId
+                 : null;
+
+    console.log('[SAVE] itemId=', itemId, '| itemDbId=', itemDbId, '| itemPropId=', itemPropId, '| modeloId=', modeloId, '| propId=', propId, '| data=', JSON.stringify(dataToUpdate));
 
     try {
-        if (pedidoModeloId) {
-            // Caminho principal: salvar direto na linha correta de pedidos_modelos pelo PK real
+        if (modeloId) {
+            // Salva na linha correta de pedidos_modelos
             const { error } = await vibeClient
                 .from('pedidos_modelos')
                 .update(dataToUpdate)
-                .eq('id', pedidoModeloId);
+                .eq('id', modeloId);
             if (error) throw error;
-            console.log('[SAVE] Salvo em pedidos_modelos id=', pedidoModeloId);
-        } else if (vibeId) {
-            // Fallback: salvar em produtos_proposta (sem campos que não existem lá)
+            console.log('[SAVE] OK -> pedidos_modelos id=', modeloId);
+        } else if (propId) {
+            // Fallback para produtos_proposta (remove campos que nao existem la)
             const safeData = { ...dataToUpdate };
             delete safeData.gabarito_operacional;
             const { error } = await vibeClient
                 .from('produtos_proposta')
                 .update(safeData)
-                .eq('id', vibeId);
+                .eq('id', propId);
             if (error) throw error;
-            console.log('[SAVE] Salvo em produtos_proposta id=', vibeId);
+            console.log('[SAVE] OK -> produtos_proposta id=', propId);
         } else {
-            console.warn('[SAVE] Nenhum ID válido encontrado para salvar. itemId=', itemId, 'itemLocal=', itemLocal);
+            console.warn('[SAVE] SKIP: nenhum ID valido encontrado');
             return;
         }
 
-        // Atualizar state local
-        const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
-        if (item) {
-            Object.assign(item, dataToUpdate);
-        }
+        // Atualiza o state local imediatamente
+        Object.assign(itemLocal, dataToUpdate);
     } catch (e) {
-        console.error('[SAVE] Erro ao salvar no Supabase:', e);
+        console.error('[SAVE] Erro:', e);
         throw e;
     }
 }
