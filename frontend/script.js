@@ -13375,7 +13375,7 @@ function onItemNumSelect(idx, osId, itemId) {
     renderItemAmostraCombinada(idx, osId);
 }
 
-function onItemArteUpload(idx, osId, itemId) {
+async function onItemArteUpload(idx, osId, itemId) {
     const input = document.getElementById(`amostra-item-arte-${idx}`);
     const nameLabel = document.getElementById(`amostra-item-arte-name-${idx}`);
     const removeBtn = document.getElementById(`btn-remove-amostra-arte-${idx}`);
