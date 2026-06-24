@@ -11406,8 +11406,8 @@ async function loadOSItens(osId) {
         const os = state.ordens.find(o => o.id === osId);
         if (!os) return;
 
-        // Se não carregado ainda, ou se tem apenas o cache básico do Vibecode (padrao undefined), busca a fonte de dados principal
-        const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i.padrao === undefined);
+        // Se não carregado ainda, ou se tem apenas o cache básico do Vibecode, busca a fonte de dados principal
+        const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
         if (needsFullLoad) {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const queryNum = parseInt(os.numero);
@@ -11436,7 +11436,8 @@ async function loadOSItens(osId) {
                             amostra_num_id: prop ? prop.amostra_num_id : null,
                             amostra_arte_base64: prop ? prop.amostra_arte_base64 : null,
                             arte_url: prop ? prop.arte_url : null,
-                            os_id: osId
+                            os_id: osId,
+                            _dbLoaded: true
                         };
                     });
                 } else if (propData && propData.length > 0) {
@@ -11461,7 +11462,8 @@ async function loadOSItens(osId) {
                         os_id: osId,
                         id_produto_proposta_origem: pp.id,
                         created_at: pp.created_at,
-                        updated_at: pp.updated_at
+                        updated_at: pp.updated_at,
+                        _dbLoaded: true
                     }));
                 } else {
                     state.osItens[osId] = [];
@@ -12714,7 +12716,7 @@ async function navigateToAmostrasFromOS(osId) {
     }
 
     // Garantir que os itens estejam carregados com todos os dados (ignorar cache simples do Vibecode)
-    const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i.padrao === undefined);
+    const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
     if (needsFullLoad) {
         await loadOSItens(osId);
     }
@@ -13758,6 +13760,7 @@ async function renderItemAmostraCombinada(idx, osId) {
             }
         } catch (e) {
             console.warn(`[Item ${idx}] Erro ao renderizar arte:`, e);
+            if (typeof toast === 'function') toast('Falha visualizando arte: ' + (e.message || 'formato?'), 'error');
         }
     }
 
