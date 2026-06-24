@@ -13523,72 +13523,39 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     if (!itemLocal) {
         console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId, '| osId=', osId, '| total itens=', (state.osItens[osId] || []).length, '| ids disponiveis=', (state.osItens[osId] || []).map(i => i.id));
+        toast('[SAVE] Item não encontrado no state! itemId=' + itemId, 'error');
         return;
     }
 
     // Prioridade: _pedidoModeloId (set pelo loadOSItens quando veio de pedidos_modelos)
-    // Fallback: se o id é numérico E diferente de id_produto_proposta_origem, é PK de pedidos_modelos
-    const itemDbId    = parseInt(itemLocal.id, 10);
-    const itemPropId  = parseInt(itemLocal.id_produto_proposta_origem, 10);
+    const modeloId = itemLocal._pedidoModeloId || itemLocal.id;
 
-    const modeloId = itemLocal._pedidoModeloId
-        || ((!isNaN(itemDbId) && !isNaN(itemPropId) && itemDbId !== itemPropId) ? itemDbId : null)
-        || itemLocal.id;  // Último fallback: usar o id direto (pode ser UUID de pedidos_modelos)
-
-    // Só usa propId se modeloId não estiver disponível
-    const propId = (!isNaN(itemPropId) && itemPropId > 0) ? itemPropId
-                 : (!isNaN(itemDbId) && itemDbId > 0) ? itemDbId
-                 : null;
-
-    console.log('[SAVE] itemId=', itemId, '| _pedidoModeloId=', itemLocal._pedidoModeloId, '| itemDbId=', itemDbId, '| itemPropId=', itemPropId, '| modeloId=', modeloId, '| propId=', propId, '| data=', JSON.stringify(dataToUpdate));
+    console.log('[SAVE] itemId=', itemId, '| _pedidoModeloId=', itemLocal._pedidoModeloId, '| modeloId=', modeloId, '| data=', JSON.stringify(dataToUpdate));
 
     try {
-        // Tenta salvar em pedidos_modelos primeiro (tabela principal)
-        if (modeloId) {
-            const { data: updateResult, error } = await vibeClient
-                .from('pedidos_modelos')
-                .update(dataToUpdate)
-                .eq('id', modeloId)
-                .select('id');
-            
-            if (error) {
-                console.error('[SAVE] Erro Supabase pedidos_modelos:', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint);
-                // Se o erro for coluna inexistente ou tabela, tenta fallback
-                if (error.code === '42703' || error.code === '42P01') {
-                    console.warn('[SAVE] Coluna ou tabela nao encontrada, tentando fallback para produtos_proposta');
-                } else {
-                    throw error;
-                }
-            } else {
-                const rowsUpdated = updateResult ? updateResult.length : 0;
-                console.log('[SAVE] OK -> pedidos_modelos id=', modeloId, '| rows updated=', rowsUpdated);
-                if (rowsUpdated === 0) {
-                    console.warn('[SAVE] AVISO: 0 linhas atualizadas em pedidos_modelos! O id', modeloId, 'pode nao existir na tabela.');
-                }
-                Object.assign(itemLocal, dataToUpdate);
-                return;
-            }
-        }
+        // Salvar em pedidos_modelos (tabela principal)
+        const { data: updateResult, error } = await vibeClient
+            .from('pedidos_modelos')
+            .update(dataToUpdate)
+            .eq('id', modeloId)
+            .select('id');
         
-        // Fallback para produtos_proposta
-        if (propId) {
-            const safeData = { ...dataToUpdate };
-            delete safeData.gabarito_operacional;
-            const { error } = await vibeClient
-                .from('produtos_proposta')
-                .update(safeData)
-                .eq('id', propId);
-            if (error) {
-                console.error('[SAVE] Erro Supabase produtos_proposta:', error.message, '| code:', error.code);
-                throw error;
-            }
-            console.log('[SAVE] OK -> produtos_proposta id=', propId);
-        } else {
-            console.warn('[SAVE] SKIP: nenhum ID valido encontrado');
-            return;
+        if (error) {
+            console.error('[SAVE] Erro Supabase pedidos_modelos:', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint);
+            toast(`[SAVE] ERRO pedidos_modelos: ${error.message} (code: ${error.code})`, 'error');
+            throw error;
         }
 
-        // Atualiza o state local imediatamente
+        const rowsUpdated = updateResult ? updateResult.length : 0;
+        console.log('[SAVE] OK -> pedidos_modelos id=', modeloId, '| rows updated=', rowsUpdated);
+        
+        if (rowsUpdated === 0) {
+            console.warn('[SAVE] AVISO: 0 linhas atualizadas! id=', modeloId, 'nao existe em pedidos_modelos');
+            toast(`[SAVE] 0 linhas atualizadas! id=${modeloId} não encontrado em pedidos_modelos`, 'warning');
+        } else {
+            toast(`[SAVE] OK → pedidos_modelos id=${modeloId} (${rowsUpdated} linha(s))`, 'success');
+        }
+
         Object.assign(itemLocal, dataToUpdate);
     } catch (e) {
         console.error('[SAVE] Erro final:', e);
