@@ -13380,17 +13380,24 @@ function onItemArteUpload(idx, osId, itemId) {
         nameLabel.textContent = file.name;
         removeBtn.style.display = 'inline-block';
         
-        // Ler como Base64
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             const base64 = e.target.result;
-            // Salvar no banco
-            saveAmostraToDB(itemId, osId, { amostra_arte_base64: base64 });
-            // Atualizar o state
+            // Atualizar o state PRIMEIRO
             const osItems = state.osItens[osId];
-            const item = osItems.find(i => i.id === itemId);
+            const item = osItems.find(i => String(i.id) === String(itemId));
             if (item) item.amostra_arte_base64 = base64;
             
+            // Renderizar IMEDIATAMENTE a arte
+            renderItemAmostraCombinada(idx, osId);
+
+            // Salvar no banco
+            try {
+                await saveAmostraToDB(itemId, osId, { amostra_arte_base64: base64 });
+                toast('Arte salva no banco com sucesso!', 'success');
+            } catch(e) {
+                toast('Falha ao enviar arte para o banco: muito pesada ou sem rede.', 'error');
+            }
             // Renderizar
             renderItemAmostraCombinada(idx, osId);
         };
@@ -13407,11 +13414,13 @@ function onItemArteRemove(idx, osId, itemId) {
     nameLabel.textContent = '';
     removeBtn.style.display = 'none';
     
-    saveAmostraToDB(itemId, osId, { amostra_arte_base64: null });
-    const item = state.osItens[osId].find(i => i.id === itemId);
+    const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
     if (item) item.amostra_arte_base64 = null;
-    
     renderItemAmostraCombinada(idx, osId);
+
+    saveAmostraToDB(itemId, osId, { amostra_arte_base64: null })
+        .then(() => toast('Arte removida do banco!', 'success'))
+        .catch(() => toast('Falha ao remover arte do banco.', 'error'));
 }
 
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
@@ -13445,7 +13454,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
     } catch (e) {
         console.error('Erro ao salvar no Supabase:', e);
-        toast('Falha ao salvar amostra no banco de dados', 'error');
+        throw e; // Lança o erro para que a interface capture (Payload too large, etc)
     }
 }
 
