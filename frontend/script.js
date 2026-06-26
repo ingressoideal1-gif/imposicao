@@ -13527,10 +13527,29 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
 
     const modeloId = itemLocal._pedidoModeloId || itemLocal.id;
 
+    if (!modeloId || modeloId === '') {
+        console.warn('[SAVE] modeloId esta vazio, ignorando update no banco');
+        return;
+    }
+
     try {
+        // Remove campos que no existem na tabela pedidos_modelos no Supabase
+        const dbData = { ...dataToUpdate };
+        if ('amostra_obs' in dbData) {
+            delete dbData.amostra_obs;
+        }
+        if ('amostra_status' in dbData) {
+            delete dbData.amostra_status;
+        }
+
+        // Se no sobrou nenhum campo para atualizar, evita fazer a requisicao que pode causar erro
+        if (Object.keys(dbData).length === 0) {
+            return;
+        }
+
         const { data: updateResult, error } = await vibeClient
             .from('pedidos_modelos')
-            .update(dataToUpdate)
+            .update(dbData)
             .eq('id', modeloId)
             .select('id');
         
