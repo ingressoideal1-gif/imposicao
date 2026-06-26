@@ -14999,11 +14999,19 @@ async function initClientePage(numero, token) {
             if (prodItems && prodItems.length > 0) {
                 itensCarregados = prodItems.map(item => {
                     const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
+                    
+                    // Remapear o status_arte do banco para o amostra_status usado pelo renderAmostrasOSItens
+                    let statusFrontend = 'PENDENTE';
+                    if (item.status_arte === 'AGUARDANDO_CLIENTE') statusFrontend = 'PRONTO';
+                    else if (item.status_arte === 'APROVADA_CLIENTE') statusFrontend = 'APROVADA';
+                    else if (item.status_arte === 'REPROVADA_CLIENTE') statusFrontend = 'REPROVADA';
+
                     return {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',
                         nome_produto_real: prop ? prop.nome_produto : null,
-                        os_id: osId
+                        os_id: osId,
+                        amostra_status: statusFrontend
                     };
                 });
             }
