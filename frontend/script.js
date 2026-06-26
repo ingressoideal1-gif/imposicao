@@ -15182,70 +15182,30 @@ async function initClientePage(numero, token) {
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
 
-        // Exibe janelas de aprovacao APENAS se status = "Enviar ARTE"
-        // Cada outro status tem sua propria mensagem para o cliente
-        switch (osStatus) {
+        // Lógica de exibição baseada no status
+        // Se aprovado ou reprovado: mostrar mensagem específica
+        // Para QUALQUER outro status (incluindo "Enviar Arte", null, desconhecido): mostrar janelas de aprovação
+        // Razão: se o admin gerou e compartilhou o link, o cliente deve ver as janelas
+        const statusUP = osStatus.toUpperCase();
+        const isAprovado = statusUP.includes('APROVAD') && !statusUP.includes('REPROVAD');
+        const isReprovado = statusUP.includes('REPROVAD');
 
-            case 'Enviar ARTE':
-            case 'Enviar Arte':
-            case 'ENVIAR ARTE':
-            case 'AGUARDANDO_APROVACAO':
-            case 'AGUARDANDO_CLIENTE':
-                // Unico status que libera as janelas de aprovacao
-                renderAmostrasOSItens(osId);
-                break;
-
-            case 'ARTE_APROVADA':
-            case 'Arte APROVADA':
-            case 'APROVADA_CLIENTE':
-                mostrarResultadoCliente(
-                    '✅',
-                    'Artes Aprovadas!',
-                    'Suas artes já foram APROVADAS. Em breve seu pedido entrará em produção. Para qualquer dúvida, entre em contato com seu ATENDIMENTO.'
-                );
-                break;
-
-            case 'REPROVADA':
-            case 'REPROVADO':
-            case 'REPROVADA_CLIENTE':
-                mostrarResultadoCliente(
-                    '❌',
-                    'Artes Reprovadas',
-                    'Recebemos sua solicitação de alteração e nossa equipe está realizando as correções. Em breve você receberá um novo link para aprovação.'
-                );
-                break;
-
-            case 'ARTE_EM_ANDAMENTO':
-                mostrarResultadoCliente(
-                    '🎨',
-                    'Arte em Produção',
-                    'Nossa equipe está trabalhando nas artes do seu pedido. Assim que estiverem prontas, você receberá um link para aprovação.'
-                );
-                break;
-
-            case 'Pendente Informação':
-                mostrarResultadoCliente(
-                    '📋',
-                    'Aguardando Informações',
-                    'Precisamos de informações adicionais para prosseguir com as artes do seu pedido. Entre em contato com seu ATENDIMENTO.'
-                );
-                break;
-
-            case 'EM IMPRESSÃO':
-                mostrarResultadoCliente(
-                    '🖨️',
-                    'Pedido em Produção',
-                    'Suas artes foram aprovadas e seu pedido já está em impressão. Para qualquer dúvida, entre em contato com seu ATENDIMENTO.'
-                );
-                break;
-
-            default:
-                mostrarResultadoCliente(
-                    'ℹ️',
-                    'Pedido em Processamento',
-                    'Seu pedido está sendo processado. Para mais informações, entre em contato com seu ATENDIMENTO.'
-                );
-                break;
+        if (isAprovado) {
+            mostrarResultadoCliente(
+                '✅',
+                'Artes Aprovadas!',
+                'Suas artes já foram APROVADAS. Em breve seu pedido entrará em produção. Para qualquer dúvida, entre em contato com seu ATENDIMENTO.'
+            );
+        } else if (isReprovado) {
+            mostrarResultadoCliente(
+                '❌',
+                'Artes Reprovadas',
+                'Recebemos sua solicitação de alteração e nossa equipe está realizando as correções. Em breve você receberá um novo link para aprovação.'
+            );
+        } else {
+            // Qualquer outro status (Enviar Arte, AGUARDANDO, EM_ANDAMENTO, null, etc.)
+            // → mostrar as janelas de aprovação (o admin compartilhou o link, então o cliente deve ver)
+            renderAmostrasOSItens(osId);
         }
 
 
