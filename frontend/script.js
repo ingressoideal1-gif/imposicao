@@ -11440,9 +11440,9 @@ async function loadOSItens(osId) {
                         
                         // Remapear o status_arte do banco para o amostra_status usado pela UI
                         let statusFrontend = 'PENDENTE';
-                        if (item.status_arte === 'AGUARDANDO_CLIENTE') statusFrontend = 'PRONTO';
-                        else if (item.status_arte === 'APROVADA_CLIENTE') statusFrontend = 'APROVADA';
-                        else if (item.status_arte === 'REPROVADA_CLIENTE') statusFrontend = 'REPROVADA';
+                        if (item.status_arte === 'AGUARDANDO_CLIENTE' || item.status_arte === 'PRONTO') statusFrontend = 'PRONTO';
+                        else if (item.status_arte === 'APROVADA_CLIENTE' || item.status_arte === 'APROVADA') statusFrontend = 'APROVADA';
+                        else if (item.status_arte === 'REPROVADA_CLIENTE' || item.status_arte === 'REPROVADA') statusFrontend = 'REPROVADA';
 
                         return {
                             ...item,
@@ -15035,9 +15035,9 @@ async function initClientePage(numero, token) {
                     
                     // Remapear o status_arte do banco para o amostra_status usado pelo renderAmostrasOSItens
                     let statusFrontend = 'PENDENTE';
-                    if (item.status_arte === 'AGUARDANDO_CLIENTE') statusFrontend = 'PRONTO';
-                    else if (item.status_arte === 'APROVADA_CLIENTE') statusFrontend = 'APROVADA';
-                    else if (item.status_arte === 'REPROVADA_CLIENTE') statusFrontend = 'REPROVADA';
+                    if (item.status_arte === 'AGUARDANDO_CLIENTE' || item.status_arte === 'PRONTO') statusFrontend = 'PRONTO';
+                    else if (item.status_arte === 'APROVADA_CLIENTE' || item.status_arte === 'APROVADA') statusFrontend = 'APROVADA';
+                    else if (item.status_arte === 'REPROVADA_CLIENTE' || item.status_arte === 'REPROVADA') statusFrontend = 'REPROVADA';
 
                     return {
                         ...item,
