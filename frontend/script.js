@@ -11605,11 +11605,12 @@ function getStatusBadge(status) {
         // Novos status do fluxo de arte
         'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
         'REPROVADO': { icon: '', cls: 'badge-amber', label: 'REPROVADA' },
+        'ARTE_EM_CORRECAO': { icon: '', cls: 'badge-amber', label: 'REPROVADA' },
         'APROVADO': { icon: '', cls: 'badge-green', label: 'Aprovada' },
         'ARTE_APROVADA': { icon: '', cls: 'badge-green', label: 'Aprovada' },
         'Arte APROVADA': { icon: '', cls: 'badge-green', label: 'Aprovada' },
         'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
-        'Enviar ARTE': { icon: '📨', cls: 'badge-green', label: 'Enviar ARTE' },
+        'Enviar ARTE': { icon: '📤', cls: 'badge-amber', label: 'Enviar ARTE' },
         'Pendente Informação': { icon: '⚠️', cls: 'badge-red', label: 'Pendente Informação' }
     };
     const s = map[status] || { icon: '❓', cls: '', label: status };
@@ -12146,15 +12147,23 @@ function renderOrdens() {
                 let statusGlobalArte = 'PENDENTE';
                 if (artesDaOS.length > 0) {
                     statusGlobalArte = (artesDaOS[0].status || 'PENDENTE').toUpperCase();
+                } else if (os.status) {
+                    statusGlobalArte = os.status.toUpperCase();
                 }
-                if (statusGlobalArte === 'APROVADA' || statusGlobalArte === 'APROVADA_CLIENTE' || statusGlobalArte === 'LIBERADA') {
+                
+                if (statusGlobalArte === 'APROVADA' || statusGlobalArte === 'APROVADA_CLIENTE' || statusGlobalArte === 'LIBERADA' || statusGlobalArte === 'ARTE_APROVADA' || statusGlobalArte === 'ARTE APROVADA') {
                     isAllApproved = true;
                 }
                 
                 let qtdAprovadas = 0;
                 if (itensList.length > 0) {
                     qtdAprovadas = itensList.filter(i => i.amostra_status === 'APROVADA' || i.amostra_status === 'APROVADA_CLIENTE' || i.status_arte === 'APROVADA' || i.status_arte === 'APROVADA_CLIENTE').length;
-                    if (qtdAprovadas === itensList.length) isAllApproved = true;
+                    
+                    if (isAllApproved) {
+                        qtdAprovadas = Math.max(qtdAprovadas, itensList.length);
+                    } else if (qtdAprovadas === itensList.length) {
+                        isAllApproved = true;
+                    }
                 } else if (isAllApproved) {
                     qtdAprovadas = 1;
                 }
@@ -16398,4 +16407,5 @@ async function exportarPdfGabarito() {
         btn.disabled = false;
     }
 }
+
 
