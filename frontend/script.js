@@ -15049,9 +15049,10 @@ async function initClientePage(numero, token) {
         let pedData = null;
         try {
             const { data } = await supabaseClient
-                .from('pedidos_comerciais')
-                .select('status_arte')
+                .from('pedidos_artes')
+                .select('status')
                 .eq('id_int', numero)
+                .limit(1)
                 .maybeSingle();
             pedData = data;
         } catch (e) { /* silencioso */ }
@@ -15156,10 +15157,10 @@ async function initClientePage(numero, token) {
         // Buscar status da OS
         let osStatus = 'ARTE_EM_ANDAMENTO';
         if (isVibeOS) {
-            // Pedidos Vibecode: status mais recente vem da tabela pedidos_comerciais,
+            // Pedidos Vibecode: status mais recente vem da tabela pedidos_artes,
             // com fallback para o status gravado no linkData
-            if (pedData && pedData.status_arte) {
-                osStatus = pedData.status_arte.trim();
+            if (pedData && pedData.status) {
+                osStatus = pedData.status.trim();
             } else if (linkData.status_arte) {
                 osStatus = linkData.status_arte.trim();
             }
