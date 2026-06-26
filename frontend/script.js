@@ -10966,7 +10966,7 @@ async function sincronizarStatusOrdensDinamico() {
 
         let novoStatus = null;
         if (todosAprovados) {
-            novoStatus = 'ARTE_APROVADA';
+            novoStatus = 'APROVADO';
         } else if (algumReprovado) {
             novoStatus = 'REPROVADO';
         }
@@ -11165,16 +11165,16 @@ async function carregarLinksExistentes() {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_links_cliente')
-            .select('os_id, numero_pedido, token')
+            .select('os_id, numero_pedido, token, status_arte')
             .eq('ativo', true);
         if (error) {
             if (error.code === '42P01') return; // tabela ainda não existe
             throw error;
         }
-        if (!state.linksCliente) state.linksCliente = {};
+        if (!state.linksCliente) state.linksCliente = {}; if (!state.linksClienteData) state.linksClienteData = {};
         const base = window.location.origin;
         (data || []).forEach(row => {
-            state.linksCliente[row.os_id] = `${base}/cliente/${row.numero_pedido}-${row.token}`;
+            state.linksCliente[row.os_id] = `${base}/cliente/${row.numero_pedido}-${row.token}`; state.linksClienteData[row.os_id] = row;
         });
         console.log(`[Links] ${(data || []).length} link(s) de cliente carregado(s).`);
     } catch (e) {
@@ -11275,8 +11275,8 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
             if (!grouped[key]) {
                 const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const osId = `vibe_${key}`;
-                const savedStatus = vibeStatusOverrides[osId];
-
+                const dbStatusArte = state.linksClienteData && state.linksClienteData[osId] && state.linksClienteData[osId].status_arte;
+                const savedStatus = dbStatusArte || vibeStatusOverrides[osId];
                 // Buscar dados reais da proposta
                 const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
                 
@@ -11602,7 +11602,7 @@ function getStatusBadge(status) {
         // Novos status do fluxo de arte
         'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
         'REPROVADO': { icon: '❌', cls: 'badge-danger', label: 'REPROVADO' },
-        'ARTE_APROVADA': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
+        'APROVADO': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
         'Arte APROVADA': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
         'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
         'Enviar ARTE': { icon: '📨', cls: 'badge-green', label: 'Enviar ARTE' },
@@ -12190,7 +12190,7 @@ function renderOrdens() {
                             ${(() => {
                                 // Se o status é "Enviar ARTE" ou já há link gerado no state, mostrar URL diretamente
                                 const linkSalvo = state.linksCliente && state.linksCliente[os.id];
-                                const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'ARTE_APROVADA' || os.status === 'REPROVADO';
+                                const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'APROVADO' || os.status === 'REPROVADO';
                                 if (linkSalvo) {
                                     return `
                                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -12340,7 +12340,7 @@ function changeOSStatus(osId, newStatus) {
         } else {
             supabaseClient
                 .from('producao_ordens_servico')
-                .upsert({ id: osId, status: newStatus, numero: os ? os.numero : null }, { onConflict: 'id' })
+                .update({ status: newStatus }).eq('id', osId)
                 .then(({error}) => { if(error) console.warn('Erro ao sync status:', error) });
         }
     }
@@ -13280,7 +13280,7 @@ async function voltarParaAtendimento() {
             } else {
                 const { error } = await supabaseClient
                     .from('producao_ordens_servico')
-                    .upsert({ id: osId, status: novoStatus, numero: os ? os.numero : null }, { onConflict: 'id' });
+                    .update({ status: novoStatus }).eq('id', osId);
                 if (error) console.warn('Erro ao atualizar status no Supabase:', error);
             }
 
@@ -13324,7 +13324,7 @@ async function voltarParaAtendimento() {
                     'success'
                 );
                 // Guardar no state para exibir na lista
-                if (!state.linksCliente) state.linksCliente = {};
+                if (!state.linksCliente) state.linksCliente = {}; if (!state.linksClienteData) state.linksClienteData = {};
                 state.linksCliente[osId] = linkUrl;
             }
         } else {
@@ -15127,7 +15127,7 @@ async function initClientePage(numero, token) {
                 renderAmostrasOSItens(osId);
                 break;
 
-            case 'ARTE_APROVADA':
+            case 'APROVADO':
             case 'Arte APROVADA':
                 mostrarResultadoCliente(
                     '✅',
@@ -15197,20 +15197,20 @@ async function clienteFinalizarFluxo(fluxoTipo) {
 
     try {
         if (fluxoTipo === 'APROVAR_TUDO') {
-            // Salvar status global da OS no Supabase para ARTE_APROVADA (Laranja, rótulo "Arte APROVADA")
+            // Salvar status global da OS no Supabase para APROVADO (Laranja, rótulo "Arte APROVADA")
             // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
             try {
                 if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                     if (osId.startsWith('vibe_')) {
                         const { error } = await supabaseClient
                             .from('pedidos_links_cliente')
-                            .update({ status_arte: 'ARTE_APROVADA' })
+                            .update({ status_arte: 'APROVADO' })
                             .eq('os_id', osId);
                         if (error) throw error;
                     } else {
                         const { error } = await supabaseClient
                             .from('producao_ordens_servico')
-                            .upsert({ id: osId, status: 'ARTE_APROVADA', numero: clienteState.numero }, { onConflict: 'id' });
+                            .update({ status: 'APROVADO' }).eq('id', osId);
                         if (error) throw error;
                     }
                 }
@@ -15264,7 +15264,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                     } else {
                         const { error } = await supabaseClient
                             .from('producao_ordens_servico')
-                            .upsert({ id: osId, status: 'REPROVADO', numero: clienteState.numero }, { onConflict: 'id' });
+                            .update({ status: 'REPROVADO' }).eq('id', osId);
                         if (error) throw error;
                     }
                 }
@@ -16384,3 +16384,6 @@ async function exportarPdfGabarito() {
         btn.disabled = false;
     }
 }
+
+
+
