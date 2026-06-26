@@ -1,4 +1,4 @@
-// - VDP Engine -- Frontend Script -
+﻿// - VDP Engine -- Frontend Script -
 
 'use strict';
 
@@ -10968,7 +10968,7 @@ async function sincronizarStatusOrdensDinamico() {
         if (todosAprovados) {
             novoStatus = 'ARTE_APROVADA';
         } else if (algumReprovado) {
-            novoStatus = 'ARTE_EM_CORRECAO';
+            novoStatus = 'REPROVADO';
         }
 
         if (novoStatus && os.status !== novoStatus) {
@@ -11601,7 +11601,7 @@ function getStatusBadge(status) {
         
         // Novos status do fluxo de arte
         'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
-        'ARTE_EM_CORRECAO': { icon: '🎨', cls: 'badge-amber', label: 'Arte em Andamento' },
+        'REPROVADO': { icon: '❌', cls: 'badge-danger', label: 'REPROVADO' },
         'ARTE_APROVADA': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
         'Arte APROVADA': { icon: '✅', cls: 'badge-green', label: 'Arte APROVADA' },
         'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
@@ -12190,7 +12190,7 @@ function renderOrdens() {
                             ${(() => {
                                 // Se o status é "Enviar ARTE" ou já há link gerado no state, mostrar URL diretamente
                                 const linkSalvo = state.linksCliente && state.linksCliente[os.id];
-                                const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'ARTE_APROVADA' || os.status === 'ARTE_EM_CORRECAO';
+                                const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'ARTE_APROVADA' || os.status === 'REPROVADO';
                                 if (linkSalvo) {
                                     return `
                                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -13344,7 +13344,7 @@ async function voltarParaAtendimento() {
 window.voltarParaAtendimento = voltarParaAtendimento;
 
 /**
- * Retorna o status global do pedido para "Arte em Andamento" em correção (ARTE_EM_CORRECAO)
+ * Retorna o status global do pedido para "Arte em Andamento" em correção (REPROVADO)
  */
 async function voltarParaArte() {
     const osId = state.amostrasOSAtivo;
@@ -13353,7 +13353,7 @@ async function voltarParaArte() {
         return;
     }
 
-    const novoStatus = 'ARTE_EM_CORRECAO';
+    const novoStatus = 'REPROVADO';
 
     try {
         // Atualizar status global da OS
@@ -15136,10 +15136,10 @@ async function initClientePage(numero, token) {
                 );
                 break;
 
-            case 'ARTE_EM_CORRECAO':
+            case 'REPROVADO':
                 mostrarResultadoCliente(
-                    '🔧',
-                    'Artes em Correção',
+                    '❌',
+                    'Artes Reprovadas',
                     'Recebemos sua solicitação de alteração e nossa equipe está realizando as correções. Em breve você receberá um novo link para aprovação.'
                 );
                 break;
@@ -15251,20 +15251,20 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
         } 
         else if (fluxoTipo === 'SOLICITAR_ALTERACAO') {
-            // Salvar status global da OS no Supabase para ARTE_EM_CORRECAO (Laranja, rótulo "Arte em Andamento")
+            // Salvar status global da OS no Supabase para REPROVADO (Laranja, rótulo "Arte em Andamento")
             // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
             try {
                 if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                     if (osId.startsWith('vibe_')) {
                         const { error } = await supabaseClient
                             .from('pedidos_links_cliente')
-                            .update({ status_arte: 'ARTE_EM_CORRECAO' })
+                            .update({ status_arte: 'REPROVADO' })
                             .eq('os_id', osId);
                         if (error) throw error;
                     } else {
                         const { error } = await supabaseClient
                             .from('producao_ordens_servico')
-                            .upsert({ id: osId, status: 'ARTE_EM_CORRECAO', numero: clienteState.numero }, { onConflict: 'id' });
+                            .upsert({ id: osId, status: 'REPROVADO', numero: clienteState.numero }, { onConflict: 'id' });
                         if (error) throw error;
                     }
                 }
