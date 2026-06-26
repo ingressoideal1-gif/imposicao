@@ -12829,7 +12829,7 @@ function renderAmostrasOSItens(osId) {
         const obs = item.amostra_obs || '';
         
         let statusBadge = '<span class="badge badge-amber">⏳ PENDENTE</span>';
-        if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADA</span>';
+        if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADO</span>';
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
         else if (status === 'PRONTO') statusBadge = '<span class="badge badge-blue">🎨 PRONTO</span>';
 
@@ -12920,12 +12920,12 @@ function renderAmostrasOSItens(osId) {
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
                                 ? `
                                 <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'APROVADA' ? 'opacity: 0.6; cursor: not-allowed; border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')" ${statusFrontend === 'APROVADA' ? 'disabled' : ''}>
-                                    ${statusFrontend === 'APROVADA' ? '✅ APROVADA' : '✅ APROVAR'}
+                                    ${statusFrontend === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
                                 </button>
                                 ` 
                                 : `
-                                <button class="btn ${statusFrontend === 'PRONTO' ? 'btn-success' : 'btn-primary'}" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'PRONTO' ? 'opacity: 0.7; cursor: default; background-color: var(--green); border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${statusFrontend === 'PRONTO' ? 'disabled' : ''}>
-                                    ${statusFrontend === 'PRONTO' ? '✅ PRONTO' : '🎨 PRONTO'}
+                                <button class="btn ${statusFrontend === 'PRONTO' || statusFrontend === 'APROVADA' ? 'btn-success' : 'btn-primary'}" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'PRONTO' || statusFrontend === 'APROVADA' ? 'opacity: 0.7; cursor: default; background-color: var(--green); border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${statusFrontend === 'PRONTO' || statusFrontend === 'APROVADA' ? 'disabled' : ''}>
+                                    ${statusFrontend === 'APROVADA' ? '✅ APROVADO (CLIENTE)' : (statusFrontend === 'PRONTO' ? '✅ PRONTO' : '🎨 PRONTO')}
                                 </button>
                                 `
                             }
