@@ -14465,7 +14465,18 @@ function updateBriefingUI(osId, osIntId) {
             uniqueProductsSet.add(prodId);
             const obsEl = document.getElementById(`briefing-obs-item-${prodId}`);
             if (obsEl) {
-                obsEl.value = (prodId in obsObj) ? obsObj[prodId] : (item.observacoes || '');
+                let val = '';
+                if (prodId in obsObj) val = obsObj[prodId];
+                else if (`item_${prodId}` in obsObj) val = obsObj[`item_${prodId}`];
+                else val = item.observacoes || '';
+                
+                if (typeof val === 'string' && val.includes('<')) {
+                    const tmp = document.createElement('div');
+                    tmp.innerHTML = val;
+                    val = tmp.textContent || tmp.innerText || '';
+                }
+                
+                obsEl.value = val.trim();
             }
         }
     });
