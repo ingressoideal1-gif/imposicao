@@ -13559,6 +13559,18 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             return;
         }
 
+        // SE O ID FOR UM ITEM VIRTUAL (Vibecode Fallback), no salvar em pedidos_modelos!
+        if (String(modeloId).startsWith('vibe_item_')) {
+            console.log('[SAVE] Ignorando pedidos_modelos para ID virtual:', modeloId);
+            Object.assign(itemLocal, dataToUpdate);
+            // Salvar tambm no localStorage para persistncia na sesso
+            const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
+            if (!overrides[modeloId]) overrides[modeloId] = {};
+            Object.assign(overrides[modeloId], dataToUpdate);
+            localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
+            return;
+        }
+
         const { data: updateResult, error } = await vibeClient
             .from('pedidos_modelos')
             .update(dbData)
