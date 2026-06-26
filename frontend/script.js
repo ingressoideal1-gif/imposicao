@@ -1,4 +1,4 @@
-﻿// - VDP Engine -- Frontend Script -
+// - VDP Engine -- Frontend Script -
 
 'use strict';
 
@@ -14864,18 +14864,28 @@ async function getOrCreateLinkCliente(osId, numero) {
         }
 
         let token;
+        const os = state.ordens.find(o => o.id === osId);
+        const currentStatus = os ? (os.status || 'Enviar ARTE') : 'Enviar ARTE';
+        
         if (existing) {
             token = existing.token;
+            if (existing.status_arte !== currentStatus) {
+                // Sincroniza o status global atual com o link gerado
+                await supabaseClient
+                    .from('pedidos_links_cliente')
+                    .update({ status_arte: currentStatus })
+                    .eq('id', existing.id);
+            }
         } else {
             token = generateClientToken(6);
-            const os = state.ordens.find(o => o.id === osId);
             const { error: insertError } = await supabaseClient
                 .from('pedidos_links_cliente')
                 .insert({
                     os_id: osId,
                     numero_pedido: String(numero),
                     token: token,
-                    id_int: os ? (os.numero || numero) : numero
+                    id_int: os ? (os.numero || numero) : numero,
+                    status_arte: currentStatus
                 });
             if (insertError) throw insertError;
         }
@@ -15147,6 +15157,8 @@ async function initClientePage(numero, token) {
         switch (osStatus) {
 
             case 'Enviar ARTE':
+            case 'Enviar Arte':
+            case 'ENVIAR ARTE':
                 // Unico status que libera as janelas de aprovacao
                 renderAmostrasOSItens(osId);
                 break;
