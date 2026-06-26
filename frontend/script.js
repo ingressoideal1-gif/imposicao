@@ -1,4 +1,4 @@
-﻿// - VDP Engine -- Frontend Script -
+// - VDP Engine -- Frontend Script -
 
 'use strict';
 
@@ -12144,32 +12144,33 @@ function renderOrdens() {
                 const itensList = state.osItens[os.id] || [];
                 
                 let isAllApproved = false;
-                let statusGlobalArte = 'PENDENTE';
-                if (artesDaOS.length > 0) {
-                    statusGlobalArte = (artesDaOS[0].status || 'PENDENTE').toUpperCase();
-                } else if (os.status) {
-                    statusGlobalArte = os.status.toUpperCase();
-                }
+                const validApproved = ['APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
                 
-                if (statusGlobalArte === 'APROVADA' || statusGlobalArte === 'APROVADA_CLIENTE' || statusGlobalArte === 'LIBERADA' || statusGlobalArte === 'ARTE_APROVADA' || statusGlobalArte === 'ARTE APROVADA') {
+                if (validApproved.includes((os.status || '').toUpperCase())) {
                     isAllApproved = true;
+                } else if (artesDaOS.length > 0) {
+                    if (validApproved.includes((artesDaOS[0].status || '').toUpperCase())) {
+                        isAllApproved = true;
+                    }
                 }
                 
                 let qtdAprovadas = 0;
+                const totalItensOS = itensList.length > 0 ? itensList.length : (os._itens_count || 0);
+
                 if (itensList.length > 0) {
                     qtdAprovadas = itensList.filter(i => i.amostra_status === 'APROVADA' || i.amostra_status === 'APROVADA_CLIENTE' || i.status_arte === 'APROVADA' || i.status_arte === 'APROVADA_CLIENTE').length;
                     
                     if (isAllApproved) {
-                        qtdAprovadas = Math.max(qtdAprovadas, itensList.length);
-                    } else if (qtdAprovadas === itensList.length) {
+                        qtdAprovadas = Math.max(qtdAprovadas, totalItensOS);
+                    } else if (qtdAprovadas === totalItensOS && totalItensOS > 0) {
                         isAllApproved = true;
                     }
                 } else if (isAllApproved) {
-                    qtdAprovadas = 1;
+                    qtdAprovadas = totalItensOS > 0 ? totalItensOS : 1;
                 }
                 
-                const artProgressHtml = itensList.length > 0 
-                    ? `<div style="font-size: 0.72rem; margin-top: 5px; font-weight: ${isAllApproved ? 'bold' : 'normal'}; color: ${isAllApproved ? 'var(--green)' : 'var(--text-dim)'};">${qtdAprovadas}/${itensList.length} Aprovadas</div>`
+                const artProgressHtml = totalItensOS > 0 
+                    ? `<div style="font-size: 0.72rem; margin-top: 5px; font-weight: ${isAllApproved ? 'bold' : 'normal'}; color: ${isAllApproved ? 'var(--green)' : 'var(--text-dim)'};">${qtdAprovadas}/${totalItensOS} Aprovadas</div>`
                     : '';
                     
                 let nomeEventoHtml = '';
