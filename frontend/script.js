@@ -12919,18 +12919,18 @@ function renderAmostrasOSItens(osId) {
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
                                 ? `
-                                <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'APROVADA' ? 'opacity: 0.6; cursor: not-allowed; border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')" ${statusFrontend === 'APROVADA' ? 'disabled' : ''}>
-                                    ${statusFrontend === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
+                                <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'APROVADA' ? 'opacity: 0.6; cursor: not-allowed; border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')" ${status === 'APROVADA' ? 'disabled' : ''}>
+                                    ${status === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
                                 </button>
                                 ` 
                                 : `
-                                <button class="btn ${statusFrontend === 'PRONTO' || statusFrontend === 'APROVADA' ? 'btn-success' : 'btn-primary'}" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'PRONTO' || statusFrontend === 'APROVADA' ? 'opacity: 0.7; cursor: default; background-color: var(--green); border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${statusFrontend === 'PRONTO' || statusFrontend === 'APROVADA' ? 'disabled' : ''}>
-                                    ${statusFrontend === 'APROVADA' ? '✅ APROVADO (CLIENTE)' : (statusFrontend === 'PRONTO' ? '✅ PRONTO' : '🎨 PRONTO')}
+                                <button class="btn ${status === 'PRONTO' || status === 'APROVADA' ? 'btn-success' : 'btn-primary'}" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'PRONTO' || status === 'APROVADA' ? 'opacity: 0.7; cursor: default; background-color: var(--green); border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'PRONTO' || status === 'APROVADA' ? 'disabled' : ''}>
+                                    ${status === 'APROVADA' ? '✅ APROVADO (CLIENTE)' : (status === 'PRONTO' ? '✅ PRONTO' : '🎨 PRONTO')}
                                 </button>
                                 `
                             }
-                            <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'REPROVADA' ? 'opacity: 0.6; cursor: not-allowed;' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')" ${statusFrontend === 'REPROVADA' ? 'disabled' : ''}>
-                                ${statusFrontend === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
+                            <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'REPROVADA' ? 'opacity: 0.6; cursor: not-allowed;' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')" ${status === 'REPROVADA' ? 'disabled' : ''}>
+                                ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
                             </button>
                         </div>
                     </div>
