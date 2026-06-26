@@ -15193,12 +15193,15 @@ async function initClientePage(numero, token) {
             case 'Enviar ARTE':
             case 'Enviar Arte':
             case 'ENVIAR ARTE':
+            case 'AGUARDANDO_APROVACAO':
+            case 'AGUARDANDO_CLIENTE':
                 // Unico status que libera as janelas de aprovacao
                 renderAmostrasOSItens(osId);
                 break;
 
             case 'ARTE_APROVADA':
             case 'Arte APROVADA':
+            case 'APROVADA_CLIENTE':
                 mostrarResultadoCliente(
                     '✅',
                     'Artes Aprovadas!',
@@ -15206,7 +15209,9 @@ async function initClientePage(numero, token) {
                 );
                 break;
 
+            case 'REPROVADA':
             case 'REPROVADO':
+            case 'REPROVADA_CLIENTE':
                 mostrarResultadoCliente(
                     '❌',
                     'Artes Reprovadas',
