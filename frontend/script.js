@@ -15154,18 +15154,22 @@ async function initClientePage(numero, token) {
 
         const isVibeOS = osId.startsWith('vibe_');
 
-        // Buscar status da OS
+        // Buscar status da OS: fonte mais confiavel primeiro
+        // 1. pedidos_artes.status (escrito pelo painel interno)
+        // 2. pedidos_links_cliente.status_arte (sincronizado na geracao do link)
+        // 3. producao_ordens_servico.status (OS local com UUID real)
         let osStatus = 'ARTE_EM_ANDAMENTO';
-        if (isVibeOS) {
-            // Pedidos Vibecode: status mais recente vem da tabela pedidos_artes,
-            // com fallback para o status gravado no linkData
-            if (pedData && pedData.status) {
-                osStatus = pedData.status.trim();
-            } else if (linkData.status_arte) {
-                osStatus = linkData.status_arte.trim();
-            }
-        } else {
-            // OS local: buscar de producao_ordens_servico (UUID compativel)
+
+        if (pedData && pedData.status) {
+            // Fonte 1: direto da tabela pedidos_artes (mais atualizado)
+            osStatus = pedData.status.trim();
+            console.log('[ClienteView] osStatus via pedidos_artes:', osStatus);
+        } else if (linkData.status_arte) {
+            // Fonte 2: status gravado no link (sincronizado na geracao)
+            osStatus = linkData.status_arte.trim();
+            console.log('[ClienteView] osStatus via linkData.status_arte:', osStatus);
+        } else if (!isVibeOS) {
+            // Fonte 3: OS local — buscar de producao_ordens_servico
             try {
                 const { data: osData } = await supabaseClient
                     .from('producao_ordens_servico')
@@ -15174,10 +15178,17 @@ async function initClientePage(numero, token) {
                     .maybeSingle();
                 if (osData && osData.status) {
                     osStatus = osData.status;
+                    console.log('[ClienteView] osStatus via producao_ordens_servico:', osStatus);
                 }
             } catch (e) {
                 console.warn('Erro ao buscar status global da OS:', e);
             }
+        }
+
+        // Normalizar variantes do status "Enviar Arte" para garantir match no switch
+        if (osStatus.toUpperCase().includes('ENVIAR') || osStatus.toUpperCase().includes('AGUARDANDO')) {
+            osStatus = 'AGUARDANDO_APROVACAO';
+            console.log('[ClienteView] osStatus normalizado para AGUARDANDO_APROVACAO');
         }
 
         // Configurar o container de renderização das amostras para o cliente
