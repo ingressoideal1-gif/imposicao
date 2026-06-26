@@ -1,4 +1,4 @@
-// - VDP Engine -- Frontend Script -
+﻿// - VDP Engine -- Frontend Script -
 
 'use strict';
 
@@ -11044,6 +11044,7 @@ async function loadOrdens() {
         }
 
         await carregarArtesGlobais();
+        await carregarLinksExistentes();
 
         // Fonte 1: Vibecode (ERP do parceiro)
         if (typeof vibeClient !== 'undefined' && vibeClient) {
@@ -11051,7 +11052,6 @@ async function loadOrdens() {
             const loaded = await loadOrdensFromVibecode(pedidosComerciais);
             if (loaded) {
                 await sincronizarStatusOrdensDinamico();
-                await carregarLinksExistentes();
                 renderOrdens();
                 return;
             }
@@ -11148,7 +11148,7 @@ async function loadOrdens() {
             }
         }
         await sincronizarStatusOrdensDinamico();
-        await carregarLinksExistentes();
+        // await carregarLinksExistentes(); // Movido para o topo da funo
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
@@ -11606,6 +11606,7 @@ function getStatusBadge(status) {
         'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
         'REPROVADO': { icon: '', cls: 'badge-amber', label: 'REPROVADA' },
         'APROVADO': { icon: '', cls: 'badge-green', label: 'Aprovada' },
+        'ARTE_APROVADA': { icon: '', cls: 'badge-green', label: 'Aprovada' },
         'Arte APROVADA': { icon: '', cls: 'badge-green', label: 'Aprovada' },
         'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
         'Enviar ARTE': { icon: '📨', cls: 'badge-green', label: 'Enviar ARTE' },
@@ -12150,8 +12151,16 @@ function renderOrdens() {
                     isAllApproved = true;
                 }
                 
+                let qtdAprovadas = 0;
+                if (itensList.length > 0) {
+                    qtdAprovadas = itensList.filter(i => i.amostra_status === 'APROVADA' || i.amostra_status === 'APROVADA_CLIENTE' || i.status_arte === 'APROVADA' || i.status_arte === 'APROVADA_CLIENTE').length;
+                    if (qtdAprovadas === itensList.length) isAllApproved = true;
+                } else if (isAllApproved) {
+                    qtdAprovadas = 1;
+                }
+                
                 const artProgressHtml = itensList.length > 0 
-                    ? `<div style="font-size: 0.72rem; margin-top: 5px; font-weight: ${isAllApproved ? 'bold' : 'normal'}; color: ${isAllApproved ? 'var(--green)' : 'var(--text-dim)'};">${isAllApproved ? itensList.length : 0}/${itensList.length} Aprovadas</div>`
+                    ? `<div style="font-size: 0.72rem; margin-top: 5px; font-weight: ${isAllApproved ? 'bold' : 'normal'}; color: ${isAllApproved ? 'var(--green)' : 'var(--text-dim)'};">${qtdAprovadas}/${itensList.length} Aprovadas</div>`
                     : '';
                     
                 let nomeEventoHtml = '';
@@ -16389,3 +16398,4 @@ async function exportarPdfGabarito() {
         btn.disabled = false;
     }
 }
+
