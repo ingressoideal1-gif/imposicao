@@ -12144,12 +12144,12 @@ function renderOrdens() {
                 const itensList = state.osItens[os.id] || [];
                 
                 let isAllApproved = false;
-                const validApproved = ['APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
+                const validApproved = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
                 
-                if (validApproved.includes((os.status || '').toUpperCase())) {
+                if (validApproved.includes((os.status || '').trim().toUpperCase())) {
                     isAllApproved = true;
                 } else if (artesDaOS.length > 0) {
-                    if (validApproved.includes((artesDaOS[0].status || '').toUpperCase())) {
+                    if (validApproved.includes((artesDaOS[0].status || '').trim().toUpperCase())) {
                         isAllApproved = true;
                     }
                 }
@@ -12158,7 +12158,11 @@ function renderOrdens() {
                 const totalItensOS = itensList.length > 0 ? itensList.length : (os._itens_count || 0);
 
                 if (itensList.length > 0) {
-                    qtdAprovadas = itensList.filter(i => i.amostra_status === 'APROVADA' || i.amostra_status === 'APROVADA_CLIENTE' || i.status_arte === 'APROVADA' || i.status_arte === 'APROVADA_CLIENTE').length;
+                    qtdAprovadas = itensList.filter(i => {
+                        const sAmostra = (i.amostra_status || '').trim().toUpperCase();
+                        const sArte = (i.status_arte || '').trim().toUpperCase();
+                        return validApproved.includes(sAmostra) || validApproved.includes(sArte);
+                    }).length;
                     
                     if (isAllApproved) {
                         qtdAprovadas = Math.max(qtdAprovadas, totalItensOS);
