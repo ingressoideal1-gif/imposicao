@@ -11388,8 +11388,14 @@ function mapVibecodeProdutoToOSItem(p, osId) {
         amostra_cor_id: p.amostra_cor_id || null,
         amostra_num_id: p.amostra_num_id || null,
         amostra_arte_base64: p.amostra_arte_base64 || null,
-        amostra_status: p.amostra_status || 'PENDENTE',
-        amostra_obs: p.amostra_obs || '',
+        amostra_status: (() => {
+            const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
+            return (overrides[`vibe_item_${p.id}`] && overrides[`vibe_item_${p.id}`].amostra_status) || p.amostra_status || 'PENDENTE';
+        })(),
+        amostra_obs: (() => {
+            const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
+            return (overrides[`vibe_item_${p.id}`] && overrides[`vibe_item_${p.id}`].amostra_obs) || p.amostra_obs || '';
+        })(),
 
         _source: 'vibecode',
         _vibe_produto_id: p.id,
@@ -11428,6 +11434,13 @@ async function loadOSItens(osId) {
                     // Usar pedidos_modelos como fonte principal
                     state.osItens[osId] = data.map(item => {
                         const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
+                        
+                        // Remapear o status_arte do banco para o amostra_status usado pela UI
+                        let statusFrontend = 'PENDENTE';
+                        if (item.status_arte === 'AGUARDANDO_CLIENTE') statusFrontend = 'PRONTO';
+                        else if (item.status_arte === 'APROVADA_CLIENTE') statusFrontend = 'APROVADA';
+                        else if (item.status_arte === 'REPROVADA_CLIENTE') statusFrontend = 'REPROVADA';
+
                         return {
                             ...item,
                             produto: item.nome_modelo || 'Modelo',
@@ -11439,6 +11452,7 @@ async function loadOSItens(osId) {
                             gabarito_operacional: item.gabarito_operacional || (prop ? prop.gabarito_operacional : null),
                             os_id: osId,
                             _pedidoModeloId: item.id,
+                            amostra_status: statusFrontend,
                             _dbLoaded: true
                         };
                     });
@@ -13560,13 +13574,15 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
 
         // SE O ID FOR UM ITEM VIRTUAL (Vibecode Fallback), no salvar em pedidos_modelos!
-        if (String(modeloId).startsWith('vibe_item_')) {
+        // Itens virtuais so gerados pelo carregarVibeOrders e no tm _dbLoaded = true
+        if (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded) {
             console.log('[SAVE] Ignorando pedidos_modelos para ID virtual:', modeloId);
             Object.assign(itemLocal, dataToUpdate);
             // Salvar tambm no localStorage para persistncia na sesso
             const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
-            if (!overrides[modeloId]) overrides[modeloId] = {};
-            Object.assign(overrides[modeloId], dataToUpdate);
+            const cacheKey = itemLocal.id; // Ex: vibe_item_1224
+            if (!overrides[cacheKey]) overrides[cacheKey] = {};
+            Object.assign(overrides[cacheKey], dataToUpdate);
             localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
             return;
         }
