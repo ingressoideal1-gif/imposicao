@@ -14356,8 +14356,9 @@ async function loadBriefingBase(osId, osIntId) {
              });
         }
         
-        state.pedidosArtesCurrent = mergedData;
-        updateBriefingUI(osId);
+        if (!state.pedidosArtesData) state.pedidosArtesData = {};
+        state.pedidosArtesData[osIntId] = mergedData;
+        updateBriefingUI(osId, osIntId);
     } catch (e) {
         console.error("Erro ao carregar briefing:", e);
     }
@@ -14437,8 +14438,9 @@ async function loadUltimosPedidos(osId, clienteNome) {
     }
 }
 
-function updateBriefingUI(osId) {
-    const data = state.pedidosArtesCurrent || {};
+function updateBriefingUI(osId, osIntId) {
+    if (!state.pedidosArtesData) state.pedidosArtesData = {};
+    const data = state.pedidosArtesData[osIntId] || {};
     
     // Atualiza campos do Briefing
     const nomeEl = document.getElementById(`briefing-nome-${osId}`);
@@ -14501,19 +14503,21 @@ let briefingSaveTimeout = null;
 async function saveBriefingField(osIntId, field, value, isObs = false, itemId = null) {
     if (!osIntId || typeof supabaseClient === 'undefined') return;
     
+    if (!state.pedidosArtesData) state.pedidosArtesData = {};
+    
     if (isObs) {
-        if (!state.pedidosArtesCurrent) state.pedidosArtesCurrent = { observacoes: {} };
-        if (!state.pedidosArtesCurrent.observacoes) state.pedidosArtesCurrent.observacoes = {};
-        state.pedidosArtesCurrent.observacoes[itemId] = value;
+        if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = { observacoes: {} };
+        if (!state.pedidosArtesData[osIntId].observacoes) state.pedidosArtesData[osIntId].observacoes = {};
+        state.pedidosArtesData[osIntId].observacoes[itemId] = value;
     } else {
-        if (!state.pedidosArtesCurrent) state.pedidosArtesCurrent = {};
-        state.pedidosArtesCurrent[field] = value;
+        if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = {};
+        state.pedidosArtesData[osIntId][field] = value;
     }
 
     clearTimeout(briefingSaveTimeout);
     briefingSaveTimeout = setTimeout(async () => {
         try {
-            const current = state.pedidosArtesCurrent;
+            const current = state.pedidosArtesData[osIntId] || {};
             const payload = {
                 id_int: osIntId,
                 nome_evento: current.nome_evento || null,
@@ -14553,13 +14557,14 @@ async function saveBriefingField(osIntId, field, value, isObs = false, itemId = 
 }
 
 async function selectDesigner(osIntId, uid, nome) {
-    if (!state.pedidosArtesCurrent) state.pedidosArtesCurrent = {};
-    state.pedidosArtesCurrent.designer_uid = uid;
-    state.pedidosArtesCurrent.designer_nome = nome;
+    if (!state.pedidosArtesData) state.pedidosArtesData = {};
+    if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = {};
+    state.pedidosArtesData[osIntId].designer_uid = uid;
+    state.pedidosArtesData[osIntId].designer_nome = nome;
     
     // Atualiza a UI imediatamente para sensação de resposta instantânea
     const activeOs = document.getElementById('active-os-name') ? document.getElementById('active-os-name').dataset.osId : null;
-    if (activeOs) updateBriefingUI(activeOs);
+    if (activeOs) updateBriefingUI(activeOs, osIntId);
 
     // Salva direto no banco
     if (!osIntId || typeof supabaseClient === 'undefined') return;
