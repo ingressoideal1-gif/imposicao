@@ -15146,9 +15146,12 @@ async function initClientePage(numero, token) {
         // Buscar status da OS
         let osStatus = 'ARTE_EM_ANDAMENTO';
         if (isVibeOS) {
-            // Pedidos Vibecode: status vem de pedidos_links_cliente.status_arte (ja carregado no linkData)
-            if (linkData.status_arte) {
-                osStatus = linkData.status_arte;
+            // Pedidos Vibecode: status mais recente vem da tabela propostas,
+            // com fallback para o status gravado no linkData
+            if (propData && propData.status_arte) {
+                osStatus = propData.status_arte.trim();
+            } else if (linkData.status_arte) {
+                osStatus = linkData.status_arte.trim();
             }
         } else {
             // OS local: buscar de producao_ordens_servico (UUID compativel)
