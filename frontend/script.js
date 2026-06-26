@@ -1,4 +1,4 @@
-// - VDP Engine -- Frontend Script -
+﻿// - VDP Engine -- Frontend Script -
 
 'use strict';
 
@@ -12961,7 +12961,7 @@ function renderAmostrasOSItens(osId) {
                                 </button>
                                 ` 
                                 : `
-                                <button class="btn ${status === 'PRONTO' || status === 'APROVADA' ? 'btn-success' : 'btn-primary'}" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'PRONTO' || status === 'APROVADA' ? 'opacity: 0.7; cursor: default; background-color: var(--green); border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'PRONTO' || status === 'APROVADA' ? 'disabled' : ''}>
+                                <button class="btn ${status === 'PRONTO' || status === 'APROVADA' ? 'btn-success' : 'btn-primary'}" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'PRONTO' || status === 'APROVADA' ? 'opacity: 0.7; cursor: default; background-color: var(--green); border-color: var(--green); color: #ffffff;' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'PRONTO' || status === 'APROVADA' ? 'disabled' : ''}>
                                     ${status === 'APROVADA' ? '✅ APROVADO (CLIENTE)' : (status === 'PRONTO' ? '✅ PRONTO' : '🎨 PRONTO')}
                                 </button>
                                 `
@@ -16408,5 +16408,6 @@ async function exportarPdfGabarito() {
         btn.disabled = false;
     }
 }
+
 
 
