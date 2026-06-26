@@ -14889,13 +14889,11 @@ async function getOrCreateLinkCliente(osId, numero) {
         
         if (existing) {
             token = existing.token;
-            if (existing.status_arte !== currentStatus) {
-                // Sincroniza o status global atual com o link gerado
-                await supabaseClient
-                    .from('pedidos_links_cliente')
-                    .update({ status_arte: currentStatus })
-                    .eq('id', existing.id);
-            }
+            // Sempre sincronizar o status atual para garantir que o link esteja atualizado
+            await supabaseClient
+                .from('pedidos_links_cliente')
+                .update({ status_arte: currentStatus })
+                .eq('id', existing.id);
         } else {
             token = generateClientToken(6);
             const { error: insertError } = await supabaseClient
@@ -15046,16 +15044,7 @@ async function initClientePage(numero, token) {
 
         if (clienteEl) clienteEl.textContent = osCliente;
 
-        let pedData = null;
-        try {
-            const { data } = await supabaseClient
-                .from('pedidos_artes')
-                .select('status')
-                .eq('id_int', numero)
-                .limit(1)
-                .maybeSingle();
-            pedData = data;
-        } catch (e) { /* silencioso */ }
+
 
         // Carregar formatos, cores e numerações para o state global do front
         try {
@@ -15154,39 +15143,35 @@ async function initClientePage(numero, token) {
 
         const isVibeOS = osId.startsWith('vibe_');
 
-        // Buscar status da OS: fonte mais confiavel primeiro
-        // 1. pedidos_artes.status (escrito pelo painel interno)
-        // 2. pedidos_links_cliente.status_arte (sincronizado na geracao do link)
-        // 3. producao_ordens_servico.status (OS local com UUID real)
-        let osStatus = 'ARTE_EM_ANDAMENTO';
+        // Buscar status da OS
+        // REGRA: linkData.status_arte é sempre a fonte primaria (sincronizado ao gerar link)
+        // Para OS locais, tentar producao_ordens_servico como fonte complementar
+        // NUNCA usar pedidos_artes.status (isso é status por ITEM, nao da OS)
+        let osStatus = linkData.status_arte ? linkData.status_arte.trim() : 'ARTE_EM_ANDAMENTO';
+        console.log('[ClienteView] osStatus inicial (linkData.status_arte):', osStatus, '| isVibeOS:', isVibeOS);
 
-        if (pedData && pedData.status) {
-            // Fonte 1: direto da tabela pedidos_artes (mais atualizado)
-            osStatus = pedData.status.trim();
-            console.log('[ClienteView] osStatus via pedidos_artes:', osStatus);
-        } else if (linkData.status_arte) {
-            // Fonte 2: status gravado no link (sincronizado na geracao)
-            osStatus = linkData.status_arte.trim();
-            console.log('[ClienteView] osStatus via linkData.status_arte:', osStatus);
-        } else if (!isVibeOS) {
-            // Fonte 3: OS local — buscar de producao_ordens_servico
+        if (!isVibeOS) {
+            // Para OS locais, tentar producao_ordens_servico para pegar status em tempo real
             try {
                 const { data: osData } = await supabaseClient
                     .from('producao_ordens_servico')
                     .select('status')
                     .eq('id', osId)
                     .maybeSingle();
-                if (osData && osData.status) {
-                    osStatus = osData.status;
+                if (osData && osData.status && osData.status.trim() !== '') {
+                    osStatus = osData.status.trim();
                     console.log('[ClienteView] osStatus via producao_ordens_servico:', osStatus);
+                } else {
+                    console.log('[ClienteView] producao_ordens_servico sem resultado, mantendo linkData.status_arte');
                 }
             } catch (e) {
                 console.warn('Erro ao buscar status global da OS:', e);
             }
         }
 
-        // Normalizar variantes do status "Enviar Arte" para garantir match no switch
-        if (osStatus.toUpperCase().includes('ENVIAR') || osStatus.toUpperCase().includes('AGUARDANDO')) {
+        // Normalizar TODAS as variantes de "Enviar Arte" para garantir abertura das janelas
+        const statusUpper = osStatus.toUpperCase();
+        if (statusUpper.includes('ENVIAR') || statusUpper.includes('AGUARDANDO') || statusUpper === 'ENVIAR_ARTE') {
             osStatus = 'AGUARDANDO_APROVACAO';
             console.log('[ClienteView] osStatus normalizado para AGUARDANDO_APROVACAO');
         }
