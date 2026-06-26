@@ -13533,8 +13533,20 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     }
 
     try {
-        // Remove campos que no existem na tabela pedidos_modelos no Supabase
         const dbData = { ...dataToUpdate };
+        
+        // Mapear amostra_status para status_arte (coluna oficial do Supabase)
+        if (dbData.amostra_status) {
+            if (dbData.amostra_status === 'PRONTO') {
+                dbData.status_arte = 'AGUARDANDO_CLIENTE';
+            } else if (dbData.amostra_status === 'APROVADA') {
+                dbData.status_arte = 'APROVADA_CLIENTE';
+            } else if (dbData.amostra_status === 'REPROVADA') {
+                dbData.status_arte = 'REPROVADA_CLIENTE';
+            }
+        }
+
+        // Remove campos virtuais (frontend-only) que no existem na tabela pedidos_modelos
         if ('amostra_obs' in dbData) {
             delete dbData.amostra_obs;
         }
