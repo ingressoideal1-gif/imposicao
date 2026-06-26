@@ -12919,18 +12919,18 @@ function renderAmostrasOSItens(osId) {
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
                                 ? `
-                                <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
-                                    ✅ APROVAR
+                                <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'APROVADA' ? 'opacity: 0.6; cursor: not-allowed; border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')" ${statusFrontend === 'APROVADA' ? 'disabled' : ''}>
+                                    ${statusFrontend === 'APROVADA' ? '✅ APROVADA' : '✅ APROVAR'}
                                 </button>
                                 ` 
                                 : `
-                                <button class="btn btn-primary" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')">
-                                    🎨 PRONTO
+                                <button class="btn ${statusFrontend === 'PRONTO' ? 'btn-success' : 'btn-primary'}" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'PRONTO' ? 'opacity: 0.7; cursor: default; background-color: var(--green); border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${statusFrontend === 'PRONTO' ? 'disabled' : ''}>
+                                    ${statusFrontend === 'PRONTO' ? '✅ PRONTO' : '🎨 PRONTO'}
                                 </button>
                                 `
                             }
-                            <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
-                                ❌ ALTERAR
+                            <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${statusFrontend === 'REPROVADA' ? 'opacity: 0.6; cursor: not-allowed;' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')" ${statusFrontend === 'REPROVADA' ? 'disabled' : ''}>
+                                ${statusFrontend === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
                             </button>
                         </div>
                     </div>
