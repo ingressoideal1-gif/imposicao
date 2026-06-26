@@ -15059,6 +15059,8 @@ async function initClientePage(numero, token) {
         state.ordens = [os];
         state.amostrasOSAtivo = osId;
 
+        const isVibeOS = osId.startsWith('vibe_');
+
         // Buscar status da OS
         let osStatus = 'ARTE_EM_ANDAMENTO';
         if (isVibeOS) {
