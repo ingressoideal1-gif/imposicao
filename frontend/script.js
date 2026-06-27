@@ -13027,11 +13027,13 @@ function renderAmostrasOSItens(osId) {
             <div style="padding: 24px;">
                 <div class="amostra-mid-row" style="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'grid-template-columns: 1fr;' : ''}">
                     <div class="amostra-decisao-panel">
+                        ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                         <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
                         <div class="amostra-decisao-status-box">
                             <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
                             ${statusBadge}
                         </div>
+                        `}
                         <div class="form-group" style="margin-bottom: 0;">
                             <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
                             <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
@@ -13040,18 +13042,18 @@ function renderAmostrasOSItens(osId) {
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
                                 ? `
-                                <button class="btn btn-success" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'APROVADA' ? 'opacity: 0.6; cursor: not-allowed; border-color: var(--green);' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')" ${status === 'APROVADA' ? 'disabled' : ''}>
-                                    ${status === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px #22c55e;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                                    ${status === 'APROVADA' ? '✅ APROVADO' : 'APROVAR'}
                                 </button>
                                 ` 
                                 : `
-                                <button class="btn ${status === 'PRONTO' || status === 'APROVADA' ? 'btn-success' : 'btn-primary'}" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'PRONTO' || status === 'APROVADA' ? 'opacity: 0.7; cursor: default; background-color: var(--green); border-color: var(--green); color: #ffffff;' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'PRONTO' || status === 'APROVADA' ? 'disabled' : ''}>
-                                    ${status === 'APROVADA' ? '✅ APROVADO (CLIENTE)' : (status === 'PRONTO' ? '✅ PRONTO' : '🎨 PRONTO')}
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'PRONTO' || status === 'APROVADA' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px #3b82f6;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' ? 'disabled' : ''}>
+                                    ${status === 'APROVADA' ? '✅ APROVADO (CLIENTE)' : (status === 'PRONTO' ? '🎨 PRONTO' : 'MARCAR PRONTO')}
                                 </button>
                                 `
                             }
-                            <button class="btn btn-danger" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'REPROVADA' ? 'opacity: 0.6; cursor: not-allowed;' : ''}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')" ${status === 'REPROVADA' ? 'disabled' : ''}>
-                                ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
+                            <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px #ef4444;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : 'ALTERAR'}
                             </button>
                         </div>
                     </div>
@@ -13103,9 +13105,9 @@ function renderAmostrasOSItens(osId) {
                         ${item.nome_modelo || `Modelo ${idx + 1}`}
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ?
-                        `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; height: auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`
+                        `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`
                     :
-                        `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
+                        `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
                          <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
