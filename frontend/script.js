@@ -11249,7 +11249,7 @@ async function carregarArtesGlobais() {
     try {
         const { data, error } = await supabaseClient
             .from('pedidos_artes')
-            .select('id_int, status, nome_evento, designer_nome, designer_uid')
+            .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados')
             .order('created_at', { ascending: false });
         if (error) {
             if (error.code === '42P01') return; // tabela não existe
@@ -12222,7 +12222,17 @@ function renderOrdens() {
             });
             tbodyArte.innerHTML = filteredArte.map(os => {
                 const itensCount = os._itens_count || 0;
-                const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
+                
+                // Entrega / Faturamento
+                const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(os.numero));
+                const entregaStatus = (arteGlobal && arteGlobal.entrega_dados) ? arteGlobal.entrega_dados.toUpperCase() : '----';
+                let entregaHtml = '<span style="color: var(--text-dim);">----</span>';
+                if (entregaStatus === 'APROVADO') {
+                    entregaHtml = '<span class="badge badge-teal" style="font-size: 0.72rem;">✅ APROVADO</span>';
+                } else if (entregaStatus === 'CORRIGIR') {
+                    entregaHtml = '<span class="badge badge-red" style="font-size: 0.72rem;">❌ CORRIGIR</span>';
+                }
+
                 const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
                 
                 // Progresso das artes
@@ -12293,7 +12303,7 @@ function renderOrdens() {
                             ${formatDateTime(os.data_liberacao)}
                             ${dataPedFormatada}
                         </td>
-                        <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
+                        <td style="text-align: center; vertical-align: middle;">${entregaHtml}</td>
                         <td style="text-align: center;">
                             ${getStatusBadge(os.status)}
                             ${artProgressHtml}
@@ -15747,6 +15757,16 @@ window.finalizarConfirmacaoCliente = async function() {
             remetente_nome: 'Cliente (aprovação online)'
         });
     } catch(e) {}
+
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            await supabaseClient.from('pedidos_artes')
+                .update({ entrega_dados: precisaAtencao ? 'CORRIGIR' : 'APROVADO' })
+                .eq('id_int', parseInt(clienteState.numero));
+        }
+    } catch(e) {
+        console.warn('Erro ao atualizar entrega_dados em pedidos_artes:', e);
+    }
 
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
