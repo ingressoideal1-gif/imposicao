@@ -12336,22 +12336,19 @@ function renderOrdens() {
                     nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #3b82f6;">${arteComDesigner.designer_nome}</span>`;
                 }
 
-                let badgeBoxBg = 'var(--blue), #2563eb';
-                let badgeBoxShadow = 'rgba(59, 130, 246, 0.4)';
+                let badgeBoxBg = '#3b82f6';
 
                 if (entregaStatus === 'CORRIGIR') {
-                    badgeBoxBg = 'var(--orange), #ea580c';
-                    badgeBoxShadow = 'rgba(249, 115, 22, 0.4)';
+                    badgeBoxBg = '#f97316';
                 } else if (isAllApproved && entregaStatus === 'APROVADO') {
-                    badgeBoxBg = 'var(--green), #16a34a';
-                    badgeBoxShadow = 'rgba(34, 197, 94, 0.4)';
+                    badgeBoxBg = '#22c55e';
                 }
 
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
                         <td style="text-align: center; font-size: 1.1rem; color: ${isAllApproved ? 'var(--green)' : 'inherit'};">▶</td>
                         <td>
-                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, ${badgeBoxBg}); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px ${badgeBoxShadow}; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
+                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block;">#${os.numero}</span>
                         </td>
 
                         <td>
