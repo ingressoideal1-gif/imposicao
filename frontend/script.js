@@ -15592,7 +15592,7 @@ async function mostrarConfirmacaoDadosCliente(osId) {
         if (enderecoEntrega) {
             endHtml = `
                 <div style="font-size: 0.95rem; line-height: 1.5; color: var(--text);">
-                    <b>Logradouro:</b> ${enderecoEntrega.logradouro || ''}, ${enderecoEntrega.numero || 'S/N'}<br>
+                    <b>Rua:</b> ${enderecoEntrega.rua || enderecoEntrega.logradouro || ''}, ${enderecoEntrega.numero || 'S/N'}<br>
                     ${enderecoEntrega.complemento ? `<b>Complemento:</b> ${enderecoEntrega.complemento}<br>` : ''}
                     <b>Bairro:</b> ${enderecoEntrega.bairro || ''}<br>
                     <b>Cidade/UF:</b> ${enderecoEntrega.cidade || ''} - ${enderecoEntrega.uf || ''}<br>
