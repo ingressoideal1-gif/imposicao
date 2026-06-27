@@ -11107,6 +11107,7 @@ async function loadOrdens() {
             console.log('[OS] Carregando do Vibecode...');
             const loaded = await loadOrdensFromVibecode(pedidosComerciais);
             if (loaded) {
+                await carregarModelosGlobais();
                 await sincronizarStatusOrdensDinamico();
                 renderOrdens();
                 return;
@@ -11261,6 +11262,38 @@ async function carregarArtesGlobais() {
         console.warn('[Artes] Erro ao carregar artes globais:', e.message);
     }
 }
+
+async function carregarModelosGlobais() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    if (!state.ordens || state.ordens.length === 0) return;
+
+    try {
+        const todosNumeros = state.ordens.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
+        const chunkSize = 200;
+        let todosModelos = [];
+        
+        for (let i = 0; i < todosNumeros.length; i += chunkSize) {
+            const chunk = todosNumeros.slice(i, i + chunkSize);
+            const { data, error } = await supabaseClient
+                .from('pedidos_modelos')
+                .select('id, id_int, status_arte, amostra_status')
+                .in('id_int', chunk);
+                
+            if (error) throw error;
+            if (data) todosModelos = todosModelos.concat(data);
+        }
+        
+        state.modelosGlobais = {};
+        todosModelos.forEach(m => {
+            if (!state.modelosGlobais[m.id_int]) state.modelosGlobais[m.id_int] = [];
+            state.modelosGlobais[m.id_int].push(m);
+        });
+        console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
+    } catch (e) {
+        console.warn('[Modelos] Erro ao carregar modelos globais:', e.message);
+    }
+}
+
 
 /**
  * Carrega OS do Vibecode agrupando produtos_proposta por id_int
@@ -12221,7 +12254,9 @@ function renderOrdens() {
                 }
             });
             tbodyArte.innerHTML = filteredArte.map(os => {
-                const itensCount = os._itens_count || 0;
+                const itensReais = (state.modelosGlobais && state.modelosGlobais[os.numero]) ? state.modelosGlobais[os.numero] : [];
+                // Se ainda não houver modelos criados no bd para essa OS, ele cai para o número de produtos
+                const itensCount = itensReais.length > 0 ? itensReais.length : (os._itens_count || 0);
                 
                 // Entrega / Faturamento
                 const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(os.numero));
@@ -12252,10 +12287,13 @@ function renderOrdens() {
                 }
                 
                 let qtdAprovadas = 0;
-                const totalItensOS = itensList.length > 0 ? itensList.length : (os._itens_count || 0);
+                const totalItensOS = itensCount; // Usa a mesma contagem da coluna "Itens" (modelos)
 
-                if (itensList.length > 0) {
-                    qtdAprovadas = itensList.filter(i => {
+                // Usamos os modelos globais se existirem, senão tentamos o cache local
+                const modelosParaChecar = itensReais.length > 0 ? itensReais : (state.osItens[os.id] || []);
+
+                if (modelosParaChecar.length > 0) {
+                    qtdAprovadas = modelosParaChecar.filter(i => {
                         const sAmostra = (i.amostra_status || '').trim().toUpperCase();
                         const sArte = (i.status_arte || '').trim().toUpperCase();
                         return validApproved.includes(sAmostra) || validApproved.includes(sArte);
