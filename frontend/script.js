@@ -15318,7 +15318,16 @@ async function initClientePage(numero, token) {
             );
         } else if (isEnviarArte) {
             // Único status onde o cliente vê as artes e pode aprovar/reprovar
-            renderAmostrasOSItens(osId);
+            const itensArray = state.osItens[osId] || [];
+            const todosAprovados = itensArray.length > 0 && itensArray.every(item => item.amostra_status === 'APROVADA');
+            
+            if (todosAprovados) {
+                // Se as artes já foram todas aprovadas mas o status da OS ainda é Enviar Arte,
+                // significa que ele fechou na etapa de Endereço/NF. Continua de onde parou.
+                mostrarConfirmacaoDadosCliente(osId);
+            } else {
+                renderAmostrasOSItens(osId);
+            }
         } else {
             // Em Arte, Pendente Informação, ou qualquer outro status intermediário
             // → cliente não deve ver as artes ainda
@@ -15349,26 +15358,8 @@ async function clienteFinalizarFluxo(fluxoTipo) {
 
     try {
         if (fluxoTipo === 'APROVAR_TUDO') {
-            // Salvar status global da OS no Supabase para ARTE_APROVADA (Laranja, rótulo "Arte APROVADA")
-            // Protegido por try-catch para evitar que restrições RLS em producao_ordens_servico quebrem a finalização do cliente
-            try {
-                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                    if (osId.startsWith('vibe_')) {
-                        const { error } = await supabaseClient
-                            .from('pedidos_links_cliente')
-                            .update({ status_arte: 'APROVADO' })
-                            .eq('os_id', osId);
-                        if (error) throw error;
-                    } else {
-                        const { error } = await supabaseClient
-                            .from('producao_ordens_servico')
-                            .update({ status: 'APROVADO' }).eq('id', osId);
-                        if (error) throw error;
-                    }
-                }
-            } catch (osErr) {
-                console.warn('Erro ao atualizar status global da OS (pode ser restricao de RLS):', osErr);
-            }
+            // NOTA: Não mudamos o status da OS para APROVADO aqui.
+            // O status só vai para APROVADO quando o cliente terminar a confirmação de endereço/NF.
 
             // Para cada item, salvar status como APROVADA no banco (Execução paralela)
             const savePromises = itens.map(item => saveAmostraToDB(item.id, osId, { amostra_status: 'APROVADA' }));
@@ -15721,6 +15712,19 @@ window.finalizarConfirmacaoCliente = async function() {
             remetente_nome: 'Cliente (aprovação online)'
         });
     } catch(e) {}
+
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const osId = clienteState.osId;
+            if (osId.startsWith('vibe_')) {
+                await supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'APROVADO' }).eq('os_id', osId);
+            } else {
+                await supabaseClient.from('producao_ordens_servico').update({ status: 'APROVADO' }).eq('id', osId);
+            }
+        }
+    } catch (osErr) {
+        console.warn('Erro ao atualizar status global da OS para APROVADO:', osErr);
+    }
 
     if (precisaAtencao) {
         mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 
