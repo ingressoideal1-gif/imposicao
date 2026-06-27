@@ -15470,8 +15470,8 @@ function checarConclusaoConfirmacoes() {
         
         if (precisaAtencao) {
             btn.innerHTML = '⚠️ Solicitar correção do Atendimento';
-            btn.style.backgroundColor = '#eab308'; // Amarelo forte
-            btn.style.borderColor = '#eab308';
+            btn.style.backgroundColor = '#f97316'; // Laranja
+            btn.style.borderColor = '#f97316';
             btn.style.color = '#fff';
         } else {
             btn.innerHTML = '✅ Finalizar Aprovação do Pedido';
@@ -15608,9 +15608,15 @@ async function mostrarConfirmacaoDadosCliente(osId) {
 
         let endHtml = '<div style="color: var(--text-dim); font-style: italic;">Endereço não cadastrado no pedido.</div>';
         if (enderecoEntrega) {
+            let recebedorHtml = '';
+            if (enderecoEntrega.recebedor) {
+                recebedorHtml = `<b>Recebedor:</b> ${enderecoEntrega.recebedor} ${enderecoEntrega.cpf_recebedor ? `(CPF: ${enderecoEntrega.cpf_recebedor})` : ''}<br>`;
+            }
+            
             endHtml = `
                 <div style="font-size: 0.95rem; line-height: 1.5; color: var(--text);">
-                    <b>Rua:</b> ${enderecoEntrega.rua || enderecoEntrega.logradouro || ''}, ${enderecoEntrega.numero || 'S/N'}<br>
+                    ${recebedorHtml}
+                    <b>Rua:</b> ${enderecoEntrega.endereco || enderecoEntrega.rua || enderecoEntrega.logradouro || ''}, ${enderecoEntrega.numero || 'S/N'}<br>
                     ${enderecoEntrega.complemento ? `<b>Complemento:</b> ${enderecoEntrega.complemento}<br>` : ''}
                     <b>Bairro:</b> ${enderecoEntrega.bairro || ''}<br>
                     <b>Cidade/UF:</b> ${enderecoEntrega.cidade || ''} - ${enderecoEntrega.uf || ''}<br>
