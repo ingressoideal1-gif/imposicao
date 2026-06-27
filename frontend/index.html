@@ -892,16 +892,9 @@
             <!-- VIEW: AMOSTRAS                                                 -->
             <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-amostras" class="view-section">
-                <div class="page-header">
-                    <div class="page-header-text">
-                        <h1>🧪 Amostras</h1>
-                        <p>Simulador técnico de amostra combinada (Cor + Arte + Numeração) com ferramentas de ajuste e aprovação.</p>
-                    </div>
-                </div>
-
                 <!-- Banner do Pedido Ativo (visível quando navegando da Lista de Arte) -->
-                <div id="amostras-os-banner" style="display: none; margin-bottom: 16px; padding: 4px 0; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
-                    <span style="font-size: 1.25rem; font-weight: 800; color: #ffffff;">Pedido <span id="amostras-os-numero"></span> <span style="color: var(--text-dim); font-weight: 400; margin: 0 8px;">—</span> <span id="amostras-os-cliente" style="font-weight: 500; font-size: 1.1rem; color: #e2e8f0;"></span></span>
+                <div id="amostras-os-banner" style="display: none; margin-bottom: 24px; padding: 0 0 16px 0; flex-direction: column; align-items: flex-start; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-size: 1.45rem; font-weight: 800; color: #ffffff;">Pedido <span id="amostras-os-numero"></span> <span style="color: var(--text-dim); font-weight: 400; margin: 0 12px;">—</span> <span id="amostras-os-cliente" style="font-weight: 600; font-size: 1.3rem; color: #e2e8f0;"></span></span>
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <span id="amostras-os-itens-count" class="badge badge-yellow"></span>
                                 <button class="btn btn-secondary btn-sm" id="btn-export-pdf-gabarito" onclick="exportarPdfGabarito()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-pdf" style="color: #f472b6;"></i> PDF Gabarito</button>
@@ -1498,7 +1491,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="/script.js?v=175"></script>
+    <script src="/script.js?v=176"></script>
 
     <!-- PÁGINA PÚBLICA DO CLIENTE (fora do app-shell) -->
     <div id="cliente-page" class="cliente-page" style="display: none;">
