@@ -15604,14 +15604,14 @@ async function mostrarConfirmacaoDadosCliente(osId) {
 
         let cliHtml = '<div style="color: var(--text-dim); font-style: italic;">Dados de faturamento não cadastrados.</div>';
         if (clienteFaturamento) {
-            const nomeRazao = clienteFaturamento.razao_social || clienteFaturamento.nome || '';
+            const nomeRazao = clienteFaturamento.nome || clienteFaturamento.fantasia || '';
             cliHtml = `
                 <div style="font-size: 0.95rem; line-height: 1.5; color: var(--text);">
                     <b>Nome/Razão Social:</b> ${nomeRazao}<br>
-                    <b>CPF/CNPJ:</b> ${clienteFaturamento.cnpj_cpf || ''}<br>
-                    ${clienteFaturamento.ie ? `<b>I.E.:</b> ${clienteFaturamento.ie}<br>` : ''}
-                    <b>E-mail:</b> ${clienteFaturamento.email || ''}<br>
-                    <b>Telefone:</b> ${clienteFaturamento.telefone || ''}
+                    <b>CPF/CNPJ:</b> ${clienteFaturamento.documento || ''}<br>
+                    ${clienteFaturamento.ins_estadual ? `<b>I.E.:</b> ${clienteFaturamento.ins_estadual}<br>` : ''}
+                    <b>E-mail:</b> ${clienteFaturamento.email_financeiro || clienteFaturamento.email_contato || clienteFaturamento.email || ''}<br>
+                    <b>Telefone:</b> ${clienteFaturamento.whatsapp_1 || clienteFaturamento.telefone_fixo || ''}
                 </div>
             `;
         }
