@@ -15660,8 +15660,8 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                         <div id="status-endereco" style="margin-bottom: 10px;"></div>
                         
                         <div id="acoes-endereco" style="display: flex; gap: 10px;">
-                            <button class="btn" onclick="acaoConfirmacaoItem('endereco', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">✅ Correto</button>
-                            <button class="btn" onclick="acaoConfirmacaoItem('endereco', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">⚠️ Incorreto</button>
+                            <button class="btn" onclick="acaoConfirmacaoItem('endereco', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">Correto</button>
+                            <button class="btn" onclick="acaoConfirmacaoItem('endereco', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">Incorreto</button>
                         </div>
 
                         <div id="correcao-endereco" style="display: none; margin-top: 10px;">
@@ -15680,8 +15680,8 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                         <div id="status-nf" style="margin-bottom: 10px;"></div>
                         
                         <div id="acoes-nf" style="display: flex; gap: 10px;">
-                            <button class="btn" onclick="acaoConfirmacaoItem('nf', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">✅ Correto</button>
-                            <button class="btn" onclick="acaoConfirmacaoItem('nf', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">⚠️ Incorreto</button>
+                            <button class="btn" onclick="acaoConfirmacaoItem('nf', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">Correto</button>
+                            <button class="btn" onclick="acaoConfirmacaoItem('nf', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">Incorreto</button>
                         </div>
 
                         <div id="correcao-nf" style="display: none; margin-top: 10px;">
