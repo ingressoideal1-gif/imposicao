@@ -12143,8 +12143,8 @@ function renderOrdens() {
                 var autoItens = state.osItens[autoOs.id] || [];
                 if (autoItens.length === 0) return;
                 var autoStatus = (autoOs.status || '').trim();
-                var autoOk = ['Enviar Arte', 'Enviar ARTE', 'APROVADO', 'REPROVADO'];
-                if (autoOk.indexOf(autoStatus) !== -1) return;
+                // Verificar para TODOS os status: se todos modelos PRONTO e status ja nao e Enviar Arte, corrigir
+                if (autoStatus === 'Enviar Arte' || autoStatus === 'Enviar ARTE') return; // ja correto
                 var autoTodos = autoItens.every(function(i) { return (i.amostra_status || '').toUpperCase() === 'PRONTO'; });
                 if (!autoTodos) return;
                 autoOs.status = 'Enviar Arte';
