@@ -11995,7 +11995,13 @@ function renderOrdens() {
             const cli = (os.cliente || '').toLowerCase();
             const vend = getOSVendedor(os.id).toLowerCase();
             const des = getOSDesigner(os.id).toLowerCase();
-            const matchSearch = num.includes(searchImpressao) || cli.includes(searchImpressao) || vend.includes(searchImpressao) || des.includes(searchImpressao);
+            
+            const osNumeroInt = parseInt(os.numero);
+            const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
+            const arteComEvento = artesDaOS.find(a => a.nome_evento);
+            const evento = arteComEvento && arteComEvento.nome_evento ? arteComEvento.nome_evento.toLowerCase() : '';
+
+            const matchSearch = num.includes(searchImpressao) || cli.includes(searchImpressao) || evento.includes(searchImpressao) || vend.includes(searchImpressao) || des.includes(searchImpressao);
             if (!matchSearch) return false;
         }
 
@@ -12081,7 +12087,13 @@ function renderOrdens() {
             const cli = (os.cliente || '').toLowerCase();
             const vend = getOSVendedor(os.id).toLowerCase();
             const des = getOSDesigner(os.id).toLowerCase();
-            const matchSearch = num.includes(searchArte) || cli.includes(searchArte) || vend.includes(searchArte) || des.includes(searchArte);
+            
+            const osNumeroInt = parseInt(os.numero);
+            const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
+            const arteComEvento = artesDaOS.find(a => a.nome_evento);
+            const evento = arteComEvento && arteComEvento.nome_evento ? arteComEvento.nome_evento.toLowerCase() : '';
+
+            const matchSearch = num.includes(searchArte) || cli.includes(searchArte) || evento.includes(searchArte) || vend.includes(searchArte) || des.includes(searchArte);
             if (!matchSearch) return false;
         }
 
