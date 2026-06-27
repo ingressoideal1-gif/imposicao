@@ -15458,16 +15458,34 @@ function checarConclusaoConfirmacoes() {
     const btn = document.getElementById('btn-finalizar-confirmacoes');
     if (!btn) return;
     
-    if (window.clienteConfirmacoes.enderecoOk !== null && window.clienteConfirmacoes.nfOk !== null) {
+    const endFeito = window.clienteConfirmacoes.enderecoOk === true || (window.clienteConfirmacoes.enderecoOk === false && window.clienteConfirmacoes.enderecoCorrecao !== '');
+    const nfFeito = window.clienteConfirmacoes.nfOk === true || (window.clienteConfirmacoes.nfOk === false && window.clienteConfirmacoes.nfCorrecao !== '');
+
+    if (endFeito && nfFeito) {
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
-        btn.innerHTML = '✅ Finalizar Aprovação do Pedido';
+        
+        const precisaAtencao = window.clienteConfirmacoes.enderecoOk === false || window.clienteConfirmacoes.nfOk === false;
+        
+        if (precisaAtencao) {
+            btn.innerHTML = '⚠️ Solicitar correção do Atendimento';
+            btn.style.backgroundColor = '#eab308'; // Amarelo forte
+            btn.style.borderColor = '#eab308';
+            btn.style.color = '#fff';
+        } else {
+            btn.innerHTML = '✅ Finalizar Aprovação do Pedido';
+            btn.style.backgroundColor = '#22c55e'; // Verde
+            btn.style.borderColor = '#22c55e';
+            btn.style.color = '#fff';
+        }
     } else {
         btn.disabled = true;
         btn.style.opacity = '0.5';
         btn.style.cursor = 'not-allowed';
         btn.innerHTML = 'Verifique os dados acima para Finalizar';
+        btn.style.backgroundColor = '#22c55e'; // default
+        btn.style.borderColor = '#22c55e';
     }
 }
 
