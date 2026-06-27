@@ -15609,6 +15609,7 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                 </div>
             `;
         }
+        window.clienteConfirmacoes.endHtml = endHtml;
 
         let cliHtml = '<div style="color: var(--text-dim); font-style: italic;">Dados de faturamento não cadastrados.</div>';
         if (clienteFaturamento) {
@@ -15623,6 +15624,7 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                 </div>
             `;
         }
+        window.clienteConfirmacoes.cliHtml = cliHtml;
 
         confirmContainer.innerHTML = `
             <div style="background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -15721,9 +15723,20 @@ window.finalizarConfirmacaoCliente = async function() {
     } catch(e) {}
 
     if (precisaAtencao) {
-        mostrarResultadoCliente('⚠️', 'Artes Aprovadas!', 'Seu pedido seguirá em frente e nosso Atendimento já foi notificado com os seus dados atualizados.');
+        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 
+            'Sua aprovação foi concluída e os dados confirmados.<br><br><b style="color: #f97316;">Como você não aprovou o local de entrega e/ou dados para Nota Fiscal, AGUARDE CONTATO DO SEU ATENDENTE PARA CORREÇÃO.</b>');
     } else {
-        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Sua aprovação foi concluída e os dados confirmados. O pedido seguirá para produção.');
+        const sucessoHTML = `
+            Sua aprovação foi concluída e os dados confirmados.<br><br>
+            <div style="text-align: left; background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: var(--text);">📦 Endereço Aprovado:</h4>
+                ${window.clienteConfirmacoes.endHtml}
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+                <h4 style="margin: 0 0 10px 0; color: var(--text);">🧾 Nota Fiscal Aprovada:</h4>
+                ${window.clienteConfirmacoes.cliHtml}
+            </div>
+        `;
+        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', sucessoHTML);
     }
 };
 
@@ -15743,7 +15756,7 @@ function mostrarResultadoCliente(icon, titulo, msg) {
     if (resultadoEl) resultadoEl.style.display = 'block';
     if (iconEl) iconEl.textContent = icon;
     if (tituloEl) tituloEl.textContent = titulo;
-    if (msgEl) msgEl.textContent = msg;
+    if (msgEl) msgEl.innerHTML = msg;
 }
 
 function openClienteLightbox(elementId) {
