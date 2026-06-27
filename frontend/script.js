@@ -15580,7 +15580,7 @@ async function mostrarConfirmacaoDadosCliente(osId) {
         let enderecoEntrega = null;
 
         if (idClienteBase) {
-            const { data: cliData } = await supabaseClient.from('clientes').select('*').eq('id', idClienteBase).limit(1);
+            const { data: cliData } = await supabaseClient.from('clientes').select('*').eq('id_cliente', idClienteBase).limit(1);
             if (cliData && cliData.length > 0) clienteFaturamento = cliData[0];
         }
         if (idEndereco) {
