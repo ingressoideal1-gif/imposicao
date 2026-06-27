@@ -15472,8 +15472,25 @@ function checarConclusaoConfirmacoes() {
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
         btn.innerHTML = '✅ Finalizar Aprovação do Pedido';
+    } else {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+        btn.innerHTML = 'Verifique os dados acima para Finalizar';
     }
 }
+
+window.desfazerConfirmacao = function(tipo) {
+    window.clienteConfirmacoes[`${tipo}Ok`] = null;
+    window.clienteConfirmacoes[`${tipo}Correcao`] = '';
+    
+    document.getElementById(`acoes-${tipo}`).style.display = 'flex';
+    document.getElementById(`correcao-${tipo}`).style.display = 'none';
+    document.getElementById(`status-${tipo}`).innerHTML = '';
+    document.getElementById(`input-correcao-${tipo}`).value = '';
+    
+    checarConclusaoConfirmacoes();
+};
 
 window.acaoConfirmacaoItem = function(tipo, ok) {
     window.clienteConfirmacoes[`${tipo}Ok`] = ok;
@@ -15485,11 +15502,21 @@ window.acaoConfirmacaoItem = function(tipo, ok) {
     if (ok) {
         botoesAcao.style.display = 'none';
         boxCorrecao.style.display = 'none';
-        badgeStatus.innerHTML = '<span style="color: #22c55e; font-weight: bold;">✅ Confirmado</span>';
+        badgeStatus.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; background: rgba(34, 197, 94, 0.1); padding: 10px; border-radius: 6px; border: 1px solid #22c55e;">
+                <span style="color: #22c55e; font-weight: bold;">✅ Confirmado</span>
+                <button class="btn btn-sm" onclick="desfazerConfirmacao('${tipo}')" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 5px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Desfazer</button>
+            </div>
+        `;
     } else {
         botoesAcao.style.display = 'none';
         boxCorrecao.style.display = 'block';
-        badgeStatus.innerHTML = '<span style="color: #f97316; font-weight: bold;">⚠️ Incorreto - Por favor informe os dados corretos abaixo:</span>';
+        badgeStatus.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <span style="color: #f97316; font-weight: bold;">⚠️ Incorreto - Por favor informe abaixo:</span>
+                <button class="btn btn-sm" onclick="desfazerConfirmacao('${tipo}')" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 5px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Voltar</button>
+            </div>
+        `;
     }
     checarConclusaoConfirmacoes();
 };
@@ -15506,7 +15533,15 @@ window.salvarCorrecaoTexto = function(tipo) {
     document.getElementById(`correcao-${tipo}`).style.display = 'none';
     
     const badgeStatus = document.getElementById(`status-${tipo}`);
-    badgeStatus.innerHTML = `<span style="color: #f97316; font-weight: bold;">✅ Correção Registrada</span><br><small style="color: var(--text-dim); margin-top: 5px; display: inline-block;">${texto.substring(0, 100)}${texto.length > 100 ? '...' : ''}</small>`;
+    badgeStatus.innerHTML = `
+        <div style="background: rgba(249, 115, 22, 0.1); padding: 10px; border-radius: 6px; border: 1px solid #f97316;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="color: #f97316; font-weight: bold;">✅ Correção Registrada</span>
+                <button class="btn btn-sm" onclick="desfazerConfirmacao('${tipo}')" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 5px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Editar</button>
+            </div>
+            <small style="color: var(--text-dim); margin-top: 5px; display: inline-block; word-break: break-word;">${texto.substring(0, 150)}${texto.length > 150 ? '...' : ''}</small>
+        </div>
+    `;
     
     checarConclusaoConfirmacoes();
 };
@@ -15613,7 +15648,7 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                         </div>
 
                         <div id="correcao-endereco" style="display: none; margin-top: 10px;">
-                            <textarea id="input-correcao-endereco" class="form-control" rows="3" placeholder="Digite o endereço de entrega correto aqui..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 10px; border-radius: 4px;"></textarea>
+                            <textarea id="input-correcao-endereco" class="form-control" rows="3" placeholder="Digite o CEP e Número do local de entrega correto aqui..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 10px; border-radius: 4px;"></textarea>
                             <button class="btn" onclick="salvarCorrecaoTexto('endereco')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 40px;">💾 Salvar Correção</button>
                         </div>
                     </div>
@@ -15633,7 +15668,7 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                         </div>
 
                         <div id="correcao-nf" style="display: none; margin-top: 10px;">
-                            <textarea id="input-correcao-nf" class="form-control" rows="3" placeholder="Digite os dados corretos da nota fiscal (CNPJ/CPF, Razão Social, IE, etc)..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 10px; border-radius: 4px;"></textarea>
+                            <textarea id="input-correcao-nf" class="form-control" rows="3" placeholder="Digite o CPF ou CNPJ correto aqui..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 10px; border-radius: 4px;"></textarea>
                             <button class="btn" onclick="salvarCorrecaoTexto('nf')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 40px;">💾 Salvar Correção</button>
                         </div>
                     </div>
