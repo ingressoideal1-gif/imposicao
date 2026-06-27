@@ -10995,6 +10995,58 @@ async function sincronizarStatusOrdensDinamico() {
             }
         }
     }
+
+    // AUTO-SYNC v145: buscar do banco os pedidos onde todos os modelos sao PRONTO mas status nao e Enviar Arte
+    // Faz uma unica query em pedidos_modelos para todas as OS da lista de arte
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const osParaVerificar = state.ordens.filter(os => {
+                const s = (os.status || '').trim();
+                return s !== 'Enviar Arte' && s !== 'Enviar ARTE' && s !== 'FINALIZADA' && s !== 'CANCELADA' && s !== 'EM IMPRESSAO';
+            });
+            if (osParaVerificar.length > 0) {
+                const numerosParaVerificar = osParaVerificar.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
+                if (numerosParaVerificar.length > 0) {
+                    const { data: modelos } = await supabaseClient
+                        .from('pedidos_modelos')
+                        .select('id_int, status_arte')
+                        .in('id_int', numerosParaVerificar);
+                    if (modelos && modelos.length > 0) {
+                        // Agrupar por id_int
+                        const modelosPorPedido = {};
+                        modelos.forEach(function(m) {
+                            if (!modelosPorPedido[m.id_int]) modelosPorPedido[m.id_int] = [];
+                            modelosPorPedido[m.id_int].push(m.status_arte || '');
+                        });
+                        // Verificar cada OS
+                        for (const os of osParaVerificar) {
+                            const num = parseInt(os.numero);
+                            const statusItens = modelosPorPedido[num] || [];
+                            if (statusItens.length === 0) continue;
+                            // Status do banco que significam PRONTO para o designer
+                            const prontos = ['PRONTO', 'AGUARDANDO_CLIENTE'];
+                            const todosProntos = statusItens.every(function(s) { return prontos.indexOf((s || '').toUpperCase()) !== -1; });
+                            if (!todosProntos) continue;
+                            // Corrigir para Enviar Arte
+                            console.log('[AUTO-SYNC-DB] Pedido #' + os.numero + ': todos modelos PRONTO no banco -> Enviar Arte');
+                            os.status = 'Enviar Arte';
+                            const ov = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+                            ov[os.id] = 'Enviar Arte';
+                            localStorage.setItem('vibe_status_overrides', JSON.stringify(ov));
+                            // Atualizar banco em background
+                            if (os.id.startsWith('vibe_')) {
+                                supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'Enviar Arte' }).eq('os_id', os.id).then(function(){});
+                            } else {
+                                supabaseClient.from('producao_ordens_servico').update({ status: 'Enviar Arte' }).eq('id', os.id).then(function(){});
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (syncErr) {
+        console.warn('[AUTO-SYNC-DB] Erro na verificacao de status:', syncErr);
+    }
 }
 
 /**
