@@ -11276,7 +11276,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte, amostra_status')
+                .select('id, id_int, status_arte')
                 .in('id_int', chunk);
                 
             if (error) throw error;
