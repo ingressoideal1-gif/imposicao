@@ -1,4 +1,4 @@
-﻿// - VDP Engine -- Frontend Script -
+// - VDP Engine -- Frontend Script -
 
 'use strict';
 
@@ -15399,8 +15399,8 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                 });
             } catch (e) { console.error('Erro log chat:', e); }
 
-            // Mostrar tela de sucesso
-            mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+            // Mostrar tela de confirmacao de dados de entrega/nf
+            mostrarConfirmacaoDadosCliente(osId);
         } 
         else if (fluxoTipo === 'SOLICITAR_ALTERACAO') {
             // Salvar status global da OS no Supabase para REPROVADO (Laranja, rótulo "Arte em Andamento")
@@ -15459,6 +15459,161 @@ async function clienteFinalizarFluxo(fluxoTipo) {
 
 async function clienteAprovarTudo() {
     return clienteFinalizarFluxo('APROVAR_TUDO');
+}
+
+async function mostrarConfirmacaoDadosCliente(osId) {
+    const contentEl = document.getElementById('cliente-content');
+    
+    // Esconder itens e acoes
+    const container = document.getElementById('cliente-amostras-itens-container');
+    const actions = document.querySelector('.cliente-actions');
+    if (container) container.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+
+    // Se não tivermos o supabase, só mostrar sucesso
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+        return;
+    }
+
+    const numPed = parseInt(clienteState.numero);
+
+    // Criar container de confirmação
+    let confirmContainer = document.getElementById('cliente-confirmacao-container');
+    if (!confirmContainer) {
+        confirmContainer = document.createElement('div');
+        confirmContainer.id = 'cliente-confirmacao-container';
+        confirmContainer.style.marginTop = '20px';
+        contentEl.appendChild(confirmContainer);
+    }
+    confirmContainer.style.display = 'block';
+    confirmContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-dim);">⏳ Buscando dados do pedido...</div>';
+
+    try {
+        // 1. Buscar proposta
+        const { data: propData, error: propErr } = await supabaseClient
+            .from('propostas')
+            .select('id_faturado, id_cliente, id_endereco_ent')
+            .eq('id_int', numPed)
+            .limit(1);
+            
+        if (propErr || !propData || propData.length === 0) throw new Error('Proposta não encontrada');
+        const proposta = propData[0];
+
+        const idClienteBase = proposta.id_faturado || proposta.id_cliente;
+        const idEndereco = proposta.id_endereco_ent;
+
+        let clienteFaturamento = null;
+        let enderecoEntrega = null;
+
+        // 2. Buscar cliente faturamento
+        if (idClienteBase) {
+            const { data: cliData } = await supabaseClient.from('clientes').select('*').eq('id', idClienteBase).limit(1);
+            if (cliData && cliData.length > 0) clienteFaturamento = cliData[0];
+        }
+
+        // 3. Buscar endereço
+        if (idEndereco) {
+            const { data: endData } = await supabaseClient.from('enderecos').select('*').eq('id', idEndereco).limit(1);
+            if (endData && endData.length > 0) enderecoEntrega = endData[0];
+        }
+
+        // Montar UI
+        let endHtml = '<div style="color: var(--text-dim); font-style: italic;">Endereço não cadastrado no pedido.</div>';
+        if (enderecoEntrega) {
+            endHtml = `
+                <div style="font-size: 0.95rem; line-height: 1.5; color: var(--text);">
+                    <b>Logradouro:</b> ${enderecoEntrega.logradouro || ''}, ${enderecoEntrega.numero || 'S/N'}<br>
+                    ${enderecoEntrega.complemento ? `<b>Complemento:</b> ${enderecoEntrega.complemento}<br>` : ''}
+                    <b>Bairro:</b> ${enderecoEntrega.bairro || ''}<br>
+                    <b>Cidade/UF:</b> ${enderecoEntrega.cidade || ''} - ${enderecoEntrega.uf || ''}<br>
+                    <b>CEP:</b> ${enderecoEntrega.cep || ''}
+                </div>
+            `;
+        }
+
+        let cliHtml = '<div style="color: var(--text-dim); font-style: italic;">Dados de faturamento não cadastrados.</div>';
+        if (clienteFaturamento) {
+            const nomeRazao = clienteFaturamento.razao_social || clienteFaturamento.nome || '';
+            cliHtml = `
+                <div style="font-size: 0.95rem; line-height: 1.5; color: var(--text);">
+                    <b>Nome/Razão Social:</b> ${nomeRazao}<br>
+                    <b>CPF/CNPJ:</b> ${clienteFaturamento.cnpj_cpf || ''}<br>
+                    ${clienteFaturamento.ie ? `<b>I.E.:</b> ${clienteFaturamento.ie}<br>` : ''}
+                    <b>E-mail:</b> ${clienteFaturamento.email || ''}<br>
+                    <b>Telefone:</b> ${clienteFaturamento.telefone || ''}
+                </div>
+            `;
+        }
+
+        confirmContainer.innerHTML = `
+            <div style="background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <div style="font-size: 3rem; margin-bottom: 10px;">🎉</div>
+                    <h2 style="color: var(--green); margin: 0; font-size: 1.5rem;">Artes do Pedido APROVADAS</h2>
+                    <p style="color: var(--text-dim); margin-top: 5px;">Por favor, confira seus dados de entrega e faturamento antes de finalizar.</p>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px;">
+                    <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px;">
+                        <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem; color: var(--text); border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">📦 Endereço de Entrega</h3>
+                        ${endHtml}
+                    </div>
+                    
+                    <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px;">
+                        <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem; color: var(--text); border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">🧾 Dados para Nota Fiscal</h3>
+                        ${cliHtml}
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                    <button class="btn btn-lg" onclick="finalizarConfirmacaoCliente('CONFIRMADO')" style="background-color: #22c55e; border-color: #22c55e; color: #fff; font-weight: bold; flex: 1; min-width: 250px;">
+                        ✅ Confirmar Dados e Finalizar
+                    </button>
+                    <button class="btn btn-lg" onclick="finalizarConfirmacaoCliente('INCORRETOS')" style="background-color: #f97316; border-color: #f97316; color: #fff; font-weight: bold; flex: 1; min-width: 250px;">
+                        ⚠️ Dados Incorretos
+                    </button>
+                </div>
+            </div>
+        `;
+
+    } catch (err) {
+        console.error('Erro ao buscar dados do cliente/endereco:', err);
+        // Fallback para a tela de sucesso padrão
+        confirmContainer.style.display = 'none';
+        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
+    }
+}
+
+async function finalizarConfirmacaoCliente(acao) {
+    const confirmContainer = document.getElementById('cliente-confirmacao-container');
+    if (confirmContainer) confirmContainer.style.display = 'none';
+
+    if (acao === 'CONFIRMADO') {
+        try {
+            await supabaseClient.from('propostas_chat').insert({
+                id_int: parseInt(clienteState.numero),
+                tipo: 'PRODUCAO',
+                setor: 'Cliente',
+                visivel_externo: true,
+                mensagem: \`✅ O CLIENTE CONFIRMOU os dados de entrega e faturamento.\`,
+                remetente_nome: 'Cliente (aprovação online)'
+            });
+        } catch(e) {}
+        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Sua aprovação foi concluída e os dados confirmados. O pedido seguirá para produção.');
+    } else {
+        try {
+            await supabaseClient.from('propostas_chat').insert({
+                id_int: parseInt(clienteState.numero),
+                tipo: 'PRODUCAO',
+                setor: 'Cliente',
+                visivel_externo: true,
+                mensagem: \`⚠️ O CLIENTE REPORTOU QUE OS DADOS (ENTREGA/NF) ESTÃO INCORRETOS. O pedido está aprovado, mas aguarda correção de dados pelo atendimento.\`,
+                remetente_nome: 'Cliente (aprovação online)'
+            });
+        } catch(e) {}
+        mostrarResultadoCliente('⚠️', 'Atenção Necessária!', 'O pedido está com as ARTES APROVADAS, porém como seus dados estão incorretos, pedimos que entre em contato com seu Atendimento IMEDIATAMENTE para atualização.');
+    }
 }
 
 function mostrarResultadoCliente(icon, titulo, msg) {
