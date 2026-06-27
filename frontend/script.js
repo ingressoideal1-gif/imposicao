@@ -11001,8 +11001,12 @@ async function sincronizarStatusOrdensDinamico() {
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const osParaVerificar = state.ordens.filter(os => {
-                const s = (os.status || '').trim();
-                return s !== 'Enviar Arte' && s !== 'Enviar ARTE' && s !== 'FINALIZADA' && s !== 'CANCELADA' && s !== 'EM IMPRESSAO';
+                const s = (os.status || '').trim().toUpperCase();
+                const ignorar = [
+                    'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
+                    'APROVADO', 'APROVADA_CLIENTE', 'REPROVADO', 'REPROVADA_CLIENTE', 'AGUARDANDO_APROVACAO'
+                ];
+                return !ignorar.includes(s);
             });
             if (osParaVerificar.length > 0) {
                 const numerosParaVerificar = osParaVerificar.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
@@ -12194,9 +12198,13 @@ function renderOrdens() {
             filteredArte.forEach(function(autoOs) {
                 var autoItens = state.osItens[autoOs.id] || [];
                 if (autoItens.length === 0) return;
-                var autoStatus = (autoOs.status || '').trim();
-                // Verificar para TODOS os status: se todos modelos PRONTO e status ja nao e Enviar Arte, corrigir
-                if (autoStatus === 'Enviar Arte' || autoStatus === 'Enviar ARTE') return; // ja correto
+                var autoStatus = (autoOs.status || '').trim().toUpperCase();
+                // Não sobrescrever se o status já for Enviar Arte, ou se for um status avançado/ação do cliente
+                const ignorar = [
+                    'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
+                    'APROVADO', 'APROVADA_CLIENTE', 'REPROVADO', 'REPROVADA_CLIENTE', 'AGUARDANDO_APROVACAO'
+                ];
+                if (ignorar.includes(autoStatus)) return;
                 var autoTodos = autoItens.every(function(i) { return (i.amostra_status || '').toUpperCase() === 'PRONTO'; });
                 if (!autoTodos) return;
                 autoOs.status = 'Enviar Arte';
