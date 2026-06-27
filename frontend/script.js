@@ -11299,7 +11299,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
                 grouped[key] = {
                     id: osId,
                     numero: key,
-                    status: savedStatus || 'ARTE_EM_ANDAMENTO',
+                    status: savedStatus || 'Em Arte',
                     status_arte: pedidoReal?.status_arte || null,
                     cliente: cliente,
                     vendedor: vendedor,
@@ -11601,17 +11601,21 @@ function getStatusBadge(status) {
         'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber', label: 'Produção' },
         'FINALIZADA': { icon: '✅', cls: 'badge-teal', label: 'Finalizada' },
         'CANCELADA': { icon: '❌', cls: 'badge-red', label: 'Cancelada' },
-        
-        // Novos status do fluxo de arte
-        'ARTE_EM_ANDAMENTO': { icon: '🎨', cls: 'badge-blue', label: 'Arte em Andamento' },
-        'REPROVADO': { icon: '', cls: 'badge-amber', label: 'REPROVADA' },
-        'ARTE_EM_CORRECAO': { icon: '', cls: 'badge-amber', label: 'REPROVADA' },
-        'APROVADO': { icon: '', cls: 'badge-green', label: 'Aprovada' },
-        'ARTE_APROVADA': { icon: '', cls: 'badge-green', label: 'Aprovada' },
-        'Arte APROVADA': { icon: '', cls: 'badge-green', label: 'Aprovada' },
-        'EM IMPRESSÃO': { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' },
-        'Enviar ARTE': { icon: '📤', cls: 'badge-amber', label: 'Enviar ARTE' },
-        'Pendente Informação': { icon: '⚠️', cls: 'badge-red', label: 'Pendente Informação' }
+
+        // Status oficiais do fluxo de arte (definidos pelo usuário)
+        'Em Arte':             { icon: '🎨', cls: 'badge-blue',   label: 'Em Arte' },
+        'Enviar Arte':         { icon: '📤', cls: 'badge-amber',  label: 'Enviar Arte' },
+        'Pendente Informação': { icon: '⚠️', cls: 'badge-red',    label: 'Pendente Informação' },
+        'APROVADO':            { icon: '✅', cls: 'badge-teal',   label: 'Aprovado' },
+        'REPROVADO':           { icon: '❌', cls: 'badge-red',    label: 'Reprovado' },
+
+        // Legados (mantidos para compatibilidade com dados antigos)
+        'ARTE_EM_ANDAMENTO':   { icon: '🎨', cls: 'badge-blue',   label: 'Em Arte' },
+        'Enviar ARTE':         { icon: '📤', cls: 'badge-amber',  label: 'Enviar Arte' },
+        'ARTE_EM_CORRECAO':    { icon: '🎨', cls: 'badge-blue',   label: 'Em Arte' },
+        'ARTE_APROVADA':       { icon: '✅', cls: 'badge-teal',   label: 'Aprovado' },
+        'Arte APROVADA':       { icon: '✅', cls: 'badge-teal',   label: 'Aprovado' },
+        'EM IMPRESSÃO':        { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' }
     };
     const s = map[status] || { icon: '❓', cls: '', label: status };
     const label = s.label || status;
@@ -12216,7 +12220,8 @@ function renderOrdens() {
                             ${(() => {
                                 // Se o status é "Enviar ARTE" ou já há link gerado no state, mostrar URL diretamente
                                 const linkSalvo = state.linksCliente && state.linksCliente[os.id];
-                                const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'ARTE_APROVADA' || os.status === 'REPROVADO';
+                                // FIX-4: 'ARTE_APROVADA' é aprovação interna (não do cliente); 'REPROVADO' não deve destacar em azul igual a "pronto"
+                                const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'AGUARDANDO_APROVACAO';
                                 if (linkSalvo) {
                                     return `
                                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -13262,8 +13267,11 @@ function atualizarBarraFinalCliente(osId) {
 }
 
 /**
- * Atualiza o status global do pedido para "Enviar ARTE" ou "Pendente Informação"
- * dependendo de todos os modelos estarem marcados como PRONTO em Amostras
+ * Atualiza o status global do pedido ao clicar em "Voltar para Atendimento".
+ * - Se TODOS os modelos estiverem PRONTO → 'Enviar Arte' (mas normalmente isso
+ *   já foi feito automaticamente por decisionAmostraItem)
+ * - Se parcial ou nenhum → 'Pendente Informação'
+ * Não gera link automaticamente — link é gerado manualmente pelo botão na lista.
  */
 async function voltarParaAtendimento() {
     const osId = state.amostrasOSAtivo;
@@ -13280,23 +13288,20 @@ async function voltarParaAtendimento() {
 
     // Verificar se todos os itens possuem amostra_status === 'PRONTO'
     const todasProntas = itens.every(item => item.amostra_status === 'PRONTO');
-
-    const novoStatus = todasProntas ? 'Enviar ARTE' : 'Pendente Informação';
+    const novoStatus = todasProntas ? 'Enviar Arte' : 'Pendente Informação';
 
     try {
-        // Atualizar status global da OS
-        // 1. Atualizar no localstorage vibe_status_overrides
+        const os = state.ordens.find(o => o.id === osId);
+
+        // 1. Atualizar localStorage
         const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
         overrides[osId] = novoStatus;
         localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
 
-        // 2. Atualizar no estado local em memória
-        const os = state.ordens.find(o => o.id === osId);
-        if (os) {
-            os.status = novoStatus;
-        }
+        // 2. Atualizar estado em memória
+        if (os) os.status = novoStatus;
 
-        // 3. Atualizar no banco Supabase para TODAS as OSs (garante que cliente leia o status atualizado)
+        // 3. Atualizar no banco Supabase
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             if (osId.startsWith('vibe_')) {
                 const { error } = await supabaseClient
@@ -13312,11 +13317,10 @@ async function voltarParaAtendimento() {
                 if (error) console.warn('Erro ao atualizar status no Supabase:', error);
             }
 
-            // 4. Sincronizar status_arte em pedidos_modelos para cada item do pedido
+            // 4. Sincronizar status_arte em pedidos_modelos por item
             try {
                 const osNumero = os ? parseInt(os.numero) : null;
                 if (osNumero && !isNaN(osNumero)) {
-                    // Mapear status do item individual baseado no amostra_status
                     const updatePromises = itens.map(item => {
                         const modeloId = item._pedidoModeloId || item.id;
                         if (!modeloId) return Promise.resolve();
@@ -13330,36 +13334,18 @@ async function voltarParaAtendimento() {
                             });
                     });
                     await Promise.all(updatePromises);
-                    console.log(`[voltarParaAtendimento] Sincronizou status_arte em pedidos_modelos para ${itens.length} itens`);
                 }
             } catch (syncErr) {
                 console.warn('[voltarParaAtendimento] Erro ao sincronizar pedidos_modelos:', syncErr);
             }
         }
 
-        // Se status = "Enviar ARTE", gerar link automaticamente e exibir
         if (todasProntas) {
-            const numero = os ? os.numero : '';
-            toast(`Pedido #${numero} concluído! Gerando link do cliente...`, 'success');
-            const linkUrl = await getOrCreateLinkCliente(osId, numero);
-            if (linkUrl) {
-                // Copiar para clipboard
-                try { await navigator.clipboard.writeText(linkUrl); } catch (_) {}
-                // Exibir toast com link clicável e botão de copiar
-                toast(
-                    `🔗 Link do cliente gerado e copiado!\n` +
-                    `Pedido #${numero} → ${linkUrl}`,
-                    'success'
-                );
-                // Guardar no state para exibir na lista
-                if (!state.linksCliente) state.linksCliente = {};
-                state.linksCliente[osId] = linkUrl;
-            }
+            toast(`Pedido #${os ? os.numero : ''} marcado como "Enviar Arte". Use o botão de link na lista para compartilhar com o cliente.`, 'success');
         } else {
-            toast(`Pedido #${os ? os.numero : ''} retornado com pendências para a Lista de Arte.`, 'warning');
+            toast(`Pedido #${os ? os.numero : ''} retornado com pendências — status: "Pendente Informação".`, 'warning');
         }
 
-        // Voltar para a view Lista de Arte e atualizar renderização
         clearAmostrasOS();
         showView('view-lista-arte');
     } catch (err) {
@@ -13372,7 +13358,9 @@ async function voltarParaAtendimento() {
 window.voltarParaAtendimento = voltarParaAtendimento;
 
 /**
- * Retorna o status global do pedido para "Arte em Andamento" em correção (REPROVADO)
+ * Retorna o pedido para o designer (status 'Em Arte').
+ * Usado quando o admin reprovador ou clica em "Voltar para Arte" após reprovação do cliente.
+ * NÃO é 'REPROVADO' — 'REPROVADO' é o status gravado pelo CLIENTE. 'Em Arte' é o status de trabalho do designer.
  */
 async function voltarParaArte() {
     const osId = state.amostrasOSAtivo;
@@ -13381,20 +13369,18 @@ async function voltarParaArte() {
         return;
     }
 
-    const novoStatus = 'REPROVADO';
+    const novoStatus = 'Em Arte';
 
     try {
-        // Atualizar status global da OS
-        // 1. Atualizar no localstorage vibe_status_overrides
+        const os = state.ordens.find(o => o.id === osId);
+
+        // 1. Atualizar localStorage
         const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
         overrides[osId] = novoStatus;
         localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
 
-        // 2. Atualizar no estado local em memória
-        const os = state.ordens.find(o => o.id === osId);
-        if (os) {
-            os.status = novoStatus;
-        }
+        // 2. Atualizar estado em memória
+        if (os) os.status = novoStatus;
 
         // 3. Atualizar no banco Supabase
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
@@ -13413,9 +13399,7 @@ async function voltarParaArte() {
             }
         }
 
-        toast(`Pedido #${os ? os.numero : ''} retornado para Arte em Andamento (Correção)!`, 'info');
-
-        // Voltar para a view Lista de Arte e atualizar renderização
+        toast(`Pedido #${os ? os.numero : ''} retornado para "Em Arte" — o designer pode corrigir.`, 'info');
         clearAmostrasOS();
         showView('view-lista-arte');
     } catch (err) {
@@ -14297,6 +14281,44 @@ async function decisionAmostraItem(itemId, osId, status) {
         }
         toast(msg, toastType);
         renderAmostrasOSItens(osId);
+
+        // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
+        // verificar se TODOS os modelos da OS estão PRONTO. Se sim → mudar status para 'Enviar Arte'
+        // automaticamente, sem precisar clicar em "Voltar para Atendimento".
+        const isInternal = (state.amostrasContainerId !== 'cliente-amostras-itens-container');
+        if (status === 'PRONTO' && isInternal) {
+            const todosItens = state.osItens[osId] || [];
+            const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO');
+            if (todosProntos) {
+                const novoStatusOS = 'Enviar Arte';
+                const os = state.ordens.find(o => o.id === osId);
+                if (os && os.status !== novoStatusOS) {
+                    // Atualizar localStorage
+                    const ov = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+                    ov[osId] = novoStatusOS;
+                    localStorage.setItem('vibe_status_overrides', JSON.stringify(ov));
+                    // Atualizar memória
+                    os.status = novoStatusOS;
+                    // Atualizar banco
+                    try {
+                        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                            if (osId.startsWith('vibe_')) {
+                                await supabaseClient.from('pedidos_links_cliente')
+                                    .update({ status_arte: novoStatusOS })
+                                    .eq('os_id', osId);
+                            } else {
+                                await supabaseClient.from('producao_ordens_servico')
+                                    .update({ status: novoStatusOS })
+                                    .eq('id', osId);
+                            }
+                        }
+                    } catch (autoErr) {
+                        console.warn('[AUTO-STATUS] Erro ao atualizar status para Enviar Arte:', autoErr);
+                    }
+                    toast(`🎉 Todos os modelos prontos! Pedido #${os.numero} mudou para "Enviar Arte" automaticamente.`, 'success');
+                }
+            }
+        }
     } catch (err) {
         console.error('Erro na decisão do item:', err);
         toast('Erro ao registrar decisão: ' + err.message, 'error');
@@ -14885,15 +14907,25 @@ async function getOrCreateLinkCliente(osId, numero) {
 
         let token;
         const os = state.ordens.find(o => o.id === osId);
-        const currentStatus = os ? (os.status || 'Enviar ARTE') : 'Enviar ARTE';
+        const currentStatus = os ? (os.status || 'Enviar Arte') : 'Enviar Arte';
         
         if (existing) {
             token = existing.token;
-            // Sempre sincronizar o status atual para garantir que o link esteja atualizado
-            await supabaseClient
-                .from('pedidos_links_cliente')
-                .update({ status_arte: currentStatus })
-                .eq('id', existing.id);
+            // FIX-1: Só sincronizar o status se o link ainda estiver em estado inicial ("Enviar Arte").
+            // Nunca sobrescrever status gravados pelo cliente (APROVADO, REPROVADO) nem status
+            // definidos manualmente pelo atendente (Em Arte, Pendente Informação) — caso contrário,
+            // clicar em "Copiar Link" poderia resetar um status que o atendente acabou de definir.
+            const statusFinais = ['APROVADO', 'REPROVADO', 'APROVADA_CLIENTE', 'REPROVADA_CLIENTE', 'EM ARTE', 'PENDENTE'];
+            const statusAtualNoLink = (existing.status_arte || '').toUpperCase();
+            const deveAtualizar = !statusFinais.some(sf => statusAtualNoLink.includes(sf));
+            if (deveAtualizar) {
+                await supabaseClient
+                    .from('pedidos_links_cliente')
+                    .update({ status_arte: currentStatus })
+                    .eq('id', existing.id);
+            } else {
+                console.log('[Link] Status final protegido — não sobrescrever:', existing.status_arte);
+            }
         } else {
             token = generateClientToken(6);
             const { error: insertError } = await supabaseClient
@@ -15151,29 +15183,32 @@ async function initClientePage(numero, token) {
         console.log('[ClienteView] osStatus inicial (linkData.status_arte):', osStatus, '| isVibeOS:', isVibeOS);
 
         if (!isVibeOS) {
-            // Para OS locais, tentar producao_ordens_servico para pegar status em tempo real
-            try {
-                const { data: osData } = await supabaseClient
-                    .from('producao_ordens_servico')
-                    .select('status')
-                    .eq('id', osId)
-                    .maybeSingle();
-                if (osData && osData.status && osData.status.trim() !== '') {
-                    osStatus = osData.status.trim();
-                    console.log('[ClienteView] osStatus via producao_ordens_servico:', osStatus);
-                } else {
-                    console.log('[ClienteView] producao_ordens_servico sem resultado, mantendo linkData.status_arte');
-                }
-            } catch (e) {
-                console.warn('Erro ao buscar status global da OS:', e);
-            }
-        }
+            // FIX-2: Para OS locais, producao_ordens_servico SÓ complementa se o status
+            // do link ainda estiver em estado inicial (não-final). Isso evita sobrescrever
+            // o que o cliente gravou (APROVADO/REPROVADO) com o status interno da OS.
+            const statusFinaisLink = ['APROVADO', 'REPROVADO', 'APROVADA_CLIENTE', 'REPROVADA_CLIENTE'];
+            const osStatusUpper = osStatus.toUpperCase();
+            const linkEstaEmEstadoFinal = statusFinaisLink.some(sf => osStatusUpper.includes(sf));
 
-        // Normalizar TODAS as variantes de "Enviar Arte" para garantir abertura das janelas
-        const statusUpper = osStatus.toUpperCase();
-        if (statusUpper.includes('ENVIAR') || statusUpper.includes('AGUARDANDO') || statusUpper === 'ENVIAR_ARTE') {
-            osStatus = 'AGUARDANDO_APROVACAO';
-            console.log('[ClienteView] osStatus normalizado para AGUARDANDO_APROVACAO');
+            if (!linkEstaEmEstadoFinal) {
+                try {
+                    const { data: osData } = await supabaseClient
+                        .from('producao_ordens_servico')
+                        .select('status')
+                        .eq('id', osId)
+                        .maybeSingle();
+                    if (osData && osData.status && osData.status.trim() !== '') {
+                        osStatus = osData.status.trim();
+                        console.log('[ClienteView] osStatus via producao_ordens_servico:', osStatus);
+                    } else {
+                        console.log('[ClienteView] producao_ordens_servico sem resultado, mantendo linkData.status_arte');
+                    }
+                } catch (e) {
+                    console.warn('Erro ao buscar status global da OS:', e);
+                }
+            } else {
+                console.log('[ClienteView] Status final no link protegido — ignorando producao_ordens_servico:', osStatus);
+            }
         }
 
         // Configurar o container de renderização das amostras para o cliente
@@ -15182,13 +15217,17 @@ async function initClientePage(numero, token) {
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
 
-        // Lógica de exibição baseada no status
-        // Se aprovado ou reprovado: mostrar mensagem específica
-        // Para QUALQUER outro status (incluindo "Enviar Arte", null, desconhecido): mostrar janelas de aprovação
-        // Razão: se o admin gerou e compartilhou o link, o cliente deve ver as janelas
-        const statusUP = osStatus.toUpperCase();
-        const isAprovado = statusUP.includes('APROVAD') && !statusUP.includes('REPROVAD');
-        const isReprovado = statusUP.includes('REPROVAD');
+        // REGRA DE ACESSO DO CLIENTE:
+        // Somente 'Enviar Arte' (e legado 'Enviar ARTE') abre as janelas de aprovação.
+        // 'APROVADO' → tela de sucesso.
+        // 'REPROVADO' → tela de reprovação (aguardando correção).
+        // QUALQUER outro status ('Em Arte', 'Pendente Informação', null, etc.) → mensagem de aguarde.
+        const statusUP = osStatus.trim().toUpperCase();
+        const isAprovado  = (statusUP === 'APROVADO' || statusUP === 'APROVADA_CLIENTE');
+        const isReprovado = (statusUP === 'REPROVADO' || statusUP === 'REPROVADA_CLIENTE');
+        const isEnviarArte = (osStatus.trim() === 'Enviar Arte' || osStatus.trim() === 'Enviar ARTE');
+
+        console.log('[ClienteView] Status final para decisão de exibição:', osStatus, '| isEnviarArte:', isEnviarArte, '| isAprovado:', isAprovado, '| isReprovado:', isReprovado);
 
         if (isAprovado) {
             mostrarResultadoCliente(
@@ -15202,10 +15241,17 @@ async function initClientePage(numero, token) {
                 'Artes Reprovadas',
                 'Recebemos sua solicitação de alteração e nossa equipe está realizando as correções. Em breve você receberá um novo link para aprovação.'
             );
-        } else {
-            // Qualquer outro status (Enviar Arte, AGUARDANDO, EM_ANDAMENTO, null, etc.)
-            // → mostrar as janelas de aprovação (o admin compartilhou o link, então o cliente deve ver)
+        } else if (isEnviarArte) {
+            // Único status onde o cliente vê as artes e pode aprovar/reprovar
             renderAmostrasOSItens(osId);
+        } else {
+            // Em Arte, Pendente Informação, ou qualquer outro status intermediário
+            // → cliente não deve ver as artes ainda
+            mostrarResultadoCliente(
+                '🕐',
+                'Artes em Preparação',
+                'Sua arte ainda está sendo preparada pela nossa equipe. Assim que estiver pronta para aprovação, você receberá um novo link. Qualquer dúvida, entre em contato com seu ATENDIMENTO.'
+            );
         }
 
 
