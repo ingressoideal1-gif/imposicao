@@ -15461,16 +15461,65 @@ async function clienteAprovarTudo() {
     return clienteFinalizarFluxo('APROVAR_TUDO');
 }
 
+window.clienteConfirmacoes = { enderecoOk: null, nfOk: null, enderecoCorrecao: '', nfCorrecao: '' };
+
+function checarConclusaoConfirmacoes() {
+    const btn = document.getElementById('btn-finalizar-confirmacoes');
+    if (!btn) return;
+    
+    if (window.clienteConfirmacoes.enderecoOk !== null && window.clienteConfirmacoes.nfOk !== null) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.innerHTML = '✅ Finalizar Aprovação do Pedido';
+    }
+}
+
+window.acaoConfirmacaoItem = function(tipo, ok) {
+    window.clienteConfirmacoes[`${tipo}Ok`] = ok;
+    
+    const botoesAcao = document.getElementById(`acoes-${tipo}`);
+    const boxCorrecao = document.getElementById(`correcao-${tipo}`);
+    const badgeStatus = document.getElementById(`status-${tipo}`);
+    
+    if (ok) {
+        botoesAcao.style.display = 'none';
+        boxCorrecao.style.display = 'none';
+        badgeStatus.innerHTML = '<span style="color: #22c55e; font-weight: bold;">✅ Confirmado</span>';
+    } else {
+        botoesAcao.style.display = 'none';
+        boxCorrecao.style.display = 'block';
+        badgeStatus.innerHTML = '<span style="color: #f97316; font-weight: bold;">⚠️ Incorreto - Por favor informe os dados corretos abaixo:</span>';
+    }
+    checarConclusaoConfirmacoes();
+};
+
+window.salvarCorrecaoTexto = function(tipo) {
+    const textarea = document.getElementById(`input-correcao-${tipo}`);
+    const texto = textarea.value.trim();
+    if (!texto) {
+        toast('Por favor, informe os dados corretos antes de salvar.', 'warning');
+        return;
+    }
+    
+    window.clienteConfirmacoes[`${tipo}Correcao`] = texto;
+    document.getElementById(`correcao-${tipo}`).style.display = 'none';
+    
+    const badgeStatus = document.getElementById(`status-${tipo}`);
+    badgeStatus.innerHTML = `<span style="color: #f97316; font-weight: bold;">✅ Correção Registrada</span><br><small style="color: var(--text-dim); margin-top: 5px; display: inline-block;">${texto.substring(0, 100)}${texto.length > 100 ? '...' : ''}</small>`;
+    
+    checarConclusaoConfirmacoes();
+};
+
 async function mostrarConfirmacaoDadosCliente(osId) {
+    window.clienteConfirmacoes = { enderecoOk: null, nfOk: null, enderecoCorrecao: '', nfCorrecao: '' };
     const contentEl = document.getElementById('cliente-content');
     
-    // Esconder itens e acoes
     const container = document.getElementById('cliente-amostras-itens-container');
     const actions = document.querySelector('.cliente-actions');
     if (container) container.style.display = 'none';
     if (actions) actions.style.display = 'none';
 
-    // Se não tivermos o supabase, só mostrar sucesso
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
         mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
         return;
@@ -15478,7 +15527,6 @@ async function mostrarConfirmacaoDadosCliente(osId) {
 
     const numPed = parseInt(clienteState.numero);
 
-    // Criar container de confirmação
     let confirmContainer = document.getElementById('cliente-confirmacao-container');
     if (!confirmContainer) {
         confirmContainer = document.createElement('div');
@@ -15490,7 +15538,6 @@ async function mostrarConfirmacaoDadosCliente(osId) {
     confirmContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-dim);">⏳ Buscando dados do pedido...</div>';
 
     try {
-        // 1. Buscar proposta
         const { data: propData, error: propErr } = await supabaseClient
             .from('propostas')
             .select('id_faturado, id_cliente, id_endereco_ent')
@@ -15506,19 +15553,15 @@ async function mostrarConfirmacaoDadosCliente(osId) {
         let clienteFaturamento = null;
         let enderecoEntrega = null;
 
-        // 2. Buscar cliente faturamento
         if (idClienteBase) {
             const { data: cliData } = await supabaseClient.from('clientes').select('*').eq('id', idClienteBase).limit(1);
             if (cliData && cliData.length > 0) clienteFaturamento = cliData[0];
         }
-
-        // 3. Buscar endereço
         if (idEndereco) {
             const { data: endData } = await supabaseClient.from('enderecos').select('*').eq('id', idEndereco).limit(1);
             if (endData && endData.length > 0) enderecoEntrega = endData[0];
         }
 
-        // Montar UI
         let endHtml = '<div style="color: var(--text-dim); font-style: italic;">Endereço não cadastrado no pedido.</div>';
         if (enderecoEntrega) {
             endHtml = `
@@ -15554,24 +15597,51 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                     <p style="color: var(--text-dim); margin-top: 5px;">Por favor, confira seus dados de entrega e faturamento antes de finalizar.</p>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px;">
+                <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 25px;">
+                    <!-- CARD ENDEREÇO -->
                     <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px;">
-                        <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem; color: var(--text); border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">📦 Endereço de Entrega</h3>
-                        ${endHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
+                            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text);">📦 Endereço de Entrega</h3>
+                        </div>
+                        <div style="margin-bottom: 15px;">${endHtml}</div>
+                        
+                        <div id="status-endereco" style="margin-bottom: 10px;"></div>
+                        
+                        <div id="acoes-endereco" style="display: flex; gap: 10px;">
+                            <button class="btn" onclick="acaoConfirmacaoItem('endereco', true)" style="background-color: #22c55e; border-color: #22c55e; color: #fff; flex: 1; min-height: 40px;">✅ Correto</button>
+                            <button class="btn" onclick="acaoConfirmacaoItem('endereco', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">⚠️ Incorreto</button>
+                        </div>
+
+                        <div id="correcao-endereco" style="display: none; margin-top: 10px;">
+                            <textarea id="input-correcao-endereco" class="form-control" rows="3" placeholder="Digite o endereço de entrega correto aqui..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 10px; border-radius: 4px;"></textarea>
+                            <button class="btn" onclick="salvarCorrecaoTexto('endereco')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 40px;">💾 Salvar Correção</button>
+                        </div>
                     </div>
                     
+                    <!-- CARD NOTA FISCAL -->
                     <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px;">
-                        <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1.1rem; color: var(--text); border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">🧾 Dados para Nota Fiscal</h3>
-                        ${cliHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
+                            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text);">🧾 Dados para Nota Fiscal</h3>
+                        </div>
+                        <div style="margin-bottom: 15px;">${cliHtml}</div>
+                        
+                        <div id="status-nf" style="margin-bottom: 10px;"></div>
+                        
+                        <div id="acoes-nf" style="display: flex; gap: 10px;">
+                            <button class="btn" onclick="acaoConfirmacaoItem('nf', true)" style="background-color: #22c55e; border-color: #22c55e; color: #fff; flex: 1; min-height: 40px;">✅ Correto</button>
+                            <button class="btn" onclick="acaoConfirmacaoItem('nf', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">⚠️ Incorreto</button>
+                        </div>
+
+                        <div id="correcao-nf" style="display: none; margin-top: 10px;">
+                            <textarea id="input-correcao-nf" class="form-control" rows="3" placeholder="Digite os dados corretos da nota fiscal (CNPJ/CPF, Razão Social, IE, etc)..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 10px; border-radius: 4px;"></textarea>
+                            <button class="btn" onclick="salvarCorrecaoTexto('nf')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 40px;">💾 Salvar Correção</button>
+                        </div>
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-                    <button class="btn btn-lg" onclick="finalizarConfirmacaoCliente('CONFIRMADO')" style="background-color: #22c55e; border-color: #22c55e; color: #fff; font-weight: bold; flex: 1; min-width: 250px;">
-                        ✅ Confirmar Dados e Finalizar
-                    </button>
-                    <button class="btn btn-lg" onclick="finalizarConfirmacaoCliente('INCORRETOS')" style="background-color: #f97316; border-color: #f97316; color: #fff; font-weight: bold; flex: 1; min-width: 250px;">
-                        ⚠️ Dados Incorretos
+                <div style="display: flex; justify-content: center;">
+                    <button id="btn-finalizar-confirmacoes" class="btn btn-lg" onclick="finalizarConfirmacaoCliente()" disabled style="background-color: #22c55e; border-color: #22c55e; color: #fff; font-weight: bold; width: 100%; opacity: 0.5; cursor: not-allowed; min-height: 50px;">
+                        Verifique os dados acima para Finalizar
                     </button>
                 </div>
             </div>
@@ -15579,42 +15649,48 @@ async function mostrarConfirmacaoDadosCliente(osId) {
 
     } catch (err) {
         console.error('Erro ao buscar dados do cliente/endereco:', err);
-        // Fallback para a tela de sucesso padrão
         confirmContainer.style.display = 'none';
         mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Artes já foram APROVADAS. Para qualquer alteração entre em contato com seu ATENDIMENTO.');
     }
 }
 
-async function finalizarConfirmacaoCliente(acao) {
+window.finalizarConfirmacaoCliente = async function() {
     const confirmContainer = document.getElementById('cliente-confirmacao-container');
     if (confirmContainer) confirmContainer.style.display = 'none';
 
-    if (acao === 'CONFIRMADO') {
-        try {
-            await supabaseClient.from('propostas_chat').insert({
-                id_int: parseInt(clienteState.numero),
-                tipo: 'PRODUCAO',
-                setor: 'Cliente',
-                visivel_externo: true,
-                mensagem: `✅ O CLIENTE CONFIRMOU os dados de entrega e faturamento.`,
-                remetente_nome: 'Cliente (aprovação online)'
-            });
-        } catch(e) {}
-        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Sua aprovação foi concluída e os dados confirmados. O pedido seguirá para produção.');
+    const endOk = window.clienteConfirmacoes.enderecoOk;
+    const endCorr = window.clienteConfirmacoes.enderecoCorrecao;
+    const nfOk = window.clienteConfirmacoes.nfOk;
+    const nfCorr = window.clienteConfirmacoes.nfCorrecao;
+
+    const precisaAtencao = (!endOk && endCorr) || (!nfOk && nfCorr);
+
+    let mensagemLog = '';
+    if (!precisaAtencao) {
+        mensagemLog = `✅ O CLIENTE CONFIRMOU os dados de entrega e faturamento.`;
     } else {
-        try {
-            await supabaseClient.from('propostas_chat').insert({
-                id_int: parseInt(clienteState.numero),
-                tipo: 'PRODUCAO',
-                setor: 'Cliente',
-                visivel_externo: true,
-                mensagem: `⚠️ O CLIENTE REPORTOU QUE OS DADOS (ENTREGA/NF) ESTÃO INCORRETOS. O pedido está aprovado, mas aguarda correção de dados pelo atendimento.`,
-                remetente_nome: 'Cliente (aprovação online)'
-            });
-        } catch(e) {}
-        mostrarResultadoCliente('⚠️', 'Atenção Necessária!', 'O pedido está com as ARTES APROVADAS, porém como seus dados estão incorretos, pedimos que entre em contato com seu Atendimento IMEDIATAMENTE para atualização.');
+        mensagemLog = `⚠️ O CLIENTE REPORTOU DADOS INCORRETOS:\n\n`;
+        if (!endOk && endCorr) mensagemLog += `📍 Novo Endereço:\n${endCorr}\n\n`;
+        if (!nfOk && nfCorr) mensagemLog += `🧾 Novos Dados Faturamento:\n${nfCorr}`;
     }
-}
+
+    try {
+        await supabaseClient.from('propostas_chat').insert({
+            id_int: parseInt(clienteState.numero),
+            tipo: 'PRODUCAO',
+            setor: 'Cliente',
+            visivel_externo: true,
+            mensagem: mensagemLog,
+            remetente_nome: 'Cliente (aprovação online)'
+        });
+    } catch(e) {}
+
+    if (precisaAtencao) {
+        mostrarResultadoCliente('⚠️', 'Artes Aprovadas!', 'Seu pedido seguirá em frente e nosso Atendimento já foi notificado com os seus dados atualizados.');
+    } else {
+        mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 'Sua aprovação foi concluída e os dados confirmados. O pedido seguirá para produção.');
+    }
+};
 
 function mostrarResultadoCliente(icon, titulo, msg) {
     const contentEl = document.getElementById('cliente-content');
