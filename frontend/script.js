@@ -15596,7 +15596,7 @@ async function finalizarConfirmacaoCliente(acao) {
                 tipo: 'PRODUCAO',
                 setor: 'Cliente',
                 visivel_externo: true,
-                mensagem: \`✅ O CLIENTE CONFIRMOU os dados de entrega e faturamento.\`,
+                mensagem: `✅ O CLIENTE CONFIRMOU os dados de entrega e faturamento.`,
                 remetente_nome: 'Cliente (aprovação online)'
             });
         } catch(e) {}
@@ -15608,7 +15608,7 @@ async function finalizarConfirmacaoCliente(acao) {
                 tipo: 'PRODUCAO',
                 setor: 'Cliente',
                 visivel_externo: true,
-                mensagem: \`⚠️ O CLIENTE REPORTOU QUE OS DADOS (ENTREGA/NF) ESTÃO INCORRETOS. O pedido está aprovado, mas aguarda correção de dados pelo atendimento.\`,
+                mensagem: `⚠️ O CLIENTE REPORTOU QUE OS DADOS (ENTREGA/NF) ESTÃO INCORRETOS. O pedido está aprovado, mas aguarda correção de dados pelo atendimento.`,
                 remetente_nome: 'Cliente (aprovação online)'
             });
         } catch(e) {}
