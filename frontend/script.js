@@ -1,4 +1,4 @@
-// - VDP Engine -- Frontend Script -
+﻿// - VDP Engine -- Frontend Script -
 
 'use strict';
 
@@ -12137,6 +12137,29 @@ function renderOrdens() {
             if (emptyArte) emptyArte.style.display = 'none';
             if (tableArte) tableArte.style.display = '';
 
+
+            // AUTO-SYNC v144: corrigir OS onde todos os modelos estao PRONTO mas status nao e Enviar Arte
+            filteredArte.forEach(function(autoOs) {
+                var autoItens = state.osItens[autoOs.id] || [];
+                if (autoItens.length === 0) return;
+                var autoStatus = (autoOs.status || '').trim();
+                var autoOk = ['Enviar Arte', 'Enviar ARTE', 'APROVADO', 'REPROVADO'];
+                if (autoOk.indexOf(autoStatus) !== -1) return;
+                var autoTodos = autoItens.every(function(i) { return (i.amostra_status || '').toUpperCase() === 'PRONTO'; });
+                if (!autoTodos) return;
+                autoOs.status = 'Enviar Arte';
+                var autoOv = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+                autoOv[autoOs.id] = 'Enviar Arte';
+                localStorage.setItem('vibe_status_overrides', JSON.stringify(autoOv));
+                console.log('[AUTO-SYNC] Pedido #' + autoOs.numero + ': todos PRONTO -> Enviar Arte');
+                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                    if (autoOs.id.startsWith('vibe_')) {
+                        supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'Enviar Arte' }).eq('os_id', autoOs.id).then(function(){});
+                    } else {
+                        supabaseClient.from('producao_ordens_servico').update({ status: 'Enviar Arte' }).eq('id', autoOs.id).then(function(){});
+                    }
+                }
+            });
             tbodyArte.innerHTML = filteredArte.map(os => {
                 const itensCount = os._itens_count || 0;
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
