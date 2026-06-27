@@ -12998,7 +12998,7 @@ function renderAmostrasOSItens(osId) {
 
     // Mostrar banner, esconder card avulso se for painel interno
     if (banner) {
-        banner.style.display = 'block';
+        banner.style.display = 'flex';
         const numEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-numero' : 'cliente-pedido-numero');
         const cliEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-cliente' : 'cliente-pedido-cliente');
         const countEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-itens-count' : 'cliente-os-itens-count');
