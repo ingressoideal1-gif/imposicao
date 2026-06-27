@@ -15647,6 +15647,7 @@ async function mostrarConfirmacaoDadosCliente(osId) {
             <div style="background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                 <div style="text-align: center; margin-bottom: 25px;">
                     <div style="font-size: 3rem; margin-bottom: 10px;">🎉</div>
+                    <div style="color: var(--text); font-size: 1.2rem; font-weight: 700; margin-bottom: 5px;">Pedido #${clienteState.numero || ''}</div>
                     <h2 style="color: var(--green); margin: 0; font-size: 1.5rem;">Artes do Pedido APROVADAS</h2>
                     <p style="color: var(--text-dim); margin-top: 5px;">Por favor, confira seus dados de entrega e faturamento antes de finalizar.</p>
                 </div>
