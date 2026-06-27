@@ -12355,9 +12355,9 @@ function renderOrdens() {
                                 const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'AGUARDANDO_APROVACAO';
                                 if (linkSalvo) {
                                     return `
-                                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                                            <a href="${linkSalvo}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--blue);text-decoration:underline;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${linkSalvo}">🔗 Abrir Link</a>
-                                            <button class="btn btn-secondary btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar link" style="padding:3px 7px;font-size:0.85rem;display:flex;align-items:center;justify-content:center;">📋</button>
+                                        <div style="display:flex;gap:6px;align-items:center;justify-content:center;">
+                                            <a href="${linkSalvo}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="padding:3px 7px;font-size:0.85rem;display:flex;align-items:center;justify-content:center;text-decoration:none;" title="Abrir Link do Cliente">🔗</a>
+                                            <button class="btn btn-secondary btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar Link do Cliente" style="padding:3px 7px;font-size:0.85rem;display:flex;align-items:center;justify-content:center;">📋</button>
                                         </div>`;
                                 }
                                 return `<button class="btn btn-secondary btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Gerar link público para aprovação do cliente" style="padding:4px 8px;font-size:0.75rem;${statusProntoParaLink ? 'border-color:var(--blue);color:var(--blue);' : ''}">🔗 ${statusProntoParaLink ? 'Gerar Link' : 'Link do Cliente'}</button>`;
