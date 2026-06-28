@@ -395,7 +395,10 @@ async def impose_file(
             print_mode=data.get("print_mode", "front"),
             numeracao_2=numeracao_2,
             rotate_page=data.get("rotate_page", False),
-            multi_artes=multi_artes_list
+            multi_artes=multi_artes_list,
+            cut_stack_mode=data.get("cut_stack_mode", "independent"),
+            sheets_per_block=data.get("sheets_per_block", 50),
+            block_depth=data.get("block_depth", 1)
         )
 
         engine = ImpositionEngine(config)
