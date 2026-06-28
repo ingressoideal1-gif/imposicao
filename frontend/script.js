@@ -5852,7 +5852,18 @@ function drawPreview() {
 
                         const suffix = el.suffix || "";
 
-                        const raw = pad > 0 ? String(val).padStart(pad, '0') : String(val);
+                        let current_val = val;
+                        if (currentNum && currentNum.tipo === "TICKET" && source_id === 1) {
+                            const pos = parseInt(el.ticket_pos) || 1;
+                            const N = parseInt(document.getElementById('num-ticket-qtd')?.value) || parseInt(currentNum.ticket_qtd) || 1;
+                            current_val = start + (item_index * N) + (pos - 1);
+                        } else if (currentNum && currentNum.tipo === "TICKET" && source_id === 2) {
+                            const pos = parseInt(el.ticket_pos) || 1;
+                            const N = parseInt(document.getElementById('num-ticket-qtd-2')?.value) || parseInt(currentNum.ticket_qtd) || 1;
+                            current_val = start + (item_index * N) + (pos - 1);
+                        }
+
+                        const raw = pad > 0 ? String(current_val).padStart(pad, '0') : String(current_val);
 
                         val_str = `${prefix}${raw}${suffix}`;
 
@@ -16944,6 +16955,7 @@ async function exportarPdfGabarito() {
         btn.disabled = false;
     }
 }
+
 
 
 
