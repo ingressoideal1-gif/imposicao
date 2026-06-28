@@ -6879,9 +6879,14 @@ function updateImpSummary() {
 
     }
 
-    const perSheet = fmt.cols * fmt.rows;
+    let ticket_qtd = 1;
+    if (num && num.tipo === "TICKET") {
+        ticket_qtd = parseInt(num.ticket_qtd) || 1;
+    }
 
-    const sheets = Math.ceil(total / perSheet);
+    const perSheet = fmt.cols * fmt.rows;
+    const total_impressions = Math.ceil(total / ticket_qtd);
+    const sheets = Math.ceil(total_impressions / perSheet);
 
 
 
