@@ -13470,27 +13470,9 @@ async function voltarParaAtendimento() {
                 if (error) console.warn('Erro ao atualizar status no Supabase:', error);
             }
 
-            // 4. Sincronizar status_arte em pedidos_modelos por item
-            try {
-                const osNumero = os ? parseInt(os.numero) : null;
-                if (osNumero && !isNaN(osNumero)) {
-                    const updatePromises = itens.map(item => {
-                        const modeloId = item._pedidoModeloId || item.id;
-                        if (!modeloId) return Promise.resolve();
-                        const statusArteModelo = item.amostra_status === 'PRONTO' ? 'AGUARDANDO_CLIENTE' : 'EM_CRIACAO';
-                        return supabaseClient
-                            .from('pedidos_modelos')
-                            .update({ status_arte: statusArteModelo })
-                            .eq('id', modeloId)
-                            .then(({ error }) => {
-                                if (error) console.warn(`[voltarParaAtendimento] Erro ao sync pedidos_modelos id=${modeloId}:`, error);
-                            });
-                    });
-                    await Promise.all(updatePromises);
-                }
-            } catch (syncErr) {
-                console.warn('[voltarParaAtendimento] Erro ao sincronizar pedidos_modelos:', syncErr);
-            }
+            // A atualização do status_arte de pedidos_modelos já ocorre de forma individual e automática 
+            // através da função saveAmostraToDB quando o designer marca como "PRONTO" ou o cliente "APROVA".
+            // Portanto, não reescrevemos o status dos modelos aqui para evitar sobrescrever modelos Aprovados.
         }
 
         if (todasProntas) {
