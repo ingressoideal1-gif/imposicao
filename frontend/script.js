@@ -5376,7 +5376,7 @@ function drawPreview() {
         }
     }
 
-    document.getElementById('preview-sheet-num').textContent = `Folha 1 de ${total_sheets}`;
+    document.getElementById('preview-sheet-num').textContent = `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
 
     const isBack = state.previewFace === 'back';
 
@@ -5384,18 +5384,24 @@ function drawPreview() {
         for (let col = 0; col < cols; col++) {
             const P = row * cols + col;
 
-            let item_index = P;
+            let S = (window.currentPreviewPage || 1) - 1;
+            if (S >= total_sheets) S = total_sheets - 1;
+            if (S < 0) S = 0;
+
+            let item_index = (S * poses_per_sheet) + P;
             if (schema === "cut_stack") {
                 if (is_strict_mode) {
-                    const S = 0; // previewing first sheet
                     const set_index = Math.floor(S / stack_size);
                     const sheet_within_set = S % stack_size;
                     item_index = (set_index * stack_size * poses_per_sheet) + (P * stack_size) + sheet_within_set;
                 } else {
-                    item_index = (P * total_sheets);
+                    item_index = (P * total_sheets) + S;
                 }
             } else if (schema === "step_repeat") {
-                item_index = 0;
+                item_index = S;
+            } else if (schema === "multi_artes") {
+                const P_col_first = col * rows + row;
+                item_index = (P_col_first * total_sheets) + S;
             }
 
             if (item_index >= total_items) continue;
@@ -6476,6 +6482,31 @@ window.renderMultiArtes = function() {
 };
 
 
+
+window.changePreviewPage = function() {
+    const input = document.getElementById('preview-page-input');
+    if (!input) return;
+    let val = parseInt(input.value);
+    if (isNaN(val) || val < 1) val = 1;
+    window.currentPreviewPage = val;
+    drawPreview();
+};
+
+window.prevPreviewPage = function() {
+    if ((window.currentPreviewPage || 1) > 1) {
+        window.currentPreviewPage = (window.currentPreviewPage || 1) - 1;
+        const input = document.getElementById('preview-page-input');
+        if (input) input.value = window.currentPreviewPage;
+        drawPreview();
+    }
+};
+
+window.nextPreviewPage = function() {
+    window.currentPreviewPage = (window.currentPreviewPage || 1) + 1;
+    const input = document.getElementById('preview-page-input');
+    if (input) input.value = window.currentPreviewPage;
+    drawPreview();
+};
 
 function updateImpSummary() {
 
