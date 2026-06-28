@@ -688,7 +688,7 @@
                                 <span class="card-title"><span class="icon">⚙️</span> Configuração da Imposição</span>
                                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     <span style="font-size: 0.82rem; color: var(--text-dim); font-weight: 500;">Regra de Paginação:</span>
-                                    <select class="form-control" id="imp-schema" style="width: 180px; padding: 4px 8px; font-size: 0.85rem; border: 1px solid var(--blue); font-weight: 500;" onchange="updateImpSummary(); toggleMultiArtes();">
+                                    <select class="form-control" id="imp-schema" style="width: 180px; padding: 4px 8px; font-size: 0.85rem; border: 1px solid var(--blue); font-weight: 500;" onchange="updateImpSummary(); toggleMultiArtes(); toggleCutStackOptions();">
                                         <option value="sequential">Sequencial</option>
                                         <option value="cut_stack">Cut &amp; Stack (Blocos)</option>
                                         <option value="step_repeat">Step &amp; Repeat</option>
@@ -802,6 +802,28 @@
                                         <option value="false" selected>Sem Rotação</option>
                                         <option value="true">Rotacionar 90°</option>
                                     </select>
+                                </div>
+                            </div>
+
+                            <!-- Configuração Cut & Stack -->
+                            <div id="cut-stack-options" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--blue); border-radius: 8px; background: rgba(59,130,246,0.04);">
+                                <h4 style="margin:0 0 15px 0; font-size:1rem; color:var(--blue);">Opções de Cut & Stack</h4>
+                                <div class="form-grid form-grid-3">
+                                    <div class="form-group">
+                                        <label>Modo Cut & Stack</label>
+                                        <select class="form-control" id="imp-cutstack-mode">
+                                            <option value="independent" selected>Colunas Independentes (Otimizado)</option>
+                                            <option value="strict">Blocos Estritos (Pilhas fixas)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Folhas por Bloco</label>
+                                        <input type="number" class="form-control" id="imp-sheets-per-block" value="50" min="1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Profundidade (Blocos/Pilha)</label>
+                                        <input type="number" class="form-control" id="imp-block-depth" value="1" min="1">
+                                    </div>
                                 </div>
                             </div>
 
@@ -1491,7 +1513,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="/script.js?v=182"></script>
+    <script src="/script.js?v=183"></script>
 
     <!-- PÁGINA PÚBLICA DO CLIENTE (fora do app-shell) -->
     <div id="cliente-page" class="cliente-page" style="display: none;">

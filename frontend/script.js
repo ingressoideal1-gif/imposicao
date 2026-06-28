@@ -6119,6 +6119,16 @@ function drawPreview() {
 
 
 
+window.toggleCutStackOptions = function() {
+    const schema = document.getElementById('imp-schema').value;
+    const container = document.getElementById('cut-stack-options');
+    if (schema === 'cut_stack') {
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+    }
+};
+
 window.toggleMultiArtes = function() {
 
     const schema = document.getElementById('imp-schema').value;
@@ -7180,7 +7190,13 @@ window.runImposition = async function (mode) {
 
         rotate_page: rotatePage,
 
-        multi_artes: payloadMultiArtes
+        multi_artes: payloadMultiArtes,
+
+        cut_stack_mode: document.getElementById('imp-cutstack-mode') ? document.getElementById('imp-cutstack-mode').value : 'independent',
+
+        sheets_per_block: document.getElementById('imp-sheets-per-block') ? parseInt(document.getElementById('imp-sheets-per-block').value) || 50 : 50,
+
+        block_depth: document.getElementById('imp-block-depth') ? parseInt(document.getElementById('imp-block-depth').value) || 1 : 1
 
     };
 
@@ -10557,6 +10573,7 @@ async function loadSelectedModelo(modId) {
         if (window.renderMultiArtes) window.renderMultiArtes();
 
         if (window.toggleMultiArtes) window.toggleMultiArtes();
+        if (window.toggleCutStackOptions) window.toggleCutStackOptions();
 
     }
 
@@ -10787,6 +10804,7 @@ function importOS(input) {
                 if (window.renderMultiArtes) window.renderMultiArtes();
 
                 if (window.toggleMultiArtes) window.toggleMultiArtes();
+                if (window.toggleCutStackOptions) window.toggleCutStackOptions();
 
             }
 

@@ -115,7 +115,10 @@ class ImpositionConfig:
                  print_mode: str = "front",
                  numeracao_2: dict | None = None,
                  rotate_page: bool = False,
-                 multi_artes: list[dict] | None = None):
+                 multi_artes: list[dict] | None = None,
+                 cut_stack_mode: str = "independent",
+                 sheets_per_block: int = 50,
+                 block_depth: int = 1):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -124,6 +127,9 @@ class ImpositionConfig:
         self.print_mode = print_mode
         self.rotate_page = rotate_page
         self.multi_artes = multi_artes or []
+        self.cut_stack_mode = cut_stack_mode
+        self.sheets_per_block = sheets_per_block
+        self.block_depth = block_depth
 
         # Formato (tamanho do item + grade + gaps)
         self.item_w = formato["width_mm"] * MM2PT
@@ -532,7 +538,13 @@ class ImpositionEngine:
         start_x = (cfg.sheet_w - used_w) / 2
         start_y = (cfg.sheet_h - used_h) / 2
 
-        total_sheets = math.ceil(cfg.total_items / poses_per_sheet)
+        if cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict":
+            stack_size = cfg.sheets_per_block * cfg.block_depth
+            items_per_set = stack_size * poses_per_sheet
+            sets_needed = math.ceil(cfg.total_items / items_per_set)
+            total_sheets = sets_needed * stack_size
+        else:
+            total_sheets = math.ceil(cfg.total_items / poses_per_sheet)
         import time as _time
         _t0 = _time.monotonic()
         print(f"[engine] total_sheets={total_sheets} items={cfg.total_items} poses={poses_per_sheet}")
@@ -692,7 +704,13 @@ class ImpositionEngine:
                     P = row * cols + col
 
                     if cfg.layout_schema == "cut_stack":
-                        item_index = (P * total_sheets) + S
+                        if cfg.cut_stack_mode == "strict":
+                            stack_size = cfg.sheets_per_block * cfg.block_depth
+                            set_index = S // stack_size
+                            sheet_within_set = S % stack_size
+                            item_index = (set_index * stack_size * poses_per_sheet) + (P * stack_size) + sheet_within_set
+                        else:
+                            item_index = (P * total_sheets) + S
                     elif cfg.layout_schema == "multi_artes":
                         P_col_first = col * rows + row
                         item_index = (P_col_first * total_sheets) + S
@@ -894,7 +912,13 @@ class ImpositionEngine:
                         P = row * cols + col
 
                         if cfg.layout_schema == "cut_stack":
-                            item_index = (P * total_sheets) + S
+                            if cfg.cut_stack_mode == "strict":
+                                stack_size = cfg.sheets_per_block * cfg.block_depth
+                                set_index = S // stack_size
+                                sheet_within_set = S % stack_size
+                                item_index = (set_index * stack_size * poses_per_sheet) + (P * stack_size) + sheet_within_set
+                            else:
+                                item_index = (P * total_sheets) + S
                         elif cfg.layout_schema == "multi_artes":
                             P_col_first = col * rows + row
                             item_index = (P_col_first * total_sheets) + S

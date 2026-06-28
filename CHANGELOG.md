@@ -4,7 +4,55 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [2026-06-16] — Sessao de Correcao, Restauracao e Publicacao
+## Versão atual: **v1.1.0** — 2026-06-27
+
+---
+
+## [v1.1.0 — 2026-06-27] — Fluxo de Status de Arte e Link do Cliente
+
+### Resumo
+Refatoração completa do fluxo de status entre o painel interno (designer/atendente) e o link público do cliente. Corrigidos 4 bugs críticos que faziam o link abrir a tela errada.
+
+### Fixes aplicados
+
+| # | Função | O que mudou |
+|---|---|---|
+| 1 | `getOrCreateLinkCliente()` | Não sobrescreve mais status finais (APROVADO, REPROVADO, Em Arte, Pendente) ao clicar em "Copiar Link" |
+| 2 | `initClientePage()` — OS locais | `producao_ordens_servico` só complementa o status se o link ainda estiver em estado inicial |
+| 3 | `initClientePage()` — detecção de aprovado | `'ARTE_APROVADA'` (aprovação interna) não ativa mais a tela "Artes Aprovadas!" do cliente |
+| 4 | `statusProntoParaLink` | Somente `'Enviar Arte'` destaca o botão de link em azul |
+
+### Fluxo de status definido
+
+```
+[OS Criada] → "Em Arte"
+    │
+    ├─ Designer marca TODOS modelos como PRONTO → "Enviar Arte" (AUTOMÁTICO)
+    ├─ Designer marca PARCIALMENTE + clica "Voltar p/ Atendimento" → "Pendente Informação"
+    └─ Atendente clica "Voltar para Arte" → "Em Arte"
+
+[Status = "Enviar Arte"] → Link do cliente ATIVO
+    ├─ Cliente APROVA TODOS → "APROVADO"
+    └─ Cliente marca UM como "Alterar" → "REPROVADO"
+
+[Status = "REPROVADO"] → Designer corrige → marca todos como PRONTO → "Enviar Arte" (AUTOMÁTICO)
+```
+
+### O que o cliente vê por status
+
+| Status | Cliente vê |
+|---|---|
+| `Enviar Arte` | 🎨 Janelas de aprovação dos modelos |
+| `APROVADO` | ✅ "Artes Aprovadas! Em breve seu pedido entra em produção." |
+| `REPROVADO` | ❌ "Artes Reprovadas. Nossa equipe está realizando as correções." |
+| `Em Arte` / `Pendente Informação` / outros | 🕐 "Artes em Preparação. Aguarde." |
+
+### Commit
+`ed6e17c` — `fix(arte): fluxo correto de status - Em Arte > Enviar Arte (auto) > APROVADO/REPROVADO`
+
+---
+
+
 
 ### 1. fix: Menus do sistema pararam de funcionar (CRITICO)
 
