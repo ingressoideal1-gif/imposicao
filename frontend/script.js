@@ -5355,7 +5355,7 @@ function drawPreview() {
 
     let ticket_qtd = 1;
     if (num && num.tipo === "TICKET") {
-        ticket_qtd = parseInt(document.getElementById('num-ticket-qtd')?.value) || parseInt(num.ticket_qtd) || 1;
+        ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
     const raw_items = Math.max(1, end - start + 1);
     const total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
@@ -5855,11 +5855,11 @@ function drawPreview() {
                         let current_val = val;
                         if (currentNum && currentNum.tipo === "TICKET" && source_id === 1) {
                             const pos = parseInt(el.ticket_pos) || 1;
-                            const N = parseInt(document.getElementById('num-ticket-qtd')?.value) || parseInt(currentNum.ticket_qtd) || 1;
+                            const N = parseInt(currentNum.ticket_qtd) || 1;
                             current_val = start + (item_index * N) + (pos - 1);
                         } else if (currentNum && currentNum.tipo === "TICKET" && source_id === 2) {
                             const pos = parseInt(el.ticket_pos) || 1;
-                            const N = parseInt(document.getElementById('num-ticket-qtd-2')?.value) || parseInt(currentNum.ticket_qtd) || 1;
+                            const N = parseInt(currentNum.ticket_qtd) || 1;
                             current_val = start + (item_index * N) + (pos - 1);
                         }
 
