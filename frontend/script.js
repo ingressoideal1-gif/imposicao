@@ -14363,6 +14363,12 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
 async function decisionAmostraItem(itemId, osId, status) {
     const obsEl = document.getElementById(`amostra-obs-${itemId}`);
     const obs = obsEl ? obsEl.value : '';
+
+    if (status === 'REPROVADA' && (!obs || obs.trim() === '')) {
+        toast('Anotar alteração no campo ANOTAÇÕES', 'warning');
+        if (obsEl) obsEl.focus();
+        return;
+    }
     
     try {
         await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs });
