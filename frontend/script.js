@@ -13439,8 +13439,8 @@ async function voltarParaAtendimento() {
         return;
     }
 
-    // Verificar se todos os itens possuem amostra_status === 'PRONTO'
-    const todasProntas = itens.every(item => item.amostra_status === 'PRONTO');
+    // Verificar se todos os itens possuem amostra_status === 'PRONTO' ou 'APROVADA'
+    const todasProntas = itens.every(item => item.amostra_status === 'PRONTO' || item.amostra_status === 'APROVADA');
     const novoStatus = todasProntas ? 'Enviar Arte' : 'Pendente Informação';
 
     try {
@@ -14423,7 +14423,7 @@ async function decisionAmostraItem(itemId, osId, status) {
         const isInternal = (state.amostrasContainerId !== 'cliente-amostras-itens-container');
         if (status === 'PRONTO' && isInternal) {
             const todosItens = state.osItens[osId] || [];
-            const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO');
+            const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO' || i.amostra_status === 'APROVADA');
             if (todosProntos) {
                 const novoStatusOS = 'Enviar Arte';
                 const os = state.ordens.find(o => o.id === osId);
