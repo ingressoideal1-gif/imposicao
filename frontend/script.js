@@ -5351,48 +5351,52 @@ function drawPreview() {
 
 
     const start_x = (sheet_w - used_w) / 2;
-
     const start_y = (sheet_h - used_h) / 2;
 
-
-
-    const total_items = Math.max(1, end - start + 1);
+    let ticket_qtd = 1;
+    if (num && num.tipo === "TICKET") {
+        ticket_qtd = parseInt(document.getElementById('num-ticket-qtd')?.value) || parseInt(num.ticket_qtd) || 1;
+    }
+    const raw_items = Math.max(1, end - start + 1);
+    const total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
 
     const poses_per_sheet = cols * rows;
+    let total_sheets = Math.ceil(total_items / poses_per_sheet);
 
-    const total_sheets = Math.ceil(total_items / poses_per_sheet);
-
-
+    let is_strict_mode = false;
+    let stack_size = 50;
+    if (schema === "cut_stack") {
+        const cutstackMode = document.getElementById('imp-cutstack-mode')?.value || 'independent';
+        if (cutstackMode === 'strict') {
+            is_strict_mode = true;
+            stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
+            const itemsPerSet = stack_size * poses_per_sheet;
+            const sets_needed = Math.ceil(total_items / itemsPerSet);
+            total_sheets = sets_needed * stack_size;
+        }
+    }
 
     document.getElementById('preview-sheet-num').textContent = `Folha 1 de ${total_sheets}`;
 
-
-
     const isBack = state.previewFace === 'back';
 
-
-
     for (let row = 0; row < rows; row++) {
-
         for (let col = 0; col < cols; col++) {
-
             const P = row * cols + col;
 
-
-
             let item_index = P;
-
             if (schema === "cut_stack") {
-
-                item_index = (P * total_sheets);
-
+                if (is_strict_mode) {
+                    const S = 0; // previewing first sheet
+                    const set_index = Math.floor(S / stack_size);
+                    const sheet_within_set = S % stack_size;
+                    item_index = (set_index * stack_size * poses_per_sheet) + (P * stack_size) + sheet_within_set;
+                } else {
+                    item_index = (P * total_sheets);
+                }
             } else if (schema === "step_repeat") {
-
                 item_index = 0;
-
             }
-
-
 
             if (item_index >= total_items) continue;
 
