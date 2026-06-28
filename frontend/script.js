@@ -11542,6 +11542,7 @@ async function loadOSItens(osId) {
                             amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
                             arte_url: item.arte_url || (prop ? prop.arte_url : null),
                             gabarito_operacional: item.gabarito_operacional || (prop ? prop.gabarito_operacional : null),
+                            amostra_obs: item.observacao_arte || item.amostra_obs || (prop ? prop.observacao_arte : null) || '',
                             os_id: osId,
                             _pedidoModeloId: item.id,
                             amostra_status: statusFrontend,
@@ -11651,7 +11652,7 @@ async function loadOSItens(osId) {
                                 item.nome_arquivo_arte = ultimaArte.nome_arquivo;
                                 item.versao_arte = ultimaArte.versao;
                                 item.url_arquivo_arte = ultimaArte.url_arquivo;
-                                if (ultimaArte.comentarios_revisao) {
+                                if (ultimaArte.comentarios_revisao && !item.amostra_obs) {
                                     item.amostra_obs = ultimaArte.comentarios_revisao;
                                 }
                             }
@@ -13709,6 +13710,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
 
         // Remove campos virtuais (frontend-only) que no existem na tabela pedidos_modelos
         if ('amostra_obs' in dbData) {
+            dbData.observacao_arte = dbData.amostra_obs;
             delete dbData.amostra_obs;
         }
         if ('amostra_status' in dbData) {
@@ -15254,12 +15256,12 @@ async function initClientePage(numero, token) {
                     if (item.status_arte === 'AGUARDANDO_CLIENTE' || item.status_arte === 'PRONTO') statusFrontend = 'PRONTO';
                     else if (item.status_arte === 'APROVADA_CLIENTE' || item.status_arte === 'APROVADA') statusFrontend = 'APROVADA';
                     else if (item.status_arte === 'REPROVADA_CLIENTE' || item.status_arte === 'REPROVADA') statusFrontend = 'REPROVADA';
-
                     return {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',
                         nome_produto_real: prop ? prop.nome_produto : null,
                         os_id: osId,
+                        amostra_obs: item.observacao_arte || item.amostra_obs || '',
                         amostra_status: statusFrontend
                     };
                 });
@@ -15288,7 +15290,7 @@ async function initClientePage(numero, token) {
                             item.nome_arquivo_arte = ultimaArte.nome_arquivo;
                             item.versao_arte = ultimaArte.versao;
                             item.url_arquivo_arte = ultimaArte.url_arquivo;
-                            if (ultimaArte.comentarios_revisao) {
+                            if (ultimaArte.comentarios_revisao && !item.amostra_obs) {
                                 item.amostra_obs = ultimaArte.comentarios_revisao;
                             }
                         }
