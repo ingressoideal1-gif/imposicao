@@ -197,7 +197,30 @@ function renderSetoresList() {
         div.style.border = '1px solid var(--border)';
         div.style.borderRadius = '6px';
         div.style.cursor = 'pointer';
-        div.innerText = s.nome || `Setor ${idx+1}`;
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+        
+        const textSpan = document.createElement('span');
+        textSpan.innerText = s.nome || `Setor ${idx+1}`;
+        div.appendChild(textSpan);
+        
+        const delBtn = document.createElement('button');
+        delBtn.innerHTML = '❌';
+        delBtn.style.background = 'transparent';
+        delBtn.style.border = 'none';
+        delBtn.style.cursor = 'pointer';
+        delBtn.style.fontSize = '0.8rem';
+        delBtn.style.padding = '4px';
+        delBtn.title = 'Excluir Setor e suas cadeiras';
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (confirm(`Tem certeza que deseja excluir o setor "${s.nome || 'Setor '+(idx+1)}" e todas as cadeiras vinculadas a ele?`)) {
+                window.excluirSetor(idx);
+            }
+        };
+        div.appendChild(delBtn);
+        
         div.onclick = () => {
             window.setorSelecionadoIdx = idx;
             renderSetoresList();
@@ -205,6 +228,38 @@ function renderSetoresList() {
         };
         list.appendChild(div);
     });
+}
+
+window.excluirSetor = function(idx) {
+    const setorId = window.state.mapaAtual.config.setores[idx].id;
+    
+    // Remove as cadeiras desse setor
+    const cadeiras = window.state.mapaAtual.config.cadeiras;
+    for (const key in cadeiras) {
+        if (cadeiras[key].setorIdx === idx || cadeiras[key].setorId === setorId) {
+            delete cadeiras[key];
+        }
+    }
+    
+    // Remove o setor
+    window.state.mapaAtual.config.setores.splice(idx, 1);
+    
+    // Reajusta o setorIdx das cadeiras restantes
+    for (const key in cadeiras) {
+        if (cadeiras[key].setorIdx > idx) {
+            cadeiras[key].setorIdx--;
+        }
+    }
+    
+    if (window.setorSelecionadoIdx === idx) {
+        window.setorSelecionadoIdx = null;
+    } else if (window.setorSelecionadoIdx > idx) {
+        window.setorSelecionadoIdx--;
+    }
+    
+    renderSetoresList();
+    carregarSetorNoSidebar();
+    window.requestAnimationFrame(renderMapa);
 }
 
 function carregarSetorNoSidebar() {
