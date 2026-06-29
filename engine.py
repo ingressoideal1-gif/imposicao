@@ -781,10 +781,11 @@ class ImpositionEngine:
                                 keep_proportion=False, clip=page_base.rect
                             )
                         else:
-                            err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}" if cfg.layout_schema == "multi_artes" else "ERR: base_file nulo"
-                            out_page_front.insert_textbox(
-                                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-                                err_msg, fontsize=8, color=(1,0,0))
+                            if cfg.layout_schema == "multi_artes":
+                                err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}"
+                                out_page_front.insert_textbox(
+                                    fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                                    err_msg, fontsize=8, color=(1,0,0))
                         csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
                         for el in current_elements:
                             if el.get("face", "both") == "back":
@@ -822,8 +823,9 @@ class ImpositionEngine:
                         if current_doc_base:
                             temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base.rect)
                         else:
-                            err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}" if cfg.layout_schema == "multi_artes" else "ERR: base_file nulo"
-                            temp_page.insert_textbox(rect_art_temp, err_msg, fontsize=8, color=(1,0,0))
+                            if cfg.layout_schema == "multi_artes":
+                                err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}"
+                                temp_page.insert_textbox(rect_art_temp, err_msg, fontsize=8, color=(1,0,0))
 
                         csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
 

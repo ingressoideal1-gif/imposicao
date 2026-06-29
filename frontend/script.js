@@ -6917,7 +6917,15 @@ function updateImpSummary() {
 
     const perSheet = fmt.cols * fmt.rows;
     const total_impressions = Math.ceil(total / ticket_qtd);
-    const sheets = Math.ceil(total_impressions / perSheet);
+    let sheets = Math.ceil(total_impressions / perSheet);
+
+    const cutstackMode = document.getElementById('imp-cutstack-mode')?.value;
+    if (schema === 'cut_stack' && cutstackMode === 'strict') {
+        const stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
+        const itemsPerSet = stack_size * perSheet;
+        const sets_needed = Math.ceil(total_impressions / itemsPerSet);
+        sheets = sets_needed * stack_size;
+    }
 
 
 
@@ -7092,9 +7100,7 @@ window.runImposition = async function (mode) {
         }
 
     } else {
-
-        if (!impFile.files.length) return toast('Selecione a arte (PDF/JPG/PNG).', 'error');
-
+        // Não exige arte, permite gerar apenas com a numeração
     }
 
     

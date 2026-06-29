@@ -811,18 +811,18 @@
                                 <div class="form-grid form-grid-3">
                                     <div class="form-group">
                                         <label>Modo Cut & Stack</label>
-                                        <select class="form-control" id="imp-cutstack-mode">
+                                        <select class="form-control" id="imp-cutstack-mode" onchange="updateImpSummary()">
                                             <option value="independent" selected>Colunas Independentes (Otimizado)</option>
                                             <option value="strict">Blocos Estritos (Pilhas fixas)</option>
                                         </select>
                                     </div>
                                     <div class="form-group">
                                         <label>Folhas por Bloco</label>
-                                        <input type="number" class="form-control" id="imp-sheets-per-block" value="50" min="1">
+                                        <input type="number" class="form-control" id="imp-sheets-per-block" value="50" min="1" onchange="updateImpSummary()">
                                     </div>
                                     <div class="form-group">
                                         <label>Profundidade (Blocos/Pilha)</label>
-                                        <input type="number" class="form-control" id="imp-block-depth" value="1" min="1">
+                                        <input type="number" class="form-control" id="imp-block-depth" value="1" min="1" onchange="updateImpSummary()">
                                     </div>
                                 </div>
                             </div>
@@ -1522,7 +1522,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="script.js?v=188"></script>
+    <script src="script.js?v=189"></script>
 
     <!-- PÁGINA PÚBLICA DO CLIENTE (fora do app-shell) -->
     <div id="cliente-page" class="cliente-page" style="display: none;">
