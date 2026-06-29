@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
@@ -1755,18 +1755,6 @@
                                 <!-- Lista de setores dinâmicos -->
                             </div>
                             
-                            <div class="divider"></div>
-                            
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <h3 style="font-size:0.95rem; margin:0;" title="Legenda e marcações especiais">Tipos / Legenda</h3>
-                                <button class="btn btn-sm btn-secondary" onclick="adicionarTipoAssentoMapa()">+ Tipo</button>
-                            </div>
-                            
-                            <div id="mapa-tipos-assento-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
-                                <!-- Lista de tipos dinâmicos -->
-                            </div>
-                            
-                            <div class="divider"></div>
                             
                             <div id="mapa-setor-props" style="display:none; flex-direction:column; gap:12px;">
                                 <h3 style="font-size:0.95rem; margin:0; color:var(--blue);">Propriedades do Setor</h3>
@@ -1797,6 +1785,17 @@
                                     </select>
                                 </div>
                                 <button class="btn btn-sm btn-primary" style="width:100%" onclick="gerarFileiraNoCanvas()">Adicionar Fileira no Mapa</button>
+                            </div>
+
+                            <div class="divider"></div>
+
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <h3 style="font-size:0.95rem; margin:0;">Tipos / Legenda</h3>
+                                <button class="btn btn-sm btn-secondary" onclick="adicionarTipoAssentoMapa()">+ Tipo</button>
+                            </div>
+
+                            <div id="mapa-tipos-assento-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                                <!-- Lista de tipos dinâmicos -->
                             </div>
                         </div>
 
