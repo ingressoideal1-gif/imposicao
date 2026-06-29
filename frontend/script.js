@@ -5429,12 +5429,15 @@ function drawPreview() {
     if (!fmt || !sai) return;
     
     const previewPartEl = document.getElementById('preview-part-input');
+    let previewPart = 'miolo';
     if (previewPartEl) {
         if (fmt.has_cover) {
             previewPartEl.style.display = 'inline-block';
+            previewPart = previewPartEl.value;
         } else {
             previewPartEl.style.display = 'none';
             previewPartEl.value = 'miolo';
+            previewPart = 'miolo';
         }
     }
 
@@ -5690,8 +5693,7 @@ function drawPreview() {
                 let dw = art_orig_w * scale;
                 let dh = art_orig_h * scale;
 
-                const previewPartEl = document.getElementById('preview-part-input');
-                const previewPart = previewPartEl ? previewPartEl.value : 'miolo';
+
                 
                 if (previewPart === 'capa' || previewPart === 'contracapa') {
                     const cScale = (parseFloat(fmt.cover_scale) || 100) / 100.0;
