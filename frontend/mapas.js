@@ -164,6 +164,8 @@ function abrirModalMapaTeatro() {
     document.getElementById('mapa-nome').value = window.state.mapaAtual.name;
     
     window.setorSelecionadoIdx = null;
+    window.cadeirasSelecionadas = new Set();
+    window.cadeiraSelecionada = null;
     renderSetoresList();
     
     setTimeout(initMapCanvas, 100);
@@ -360,7 +362,7 @@ function renderCanvasLoop() {
         else if (c.tipo === 'Acompanhante') canvasCtx.fillStyle = '#2ecc71';
         else canvasCtx.fillStyle = '#3498db'; 
         
-        if (window.cadeiraSelecionada === key) {
+        if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.has(key)) {
             canvasCtx.fillStyle = '#9b59b6'; // Purple for selected
         }
 
@@ -412,8 +414,15 @@ function onMapMouseDown(e) {
                 changed = true;
             }
         } else if (mapTool === 'select') {
-            window.cadeiraSelecionada = key;
-            changed = true;
+            window.cadeirasSelecionadas = window.cadeirasSelecionadas || new Set();
+            if (cadeiras[key]) {
+                if (!e.shiftKey && !e.ctrlKey) window.cadeirasSelecionadas.clear();
+                window.cadeirasSelecionadas.add(key);
+                changed = true;
+            } else {
+                window.cadeirasSelecionadas.clear();
+                changed = true;
+            }
         }
         
         if (changed) {
@@ -432,13 +441,23 @@ function onMapMouseMove(e) {
         window.requestAnimationFrame(renderMapa);
     }
     
-    if (e.buttons === 1 && mapTool === 'erase') {
+    if (e.buttons === 1) {
         const pos = getGridPos(e);
         const key = `${pos.gx},${pos.gy}`;
-        if (window.state.mapaAtual.config.cadeiras[key]) {
-            delete window.state.mapaAtual.config.cadeiras[key];
-            window.requestAnimationFrame(renderMapa);
-            atualizarEstatisticasMapa();
+        const cadeiras = window.state.mapaAtual.config.cadeiras;
+        
+        if (mapTool === 'erase') {
+            if (cadeiras[key]) {
+                delete cadeiras[key];
+                window.requestAnimationFrame(renderMapa);
+                atualizarEstatisticasMapa();
+            }
+        } else if (mapTool === 'select') {
+            if (cadeiras[key]) {
+                window.cadeirasSelecionadas = window.cadeirasSelecionadas || new Set();
+                window.cadeirasSelecionadas.add(key);
+                window.requestAnimationFrame(renderMapa);
+            }
         }
     }
 }
@@ -520,15 +539,23 @@ window.gerarFileiraNoCanvas = function() {
 }
 
 window.marcarAssentoEspecial = function(tipo) {
-    if (!window.cadeiraSelecionada) {
-        alert("Clique em uma cadeira com a ferramenta 'Selecionar' primeiro.");
+    if (!window.cadeirasSelecionadas || window.cadeirasSelecionadas.size === 0) {
+        alert("Selecione uma ou mais cadeiras com a ferramenta 'Selecionar' primeiro.");
         return;
     }
     
     const cadeiras = window.state.mapaAtual.config.cadeiras;
-    if (cadeiras[window.cadeiraSelecionada]) {
-        cadeiras[window.cadeiraSelecionada].tipo = tipo;
-        window.cadeiraSelecionada = null; // deselect after apply
+    let count = 0;
+    
+    window.cadeirasSelecionadas.forEach(key => {
+        if (cadeiras[key]) {
+            cadeiras[key].tipo = tipo;
+            count++;
+        }
+    });
+    
+    if (count > 0) {
+        window.cadeirasSelecionadas.clear();
         window.requestAnimationFrame(renderMapa);
         atualizarEstatisticasMapa();
     }
