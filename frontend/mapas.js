@@ -823,6 +823,22 @@ document.addEventListener('DOMContentLoaded', () => {
             window.showView('view-mapas');
         });
     }
+    
+    // Carrega os mapas do localStorage imediatamente (para não mostrar tabela vazia no F5)
+    const localData = JSON.parse(localStorage.getItem('vibe_mapas_teatro') || '[]');
+    if (localData.length > 0) {
+        window.state.mapas = [...localData];
+        // Aguarda o DOM estar pronto para renderizar a tabela
+        setTimeout(() => {
+            if (typeof renderTabelaMapas === 'function') renderTabelaMapas();
+        }, 100);
+    }
+    
+    // Após o DOM e scripts carregarem, sincroniza com o backend
+    // Maior delay para garantir que supabaseClient já foi inicializado
+    setTimeout(() => {
+        fetchMapasTeatro();
+    }, 800);
 });
 
 // ==========================================
