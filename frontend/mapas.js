@@ -398,40 +398,47 @@ window.gerarFileiraNoCanvas = function() {
         return;
     }
     
-    const prefixo = document.getElementById('mapa-fileira-prefix').value || 'A';
+    const prefixoRaw = document.getElementById('mapa-fileira-prefix').value || 'A';
     const inicio = parseInt(document.getElementById('mapa-fileira-inicio').value) || 1;
     const fim = parseInt(document.getElementById('mapa-fileira-fim').value) || 30;
     const padrao = document.getElementById('mapa-fileira-padrao').value;
     
-    const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
-    s.fileiras.push({ prefixo, inicio, fim, padrao });
+    // Suporte para múltiplas fileiras separadas por vírgula (ex: A, B, C)
+    const prefixos = prefixoRaw.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    if (prefixos.length === 0) prefixos.push('A');
     
+    const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
     const cadeiras = window.state.mapaAtual.config.cadeiras;
     
-    let startY = 0; 
-    let startX = -15; 
-    
-    let maxGy = -999;
-    for(let k in cadeiras) {
-        let gy = parseInt(k.split(',')[1]);
-        if(gy > maxGy) maxGy = gy;
-    }
-    if(maxGy !== -999) startY = maxGy + 2;
-    
-    let currentX = startX;
-    
-    for (let i = inicio; i <= fim; i++) {
-        if (padrao === 'impar' && i % 2 === 0) continue;
-        if (padrao === 'par' && i % 2 !== 0) continue;
+    for (let pIdx = 0; pIdx < prefixos.length; pIdx++) {
+        const prefixo = prefixos[pIdx];
+        s.fileiras.push({ prefixo, inicio, fim, padrao });
         
-        let key = `${currentX},${startY}`;
-        cadeiras[key] = {
-            setorIdx: window.setorSelecionadoIdx,
-            prefixo: prefixo,
-            num: i,
-            tipo: 'Normal'
-        };
-        currentX++;
+        let startY = 0; 
+        let startX = -15; 
+        
+        let maxGy = -999;
+        for(let k in cadeiras) {
+            let gy = parseInt(k.split(',')[1]);
+            if(gy > maxGy) maxGy = gy;
+        }
+        if(maxGy !== -999) startY = maxGy + 2;
+        
+        let currentX = startX;
+        
+        for (let i = inicio; i <= fim; i++) {
+            if (padrao === 'impar' && i % 2 === 0) continue;
+            if (padrao === 'par' && i % 2 !== 0) continue;
+            
+            let key = `${currentX},${startY}`;
+            cadeiras[key] = {
+                setorIdx: window.setorSelecionadoIdx,
+                prefixo: prefixo,
+                num: i,
+                tipo: 'Normal'
+            };
+            currentX++;
+        }
     }
 }
 
