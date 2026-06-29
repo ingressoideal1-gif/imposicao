@@ -53,43 +53,53 @@ window.undoMapHistory = function() {
 // INICIALIZAÇÃO E FETCH
 // ==========================================
 async function fetchMapasTeatro() {
-    let success = false;
-    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-        const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').order('name', { ascending: true });
-        if (!error && data) {
-            window.state.mapas = data;
-            success = true;
-        }
-    } else {
-        // Fallback para api local se rodando em env dev sem supabase
-        try {
-            const res = await fetch('/api/mapas_teatro');
-            if (res.ok) {
-                window.state.mapas = await res.json();
+    // 1. Carrega o cache local IMEDIATAMENTE
+    const localData = JSON.parse(localStorage.getItem('vibe_mapas_teatro') || '[]');
+    window.state.mapas = [...localData];
+    
+    // 2. Renderiza na tela para o usuário não ficar esperando ou ver tela vazia
+    renderTabelaMapas();
+    
+    // 3. Tenta sincronizar com o backend
+    try {
+        let success = false;
+        let backendData = [];
+        
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').order('name', { ascending: true });
+            if (!error && data) {
+                backendData = data;
                 success = true;
             }
-        } catch(e) {}
-    }
-    
-    // Fallback/Cache em localStorage e Merge para evitar sumiço por RLS do Supabase
-    const localData = JSON.parse(localStorage.getItem('vibe_mapas_teatro') || '[]');
-    
-    if (success) {
-        // Se a API retornou, fazemos merge com os locais (para não perder os mapas que salvamos mas a API não retornou)
-        const merged = [...window.state.mapas];
-        localData.forEach(localMap => {
-            if (!merged.find(x => x.id === localMap.id)) {
-                merged.push(localMap);
+        } else {
+            // Fallback para api local se rodando em env dev sem supabase
+            const res = await fetch('/api/mapas_teatro');
+            if (res.ok) {
+                backendData = await res.json();
+                success = true;
             }
-        });
-        window.state.mapas = merged;
-        localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
-    } else {
-        // Se falhou, usa 100% o que está local
-        window.state.mapas = localData;
+        }
+        
+        if (success) {
+            // Merge robusto: Backend tem prioridade, mas mantemos o que só existe localmente
+            const mergedMap = new Map();
+            
+            backendData.forEach(m => mergedMap.set(m.id, m));
+            
+            localData.forEach(m => {
+                if (!mergedMap.has(m.id)) {
+                    mergedMap.set(m.id, m);
+                }
+            });
+            
+            window.state.mapas = Array.from(mergedMap.values());
+            localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
+            
+            renderTabelaMapas();
+        }
+    } catch(e) {
+        console.error("Erro ao sincronizar mapas com backend (mantendo cache local):", e);
     }
-    
-    renderTabelaMapas();
 }
 
 function renderTabelaMapas() {
@@ -181,35 +191,33 @@ window.salvarMapaTeatro = async function() {
     
     let backendSuccess = false;
     
-    if (m.id) {
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const {error} = await supabaseClient.from('producao_mapas_teatro').update({
-                name: m.name,
-                config: m.config
-            }).eq('id', m.id);
-            if(!error) backendSuccess = true;
-        } else {
-            try {
+    try {
+        if (m.id) {
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const {error} = await supabaseClient.from('producao_mapas_teatro').update({
+                    name: m.name,
+                    config: m.config
+                }).eq('id', m.id);
+                if(!error) backendSuccess = true;
+            } else {
                 const res = await fetch(`/api/mapas_teatro/${m.id}`, {
                     method: 'PUT',
                     headers:{'Content-Type':'application/json'},
                     body: JSON.stringify(m)
                 });
                 if(res.ok) backendSuccess = true;
-            } catch(e) {}
-        }
-    } else {
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { data, error } = await supabaseClient.from('producao_mapas_teatro').insert([{
-                name: m.name,
-                config: m.config
-            }]).select();
-            if(data && data.length > 0) {
-                m.id = data[0].id;
-                backendSuccess = true;
             }
         } else {
-            try {
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { data, error } = await supabaseClient.from('producao_mapas_teatro').insert([{
+                    name: m.name,
+                    config: m.config
+                }]).select();
+                if(data && data.length > 0) {
+                    m.id = data[0].id;
+                    backendSuccess = true;
+                }
+            } else {
                 const res = await fetch(`/api/mapas_teatro`, {
                     method: 'POST',
                     headers:{'Content-Type':'application/json'},
@@ -220,8 +228,10 @@ window.salvarMapaTeatro = async function() {
                     if(data.id) m.id = data.id;
                     backendSuccess = true;
                 }
-            } catch(e) {}
+            }
         }
+    } catch(e) {
+        console.error("Erro ao salvar mapa no backend:", e);
     }
     
     // Atualiza o cache local SEMPRE, mesmo se deu sucesso no backend (garantia máxima)
