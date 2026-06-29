@@ -680,3 +680,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ==========================================
+// EVENTOS GLOBAIS DE TECLADO
+// ==========================================
+document.addEventListener('keydown', function(e) {
+    const modal = document.getElementById('modal-mapa-teatro');
+    if (!modal || modal.style.display !== 'flex') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    
+    // Deleta as cadeiras selecionadas ao pressionar X ou Delete
+    if (e.key.toLowerCase() === 'x' || e.key === 'Delete') {
+        if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size > 0) {
+            const cadeiras = window.state.mapaAtual.config.cadeiras;
+            window.cadeirasSelecionadas.forEach(key => {
+                delete cadeiras[key];
+            });
+            window.cadeirasSelecionadas.clear();
+            atualizarEstatisticasMapa();
+            
+            // Re-render
+            if (typeof renderCanvasLoop !== 'undefined' && canvasCtx) {
+                // We just need a dirty flag or one frame because renderCanvasLoop might be running
+                // but actually renderCanvasLoop uses requestAnimationFrame constantly.
+            }
+        }
+    }
+});
