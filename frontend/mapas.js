@@ -419,6 +419,16 @@ function onMapMouseDown(e) {
                 if (!e.shiftKey && !e.ctrlKey) window.cadeirasSelecionadas.clear();
                 window.cadeirasSelecionadas.add(key);
                 changed = true;
+                
+                // Preenche formulário para facilitar adição na mesma fila
+                document.getElementById('mapa-fileira-prefix').value = cadeiras[key].prefixo || '';
+                document.getElementById('mapa-fileira-inicio').value = parseInt(cadeiras[key].num || 0) + 1;
+                // Seleciona automaticamente o setor da cadeira clicada
+                if (cadeiras[key].setorIdx !== undefined && window.setorSelecionadoIdx !== cadeiras[key].setorIdx) {
+                    window.setorSelecionadoIdx = cadeiras[key].setorIdx;
+                    renderSetoresList();
+                    carregarSetorNoSidebar();
+                }
             } else {
                 window.cadeirasSelecionadas.clear();
                 changed = true;
@@ -457,6 +467,10 @@ function onMapMouseMove(e) {
                 window.cadeirasSelecionadas = window.cadeirasSelecionadas || new Set();
                 window.cadeirasSelecionadas.add(key);
                 window.requestAnimationFrame(renderMapa);
+                
+                // Preenche formulário para facilitar adição na mesma fila
+                document.getElementById('mapa-fileira-prefix').value = cadeiras[key].prefixo || '';
+                document.getElementById('mapa-fileira-inicio').value = parseInt(cadeiras[key].num || 0) + 1;
             }
         }
     }
@@ -510,17 +524,33 @@ window.gerarFileiraNoCanvas = function() {
         const prefixo = prefixos[pIdx];
         s.fileiras.push({ prefixo, inicio, fim, padrao });
         
-        let startY = 0; 
-        let startX = -15; 
+        let startY = null; 
+        let startX = null; 
         
-        let maxGy = -999;
-        for(let k in cadeiras) {
-            let gy = parseInt(k.split(',')[1]);
-            if(gy > maxGy) maxGy = gy;
+        // Verifica se já existe a fileira com este prefixo no setor
+        for (let k in cadeiras) {
+            const c = cadeiras[k];
+            if (c.setorIdx === window.setorSelecionadoIdx && c.prefixo === prefixo) {
+                let [gx, gy] = k.split(',').map(Number);
+                if (startY === null) startY = gy;
+                if (startX === null || gx > startX) startX = gx;
+            }
         }
-        if(maxGy !== -999) startY = maxGy + 2;
         
-        let currentX = startX;
+        let currentX;
+        if (startY !== null) {
+            // Continua a fileira existente a direita
+            currentX = startX + 1;
+        } else {
+            // Fileira nova, acha a linha de baixo
+            let maxGy = -999;
+            for(let k in cadeiras) {
+                let gy = parseInt(k.split(',')[1]);
+                if(gy > maxGy) maxGy = gy;
+            }
+            startY = (maxGy !== -999) ? maxGy + 2 : 0;
+            currentX = -15; 
+        }
         
         for (let i = inicio; i <= fim; i++) {
             if (padrao === 'impar' && i % 2 === 0) continue;
