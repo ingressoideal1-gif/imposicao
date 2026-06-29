@@ -5420,12 +5420,19 @@ function drawPreview() {
 
 
     const fmt = state.formatos.find(f => f.id === fmtId);
-
     const sai = state.saidas.find(s => s.id === saiId);
 
     if (!fmt || !sai) return;
-
-
+    
+    const previewPartEl = document.getElementById('preview-part-input');
+    if (previewPartEl) {
+        if (fmt.has_cover) {
+            previewPartEl.style.display = 'inline-block';
+        } else {
+            previewPartEl.style.display = 'none';
+            previewPartEl.value = 'miolo';
+        }
+    }
 
     const num = state.numeracoes.find(n => n.id === numId) || null;
 
@@ -5672,20 +5679,23 @@ function drawPreview() {
 
 
             if (activeImage || activePdfDoc) {
-
                 // Centralizar a arte na célula + aplicar offset do formato (em relação ao centro da célula que é 0,0)
-
                 // (positivo H = direita, positivo V = para cima → negar Y)
+                let offH = fmt_off_h * scale;
+                let offV = -fmt_off_v * scale;
+                let dw = art_orig_w * scale;
+                let dh = art_orig_h * scale;
 
-                const offH = fmt_off_h * scale;
-
-                const offV = -fmt_off_v * scale;
-
-
-
-                const dw = art_orig_w * scale;
-
-                const dh = art_orig_h * scale;
+                const previewPartEl = document.getElementById('preview-part-input');
+                const previewPart = previewPartEl ? previewPartEl.value : 'miolo';
+                
+                if (previewPart === 'capa' || previewPart === 'contracapa') {
+                    const cScale = (parseFloat(fmt.cover_scale) || 100) / 100.0;
+                    dw *= cScale;
+                    dh *= cScale;
+                    offH = (parseFloat(fmt.cover_offset_x) || 0) * MM2PT * scale;
+                    offV = -(parseFloat(fmt.cover_offset_y) || 0) * MM2PT * scale;
+                }
 
 
 
@@ -5900,6 +5910,29 @@ function drawPreview() {
 
 
             // Desenhar Nome da Arte (Multi-Artes)
+            
+            if (previewPart === 'capa' || previewPart === 'contracapa') {
+                if (previewPart === 'capa' && !isBack) {
+                    const color = fmt.cover_font_color || '#000000';
+                    const fsPdf = parseInt(fmt.cover_font_size) || 12;
+                    const yPdf = parseFloat(fmt.cover_font_y) || 10;
+                    
+                    ctx.fillStyle = color;
+                    ctx.font = `bold ${fsPdf * scale}px Helvetica, sans-serif`;
+                    ctx.textBaseline = 'top';
+                    ctx.textAlign = 'left';
+                    
+                    const blocoNum = String(P + 1).padStart(2, '0');
+                    const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
+                    
+                    ctx.fillText(`Bloco ${blocoNum}`, -cw/2 + 10*scale, -ch/2 + (yPdf * MM2PT * scale));
+                    ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+                    ctx.fillText(` - de 0001 a 0050`, -cw/2 + 10*scale + wBloco, -ch/2 + (yPdf * MM2PT * scale));
+                }
+                ctx.restore();
+                continue;
+            }
+
             if (schema === 'multi_artes' && multiArteItem && multiArteItem.nome) {
                 ctx.save();
                 const nomeTxt = String(multiArteItem.nome).padStart(6, '0');
