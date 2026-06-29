@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
@@ -1738,7 +1738,7 @@
                     
                     <div style="display:flex; flex:1; overflow:hidden;">
                         <!-- Sidebar: Propriedades -->
-                        <div style="width:300px; border-right:1px solid var(--border); background:var(--card-bg); padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
+                        <div style="width:300px; min-width:300px; max-width:300px; border-right:1px solid var(--border); background:var(--card-bg); padding:16px; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:16px; box-sizing:border-box;">
                             <div class="form-group">
                                 <label>Nome do Mapa</label>
                                 <input type="text" id="mapa-nome" class="form-control" placeholder="Ex: Teatro Municipal">
@@ -1762,18 +1762,18 @@
                                     <label>Nome do Setor</label>
                                     <input type="text" id="mapa-setor-nome" class="form-control" oninput="atualizarSetorAtual()">
                                 </div>
-                                <div style="display:flex; gap:8px;">
-                                    <div class="form-group" style="flex:1;">
-                                        <label>Fila (Letra)</label>
-                                        <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A">
+                                <div style="display:flex; gap:4px;">
+                                    <div class="form-group" style="flex:1; min-width:0;">
+                                        <label>Fila</label>
+                                        <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A" style="min-width:0; width:100%;">
                                     </div>
-                                    <div class="form-group" style="flex:1;">
-                                        <label>Nº Inicial</label>
-                                        <input type="number" id="mapa-fileira-inicio" class="form-control" value="1">
+                                    <div class="form-group" style="flex:1; min-width:0;">
+                                        <label>Início</label>
+                                        <input type="number" id="mapa-fileira-inicio" class="form-control" value="1" style="min-width:0; width:100%;">
                                     </div>
-                                    <div class="form-group" style="flex:1;">
-                                        <label>Nº Final</label>
-                                        <input type="number" id="mapa-fileira-fim" class="form-control" value="30">
+                                    <div class="form-group" style="flex:1; min-width:0;">
+                                        <label>Fim</label>
+                                        <input type="number" id="mapa-fileira-fim" class="form-control" value="30" style="min-width:0; width:100%;">
                                     </div>
                                 </div>
                                 <div class="form-group">
