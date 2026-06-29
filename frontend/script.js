@@ -5937,7 +5937,20 @@ function drawPreview() {
                     
                     ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
                     ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                    ctx.fillText(` - de 0001 a 0050`, textX + wBloco, textY);
+                    
+                    const seqStartInput = document.getElementById('imp-start');
+                    const seqStart = (seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1;
+                    const sheetsInput = document.getElementById('imp-sheets-per-block');
+                    const sheetsPerBlock = (sheetsInput && sheetsInput.value && sheetsInput.offsetParent !== null) 
+                        ? parseInt(sheetsInput.value) 
+                        : (parseInt(fmt.default_sheets_per_block) || 50);
+                        
+                    const iStart = P * sheetsPerBlock;
+                    const iEnd = iStart + sheetsPerBlock - 1;
+                    const vStartStr = String(seqStart + iStart).padStart(4, '0');
+                    const vEndStr = String(seqStart + iEnd).padStart(4, '0');
+                    
+                    ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
                 }
                 ctx.restore();
                 continue;
