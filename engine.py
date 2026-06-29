@@ -1164,7 +1164,9 @@ class ImpositionEngine:
                 v_start = cfg.seq_start + (i_start * cfg.seq_increment)
                 v_end = cfg.seq_start + (i_end * cfg.seq_increment)
                 
-                text = f"Bloco {(set_idx * poses_per_sheet) + P + 1}\nInício: {v_start}\nFim: {v_end}"
+                v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
+                v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
+                text = f"Bloco {(set_idx * poses_per_sheet) + P + 1:02d} - de {v_start_str} a {v_end_str}"
                 font_y = cell_y0 + (cfg.cover_font_y * 2.83465)
                 
                 def hex_to_rgb(h):
