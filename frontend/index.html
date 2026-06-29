@@ -1649,34 +1649,17 @@
                             <h4 style="margin-top: 0;">Ações na Versão Atual</h4>
                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                                 <button class="btn btn-success btn-sm" onclick="aprovarArteAtual()">✅ Aprovar (Cliente)</button>
-                                <button class="btn btn-teal btn-sm" onclick="liberarArteAtual()">✅ Liberar Impressão</button>
-                                <button class="btn btn-danger btn-sm" onclick="reprovarArteAtual()">❌ Reprovar</button>
-                            </div>
-                        </div>
-                    </div>
+                                <button class="btn btn-teal btn-sm" onclick="liberarArteAtual()">✅ Liberar Impress�            <!-- Canvas Área Principal -->
+            <div style="flex:1; display:flex; flex-direction:column; background:#1e1e24; position:relative; overflow:hidden;" id="mapa-canvas-container">
+                <div style="position:absolute; top:16px; left:16px; display:flex; gap:8px; z-index:10; background:rgba(0,0,0,0.5); padding:8px; border-radius:8px;" id="mapa-ferramentas-canvas">
+                    <button class="btn btn-sm" id="tool-select" onclick="setMapTool('select')" style="background:var(--blue); color:white;">🖱️ Selecionar</button>
+                    <button class="btn btn-sm btn-secondary" id="tool-pan" onclick="setMapTool('pan')">🖐 Mover</button>
+                    <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">🧹 Borracha</button>
+                    <div style="width:1px; background:var(--border); margin:0 4px;"></div>
+                    <div id="mapa-toolbar-tipos" style="display:flex; gap:8px;"></div>
                 </div>
-            </div>
-
-        </main>
-    </div>
-
-    <!-- Modal de Editor Visual -->
-    <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card);">
-            <h2 style="margin:0; font-size:1.2rem; display:flex; align-items:center; gap:8px;">
-                <span class="icon">🗺️</span> Editor de Mapa de Teatro V2
-            </h2>
-            <div style="display:flex; gap:12px;">
-                <button class="btn btn-secondary" onclick="fecharModalMapaTeatro()">Cancelar</button>
-                <button class="btn btn-primary" onclick="salvarMapaTeatro()">Salvar Mapa</button>
-            </div>
-        </div>
-        
-        <div style="display:flex; flex:1; overflow:hidden;">
-            <!-- Sidebar: Propriedades -->
-            <div style="width:340px; min-width:340px; border-right:1px solid var(--border); background:var(--card); padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
-                <div class="form-group">
-                    <label>Nome do Mapa</label>
+                <canvas id="mapa-canvas" style="width:100%; height:100%; cursor:grab;"></canvas>
+            </div> Mapa</label>
                     <input type="text" id="mapa-nome" class="form-control" placeholder="Ex: Teatro Municipal">
                 </div>
                 
@@ -1688,12 +1671,23 @@
                 </div>
                 
                 <div id="mapa-setores-list" style="display:flex; flex-direction:column; gap:8px;">
-                    <!-- Lista de setores dinâmicos -->
-                </div>
-                
-                <div class="divider"></div>
-                
-                <div id="mapa-setor-props" style="display:none; flex-direction:column; gap:12px;">
+                        <!-- Lista de setores dinamicos -->
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="font-size:0.95rem; margin:0;" title="Legenda e marcacoes especiais">Tipos / Legenda</h3>
+                        <button class="btn btn-sm btn-secondary" onclick="adicionarTipoAssentoMapa()">+ Tipo</button>
+                    </div>
+                    
+                    <div id="mapa-tipos-assento-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                        <!-- Lista de tipos dinamicos -->
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div id="mapa-setor-props" style="display:none; flex-direction:column; gap:12px;">
                     <h3 style="font-size:0.95rem; margin:0; color:var(--blue);">Propriedades do Setor</h3>
                     <div class="form-group">
                         <label>Nome do Setor</label>
@@ -1732,10 +1726,7 @@
                     <button class="btn btn-sm btn-secondary" id="tool-pan" onclick="setMapTool('pan')">✋ Mover</button>
                     <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">🧹 Borracha</button>
                     <div style="width:1px; background:var(--border); margin:0 4px;"></div>
-                    <button class="btn btn-sm btn-secondary" onclick="marcarAssentoEspecial('PCD')" title="Marcar como PCD">♿</button>
-                    <button class="btn btn-sm btn-secondary" onclick="marcarAssentoEspecial('Obeso')" title="Marcar como Obeso">💺</button>
-                    <button class="btn btn-sm btn-secondary" onclick="marcarAssentoEspecial('Acompanhante')" title="Marcar como Acompanhante">👥</button>
-                    <button class="btn btn-sm btn-secondary" onclick="marcarAssentoEspecial('Normal')" title="Remover Especial">✖️</button>
+                    <div id="mapa-toolbar-tipos" style="display:flex; gap:8px;"></div>
                 </div>
                 <canvas id="mapa-canvas" style="width:100%; height:100%; cursor:grab;"></canvas>
             </div>
@@ -1745,7 +1736,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=5"></script>
+    <script src="mapas.js?v=6"></script>
     <script src="script.js?v=190"></script>
 
     <!-- PÁGINA PÚBLICA DO CLIENTE (fora do app-shell) -->
