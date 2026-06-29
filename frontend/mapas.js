@@ -396,10 +396,20 @@ function onMapMouseDown(e) {
         const key = `${pos.gx},${pos.gy}`;
         const cadeiras = window.state.mapaAtual.config.cadeiras;
         
+        let changed = false;
         if (mapTool === 'erase') {
-            if (cadeiras[key]) delete cadeiras[key];
+            if (cadeiras[key]) {
+                delete cadeiras[key];
+                changed = true;
+            }
         } else if (mapTool === 'select') {
             window.cadeiraSelecionada = key;
+            changed = true;
+        }
+        
+        if (changed) {
+            window.requestAnimationFrame(renderMapa);
+            atualizarEstatisticasMapa();
         }
     }
 }
@@ -410,6 +420,7 @@ function onMapMouseMove(e) {
         const dy = e.clientY - dragStart.y;
         camera.x = cameraStart.x + dx;
         camera.y = cameraStart.y + dy;
+        window.requestAnimationFrame(renderMapa);
     }
     
     if (e.buttons === 1 && mapTool === 'erase') {
@@ -417,6 +428,8 @@ function onMapMouseMove(e) {
         const key = `${pos.gx},${pos.gy}`;
         if (window.state.mapaAtual.config.cadeiras[key]) {
             delete window.state.mapaAtual.config.cadeiras[key];
+            window.requestAnimationFrame(renderMapa);
+            atualizarEstatisticasMapa();
         }
     }
 }
@@ -507,6 +520,8 @@ window.marcarAssentoEspecial = function(tipo) {
     if (cadeiras[window.cadeiraSelecionada]) {
         cadeiras[window.cadeiraSelecionada].tipo = tipo;
         window.cadeiraSelecionada = null; // deselect after apply
+        window.requestAnimationFrame(renderMapa);
+        atualizarEstatisticasMapa();
     }
 }
 
