@@ -612,86 +612,7 @@
                     </div>
                 </div>
 
-                <!-- Modal de Editor Visual -->
-                <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-color); z-index:9999; overflow:hidden; flex-direction:column;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card-bg);">
-                        <h2 style="margin:0; font-size:1.2rem; display:flex; align-items:center; gap:8px;">
-                            <span class="icon">🗺️</span> Editor de Mapa de Teatro
-                        </h2>
-                        <div style="display:flex; gap:12px;">
-                            <button class="btn btn-secondary" onclick="fecharModalMapaTeatro()">Cancelar</button>
-                            <button class="btn btn-primary" onclick="salvarMapaTeatro()">Salvar Mapa</button>
-                        </div>
-                    </div>
-                    
-                    <div style="display:flex; flex:1; overflow:hidden;">
-                        <!-- Sidebar: Propriedades -->
-                        <div style="width:300px; border-right:1px solid var(--border); background:var(--card-bg); padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
-                            <div class="form-group">
-                                <label>Nome do Mapa</label>
-                                <input type="text" id="mapa-nome" class="form-control" placeholder="Ex: Teatro Municipal">
-                            </div>
-                            
-                            <div class="divider"></div>
-                            
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <h3 style="font-size:0.95rem; margin:0;">Setores</h3>
-                                <button class="btn btn-sm btn-secondary" onclick="adicionarSetorMapa()">+ Setor</button>
-                            </div>
-                            
-                            <div id="mapa-setores-list" style="display:flex; flex-direction:column; gap:8px;">
-                                <!-- Lista de setores dinâmicos -->
-                            </div>
-                            
-                            <div class="divider"></div>
-                            
-                            <div id="mapa-setor-props" style="display:none; flex-direction:column; gap:12px;">
-                                <h3 style="font-size:0.95rem; margin:0; color:var(--blue);">Propriedades do Setor</h3>
-                                <div class="form-group">
-                                    <label>Nome do Setor</label>
-                                    <input type="text" id="mapa-setor-nome" class="form-control" oninput="atualizarSetorAtual()">
-                                </div>
-                                <div style="display:flex; gap:8px;">
-                                    <div class="form-group" style="flex:1;">
-                                        <label>Fila (Letra)</label>
-                                        <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A">
-                                    </div>
-                                    <div class="form-group" style="flex:1;">
-                                        <label>Nº Inicial</label>
-                                        <input type="number" id="mapa-fileira-inicio" class="form-control" value="1">
-                                    </div>
-                                    <div class="form-group" style="flex:1;">
-                                        <label>Nº Final</label>
-                                        <input type="number" id="mapa-fileira-fim" class="form-control" value="30">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label>Padrão Numeração</label>
-                                    <select id="mapa-fileira-padrao" class="form-control">
-                                        <option value="sequencial">Sequencial (1,2,3)</option>
-                                        <option value="impar">Ímpar (1,3,5)</option>
-                                        <option value="par">Par (2,4,6)</option>
-                                    </select>
-                                </div>
-                                <button class="btn btn-sm btn-primary" style="width:100%" onclick="gerarFileiraNoCanvas()">Adicionar Fileira no Mapa</button>
-                            </div>
-                        </div>
-
-                        <!-- Canvas Área Principal -->
-                        <div style="flex:1; display:flex; flex-direction:column; background:#1e1e24; position:relative; overflow:hidden;" id="mapa-canvas-container">
-                            <div style="position:absolute; top:16px; left:16px; display:flex; gap:8px; z-index:10; background:rgba(0,0,0,0.5); padding:8px; border-radius:8px;">
-                                <button class="btn btn-sm" id="tool-select" onclick="setMapTool('select')" style="background:var(--blue); color:white;">🖱️ Selecionar</button>
-                                <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">🧹 Borracha</button>
-                                <div style="width:1px; background:var(--border); margin:0 4px;"></div>
-                                <button class="btn btn-sm btn-secondary" onclick="marcarAssentoEspecial('PCD')" title="Marcar como PCD">♿</button>
-                                <button class="btn btn-sm btn-secondary" onclick="marcarAssentoEspecial('Obeso')" title="Marcar como Obeso">💺</button>
-                                <button class="btn btn-sm btn-secondary" onclick="marcarAssentoEspecial('Acompanhante')" title="Marcar como Acompanhante">👥</button>
-                                <button class="btn btn-sm btn-secondary" onclick="marcarAssentoEspecial('Normal')" title="Remover Especial">✖️</button>
-                            </div>
-                            <canvas id="mapa-canvas" style="width:100%; height:100%; cursor:grab;"></canvas>
-                        </div>
-                    </div>
-                </div>
+                
             </section>
 
             <section id="view-saidas" class="view-section">
@@ -1803,6 +1724,83 @@
         </div>
     </div>
 
+<!-- Modal de Editor Visual -->
+                <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-color); z-index:9999; overflow:hidden; flex-direction:column;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card-bg);">
+                        <h2 style="margin:0; font-size:1.2rem; display:flex; align-items:center; gap:8px;">
+                            <span class="icon">🗺️</span> Editor de Mapa de Teatro
+                        </h2>
+                        <div style="display:flex; gap:12px;">
+                            <button class="btn btn-secondary" onclick="fecharModalMapaTeatro()">Cancelar</button>
+                            <button class="btn btn-primary" onclick="salvarMapaTeatro()">Salvar Mapa</button>
+                        </div>
+                    </div>
+                    
+                    <div style="display:flex; flex:1; overflow:hidden;">
+                        <!-- Sidebar: Propriedades -->
+                        <div style="width:300px; border-right:1px solid var(--border); background:var(--card-bg); padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
+                            <div class="form-group">
+                                <label>Nome do Mapa</label>
+                                <input type="text" id="mapa-nome" class="form-control" placeholder="Ex: Teatro Municipal">
+                            </div>
+                            
+                            <div class="divider"></div>
+                            
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <h3 style="font-size:0.95rem; margin:0;">Setores</h3>
+                                <button class="btn btn-sm btn-secondary" onclick="adicionarSetorMapa()">+ Setor</button>
+                            </div>
+                            
+                            <div id="mapa-setores-list" style="display:flex; flex-direction:column; gap:8px;">
+                                <!-- Lista de setores dinâmicos -->
+                            </div>
+                            
+                            <div class="divider"></div>
+                            
+                            <div id="mapa-setor-props" style="display:none; flex-direction:column; gap:12px;">
+                                <h3 style="font-size:0.95rem; margin:0; color:var(--blue);">Propriedades do Setor</h3>
+                                <div class="form-group">
+                                    <label>Nome do Setor</label>
+                                    <input type="text" id="mapa-setor-nome" class="form-control" oninput="atualizarSetorAtual()">
+                                </div>
+                                <div style="display:flex; gap:8px;">
+                                    <div class="form-group" style="flex:1;">
+                                        <label>Fila (Letra)</label>
+                                        <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A">
+                                    </div>
+                                    <div class="form-group" style="flex:1;">
+                                        <label>Nº Inicial</label>
+                                        <input type="number" id="mapa-fileira-inicio" class="form-control" value="1">
+                                    </div>
+                                    <div class="form-group" style="flex:1;">
+                                        <label>Nº Final</label>
+                                        <input type="number" id="mapa-fileira-fim" class="form-control" value="30">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Padrão Numeração</label>
+                                    <select id="mapa-fileira-padrao" class="form-control">
+                                        <option value="sequencial">Sequencial (1,2,3)</option>
+                                        <option value="impar">Ímpar (1,3,5)</option>
+                                        <option value="par">Par (2,4,6)</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-sm btn-primary" style="width:100%" onclick="gerarFileiraNoCanvas()">Adicionar Fileira no Mapa</button>
+                            </div>
+                        </div>
+
+                        <!-- Canvas Área Principal -->
+                        <div style="flex:1; display:flex; flex-direction:column; background:#1e1e24; position:relative; overflow:hidden;" id="mapa-canvas-container">
+                            <div style="position:absolute; top:16px; left:16px; display:flex; gap:8px; z-index:10; background:rgba(0,0,0,0.5); padding:8px; border-radius:8px;">
+                                <button class="btn btn-sm" id="tool-select" onclick="setMapTool('select')" style="background:var(--blue); color:white;">🖱️ Selecionar</button>
+                                <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">🧹 Borracha</button>
+                                <div style="width:1px; background:var(--border); margin:0 4px;"></div>
+                                <div id="mapa-toolbar-tipos" style="display:flex; gap:8px;"></div>
+                            </div>
+                            <canvas id="mapa-canvas" style="width:100%; height:100%; cursor:grab;"></canvas>
+                        </div>
+                    </div>
+                </div>
 </body>
 </html>
 
