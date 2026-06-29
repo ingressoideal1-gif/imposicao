@@ -233,6 +233,7 @@ def add_formato(data: dict) -> str:
             "cover_offset_y": float(data.get("cover_offset_y", 0.0)),
             "cover_font_size": int(data.get("cover_font_size", 12)),
             "cover_font_color": data.get("cover_font_color", "#000000"),
+            "cover_font_x": float(data.get("cover_font_x", 10.0)),
             "cover_font_y": float(data.get("cover_font_y", 10.0))
         }
         _supabase_request("POST", "producao_formatos", clean_data)
@@ -268,6 +269,7 @@ def update_formato(fmt_id: str, data: dict) -> bool:
             "cover_offset_y": float(data.get("cover_offset_y", 0.0)),
             "cover_font_size": int(data.get("cover_font_size", 12)),
             "cover_font_color": data.get("cover_font_color", "#000000"),
+            "cover_font_x": float(data.get("cover_font_x", 10.0)),
             "cover_font_y": float(data.get("cover_font_y", 10.0))
         }
             res = _supabase_request("PATCH", f"producao_formatos?id=eq.{fmt_id}", clean_data)

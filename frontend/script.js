@@ -917,6 +917,8 @@ async function saveFmt() {
 
         cover_font_color: document.getElementById('fmt-cover-font-color').value || '#000000',
 
+        cover_font_x: parseFloat(document.getElementById('fmt-cover-font-x').value) || 10.0,
+
         cover_font_y: parseFloat(document.getElementById('fmt-cover-font-y').value) || 10.0,
 
     };
@@ -1017,6 +1019,7 @@ function editFmt(id) {
     document.getElementById('fmt-cover-offy').value = f.cover_offset_y || 0;
     document.getElementById('fmt-cover-font-size').value = f.cover_font_size || 12;
     document.getElementById('fmt-cover-font-color').value = f.cover_font_color || '#000000';
+    document.getElementById('fmt-cover-font-x').value = f.cover_font_x !== undefined ? f.cover_font_x : 10;
     document.getElementById('fmt-cover-font-y').value = f.cover_font_y !== undefined ? f.cover_font_y : 10;
 
     const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
@@ -1080,6 +1083,7 @@ function cancelFmtEdit() {
     document.getElementById('fmt-cover-offy').value = '0';
     document.getElementById('fmt-cover-font-size').value = '12';
     document.getElementById('fmt-cover-font-color').value = '#000000';
+    document.getElementById('fmt-cover-font-x').value = '10';
     document.getElementById('fmt-cover-font-y').value = '10';
     const coverOpts = document.getElementById('fmt-cover-options');
     if (coverOpts) coverOpts.style.display = 'none';
@@ -5915,6 +5919,7 @@ function drawPreview() {
                 if (previewPart === 'capa' && !isBack) {
                     const color = fmt.cover_font_color || '#000000';
                     const fsPdf = parseInt(fmt.cover_font_size) || 12;
+                    const xPdf = parseFloat(fmt.cover_font_x) || 10;
                     const yPdf = parseFloat(fmt.cover_font_y) || 10;
                     
                     ctx.fillStyle = color;
@@ -5925,9 +5930,12 @@ function drawPreview() {
                     const blocoNum = String(P + 1).padStart(2, '0');
                     const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
                     
-                    ctx.fillText(`Bloco ${blocoNum}`, -cw/2 + 10*scale, -ch/2 + (yPdf * MM2PT * scale));
+                    const textX = -cw/2 + (xPdf * MM2PT * scale);
+                    const textY = -ch/2 + (yPdf * MM2PT * scale);
+                    
+                    ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
                     ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                    ctx.fillText(` - de 0001 a 0050`, -cw/2 + 10*scale + wBloco, -ch/2 + (yPdf * MM2PT * scale));
+                    ctx.fillText(` - de 0001 a 0050`, textX + wBloco, textY);
                 }
                 ctx.restore();
                 continue;

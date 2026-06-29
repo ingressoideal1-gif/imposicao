@@ -137,6 +137,7 @@ class ImpositionConfig:
         self.cover_offset_y = float(formato.get("cover_offset_y", 0.0))
         self.cover_font_size = int(formato.get("cover_font_size", 12))
         self.cover_font_color = formato.get("cover_font_color", "#000000")
+        self.cover_font_x = float(formato.get("cover_font_x", 10.0))
         self.cover_font_y = float(formato.get("cover_font_y", 10.0))
         # Formato (tamanho do item + grade + gaps)
         self.item_w = formato["width_mm"] * MM2PT
@@ -1179,9 +1180,10 @@ class ImpositionEngine:
                 
                 color_rgb = hex_to_rgb(cfg.cover_font_color)
                 w_bloco = fitz.get_text_length(bloco_str, fontname="hebo", fontsize=cfg.cover_font_size)
+                font_x = cell_x0 + (cfg.cover_font_x * 2.83465)
                 
-                p.insert_text(fitz.Point(cell_x0 + 10, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
-                p.insert_text(fitz.Point(cell_x0 + 10 + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
+                p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
+                p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
 
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_01_capa.pdf")
         doc_c.save(out_name, garbage=4, deflate=True)
