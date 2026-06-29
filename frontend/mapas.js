@@ -22,6 +22,33 @@ const SEAT_SIZE = 24;
 const SEAT_GAP = 8;
 const GRID_SIZE = SEAT_SIZE + SEAT_GAP;
 
+// Histórico (Undo)
+window.state.mapaHistory = [];
+
+window.pushToMapHistory = function() {
+    if (!window.state.mapaAtual || !window.state.mapaAtual.config) return;
+    window.state.mapaHistory.push(JSON.parse(JSON.stringify(window.state.mapaAtual.config)));
+    if (window.state.mapaHistory.length > 50) {
+        window.state.mapaHistory.shift();
+    }
+}
+
+window.undoMapHistory = function() {
+    if (!window.state.mapaAtual || !window.state.mapaHistory || window.state.mapaHistory.length === 0) return;
+    const previousConfig = window.state.mapaHistory.pop();
+    window.state.mapaAtual.config = previousConfig;
+    window.cadeirasSelecionadas = new Set();
+    
+    renderSetoresList();
+    if (typeof carregarSetorNoSidebar === 'function') carregarSetorNoSidebar();
+    if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
+    window.requestAnimationFrame(() => {
+        if (typeof renderCanvasLoop !== 'undefined' && canvasCtx) {
+            // will render automatically if loop is running
+        }
+    });
+}
+
 // ==========================================
 // INICIALIZAÇÃO E FETCH
 // ==========================================
@@ -224,6 +251,8 @@ function abrirModalMapaTeatro() {
     window.setorSelecionadoIdx = null;
     window.cadeirasSelecionadas = new Set();
     window.cadeiraSelecionada = null;
+    window.state.mapaHistory = []; // Reset history when opening a map
+    
     renderSetoresList();
     
     setTimeout(initMapCanvas, 100);
@@ -236,6 +265,7 @@ window.fecharModalMapaTeatro = function() {
 }
 
 window.adicionarSetorMapa = function() {
+    window.pushToMapHistory();
     window.state.mapaAtual.config.setores.push({
         nome: 'Novo Setor',
         fileiras: []
@@ -291,6 +321,7 @@ function renderSetoresList() {
 }
 
 window.excluirSetor = function(idx) {
+    window.pushToMapHistory();
     const setorId = window.state.mapaAtual.config.setores[idx].id;
     
     // Remove as cadeiras desse setor
@@ -468,6 +499,7 @@ function onMapMouseDown(e) {
         let changed = false;
         if (mapTool === 'erase') {
             if (cadeiras[key]) {
+                window.pushToMapHistory();
                 delete cadeiras[key];
                 changed = true;
             }
@@ -516,9 +548,12 @@ function onMapMouseMove(e) {
         
         if (mapTool === 'erase') {
             if (cadeiras[key]) {
+                // To avoid pushing to history 60 times a second while dragging erase, 
+                // we'll just push once if the mouse is down, but that's tricky here.
+                // It's ok, we can just push on mouse down, and here we just delete.
                 delete cadeiras[key];
                 window.requestAnimationFrame(renderMapa);
-                atualizarEstatisticasMapa();
+                if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
             }
         } else if (mapTool === 'select') {
             if (cadeiras[key]) {
@@ -566,6 +601,8 @@ window.gerarFileiraNoCanvas = function() {
         return;
     }
     
+    window.pushToMapHistory();
+    
     const prefixoRaw = document.getElementById('mapa-fileira-prefix').value || 'A';
     const inicio = parseInt(document.getElementById('mapa-fileira-inicio').value) || 1;
     const fim = parseInt(document.getElementById('mapa-fileira-fim').value) || 30;
@@ -578,26 +615,66 @@ window.gerarFileiraNoCanvas = function() {
     const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
     const cadeiras = window.state.mapaAtual.config.cadeiras;
     
+    let numSeatsToAdd = 0;
+    for (let i = inicio; i <= fim; i++) {
+        if (padrao === 'impar' && i % 2 === 0) continue;
+        if (padrao === 'par' && i % 2 !== 0) continue;
+        numSeatsToAdd++;
+    }
+    
     for (let pIdx = 0; pIdx < prefixos.length; pIdx++) {
         const prefixo = prefixos[pIdx];
         s.fileiras.push({ prefixo, inicio, fim, padrao });
         
         let startY = null; 
         let startX = null; 
+        let referenceChairKey = null;
         
-        // Verifica se já existe a fileira com este prefixo no setor
-        for (let k in cadeiras) {
-            const c = cadeiras[k];
-            if (c.setorIdx === window.setorSelecionadoIdx && c.prefixo === prefixo) {
-                let [gx, gy] = k.split(',').map(Number);
-                if (startY === null) startY = gy;
-                if (startX === null || gx > startX) startX = gx;
+        // Verifica se há UMA cadeira selecionada que pertença a este setor e prefixo.
+        // Se sim, inserimos a partir dela!
+        if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size === 1) {
+            const selKey = Array.from(window.cadeirasSelecionadas)[0];
+            const selChair = cadeiras[selKey];
+            if (selChair && selChair.setorIdx === window.setorSelecionadoIdx && selChair.prefixo === prefixo) {
+                referenceChairKey = selKey;
+                let [gx, gy] = selKey.split(',').map(Number);
+                startX = gx;
+                startY = gy;
+            }
+        }
+        
+        if (referenceChairKey === null) {
+            // Verifica se já existe a fileira com este prefixo no setor (vai pro final)
+            for (let k in cadeiras) {
+                const c = cadeiras[k];
+                if (c.setorIdx === window.setorSelecionadoIdx && c.prefixo === prefixo) {
+                    let [gx, gy] = k.split(',').map(Number);
+                    if (startY === null) startY = gy;
+                    if (startX === null || gx > startX) startX = gx;
+                }
             }
         }
         
         let currentX;
         if (startY !== null) {
-            // Continua a fileira existente a direita
+            if (referenceChairKey !== null) {
+                // Desloca todas as cadeiras existentes à direita do startX para abrir espaço
+                const chairsToShift = [];
+                for (let k in cadeiras) {
+                    let [gx, gy] = k.split(',').map(Number);
+                    if (gy === startY && gx > startX) {
+                        chairsToShift.push({ key: k, gx, gy, c: cadeiras[k] });
+                    }
+                }
+                chairsToShift.sort((a, b) => b.gx - a.gx); // da direita para a esquerda
+                for (const item of chairsToShift) {
+                    const newKey = `${item.gx + numSeatsToAdd},${item.gy}`;
+                    cadeiras[newKey] = item.c;
+                    delete cadeiras[item.key];
+                }
+            }
+            
+            // Continua a fileira
             currentX = startX + 1;
         } else {
             // Fileira nova, acha a linha de baixo
@@ -634,6 +711,8 @@ window.marcarAssentoEspecial = function(tipo) {
     
     const cadeiras = window.state.mapaAtual.config.cadeiras;
     let count = 0;
+    
+    window.pushToMapHistory();
     
     window.cadeirasSelecionadas.forEach(key => {
         if (cadeiras[key]) {
@@ -689,9 +768,16 @@ document.addEventListener('keydown', function(e) {
     if (!modal || modal.style.display !== 'flex') return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     
+    if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        window.undoMapHistory();
+        return;
+    }
+
     // Deleta as cadeiras selecionadas ao pressionar X ou Delete
     if (e.key.toLowerCase() === 'x' || e.key === 'Delete') {
         if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size > 0) {
+            window.pushToMapHistory();
             const cadeiras = window.state.mapaAtual.config.cadeiras;
             window.cadeirasSelecionadas.forEach(key => {
                 delete cadeiras[key];
