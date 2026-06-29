@@ -527,7 +527,7 @@ function onMapMouseDown(e) {
         
         if (changed) {
             window.requestAnimationFrame(renderMapa);
-            atualizarEstatisticasMapa();
+            if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
         }
     }
 }
@@ -724,7 +724,7 @@ window.marcarAssentoEspecial = function(tipo) {
     if (count > 0) {
         window.cadeirasSelecionadas.clear();
         window.requestAnimationFrame(renderMapa);
-        atualizarEstatisticasMapa();
+        if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
     }
 }
 
@@ -783,13 +783,43 @@ document.addEventListener('keydown', function(e) {
                 delete cadeiras[key];
             });
             window.cadeirasSelecionadas.clear();
-            atualizarEstatisticasMapa();
+            if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
             
             // Re-render
             if (typeof renderCanvasLoop !== 'undefined' && canvasCtx) {
                 // We just need a dirty flag or one frame because renderCanvasLoop might be running
                 // but actually renderCanvasLoop uses requestAnimationFrame constantly.
             }
+        }
+    }
+    
+    // Move as cadeiras selecionadas com as setas do teclado
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size > 0) {
+            e.preventDefault();
+            window.pushToMapHistory();
+            const cadeiras = window.state.mapaAtual.config.cadeiras;
+            
+            let dx = 0, dy = 0;
+            if (e.key === 'ArrowUp') dy = -1;
+            if (e.key === 'ArrowDown') dy = 1;
+            if (e.key === 'ArrowLeft') dx = -1;
+            if (e.key === 'ArrowRight') dx = 1;
+            
+            const toMove = [];
+            window.cadeirasSelecionadas.forEach(key => {
+                let [gx, gy] = key.split(',').map(Number);
+                toMove.push({ key, gx, gy, c: cadeiras[key] });
+            });
+            
+            toMove.forEach(item => delete cadeiras[item.key]);
+            
+            window.cadeirasSelecionadas.clear();
+            toMove.forEach(item => {
+                const newKey = `${item.gx + dx},${item.gy + dy}`;
+                cadeiras[newKey] = item.c;
+                window.cadeirasSelecionadas.add(newKey);
+            });
         }
     }
 });
