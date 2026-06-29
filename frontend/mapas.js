@@ -44,14 +44,22 @@ async function fetchMapasTeatro() {
         } catch(e) {}
     }
     
-    // Fallback/Cache em localStorage garantido
+    // Fallback/Cache em localStorage e Merge para evitar sumiço por RLS do Supabase
+    const localData = JSON.parse(localStorage.getItem('vibe_mapas_teatro') || '[]');
+    
     if (success) {
+        // Se a API retornou, fazemos merge com os locais (para não perder os mapas que salvamos mas a API não retornou)
+        const merged = [...window.state.mapas];
+        localData.forEach(localMap => {
+            if (!merged.find(x => x.id === localMap.id)) {
+                merged.push(localMap);
+            }
+        });
+        window.state.mapas = merged;
         localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
     } else {
-        const localData = localStorage.getItem('vibe_mapas_teatro');
-        if (localData) {
-            window.state.mapas = JSON.parse(localData);
-        }
+        // Se falhou, usa 100% o que está local
+        window.state.mapas = localData;
     }
     
     renderTabelaMapas();
@@ -189,7 +197,7 @@ window.salvarMapaTeatro = async function() {
         }
     }
     
-    // Atualiza o cache local (garantia de no perder no F5 se a API ou DB falharem)
+    // Atualiza o cache local SEMPRE, mesmo se deu sucesso no backend (garantia máxima)
     if (!m.id) {
         m.id = 'local_' + Math.random().toString(36).substr(2, 9);
     }
