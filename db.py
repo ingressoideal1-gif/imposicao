@@ -221,6 +221,12 @@ def add_formato(data: dict) -> str:
             "offset_h_mm": float(data.get("offset_h_mm", 0)),
             "offset_v_mm": float(data.get("offset_v_mm", 0)),
             "rotations": data.get("rotations", {}),
+            "default_schema": data.get("default_schema") or "sequential",
+            "default_saida_id": data.get("default_saida_id"),
+            "default_cut_stack_mode": data.get("default_cut_stack_mode") or "independent",
+            "default_sheets_per_block": int(data.get("default_sheets_per_block", 50) or 50),
+            "default_block_depth": int(data.get("default_block_depth", 1) or 1),
+            "default_rotate_page": bool(data.get("default_rotate_page", False))
         }
         _supabase_request("POST", "producao_formatos", clean_data)
         return new_id
@@ -233,17 +239,23 @@ def update_formato(fmt_id: str, data: dict) -> bool:
     if IS_SUPABASE_ACTIVE:
         try:
             clean_data = {
-                "name": data.get("name"),
-                "width_mm": float(data.get("width_mm", 0)),
-                "height_mm": float(data.get("height_mm", 0)),
-                "cols": int(data.get("cols", 1)),
-                "rows": int(data.get("rows", 1)),
-                "gap_h_mm": float(data.get("gap_h_mm", 0)),
-                "gap_v_mm": float(data.get("gap_v_mm", 0)),
-                "offset_h_mm": float(data.get("offset_h_mm", 0)),
-                "offset_v_mm": float(data.get("offset_v_mm", 0)),
-                "rotations": data.get("rotations", {}),
-            }
+            "name": data.get("name"),
+            "width_mm": float(data.get("width_mm", 0)),
+            "height_mm": float(data.get("height_mm", 0)),
+            "cols": int(data.get("cols", 1)),
+            "rows": int(data.get("rows", 1)),
+            "gap_h_mm": float(data.get("gap_h_mm", 0)),
+            "gap_v_mm": float(data.get("gap_v_mm", 0)),
+            "offset_h_mm": float(data.get("offset_h_mm", 0)),
+            "offset_v_mm": float(data.get("offset_v_mm", 0)),
+            "rotations": data.get("rotations", {}),
+            "default_schema": data.get("default_schema") or "sequential",
+            "default_saida_id": data.get("default_saida_id"),
+            "default_cut_stack_mode": data.get("default_cut_stack_mode") or "independent",
+            "default_sheets_per_block": int(data.get("default_sheets_per_block", 50) or 50),
+            "default_block_depth": int(data.get("default_block_depth", 1) or 1),
+            "default_rotate_page": bool(data.get("default_rotate_page", False))
+        }
             res = _supabase_request("PATCH", f"producao_formatos?id=eq.{fmt_id}", clean_data)
             return bool(res)
         except Exception:

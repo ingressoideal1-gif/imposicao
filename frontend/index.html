@@ -205,6 +205,58 @@
                     </div>
                 </div>
 
+                <!-- 2.5 Card Padrões de Imposição -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title"><span class="icon">⚙️</span> Padrões de Imposição (Opcional)</span>
+                    </div>
+                    <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+                        <div class="form-group">
+                            <label>Regra de Paginação</label>
+                            <select class="form-control" id="fmt-def-schema" onchange="document.getElementById('fmt-def-cut-stack-options').style.display = (this.value === 'cut_stack') ? 'block' : 'none'">
+                                <option value="sequential">Padrão Sequencial (VDP Simples)</option>
+                                <option value="cut_stack">Cut & Stack (Corte e Pilha)</option>
+                                <option value="pdf_multiple">Repetir PDF Múltiplas Páginas</option>
+                                <option value="multi_artes">Multi-Artes (VDP c/ Artes Variadas)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Saída Padrão</label>
+                            <select class="form-control" id="fmt-def-saida">
+                                <option value="">— Nenhuma (Livre) —</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Opções específicas de Cut & Stack (mesma lógica visual da página principal) -->
+                    <div id="fmt-def-cut-stack-options" style="display:none; margin-top: 12px; padding: 12px; background: rgba(0, 168, 255, 0.05); border: 1px solid rgba(0, 168, 255, 0.2); border-radius: var(--radius);">
+                        <div class="form-grid form-grid-3">
+                            <div class="form-group">
+                                <label style="color: var(--blue);">Modo Cut & Stack</label>
+                                <select class="form-control" id="fmt-def-cut-stack-mode">
+                                    <option value="independent">Colunas Independentes</option>
+                                    <option value="strict">Blocos Estritos</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label style="color: var(--blue);">Folhas por Bloco</label>
+                                <input type="number" class="form-control" id="fmt-def-sheets" value="50" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label style="color: var(--blue);">Profundidade</label>
+                                <input type="number" class="form-control" id="fmt-def-depth" value="1" min="1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-grid" style="grid-template-columns: 1fr; margin-top: 12px;">
+                        <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="fmt-def-rotate" style="width: 16px; height: 16px;">
+                            <label for="fmt-def-rotate" style="margin-bottom: 0; cursor: pointer;">Rotacionar Páginas Pares 180° (Duplex/Flip)</label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 3. Card Preview da Imposição -->
                 <div class="card">
                     <div class="card-header">
@@ -744,7 +796,7 @@
                             <div class="form-grid form-grid-4" style="margin-bottom:20px;">
                                 <div class="form-group">
                                     <label>1. Formato</label>
-                                    <select class="form-control" id="imp-formato" onchange="populateImpNumeracoes(); updateImpSummary()">
+                                    <select class="form-control" id="imp-formato" onchange="populateImpNumeracoes(); applyFormatoDefaults(); updateImpSummary()">
                                         <option value="">— Selecione —</option>
                                     </select>
                                 </div>

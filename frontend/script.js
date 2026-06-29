@@ -893,6 +893,18 @@ async function saveFmt() {
 
         rotations: state.fmtRotations,
 
+        default_schema: document.getElementById('fmt-def-schema').value,
+
+        default_saida_id: document.getElementById('fmt-def-saida').value || null,
+
+        default_cut_stack_mode: document.getElementById('fmt-def-cut-stack-mode').value,
+
+        default_sheets_per_block: parseInt(document.getElementById('fmt-def-sheets').value) || 50,
+
+        default_block_depth: parseInt(document.getElementById('fmt-def-depth').value) || 1,
+
+        default_rotate_page: document.getElementById('fmt-def-rotate').checked,
+
     };
 
     if (!data.name) return toast('Informe um nome para o formato.', 'error');
@@ -973,6 +985,21 @@ function editFmt(id) {
 
     document.getElementById('fmt-offv').value = (f.offset_v_mm || 0).toString().replace('.', ',');
 
+    document.getElementById('fmt-def-schema').value = f.default_schema || 'sequential';
+    
+    document.getElementById('fmt-def-saida').value = f.default_saida_id || '';
+    
+    document.getElementById('fmt-def-cut-stack-mode').value = f.default_cut_stack_mode || 'independent';
+    
+    document.getElementById('fmt-def-sheets').value = f.default_sheets_per_block || 50;
+    
+    document.getElementById('fmt-def-depth').value = f.default_block_depth || 1;
+    
+    document.getElementById('fmt-def-rotate').checked = !!f.default_rotate_page;
+
+    const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
+    if (cutStackOpts) cutStackOpts.style.display = (f.default_schema === 'cut_stack') ? 'block' : 'none';
+
     state.fmtRotations = f.rotations || {};
 
     state.fmtSelectedCellIndex = null;
@@ -1012,6 +1039,15 @@ function cancelFmtEdit() {
     document.getElementById('fmt-offh').value = '0';
 
     document.getElementById('fmt-offv').value = '0';
+
+    document.getElementById('fmt-def-schema').value = 'sequential';
+    document.getElementById('fmt-def-saida').value = '';
+    document.getElementById('fmt-def-cut-stack-mode').value = 'independent';
+    document.getElementById('fmt-def-sheets').value = '50';
+    document.getElementById('fmt-def-depth').value = '1';
+    document.getElementById('fmt-def-rotate').checked = false;
+    const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
+    if (cutStackOpts) cutStackOpts.style.display = 'none';
 
     // Remover classes de validação
 
@@ -1931,11 +1967,21 @@ function populateSelects() {
     }
 
     const selImpSaida = document.getElementById('imp-saida');
+    const selFmtDefSaida = document.getElementById('fmt-def-saida');
     if (selImpSaida) {
         const cur = selImpSaida.value;
-        selImpSaida.innerHTML = '<option value="">-- Selecione --</option>' +
+        const curDef = selFmtDefSaida ? selFmtDefSaida.value : '';
+        const optionsHtml = '<option value="">-- Selecione --</option>' +
             state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        
+        selImpSaida.innerHTML = optionsHtml;
         if (cur) selImpSaida.value = cur;
+        
+        if (selFmtDefSaida) {
+            selFmtDefSaida.innerHTML = '<option value="">-- Nenhuma (Livre) --</option>' +
+                state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            if (curDef) selFmtDefSaida.value = curDef;
+        }
     }
 
     // Imposição -- numerações (filtradas por tamanho do formato selecionado)
@@ -2011,6 +2057,66 @@ function populateSelects() {
 
 }
 
+
+// - Aplica os padrões do formato na tela de imposição -
+function applyFormatoDefaults() {
+    const fmtSel = document.getElementById('imp-formato');
+    if (!fmtSel) return;
+    
+    const selectedFmtId = fmtSel.value;
+    if (!selectedFmtId) return;
+    
+    const fmt = state.formatos.find(f => String(f.id) === String(selectedFmtId));
+    if (!fmt) return;
+    
+    // Aplica a Regra de Paginação se houver
+    if (fmt.default_schema) {
+        const schemaSel = document.getElementById('imp-schema');
+        if (schemaSel) {
+            schemaSel.value = fmt.default_schema;
+            schemaSel.dispatchEvent(new Event('change'));
+        }
+    }
+    
+    // Aplica a Saída se houver
+    if (fmt.default_saida_id) {
+        const saidaSel = document.getElementById('imp-saida');
+        if (saidaSel) {
+            // Verifica se a opção existe
+            if (Array.from(saidaSel.options).some(opt => opt.value === fmt.default_saida_id)) {
+                saidaSel.value = fmt.default_saida_id;
+            }
+        }
+    }
+    
+    // Cut & Stack mode
+    if (fmt.default_cut_stack_mode) {
+        const modeSel = document.getElementById('imp-cut-stack-mode');
+        if (modeSel) modeSel.value = fmt.default_cut_stack_mode;
+    }
+    
+    // Sheets per block
+    if (fmt.default_sheets_per_block) {
+        const sheetsInp = document.getElementById('imp-sheets-per-block');
+        if (sheetsInp) sheetsInp.value = fmt.default_sheets_per_block;
+    }
+    
+    // Block depth
+    if (fmt.default_block_depth) {
+        const depthInp = document.getElementById('imp-block-depth');
+        if (depthInp) depthInp.value = fmt.default_block_depth;
+    }
+    
+    // Rotate
+    if (fmt.default_rotate_page !== undefined) {
+        const rotateCb = document.getElementById('imp-rotate-page');
+        if (rotateCb) {
+            rotateCb.checked = !!fmt.default_rotate_page;
+            // update local state
+            state.rotatePage = rotateCb.checked;
+        }
+    }
+}
 
 // - Popula Numeração 1 e 2 na Imposição, filtradas por TAMANHO do formato -
 function populateImpNumeracoes() {
