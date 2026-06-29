@@ -1166,7 +1166,10 @@ class ImpositionEngine:
                 
                 v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
                 v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
-                text = f"Bloco {(set_idx * poses_per_sheet) + P + 1:02d} - de {v_start_str} a {v_end_str}"
+                
+                bloco_num = (set_idx * poses_per_sheet) + P + 1
+                bloco_str = f"Bloco {bloco_num:02d}"
+                sufixo_str = f" - de {v_start_str} a {v_end_str}"
                 font_y = cell_y0 + (cfg.cover_font_y * 2.83465)
                 
                 def hex_to_rgb(h):
@@ -1174,7 +1177,11 @@ class ImpositionEngine:
                     if len(h) < 6: h = "000000"
                     return tuple(int(h[i:i+2], 16)/255.0 for i in (0, 2, 4))
                 
-                p.insert_text(fitz.Point(cell_x0 + 10, font_y), text, fontsize=cfg.cover_font_size, color=hex_to_rgb(cfg.cover_font_color))
+                color_rgb = hex_to_rgb(cfg.cover_font_color)
+                w_bloco = fitz.get_text_length(bloco_str, fontname="hebo", fontsize=cfg.cover_font_size)
+                
+                p.insert_text(fitz.Point(cell_x0 + 10, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
+                p.insert_text(fitz.Point(cell_x0 + 10 + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
 
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_01_capa.pdf")
         doc_c.save(out_name, garbage=4, deflate=True)
