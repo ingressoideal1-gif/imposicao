@@ -282,8 +282,17 @@ window.atualizarSetorAtual = function() {
 
 window.setMapTool = function(tool) {
     mapTool = tool;
-    document.getElementById('tool-select').style.background = tool === 'select' ? 'var(--blue)' : 'var(--secondary)';
-    document.getElementById('tool-erase').style.background = tool === 'erase' ? 'var(--blue)' : 'var(--secondary)';
+    document.getElementById('tool-select').style.background = tool === 'select' ? 'var(--blue)' : '';
+    document.getElementById('tool-select').className = tool === 'select' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+    
+    const panBtn = document.getElementById('tool-pan');
+    if (panBtn) {
+        panBtn.style.background = tool === 'pan' ? 'var(--blue)' : '';
+        panBtn.className = tool === 'pan' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+    }
+    
+    document.getElementById('tool-erase').style.background = tool === 'erase' ? 'var(--blue)' : '';
+    document.getElementById('tool-erase').className = tool === 'erase' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
 }
 
 // ==========================================
