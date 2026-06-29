@@ -905,6 +905,20 @@ async function saveFmt() {
 
         default_rotate_page: document.getElementById('fmt-def-rotate').checked,
 
+        has_cover: document.getElementById('fmt-has-cover').checked,
+
+        cover_scale: parseFloat(document.getElementById('fmt-cover-scale').value) || 80.0,
+
+        cover_offset_x: parseFloat(document.getElementById('fmt-cover-offx').value) || 0,
+
+        cover_offset_y: parseFloat(document.getElementById('fmt-cover-offy').value) || 0,
+
+        cover_font_size: parseInt(document.getElementById('fmt-cover-font-size').value) || 12,
+
+        cover_font_color: document.getElementById('fmt-cover-font-color').value || '#000000',
+
+        cover_font_y: parseFloat(document.getElementById('fmt-cover-font-y').value) || 10.0,
+
     };
 
     if (!data.name) return toast('Informe um nome para o formato.', 'error');
@@ -997,8 +1011,19 @@ function editFmt(id) {
     
     document.getElementById('fmt-def-rotate').checked = !!f.default_rotate_page;
 
+    document.getElementById('fmt-has-cover').checked = !!f.has_cover;
+    document.getElementById('fmt-cover-scale').value = f.cover_scale !== undefined ? f.cover_scale : 80;
+    document.getElementById('fmt-cover-offx').value = f.cover_offset_x || 0;
+    document.getElementById('fmt-cover-offy').value = f.cover_offset_y || 0;
+    document.getElementById('fmt-cover-font-size').value = f.cover_font_size || 12;
+    document.getElementById('fmt-cover-font-color').value = f.cover_font_color || '#000000';
+    document.getElementById('fmt-cover-font-y').value = f.cover_font_y !== undefined ? f.cover_font_y : 10;
+
     const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
     if (cutStackOpts) cutStackOpts.style.display = (f.default_schema === 'cut_stack') ? 'block' : 'none';
+    
+    const coverOpts = document.getElementById('fmt-cover-options');
+    if (coverOpts) coverOpts.style.display = f.has_cover ? 'block' : 'none';
 
     state.fmtRotations = f.rotations || {};
 
@@ -1048,6 +1073,16 @@ function cancelFmtEdit() {
     document.getElementById('fmt-def-rotate').checked = false;
     const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
     if (cutStackOpts) cutStackOpts.style.display = 'none';
+    
+    document.getElementById('fmt-has-cover').checked = false;
+    document.getElementById('fmt-cover-scale').value = '80';
+    document.getElementById('fmt-cover-offx').value = '0';
+    document.getElementById('fmt-cover-offy').value = '0';
+    document.getElementById('fmt-cover-font-size').value = '12';
+    document.getElementById('fmt-cover-font-color').value = '#000000';
+    document.getElementById('fmt-cover-font-y').value = '10';
+    const coverOpts = document.getElementById('fmt-cover-options');
+    if (coverOpts) coverOpts.style.display = 'none';
 
     // Remover classes de validação
 
@@ -7639,6 +7674,40 @@ window.runImposition = async function (mode) {
 
             throw new Error(err.detail || 'Erro no servidor');
 
+        }
+
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+            const data = await res.json();
+            if (data.type === "multi_file") {
+                toast(`Baixando ${data.files.length} arquivos...`, 'info');
+                for (const f of data.files) {
+                    const binStr = atob(f.data);
+                    const bytes = new Uint8Array(binStr.length);
+                    for (let i = 0; i < binStr.length; i++) {
+                        bytes[i] = binStr.charCodeAt(i);
+                    }
+                    const fBlob = new Blob([bytes], {type: "application/pdf"});
+                    const url = window.URL.createObjectURL(fBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = f.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                
+                if (state.activeOSItem && state.activeOSItem.itemId) {
+                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
+                    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+                }
+                btnText.textContent = 'Gerar Imposição';
+                spinner.style.display = 'none';
+                btn.disabled = false;
+                return;
+            }
         }
 
         const blob = await res.blob();

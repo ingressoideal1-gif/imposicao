@@ -226,7 +226,14 @@ def add_formato(data: dict) -> str:
             "default_cut_stack_mode": data.get("default_cut_stack_mode") or "independent",
             "default_sheets_per_block": int(data.get("default_sheets_per_block", 50) or 50),
             "default_block_depth": int(data.get("default_block_depth", 1) or 1),
-            "default_rotate_page": bool(data.get("default_rotate_page", False))
+            "default_rotate_page": bool(data.get("default_rotate_page", False)),
+            "has_cover": bool(data.get("has_cover", False)),
+            "cover_scale": float(data.get("cover_scale", 80.0)),
+            "cover_offset_x": float(data.get("cover_offset_x", 0.0)),
+            "cover_offset_y": float(data.get("cover_offset_y", 0.0)),
+            "cover_font_size": int(data.get("cover_font_size", 12)),
+            "cover_font_color": data.get("cover_font_color", "#000000"),
+            "cover_font_y": float(data.get("cover_font_y", 10.0))
         }
         _supabase_request("POST", "producao_formatos", clean_data)
         return new_id
@@ -254,7 +261,14 @@ def update_formato(fmt_id: str, data: dict) -> bool:
             "default_cut_stack_mode": data.get("default_cut_stack_mode") or "independent",
             "default_sheets_per_block": int(data.get("default_sheets_per_block", 50) or 50),
             "default_block_depth": int(data.get("default_block_depth", 1) or 1),
-            "default_rotate_page": bool(data.get("default_rotate_page", False))
+            "default_rotate_page": bool(data.get("default_rotate_page", False)),
+            "has_cover": bool(data.get("has_cover", False)),
+            "cover_scale": float(data.get("cover_scale", 80.0)),
+            "cover_offset_x": float(data.get("cover_offset_x", 0.0)),
+            "cover_offset_y": float(data.get("cover_offset_y", 0.0)),
+            "cover_font_size": int(data.get("cover_font_size", 12)),
+            "cover_font_color": data.get("cover_font_color", "#000000"),
+            "cover_font_y": float(data.get("cover_font_y", 10.0))
         }
             res = _supabase_request("PATCH", f"producao_formatos?id=eq.{fmt_id}", clean_data)
             return bool(res)

@@ -407,8 +407,32 @@ async def impose_file(
         suffix_fn = f"CSV_{len(csv_data)}" if csv_data else f"{data.get('seq_start', 1)}-{data.get('seq_end', 100)}"
         download_name = f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
 
-        # Lê PDF gerado para memória e agenda remoção do temp em background
-        with open(out_pdf_path, "rb") as f_pdf:
+        import base64
+        if getattr(engine, "generated_files", None) and len(engine.generated_files) > 1:
+            multi_files = []
+            for gf in engine.generated_files:
+                if os.path.exists(gf["path"]):
+                    with open(gf["path"], "rb") as f_pdf:
+                        b64_data = base64.b64encode(f_pdf.read()).decode("utf-8")
+                        multi_files.append({"name": gf["name"], "data": b64_data})
+                    if background_tasks:
+                        background_tasks.add_task(os.remove, gf["path"])
+            
+            if background_tasks:
+                if base_file_path and os.path.exists(base_file_path):
+                    background_tasks.add_task(os.remove, base_file_path)
+                for temp_path in ma_files_map.values():
+                    if os.path.exists(temp_path):
+                        background_tasks.add_task(os.remove, temp_path)
+                        
+            return {"type": "multi_file", "files": multi_files}
+
+        # Lógica original (arquivo único)
+        out_pdf_to_read = out_pdf_path
+        if getattr(engine, "generated_files", None) and len(engine.generated_files) == 1:
+            out_pdf_to_read = engine.generated_files[0]["path"]
+
+        with open(out_pdf_to_read, "rb") as f_pdf:
             pdf_bytes = f_pdf.read()
 
         if background_tasks:
@@ -417,10 +441,9 @@ async def impose_file(
             for temp_path in ma_files_map.values():
                 if os.path.exists(temp_path):
                     background_tasks.add_task(os.remove, temp_path)
-            if os.path.exists(out_pdf_path):
-                background_tasks.add_task(os.remove, out_pdf_path)
+            if os.path.exists(out_pdf_to_read):
+                background_tasks.add_task(os.remove, out_pdf_to_read)
 
-        # StreamingResponse: envia da RAM sem travar aguardando disco
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",
