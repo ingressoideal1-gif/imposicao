@@ -26,10 +26,12 @@ const GRID_SIZE = SEAT_SIZE + SEAT_GAP;
 // INICIALIZAÇÃO E FETCH
 // ==========================================
 async function fetchMapasTeatro() {
+    let success = false;
     if (typeof supabaseClient !== 'undefined' && supabaseClient) {
         const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').order('name', { ascending: true });
         if (!error && data) {
             window.state.mapas = data;
+            success = true;
         }
     } else {
         // Fallback para api local se rodando em env dev sem supabase
@@ -37,9 +39,21 @@ async function fetchMapasTeatro() {
             const res = await fetch('/api/mapas_teatro');
             if (res.ok) {
                 window.state.mapas = await res.json();
+                success = true;
             }
         } catch(e) {}
     }
+    
+    // Fallback/Cache em localStorage garantido
+    if (success) {
+        localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
+    } else {
+        const localData = localStorage.getItem('vibe_mapas_teatro');
+        if (localData) {
+            window.state.mapas = JSON.parse(localData);
+        }
+    }
+    
     renderTabelaMapas();
 }
 
@@ -109,13 +123,20 @@ window.editarMapaTeatro = function(id) {
 }
 
 window.excluirMapaTeatro = async function(id) {
-    if(!confirm("Tem certeza que deseja excluir este Mapa de Teatro?")) return;
+    if (!confirm('Deseja realmente excluir este mapa?')) return;
     
     if (typeof supabaseClient !== 'undefined' && supabaseClient) {
         await supabaseClient.from('producao_mapas_teatro').delete().eq('id', id);
     } else {
-        await fetch(`/api/mapas_teatro/${id}`, { method: 'DELETE' });
+        try {
+            await fetch(`/api/mapas_teatro/${id}`, { method: 'DELETE' });
+        } catch(e){}
     }
+    
+    // Atualiza localstorage
+    window.state.mapas = window.state.mapas.filter(x => x.id !== id);
+    localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
+    
     await fetchMapasTeatro();
 }
 
@@ -123,34 +144,63 @@ window.salvarMapaTeatro = async function() {
     const m = window.state.mapaAtual;
     m.name = document.getElementById('mapa-nome').value || 'Mapa sem nome';
     
+    let backendSuccess = false;
+    
     if (m.id) {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            await supabaseClient.from('producao_mapas_teatro').update({
+            const {error} = await supabaseClient.from('producao_mapas_teatro').update({
                 name: m.name,
                 config: m.config
             }).eq('id', m.id);
+            if(!error) backendSuccess = true;
         } else {
-            await fetch(`/api/mapas_teatro/${m.id}`, {
-                method: 'PUT',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify(m)
-            });
+            try {
+                const res = await fetch(`/api/mapas_teatro/${m.id}`, {
+                    method: 'PUT',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify(m)
+                });
+                if(res.ok) backendSuccess = true;
+            } catch(e) {}
         }
     } else {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { data } = await supabaseClient.from('producao_mapas_teatro').insert([{
+            const { data, error } = await supabaseClient.from('producao_mapas_teatro').insert([{
                 name: m.name,
                 config: m.config
             }]).select();
-            if(data && data.length > 0) m.id = data[0].id;
+            if(data && data.length > 0) {
+                m.id = data[0].id;
+                backendSuccess = true;
+            }
         } else {
-            await fetch(`/api/mapas_teatro`, {
-                method: 'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify(m)
-            });
+            try {
+                const res = await fetch(`/api/mapas_teatro`, {
+                    method: 'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify(m)
+                });
+                if(res.ok) {
+                    const data = await res.json();
+                    if(data.id) m.id = data.id;
+                    backendSuccess = true;
+                }
+            } catch(e) {}
         }
     }
+    
+    // Atualiza o cache local (garantia de no perder no F5 se a API ou DB falharem)
+    if (!m.id) {
+        m.id = 'local_' + Math.random().toString(36).substr(2, 9);
+    }
+    window.state.mapas = window.state.mapas || [];
+    const idx = window.state.mapas.findIndex(x => x.id === m.id);
+    if (idx >= 0) {
+        window.state.mapas[idx] = JSON.parse(JSON.stringify(m));
+    } else {
+        window.state.mapas.push(JSON.parse(JSON.stringify(m)));
+    }
+    localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
     
     fecharModalMapaTeatro();
     await fetchMapasTeatro();
