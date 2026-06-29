@@ -1090,8 +1090,7 @@ class ImpositionEngine:
                 doc_out.save(out_name, garbage=4, deflate=True)
                 self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                 self._generate_contracapa(set_idx_current, cfg, doc_base)
-            if doc_out:
-                doc_out.close()
+
         else:
             doc_out.save(cfg.out_pdf, garbage=4, deflate=True)
             self.generated_files.append({"type": "single", "path": cfg.out_pdf, "name": os.path.basename(cfg.out_pdf)})
