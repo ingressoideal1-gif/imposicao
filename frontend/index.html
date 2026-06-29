@@ -1674,7 +1674,7 @@
         
         <div style="display:flex; flex:1; overflow:hidden;">
             <!-- Sidebar: Propriedades -->
-            <div style="width:300px; border-right:1px solid var(--border); background:var(--card); padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
+            <div style="width:340px; min-width:340px; border-right:1px solid var(--border); background:var(--card); padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
                 <div class="form-group">
                     <label>Nome do Mapa</label>
                     <input type="text" id="mapa-nome" class="form-control" placeholder="Ex: Teatro Municipal">
@@ -1704,13 +1704,13 @@
                         <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A">
                     </div>
                     <div style="display:flex; gap:8px;">
-                        <div class="form-group" style="flex:1;">
-                            <label>Nº Inicial</label>
-                            <input type="number" id="mapa-fileira-inicio" class="form-control" value="1">
+                        <div class="form-group" style="flex:1; min-width:0;">
+                            <label style="white-space:nowrap; font-size:0.7rem;">Nº Inicial</label>
+                            <input type="number" id="mapa-fileira-inicio" class="form-control" value="1" style="min-width:0; width:100%;">
                         </div>
-                        <div class="form-group" style="flex:1;">
-                            <label>Nº Final</label>
-                            <input type="number" id="mapa-fileira-fim" class="form-control" value="30">
+                        <div class="form-group" style="flex:1; min-width:0;">
+                            <label style="white-space:nowrap; font-size:0.7rem;">Nº Final</label>
+                            <input type="number" id="mapa-fileira-fim" class="form-control" value="30" style="min-width:0; width:100%;">
                         </div>
                     </div>
                     <div class="form-group">
