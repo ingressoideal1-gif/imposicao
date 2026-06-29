@@ -1,4 +1,4 @@
-// mapas.js - Lógica para o módulo Mapas de Teatro
+﻿// mapas.js - Lógica para o módulo Mapas de Teatro
 
 // ==========================================
 // ESTADO DO MÓDULO
@@ -162,7 +162,7 @@ function renderTabelaMapas() {
 // ==========================================
 // AÇÕES CRUD BÁSICAS
 // ==========================================
-window.novoMapaTeatro = function() {
+window.novoMapaTeatro = function() { try {
     window.state.mapaAtual = {
         name: 'Novo Teatro',
         config: {
@@ -170,8 +170,7 @@ window.novoMapaTeatro = function() {
             cadeiras: {} // dict { "x,y": { setorIdx, fileira, num, tipo } }
         }
     };
-    abrirModalMapaTeatro();
-}
+    abrirModalMapaTeatro(); } catch (e) { alert('Erro no novoMapaTeatro: ' + (e.stack || e)); console.error(e); } }
 
 window.editarMapaTeatro = function(id) {
     const m = window.state.mapas.find(x => x.id === id);
@@ -180,8 +179,7 @@ window.editarMapaTeatro = function(id) {
     if (!window.state.mapaAtual.config.cadeiras) {
         window.state.mapaAtual.config.cadeiras = {};
     }
-    abrirModalMapaTeatro();
-}
+    abrirModalMapaTeatro(); } catch (e) { alert('Erro no novoMapaTeatro: ' + (e.stack || e)); console.error(e); } }
 
 window.excluirMapaTeatro = async function(id) {
     if (!confirm('Deseja realmente excluir este mapa?')) return;
@@ -270,7 +268,7 @@ window.salvarMapaTeatro = async function() {
 // ==========================================
 // MODAL E SIDEBAR
 // ==========================================
-function abrirModalMapaTeatro() {
+function abrirModalMapaTeatro() { try {
     document.getElementById('modal-mapa-teatro').style.display = 'flex';
     document.getElementById('mapa-nome').value = window.state.mapaAtual.name;
     
@@ -283,8 +281,7 @@ function abrirModalMapaTeatro() {
     if(window.renderTiposAssentoList) window.renderTiposAssentoList();
     if(window.renderToolbarTipos) window.renderToolbarTipos();
     
-    setTimeout(initMapCanvas, 100);
-}
+    setTimeout(initMapCanvas, 100); } catch (e) { alert('Erro no abrirModalMapaTeatro: ' + (e.stack || e)); console.error(e); } }
 
 window.fecharModalMapaTeatro = function() {
     document.getElementById('modal-mapa-teatro').style.display = 'none';
@@ -976,3 +973,4 @@ window.removerTipoAssento = function(idx) {
     renderToolbarTipos();
     renderCanvasLoop();
 }
+
