@@ -577,7 +577,7 @@ class ImpositionEngine:
         pdf_cache = {}
 
         if cfg.layout_schema == "multi_artes":
-            import os
+
             sorted_artes = sorted(cfg.multi_artes, key=lambda a: int(a.get("qtd", 0)), reverse=True)
             
             def parse_elements(num_obj, source_id):
@@ -1105,7 +1105,7 @@ class ImpositionEngine:
         print(f"[engine] Gerado: {cfg.out_pdf} ({total_sheets * (2 if is_duplex else 1)} folha(s) fisicas, {cfg.total_items} itens)")
 
     def _generate_contracapa(self, set_idx, cfg, doc_base):
-        import os
+
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
         if cfg.rotate_page: p.set_rotation(90)
@@ -1115,7 +1115,7 @@ class ImpositionEngine:
         self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
 
     def _generate_capa(self, set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets):
-        import os
+
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
         if cfg.rotate_page: p.set_rotation(90)
