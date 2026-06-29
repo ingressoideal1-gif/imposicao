@@ -1,0 +1,481 @@
+// mapas.js - Lógica para o módulo Mapas de Teatro
+
+// ==========================================
+// ESTADO DO MÓDULO
+// ==========================================
+window.state = window.state || {};
+window.state.mapas = [];
+window.state.mapaAtual = null;
+
+let mapTool = 'select'; // 'select', 'erase'
+let canvasCtx = null;
+let mapCanvas = null;
+
+// Sistema de Câmera (Pan/Zoom)
+let camera = { x: 0, y: 0, zoom: 1 };
+let isDraggingMap = false;
+let dragStart = { x: 0, y: 0 };
+let cameraStart = { x: 0, y: 0 };
+
+// Grid e Assentos
+const SEAT_SIZE = 24;
+const SEAT_GAP = 8;
+const GRID_SIZE = SEAT_SIZE + SEAT_GAP;
+
+// ==========================================
+// INICIALIZAÇÃO E FETCH
+// ==========================================
+async function fetchMapasTeatro() {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').order('name', { ascending: true });
+        if (!error && data) {
+            window.state.mapas = data;
+        }
+    } else {
+        // Fallback para api local se rodando em env dev sem supabase
+        try {
+            const res = await fetch('/api/mapas_teatro');
+            if (res.ok) {
+                window.state.mapas = await res.json();
+            }
+        } catch(e) {}
+    }
+    renderTabelaMapas();
+}
+
+function renderTabelaMapas() {
+    const tbody = document.getElementById('tbody-mapas');
+    const empty = document.getElementById('empty-mapas');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (!window.state.mapas || window.state.mapas.length === 0) {
+        if(empty) empty.style.display = 'flex';
+        return;
+    }
+    
+    if(empty) empty.style.display = 'none';
+    
+    window.state.mapas.forEach(mapa => {
+        const tr = document.createElement('tr');
+        const config = mapa.config || {};
+        const setores = config.setores || [];
+        
+        let totalAssentos = 0;
+        setores.forEach(s => {
+            (s.fileiras || []).forEach(f => {
+                const count = Math.max(0, parseInt(f.fim) - parseInt(f.inicio) + 1);
+                const pulos = (f.pulos || []).length;
+                totalAssentos += (count - pulos);
+            });
+        });
+
+        tr.innerHTML = `
+            <td><strong>${mapa.name}</strong></td>
+            <td>${setores.length} Setores</td>
+            <td>${totalAssentos} Assentos</td>
+            <td class="text-right">
+                <button class="btn btn-sm" onclick="editarMapaTeatro('${mapa.id}')">✏️ Editar</button>
+                <button class="btn btn-sm" onclick="excluirMapaTeatro('${mapa.id}')">🗑️ Excluir</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// ==========================================
+// AÇÕES CRUD BÁSICAS
+// ==========================================
+window.novoMapaTeatro = function() {
+    window.state.mapaAtual = {
+        name: 'Novo Teatro',
+        config: {
+            setores: [],
+            cadeiras: {} // dict { "x,y": { setorIdx, fileira, num, tipo } }
+        }
+    };
+    abrirModalMapaTeatro();
+}
+
+window.editarMapaTeatro = function(id) {
+    const m = window.state.mapas.find(x => x.id === id);
+    if (!m) return;
+    window.state.mapaAtual = JSON.parse(JSON.stringify(m));
+    if (!window.state.mapaAtual.config.cadeiras) {
+        window.state.mapaAtual.config.cadeiras = {};
+    }
+    abrirModalMapaTeatro();
+}
+
+window.excluirMapaTeatro = async function(id) {
+    if(!confirm("Tem certeza que deseja excluir este Mapa de Teatro?")) return;
+    
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        await supabaseClient.from('producao_mapas_teatro').delete().eq('id', id);
+    } else {
+        await fetch(`/api/mapas_teatro/${id}`, { method: 'DELETE' });
+    }
+    await fetchMapasTeatro();
+}
+
+window.salvarMapaTeatro = async function() {
+    const m = window.state.mapaAtual;
+    m.name = document.getElementById('mapa-nome').value || 'Mapa sem nome';
+    
+    if (m.id) {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            await supabaseClient.from('producao_mapas_teatro').update({
+                name: m.name,
+                config: m.config
+            }).eq('id', m.id);
+        } else {
+            await fetch(`/api/mapas_teatro/${m.id}`, {
+                method: 'PUT',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(m)
+            });
+        }
+    } else {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { data } = await supabaseClient.from('producao_mapas_teatro').insert([{
+                name: m.name,
+                config: m.config
+            }]).select();
+            if(data && data.length > 0) m.id = data[0].id;
+        } else {
+            await fetch(`/api/mapas_teatro`, {
+                method: 'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(m)
+            });
+        }
+    }
+    
+    fecharModalMapaTeatro();
+    await fetchMapasTeatro();
+}
+
+// ==========================================
+// MODAL E SIDEBAR
+// ==========================================
+function abrirModalMapaTeatro() {
+    document.getElementById('modal-mapa-teatro').style.display = 'flex';
+    document.getElementById('mapa-nome').value = window.state.mapaAtual.name;
+    
+    window.setorSelecionadoIdx = null;
+    renderSetoresList();
+    
+    setTimeout(initMapCanvas, 100);
+}
+
+window.fecharModalMapaTeatro = function() {
+    document.getElementById('modal-mapa-teatro').style.display = 'none';
+    window.state.mapaAtual = null;
+    if(window.requestAnimFrameId) cancelAnimationFrame(window.requestAnimFrameId);
+}
+
+window.adicionarSetorMapa = function() {
+    window.state.mapaAtual.config.setores.push({
+        nome: 'Novo Setor',
+        fileiras: []
+    });
+    window.setorSelecionadoIdx = window.state.mapaAtual.config.setores.length - 1;
+    renderSetoresList();
+    carregarSetorNoSidebar();
+}
+
+function renderSetoresList() {
+    const list = document.getElementById('mapa-setores-list');
+    list.innerHTML = '';
+    const setores = window.state.mapaAtual.config.setores;
+    
+    setores.forEach((s, idx) => {
+        const div = document.createElement('div');
+        div.style.padding = '8px 12px';
+        div.style.background = idx === window.setorSelecionadoIdx ? 'var(--blue)' : 'rgba(255,255,255,0.05)';
+        div.style.border = '1px solid var(--border)';
+        div.style.borderRadius = '6px';
+        div.style.cursor = 'pointer';
+        div.innerText = s.nome || `Setor ${idx+1}`;
+        div.onclick = () => {
+            window.setorSelecionadoIdx = idx;
+            renderSetoresList();
+            carregarSetorNoSidebar();
+        };
+        list.appendChild(div);
+    });
+}
+
+function carregarSetorNoSidebar() {
+    const props = document.getElementById('mapa-setor-props');
+    if (window.setorSelecionadoIdx === null) {
+        props.style.display = 'none';
+        return;
+    }
+    props.style.display = 'flex';
+    const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
+    document.getElementById('mapa-setor-nome').value = s.nome || '';
+}
+
+window.atualizarSetorAtual = function() {
+    if (window.setorSelecionadoIdx === null) return;
+    const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
+    s.nome = document.getElementById('mapa-setor-nome').value;
+    renderSetoresList(); 
+}
+
+window.setMapTool = function(tool) {
+    mapTool = tool;
+    document.getElementById('tool-select').style.background = tool === 'select' ? 'var(--blue)' : 'var(--secondary)';
+    document.getElementById('tool-erase').style.background = tool === 'erase' ? 'var(--blue)' : 'var(--secondary)';
+}
+
+// ==========================================
+// MOTOR DO CANVAS
+// ==========================================
+function initMapCanvas() {
+    mapCanvas = document.getElementById('mapa-canvas');
+    const container = document.getElementById('mapa-canvas-container');
+    
+    mapCanvas.width = container.clientWidth;
+    mapCanvas.height = container.clientHeight;
+    
+    canvasCtx = mapCanvas.getContext('2d');
+    
+    camera.x = mapCanvas.width / 2;
+    camera.y = mapCanvas.height / 2;
+    camera.zoom = 1;
+    
+    mapCanvas.onmousedown = onMapMouseDown;
+    mapCanvas.onmousemove = onMapMouseMove;
+    mapCanvas.onmouseup = onMapMouseUp;
+    mapCanvas.onwheel = onMapWheel;
+    mapCanvas.onmouseleave = () => { isDraggingMap = false; };
+    
+    renderCanvasLoop();
+}
+
+function renderCanvasLoop() {
+    if (!canvasCtx || !window.state.mapaAtual) return;
+    
+    canvasCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+    
+    canvasCtx.save();
+    canvasCtx.translate(camera.x, camera.y);
+    canvasCtx.scale(camera.zoom, camera.zoom);
+    
+    // Grid
+    canvasCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+    canvasCtx.lineWidth = 1;
+    const gSize = GRID_SIZE;
+    const viewW = mapCanvas.width / camera.zoom;
+    const viewH = mapCanvas.height / camera.zoom;
+    const startX = Math.floor(-camera.x / camera.zoom / gSize) * gSize;
+    const startY = Math.floor(-camera.y / camera.zoom / gSize) * gSize;
+    
+    canvasCtx.beginPath();
+    for (let x = startX; x < startX + viewW + gSize; x += gSize) {
+        canvasCtx.moveTo(x, startY);
+        canvasCtx.lineTo(x, startY + viewH + gSize);
+    }
+    for (let y = startY; y < startY + viewH + gSize; y += gSize) {
+        canvasCtx.moveTo(startX, y);
+        canvasCtx.lineTo(startX + viewW + gSize, y);
+    }
+    canvasCtx.stroke();
+    
+    // Cadeiras
+    const cadeiras = window.state.mapaAtual.config.cadeiras || {};
+    for (const key in cadeiras) {
+        const c = cadeiras[key];
+        const [cx, cy] = key.split(',').map(Number);
+        
+        if (c.tipo === 'PCD') canvasCtx.fillStyle = '#f1c40f';
+        else if (c.tipo === 'Obeso') canvasCtx.fillStyle = '#e67e22';
+        else if (c.tipo === 'Acompanhante') canvasCtx.fillStyle = '#2ecc71';
+        else canvasCtx.fillStyle = '#3498db'; 
+        
+        if (window.cadeiraSelecionada === key) {
+            canvasCtx.fillStyle = '#9b59b6'; // Purple for selected
+        }
+
+        canvasCtx.fillRect(cx * gSize, cy * gSize, SEAT_SIZE, SEAT_SIZE);
+        
+        canvasCtx.fillStyle = '#ffffff';
+        canvasCtx.font = '10px Arial';
+        canvasCtx.textAlign = 'center';
+        canvasCtx.textBaseline = 'middle';
+        canvasCtx.fillText(c.prefixo + c.num, cx * gSize + SEAT_SIZE/2, cy * gSize + SEAT_SIZE/2);
+    }
+    
+    canvasCtx.restore();
+    window.requestAnimFrameId = requestAnimationFrame(renderCanvasLoop);
+}
+
+function getGridPos(evt) {
+    const rect = mapCanvas.getBoundingClientRect();
+    const mx = evt.clientX - rect.left;
+    const my = evt.clientY - rect.top;
+    
+    const worldX = (mx - camera.x) / camera.zoom;
+    const worldY = (my - camera.y) / camera.zoom;
+    
+    const gx = Math.floor(worldX / GRID_SIZE);
+    const gy = Math.floor(worldY / GRID_SIZE);
+    return { gx, gy, mx, my };
+}
+
+function onMapMouseDown(e) {
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && mapTool === 'pan')) {
+        isDraggingMap = true;
+        dragStart.x = e.clientX;
+        dragStart.y = e.clientY;
+        cameraStart.x = camera.x;
+        cameraStart.y = camera.y;
+        return;
+    }
+    
+    if (e.button === 0) {
+        const pos = getGridPos(e);
+        const key = `${pos.gx},${pos.gy}`;
+        const cadeiras = window.state.mapaAtual.config.cadeiras;
+        
+        if (mapTool === 'erase') {
+            if (cadeiras[key]) delete cadeiras[key];
+        } else if (mapTool === 'select') {
+            window.cadeiraSelecionada = key;
+        }
+    }
+}
+
+function onMapMouseMove(e) {
+    if (isDraggingMap) {
+        const dx = e.clientX - dragStart.x;
+        const dy = e.clientY - dragStart.y;
+        camera.x = cameraStart.x + dx;
+        camera.y = cameraStart.y + dy;
+    }
+    
+    if (e.buttons === 1 && mapTool === 'erase') {
+        const pos = getGridPos(e);
+        const key = `${pos.gx},${pos.gy}`;
+        if (window.state.mapaAtual.config.cadeiras[key]) {
+            delete window.state.mapaAtual.config.cadeiras[key];
+        }
+    }
+}
+
+function onMapMouseUp(e) {
+    isDraggingMap = false;
+}
+
+function onMapWheel(e) {
+    e.preventDefault();
+    const rect = mapCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const zoomFactor = 1.1;
+    let newZoom = camera.zoom;
+    
+    if (e.deltaY < 0) newZoom *= zoomFactor;
+    else newZoom /= zoomFactor;
+    
+    newZoom = Math.max(0.1, Math.min(newZoom, 5));
+    
+    camera.x = mx - (mx - camera.x) * (newZoom / camera.zoom);
+    camera.y = my - (my - camera.y) * (newZoom / camera.zoom);
+    camera.zoom = newZoom;
+}
+
+// ==========================================
+// FUNÇÕES DE CRIAÇÃO EM MASSA
+// ==========================================
+window.gerarFileiraNoCanvas = function() {
+    if (window.setorSelecionadoIdx === null) {
+        alert("Selecione ou crie um Setor primeiro!");
+        return;
+    }
+    
+    const prefixo = document.getElementById('mapa-fileira-prefix').value || 'A';
+    const inicio = parseInt(document.getElementById('mapa-fileira-inicio').value) || 1;
+    const fim = parseInt(document.getElementById('mapa-fileira-fim').value) || 30;
+    const padrao = document.getElementById('mapa-fileira-padrao').value;
+    
+    const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
+    s.fileiras.push({ prefixo, inicio, fim, padrao });
+    
+    const cadeiras = window.state.mapaAtual.config.cadeiras;
+    
+    let startY = 0; 
+    let startX = -15; 
+    
+    let maxGy = -999;
+    for(let k in cadeiras) {
+        let gy = parseInt(k.split(',')[1]);
+        if(gy > maxGy) maxGy = gy;
+    }
+    if(maxGy !== -999) startY = maxGy + 2;
+    
+    let currentX = startX;
+    
+    for (let i = inicio; i <= fim; i++) {
+        if (padrao === 'impar' && i % 2 === 0) continue;
+        if (padrao === 'par' && i % 2 !== 0) continue;
+        
+        let key = `${currentX},${startY}`;
+        cadeiras[key] = {
+            setorIdx: window.setorSelecionadoIdx,
+            prefixo: prefixo,
+            num: i,
+            tipo: 'Normal'
+        };
+        currentX++;
+    }
+}
+
+window.marcarAssentoEspecial = function(tipo) {
+    if (!window.cadeiraSelecionada) {
+        alert("Clique em uma cadeira com a ferramenta 'Selecionar' primeiro.");
+        return;
+    }
+    
+    const cadeiras = window.state.mapaAtual.config.cadeiras;
+    if (cadeiras[window.cadeiraSelecionada]) {
+        cadeiras[window.cadeiraSelecionada].tipo = tipo;
+        window.cadeiraSelecionada = null; // deselect after apply
+    }
+}
+
+// ==========================================
+// INIT ROUTER
+// ==========================================
+const originalShowView = window.showView;
+window.showView = function(viewId) {
+    if (originalShowView) originalShowView(viewId);
+    
+    // Highlight the sidebar button
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    const btn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);
+    if (btn) btn.classList.add('active');
+    
+    // Hide all sections, show target
+    document.querySelectorAll('.view-section').forEach(sec => sec.style.display = 'none');
+    const sec = document.getElementById(viewId);
+    if (sec) sec.style.display = 'block';
+    
+    if (viewId === 'view-mapas') {
+        fetchMapasTeatro();
+    }
+}
+
+// Initial trigger via DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('nav-mapas');
+    if (btn) {
+        btn.addEventListener('click', () => {
+            window.showView('view-mapas');
+        });
+    }
+});

@@ -732,3 +732,86 @@ def update_os_item(item_id: str, data: dict) -> bool:
             _save_db(db_data)
             return True
     return False
+
+# — MAPAS DE TEATRO —
+
+def get_mapas_teatro() -> list:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", "producao_mapas_teatro?order=name.asc") or []
+            return res
+        except Exception:
+            return []
+    db = _get_db()
+    return db.get("mapas_teatro", [])
+
+def get_mapa_teatro(mapa_id: str) -> dict | None:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", f"producao_mapas_teatro?id=eq.{mapa_id}")
+            if res:
+                return res[0]
+            return None
+        except Exception:
+            return None
+    db = _get_db()
+    for m in db.get("mapas_teatro", []):
+        if m["id"] == mapa_id:
+            return m
+    return None
+
+def add_mapa_teatro(data: dict) -> str:
+    new_id = data.get("id") or (str(uuid.uuid4()) if IS_SUPABASE_ACTIVE else ("mapa_" + str(uuid.uuid4())[:8]))
+    data["id"] = new_id
+    if IS_SUPABASE_ACTIVE:
+        clean_data = {
+            "id": new_id,
+            "name": data.get("name", "Novo Mapa"),
+            "config": data.get("config", {})
+        }
+        _supabase_request("POST", "producao_mapas_teatro", clean_data)
+        return new_id
+    
+    db = _get_db()
+    if "mapas_teatro" not in db:
+        db["mapas_teatro"] = []
+    db["mapas_teatro"].append(data)
+    _save_db(db)
+    return new_id
+
+def update_mapa_teatro(mapa_id: str, data: dict) -> bool:
+    if IS_SUPABASE_ACTIVE:
+        try:
+            clean_data = {}
+            if "name" in data:
+                clean_data["name"] = data["name"]
+            if "config" in data:
+                clean_data["config"] = data["config"]
+            
+            if not clean_data: return True
+            res = _supabase_request("PATCH", f"producao_mapas_teatro?id=eq.{mapa_id}", clean_data)
+            return bool(res)
+        except Exception:
+            return False
+            
+    db = _get_db()
+    for i, m in enumerate(db.get("mapas_teatro", [])):
+        if m["id"] == mapa_id:
+            db["mapas_teatro"][i].update(data)
+            _save_db(db)
+            return True
+    return False
+
+def delete_mapa_teatro(mapa_id: str):
+    if IS_SUPABASE_ACTIVE:
+        try:
+            _supabase_request("DELETE", f"producao_mapas_teatro?id=eq.{mapa_id}")
+            return
+        except Exception:
+            pass
+        return
+
+    db = _get_db()
+    if "mapas_teatro" in db:
+        db["mapas_teatro"] = [m for m in db["mapas_teatro"] if m["id"] != mapa_id]
+        _save_db(db)

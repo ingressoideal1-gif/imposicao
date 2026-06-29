@@ -266,6 +266,38 @@ def delete_modelo_imposicao(mod_id: str, user: dict = Depends(get_current_user))
     db.delete_modelo_imposicao(mod_id)
     return {"status": "success"}
 
+# — MAPAS DE TEATRO —
+
+@app.get("/api/mapas_teatro")
+def list_mapas_teatro(user: dict = Depends(get_current_user)):
+    return db.get_mapas_teatro()
+
+@app.get("/api/mapas_teatro/{mapa_id}")
+def get_mapa_teatro(mapa_id: str, user: dict = Depends(get_current_user)):
+    m = db.get_mapa_teatro(mapa_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Mapa no encontrado")
+    return m
+
+@app.post("/api/mapas_teatro")
+async def create_mapa_teatro(request: Request, user: dict = Depends(get_current_user)):
+    data = await request.json()
+    new_id = db.add_mapa_teatro(data)
+    return {"id": new_id, "status": "success"}
+
+@app.put("/api/mapas_teatro/{mapa_id}")
+async def update_mapa_teatro(mapa_id: str, request: Request, user: dict = Depends(get_current_user)):
+    data = await request.json()
+    ok = db.update_mapa_teatro(mapa_id, data)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Mapa no encontrado")
+    return {"status": "success"}
+
+@app.delete("/api/mapas_teatro/{mapa_id}")
+def delete_mapa_teatro(mapa_id: str, user: dict = Depends(get_current_user)):
+    db.delete_mapa_teatro(mapa_id)
+    return {"status": "success"}
+
 # ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
 
 @app.post("/api/impose")
