@@ -431,7 +431,10 @@ async def impose_file(
                     print(f"[DEBUG TEATRO] has setores = {bool(mapa['config'].get('setores'))}")
                     if mapa["config"].get("setores"):
                         print(f"[DEBUG TEATRO] num setores = {len(mapa['config']['setores'])}")
-            if mapa and mapa.get("config") and mapa["config"].get("setores"):
+                tipos_sufixos = {}
+                for t in mapa["config"].get("tiposAssento", []):
+                    tipos_sufixos[t.get("id")] = str(t.get("sufixo", "")).strip()
+
                 csv_data = []
                 for setor in mapa["config"]["setores"]:
                     # No frontend as cadeiras são um dicionário: setor.cadeiras
@@ -456,24 +459,22 @@ async def impose_file(
                             except ValueError:
                                 pass
                         
-                        # Fallback para prefixo e num (garante tipo correto)
-                        pref = str(a.get("prefixo") or a.get("row_label") or "")
-                        
-                        try:
-                            num_val = int(a.get("num") or a.get("col_label") or 0)
-                        except:
-                            num_val = 0
-                            
-                        return (1, pref, num_val)
+                        return (1, pref, num_int)
 
                     assentos.sort(key=sort_key)
                     
                     for a in assentos:
                         if a.get("tipo") == "Apagado" or a.get("isErased"):
                             continue
+                            
+                        num_str = str(a.get("num") or a.get("col_label") or "")
+                        sufixo = tipos_sufixos.get(a.get("tipo", ""), "")
+                        if sufixo:
+                            num_str += f" {sufixo}"
+                            
                         csv_data.append({
                             "Fila": str(a.get("prefixo") or a.get("row_label") or ""),
-                            "Numero": str(a.get("num") or a.get("col_label") or ""),
+                            "Numero": num_str,
                             "Setor": str(setor.get("nome", ""))
                         })
                 print(f"[DEBUG TEATRO] csv_data gerado com {len(csv_data)} assentos")

@@ -6979,6 +6979,13 @@ async function loadMapaTeatroData(mapaId) {
         }
         
         if (mapa && mapa.config && mapa.config.setores) {
+            const tiposSufixos = {};
+            if (mapa.config.tiposAssento) {
+                for (const t of mapa.config.tiposAssento) {
+                    tiposSufixos[t.id] = (t.sufixo || '').trim();
+                }
+            }
+
             const csvData = [];
             for (const setor of mapa.config.setores) {
                 const cadeiras = setor.cadeiras || {};
@@ -7001,9 +7008,14 @@ async function loadMapaTeatroData(mapaId) {
                 });
                 for (const a of assentos) {
                     if (a.tipo === 'Apagado' || a.isErased) continue;
+                    let numStr = String(a.num || a.col_label || '');
+                    const sufixo = tiposSufixos[a.tipo];
+                    if (sufixo && sufixo !== "") {
+                        numStr += " " + sufixo;
+                    }
                     csvData.push({
                         Fila: String(a.prefixo || a.row_label || ''),
-                        Numero: String(a.num || a.col_label || ''),
+                        Numero: numStr,
                         Setor: String(setor.nome || '')
                     });
                 }
@@ -7018,6 +7030,7 @@ async function loadMapaTeatroData(mapaId) {
         state.csvData = null;
     }
     updateImpSummary();
+    drawPreview();
 }
 
 function updateImpSummary() {
