@@ -3053,7 +3053,7 @@ function drawElement(ctx, el, S) {
 
 
 
-    if (el.type === 'TEXT' || el.type === 'FIXED') {
+    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
 
         const fs = (el.font_size || 12) * S / 2.8346;
 
@@ -3064,15 +3064,18 @@ function drawElement(ctx, el, S) {
         let label = '';
 
         if (el.type === 'FIXED') {
-
             label = el.fixed_value || 'TEXTO FIXO';
-
+        } else if (el.type === 'TEATRO_FILA') {
+            label = `${el.prefix || ''}A`;
+        } else if (el.type === 'TEATRO_LUGAR') {
+            label = `${el.prefix || ''}22`;
+        } else if (el.type === 'TEATRO_COMBO') {
+            const fila = `${el.prefix_fila || ''}A`;
+            const lugar = `${el.prefix_lugar || ''}22`;
+            label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
         } else if (el.source === 'database') {
-
             label = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
-
         } else {
-
             const padValue = typeof el.pad !== 'undefined' ? el.pad : 6;
             const dummyNum = String(el.ticket_pos || 1).padStart(padValue, '0');
             label = `${el.prefix || ''}${dummyNum}${el.suffix || ''}`;
@@ -3081,12 +3084,21 @@ function drawElement(ctx, el, S) {
         // Desenhar texto centralizado no ponto de ancoragem (centro real do elemento)
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(label, 0, 0);
+        
+        let mw = 0;
+        if (label.includes('\n')) {
+            const lines = label.split('\n');
+            ctx.fillText(lines[0], 0, -fs/2);
+            ctx.fillText(lines[1], 0, fs/2);
+            mw = Math.max(ctx.measureText(lines[0]).width, ctx.measureText(lines[1]).width);
+        } else {
+            ctx.fillText(label, 0, 0);
+            mw = ctx.measureText(label).width;
+        }
 
         // Indicador de selecao: underline sutil (sem box tracejado)
         if (isSelected) {
-            const mw = ctx.measureText(label).width;
-            const halfH = fs / 2;
+            const halfH = label.includes('\n') ? fs : fs / 2;
             ctx.strokeStyle = '#3b82f6';
             ctx.lineWidth = 2;
             ctx.beginPath();
