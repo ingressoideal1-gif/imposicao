@@ -2221,13 +2221,18 @@ function renderNumeracoes() {
 
     const filterFmt = document.getElementById('catalogo-filter-format')?.value || '';
 
-
+    const filterType = document.getElementById('catalogo-filter-type')?.value || '';
 
     const filtradas = state.numeracoes.filter(n => {
 
         if (filterFmt) {
             const ids = n.formato_ids || [n.formato_id];
             if (!ids.some(id => String(id) === String(filterFmt))) return false;
+        }
+
+        if (filterType) {
+            const tipo = n.tipo || 'SEQUENCIAL';
+            if (tipo !== filterType) return false;
         }
 
         if (searchVal && !(n.name || '').toLowerCase().includes(searchVal)) return false;
@@ -2292,10 +2297,9 @@ function renderNumeracoes() {
             </div>
 
             <table class="data-table">
-
                 <thead>
 
-                    <tr><th>Nome</th><th>Elementos</th><th>Ações</th></tr>
+                    <tr><th>Nome</th><th>Tipo</th><th>Elementos</th><th width="150" class="actions-cell">Ações</th></tr>
 
                 </thead>
 
@@ -2313,12 +2317,12 @@ function renderNumeracoes() {
 
             ).join(' ');
 
+            const tipoBadge = `<span class="badge badge-gray">${n.tipo || 'SEQUENCIAL'}</span>`;
+
             html += `
-
                 <tr>
-
                     <td><strong>${n.name}</strong></td>
-
+                    <td>${tipoBadge}</td>
                     <td>${typeBadges || '--'} <small style="color:var(--text-faint)">(${(n.elements || []).length} itens)</small></td>
 
                     <td class="actions-cell">
@@ -2654,6 +2658,7 @@ window.duplicateCatalogNumeracao = async function (id) {
             name: n.name + ' (cópia)',
             formato_id: n.formato_id,
             formato_ids: n.formato_ids || [n.formato_id],
+            tipo: n.tipo || 'SEQUENCIAL',
             csv_filename: n.csv_filename || "",
             csv_headers: n.csv_headers || [],
             csv_data: n.csv_data || null,
