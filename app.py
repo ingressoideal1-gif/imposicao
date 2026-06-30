@@ -330,11 +330,12 @@ def _embed_system_fonts(numeracao_obj):
         family_lower = family.lower().replace(" ", "")
         fam_norm = family_lower.replace("-", "").replace("_", "")
         found_file = None
-        for fdir in font_dirs:
-            if not os.path.isdir(fdir):
+
+        for search_dir in search_dirs:
+            if not os.path.isdir(os.path.expanduser(search_dir)):
                 continue
             for ext in ("**/*.ttf", "**/*.otf", "**/*.TTF", "**/*.OTF"):
-                for fpath in _glob.glob(os.path.join(fdir, ext), recursive=True):
+                for fpath in _glob.glob(os.path.join(os.path.expanduser(search_dir), ext), recursive=True):
                     base = os.path.splitext(os.path.basename(fpath))[0].lower().replace(" ", "").replace("-", "").replace("_", "")
                     bold_match = ("bold" in base) == is_bold
                     italic_match = ("italic" in base or "oblique" in base) == is_italic
@@ -427,14 +428,17 @@ async def impose_file(
                     # No frontend as cadeiras são um dicionário: setor.cadeiras
                     cadeiras_dict = setor.get("cadeiras", {})
                     assentos = list(cadeiras_dict.values())
-                    # Order by Y asc, then by X asc
-                    assentos.sort(key=lambda a: (float(a.get("y", 0)), float(a.get("x", 0))))
+                    # Order by Y asc, then by X asc, fallback to prefixo, num
+                    assentos.sort(key=lambda a: (
+                        float(a.get("y", 0)) if "y" in a else a.get("prefixo", ""),
+                        float(a.get("x", 0)) if "x" in a else float(a.get("num", 0))
+                    ))
                     for a in assentos:
                         if a.get("tipo") == "Apagado" or a.get("isErased"):
                             continue
                         csv_data.append({
-                            "Fila": str(a.get("row_label", "")),
-                            "Numero": str(a.get("col_label", "")),
+                            "Fila": str(a.get("prefixo") or a.get("row_label") or ""),
+                            "Numero": str(a.get("num") or a.get("col_label") or ""),
                             "Setor": str(setor.get("nome", ""))
                         })
                 print(f"[DEBUG TEATRO] csv_data gerado com {len(csv_data)} assentos")

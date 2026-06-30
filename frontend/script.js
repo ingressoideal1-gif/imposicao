@@ -6983,12 +6983,22 @@ async function loadMapaTeatroData(mapaId) {
             for (const setor of mapa.config.setores) {
                 const cadeiras = setor.cadeiras || {};
                 const assentos = Object.values(cadeiras);
-                assentos.sort((a, b) => (parseFloat(a.y || 0) - parseFloat(b.y || 0)) || (parseFloat(a.x || 0) - parseFloat(b.x || 0)));
+                assentos.sort((a, b) => {
+                    if (a.y !== undefined && b.y !== undefined) {
+                        return (parseFloat(a.y) - parseFloat(b.y)) || (parseFloat(a.x) - parseFloat(b.x));
+                    }
+                    const pa = a.prefixo || '';
+                    const pb = b.prefixo || '';
+                    if (pa !== pb) return pa.localeCompare(pb);
+                    const na = parseInt(a.num) || 0;
+                    const nb = parseInt(b.num) || 0;
+                    return na - nb;
+                });
                 for (const a of assentos) {
                     if (a.tipo === 'Apagado' || a.isErased) continue;
                     csvData.push({
-                        Fila: String(a.row_label || ''),
-                        Numero: String(a.col_label || ''),
+                        Fila: String(a.prefixo || a.row_label || ''),
+                        Numero: String(a.num || a.col_label || ''),
                         Setor: String(setor.nome || '')
                     });
                 }
