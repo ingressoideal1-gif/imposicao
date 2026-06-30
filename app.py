@@ -337,17 +337,37 @@ async def impose_file(
 
         # Ler e parsear CSV se fornecido, caso contrário usar o CSV embutido na numeração se disponível
         csv_data = None
-        if csv_file and csv_file.filename:
-            content = await csv_file.read()
-            try:
-                decoded = content.decode("utf-8-sig")
-            except UnicodeDecodeError:
-                decoded = content.decode("latin-1")
-            
-            reader = csv.DictReader(io.StringIO(decoded))
-            csv_data = [row for row in reader]
-        elif numeracao and "csv_data" in numeracao and numeracao["csv_data"]:
-            csv_data = numeracao["csv_data"]
+        
+        mapa_teatro_id = data.get("mapa_teatro_id")
+        if mapa_teatro_id:
+            mapa = db.get_mapa_teatro(mapa_teatro_id)
+            if mapa and mapa.get("config") and mapa["config"].get("setores"):
+                csv_data = []
+                for setor in mapa["config"]["setores"]:
+                    assentos = setor.get("assentos", [])
+                    # Order by Y asc, then by X asc
+                    assentos.sort(key=lambda a: (float(a.get("y", 0)), float(a.get("x", 0))))
+                    for a in assentos:
+                        if a.get("tipo") == "Apagado" or a.get("isErased"):
+                            continue
+                        csv_data.append({
+                            "Fila": str(a.get("row_label", "")),
+                            "Numero": str(a.get("col_label", "")),
+                            "Setor": str(setor.get("nome", ""))
+                        })
+
+        if not csv_data:
+            if csv_file and csv_file.filename:
+                content = await csv_file.read()
+                try:
+                    decoded = content.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    decoded = content.decode("latin-1")
+                
+                reader = csv.DictReader(io.StringIO(decoded))
+                csv_data = [row for row in reader]
+            elif numeracao and "csv_data" in numeracao and numeracao["csv_data"]:
+                csv_data = numeracao["csv_data"]
 
         # Detectar extensão do arquivo enviado
         base_file_path = ""

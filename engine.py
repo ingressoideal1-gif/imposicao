@@ -294,7 +294,7 @@ class ImpositionEngine:
         # Calcular half-width e half-height baseado no tipo
         hw = 0.0
         hh = 0.0
-        if t in ("TEXT", "FIXED"):
+        if t in ("TEXT", "FIXED") or t.startswith("TEATRO_"):
             # Para texto, o tamanho depende da string e da fonte — usamos font_size como altura
             # e a largura nao precisa de offset pois insert_text usa ponto de baseline
             font_size = el.get("font_size", 12)
@@ -331,6 +331,23 @@ class ImpositionEngine:
         elif el.get("source") == "database" and csv_row is not None:
             col_name = el.get("csv_column", "")
             val_str = str(csv_row.get(col_name, ""))
+        elif t == "TEATRO_FILA":
+            fila = str(csv_row.get("Fila", "A")) if csv_row else "A"
+            prefix = str(el.get("prefix", "") or "")
+            val_str = f"{prefix}{fila}"
+        elif t == "TEATRO_LUGAR":
+            num = str(csv_row.get("Numero", "22")) if csv_row else "22"
+            prefix = str(el.get("prefix", "") or "")
+            val_str = f"{prefix}{num}"
+        elif t == "TEATRO_COMBO":
+            fila = str(csv_row.get("Fila", "A")) if csv_row else "A"
+            num = str(csv_row.get("Numero", "22")) if csv_row else "22"
+            prefix_fila = str(el.get("prefix_fila", "") or "")
+            prefix_lugar = str(el.get("prefix_lugar", "") or "")
+            if el.get("layout") == "2lines":
+                val_str = f"{prefix_fila}{fila}\n{prefix_lugar}{num}"
+            else:
+                val_str = f"{prefix_fila}{fila} - {prefix_lugar}{num}"
         else:
             pad = int(el.get("pad", 0) or 0)
             prefix = str(el.get("prefix", "") or "")
@@ -339,7 +356,7 @@ class ImpositionEngine:
             val_str = f"{prefix}{raw}{suffix}"
 
 
-        if t in ("TEXT", "FIXED"):
+        if t in ("TEXT", "FIXED") or t.startswith("TEATRO_"):
             font_size = el.get("font_size", 12)
             raw_font_name = el.get("font_name", "helv")
             # Mapeamento do frontend para abreviacoes oficiais do Base-14 do PyMuPDF
@@ -420,25 +437,39 @@ class ImpositionEngine:
 
             # Ancoragem central: cx, cy = centro do texto
             # insert_text origin: X = centro - metade da largura, Y = centro + metade da altura (baseline)
-            origin_x = cx - text_width / 2.0
-            origin_y = cy + font_size / 2.0  # baseline fica ~font_size abaixo do topo
-
-            if angle != 0:
-                # O pivot de rotacao e o centro do texto (cx, cy)
-                origin = fitz.Point(origin_x, origin_y)
-                pivot = fitz.Point(cx, cy)
-                page.insert_text(
-                    origin,
-                    val_str,
-                    morph=(pivot, fitz.Matrix(-angle)),
-                    **insert_kwargs
-                )
-            else:
-                page.insert_text(
-                    (origin_x, origin_y),
-                    val_str,
-                    **insert_kwargs
-                )
+            
+            lines_to_draw = val_str.split("\n")
+            line_height = font_size * 1.2
+            
+            # Se for multilinha, o cy e o centro total do bloco
+            total_height = len(lines_to_draw) * line_height
+            start_y = cy - (total_height / 2.0) + (font_size / 2.0)
+            
+            for i, line_str in enumerate(lines_to_draw):
+                if font_file:
+                    text_width = font_size * 0.55 * len(line_str)
+                else:
+                    text_width = fitz.get_text_length(line_str, fontname=font_name, fontsize=font_size)
+                    
+                origin_x = cx - text_width / 2.0
+                origin_y = start_y + (i * line_height)
+                
+                if angle != 0:
+                    # O pivot de rotacao e o centro do texto (cx, cy)
+                    origin = fitz.Point(origin_x, origin_y)
+                    pivot = fitz.Point(cx, cy)
+                    page.insert_text(
+                        origin,
+                        line_str,
+                        morph=(pivot, fitz.Matrix(-angle)),
+                        **insert_kwargs
+                    )
+                else:
+                    page.insert_text(
+                        (origin_x, origin_y),
+                        line_str,
+                        **insert_kwargs
+                    )
 
 
         elif t == "QR":

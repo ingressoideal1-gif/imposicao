@@ -2732,11 +2732,20 @@ window.cancelNumEdit = cancelNumEdit;
 window.onTipoSelect = function() {
     const tipo = document.getElementById('num-tipo').value;
     const ticketSettings = document.getElementById('num-ticket-settings');
+    const teatroSettings = document.getElementById('num-teatro-elements-container');
+    
     if (tipo === 'TICKET') {
         ticketSettings.style.display = 'block';
     } else {
         ticketSettings.style.display = 'none';
     }
+
+    if (tipo === 'TEATRO') {
+        if(teatroSettings) teatroSettings.style.display = 'block';
+    } else {
+        if(teatroSettings) teatroSettings.style.display = 'none';
+    }
+    
     // Re-render elements so any ticket_pos dropdowns are created/removed
     renderElementsList();
 };
@@ -4282,6 +4291,10 @@ window.addElement = function (type) {
     });
 
     if (type === 'PICOTE') Object.assign(base, { name: 'Picote' });
+    
+    if (type === 'TEATRO_FILA') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Fileira: ' });
+    if (type === 'TEATRO_LUGAR') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Poltrona: ' });
+    if (type === 'TEATRO_COMBO') Object.assign(base, { font_size: 12, font_name: 'helv', prefix_fila: 'Fila: ', prefix_lugar: 'Lugar: ', layout: '1line' });
 
 
 
@@ -4333,9 +4346,9 @@ function renderElementsList() {
 
 
 
-    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PICOTE: '✂️ Picote' };
+    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar' };
 
-    const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray' };
+    const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray', TEATRO_FILA: 'badge-purple', TEATRO_LUGAR: 'badge-purple', TEATRO_COMBO: 'badge-purple' };
 
 
 
@@ -4505,6 +4518,29 @@ function renderElementsList() {
 
                 <div class="form-group"><label>Altura (mm)</label><input class="form-control" type="number" value="${el.height_mm || 20}" min="5" max="200" step="0.5" onchange="updateEl('${el.id}','height_mm',+this.value)"></div>`;
 
+        } else if (el.type === 'TEATRO_FILA' || el.type === 'TEATRO_LUGAR') {
+            extraFields = `
+                <div class="form-group el-full"><label>Fonte</label>
+                    ${fontPickerHTML(el.id, el.font_name)}
+                </div>
+                <div class="form-group"><label>Tamanho (pt)</label><input class="form-control el-font" type="number" value="${el.font_size}" min="4" max="120" onchange="updateEl('${el.id}','font_size',+this.value)"></div>
+                <div class="form-group"><label>Prefixo</label><input class="form-control" type="text" value="${el.prefix || ''}" onchange="updateEl('${el.id}','prefix',this.value)"></div>
+            `;
+        } else if (el.type === 'TEATRO_COMBO') {
+            extraFields = `
+                <div class="form-group el-full"><label>Fonte</label>
+                    ${fontPickerHTML(el.id, el.font_name)}
+                </div>
+                <div class="form-group"><label>Tamanho (pt)</label><input class="form-control el-font" type="number" value="${el.font_size}" min="4" max="120" onchange="updateEl('${el.id}','font_size',+this.value)"></div>
+                <div class="form-group"><label>Disposição</label>
+                    <select class="form-control" onchange="updateEl('${el.id}','layout',this.value)">
+                        <option value="1line" ${el.layout === '1line' ? 'selected' : ''}>Em 1 Linha</option>
+                        <option value="2lines" ${el.layout === '2lines' ? 'selected' : ''}>Em 2 Linhas</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Prefixo Fila</label><input class="form-control" type="text" value="${el.prefix_fila || ''}" onchange="updateEl('${el.id}','prefix_fila',this.value)"></div>
+                <div class="form-group"><label>Prefixo Lugar</label><input class="form-control" type="text" value="${el.prefix_lugar || ''}" onchange="updateEl('${el.id}','prefix_lugar',this.value)"></div>
+            `;
         }
         
         let ticketPosHTML = '';
@@ -6705,6 +6741,23 @@ window.nextPreviewPage = function() {
     drawPreview();
 };
 
+async function populateImpMapasTeatro() {
+    const sel = document.getElementById('imp-mapa-teatro');
+    if (!sel || sel.options.length > 1) return; // already populated
+
+    let mapas = window.state.mapas || [];
+    if (mapas.length === 0 && typeof supabaseClient !== 'undefined' && supabaseClient) {
+        const { data } = await supabaseClient.from('producao_mapas_teatro').select('id, name').order('name', { ascending: true });
+        if (data) mapas = data;
+    }
+
+    const current = sel.value;
+    sel.innerHTML = '<option value="">-- Selecione um mapa --</option>' + mapas.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+    if (current && mapas.some(m => String(m.id) === String(current))) {
+        sel.value = current;
+    }
+}
+
 function updateImpSummary() {
 
     const fmtSelect = document.getElementById('imp-formato');
@@ -7052,6 +7105,22 @@ function updateImpSummary() {
         if (impEnd) impEnd.removeAttribute('disabled');
 
     }
+
+    const impMapaTeatroGroup = document.getElementById('imp-mapa-teatro-group');
+    const impStartGroup = document.getElementById('imp-start-group');
+    const impEndGroup = document.getElementById('imp-end-group');
+    
+    if ((num && num.tipo === 'TEATRO') || (num2 && num2.tipo === 'TEATRO')) {
+        if (impMapaTeatroGroup) impMapaTeatroGroup.style.display = 'block';
+        if (impStartGroup) impStartGroup.style.display = 'none';
+        if (impEndGroup) impEndGroup.style.display = 'none';
+        populateImpMapasTeatro();
+    } else {
+        if (impMapaTeatroGroup) impMapaTeatroGroup.style.display = 'none';
+        if (impStartGroup) impStartGroup.style.display = 'block';
+        if (impEndGroup) impEndGroup.style.display = 'block';
+    }
+
 
 
 
@@ -7421,6 +7490,8 @@ window.runImposition = async function (mode) {
         numeracao_id: numId || null,
 
         numeracao_2_id: num2Id || null,
+        
+        mapa_teatro_id: document.getElementById('imp-mapa-teatro')?.value || null,
 
         saida_id: saiId,
 
@@ -9751,7 +9822,7 @@ window.onAmostraNumeracaoSelect = function() {
 
 
 
-            if (el.type === 'TEXT' || el.type === 'FIXED') {
+            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
 
                 const fs = (el.font_size || 12) * S / 2.8346;
 
@@ -9767,6 +9838,14 @@ window.onAmostraNumeracaoSelect = function() {
 
                     label = el.fixed_value || 'TEXTO';
 
+                } else if (el.type === 'TEATRO_FILA') {
+                    label = `${el.prefix || ''}A`;
+                } else if (el.type === 'TEATRO_LUGAR') {
+                    label = `${el.prefix || ''}22`;
+                } else if (el.type === 'TEATRO_COMBO') {
+                    const fila = `${el.prefix_fila || ''}A`;
+                    const lugar = `${el.prefix_lugar || ''}22`;
+                    label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
                 } else {
 
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
@@ -9777,7 +9856,13 @@ window.onAmostraNumeracaoSelect = function() {
 
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(label, 0, 0);
+                if (label.includes('\n')) {
+                    const lines = label.split('\n');
+                    ctx.fillText(lines[0], 0, -fs/2);
+                    ctx.fillText(lines[1], 0, fs/2);
+                } else {
+                    ctx.fillText(label, 0, 0);
+                }
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'alphabetic';
 
@@ -14377,7 +14462,7 @@ async function renderItemAmostraCombinada(idx, osId) {
             numCtx.translate(x, y);
             numCtx.rotate(rot);
 
-            if (el.type === 'TEXT' || el.type === 'FIXED') {
+            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
                 const fs = (el.font_size || 12) * S / 2.8346;
                 numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
                 numCtx.fillStyle = color;
@@ -14385,13 +14470,27 @@ async function renderItemAmostraCombinada(idx, osId) {
                 let label = '';
                 if (el.type === 'FIXED') {
                     label = el.fixed_value || 'TEXTO';
+                } else if (el.type === 'TEATRO_FILA') {
+                    label = `${el.prefix || ''}A`;
+                } else if (el.type === 'TEATRO_LUGAR') {
+                    label = `${el.prefix || ''}22`;
+                } else if (el.type === 'TEATRO_COMBO') {
+                    const fila = `${el.prefix_fila || ''}A`;
+                    const lugar = `${el.prefix_lugar || ''}22`;
+                    label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                     label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
                 }
                 numCtx.textAlign = 'center';
                 numCtx.textBaseline = 'middle';
-                numCtx.fillText(label, 0, 0);
+                if (label.includes('\n')) {
+                    const lines = label.split('\n');
+                    numCtx.fillText(lines[0], 0, -fs/2);
+                    numCtx.fillText(lines[1], 0, fs/2);
+                } else {
+                    numCtx.fillText(label, 0, 0);
+                }
                 numCtx.textAlign = 'left';
                 numCtx.textBaseline = 'alphabetic';
             } else if (el.type === 'QR') {
@@ -17008,7 +17107,7 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
         numCtx.translate(x, y);
         numCtx.rotate(rot);
 
-        if (el.type === 'TEXT' || el.type === 'FIXED') {
+        if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
             const fs = (el.font_size || 12) * S / 2.8346;
             numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
             numCtx.fillStyle = color;
@@ -17016,13 +17115,27 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
             let label = '';
             if (el.type === 'FIXED') {
                 label = el.fixed_value || 'TEXTO';
+            } else if (el.type === 'TEATRO_FILA') {
+                label = `${el.prefix || ''}A`;
+            } else if (el.type === 'TEATRO_LUGAR') {
+                label = `${el.prefix || ''}22`;
+            } else if (el.type === 'TEATRO_COMBO') {
+                const fila = `${el.prefix_fila || ''}A`;
+                const lugar = `${el.prefix_lugar || ''}22`;
+                label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                 label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
             }
             numCtx.textAlign = 'center';
             numCtx.textBaseline = 'middle';
-            numCtx.fillText(label, 0, 0);
+            if (label.includes('\n')) {
+                const lines = label.split('\n');
+                numCtx.fillText(lines[0], 0, -fs/2);
+                numCtx.fillText(lines[1], 0, fs/2);
+            } else {
+                numCtx.fillText(label, 0, 0);
+            }
             numCtx.textAlign = 'left';
             numCtx.textBaseline = 'alphabetic';
         } else if (el.type === 'QR') {
