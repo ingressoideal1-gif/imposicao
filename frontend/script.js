@@ -6967,10 +6967,17 @@ async function loadMapaTeatroData(mapaId) {
         drawPreview();
         return;
     }
-    if (_lastLoadedMapaTeatro === mapaId) return; // já carregado
-    _lastLoadedMapaTeatro = mapaId;
+    if (_lastLoadedMapaTeatro === String(mapaId)) return; // já carregado
+    _lastLoadedMapaTeatro = String(mapaId);
     try {
-        const mapa = await api('GET', `/mapas_teatro/${mapaId}`);
+        let mapa = null;
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').eq('id', mapaId).single();
+            if (!error && data) mapa = data;
+        } else {
+            mapa = await api('GET', `/mapas_teatro/${mapaId}`);
+        }
+        
         if (mapa && mapa.config && mapa.config.setores) {
             const csvData = [];
             for (const setor of mapa.config.setores) {
@@ -6994,7 +7001,7 @@ async function loadMapaTeatroData(mapaId) {
         console.error('[Teatro] Erro ao carregar mapa:', err);
         state.csvData = null;
     }
-    drawPreview();
+    updateImpSummary();
 }
 
 function updateImpSummary() {
@@ -8074,9 +8081,6 @@ window.runImposition = async function (mode) {
                     await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
                     if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
                 }
-                btnText.textContent = 'Gerar Imposição';
-                spinner.style.display = 'none';
-                btn.disabled = false;
                 return;
             }
         }
