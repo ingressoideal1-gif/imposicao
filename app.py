@@ -381,7 +381,7 @@ async def impose_file(
                 content = await file.read()
                 tmp_in.write(content)
                 base_file_path = tmp_in.name
-        elif data.get("schema") != "multi_artes":
+        elif data.get("schema") != "multi_artes" and not mapa_teatro_id:
             raise HTTPException(status_code=400, detail="Arquivo principal não enviado.")
 
         if base_file_path:
