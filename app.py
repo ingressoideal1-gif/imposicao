@@ -298,6 +298,66 @@ def delete_mapa_teatro(mapa_id: str, user: dict = Depends(get_current_user)):
     db.delete_mapa_teatro(mapa_id)
     return {"status": "success"}
 
+# ─── Embutir fontes do sistema nos elementos da numeração ─────────────────────
+
+def _embed_system_fonts(numeracao_obj):
+    """Embute o binário das fontes do sistema nos elementos para garantir
+    que funcionem independentemente do ambiente de deploy."""
+    if not numeracao_obj or "elements" not in numeracao_obj:
+        return
+    import glob as _glob
+    import base64
+    font_cache = {}  # cache_key -> base64 data
+    font_dirs = [
+        "C:/Windows/Fonts",
+        os.path.expanduser("~/AppData/Local/Microsoft/Windows/Fonts"),
+        "/usr/share/fonts",
+        "/System/Library/Fonts",
+        os.path.expanduser("~/Library/Fonts"),
+    ]
+    for el in numeracao_obj["elements"]:
+        raw_fn = el.get("font_name", "")
+        if not raw_fn.startswith("system:"):
+            continue
+        parts = raw_fn[7:].split("|")
+        family = parts[0]
+        is_bold = "bold" in parts[1:]
+        is_italic = "italic" in parts[1:]
+        cache_key = f"{family}|{'b' if is_bold else ''}|{'i' if is_italic else ''}"
+        if cache_key in font_cache:
+            el["_font_data"] = font_cache[cache_key]
+            continue
+        family_lower = family.lower().replace(" ", "")
+        fam_norm = family_lower.replace("-", "").replace("_", "")
+        found_file = None
+        for fdir in font_dirs:
+            if not os.path.isdir(fdir):
+                continue
+            for ext in ("**/*.ttf", "**/*.otf", "**/*.TTF", "**/*.OTF"):
+                for fpath in _glob.glob(os.path.join(fdir, ext), recursive=True):
+                    base = os.path.splitext(os.path.basename(fpath))[0].lower().replace(" ", "").replace("-", "").replace("_", "")
+                    bold_match = ("bold" in base) == is_bold
+                    italic_match = ("italic" in base or "oblique" in base) == is_italic
+                    if base.startswith(fam_norm) and bold_match and italic_match:
+                        found_file = fpath
+                        break
+                    if fam_norm in base and not found_file:
+                        if bold_match and italic_match:
+                            found_file = fpath
+                if found_file:
+                    break
+            if found_file:
+                break
+        if found_file:
+            try:
+                with open(found_file, "rb") as f:
+                    font_bytes = base64.b64encode(f.read()).decode("ascii")
+                    el["_font_data"] = font_bytes
+                    font_cache[cache_key] = font_bytes
+                    print(f"[impose] Fonte embutida: {family} -> {found_file} ({len(font_bytes)} chars b64)")
+            except Exception as ex:
+                print(f"[impose] Erro ao embutir fonte {family}: {ex}")
+
 # ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
 
 @app.post("/api/impose")
@@ -320,6 +380,10 @@ async def impose_file(
         saida   = data.get("saida") or db.get_saida(data.get("saida_id"))
         numeracao = data.get("numeracao") or (db.get_numeracao(data.get("numeracao_id")) if data.get("numeracao_id") else None)
         numeracao_2 = data.get("numeracao_2") or (db.get_numeracao(data.get("numeracao_2_id")) if data.get("numeracao_2_id") else None)
+
+        # Embutir fontes do sistema nos elementos para deploy cross-platform
+        _embed_system_fonts(numeracao)
+        _embed_system_fonts(numeracao_2)
 
         # Diagnóstico de elementos na numeração (font, color, posição)
         for _num_label, _num_obj in [("numeracao", numeracao), ("numeracao_2", numeracao_2)]:
@@ -453,6 +517,11 @@ async def impose_file(
         log_diag(f"[multi_artes] mapeados: {file_idx}")
         for _ma in multi_artes_list:
             log_diag(f"[multi_artes] pdf_name={_ma.get('pdf_name')!r} has_raw={_ma.get('has_raw_file')} local_path={bool(_ma.get('local_path'))}")
+
+        # Embutir fontes do sistema nos elementos de multi_artes
+        for ma in multi_artes_list:
+            _embed_system_fonts(ma.get("numeracao"))
+            _embed_system_fonts(ma.get("numeracao_2"))
 
         config = ImpositionConfig(
             base_file=base_file_path,

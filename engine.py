@@ -197,11 +197,7 @@ class ImpositionConfig:
         self.elements = []
         
         # Carregar numeração 1
-        print(f"[engine] numeracao keys: {list(numeracao.keys()) if numeracao else 'None'}")
         if numeracao and "elements" in numeracao:
-            print(f"[engine] NUM1 elements count: {len(numeracao['elements'])}")
-            for _i, _el in enumerate(numeracao["elements"]):
-                print(f"[engine] NUM1 el[{_i}]: type={_el.get('type')} font_name={_el.get('font_name')!r} font_size={_el.get('font_size')!r} color={_el.get('color')!r} x_mm={_el.get('x_mm')!r} y_mm={_el.get('y_mm')!r}")
             for el in numeracao["elements"]:
                 e = dict(el)
                 # Converter mm → pt para todos os campos de posição/tamanho
@@ -363,7 +359,7 @@ class ImpositionEngine:
         if t in ("TEXT", "FIXED") or t.startswith("TEATRO_"):
             font_size = float(el.get("font_size", 12))
             raw_font_name = el.get("font_name", "helv")
-            print(f"[engine._render_element] type={t} raw_font_name={raw_font_name!r} font_size={font_size} color={el.get('color')!r} val_str={val_str!r}")
+
             # Mapeamento do frontend para abreviacoes oficiais do Base-14 do PyMuPDF
             font_map = {
                 "helv": "helv",
@@ -420,6 +416,21 @@ class ImpositionEngine:
                     font_name = family
                     font_file = found_file
                     print(f"[engine] Fonte do sistema encontrada: '{family}' -> {found_file}")
+                elif el.get("_font_data"):
+                    # Fonte embutida no payload (base64) - usar arquivo temporário
+                    import base64, tempfile
+                    try:
+                        font_bytes = base64.b64decode(el["_font_data"])
+                        tmp_font = tempfile.NamedTemporaryFile(delete=False, suffix=".ttf")
+                        tmp_font.write(font_bytes)
+                        tmp_font.close()
+                        font_name = family
+                        font_file = tmp_font.name
+                        print(f"[engine] Fonte embutida usada: '{family}' ({len(el['_font_data'])} chars b64)")
+                    except Exception as ex:
+                        print(f"[engine] Erro ao usar fonte embutida '{family}': {ex}")
+                        font_name = "hebo" if is_bold else "helv"
+                        font_file = None
                 else:
                     font_name = "hebo" if is_bold else "helv"
                     font_file = None

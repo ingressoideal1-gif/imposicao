@@ -3084,12 +3084,16 @@ function drawElement(ctx, el, S) {
         if (el.type === 'FIXED') {
             label = el.fixed_value || 'TEXTO FIXO';
         } else if (el.type === 'TEATRO_FILA') {
-            label = `${el.prefix || ''}A`;
+            const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+            label = `${el.prefix || ''}${_fVal}`;
         } else if (el.type === 'TEATRO_LUGAR') {
-            label = `${el.prefix || ''}22`;
+            const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+            label = `${el.prefix || ''}${_lVal}`;
         } else if (el.type === 'TEATRO_COMBO') {
-            const fila = `${el.prefix_fila || ''}A`;
-            const lugar = `${el.prefix_lugar || ''}22`;
+            const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+            const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+            const fila = `${el.prefix_fila || ''}${_fVal}`;
+            const lugar = `${el.prefix_lugar || ''}${_lVal}`;
             label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
         } else if (el.source === 'database') {
             label = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
@@ -3742,12 +3746,16 @@ function getElementSizeMM(el) {
             if (el.type === 'FIXED') {
                 label = el.fixed_value || 'TEXTO FIXO';
             } else if (el.type === 'TEATRO_FILA') {
-                label = `${el.prefix || ''}A`;
+                const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                label = `${el.prefix || ''}${_fVal}`;
             } else if (el.type === 'TEATRO_LUGAR') {
-                label = `${el.prefix || ''}22`;
+                const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                label = `${el.prefix || ''}${_lVal}`;
             } else if (el.type === 'TEATRO_COMBO') {
-                const fila = `${el.prefix_fila || ''}A`;
-                const lugar = `${el.prefix_lugar || ''}22`;
+                const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                const fila = `${el.prefix_fila || ''}${_fVal}`;
+                const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                 label = el.layout === '2lines' ? fila : `${fila} - ${lugar}`;
             } else if (el.source === 'database') {
                 label = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
@@ -6240,17 +6248,18 @@ function drawPreview() {
                         val_str = el.fixed_value || "";
 
                     } else if (el.type === 'TEATRO_FILA') {
-
-                        val_str = `${el.prefix || ''}A`;
+                        const filaVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Fila || 'A' : 'A';
+                        val_str = `${el.prefix || ''}${filaVal}`;
 
                     } else if (el.type === 'TEATRO_LUGAR') {
-
-                        val_str = `${el.prefix || ''}22`;
+                        const lugarVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Numero || '22' : '22';
+                        val_str = `${el.prefix || ''}${lugarVal}`;
 
                     } else if (el.type === 'TEATRO_COMBO') {
-
-                        const filaT = `${el.prefix_fila || ''}A`;
-                        const lugarT = `${el.prefix_lugar || ''}22`;
+                        const filaVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Fila || 'A' : 'A';
+                        const lugarVal = (state.csvData && state.csvData[item_index]) ? state.csvData[item_index].Numero || '22' : '22';
+                        const filaT = `${el.prefix_fila || ''}${filaVal}`;
+                        const lugarT = `${el.prefix_lugar || ''}${lugarVal}`;
                         val_str = el.layout === '2lines' ? `${filaT}\n${lugarT}` : `${filaT} - ${lugarT}`;
 
                     } else if (el.source === 'database') {
@@ -6950,6 +6959,44 @@ async function populateImpMapasTeatro() {
     }
 }
 
+let _lastLoadedMapaTeatro = null;
+async function loadMapaTeatroData(mapaId) {
+    if (!mapaId) {
+        state.csvData = null;
+        _lastLoadedMapaTeatro = null;
+        drawPreview();
+        return;
+    }
+    if (_lastLoadedMapaTeatro === mapaId) return; // já carregado
+    _lastLoadedMapaTeatro = mapaId;
+    try {
+        const mapa = await api('GET', `/mapas_teatro/${mapaId}`);
+        if (mapa && mapa.config && mapa.config.setores) {
+            const csvData = [];
+            for (const setor of mapa.config.setores) {
+                const assentos = (setor.assentos || []).slice();
+                assentos.sort((a, b) => (parseFloat(a.y || 0) - parseFloat(b.y || 0)) || (parseFloat(a.x || 0) - parseFloat(b.x || 0)));
+                for (const a of assentos) {
+                    if (a.tipo === 'Apagado' || a.isErased) continue;
+                    csvData.push({
+                        Fila: String(a.row_label || ''),
+                        Numero: String(a.col_label || ''),
+                        Setor: String(setor.nome || '')
+                    });
+                }
+            }
+            state.csvData = csvData;
+            console.log(`[Teatro] Mapa carregado: ${csvData.length} assentos`);
+        } else {
+            state.csvData = null;
+        }
+    } catch (err) {
+        console.error('[Teatro] Erro ao carregar mapa:', err);
+        state.csvData = null;
+    }
+    drawPreview();
+}
+
 function updateImpSummary() {
 
     const fmtSelect = document.getElementById('imp-formato');
@@ -7307,6 +7354,11 @@ function updateImpSummary() {
         if (impStartGroup) impStartGroup.style.display = 'none';
         if (impEndGroup) impEndGroup.style.display = 'none';
         populateImpMapasTeatro();
+        // Carregar dados do mapa de teatro selecionado
+        const mapaTeatro = document.getElementById('imp-mapa-teatro');
+        if (mapaTeatro && mapaTeatro.value) {
+            loadMapaTeatroData(mapaTeatro.value);
+        }
     } else {
         if (impMapaTeatroGroup) impMapaTeatroGroup.style.display = 'none';
         if (impStartGroup) impStartGroup.style.display = 'block';
@@ -10031,12 +10083,16 @@ window.onAmostraNumeracaoSelect = function() {
                     label = el.fixed_value || 'TEXTO';
 
                 } else if (el.type === 'TEATRO_FILA') {
-                    label = `${el.prefix || ''}A`;
+                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    label = `${el.prefix || ''}${_fVal}`;
                 } else if (el.type === 'TEATRO_LUGAR') {
-                    label = `${el.prefix || ''}22`;
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    label = `${el.prefix || ''}${_lVal}`;
                 } else if (el.type === 'TEATRO_COMBO') {
-                    const fila = `${el.prefix_fila || ''}A`;
-                    const lugar = `${el.prefix_lugar || ''}22`;
+                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    const fila = `${el.prefix_fila || ''}${_fVal}`;
+                    const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
                 } else {
 
@@ -14663,12 +14719,16 @@ async function renderItemAmostraCombinada(idx, osId) {
                 if (el.type === 'FIXED') {
                     label = el.fixed_value || 'TEXTO';
                 } else if (el.type === 'TEATRO_FILA') {
-                    label = `${el.prefix || ''}A`;
+                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    label = `${el.prefix || ''}${_fVal}`;
                 } else if (el.type === 'TEATRO_LUGAR') {
-                    label = `${el.prefix || ''}22`;
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    label = `${el.prefix || ''}${_lVal}`;
                 } else if (el.type === 'TEATRO_COMBO') {
-                    const fila = `${el.prefix_fila || ''}A`;
-                    const lugar = `${el.prefix_lugar || ''}22`;
+                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    const fila = `${el.prefix_fila || ''}${_fVal}`;
+                    const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
@@ -17308,12 +17368,16 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
             if (el.type === 'FIXED') {
                 label = el.fixed_value || 'TEXTO';
             } else if (el.type === 'TEATRO_FILA') {
-                label = `${el.prefix || ''}A`;
+                const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                label = `${el.prefix || ''}${_fVal}`;
             } else if (el.type === 'TEATRO_LUGAR') {
-                label = `${el.prefix || ''}22`;
+                const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                label = `${el.prefix || ''}${_lVal}`;
             } else if (el.type === 'TEATRO_COMBO') {
-                const fila = `${el.prefix_fila || ''}A`;
-                const lugar = `${el.prefix_lugar || ''}22`;
+                const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                const fila = `${el.prefix_fila || ''}${_fVal}`;
+                const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                 label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
