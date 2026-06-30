@@ -922,6 +922,18 @@ document.addEventListener('keydown', function(e) {
     if (!modal || modal.style.display !== 'flex') return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     
+    // Spacebar: ativa ferramenta Mover (pan) enquanto pressionado
+    if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        if (mapTool !== 'pan') {
+            window._toolAntesDoSpace = mapTool; // guarda a ferramenta atual
+        }
+        window.setMapTool('pan');
+        const canvas = document.getElementById('mapa-canvas');
+        if (canvas) canvas.style.cursor = 'grab';
+        return;
+    }
+
     if (e.ctrlKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         window.undoMapHistory();
@@ -975,6 +987,19 @@ document.addEventListener('keydown', function(e) {
                 window.cadeirasSelecionadas.add(newKey);
             });
         }
+    }
+});
+
+// Ao soltar o Spacebar, volta para a ferramenta anterior
+document.addEventListener('keyup', function(e) {
+    const modal = document.getElementById('modal-mapa-teatro');
+    if (!modal || modal.style.display !== 'flex') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    
+    if (e.code === 'Space') {
+        const ferramentaAnterior = window._toolAntesDoSpace || 'select';
+        window._toolAntesDoSpace = null;
+        window.setMapTool(ferramentaAnterior);
     }
 });
 
