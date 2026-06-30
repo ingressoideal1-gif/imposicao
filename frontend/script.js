@@ -7295,7 +7295,7 @@ function updateImpSummary() {
 
     if (isPdfMultiple) {
 
-        const ms = document.getElementById('mapaTeatroSelect');
+        const ms = document.getElementById('imp-mapa-teatro');
         if (!ms || !ms.value) {
             state.csvData = null;
         }
@@ -7366,7 +7366,7 @@ function updateImpSummary() {
 
         if (!csvFileEl || !csvFileEl.files.length) {
 
-            const ms = document.getElementById('mapaTeatroSelect');
+            const ms = document.getElementById('imp-mapa-teatro');
             if (!ms || !ms.value) {
                 state.csvData = null;
             }
