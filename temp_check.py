@@ -8,13 +8,6 @@ for m in res.data:
     print(f"Mapa: {m['name']} id={m['id']}")
     config = m.get('config', {})
     if 'setores' in config:
-        for s in config['setores']:
-            cadeiras = s.get('cadeiras', {})
-            if isinstance(cadeiras, dict):
-                print(f"    setor {s.get('nome')} tem {len(cadeiras)} cadeiras")
-            elif isinstance(cadeiras, list):
-                print(f"    setor {s.get('nome')} cadeiras e LIST: {len(cadeiras)}")
-            else:
-                print(f"    setor {s.get('nome')} cadeiras nao e dict nem list: {type(cadeiras)}")
+        print(f"  Tem setores: {len(config['setores'])}")
     else:
         print("  sem setores")

@@ -6971,11 +6971,17 @@ async function loadMapaTeatroData(mapaId) {
     _lastLoadedMapaTeatro = String(mapaId);
     try {
         let mapa = null;
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').eq('id', mapaId).single();
-            if (!error && data) mapa = data;
-        } else {
-            mapa = await api('GET', `/mapas_teatro/${mapaId}`);
+        if (window.state && window.state.mapas) {
+            mapa = window.state.mapas.find(x => String(x.id) === String(mapaId));
+        }
+        
+        if (!mapa) {
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').eq('id', mapaId).single();
+                if (!error && data) mapa = data;
+            } else {
+                mapa = await api('GET', `/mapas_teatro/${mapaId}`);
+            }
         }
         
         if (mapa && mapa.config && mapa.config.setores) {
