@@ -3719,7 +3719,7 @@ function getElementSizeMM(el) {
 
     let w = 20, h = 8;
 
-    if (el.type === 'TEXT' || el.type === 'FIXED') {
+    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
 
         const canvas = document.getElementById('numeracao-canvas');
 
@@ -3740,17 +3740,19 @@ function getElementSizeMM(el) {
             let label = '';
 
             if (el.type === 'FIXED') {
-
                 label = el.fixed_value || 'TEXTO FIXO';
-
+            } else if (el.type === 'TEATRO_FILA') {
+                label = `${el.prefix || ''}A`;
+            } else if (el.type === 'TEATRO_LUGAR') {
+                label = `${el.prefix || ''}22`;
+            } else if (el.type === 'TEATRO_COMBO') {
+                const fila = `${el.prefix_fila || ''}A`;
+                const lugar = `${el.prefix_lugar || ''}22`;
+                label = el.layout === '2lines' ? fila : `${fila} - ${lugar}`;
             } else if (el.source === 'database') {
-
                 label = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
-
             } else {
-
                 label = `${el.prefix || ''}0001${el.suffix || ''}`;
-
             }
 
             const mw_px = ctx.measureText(label).width;
@@ -3760,6 +3762,11 @@ function getElementSizeMM(el) {
             w = mw_px / S;
 
             h = el.font_size / 2.8346;
+            
+            // TEATRO_COMBO em 2lines: dobrar a altura
+            if (el.type === 'TEATRO_COMBO' && el.layout === '2lines') {
+                h *= 2.2;
+            }
 
         } else {
 
@@ -6232,6 +6239,20 @@ function drawPreview() {
 
                         val_str = el.fixed_value || "";
 
+                    } else if (el.type === 'TEATRO_FILA') {
+
+                        val_str = `${el.prefix || ''}A`;
+
+                    } else if (el.type === 'TEATRO_LUGAR') {
+
+                        val_str = `${el.prefix || ''}22`;
+
+                    } else if (el.type === 'TEATRO_COMBO') {
+
+                        const filaT = `${el.prefix_fila || ''}A`;
+                        const lugarT = `${el.prefix_lugar || ''}22`;
+                        val_str = el.layout === '2lines' ? `${filaT}\n${lugarT}` : `${filaT} - ${lugarT}`;
+
                     } else if (el.source === 'database') {
 
                         if (state.csvData && state.csvData[item_index]) {
@@ -6281,7 +6302,7 @@ function drawPreview() {
 
 
 
-                    if (el.type === 'TEXT' || el.type === 'FIXED') {
+                    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
 
                         const fs = (el.font_size || 12) * scale;
 
@@ -6291,7 +6312,15 @@ function drawPreview() {
 
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText(val_str, 0, 0);
+                        
+                        if (val_str.includes('\n')) {
+                            const lines = val_str.split('\n');
+                            ctx.fillText(lines[0], 0, -fs / 2);
+                            ctx.fillText(lines[1], 0, fs / 2);
+                        } else {
+                            ctx.fillText(val_str, 0, 0);
+                        }
+                        
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'alphabetic';
 

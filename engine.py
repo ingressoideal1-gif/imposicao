@@ -866,8 +866,9 @@ class ImpositionEngine:
                             if "width_mm" in el and el["type"] == "SVG":
                                 rotated_el["width_mm"] = el["width_mm"]
                                 rotated_el["height_mm"] = el.get("height_mm", 20)
-                            if el["type"] in ("TEXT", "FIXED"):
+                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
                                 rotated_el["font_size"] = el.get("font_size", 12)
+                                rotated_el["font_name"] = el.get("font_name", "helv")
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
                             if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
                                 pos = int(rotated_el.get("ticket_pos", 1))
@@ -908,8 +909,9 @@ class ImpositionEngine:
                             if "width_mm" in el and el["type"] == "SVG":
                                 rotated_el["width_mm"] = el["width_mm"]
                                 rotated_el["height_mm"] = el.get("height_mm", 20)
-                            if el["type"] in ("TEXT", "FIXED"):
+                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
                                 rotated_el["font_size"] = el.get("font_size", 12)
+                                rotated_el["font_name"] = el.get("font_name", "helv")
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
                             if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
                                 pos = int(rotated_el.get("ticket_pos", 1))
@@ -1084,8 +1086,9 @@ class ImpositionEngine:
                             if "width_mm" in el and el["type"] == "SVG":
                                 rotated_el["width_mm"] = el["width_mm"]
                                 rotated_el["height_mm"] = el.get("height_mm", 20)
-                            if el["type"] in ("TEXT", "FIXED"):
+                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
                                 rotated_el["font_size"] = el.get("font_size", 12)
+                                rotated_el["font_name"] = el.get("font_name", "helv")
 
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
 
