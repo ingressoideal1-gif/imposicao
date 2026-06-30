@@ -3462,10 +3462,6 @@ function onCanvasMouseDown(e) {
             }
         }
             selectElId(hit.id, true, true);
-        } else {
-            selectElId(hit.id, false, true);
-        }
-
 
 
         // Configurar o arraste para todos os elementos atualmente selecionados
@@ -4856,32 +4852,32 @@ window.removeEl = function (id) {
 
 
 window.duplicateEl = function (id) {
-    clone.id = newId;
-
-    clone.x_mm += 5; // Desloca levemente para não sobrepor perfeitamente
-
-    if (clone.type === 'PICOTE') {
-
-        clone.y_mm = 0;
-
-    } else {
-
-        clone.y_mm += 5;
-
+    if (!state.selectedElIds.includes(id)) {
+        selectElId(id, false, false);
     }
+    duplicateSelectedElements();
+};
 
-    if (clone.name) clone.name += ' (cópia)';
+window.groupSelectedElements = function () {
+    if (!state.selectedElIds || state.selectedElIds.length < 2) {
+        toast('Selecione pelo menos 2 elementos para agrupar.', 'warning');
+        return;
+    }
+    const groupId = 'g_' + Math.random().toString(36).substr(2, 9);
+    state.selectedElIds.forEach(id => {
+        const el = state.numElements.find(e => e.id === id);
+        if (el) el.group_id = groupId;
+    });
+    toast('Elementos agrupados!', 'success');
+};
 
-
-
-    state.numElements.push(clone);
-
-    renderElementsList();
-
-    drawCanvas();
-
-    selectElId(newId, false);
-
+window.ungroupSelectedElements = function () {
+    if (!state.selectedElIds || state.selectedElIds.length === 0) return;
+    state.selectedElIds.forEach(id => {
+        const el = state.numElements.find(e => e.id === id);
+        if (el) delete el.group_id;
+    });
+    toast('Elementos desagrupados!', 'info');
 };
 
 
@@ -17463,4 +17459,5 @@ document.addEventListener('keydown', (e) => {
         if (typeof duplicateSelectedElements === 'function') duplicateSelectedElements();
     }
 });
+
 
