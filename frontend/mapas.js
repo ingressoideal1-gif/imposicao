@@ -349,9 +349,7 @@ window.salvarMapaTeatro = async function() {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const {error} = await supabaseClient.from('producao_mapas_teatro').update({
                     name: m.name,
-                    config: m.config,
-                    total_lugares: m.total_lugares,
-                    lugares_por_setor: m.lugares_por_setor
+                    config: m.config
                 }).eq('id', m.id);
                 if(!error) backendSuccess = true;
             } else {
@@ -366,9 +364,7 @@ window.salvarMapaTeatro = async function() {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const { data, error } = await supabaseClient.from('producao_mapas_teatro').insert([{
                     name: m.name,
-                    config: m.config,
-                    total_lugares: m.total_lugares,
-                    lugares_por_setor: m.lugares_por_setor
+                    config: m.config
                 }]).select();
                 if(data && data.length > 0) {
                     m.id = data[0].id;
