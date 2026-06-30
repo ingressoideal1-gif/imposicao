@@ -197,7 +197,11 @@ class ImpositionConfig:
         self.elements = []
         
         # Carregar numeração 1
+        print(f"[engine] numeracao keys: {list(numeracao.keys()) if numeracao else 'None'}")
         if numeracao and "elements" in numeracao:
+            print(f"[engine] NUM1 elements count: {len(numeracao['elements'])}")
+            for _i, _el in enumerate(numeracao["elements"]):
+                print(f"[engine] NUM1 el[{_i}]: type={_el.get('type')} font_name={_el.get('font_name')!r} font_size={_el.get('font_size')!r} color={_el.get('color')!r} x_mm={_el.get('x_mm')!r} y_mm={_el.get('y_mm')!r}")
             for el in numeracao["elements"]:
                 e = dict(el)
                 # Converter mm → pt para todos os campos de posição/tamanho
@@ -357,8 +361,9 @@ class ImpositionEngine:
 
 
         if t in ("TEXT", "FIXED") or t.startswith("TEATRO_"):
-            font_size = el.get("font_size", 12)
+            font_size = float(el.get("font_size", 12))
             raw_font_name = el.get("font_name", "helv")
+            print(f"[engine._render_element] type={t} raw_font_name={raw_font_name!r} font_size={font_size} color={el.get('color')!r} val_str={val_str!r}")
             # Mapeamento do frontend para abreviacoes oficiais do Base-14 do PyMuPDF
             font_map = {
                 "helv": "helv",
@@ -383,6 +388,7 @@ class ImpositionEngine:
                 import glob as _glob
                 font_dirs = [
                     "C:/Windows/Fonts",
+                    os.path.expanduser("~/AppData/Local/Microsoft/Windows/Fonts"),
                     "/usr/share/fonts",
                     "/System/Library/Fonts",
                     os.path.expanduser("~/Library/Fonts"),
@@ -392,8 +398,9 @@ class ImpositionEngine:
                 for fdir in font_dirs:
                     if not os.path.isdir(fdir):
                         continue
-                    for ext in ("*.ttf", "*.otf", "*.TTF", "*.OTF"):
-                        for fpath in _glob.glob(os.path.join(fdir, ext)):
+                    # Busca recursiva para incluir subdiretórios
+                    for ext in ("**/*.ttf", "**/*.otf", "**/*.TTF", "**/*.OTF"):
+                        for fpath in _glob.glob(os.path.join(fdir, ext), recursive=True):
                             base = os.path.splitext(os.path.basename(fpath))[0].lower().replace(" ", "").replace("-", "").replace("_", "")
                             fam_norm = family_lower.replace("-", "").replace("_", "")
                             bold_match = ("bold" in base) == is_bold
@@ -412,6 +419,7 @@ class ImpositionEngine:
                 if found_file:
                     font_name = family
                     font_file = found_file
+                    print(f"[engine] Fonte do sistema encontrada: '{family}' -> {found_file}")
                 else:
                     font_name = "hebo" if is_bold else "helv"
                     font_file = None

@@ -321,14 +321,20 @@ async def impose_file(
         numeracao = data.get("numeracao") or (db.get_numeracao(data.get("numeracao_id")) if data.get("numeracao_id") else None)
         numeracao_2 = data.get("numeracao_2") or (db.get_numeracao(data.get("numeracao_2_id")) if data.get("numeracao_2_id") else None)
 
-        # Diagnóstico de elementos PDF na numeração
+        # Diagnóstico de elementos na numeração (font, color, posição)
         for _num_label, _num_obj in [("numeracao", numeracao), ("numeracao_2", numeracao_2)]:
             if _num_obj and "elements" in _num_obj:
-                for _el in _num_obj["elements"]:
-                    if _el.get("type") == "PDF":
+                print(f"[impose] {_num_label} tem {len(_num_obj['elements'])} elements")
+                for _i, _el in enumerate(_num_obj["elements"]):
+                    _t = _el.get("type", "?")
+                    if _t in ("TEXT", "FIXED") or _t.startswith("TEATRO_"):
+                        print(f"[impose] {_num_label} el[{_i}]: type={_t} font_name={_el.get('font_name')!r} font_size={_el.get('font_size')!r} color={_el.get('color')!r} x_mm={_el.get('x_mm')!r} y_mm={_el.get('y_mm')!r}")
+                    elif _t == "PDF":
                         _pc = _el.get("pdf_content", "")
                         _preview = (_pc[:80] + "...") if len(_pc) > 80 else _pc
-                        print(f"[impose] {_num_label} elemento PDF: width={_el.get('width_mm')}mm, height={_el.get('height_mm')}mm, pdf_content={_preview!r}")
+                        print(f"[impose] {_num_label} el[{_i}] PDF: width={_el.get('width_mm')}mm, height={_el.get('height_mm')}mm, pdf_content={_preview!r}")
+                    else:
+                        print(f"[impose] {_num_label} el[{_i}]: type={_t}")
 
         if not formato:
             raise HTTPException(status_code=400, detail="Formato não encontrado.")
@@ -339,8 +345,18 @@ async def impose_file(
         csv_data = None
         
         mapa_teatro_id = data.get("mapa_teatro_id")
+        print(f"[DEBUG TEATRO] mapa_teatro_id = {mapa_teatro_id!r}")
         if mapa_teatro_id:
             mapa = db.get_mapa_teatro(mapa_teatro_id)
+            print(f"[DEBUG TEATRO] mapa loaded = {bool(mapa)}")
+            if mapa:
+                print(f"[DEBUG TEATRO] mapa keys = {list(mapa.keys()) if mapa else 'None'}")
+                print(f"[DEBUG TEATRO] has config = {bool(mapa.get('config'))}")
+                if mapa.get("config"):
+                    print(f"[DEBUG TEATRO] config keys = {list(mapa['config'].keys())}")
+                    print(f"[DEBUG TEATRO] has setores = {bool(mapa['config'].get('setores'))}")
+                    if mapa["config"].get("setores"):
+                        print(f"[DEBUG TEATRO] num setores = {len(mapa['config']['setores'])}")
             if mapa and mapa.get("config") and mapa["config"].get("setores"):
                 csv_data = []
                 for setor in mapa["config"]["setores"]:
@@ -355,6 +371,11 @@ async def impose_file(
                             "Numero": str(a.get("col_label", "")),
                             "Setor": str(setor.get("nome", ""))
                         })
+                print(f"[DEBUG TEATRO] csv_data gerado com {len(csv_data)} assentos")
+                if csv_data:
+                    print(f"[DEBUG TEATRO] primeiro assento = {csv_data[0]}")
+            else:
+                print(f"[DEBUG TEATRO] FALHA: mapa nao tem config/setores")
 
         if not csv_data:
             if csv_file and csv_file.filename:
