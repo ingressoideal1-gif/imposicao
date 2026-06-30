@@ -4815,12 +4815,13 @@ window.duplicateSelectedElements = function () {
         
         const clone = JSON.parse(JSON.stringify(el));
         clone.id = newId;
-        clone.x_mm += 5;
-        if (clone.type === 'PICOTE') {
-            clone.y_mm = 0;
-        } else {
-            clone.y_mm += 5;
+        
+        if (state.numFormato && clone.type !== 'PICOTE') {
+            clone.x_mm = state.numFormato.width_mm / 2;
+        } else if (clone.type !== 'PICOTE') {
+            clone.x_mm += 5;
         }
+        
         clone.last_interaction = timeNow;
 
         if (clone.group_id) {
