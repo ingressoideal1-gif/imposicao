@@ -6981,7 +6981,8 @@ async function loadMapaTeatroData(mapaId) {
         if (mapa && mapa.config && mapa.config.setores) {
             const csvData = [];
             for (const setor of mapa.config.setores) {
-                const assentos = (setor.assentos || []).slice();
+                const cadeiras = setor.cadeiras || {};
+                const assentos = Object.values(cadeiras);
                 assentos.sort((a, b) => (parseFloat(a.y || 0) - parseFloat(b.y || 0)) || (parseFloat(a.x || 0) - parseFloat(b.x || 0)));
                 for (const a of assentos) {
                     if (a.tipo === 'Apagado' || a.isErased) continue;

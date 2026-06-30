@@ -424,7 +424,9 @@ async def impose_file(
             if mapa and mapa.get("config") and mapa["config"].get("setores"):
                 csv_data = []
                 for setor in mapa["config"]["setores"]:
-                    assentos = setor.get("assentos", [])
+                    # No frontend as cadeiras são um dicionário: setor.cadeiras
+                    cadeiras_dict = setor.get("cadeiras", {})
+                    assentos = list(cadeiras_dict.values())
                     # Order by Y asc, then by X asc
                     assentos.sort(key=lambda a: (float(a.get("y", 0)), float(a.get("x", 0))))
                     for a in assentos:
