@@ -537,6 +537,13 @@
                                 <button class="btn btn-sm btn-secondary" id="btn-align-centerv" onclick="alignSelectedElement('center-v')" title="Centralizar Vertical" style="padding: 4px 8px; font-size: 0.8rem;">↕️</button>
                                 <button class="btn btn-sm btn-secondary" id="btn-align-bottom" onclick="alignSelectedElement('bottom')" title="Alinhar à Base" style="padding: 4px 8px; font-size: 0.8rem;">⬇️</button>
                             </div>
+
+                            <!-- Ferramentas de Agrupamento -->
+                            <div class="group-tools-horizontal" style="display: flex; gap: 4px; align-items: center; background: rgba(0,0,0,0.15); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 8px;">
+                                <span style="font-size: 0.68rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-right: 6px; user-select: none;">Grupo:</span>
+                                <button class="btn btn-sm btn-secondary" onclick="groupSelectedElements()" title="Agrupar Selecionados" style="padding: 4px 8px; font-size: 0.8rem;">🔗 Agrupar</button>
+                                <button class="btn btn-sm btn-secondary" onclick="ungroupSelectedElements()" title="Desagrupar Selecionados" style="padding: 4px 8px; font-size: 0.8rem;">🔓 Desagrupar</button>
+                            </div>
                         </div>
                         <div style="display: flex; width: 100%; justify-content: center; overflow: auto; padding: 8px 0;">
                             <canvas id="numeracao-canvas"></canvas>
