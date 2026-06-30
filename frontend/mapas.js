@@ -507,29 +507,48 @@ function renderSetoresList() {
 function selecionarSetorComTransicao(idx) {
     if (window.setorSelecionadoIdx === idx) return;
 
-    // Salva câmera do setor atual
-    if (!window._camerasPorSetor) window._camerasPorSetor = {};
-    if (window.setorSelecionadoIdx !== null) {
-        window._camerasPorSetor[window.setorSelecionadoIdx] = { ...camera };
+    const canvas = document.getElementById('mapa-canvas');
+
+    // ── Fade OUT ──────────────────────────────────────────────
+    if (canvas) {
+        canvas.style.transition = 'opacity 0.18s ease';
+        canvas.style.opacity = '0';
     }
 
-    window.setorSelecionadoIdx = idx;
-    window.cadeirasSelecionadas = new Set();
+    setTimeout(() => {
+        // Salva câmera do setor que estava ativo
+        if (!window._camerasPorSetor) window._camerasPorSetor = {};
+        if (window.setorSelecionadoIdx !== null) {
+            window._camerasPorSetor[window.setorSelecionadoIdx] = { ...camera };
+        }
 
-    // Restaura câmera do novo setor (ou centraliza)
-    if (window._camerasPorSetor[idx]) {
-        Object.assign(camera, window._camerasPorSetor[idx]);
-    } else if (mapCanvas) {
-        camera.x = mapCanvas.width / 2;
-        camera.y = mapCanvas.height / 2;
-        camera.zoom = 1;
-    }
+        // Troca o setor
+        window.setorSelecionadoIdx = idx;
+        window.cadeirasSelecionadas = new Set();
 
-    renderSetoresList();
-    carregarSetorNoSidebar();
-    atualizarHeaderSetor();
-    if(window.renderTiposAssentoList) window.renderTiposAssentoList();
-    if(window.renderToolbarTipos) window.renderToolbarTipos();
+        // Restaura câmera do novo setor (ou centraliza)
+        if (window._camerasPorSetor[idx]) {
+            Object.assign(camera, window._camerasPorSetor[idx]);
+        } else if (mapCanvas) {
+            camera.x = mapCanvas.width / 2;
+            camera.y = mapCanvas.height / 2;
+            camera.zoom = 1;
+        }
+
+        renderSetoresList();
+        carregarSetorNoSidebar();
+        atualizarHeaderSetor();
+        if(window.renderTiposAssentoList) window.renderTiposAssentoList();
+        if(window.renderToolbarTipos) window.renderToolbarTipos();
+
+        // ── Fade IN ───────────────────────────────────────────
+        if (canvas) {
+            // Pequeno delay para o browser processar o novo frame antes do fade-in
+            requestAnimationFrame(() => {
+                canvas.style.opacity = '1';
+            });
+        }
+    }, 180); // espera o fade-out completar
 }
 
 function atualizarHeaderSetor() {
