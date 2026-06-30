@@ -7295,7 +7295,10 @@ function updateImpSummary() {
 
     if (isPdfMultiple) {
 
-        state.csvData = null;
+        const ms = document.getElementById('mapaTeatroSelect');
+        if (!ms || !ms.value) {
+            state.csvData = null;
+        }
 
         state.csvFile = null;
 
@@ -7363,7 +7366,10 @@ function updateImpSummary() {
 
         if (!csvFileEl || !csvFileEl.files.length) {
 
-            state.csvData = null;
+            const ms = document.getElementById('mapaTeatroSelect');
+            if (!ms || !ms.value) {
+                state.csvData = null;
+            }
 
             state.csvFile = null;
 
@@ -17664,5 +17670,6 @@ document.addEventListener('keydown', (e) => {
         if (typeof duplicateSelectedElements === 'function') duplicateSelectedElements();
     }
 });
+
 
 
