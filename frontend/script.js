@@ -74,6 +74,10 @@ const state = {
 
     numElements: [],        // array de elementos no editor
 
+    numHistory: [],         // historico de undo/redo
+    
+    numHistoryIndex: -1,    // indice atual do historico
+
     numElCounter: 0,        // contador de IDs locais (sempre cresce, nunca reseta)
 
     selectedElId: null,     // elemento selecionado no canvas
@@ -2422,14 +2426,15 @@ function editNumeracao(id) {
     state.numElements = (n.elements || []).map(e => ({ ...e }));
 
     const maxId = state.numElements.reduce((max, el) => {
-
         const num = parseInt((el.id || '').replace('el_', '')) || 0;
-
         return Math.max(max, num);
-
     }, 0);
 
     state.numElCounter = maxId;
+
+    state.numHistory = [];
+    state.numHistoryIndex = -1;
+    saveNumHistory();
 
 
 
@@ -2806,7 +2811,15 @@ window.onFormatoSelect = function (clearElements = true) {
         compatContainer.style.display = 'block';
     }
 
-    if (clearElements !== false) state.numElements = [];
+    if (clearElements !== false) {
+        state.numElements = [];
+        state.numHistory = [];
+        state.numHistoryIndex = -1;
+    }
+    
+    if (clearElements !== false || state.numHistory.length === 0) {
+        saveNumHistory();
+    }
 
     document.getElementById('numeracao-editor').style.display = 'grid';
 
@@ -3595,9 +3608,19 @@ function onCanvasMouseMove(e) {
 
 
 function onCanvasMouseUp() {
-
+    if (state.dragging) {
+        let moved = false;
+        state.dragging.targets.forEach(t => {
+            const el = state.numElements.find(e => e.id === t.elId);
+            if (el && (el.x_mm !== t.startX || el.y_mm !== t.startY)) {
+                moved = true;
+            }
+        });
+        if (moved) {
+            saveNumHistory();
+        }
+    }
     state.dragging = null;
-
 }
 
 
@@ -3763,24 +3786,16 @@ function getElementSizeMM(el) {
 
 
 window.alignSelectedElement = function (alignment) {
-
     if (!state.selectedElIds || !state.selectedElIds.length || !state.numFormato) {
-
         toast('Selecione um ou mais elementos para alinhar', 'error');
-
         return;
-
     }
-
     const fmt = state.numFormato;
-
-
-
+    let mutated = false;
     state.selectedElIds.forEach(id => {
-
         const el = state.numElements.find(e => e.id === id);
-
         if (!el) return;
+        mutated = true;
 
 
 
@@ -3829,10 +3844,9 @@ window.alignSelectedElement = function (alignment) {
             if (fy && el.type !== 'PICOTE') fy.value = el.y_mm.toFixed(1);
 
         }
-
     });
 
-
+    if (mutated) saveNumHistory();
 
     drawCanvas();
 
@@ -4335,6 +4349,7 @@ window.addElement = function (type) {
 
 
     state.numElements.push(base);
+    saveNumHistory();
 
     renderElementsList();
 
@@ -4728,12 +4743,11 @@ function renderElementsList() {
 
 
 window.updateEl = function (id, field, value) {
-
     const el = state.numElements.find(e => e.id === id);
-
     if (!el) return;
 
     el[field] = value;
+    saveNumHistory();
 
     drawCanvas();
 
@@ -4784,6 +4798,9 @@ window.deleteSelectedElements = function () {
     state.numElements = state.numElements.filter(e => !idsToDelete.has(e.id));
     state.selectedElIds = [];
     state.selectedElId = null;
+    
+    saveNumHistory();
+    
     renderElementsList();
     drawCanvas();
 };
@@ -4802,6 +4819,8 @@ window.duplicateSelectedElements = function () {
         }
     });
 
+    saveNumHistory();
+    
     const groupMap = {};
     const newSelectedIds = [];
     const timeNow = Date.now();
@@ -4837,6 +4856,9 @@ window.duplicateSelectedElements = function () {
 
     state.selectedElIds = newSelectedIds;
     state.selectedElId = newSelectedIds.length > 0 ? newSelectedIds[newSelectedIds.length - 1] : null;
+    
+    saveNumHistory();
+    
     renderElementsList();
     drawCanvas();
 };
@@ -4862,20 +4884,64 @@ window.groupSelectedElements = function () {
         toast('Selecione pelo menos 2 elementos para agrupar.', 'warning');
         return;
     }
-    const groupId = 'g_' + Math.random().toString(36).substr(2, 9);
     state.selectedElIds.forEach(id => {
         const el = state.numElements.find(e => e.id === id);
         if (el) el.group_id = groupId;
     });
+    
+    saveNumHistory();
+    
     toast('Elementos agrupados!', 'success');
+};
+
+window.saveNumHistory = function () {
+    if (state.numHistoryIndex < state.numHistory.length - 1) {
+        state.numHistory = state.numHistory.slice(0, state.numHistoryIndex + 1);
+    }
+    state.numHistory.push({
+        numElements: JSON.parse(JSON.stringify(state.numElements)),
+        numElCounter: state.numElCounter,
+        selectedElIds: [...(state.selectedElIds || [])]
+    });
+    state.numHistoryIndex++;
+};
+
+window.undoNumHistory = function () {
+    if (state.numHistoryIndex > 0) {
+        state.numHistoryIndex--;
+        const snapshot = state.numHistory[state.numHistoryIndex];
+        state.numElements = JSON.parse(JSON.stringify(snapshot.numElements));
+        state.numElCounter = snapshot.numElCounter;
+        state.selectedElIds = [...snapshot.selectedElIds];
+        state.selectedElId = state.selectedElIds.length > 0 ? state.selectedElIds[state.selectedElIds.length - 1] : null;
+        renderElementsList();
+        drawCanvas();
+    }
+};
+
+window.redoNumHistory = function () {
+    if (state.numHistoryIndex < state.numHistory.length - 1) {
+        state.numHistoryIndex++;
+        const snapshot = state.numHistory[state.numHistoryIndex];
+        state.numElements = JSON.parse(JSON.stringify(snapshot.numElements));
+        state.numElCounter = snapshot.numElCounter;
+        state.selectedElIds = [...snapshot.selectedElIds];
+        state.selectedElId = state.selectedElIds.length > 0 ? state.selectedElIds[state.selectedElIds.length - 1] : null;
+        renderElementsList();
+        drawCanvas();
+    }
 };
 
 window.ungroupSelectedElements = function () {
     if (!state.selectedElIds || state.selectedElIds.length === 0) return;
+    
     state.selectedElIds.forEach(id => {
         const el = state.numElements.find(e => e.id === id);
         if (el) delete el.group_id;
     });
+    
+    saveNumHistory();
+    
     toast('Elementos desagrupados!', 'info');
 };
 
@@ -17451,6 +17517,20 @@ document.addEventListener('keydown', (e) => {
 
     if (e.key === 'Delete') {
         if (typeof deleteSelectedElements === 'function') deleteSelectedElements();
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+            if (typeof redoNumHistory === 'function') redoNumHistory();
+        } else {
+            if (typeof undoNumHistory === 'function') undoNumHistory();
+        }
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        if (typeof redoNumHistory === 'function') redoNumHistory();
     }
 
     if (e.ctrlKey && e.key.toLowerCase() === 'd') {
