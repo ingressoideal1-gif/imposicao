@@ -414,6 +414,13 @@ window.salvarMapaTeatro = async function() {
 function abrirModalMapaTeatro() {
     document.getElementById('modal-mapa-teatro').style.display = 'flex';
     document.getElementById('mapa-nome').value = window.state.mapaAtual.name;
+    
+    // Limpar campos de fileira
+    if(document.getElementById('mapa-fileira-prefix')) document.getElementById('mapa-fileira-prefix').value = 'A';
+    if(document.getElementById('mapa-fileira-inicio')) document.getElementById('mapa-fileira-inicio').value = '1';
+    if(document.getElementById('mapa-fileira-fim')) document.getElementById('mapa-fileira-fim').value = '30';
+    if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'seq';
+
 
     // Atualiza header do canvas com o nome do mapa
     const nomeEl = document.getElementById('mapa-header-nome-val');
@@ -452,6 +459,12 @@ window.fecharModalMapaTeatro = function() {
 
 window.adicionarSetorMapa = function() {
     window.pushToMapHistory();
+    
+    // Limpar campos de fileira ao criar novo setor
+    if(document.getElementById('mapa-fileira-prefix')) document.getElementById('mapa-fileira-prefix').value = 'A';
+    if(document.getElementById('mapa-fileira-inicio')) document.getElementById('mapa-fileira-inicio').value = '1';
+    if(document.getElementById('mapa-fileira-fim')) document.getElementById('mapa-fileira-fim').value = '30';
+    if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'seq';
     const novoIdx = window.state.mapaAtual.config.setores.length;
     window.state.mapaAtual.config.setores.push({
         id: 'setor_' + novoIdx + '_' + Date.now(),
