@@ -152,6 +152,7 @@ function renderTabelaMapas() {
             <td>${totalAssentos} Assentos</td>
             <td class="text-right">
                 <button class="btn btn-sm" onclick="editarMapaTeatro('${mapa.id}')">✏️ Editar</button>
+                <button class="btn btn-sm btn-secondary" onclick="duplicarMapaTeatro('${mapa.id}')" title="Duplicar mapa com todas as configurações">📋 Copiar</button>
                 <button class="btn btn-sm" onclick="excluirMapaTeatro('${mapa.id}')">🗑️ Excluir</button>
             </td>
         `;
@@ -199,6 +200,62 @@ window.excluirMapaTeatro = async function(id) {
     localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
     
     await fetchMapasTeatro();
+}
+
+window.duplicarMapaTeatro = async function(id) {
+    const original = window.state.mapas.find(m => m.id === id);
+    if (!original) return;
+    
+    const novoNome = `Cópia de ${original.name}`;
+    if (!confirm(`Duplicar o mapa "${original.name}" como "${novoNome}"?`)) return;
+    
+    // Deep copy da config completa
+    const copia = {
+        name: novoNome,
+        config: JSON.parse(JSON.stringify(original.config || {}))
+    };
+    // Não copiamos o ID para que seja gerado um novo
+    
+    let novoId = null;
+    
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { data, error } = await supabaseClient
+                .from('producao_mapas_teatro')
+                .insert([{ name: copia.name, config: copia.config }])
+                .select();
+            if (data && data.length > 0) {
+                novoId = data[0].id;
+                copia.id = novoId;
+            } else if (error) {
+                console.error('Erro ao duplicar no Supabase:', error);
+            }
+        } else {
+            const res = await fetch('/api/mapas_teatro', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(copia)
+            });
+            if (res.ok) {
+                const saved = await res.json();
+                copia.id = saved.id;
+                novoId = saved.id;
+            }
+        }
+    } catch(e) {
+        console.error('Erro ao duplicar mapa:', e);
+    }
+    
+    // Salva no cache local mesmo sem backend
+    if (!copia.id) copia.id = 'local_' + Date.now();
+    window.state.mapas.push(copia);
+    localStorage.setItem('vibe_mapas_teatro', JSON.stringify(window.state.mapas));
+    
+    await fetchMapasTeatro();
+    
+    if (typeof window.showToast === 'function') {
+        window.showToast(`Mapa duplicado como "${novoNome}"!`, 'success');
+    }
 }
 
 window.salvarMapaTeatro = async function() {
