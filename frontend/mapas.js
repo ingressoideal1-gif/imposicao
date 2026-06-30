@@ -835,10 +835,13 @@ function onMapMouseDown(e) {
                 
                 // Tenta calcular o número com base no vizinho esquerdo ou direito
                 let refNum = parseInt(document.getElementById('mapa-fileira-inicio').value) || 1;
+                let padrao = document.getElementById('mapa-fileira-padrao').value;
+                let step = (padrao === 'par' || padrao === 'impar') ? 2 : 1;
+                
                 if (cadeiras[`${pos.gx - 1},${pos.gy}`]) {
-                    refNum = parseInt(cadeiras[`${pos.gx - 1},${pos.gy}`].num) + 1;
+                    refNum = parseInt(cadeiras[`${pos.gx - 1},${pos.gy}`].num) + step;
                 } else if (cadeiras[`${pos.gx + 1},${pos.gy}`]) {
-                    refNum = parseInt(cadeiras[`${pos.gx + 1},${pos.gy}`].num) - 1;
+                    refNum = parseInt(cadeiras[`${pos.gx + 1},${pos.gy}`].num) - step;
                 }
                 
                 cadeiras[key] = {
