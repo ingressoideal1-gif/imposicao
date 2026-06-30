@@ -3461,8 +3461,6 @@ function onCanvasMouseDown(e) {
                 selectElId(hit.id, false, true);
             }
         }
-            selectElId(hit.id, true, true);
-
 
         // Configurar o arraste para todos os elementos atualmente selecionados
         state.dragging = {
