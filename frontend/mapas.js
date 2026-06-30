@@ -118,21 +118,28 @@ async function fetchMapasTeatro() {
     }
 }
 
-function renderTabelaMapas() {
+function renderTabelaMapas(filtro) {
     const tbody = document.getElementById('tbody-mapas');
     const empty = document.getElementById('empty-mapas');
     if (!tbody) return;
     
+    // Usa o filtro passado ou lê o campo de busca
+    const termo = (filtro !== undefined ? filtro : (document.getElementById('input-busca-mapa') || {}).value || '').toLowerCase().trim();
+    
     tbody.innerHTML = '';
     
-    if (!window.state.mapas || window.state.mapas.length === 0) {
+    const mapasFiltrados = (window.state.mapas || []).filter(m =>
+        !termo || m.name.toLowerCase().includes(termo)
+    );
+    
+    if (mapasFiltrados.length === 0) {
         if(empty) empty.style.display = 'flex';
         return;
     }
     
     if(empty) empty.style.display = 'none';
     
-    window.state.mapas.forEach(mapa => {
+    mapasFiltrados.forEach(mapa => {
         const tr = document.createElement('tr');
         const config = mapa.config || {};
         const setores = config.setores || [];
@@ -146,8 +153,13 @@ function renderTabelaMapas() {
             });
         });
 
+        // Destaca o termo pesquisado no nome
+        const nomeFinal = termo
+            ? mapa.name.replace(new RegExp(`(${termo})`, 'gi'), '<mark style="background:rgba(59,130,246,0.35); color:inherit; border-radius:2px;">$1</mark>')
+            : mapa.name;
+
         tr.innerHTML = `
-            <td><strong>${mapa.name}</strong></td>
+            <td><strong>${nomeFinal}</strong></td>
             <td>${setores.length} Setores</td>
             <td>${totalAssentos} Assentos</td>
             <td class="text-right">
@@ -158,6 +170,10 @@ function renderTabelaMapas() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+window.filtrarMapas = function(valor) {
+    renderTabelaMapas(valor);
 }
 
 // ==========================================

@@ -587,7 +587,18 @@
                     </div>
                 </div>
 
-                <div class="toolbar-actions" style="justify-content: flex-end; margin-bottom: 16px;">
+                <div class="toolbar-actions" style="justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
+                    <div style="position:relative; flex:1; max-width: 360px;">
+                        <span style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-dim); pointer-events:none;">🔍</span>
+                        <input
+                            type="text"
+                            id="input-busca-mapa"
+                            class="form-control"
+                            placeholder="Pesquisar por nome do mapa..."
+                            oninput="filtrarMapas(this.value)"
+                            style="padding-left: 32px;"
+                        >
+                    </div>
                     <button class="btn btn-primary" onclick="novoMapaTeatro()">+ Novo Mapa</button>
                 </div>
 
