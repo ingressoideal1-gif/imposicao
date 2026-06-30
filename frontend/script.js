@@ -7775,6 +7775,11 @@ window.runImposition = async function (mode) {
 
 
 
+    let payloadNumeracao = numeracao ? JSON.parse(JSON.stringify(numeracao)) : null;
+    if (payloadNumeracao && state.csvData) {
+        payloadNumeracao.csv_data = state.csvData;
+    }
+
     const payload = {
 
         formato_id: fmtId,
@@ -7791,7 +7796,7 @@ window.runImposition = async function (mode) {
 
         saida: saida,
 
-        numeracao: numeracao,
+        numeracao: payloadNumeracao,
 
         numeracao_2: num2,
 
