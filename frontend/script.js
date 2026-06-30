@@ -2174,8 +2174,9 @@ function populateImpNumeracoes() {
             return ids.some(id => String(id) === String(selectedFmtId));
         });
     } else {
-        filteredNums = state.numeracoes;
+        filteredNums = [...state.numeracoes];
     }
+    filteredNums.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
 
     // Popula Numeração 1 e Numeração 2
     ['imp-numeracao', 'imp-numeracao-2'].forEach(id => {
@@ -2235,6 +2236,7 @@ function renderNumeracoes() {
 
     });
 
+    filtradas.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
 
 
     if (!filtradas.length) {
