@@ -3441,47 +3441,45 @@ function onCanvasMouseDown(e) {
 
 
     if (hit) {
+        // Se pertencer a um grupo, seleciona o grupo inteiro
+        let idsToSelect = [hit.id];
+        if (hit.group_id) {
+            idsToSelect = state.numElements.filter(e => e.group_id === hit.group_id).map(e => e.id);
+        }
 
         if (multi) {
-
-            selectElId(hit.id, true);
-
+            idsToSelect.forEach(id => selectElId(id, true, true));
         } else {
-
-            if (!isElSelected(hit.id)) {
-
-                selectElId(hit.id, false);
-
+            // Se nenhum dos itens do grupo já está selecionado
+            const isGroupAlreadySelected = idsToSelect.every(id => isElSelected(id)) && idsToSelect.length === state.selectedElIds.length;
+            if (!isGroupAlreadySelected) {
+                // Limpa selecao atual e adiciona todos
+                state.selectedElIds = [];
+                idsToSelect.forEach(id => selectElId(id, true, true));
+            } else {
+                // Já estão selecionados, apenas atualiza interação
+                selectElId(hit.id, false, true);
             }
-
+        }
+            selectElId(hit.id, true, true);
+        } else {
+            selectElId(hit.id, false, true);
         }
 
 
 
         // Configurar o arraste para todos os elementos atualmente selecionados
-
         state.dragging = {
-
             targets: state.selectedElIds.map(id => {
-
                 const el = state.numElements.find(item => item.id === id);
-
                 return el ? {
-
                     elId: id,
-
                     startX: el.x_mm,
-
                     startY: el.y_mm
-
                 } : null;
-
             }).filter(Boolean),
-
             downX: x,
-
             downY: y
-
         };
 
     } else {
@@ -3622,7 +3620,7 @@ function isElSelected(id) {
 
 
 
-function selectElId(id, multi = false) {
+function selectElId(id, multi = false, updateInteraction = false) {
 
     if (!state.selectedElIds) state.selectedElIds = [];
 
@@ -3669,6 +3667,14 @@ function selectElId(id, multi = false) {
     // Rolar até o último selecionado
 
     if (state.selectedElId) {
+
+        if (updateInteraction) {
+            state.selectedElIds.forEach(selectedId => {
+                const el = state.numElements.find(e => e.id === selectedId);
+                if (el) el.last_interaction = Date.now();
+            });
+            renderElementsList();
+        }
 
         const card = document.getElementById(`elcard-${state.selectedElId}`);
 
@@ -4288,7 +4294,24 @@ window.addElement = function (type) {
 
     const id = `el_${state.numElCounter}`;
 
-    const base = { id, type, x_mm: type === 'PICOTE' ? 25 : 5, y_mm: type === 'PICOTE' ? 0 : 5, rotation: 0, color: type === 'PICOTE' ? '#ef4444' : '#000000', face: 'both', _centerAnchor: type !== 'PICOTE' };
+    let startX = 5;
+    let startY = 5;
+    if (state.numFormato) {
+        startX = state.numFormato.width_mm / 2;
+        startY = state.numFormato.height_mm / 2;
+    }
+
+    const base = { 
+        id, 
+        type, 
+        x_mm: type === 'PICOTE' ? 25 : startX, 
+        y_mm: type === 'PICOTE' ? 0 : startY, 
+        rotation: 0, 
+        color: type === 'PICOTE' ? '#ef4444' : '#000000', 
+        face: 'both', 
+        _centerAnchor: type !== 'PICOTE',
+        last_interaction: Date.now()
+    };
 
 
 
@@ -4371,11 +4394,17 @@ function renderElementsList() {
 
 
 
-    container.innerHTML = state.numElements.map(el => {
+    const elementsToRender = [...state.numElements].sort((a, b) => {
+        if (a.type === 'PICOTE' && b.type !== 'PICOTE') return 1;
+        if (b.type === 'PICOTE' && a.type !== 'PICOTE') return -1;
+        const timeA = a.last_interaction || 0;
+        const timeB = b.last_interaction || 0;
+        return timeB - timeA;
+    });
+
+    container.innerHTML = elementsToRender.map(el => {
 
         const isSelected = isElSelected(el.id);
-
-
 
         if (el.type === 'PICOTE') {
 
@@ -4744,36 +4773,89 @@ window.updateElSource = function (id, value) {
 
 
 
-window.removeEl = function (id) {
+window.deleteSelectedElements = function () {
+    if (!state.selectedElIds || state.selectedElIds.length === 0) return;
+    
+    let idsToDelete = new Set(state.selectedElIds);
+    state.numElements.forEach(el => {
+        if (el.group_id) {
+            const selectedInGroup = state.selectedElIds.some(sid => {
+                const selObj = state.numElements.find(e => e.id === sid);
+                return selObj && selObj.group_id === el.group_id;
+            });
+            if (selectedInGroup) idsToDelete.add(el.id);
+        }
+    });
 
-    state.numElements = state.numElements.filter(e => e.id !== id);
-
-    if (state.selectedElId === id) state.selectedElId = null;
-
+    state.numElements = state.numElements.filter(e => !idsToDelete.has(e.id));
+    state.selectedElIds = [];
+    state.selectedElId = null;
     renderElementsList();
-
     drawCanvas();
+};
 
+window.duplicateSelectedElements = function () {
+    if (!state.selectedElIds || state.selectedElIds.length === 0) return;
+    
+    let idsToDupe = new Set(state.selectedElIds);
+    state.numElements.forEach(el => {
+        if (el.group_id) {
+            const selectedInGroup = state.selectedElIds.some(sid => {
+                const selObj = state.numElements.find(e => e.id === sid);
+                return selObj && selObj.group_id === el.group_id;
+            });
+            if (selectedInGroup) idsToDupe.add(el.id);
+        }
+    });
+
+    const groupMap = {};
+    const newSelectedIds = [];
+    const timeNow = Date.now();
+
+    Array.from(idsToDupe).forEach(id => {
+        const el = state.numElements.find(e => e.id === id);
+        if (!el) return;
+        
+        state.numElCounter++;
+        const newId = `el_${state.numElCounter}`;
+        
+        const clone = JSON.parse(JSON.stringify(el));
+        clone.id = newId;
+        clone.x_mm += 5;
+        if (clone.type === 'PICOTE') {
+            clone.y_mm = 0;
+        } else {
+            clone.y_mm += 5;
+        }
+        clone.last_interaction = timeNow;
+
+        if (clone.group_id) {
+            if (!groupMap[clone.group_id]) {
+                groupMap[clone.group_id] = 'g_' + Math.random().toString(36).substr(2, 9);
+            }
+            clone.group_id = groupMap[clone.group_id];
+        }
+
+        state.numElements.push(clone);
+        newSelectedIds.push(newId);
+    });
+
+    state.selectedElIds = newSelectedIds;
+    state.selectedElId = newSelectedIds.length > 0 ? newSelectedIds[newSelectedIds.length - 1] : null;
+    renderElementsList();
+    drawCanvas();
+};
+
+window.removeEl = function (id) {
+    if (!state.selectedElIds.includes(id)) {
+        selectElId(id, false, false);
+    }
+    deleteSelectedElements();
 };
 
 
 
 window.duplicateEl = function (id) {
-
-    const el = state.numElements.find(e => e.id === id);
-
-    if (!el) return;
-
-
-
-    state.numElCounter++;
-
-    const newId = `el_${state.numElCounter}`;
-
-
-
-    const clone = JSON.parse(JSON.stringify(el));
-
     clone.id = newId;
 
     clone.x_mm += 5; // Desloca levemente para não sobrepor perfeitamente
@@ -4808,9 +4890,10 @@ window.duplicateEl = function (id) {
 
 window.selectEl = function (id, event) {
 
+    const isInputClick = event && event.target && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'LABEL'].includes(event.target.tagName);
     const multi = event ? (event.ctrlKey || event.shiftKey) : false;
 
-    selectElId(id, multi);
+    selectElId(id, multi, !isInputClick);
 
     drawCanvas();
 
@@ -17363,4 +17446,21 @@ async function exportarPdfGabarito() {
 
 
 
+
+
+document.addEventListener('keydown', (e) => {
+    const viewNum = document.getElementById('view-numeracao');
+    if (!viewNum || viewNum.style.display === 'none') return;
+
+    if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+    if (e.key === 'Delete') {
+        if (typeof deleteSelectedElements === 'function') deleteSelectedElements();
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        if (typeof duplicateSelectedElements === 'function') duplicateSelectedElements();
+    }
+});
 
