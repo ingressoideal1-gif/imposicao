@@ -1675,7 +1675,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=1"></script>
-    <script src="script.js?v=190"></script>
+    <script src="script.js?v=191"></script>
 
     <!-- PÁGINA PÚBLICA DO CLIENTE (fora do app-shell) -->
     <div id="cliente-page" class="cliente-page" style="display: none;">
@@ -1827,6 +1827,8 @@
                                 <button class="btn btn-sm" id="tool-select" onclick="setMapTool('select')" style="background:var(--blue); color:white;">🖱️ Selecionar</button>
                                 <button class="btn btn-sm btn-secondary" id="tool-pan" onclick="setMapTool('pan')">🖐 Mover</button>
                                 <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">🧹 Borracha</button>
+                                <button class="btn btn-sm btn-secondary" id="tool-restore" onclick="setMapTool('restore')">➕ Voltar</button>
+                                <button class="btn btn-sm btn-secondary" onclick="window.deletarSelecionadas()" style="color:#ff4d4d; border-color:#ff4d4d;">❌ Excluir (X)</button>
                                 <div style="width:1px; background:var(--border); margin:0 4px;"></div>
                                 <div id="mapa-toolbar-tipos" style="display:flex; gap:8px;"></div>
                             </div>
@@ -1836,6 +1838,7 @@
                 </div>
 </body>
 </html>
+
 
 
 

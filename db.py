@@ -767,7 +767,9 @@ def add_mapa_teatro(data: dict) -> str:
         clean_data = {
             "id": new_id,
             "name": data.get("name", "Novo Mapa"),
-            "config": data.get("config", {})
+            "config": data.get("config", {}),
+            "total_lugares": data.get("total_lugares", 0),
+            "lugares_por_setor": data.get("lugares_por_setor", [])
         }
         _supabase_request("POST", "producao_mapas_teatro", clean_data)
         return new_id
@@ -787,6 +789,10 @@ def update_mapa_teatro(mapa_id: str, data: dict) -> bool:
                 clean_data["name"] = data["name"]
             if "config" in data:
                 clean_data["config"] = data["config"]
+            if "total_lugares" in data:
+                clean_data["total_lugares"] = data["total_lugares"]
+            if "lugares_por_setor" in data:
+                clean_data["lugares_por_setor"] = data["lugares_por_setor"]
             
             if not clean_data: return True
             res = _supabase_request("PATCH", f"producao_mapas_teatro?id=eq.{mapa_id}", clean_data)

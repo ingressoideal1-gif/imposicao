@@ -1,7 +1,9 @@
 CREATE TABLE IF NOT EXISTS producao_mapas_teatro (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL,
-    config JSONB DEFAULT '{}'::jsonb
+    config JSONB DEFAULT '{}'::jsonb,
+    total_lugares INTEGER DEFAULT 0,
+    lugares_por_setor JSONB DEFAULT '[]'::jsonb
 );
 
 -- Habilitar RLS (Row Level Security) para segurança

@@ -326,6 +326,22 @@ window.salvarMapaTeatro = async function() {
     const m = window.state.mapaAtual;
     m.name = document.getElementById('mapa-nome').value || 'Mapa sem nome';
     
+    // Calcula totais de cadeiras por setor
+    let total_lugares = 0;
+    let lugares_por_setor = [];
+    if (m.config && m.config.setores) {
+        m.config.setores.forEach(s => {
+            const qtd = Object.keys(s.cadeiras || {}).length;
+            total_lugares += qtd;
+            lugares_por_setor.push({
+                setor: s.nome || 'Sem Nome',
+                quantidade: qtd
+            });
+        });
+    }
+    m.total_lugares = total_lugares;
+    m.lugares_por_setor = lugares_por_setor;
+    
     let backendSuccess = false;
     
     try {
@@ -333,7 +349,9 @@ window.salvarMapaTeatro = async function() {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const {error} = await supabaseClient.from('producao_mapas_teatro').update({
                     name: m.name,
-                    config: m.config
+                    config: m.config,
+                    total_lugares: m.total_lugares,
+                    lugares_por_setor: m.lugares_por_setor
                 }).eq('id', m.id);
                 if(!error) backendSuccess = true;
             } else {
@@ -348,7 +366,9 @@ window.salvarMapaTeatro = async function() {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const { data, error } = await supabaseClient.from('producao_mapas_teatro').insert([{
                     name: m.name,
-                    config: m.config
+                    config: m.config,
+                    total_lugares: m.total_lugares,
+                    lugares_por_setor: m.lugares_por_setor
                 }]).select();
                 if(data && data.length > 0) {
                     m.id = data[0].id;
@@ -612,6 +632,12 @@ window.setMapTool = function(tool) {
     
     document.getElementById('tool-erase').style.background = tool === 'erase' ? 'var(--blue)' : '';
     document.getElementById('tool-erase').className = tool === 'erase' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+
+    const restoreBtn = document.getElementById('tool-restore');
+    if (restoreBtn) {
+        restoreBtn.style.background = tool === 'restore' ? 'var(--blue)' : '';
+        restoreBtn.className = tool === 'restore' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+    }
 }
 
 // ==========================================
@@ -779,6 +805,36 @@ function onMapMouseDown(e) {
                 delete cadeiras[key];
                 changed = true;
             }
+        } else if (mapTool === 'restore') {
+            if (!cadeiras[key]) {
+                window.pushToMapHistory();
+                
+                // Tenta pegar o prefixo da mesma fileira
+                let refPrefixo = document.getElementById('mapa-fileira-prefix').value || 'A';
+                refPrefixo = refPrefixo.split(',')[0].split('-')[0].trim();
+                
+                for (let k in cadeiras) {
+                    if (k.endsWith(',' + pos.gy)) {
+                        refPrefixo = cadeiras[k].prefixo;
+                        break;
+                    }
+                }
+                
+                // Tenta calcular o número com base no vizinho esquerdo ou direito
+                let refNum = parseInt(document.getElementById('mapa-fileira-inicio').value) || 1;
+                if (cadeiras[`${pos.gx - 1},${pos.gy}`]) {
+                    refNum = parseInt(cadeiras[`${pos.gx - 1},${pos.gy}`].num) + 1;
+                } else if (cadeiras[`${pos.gx + 1},${pos.gy}`]) {
+                    refNum = parseInt(cadeiras[`${pos.gx + 1},${pos.gy}`].num) - 1;
+                }
+                
+                cadeiras[key] = {
+                    prefixo: refPrefixo,
+                    num: refNum > 0 ? refNum : 1,
+                    tipo: 'Normal'
+                };
+                changed = true;
+            }
         } else if (mapTool === 'select') {
             window.cadeirasSelecionadas = window.cadeirasSelecionadas || new Set();
             if (cadeiras[key]) {
@@ -881,8 +937,43 @@ window.gerarFileiraNoCanvas = function() {
     const fim = parseInt(document.getElementById('mapa-fileira-fim').value) || 30;
     const padrao = document.getElementById('mapa-fileira-padrao').value;
     
-    // Suporte para múltiplas fileiras separadas por vírgula (ex: A, B, C)
-    const prefixos = prefixoRaw.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    // Suporte para múltiplas fileiras separadas por vírgula (ex: A, B, C) e ranges (ex: B-H ou 1-5)
+    const parts = prefixoRaw.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    const prefixos = [];
+    
+    parts.forEach(part => {
+        const rangeMatch = part.match(/^([A-Za-z0-9])\s*-\s*([A-Za-z0-9])$/);
+        if (rangeMatch) {
+            const startChar = rangeMatch[1];
+            const endChar = rangeMatch[2];
+            
+            // Se ambos são letras
+            if (/[a-zA-Z]/.test(startChar) && /[a-zA-Z]/.test(endChar)) {
+                const sCode = startChar.toUpperCase().charCodeAt(0);
+                const eCode = endChar.toUpperCase().charCodeAt(0);
+                if (sCode <= eCode) {
+                    for (let i = sCode; i <= eCode; i++) prefixos.push(String.fromCharCode(i));
+                } else {
+                    for (let i = sCode; i >= eCode; i--) prefixos.push(String.fromCharCode(i));
+                }
+            } 
+            // Se ambos são números (single digit apenas, mas é um bônus)
+            else if (/[0-9]/.test(startChar) && /[0-9]/.test(endChar)) {
+                const sNum = parseInt(startChar);
+                const eNum = parseInt(endChar);
+                if (sNum <= eNum) {
+                    for (let i = sNum; i <= eNum; i++) prefixos.push(i.toString());
+                } else {
+                    for (let i = sNum; i >= eNum; i--) prefixos.push(i.toString());
+                }
+            } else {
+                prefixos.push(part);
+            }
+        } else {
+            prefixos.push(part);
+        }
+    });
+    
     if (prefixos.length === 0) prefixos.push('A');
     
     const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
@@ -1054,6 +1145,20 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // EVENTOS GLOBAIS DE TECLADO
 // ==========================================
+window.deletarSelecionadas = function() {
+    if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size > 0) {
+        window.pushToMapHistory();
+        const _s = getSetorAtual();
+        if (!_s) return;
+        const cadeiras = getCadeirasSetor(_s);
+        window.cadeirasSelecionadas.forEach(key => {
+            delete cadeiras[key];
+        });
+        window.cadeirasSelecionadas.clear();
+        if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
+    }
+};
+
 document.addEventListener('keydown', function(e) {
     const modal = document.getElementById('modal-mapa-teatro');
     if (!modal || modal.style.display !== 'flex') return;
@@ -1079,21 +1184,7 @@ document.addEventListener('keydown', function(e) {
 
     // Deleta as cadeiras selecionadas ao pressionar X ou Delete
     if (e.key.toLowerCase() === 'x' || e.key === 'Delete') {
-        if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size > 0) {
-            window.pushToMapHistory();
-            const cadeiras = window.state.mapaAtual.config.cadeiras;
-            window.cadeirasSelecionadas.forEach(key => {
-                delete cadeiras[key];
-            });
-            window.cadeirasSelecionadas.clear();
-            if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
-            
-            // Re-render
-            if (typeof renderCanvasLoop !== 'undefined' && canvasCtx) {
-                // We just need a dirty flag or one frame because renderCanvasLoop might be running
-                // but actually renderCanvasLoop uses requestAnimationFrame constantly.
-            }
-        }
+        window.deletarSelecionadas();
     }
     
     // Move as cadeiras selecionadas com as setas do teclado
