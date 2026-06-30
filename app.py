@@ -330,6 +330,15 @@ def _embed_system_fonts(numeracao_obj):
         family_lower = family.lower().replace(" ", "")
         fam_norm = family_lower.replace("-", "").replace("_", "")
         found_file = None
+        
+        search_dirs = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts"),
+            "C:/Windows/Fonts",
+            "/usr/share/fonts",
+            "/usr/local/share/fonts",
+            "~/.fonts"
+        ]
+
 
         for search_dir in search_dirs:
             if not os.path.isdir(os.path.expanduser(search_dir)):
