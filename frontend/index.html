@@ -1812,7 +1812,18 @@
 
                         <!-- Canvas Área Principal -->
                         <div style="flex:1; display:flex; flex-direction:column; background:#1e1e24; position:relative; overflow:hidden;" id="mapa-canvas-container">
-                            <div style="position:absolute; top:16px; left:16px; display:flex; gap:8px; z-index:10; background:rgba(0,0,0,0.5); padding:8px; border-radius:8px;">
+
+                            <!-- Header: nome do mapa + setor ativo -->
+                            <div style="display:flex; align-items:center; gap:6px; padding:8px 16px; background:rgba(0,0,0,0.45); border-bottom:1px solid var(--border); z-index:11; flex-shrink:0;">
+                                <span style="font-size:0.8rem; color:var(--text-dim);" id="mapa-header-nome-label">📋</span>
+                                <span style="font-size:0.82rem; font-weight:600; color:#fff;" id="mapa-header-nome-val"></span>
+                                <span style="font-size:0.82rem; color:var(--blue); font-weight:700; transition:all 0.3s;" id="mapa-header-setor"></span>
+                                <div style="flex:1;"></div>
+                                <span style="font-size:0.72rem; color:var(--text-dim);">Space = Mover &nbsp;|&nbsp; Ctrl+Z = Desfazer &nbsp;|&nbsp; Del/X = Excluir</span>
+                            </div>
+
+                            <!-- Toolbar de ferramentas -->
+                            <div style="position:absolute; top:54px; left:16px; display:flex; gap:8px; z-index:10; background:rgba(0,0,0,0.5); padding:8px; border-radius:8px;">
                                 <button class="btn btn-sm" id="tool-select" onclick="setMapTool('select')" style="background:var(--blue); color:white;">🖱️ Selecionar</button>
                                 <button class="btn btn-sm btn-secondary" id="tool-pan" onclick="setMapTool('pan')">🖐 Mover</button>
                                 <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">🧹 Borracha</button>

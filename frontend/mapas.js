@@ -57,12 +57,60 @@ window.undoMapHistory = function() {
     
     renderSetoresList();
     if (typeof carregarSetorNoSidebar === 'function') carregarSetorNoSidebar();
+    if (typeof atualizarHeaderSetor === 'function') atualizarHeaderSetor();
     if (typeof atualizarEstatisticasMapa === 'function') atualizarEstatisticasMapa();
     window.requestAnimationFrame(() => {
         if (typeof renderCanvasLoop !== 'undefined' && canvasCtx) {
             // will render automatically if loop is running
         }
     });
+}
+
+
+// ==========================================
+// HELPERS POR SETOR
+// ==========================================
+
+/** Retorna o setor atualmente selecionado */
+function getSetorAtual() {
+    if (window.setorSelecionadoIdx === null || window.setorSelecionadoIdx === undefined) return null;
+    const setores = window.state.mapaAtual && window.state.mapaAtual.config && window.state.mapaAtual.config.setores;
+    if (!setores) return null;
+    return setores[window.setorSelecionadoIdx] || null;
+}
+
+/** Retorna o objeto cadeiras do setor ativo (criando se necessário) */
+function getCadeirasSetor(setor) {
+    if (!setor) return {};
+    if (!setor.cadeiras) setor.cadeiras = {};
+    return setor.cadeiras;
+}
+
+/** Migra dados antigos: cadeiras em config.cadeiras global → setor.cadeiras */
+function migrarDadosAntigos() {
+    if (!window.state.mapaAtual || !window.state.mapaAtual.config) return;
+    const config = window.state.mapaAtual.config;
+    const global = config.cadeiras;
+    if (!global || Object.keys(global).length === 0) return;
+
+    // Garante que cada setor tenha cadeiras: {}
+    (config.setores || []).forEach((s, idx) => {
+        if (!s.cadeiras) s.cadeiras = {};
+        if (!s.id) s.id = 'setor_' + idx + '_' + Date.now();
+    });
+
+    // Redistribui
+    for (const key in global) {
+        const c = global[key];
+        const idx = c.setorIdx !== undefined ? c.setorIdx : 0;
+        const setor = config.setores[idx];
+        if (setor) {
+            setor.cadeiras[key] = c;
+        }
+    }
+
+    config.cadeiras = {}; // esvazia o global
+    console.log('[Migração] Cadeiras migradas para setores individuais.');
 }
 
 // ==========================================
@@ -346,16 +394,33 @@ window.salvarMapaTeatro = async function() {
 function abrirModalMapaTeatro() {
     document.getElementById('modal-mapa-teatro').style.display = 'flex';
     document.getElementById('mapa-nome').value = window.state.mapaAtual.name;
-    
-    window.setorSelecionadoIdx = null;
+
+    // Atualiza header do canvas com o nome do mapa
+    const nomeEl = document.getElementById('mapa-header-nome-val');
+    if (nomeEl) nomeEl.textContent = window.state.mapaAtual.name;
+
+    // Garante estrutura por setor
+    const config = window.state.mapaAtual.config;
+    if (!config.setores) config.setores = [];
+    config.setores.forEach((s, idx) => {
+        if (!s.id) s.id = 'setor_' + idx + '_' + Date.now();
+        if (!s.cadeiras) s.cadeiras = {};
+    });
+
+    // Migra dados antigos (config.cadeiras global) se existir
+    migrarDadosAntigos();
+
+    window.setorSelecionadoIdx = config.setores.length > 0 ? 0 : null;
     window.cadeirasSelecionadas = new Set();
     window.cadeiraSelecionada = null;
-    window.state.mapaHistory = []; // Reset history when opening a map
-    
+    window.state.mapaHistory = [];
+    window._camerasPorSetor = {}; // câmera independente por setor
+
     renderSetoresList();
     if(window.renderTiposAssentoList) window.renderTiposAssentoList();
     if(window.renderToolbarTipos) window.renderToolbarTipos();
-    
+    atualizarHeaderSetor();
+
     setTimeout(initMapCanvas, 100);
 }
 
@@ -367,13 +432,18 @@ window.fecharModalMapaTeatro = function() {
 
 window.adicionarSetorMapa = function() {
     window.pushToMapHistory();
+    const novoIdx = window.state.mapaAtual.config.setores.length;
     window.state.mapaAtual.config.setores.push({
+        id: 'setor_' + novoIdx + '_' + Date.now(),
         nome: 'Novo Setor',
-        fileiras: []
+        fileiras: [],
+        cadeiras: {}
     });
-    window.setorSelecionadoIdx = window.state.mapaAtual.config.setores.length - 1;
+    window.setorSelecionadoIdx = novoIdx;
     renderSetoresList();
     carregarSetorNoSidebar();
+    atualizarHeaderSetor();
+    selecionarSetorComTransicao(novoIdx);
     if(window.renderTiposAssentoList) window.renderTiposAssentoList();
     if(window.renderToolbarTipos) window.renderToolbarTipos();
 }
@@ -382,80 +452,114 @@ function renderSetoresList() {
     const list = document.getElementById('mapa-setores-list');
     list.innerHTML = '';
     const setores = window.state.mapaAtual.config.setores;
-    
+
     setores.forEach((s, idx) => {
+        const ativo = idx === window.setorSelecionadoIdx;
+        const numAssentos = Object.keys(s.cadeiras || {}).length;
+
         const div = document.createElement('div');
-        div.style.padding = '8px 12px';
-        div.style.background = idx === window.setorSelecionadoIdx ? 'var(--blue)' : 'rgba(255,255,255,0.05)';
-        div.style.border = '1px solid var(--border)';
-        div.style.borderRadius = '6px';
-        div.style.cursor = 'pointer';
-        div.style.display = 'flex';
-        div.style.justifyContent = 'space-between';
-        div.style.alignItems = 'center';
-        
-        const textSpan = document.createElement('span');
-        textSpan.innerText = s.nome || `Setor ${idx+1}`;
-        div.appendChild(textSpan);
-        
+        div.style.cssText = `
+            padding: 8px 12px;
+            background: ${ativo ? 'var(--blue)' : 'rgba(255,255,255,0.05)'};
+            border: 1px solid ${ativo ? 'var(--blue)' : 'var(--border)'};
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s, border-color 0.2s;
+        `;
+
+        const left = document.createElement('div');
+        left.style.cssText = 'display:flex; flex-direction:column; gap:2px; min-width:0;';
+
+        const nome = document.createElement('span');
+        nome.style.cssText = 'font-size:0.88rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+        nome.innerText = s.nome || `Setor ${idx+1}`;
+        left.appendChild(nome);
+
+        const meta = document.createElement('span');
+        meta.style.cssText = `font-size:0.72rem; color:${ativo ? 'rgba(255,255,255,0.75)' : 'var(--text-dim)'};`;
+        meta.innerText = numAssentos + ' assento' + (numAssentos !== 1 ? 's' : '');
+        left.appendChild(meta);
+
+        div.appendChild(left);
+
         const delBtn = document.createElement('button');
         delBtn.innerHTML = '❌';
-        delBtn.style.background = 'transparent';
-        delBtn.style.border = 'none';
-        delBtn.style.cursor = 'pointer';
-        delBtn.style.fontSize = '0.8rem';
-        delBtn.style.padding = '4px';
+        delBtn.style.cssText = 'background:transparent; border:none; cursor:pointer; font-size:0.8rem; padding:4px; flex-shrink:0;';
         delBtn.title = 'Excluir Setor e suas cadeiras';
         delBtn.onclick = (e) => {
             e.stopPropagation();
-            if (confirm(`Tem certeza que deseja excluir o setor "${s.nome || 'Setor '+(idx+1)}" e todas as cadeiras vinculadas a ele?`)) {
+            if (confirm(`Excluir o setor "${s.nome || 'Setor '+(idx+1)}" e todas as ${numAssentos} cadeiras?`)) {
                 window.excluirSetor(idx);
             }
         };
         div.appendChild(delBtn);
-        
+
         div.onclick = () => {
-            window.setorSelecionadoIdx = idx;
-            renderSetoresList();
-            carregarSetorNoSidebar();
+            selecionarSetorComTransicao(idx);
         };
         list.appendChild(div);
     });
 }
 
+function selecionarSetorComTransicao(idx) {
+    if (window.setorSelecionadoIdx === idx) return;
+
+    // Salva câmera do setor atual
+    if (!window._camerasPorSetor) window._camerasPorSetor = {};
+    if (window.setorSelecionadoIdx !== null) {
+        window._camerasPorSetor[window.setorSelecionadoIdx] = { ...camera };
+    }
+
+    window.setorSelecionadoIdx = idx;
+    window.cadeirasSelecionadas = new Set();
+
+    // Restaura câmera do novo setor (ou centraliza)
+    if (window._camerasPorSetor[idx]) {
+        Object.assign(camera, window._camerasPorSetor[idx]);
+    } else if (mapCanvas) {
+        camera.x = mapCanvas.width / 2;
+        camera.y = mapCanvas.height / 2;
+        camera.zoom = 1;
+    }
+
+    renderSetoresList();
+    carregarSetorNoSidebar();
+    atualizarHeaderSetor();
+    if(window.renderTiposAssentoList) window.renderTiposAssentoList();
+    if(window.renderToolbarTipos) window.renderToolbarTipos();
+}
+
+function atualizarHeaderSetor() {
+    const el = document.getElementById('mapa-header-setor');
+    if (!el) return;
+    if (window.setorSelecionadoIdx !== null && window.state.mapaAtual) {
+        const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
+        el.textContent = s ? (' › ' + (s.nome || 'Setor ' + (window.setorSelecionadoIdx + 1))) : '';
+    } else {
+        el.textContent = '';
+    }
+}
+
 window.excluirSetor = function(idx) {
     window.pushToMapHistory();
-    const setorId = window.state.mapaAtual.config.setores[idx].id;
-    
-    // Remove as cadeiras desse setor
-    const cadeiras = window.state.mapaAtual.config.cadeiras;
-    for (const key in cadeiras) {
-        if (cadeiras[key].setorIdx === idx || cadeiras[key].setorId === setorId) {
-            delete cadeiras[key];
-        }
-    }
-    
-    // Remove o setor
+    // Simplesmente remove o setor (cadeiras ficam dentro do objeto do setor)
     window.state.mapaAtual.config.setores.splice(idx, 1);
-    
-    // Reajusta o setorIdx das cadeiras restantes
-    for (const key in cadeiras) {
-        if (cadeiras[key].setorIdx > idx) {
-            cadeiras[key].setorIdx--;
-        }
-    }
-    
+
+    const total = window.state.mapaAtual.config.setores.length;
     if (window.setorSelecionadoIdx === idx) {
-        window.setorSelecionadoIdx = null;
+        window.setorSelecionadoIdx = total > 0 ? Math.min(idx, total - 1) : null;
     } else if (window.setorSelecionadoIdx > idx) {
         window.setorSelecionadoIdx--;
     }
-    
+
     renderSetoresList();
     carregarSetorNoSidebar();
+    atualizarHeaderSetor();
     if(window.renderTiposAssentoList) window.renderTiposAssentoList();
     if(window.renderToolbarTipos) window.renderToolbarTipos();
-    window.requestAnimationFrame(renderMapa);
 }
 
 function carregarSetorNoSidebar() {
@@ -545,8 +649,21 @@ function renderCanvasLoop() {
     }
     canvasCtx.stroke();
     
-    // Cadeiras
-    const cadeiras = window.state.mapaAtual.config.cadeiras || {};
+    // Cadeiras do setor ativo
+    const _setorAtivo = getSetorAtual();
+    const cadeiras = _setorAtivo ? (_setorAtivo.cadeiras || {}) : {};
+
+    // Mensagem quando nenhum setor selecionado
+    if (!_setorAtivo) {
+        canvasCtx.restore();
+        canvasCtx.fillStyle = 'rgba(255,255,255,0.2)';
+        canvasCtx.font = '16px Inter, Arial';
+        canvasCtx.textAlign = 'center';
+        canvasCtx.textBaseline = 'middle';
+        canvasCtx.fillText('Selecione ou crie um Setor na barra lateral', mapCanvas.width/2, mapCanvas.height/2);
+        window.requestAnimFrameId = requestAnimationFrame(renderCanvasLoop);
+        return;
+    }
     const tipos = window.getTiposAssento();
     const tiposMap = new Map();
     tipos.forEach(t => tiposMap.set(t.id, t));
@@ -632,8 +749,10 @@ function onMapMouseDown(e) {
     if (e.button === 0) {
         const pos = getGridPos(e);
         const key = `${pos.gx},${pos.gy}`;
-        const cadeiras = window.state.mapaAtual.config.cadeiras;
-        
+        const _s = getSetorAtual();
+        if (!_s) return; // nenhum setor selecionado
+        const cadeiras = getCadeirasSetor(_s);
+
         let changed = false;
         if (mapTool === 'erase') {
             if (cadeiras[key]) {
@@ -651,12 +770,7 @@ function onMapMouseDown(e) {
                 // Preenche formulário para facilitar adição na mesma fila
                 document.getElementById('mapa-fileira-prefix').value = cadeiras[key].prefixo || '';
                 document.getElementById('mapa-fileira-inicio').value = parseInt(cadeiras[key].num || 0) + 1;
-                // Seleciona automaticamente o setor da cadeira clicada
-                if (cadeiras[key].setorIdx !== undefined && window.setorSelecionadoIdx !== cadeiras[key].setorIdx) {
-                    window.setorSelecionadoIdx = cadeiras[key].setorIdx;
-                    renderSetoresList();
-                    carregarSetorNoSidebar();
-                }
+                // cadeiras já pertencem ao setor ativo
             } else {
                 window.cadeirasSelecionadas.clear();
                 changed = true;
@@ -682,8 +796,10 @@ function onMapMouseMove(e) {
     if (e.buttons === 1) {
         const pos = getGridPos(e);
         const key = `${pos.gx},${pos.gy}`;
-        const cadeiras = window.state.mapaAtual.config.cadeiras;
-        
+        const _sm = getSetorAtual();
+        if (!_sm) return;
+        const cadeiras = getCadeirasSetor(_sm);
+
         if (mapTool === 'erase') {
             if (cadeiras[key]) {
                 // To avoid pushing to history 60 times a second while dragging erase, 
@@ -751,7 +867,8 @@ window.gerarFileiraNoCanvas = function() {
     if (prefixos.length === 0) prefixos.push('A');
     
     const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
-    const cadeiras = window.state.mapaAtual.config.cadeiras;
+    if (!s.cadeiras) s.cadeiras = {};
+    const cadeiras = s.cadeiras;
     
     let numSeatsToAdd = 0;
     for (let i = inicio; i <= fim; i++) {
@@ -773,7 +890,7 @@ window.gerarFileiraNoCanvas = function() {
         if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size === 1) {
             const selKey = Array.from(window.cadeirasSelecionadas)[0];
             const selChair = cadeiras[selKey];
-            if (selChair && selChair.setorIdx === window.setorSelecionadoIdx && selChair.prefixo === prefixo) {
+            if (selChair && selChair.prefixo === prefixo) {
                 referenceChairKey = selKey;
                 let [gx, gy] = selKey.split(',').map(Number);
                 startX = gx;
@@ -785,7 +902,7 @@ window.gerarFileiraNoCanvas = function() {
             // Verifica se já existe a fileira com este prefixo no setor (vai pro final)
             for (let k in cadeiras) {
                 const c = cadeiras[k];
-                if (c.setorIdx === window.setorSelecionadoIdx && c.prefixo === prefixo) {
+                if (c.prefixo === prefixo) {
                     let [gx, gy] = k.split(',').map(Number);
                     if (startY === null) startY = gy;
                     if (startX === null || gx > startX) startX = gx;
@@ -831,7 +948,6 @@ window.gerarFileiraNoCanvas = function() {
             
             let key = `${currentX},${startY}`;
             cadeiras[key] = {
-                setorIdx: window.setorSelecionadoIdx,
                 prefixo: prefixo,
                 num: i,
                 tipo: 'Normal'
@@ -847,11 +963,13 @@ window.marcarAssentoEspecial = function(tipo) {
         return;
     }
     
-    const cadeiras = window.state.mapaAtual.config.cadeiras;
+    const _sm2 = getSetorAtual();
+    if (!_sm2) return;
+    const cadeiras = getCadeirasSetor(_sm2);
     let count = 0;
-    
+
     window.pushToMapHistory();
-    
+
     window.cadeirasSelecionadas.forEach(key => {
         if (cadeiras[key]) {
             cadeiras[key].tipo = tipo;
@@ -964,8 +1082,10 @@ document.addEventListener('keydown', function(e) {
         if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size > 0) {
             e.preventDefault();
             window.pushToMapHistory();
-            const cadeiras = window.state.mapaAtual.config.cadeiras;
-            
+            const _sarrow = getSetorAtual();
+            if (!_sarrow) return;
+            const cadeiras = getCadeirasSetor(_sarrow);
+
             let dx = 0, dy = 0;
             if (e.key === 'ArrowUp') dy = -1;
             if (e.key === 'ArrowDown') dy = 1;
