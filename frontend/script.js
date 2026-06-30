@@ -6984,14 +6984,19 @@ async function loadMapaTeatroData(mapaId) {
                 const cadeiras = setor.cadeiras || {};
                 const assentos = Object.values(cadeiras);
                 assentos.sort((a, b) => {
-                    if (a.y !== undefined && b.y !== undefined) {
-                        return (parseFloat(a.y) - parseFloat(b.y)) || (parseFloat(a.x) - parseFloat(b.x));
+                    // Evita falha se y/x for nulo ou invalido
+                    if (a.y != null && b.y != null && a.x != null && b.x != null) {
+                        const ya = parseFloat(a.y), yb = parseFloat(b.y);
+                        const xa = parseFloat(a.x), xb = parseFloat(b.x);
+                        if (!isNaN(ya) && !isNaN(yb) && !isNaN(xa) && !isNaN(xb)) {
+                            return (ya - yb) || (xa - xb);
+                        }
                     }
-                    const pa = a.prefixo || '';
-                    const pb = b.prefixo || '';
+                    const pa = String(a.prefixo || a.row_label || '');
+                    const pb = String(b.prefixo || b.row_label || '');
                     if (pa !== pb) return pa.localeCompare(pb);
-                    const na = parseInt(a.num) || 0;
-                    const nb = parseInt(b.num) || 0;
+                    const na = parseInt(a.num || a.col_label) || 0;
+                    const nb = parseInt(b.num || b.col_label) || 0;
                     return na - nb;
                 });
                 for (const a of assentos) {

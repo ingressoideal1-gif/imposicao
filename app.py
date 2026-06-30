@@ -437,11 +437,37 @@ async def impose_file(
                     # No frontend as cadeiras são um dicionário: setor.cadeiras
                     cadeiras_dict = setor.get("cadeiras", {})
                     assentos = list(cadeiras_dict.values())
-                    # Order by Y asc, then by X asc, fallback to prefixo, num
-                    assentos.sort(key=lambda a: (
-                        float(a.get("y", 0)) if "y" in a else a.get("prefixo", ""),
-                        float(a.get("x", 0)) if "x" in a else float(a.get("num", 0))
-                    ))
+                    
+                    def sort_key(a):
+                        # Tenta usar Y e X, com fallback para labels
+                        y_val = a.get("y")
+                        x_val = a.get("x")
+                        pref = str(a.get("prefixo") or a.get("row_label") or "")
+                        num_val = a.get("num") or a.get("col_label") or 0
+                        
+                        try:
+                            num_int = int(num_val)
+                        except:
+                            num_int = 0
+
+                        if y_val is not None and x_val is not None:
+                            try:
+                                return (0, float(y_val), float(x_val))
+                            except ValueError:
+                                pass
+                        
+                        # Fallback para prefixo e num (garante tipo correto)
+                        pref = str(a.get("prefixo") or a.get("row_label") or "")
+                        
+                        try:
+                            num_val = int(a.get("num") or a.get("col_label") or 0)
+                        except:
+                            num_val = 0
+                            
+                        return (1, pref, num_val)
+
+                    assentos.sort(key=sort_key)
+                    
                     for a in assentos:
                         if a.get("tipo") == "Apagado" or a.get("isErased"):
                             continue
