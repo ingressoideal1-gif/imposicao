@@ -13792,30 +13792,186 @@ function renderImpOSQueue() {
     const os = state.ordens.find(o => o.id === osId);
     if (numeroBadge) numeroBadge.textContent = os ? `#${os.numero}` : '';
 
-    const pendentes = itens.filter(i => i.impressao !== 'IMPRESSO' && (i.aprovacao === 'APROVADA' || i.aprovacao === 'PRONTA'));
+    const pendentes = itens.filter(i => i.impressao !== 'IMPRESSO');
     if (pendingBadge) pendingBadge.textContent = `${pendentes.length} pendente${pendentes.length !== 1 ? 's' : ''}`;
+
+    // Pegar o formato atualmente selecionado para filtrar cores e numerações disponíveis
+    const fmtId = document.getElementById('imp-formato')?.value || '';
+
+    // Cores disponíveis: filtrar pelo formato se possível
+    const coresDisponiveis = (state.cores || []).filter(c => !fmtId || !c.formato_id || String(c.formato_id) === String(fmtId));
+
+    // Numerações disponíveis para o formato
+    const numsDisponiveis = (state.numeracoes || []).filter(n => !fmtId || !n.formato_id || String(n.formato_id) === String(fmtId));
+
+    const inputStyle = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:2px 5px; font-size:0.75rem; width:100%;';
+    const selectStyle = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:2px 5px; font-size:0.75rem; width:100%; cursor:pointer;';
+    const btnStyle = 'border:none; border-radius:4px; padding:3px 8px; font-size:0.72rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
+
     tbody.innerHTML = itens.map((item, idx) => {
-        const isActive = activeItem.itemId === item.id;
-        const rowBg = isActive ? 'background: rgba(59,130,246,0.12);' : '';
+        const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
+        const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 2px solid var(--blue);' : '';
         const indexModelo = idx + 1;
-        
+
+        // Opções de Cor
+        const coresOptions = coresDisponiveis.map(c => {
+            const sel = globalFuzzyMatch(c.name, item.cor || item.padrao || '') ? 'selected' : '';
+            return `<option value="${c.id}" ${sel}>${c.name}</option>`;
+        }).join('');
+
+        // Opções de Numeração
+        const numsOptions = numsDisponiveis.map(n => {
+            const sel = globalFuzzyMatch(n.name || n.tipo, item.numeracao || '') ? 'selected' : '';
+            return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
+        }).join('');
+
+        const niVal = item.num_inicial || item.numeracao_inicio || '';
+        const nfVal = item.num_final || item.numeracao_fim || '';
+
         return `
-            <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" onclick="enviarParaImposicao('${item.id}', '${osId}')" class="hover-row">
+            <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="imp-queue-row-${item.id}">
                 <td style="padding: 5px 8px; text-align: center;">
                     ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                    <strong>${indexModelo}</strong>
+                    <strong style="cursor:pointer;" onclick="enviarParaImposicao('${item.id}', '${osId}')" title="Carregar este modelo">${indexModelo}</strong>
                 </td>
-                <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem;">${item.modelo || '--'}</td>
-                <td style="padding: 5px 8px;"><strong>${item.produto || '--'}</strong></td>
-                <td style="padding: 5px 8px;">${item.cor || 'STD'}</td>
-                <td style="padding: 5px 8px;">${item.numeracao || '--'}</td>
-                <td style="padding: 5px 8px;">${item.num_inicial || '--'}</td>
-                <td style="padding: 5px 8px;">${item.num_final || '--'}</td>
+                <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem; color:var(--text-dim);">${item.modelo || '--'}</td>
+                <td style="padding: 5px 8px;"><strong style="cursor:pointer;" onclick="enviarParaImposicao('${item.id}', '${osId}')">${item.produto || '--'}</strong></td>
+                <td style="padding: 5px 4px;">
+                    <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                        <option value="">— Cor —</option>
+                        ${coresOptions}
+                    </select>
+                </td>
+                <td style="padding: 5px 4px;">
+                    <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                        <option value="">— Numeração —</option>
+                        ${numsOptions}
+                    </select>
+                </td>
+                <td style="padding: 5px 4px;">
+                    <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
+                        onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
+                        onclick="event.stopPropagation()" />
+                </td>
+                <td style="padding: 5px 4px;">
+                    <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
+                        onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                        onclick="event.stopPropagation()" />
+                </td>
                 <td style="padding: 5px 8px; text-align: center;">${item.verso ? '✅' : '--'}</td>
                 <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
+                <td style="padding: 5px 4px; white-space:nowrap; display:flex; gap:4px; align-items:center;">
+                    <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
+                        onclick="event.stopPropagation(); impQueueGerarPDF('${item.id}', '${osId}')">
+                        📄 PDF
+                    </button>
+                    <button style="${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
+                        onclick="event.stopPropagation(); impQueueImprimir('${item.id}', '${osId}')">
+                        🖨️ Imprimir
+                    </button>
+                </td>
             </tr>
         `;
     }).join('');
+}
+
+// -----------------------------------------------------------------------
+// Funções auxiliares da fila de itens interativa (imp-os-queue)
+// -----------------------------------------------------------------------
+
+/** Atualiza a cor do item na fila e dispara enviarParaImposicao com a nova cor */
+function impQueueUpdateCor(itemId, osId, corId) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const cor = (state.cores || []).find(c => String(c.id) === String(corId));
+    if (cor) {
+        item.cor = cor.name;
+        item.padrao = cor.name;
+        item.amostra_cor_id = cor.id;
+        // Se tiver formato_id na cor, aplicar ao select de formato
+        if (cor.formato_id) {
+            const fmtSelect = document.getElementById('imp-formato');
+            if (fmtSelect) {
+                fmtSelect.value = cor.formato_id;
+                fmtSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        autoSaveOSItemField(itemId, osId, 'amostra_cor_id', cor.id);
+    }
+    enviarParaImposicao(itemId, osId);
+}
+
+/** Atualiza a numeração do item na fila */
+function impQueueUpdateNum(itemId, osId, numId) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if (num) {
+        item.numeracao = num.name || num.tipo;
+        item.numeracao_id = num.id;
+        autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
+        // Aplicar ao select de numeração na Imposição
+        const numSelect = document.getElementById('imp-numeracao');
+        if (numSelect) {
+            numSelect.value = numId;
+            numSelect.dispatchEvent(new Event('change'));
+        }
+    }
+}
+
+/** Atualiza um campo genérico (NI ou NF) do item */
+function impQueueUpdateField(itemId, osId, field, value) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    item[field] = value;
+    // Espelhar nos campos da Imposição se for o item ativo
+    if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
+        const elId = field === 'num_inicial' ? 'imp-start' : 'imp-end';
+        const el = document.getElementById(elId);
+        if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        updateImpSummary();
+        if (typeof drawPreview === 'function') drawPreview();
+    }
+    // Persistir no banco
+    const dbField = field === 'num_inicial' ? 'numeracao_inicio' : 'numeracao_fim';
+    autoSaveOSItemField(itemId, osId, dbField, parseInt(value) || value);
+}
+
+/** Gerar PDF para o item específico */
+async function impQueueGerarPDF(itemId, osId) {
+    // Carregar o item na imposição primeiro
+    await enviarParaImposicao(itemId, osId);
+    // Aguardar renderização e então acionar o botão de gerar PDF
+    setTimeout(() => {
+        const btnGerar = document.getElementById('btn-gerar-pdf') || document.querySelector('[onclick*="gerarPDF"]') || document.querySelector('[onclick*="generatePDF"]');
+        if (btnGerar) {
+            btnGerar.click();
+        } else if (typeof gerarPDF === 'function') {
+            gerarPDF();
+        } else if (typeof generatePDF === 'function') {
+            generatePDF();
+        } else {
+            toast('Use o botão "Gerar PDF" no painel de Imposição.', 'info');
+        }
+    }, 1200);
+}
+
+/** Imprimir o item específico */
+async function impQueueImprimir(itemId, osId) {
+    await enviarParaImposicao(itemId, osId);
+    setTimeout(() => {
+        const btnImprimir = document.getElementById('btn-imprimir') || document.querySelector('[onclick*="imprimir"]') || document.querySelector('[onclick*="print"]');
+        if (btnImprimir) {
+            btnImprimir.click();
+        } else if (typeof imprimirDireto === 'function') {
+            imprimirDireto();
+        } else {
+            window.print();
+        }
+    }, 1200);
 }
 
 /**
@@ -15719,6 +15875,11 @@ window.enviarParaImposicao = enviarParaImposicao;
 window.autoSaveOSItemField = autoSaveOSItemField;
 window.renderImpOSQueue = renderImpOSQueue;
 window.toggleImpOSQueue = toggleImpOSQueue;
+window.impQueueUpdateCor = impQueueUpdateCor;
+window.impQueueUpdateNum = impQueueUpdateNum;
+window.impQueueUpdateField = impQueueUpdateField;
+window.impQueueGerarPDF = impQueueGerarPDF;
+window.impQueueImprimir = impQueueImprimir;
 window.matchFormato = matchFormato;
 window.matchCor = matchCor;
 window.matchNumeracao = matchNumeracao;
