@@ -2,6 +2,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/cliente/:match*",
+      "destination": "/frontend/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/frontend/$1"
     }
