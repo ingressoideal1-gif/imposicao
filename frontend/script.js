@@ -12278,6 +12278,13 @@ async function loadOSItens(osId) {
                         return {
                             ...item,
                             produto: item.nome_modelo || 'Modelo',
+                            modelo: item.ordem ? item.ordem.toString() : item.modelo,
+                            cor: item.padrao || item.cor || 'STD',
+                            numeracao: item.tipo_numeracao || item.numeracao,
+                            num_inicial: item.numeracao_inicio || item.num_inicial,
+                            num_final: item.numeracao_fim || item.num_final,
+                            verso: item.frente_verso !== undefined ? item.frente_verso : item.verso,
+                            impressao: item.status_producao || item.impressao || 'AGUARD.',
                             nome_produto_real: prop ? prop.nome_produto : null,
                             amostra_cor_id: item.amostra_cor_id || (prop ? prop.amostra_cor_id : null),
                             amostra_num_id: item.amostra_num_id || (prop ? prop.amostra_num_id : null),
@@ -12299,6 +12306,13 @@ async function loadOSItens(osId) {
                         id_int: pp.id_int,
                         nome_modelo: pp.nome_produto || `Modelo ${idx + 1}`,
                         produto: pp.nome_produto || `Modelo ${idx + 1}`,
+                        modelo: (idx + 1).toString(),
+                        cor: pp.padrao || 'STD',
+                        numeracao: pp.tipo_numeracao || null,
+                        num_inicial: pp.numeracao_inicio || null,
+                        num_final: pp.numeracao_fim || null,
+                        verso: pp.frente_verso || false,
+                        impressao: 'AGUARD.',
                         nome_produto_real: pp.nome_produto,
                         gabarito_operacional: pp.gabarito_operacional || null,
                         padrao: pp.padrao || null,
@@ -13207,7 +13221,33 @@ function renderOSItens(osId) {
         return;
     }
 
-    tbody.innerHTML = itens.map(item => `
+    tbody.innerHTML = itens.map((item, index) => {
+        const indexModelo = index + 1;
+        
+        if (isImpressao) {
+            return `
+            <tr class="hover-row" style="transition: all 0.2s; cursor: pointer;" id="row-item-${item.id}" onclick="enviarParaImposicao('${item.id}', '${osId}')">
+                <td style="text-align: center; font-weight: bold; color: var(--text-dim);">${indexModelo}</td>
+                <td style="font-family: monospace; font-size: 0.85rem;">${item.modelo || '--'}</td>
+                <td><strong>${item.produto || '--'}</strong></td>
+                <td>${item.cor || 'STD'}</td>
+                <td>${item.numeracao || '--'}</td>
+                <td style="text-align: center;">${item.num_inicial || '--'}</td>
+                <td style="text-align: center;">${item.num_final || '--'}</td>
+                <td style="text-align: center;">${item.verso ? '✅' : '--'}</td>
+                <td style="text-align: center;" onclick="event.stopPropagation()">
+                    <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
+                        <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
+                        <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
+                        <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
+                        <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>❌ Erro</option>
+                    </select>
+                </td>
+            </tr>
+            `;
+        }
+        
+        return `
         <tr>
             <td>${item.setor || '--'}</td>
             <td><strong>${item.produto || '--'}</strong></td>
@@ -13250,7 +13290,8 @@ function renderOSItens(osId) {
                 </button>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 /**
@@ -13595,6 +13636,43 @@ async function enviarParaImposicao(itemId, osId) {
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
     setTimeout(() => { renderImpOSQueue(); }, 600);
+    
+    // --- CARREGAR ARTE (PDF/IMAGEM) ---
+    setTimeout(() => {
+        const arteUrl = item.arte_url || item.amostra_arte_base64;
+        if (arteUrl) {
+            const filename = item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
+            if (arteUrl.startsWith('http')) {
+                fetch(arteUrl)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const file = new File([blob], filename, { type: blob.type || 'application/pdf' });
+                        state.expectedArteName = filename;
+                        loadImpArtFile(file);
+                        const impInfo = document.getElementById('imp-file-info');
+                        if (impInfo) {
+                            impInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
+                            impInfo.style.display = 'block';
+                        }
+                    })
+                    .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via URL:', err));
+            } else if (arteUrl.startsWith('data:')) {
+                fetch(arteUrl)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const file = new File([blob], filename, { type: blob.type });
+                        state.expectedArteName = filename;
+                        loadImpArtFile(file);
+                        const impInfo = document.getElementById('imp-file-info');
+                        if (impInfo) {
+                            impInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
+                            impInfo.style.display = 'block';
+                        }
+                    })
+                    .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via Data URL:', err));
+            }
+        }
+    }, 700);
 
     const os = state.ordens.find(o => o.id === osId);
     const osNum = os ? os.numero : '';
