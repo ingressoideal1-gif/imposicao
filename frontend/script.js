@@ -12281,6 +12281,8 @@ async function loadOSItens(osId) {
                             modelo: item.id ? item.id.toString() : '--',
                             cor: item.padrao || item.cor || 'STD',
                             numeracao: item.gabarito_operacional || item.tipo_numeracao || item.numeracao,
+                            gabarito_operacional: item.gabarito_operacional || null,
+                            qtd: item.quantidade || item.qtd || 0,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
                             verso: item.frente_verso !== undefined ? item.frente_verso : item.verso,
@@ -12290,7 +12292,6 @@ async function loadOSItens(osId) {
                             amostra_num_id: item.amostra_num_id || (prop ? prop.amostra_num_id : null),
                             amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
                             arte_url: item.arte_url || (prop ? prop.arte_url : null),
-                            gabarito_operacional: item.gabarito_operacional || (prop ? prop.gabarito_operacional : null),
                             amostra_obs: item.observacao_arte || item.amostra_obs || (prop ? prop.observacao_arte : null) || '',
                             os_id: osId,
                             _pedidoModeloId: item.id,
@@ -13819,14 +13820,18 @@ function renderImpOSQueue() {
             return `<option value="${c.id}" ${sel}>${c.name}</option>`;
         }).join('');
 
-        // Opções de Numeração
+        // Numeração: usar gabarito_operacional como valor principal (texto livre)
+        const numValDisplay = item.gabarito_operacional || item.numeracao || '';
+
+        // Opções de Numeração — pré-selecionar pelo gabarito_operacional via fuzzy
         const numsOptions = numsDisponiveis.map(n => {
-            const sel = globalFuzzyMatch(n.name || n.tipo, item.numeracao || '') ? 'selected' : '';
+            const sel = globalFuzzyMatch(n.name || n.tipo || '', numValDisplay) ? 'selected' : '';
             return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
         }).join('');
 
-        const niVal = item.num_inicial || item.numeracao_inicio || '';
-        const nfVal = item.num_final || item.numeracao_fim || '';
+        const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
+        const nfVal = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
+        const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
 
         return `
             <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="imp-queue-row-${item.id}">
@@ -13837,14 +13842,19 @@ function renderImpOSQueue() {
                 <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem; color:var(--text-dim);">${item.modelo || '--'}</td>
                 <td style="padding: 5px 8px;"><strong style="cursor:pointer;" onclick="enviarParaImposicao('${item.id}', '${osId}')">${item.produto || '--'}</strong></td>
                 <td style="padding: 5px 4px;">
+                    <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
+                        onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
+                        onclick="event.stopPropagation()" />
+                </td>
+                <td style="padding: 5px 4px;">
                     <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                         <option value="">— Cor —</option>
                         ${coresOptions}
                     </select>
                 </td>
                 <td style="padding: 5px 4px;">
-                    <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                        <option value="">— Numeração —</option>
+                    <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()" title="${numValDisplay}">
+                        <option value="">${numValDisplay || '— Numeração —'}</option>
                         ${numsOptions}
                     </select>
                 </td>
@@ -13873,6 +13883,7 @@ function renderImpOSQueue() {
             </tr>
         `;
     }).join('');
+
 }
 
 // -----------------------------------------------------------------------
@@ -13921,23 +13932,38 @@ function impQueueUpdateNum(itemId, osId, numId) {
     }
 }
 
-/** Atualiza um campo genérico (NI ou NF) do item */
+/** Atualiza um campo genérico (NI, NF, QTD ou Numeração) do item */
 function impQueueUpdateField(itemId, osId, field, value) {
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;
     item[field] = value;
+
     // Espelhar nos campos da Imposição se for o item ativo
     if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
-        const elId = field === 'num_inicial' ? 'imp-start' : 'imp-end';
-        const el = document.getElementById(elId);
-        if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        if (field === 'num_inicial') {
+            const el = document.getElementById('imp-start');
+            if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        } else if (field === 'num_final') {
+            const el = document.getElementById('imp-end');
+            if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        }
         updateImpSummary();
         if (typeof drawPreview === 'function') drawPreview();
     }
-    // Persistir no banco
-    const dbField = field === 'num_inicial' ? 'numeracao_inicio' : 'numeracao_fim';
-    autoSaveOSItemField(itemId, osId, dbField, parseInt(value) || value);
+
+    // Mapear campo local → coluna no banco (pedidos_modelos)
+    const dbFieldMap = {
+        'num_inicial': 'numeracao_inicio',
+        'num_final':   'numeracao_fim',
+        'qtd':         'quantidade',
+        'numeracao':   'gabarito_operacional',
+    };
+    const dbField = dbFieldMap[field] || field;
+    const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')
+        ? (parseInt(value) || 0)
+        : value;
+    autoSaveOSItemField(itemId, osId, dbField, dbValue);
 }
 
 /** Gerar PDF para o item específico */
