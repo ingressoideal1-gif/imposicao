@@ -5667,8 +5667,8 @@ function drawPreview() {
 
 
 
-    const fmt = state.formatos.find(f => f.id === fmtId);
-    const sai = state.saidas.find(s => s.id === saiId);
+    const fmt = state.formatos.find(f => String(f.id) === String(fmtId));
+    const sai = state.saidas.find(s => String(s.id) === String(saiId));
 
     if (!fmt || !sai) return;
     
