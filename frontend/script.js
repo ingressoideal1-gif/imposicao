@@ -12973,7 +12973,7 @@ function renderOrdens() {
                 }
 
                 return `
-                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
+                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="abrirImposicaoDoPedido('${os.id}', '${os.numero}')" style="cursor: pointer;">
                         <td>
                             <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
                         </td>
@@ -13576,24 +13576,9 @@ async function enviarParaImposicao(itemId, osId) {
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
 
-    // Navegar para a view de Imposição, EXCETO se estivermos no Painel de Produção (que quer ver o preview inline)
-    const isPainelProducao = document.getElementById('view-lista-impressao')?.classList.contains('active');
-    if (!isPainelProducao) {
-        const navBtn = document.querySelector('[data-view="view-imposicao"]');
-        if (navBtn) navBtn.click();
-    } else {
-        const previewCard = document.getElementById('os-preview-card-impressao');
-        const canvasContainer = document.querySelector('.preview-canvas-container');
-        if (previewCard && canvasContainer && !previewCard.contains(canvasContainer)) {
-            previewCard.appendChild(canvasContainer);
-        }
-        if (previewCard) {
-            previewCard.style.display = 'flex';
-            setTimeout(() => {
-                previewCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }, 100);
-        }
-    }
+    // Navegar para a view de Imposição
+    const navBtn = document.querySelector('[data-view="view-imposicao"]');
+    if (navBtn) navBtn.click();
 
     // --- MATCHING AUTOMÁTICO DE FORMATO (VIA COR OU NOME) E SAÍDA ---
     let formatoId = item.formato_id;
@@ -13667,6 +13652,7 @@ async function enviarParaImposicao(itemId, osId) {
     }, 400);
 
     // --- PREENCHER MODO DE IMPRESSÃO ---
+    // Aguardar a navegação de aba + preenchimento dos selects antes de desenhar
     setTimeout(() => {
         if (item.verso) {
             const printMode = document.getElementById('imp-print-mode');
@@ -13684,7 +13670,7 @@ async function enviarParaImposicao(itemId, osId) {
         }
         updateImpSummary();
         if (typeof drawPreview === 'function') drawPreview();
-    }, 500);
+    }, 800);
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
     setTimeout(() => { renderImpOSQueue(); }, 600);
@@ -13706,6 +13692,8 @@ async function enviarParaImposicao(itemId, osId) {
                             impInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
                             impInfo.style.display = 'block';
                         }
+                        // Redesenhar preview com a arte carregada
+                        setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
                     })
                     .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via URL:', err));
             } else if (arteUrl.startsWith('data:')) {
