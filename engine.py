@@ -7,6 +7,39 @@ from PIL import Image
 
 MM2PT = 2.8346   # 1mm em pontos PDF
 
+# Fração do ascender por família de fonte (ascender / em-size).
+# Usado para converter ancoragem CENTRAL (canvas textBaseline='middle')
+# para a BASELINE exigida pelo PyMuPDF insert_text.
+# Valores das fontes Base-14 padrão do PDF:
+ASCENDER_FRACTIONS = {
+    "helv": 0.718,  # Helvetica Regular
+    "hebo": 0.718,  # Helvetica Bold
+    "tiro": 0.683,  # Times Roman
+    "tibo": 0.683,  # Times Bold
+    "tiit": 0.683,  # Times Italic
+    "tibi": 0.683,  # Times Bold Italic
+    "cour": 0.626,  # Courier
+    "cobo": 0.626,  # Courier Bold
+    "cobi": 0.626,  # Courier Bold Italic
+}
+_ASCENDER_DEFAULT = 0.72  # valor médio para fontes do sistema (TTF/OTF)
+
+# Fração do descender por família de fonte (|descender| / em-size).
+# Necessário para calcular o offset canvas textBaseline='middle' → PDF baseline:
+#   offset = (ascender - descender) / 2
+# Isso corresponde ao deslocamento do centro visual até a baseline.
+DESCENDER_FRACTIONS = {
+    "helv": 0.207,  # Helvetica Regular
+    "hebo": 0.207,  # Helvetica Bold
+    "tiro": 0.217,  # Times Roman
+    "tibo": 0.217,  # Times Bold
+    "tiit": 0.217,  # Times Italic
+    "tibi": 0.217,  # Times Bold Italic
+    "cour": 0.207,  # Courier
+    "cobo": 0.207,  # Courier Bold
+    "cobi": 0.207,  # Courier Bold Italic
+}
+_DESCENDER_DEFAULT = 0.21  # valor médio para fontes do sistema (TTF/OTF)
 
 def _hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
     """Converte #RRGGBB para (r, g, b) normalizados 0-1."""
@@ -454,27 +487,55 @@ class ImpositionEngine:
             else:
                 text_width = fitz.get_text_length(val_str, fontname=font_name, fontsize=font_size)
 
-            # Ancoragem central: cx, cy = centro do texto
-            # insert_text origin: X = centro - metade da largura, Y = centro + metade da altura (baseline)
-            
+            # Ancoragem central: cx, cy = centro visual do texto (replica textBaseline='middle' do canvas)
+            # PyMuPDF insert_text usa a BASELINE como ponto de inserção — NÃO o centro visual.
+            #
+            # Raciocínio geométrico:
+            #   - Em canvas: fillText(label, 0, 0) com textBaseline='middle' coloca o CENTRO
+            #     visual do texto em y=0 (o ponto cy do elemento).
+            #   - A baseline do texto fica ABAIXO do centro em: (asc - desc)/2 * font_size
+            #   - Em PyMuPDF: insert_text recebe a BASELINE como origin_y.
+            #
+            # Para cada linha i de um bloco multilinha centrado em cy:
+            #   cy_linha_i = block_top + i*line_height + line_height/2  (centro da linha)
+            #   baseline_i = cy_linha_i + (asc - desc)/2 * font_size
+            #
+            # line_height = 1.2 x font_size (CSS/canvas default, identico ao canvas JS)
+
             lines_to_draw = val_str.split("\n")
-            line_height = font_size * 1.2
-            
-            # Se for multilinha, o cy e o centro total do bloco
+            line_height = font_size * 1.2  # mesmo valor usado no canvas JS
+
+            # Frações de ascender e descender para o offset correto de baseline
+            if font_file:
+                asc  = _ASCENDER_DEFAULT
+                desc = _DESCENDER_DEFAULT
+            else:
+                asc  = ASCENDER_FRACTIONS.get(font_name,  _ASCENDER_DEFAULT)
+                desc = DESCENDER_FRACTIONS.get(font_name, _DESCENDER_DEFAULT)
+
+            # Offset do centro visual até a baseline (replicando textBaseline='middle')
+            # Em canvas: baseline = y_center + (asc - desc)/2 * font_size
+            baseline_offset = (asc - desc) / 2.0 * font_size
+
+            # Altura total do bloco e topo do bloco (alinhado ao centro cy)
             total_height = len(lines_to_draw) * line_height
-            start_y = cy - (total_height / 2.0) + (font_size / 2.0)
-            
+            block_top = cy - total_height / 2.0
+
             for i, line_str in enumerate(lines_to_draw):
                 if font_file:
                     text_width = font_size * 0.55 * len(line_str)
                 else:
                     text_width = fitz.get_text_length(line_str, fontname=font_name, fontsize=font_size)
-                    
+
                 origin_x = cx - text_width / 2.0
-                origin_y = start_y + (i * line_height)
-                
+
+                # Centro visual da linha i
+                cy_line = block_top + (i * line_height) + (line_height / 2.0)
+                # Baseline = centro visual + offset (textBaseline='middle' → PDF baseline)
+                origin_y = cy_line + baseline_offset
+
                 if angle != 0:
-                    # O pivot de rotacao e o centro do texto (cx, cy)
+                    # O pivot de rotaçao e o centro do bloco de texto (cx, cy)
                     origin = fitz.Point(origin_x, origin_y)
                     pivot = fitz.Point(cx, cy)
                     page.insert_text(

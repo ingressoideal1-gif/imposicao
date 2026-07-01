@@ -169,10 +169,12 @@ async function fetchPdfBytes(content) {
 }
 // - Utility -- getFontCSS -
 // Converte font_name do elemento para string CSS para renderização no canvas.
-// Suporta fontes Base-14 (helv, helv-bold, times...) e fontes do sistema (system:NomeDaFonte).
+// IMPORTANTE: usar Arial (não Inter) como fallback de Helvetica — Arial tem métricas
+// mais próximas da Helvetica Base-14 usada pelo engine Python (PyMuPDF).
+// Isso garante que a visualização em canvas seja fiel ao PDF gerado.
 function getFontCSS(font_name) {
-    if (!font_name || font_name === 'helv') return 'Inter, Arial, sans-serif';
-    if (font_name === 'helv-bold') return 'bold Inter, Arial, sans-serif';
+    if (!font_name || font_name === 'helv') return 'Arial, Helvetica, sans-serif';
+    if (font_name === 'helv-bold') return 'bold Arial, Helvetica, sans-serif';
     if (font_name === 'times') return '"Times New Roman", Times, serif';
     if (font_name === 'times-bold') return 'bold "Times New Roman", Times, serif';
     if (font_name === 'cour') return '"Courier New", Courier, monospace';
@@ -187,6 +189,19 @@ function getFontCSS(font_name) {
     }
     return `"${font_name}", sans-serif`;
 }
+
+// Fração do ascender por família de fonte (ascender / em-size).
+// Deve espelhar ASCENDER_FRACTIONS do engine.py para que a posição vertical
+// do texto no canvas seja idêntica à do PDF gerado.
+// No canvas, textBaseline='middle' centraliza pelo centro visual (mean line),
+// mas precisamos deste mapa para o cálculo do line_height multilinha.
+const ASCENDER_CANVAS = {
+    'helv': 0.718, 'helv-bold': 0.718,
+    'times': 0.683, 'times-bold': 0.683,
+    'cour': 0.626, 'cour-bold': 0.626,
+};
+const _ASCENDER_CANVAS_DEFAULT = 0.72;
+
 
 // Monta a string de font para ctx.font no Canvas 2D.
 // O canvas exige a ordem: [font-style] [font-weight] size family
@@ -3020,9 +3035,13 @@ function drawCanvas() {
 
 
 
-    // Migracao automatica: converter elementos de ancoragem top-left para center
+
+    // Garantia de segurança: se algum elemento ainda não tem _centerAnchor (legado),
+    // a migração já deve ter sido feita por normalizarElementosCenterAnchor() no carregamento.
+    // Aqui apenas marcamos para evitar qualquer problema residual sem alterar posições.
     state.numElements.forEach(el => {
         if (el.type !== 'PICOTE' && !el._centerAnchor) {
+            // Elemento legado carregado sem migração prévia — aplicar uma vez
             const { w, h } = getElementSizeMM(el);
             el.x_mm += w / 2;
             el.y_mm += h / 2;
@@ -3103,24 +3122,35 @@ function drawElement(ctx, el, S) {
             label = `${el.prefix || ''}${dummyNum}${el.suffix || ''}`;
         }
 
-        // Desenhar texto centralizado no ponto de ancoragem (centro real do elemento)
+        // Desenhar texto centralizado no ponto de ancoragem (centro real do elemento).
+        // Para linha simples: textBaseline='middle' centraliza automaticamente (correto).
+        // Para multilinha: usar line_height = 1.2 × fs (igual ao engine.py) e
+        // posicionar cada linha manualmente a partir do topo do bloco.
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        
+
         let mw = 0;
         if (label.includes('\n')) {
             const lines = label.split('\n');
-            ctx.fillText(lines[0], 0, -fs/2);
-            ctx.fillText(lines[1], 0, fs/2);
-            mw = Math.max(ctx.measureText(lines[0]).width, ctx.measureText(lines[1]).width);
+            const lineHeight = fs * 1.2;  // igual ao engine: font_size * 1.2
+            const totalH = lines.length * lineHeight;
+            // topo do bloco centrado em y=0 (ancoragem central)
+            const blockTop = -totalH / 2;
+            lines.forEach((line, i) => {
+                // centro visual da linha i: topo_da_linha + lineHeight/2
+                const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
+                ctx.fillText(line, 0, lineCenter);
+                const lw = ctx.measureText(line).width;
+                if (lw > mw) mw = lw;
+            });
         } else {
             ctx.fillText(label, 0, 0);
             mw = ctx.measureText(label).width;
         }
 
-        // Indicador de selecao: underline sutil (sem box tracejado)
+        // Indicador de seleção: underline sutil (sem box tracejado)
         if (isSelected) {
-            const halfH = label.includes('\n') ? fs : fs / 2;
+            const halfH = label.includes('\n') ? fs * 1.2 : fs / 2;
             ctx.strokeStyle = '#3b82f6';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -5904,8 +5934,12 @@ function drawPreview() {
                 // (positivo H = direita, positivo V = para cima → negar Y)
                 let offH = fmt_off_h * scale;
                 let offV = -fmt_off_v * scale;
-                let dw = art_orig_w * scale;
-                let dh = art_orig_h * scale;
+                
+                // O backend (engine.py) sempre ajusta proporcionalmente a arte base (JPG ou PDF) 
+                // para caber na caixa de dimensões item_w x item_h. Replicamos o mesmo comportamento aqui:
+                const fitScale = Math.min(item_w / art_orig_w, item_h / art_orig_h);
+                let dw = art_orig_w * fitScale * scale;
+                let dh = art_orig_h * fitScale * scale;
 
 
                 
@@ -14788,8 +14822,13 @@ async function renderItemAmostraCombinada(idx, osId) {
                 numCtx.textBaseline = 'middle';
                 if (label.includes('\n')) {
                     const lines = label.split('\n');
-                    numCtx.fillText(lines[0], 0, -fs/2);
-                    numCtx.fillText(lines[1], 0, fs/2);
+                    const lineHeight = fs * 1.2;  // igual ao engine.py e drawElement
+                    const totalH = lines.length * lineHeight;
+                    const blockTop = -totalH / 2;
+                    lines.forEach((line, i) => {
+                        const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
+                        numCtx.fillText(line, 0, lineCenter);
+                    });
                 } else {
                     numCtx.fillText(label, 0, 0);
                 }
@@ -17437,8 +17476,13 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
             numCtx.textBaseline = 'middle';
             if (label.includes('\n')) {
                 const lines = label.split('\n');
-                numCtx.fillText(lines[0], 0, -fs/2);
-                numCtx.fillText(lines[1], 0, fs/2);
+                const lineHeight = fs * 1.2;  // igual ao engine.py e drawElement
+                const totalH = lines.length * lineHeight;
+                const blockTop = -totalH / 2;
+                lines.forEach((line, i) => {
+                    const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
+                    numCtx.fillText(line, 0, lineCenter);
+                });
             } else {
                 numCtx.fillText(label, 0, 0);
             }
