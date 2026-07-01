@@ -5766,9 +5766,9 @@ function drawPreview() {
     let stack_size = 50;
     if (schema === "cut_stack") {
         const cutstackMode = document.getElementById('imp-cutstack-mode')?.value || 'independent';
+        stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
         if (cutstackMode === 'strict') {
             is_strict_mode = true;
-            stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
             const itemsPerSet = stack_size * poses_per_sheet;
             const sets_needed = Math.ceil(total_items / itemsPerSet);
             total_sheets = sets_needed * stack_size;
@@ -5789,10 +5789,24 @@ function drawPreview() {
 
             let item_index = (S * poses_per_sheet) + P;
             if (schema === "cut_stack") {
-                if (is_strict_mode) {
+                const cutstackMode = document.getElementById('imp-cutstack-mode')?.value || 'independent';
+                if (cutstackMode === 'strict') {
+                    const full_sets = Math.floor(total_sheets / stack_size);
                     const set_index = Math.floor(S / stack_size);
                     const sheet_within_set = S % stack_size;
-                    item_index = (set_index * stack_size * poses_per_sheet) + (P * stack_size) + sheet_within_set;
+                    item_index = ((P * full_sets) + set_index) * stack_size + sheet_within_set;
+                } else if (cutstackMode === 'strict_assembly') {
+                    const full_sets = Math.floor(total_sheets / stack_size);
+                    if (S < full_sets * stack_size) {
+                        const set_index = Math.floor(S / stack_size);
+                        const sheet_within_set = S % stack_size;
+                        item_index = ((P * full_sets) + set_index) * stack_size + sheet_within_set;
+                    } else {
+                        const S_asm = S - (full_sets * stack_size);
+                        const asm_sheets = total_sheets - (full_sets * stack_size);
+                        const base_index = full_sets * stack_size * poses_per_sheet;
+                        item_index = base_index + (P * asm_sheets) + S_asm;
+                    }
                 } else {
                     item_index = (P * total_sheets) + S;
                 }
@@ -7512,11 +7526,13 @@ function updateImpSummary() {
     let sheets = Math.ceil(total_impressions / perSheet);
 
     const cutstackMode = document.getElementById('imp-cutstack-mode')?.value;
-    if (schema === 'cut_stack' && cutstackMode === 'strict') {
+    if (schema === 'cut_stack') {
         const stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
-        const itemsPerSet = stack_size * perSheet;
-        const sets_needed = Math.ceil(total_impressions / itemsPerSet);
-        sheets = sets_needed * stack_size;
+        if (cutstackMode === 'strict') {
+            const itemsPerSet = stack_size * perSheet;
+            const sets_needed = Math.ceil(total_impressions / itemsPerSet);
+            sheets = sets_needed * stack_size;
+        }
     }
 
 

@@ -509,7 +509,9 @@ async def impose_file(
                 tmp_in.write(content)
                 base_file_path = tmp_in.name
         elif data.get("schema") != "multi_artes" and not mapa_teatro_id:
-            raise HTTPException(status_code=400, detail="Arquivo principal não enviado.")
+            # Sem arquivo enviado e sem mapa de teatro: base_file_path fica vazio.
+            # O engine.py suporta base_file="" gerando imposição apenas com numeração.
+            pass
 
         if base_file_path:
             out_pdf_path = base_file_path.rsplit(".", 1)[0] + "_imposed.pdf"

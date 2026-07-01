@@ -673,7 +673,7 @@ class ImpositionEngine:
         doc_base = self._load_base_as_pdf()
         
         if cfg.has_cover:
-            if cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict":
+            if cfg.layout_schema == "cut_stack":
                 stack_size = cfg.sheets_per_block * cfg.block_depth
             else:
                 stack_size = total_sheets
@@ -852,9 +852,22 @@ class ImpositionEngine:
                     if cfg.layout_schema == "cut_stack":
                         if cfg.cut_stack_mode == "strict":
                             stack_size = cfg.sheets_per_block * cfg.block_depth
+                            full_sets = total_sheets // stack_size
                             set_index = S // stack_size
                             sheet_within_set = S % stack_size
-                            item_index = (set_index * stack_size * poses_per_sheet) + (P * stack_size) + sheet_within_set
+                            item_index = ((P * full_sets) + set_index) * stack_size + sheet_within_set
+                        elif cfg.cut_stack_mode == "strict_assembly":
+                            stack_size = cfg.sheets_per_block * cfg.block_depth
+                            full_sets = total_sheets // stack_size
+                            if S < full_sets * stack_size:
+                                set_index = S // stack_size
+                                sheet_within_set = S % stack_size
+                                item_index = ((P * full_sets) + set_index) * stack_size + sheet_within_set
+                            else:
+                                S_asm = S - (full_sets * stack_size)
+                                asm_sheets = total_sheets - (full_sets * stack_size)
+                                base_index = full_sets * stack_size * poses_per_sheet
+                                item_index = base_index + (P * asm_sheets) + S_asm
                         else:
                             item_index = (P * total_sheets) + S
                     elif cfg.layout_schema == "multi_artes":
@@ -1246,6 +1259,53 @@ class ImpositionEngine:
                 cell_x1 = cell_x0 + cfg.item_w
                 cell_y1 = cell_y0 + cfg.item_h
                 
+                is_montagem = False
+                i_start = 0
+                i_end = 0
+                bloco_num = 0
+                
+                # Text info and logic
+                if cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict":
+                    full_sets = total_sheets // stack_size
+                    bloco_num = (P * full_sets) + set_idx + 1
+                    i_start = (bloco_num - 1) * stack_size
+                    i_end = min(i_start + stack_size - 1, cfg.total_items - 1)
+                elif cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict_assembly":
+                    full_sets = total_sheets // stack_size
+                    if set_idx < full_sets:
+                        bloco_num = (P * full_sets) + set_idx + 1
+                        i_start = (bloco_num - 1) * stack_size
+                        i_end = min(i_start + stack_size - 1, cfg.total_items - 1)
+                    else:
+                        asm_sheets = total_sheets - (full_sets * stack_size)
+                        base_index = full_sets * stack_size * poses_per_sheet
+                        i_start = base_index + (P * asm_sheets)
+                        i_end = min(i_start + stack_size - 1, cfg.total_items - 1)
+                        bloco_num = (i_start // stack_size) + 1
+                        if i_start % stack_size != 0:
+                            is_montagem = True
+                else:
+                    i_start = P * total_sheets + (set_idx * stack_size)
+                    i_end = min(i_start + stack_size - 1, cfg.total_items - 1)
+                    if cfg.layout_schema == "cut_stack":
+                        import math
+                        sets_per_cell = math.ceil(total_sheets / stack_size)
+                        bloco_num = (P * sets_per_cell) + set_idx + 1
+                    else:
+                        bloco_num = (set_idx * poses_per_sheet) + P + 1
+
+                if i_start >= cfg.total_items:
+                    continue
+                
+                if is_montagem:
+                    font_size = 50
+                    text = "MONTAGEM"
+                    w_text = fitz.get_text_length(text, fontname="hebo", fontsize=font_size)
+                    cx = cell_x0 + (cfg.item_w - w_text) / 2
+                    cy = cell_y0 + (cfg.item_h / 2) + (font_size / 3)
+                    p.insert_text(fitz.Point(cx, cy), text, fontname="hebo", fontsize=font_size, color=(0,0,0))
+                    continue
+                    
                 # Draw cover art (doc_base scaled)
                 if doc_base:
                     page_base = doc_base[0]
@@ -1267,22 +1327,13 @@ class ImpositionEngine:
                         fitz.Rect(cx, cy, cx + new_w, cy + new_h),
                         doc_base, 0, keep_proportion=False
                     )
-                
-                # Text info
-                if cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict":
-                    i_start = (set_idx * stack_size * poses_per_sheet) + (P * stack_size)
-                    i_end = min(i_start + stack_size - 1, cfg.total_items - 1)
-                else:
-                    i_start = P * total_sheets + (set_idx * stack_size)
-                    i_end = min(i_start + stack_size - 1, cfg.total_items - 1)
-                
+
                 v_start = cfg.seq_start + (i_start * cfg.seq_increment)
                 v_end = cfg.seq_start + (i_end * cfg.seq_increment)
                 
                 v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
                 v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
                 
-                bloco_num = (set_idx * poses_per_sheet) + P + 1
                 bloco_str = f"Bloco {bloco_num:02d}"
                 sufixo_str = f" - de {v_start_str} a {v_end_str}"
                 font_y = cell_y0 + (cfg.cover_font_y * 2.83465)
