@@ -12288,7 +12288,7 @@ async function loadOSItens(osId) {
                             verso: item.frente_verso !== undefined ? item.frente_verso : item.verso,
                             impressao: item.status_producao || item.impressao || 'AGUARD.',
                             nome_produto_real: prop ? prop.nome_produto : null,
-                            amostra_cor_id: item.amostra_cor_id || (prop ? prop.amostra_cor_id : null),
+                            amostra_cor_id: item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
                             amostra_num_id: item.amostra_num_id || (prop ? prop.amostra_num_id : null),
                             amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
                             arte_url: item.arte_url || (prop ? prop.arte_url : null),
@@ -12298,6 +12298,10 @@ async function loadOSItens(osId) {
                             amostra_status: statusFrontend,
                             _dbLoaded: true
                         };
+                    });
+                    // DEBUG: mostrar campos de cor de cada item
+                    state.osItens[osId].forEach(it => {
+                        console.log(`[COR DEBUG] id=${it.id} padrao=${it.padrao} cor=${it.cor} amostra_cor_id=${it.amostra_cor_id} id_cor=${it.id_cor} cor_raw=${it._rawCor}`);
                     });
                 } else if (propData && propData.length > 0) {
                     // Fallback: usar produtos_proposta diretamente quando pedidos_modelos está vazio
@@ -13834,9 +13838,16 @@ function renderImpOSQueue() {
         const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 2px solid var(--blue);' : '';
         const indexModelo = idx + 1;
 
-        // Opções de Cor
+        // Opções de Cor — prioridade: amostra_cor_id > fuzzy match no nome > padrao direto
+        const corIdAtual = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
+        const corNomeAtual = item.cor || item.padrao || '';
         const coresOptions = coresDisponiveis.map(c => {
-            const sel = globalFuzzyMatch(c.name, item.cor || item.padrao || '') ? 'selected' : '';
+            let sel = '';
+            if (corIdAtual && String(c.id) === corIdAtual) {
+                sel = 'selected';
+            } else if (!corIdAtual && corNomeAtual && globalFuzzyMatch(c.name, corNomeAtual)) {
+                sel = 'selected';
+            }
             return `<option value="${c.id}" ${sel}>${c.name}</option>`;
         }).join('');
 
