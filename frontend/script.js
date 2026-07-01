@@ -13679,16 +13679,15 @@ async function enviarParaImposicao(itemId, osId) {
     
     // --- CARREGAR ARTE (PDF/IMAGEM) ---
     setTimeout(() => {
-        // Prioridade 1: arte_url ou amostra do próprio item
-        // Prioridade 2: PDF da cor correspondente (producao_cores.pdf_base64 ou pdf_url)
-        const arteUrl = item.arte_url || item.amostra_arte_base64;
+        // Prioridade 1: arte_url do próprio item
+        // Prioridade 2: pdf_url da cor correspondente
+        const arteUrl = item.arte_url || null;
         
-        // Tentar encontrar a arte via cor
-        const corNome = item.cor || item.padrao || '';
-        const corObj = corNome && state.cores ? state.cores.find(c =>
-            globalFuzzyMatch(c.name, corNome)
-        ) : null;
-        const arteViaCor = corObj ? (corObj.pdf_base64 || corObj.pdf_url) : null;
+        // Tentar encontrar a arte via cor — prioridade: amostra_cor_id > fuzzy match
+        const corObj = item.amostra_cor_id
+            ? (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id))
+            : (state.cores || []).find(c => globalFuzzyMatch(c.name, item.cor || item.padrao || ''));
+        const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
         
         const arteSource = arteUrl || arteViaCor;
         
@@ -13696,37 +13695,34 @@ async function enviarParaImposicao(itemId, osId) {
             const filename = item.nome_arquivo_arte || (corObj ? `${corObj.name}.pdf` : `Arte_${item.modelo || 'Modelo'}.pdf`);
             
             const loadArte = (src) => {
-                if (src.startsWith('http')) {
-                    fetch(src)
-                        .then(res => res.blob())
-                        .then(blob => {
-                            const file = new File([blob], filename, { type: blob.type || 'application/pdf' });
-                            state.expectedArteName = filename;
-                            loadImpArtFile(file);
-                            const impInfo = document.getElementById('imp-file-info');
-                            if (impInfo) {
-                                impInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
-                                impInfo.style.display = 'block';
-                            }
-                            setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
-                        })
-                        .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via URL:', err));
-                } else if (src.startsWith('data:')) {
-                    fetch(src)
-                        .then(res => res.blob())
-                        .then(blob => {
-                            const file = new File([blob], filename, { type: blob.type || 'application/pdf' });
-                            state.expectedArteName = filename;
-                            loadImpArtFile(file);
-                            const impInfo = document.getElementById('imp-file-info');
-                            if (impInfo) {
-                                impInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
-                                impInfo.style.display = 'block';
-                            }
-                            setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
-                        })
-                        .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via Data URL:', err));
+                if (!src || !src.startsWith('http')) {
+                    console.warn('[OS→Imp] Fonte de arte inválida (não é URL HTTP):', src);
+                    return;
                 }
+                fetch(src)
+                    .then(res => {
+                        const ct = res.headers.get('content-type') || '';
+                        return res.blob().then(blob => ({ blob, ct }));
+                    })
+                    .then(({ blob, ct }) => {
+                        // Validar que é PDF ou imagem antes de carregar
+                        const isPdf = ct.includes('pdf') || filename.toLowerCase().endsWith('.pdf');
+                        const isImg = ct.includes('image') || /\.(png|jpg|jpeg|webp)$/i.test(filename);
+                        if (!isPdf && !isImg) {
+                            console.warn('[OS→Imp] Conteúdo retornado não é PDF nem imagem. Content-Type:', ct);
+                            return;
+                        }
+                        const file = new File([blob], filename, { type: ct || (isPdf ? 'application/pdf' : 'image/png') });
+                        state.expectedArteName = filename;
+                        loadImpArtFile(file);
+                        const impInfo = document.getElementById('imp-file-info');
+                        if (impInfo) {
+                            impInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
+                            impInfo.style.display = 'block';
+                        }
+                        setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
+                    })
+                    .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via URL:', err));
             };
             
             loadArte(arteSource);
