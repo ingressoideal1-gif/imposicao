@@ -8,7 +8,6 @@ let state = {
     formatos: []
 };
 
-let vibeClient = window.supabaseClient; // Alias usado em algumas funcoes
 
 function toast(msg, type = 'info') {
 
@@ -1393,3 +1392,49 @@ function closeClienteLightbox() {
 document.addEventListener('DOMContentLoaded', () => {
     checkClienteRoute();
 });
+
+/**
+ * Atualiza a barra final dinamicamente no link do cliente
+ */
+function atualizarBarraFinalCliente(osId) {
+    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') return;
+
+    const containerActions = document.querySelector('.cliente-actions');
+    if (!containerActions) return;
+
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) return;
+
+    // Verificar se todos os modelos estão aprovados
+    const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
+
+    // Verificar se pelo menos um modelo está reprovado (alteração)
+    const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
+
+    let html = '';
+    if (todosAprovados) {
+        // Verde, ativo, Finalizar e Aprovar Pedido Completo
+        html = `
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer;">
+                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+            </button>
+        `;
+    } else if (algumReprovado) {
+        // Tons de laranja e vermelho, ativo, Solicitar Alteração de Arte
+        html = `
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #ef4444; color: #ffffff; border: none; cursor: pointer;">
+                ⚠️ SOLICITAR ALTERAÇÃO DE ARTE
+            </button>
+        `;
+    } else {
+        // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo
+        html = `
+            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #374151; color: #9ca3af; border: 1px solid #374151; cursor: not-allowed; opacity: 0.6;">
+                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+            </button>
+        `;
+    }
+
+    containerActions.innerHTML = html;
+}
+
