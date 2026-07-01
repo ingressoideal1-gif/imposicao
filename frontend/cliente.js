@@ -942,6 +942,19 @@ window.desfazerConfirmacao = function(tipo) {
     window.clienteConfirmacoes[`${tipo}Ok`] = null;
     window.clienteConfirmacoes[`${tipo}Correcao`] = '';
     
+    const btnConfirmar = document.getElementById(`btn-confirmar-${tipo}`);
+    const btnAlterar = document.getElementById(`btn-alterar-${tipo}`);
+    if (btnConfirmar) {
+        btnConfirmar.style.backgroundColor = 'transparent';
+        btnConfirmar.style.borderColor = 'var(--border-color)';
+        btnConfirmar.style.color = 'var(--text)';
+    }
+    if (btnAlterar) {
+        btnAlterar.style.backgroundColor = 'transparent';
+        btnAlterar.style.borderColor = 'var(--border-color)';
+        btnAlterar.style.color = 'var(--text)';
+    }
+    
     document.getElementById(`acoes-${tipo}`).style.display = 'flex';
     document.getElementById(`correcao-${tipo}`).style.display = 'none';
     document.getElementById(`status-${tipo}`).innerHTML = '';
@@ -953,26 +966,39 @@ window.desfazerConfirmacao = function(tipo) {
 window.acaoConfirmacaoItem = function(tipo, ok) {
     window.clienteConfirmacoes[`${tipo}Ok`] = ok;
     
-    const botoesAcao = document.getElementById(`acoes-${tipo}`);
+    const btnConfirmar = document.getElementById(`btn-confirmar-${tipo}`);
+    const btnAlterar = document.getElementById(`btn-alterar-${tipo}`);
     const boxCorrecao = document.getElementById(`correcao-${tipo}`);
     const badgeStatus = document.getElementById(`status-${tipo}`);
     
     if (ok) {
-        botoesAcao.style.display = 'none';
+        if (btnConfirmar) {
+            btnConfirmar.style.backgroundColor = '#22c55e';
+            btnConfirmar.style.borderColor = '#22c55e';
+            btnConfirmar.style.color = '#fff';
+        }
+        if (btnAlterar) {
+            btnAlterar.style.backgroundColor = 'transparent';
+            btnAlterar.style.borderColor = 'var(--border-color)';
+            btnAlterar.style.color = 'var(--text)';
+        }
         boxCorrecao.style.display = 'none';
-        badgeStatus.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; background: rgba(34, 197, 94, 0.1); padding: 10px; border-radius: 6px; border: 1px solid #22c55e;">
-                <span style="color: #22c55e; font-weight: bold;">✅ Confirmado</span>
-                <button class="btn btn-sm" onclick="desfazerConfirmacao('${tipo}')" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 5px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Desfazer</button>
-            </div>
-        `;
+        badgeStatus.innerHTML = '';
     } else {
-        botoesAcao.style.display = 'none';
+        if (btnAlterar) {
+            btnAlterar.style.backgroundColor = '#f97316';
+            btnAlterar.style.borderColor = '#f97316';
+            btnAlterar.style.color = '#fff';
+        }
+        if (btnConfirmar) {
+            btnConfirmar.style.backgroundColor = 'transparent';
+            btnConfirmar.style.borderColor = 'var(--border-color)';
+            btnConfirmar.style.color = 'var(--text)';
+        }
         boxCorrecao.style.display = 'block';
         badgeStatus.innerHTML = `
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                <span style="color: #f97316; font-weight: bold;">⚠️ Incorreto - Por favor informe abaixo:</span>
-                <button class="btn btn-sm" onclick="desfazerConfirmacao('${tipo}')" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 5px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Voltar</button>
+                <span style="color: #f97316; font-weight: bold;">⚠️ Informe os dados corretos abaixo:</span>
             </div>
         `;
     }
@@ -1110,8 +1136,8 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                         <div id="status-endereco" style="margin-bottom: 10px;"></div>
                         
                         <div id="acoes-endereco" style="display: flex; gap: 10px;">
-                            <button class="btn" onclick="acaoConfirmacaoItem('endereco', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">Correto</button>
-                            <button class="btn" onclick="acaoConfirmacaoItem('endereco', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">Incorreto</button>
+                            <button class="btn" id="btn-confirmar-endereco" onclick="acaoConfirmacaoItem('endereco', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s;">CONFIRMAR</button>
+                            <button class="btn" id="btn-alterar-endereco" onclick="acaoConfirmacaoItem('endereco', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s;">ALTERAR</button>
                         </div>
 
                         <div id="correcao-endereco" style="display: none; margin-top: 10px;">
@@ -1130,8 +1156,8 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                         <div id="status-nf" style="margin-bottom: 10px;"></div>
                         
                         <div id="acoes-nf" style="display: flex; gap: 10px;">
-                            <button class="btn" onclick="acaoConfirmacaoItem('nf', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">Correto</button>
-                            <button class="btn" onclick="acaoConfirmacaoItem('nf', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px;">Incorreto</button>
+                            <button class="btn" id="btn-confirmar-nf" onclick="acaoConfirmacaoItem('nf', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s;">CONFIRMAR</button>
+                            <button class="btn" id="btn-alterar-nf" onclick="acaoConfirmacaoItem('nf', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s;">ALTERAR</button>
                         </div>
 
                         <div id="correcao-nf" style="display: none; margin-top: 10px;">
