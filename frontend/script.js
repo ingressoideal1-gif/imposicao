@@ -13796,6 +13796,26 @@ function renderImpOSQueue() {
     const pendentes = itens.filter(i => i.impressao !== 'IMPRESSO');
     if (pendingBadge) pendingBadge.textContent = `${pendentes.length} pendente${pendentes.length !== 1 ? 's' : ''}`;
 
+    // Garantir cabeçalho correto (via JS para evitar problema de cache do HTML)
+    const table = tbody.closest('table');
+    if (table) {
+        let thead = table.querySelector('thead');
+        if (!thead) { thead = document.createElement('thead'); table.insertBefore(thead, tbody); }
+        thead.innerHTML = `<tr>
+            <th style="padding:4px 6px; width:32px; text-align:center;">M</th>
+            <th style="padding:4px 6px; width:80px;">Modelo</th>
+            <th style="padding:4px 6px;">Nome</th>
+            <th style="padding:4px 6px; width:60px;">QTD</th>
+            <th style="padding:4px 6px; min-width:110px;">COR</th>
+            <th style="padding:4px 6px; min-width:140px;">Numera\u00e7\u00e3o</th>
+            <th style="padding:4px 6px; width:60px;">NI</th>
+            <th style="padding:4px 6px; width:60px;">NF</th>
+            <th style="padding:4px 6px; width:44px; text-align:center;">Verso</th>
+            <th style="padding:4px 6px;">Status</th>
+        </tr>`;
+    }
+
+
     // Pegar o formato atualmente selecionado para filtrar cores e numerações disponíveis
     const fmtId = document.getElementById('imp-formato')?.value || '';
 
