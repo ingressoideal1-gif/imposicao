@@ -12017,7 +12017,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte')
+                .select('id, id_int, status_arte, impressao')
                 .in('id_int', chunk);
                 
             if (error) throw error;
@@ -12894,8 +12894,15 @@ function renderOrdens() {
             tbodyImpressao.innerHTML = filteredImpressao.map(os => {
                 const isExpanded = state.osExpandedId === os.id;
                 const osItensList = state.osItens[os.id] || [];
-                const totalItens = osItensList.length;
-                const impressosCount = osItensList.filter(item => item.impressao === 'IMPRESSO').length;
+                const numOs = parseInt(os.numero);
+                const modelosGlobais = state.modelosGlobais && state.modelosGlobais[numOs] ? state.modelosGlobais[numOs] : [];
+                const totalItens = modelosGlobais.length > 0 ? modelosGlobais.length : (osItensList.length || 1);
+                
+                // Na view de impressão, queremos contar os impressos
+                const impressosCount = modelosGlobais.length > 0 
+                    ? modelosGlobais.filter(m => m.impressao === 'IMPRESSO').length 
+                    : osItensList.filter(item => item.impressao === 'IMPRESSO').length;
+                    
                 const pct = totalItens > 0 ? Math.round((impressosCount / totalItens) * 100) : 0;
                 
                 // Barra de progresso do status de impressão
@@ -13597,7 +13604,10 @@ async function enviarParaImposicao(itemId, osId) {
 // -------------------------------------------------------------------------------
 // ABRIR OS INTEIRA NA IMPOSIÇÃO
 // -------------------------------------------------------------------------------
-function abrirImposicaoDoPedido(osId, numeroOS) {
+async function abrirImposicaoDoPedido(osId, numeroOS) {
+    // Garante que todos os itens reais (pedidos_modelos) da OS sejam carregados antes de abrir
+    await loadOSItens(osId);
+
     const itens = state.osItens[osId] || [];
     if (!itens.length) {
         return toast('Esta OS não possui itens.', 'error');
