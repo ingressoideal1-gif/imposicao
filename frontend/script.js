@@ -13658,7 +13658,6 @@ function renderImpOSQueue() {
         const isActive = activeItem.itemId === item.id;
         const rowBg = isActive ? 'background: rgba(59,130,246,0.12);' : '';
         const indexModelo = idx + 1;
-        const versoIcon = item.verso ? '<span style="color: var(--green);">Sim</span>' : '<span style="color: var(--text-dim);">Não</span>';
         
         return `
             <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" onclick="enviarParaImposicao('${item.id}', '${osId}')" class="hover-row">
@@ -13666,13 +13665,13 @@ function renderImpOSQueue() {
                     ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
                     <strong>${indexModelo}</strong>
                 </td>
-                <td style="padding: 5px 8px; color: var(--text-dim); font-size: 0.72rem;">${item.id || '--'}</td>
+                <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem;">${item.modelo || '--'}</td>
                 <td style="padding: 5px 8px;"><strong>${item.produto || '--'}</strong></td>
-                <td style="padding: 5px 8px;">${item.cor || '--'}</td>
+                <td style="padding: 5px 8px;">${item.cor || 'STD'}</td>
                 <td style="padding: 5px 8px;">${item.numeracao || '--'}</td>
                 <td style="padding: 5px 8px;">${item.num_inicial || '--'}</td>
                 <td style="padding: 5px 8px;">${item.num_final || '--'}</td>
-                <td style="padding: 5px 8px; text-align: center;">${versoIcon}</td>
+                <td style="padding: 5px 8px; text-align: center;">${item.verso ? '✅' : '--'}</td>
                 <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
             </tr>
         `;
