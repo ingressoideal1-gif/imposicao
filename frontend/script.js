@@ -13817,14 +13817,9 @@ function renderImpOSQueue() {
     }
 
 
-    // Pegar o formato atualmente selecionado para filtrar cores e numerações disponíveis
-    const fmtId = document.getElementById('imp-formato')?.value || '';
-
-    // Cores disponíveis: filtrar pelo formato se possível
-    const coresDisponiveis = (state.cores || []).filter(c => !fmtId || !c.formato_id || String(c.formato_id) === String(fmtId));
-
-    // Numerações disponíveis para o formato
-    const numsDisponiveis = (state.numeracoes || []).filter(n => !fmtId || !n.formato_id || String(n.formato_id) === String(fmtId));
+    // Todas as cores e numerações (filtro por formato feito por item abaixo)
+    const todasCores = state.cores || [];
+    const todasNums = state.numeracoes || [];
 
     const inputStyle = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:2px 5px; font-size:0.75rem; width:100%;';
     const selectStyle = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:2px 5px; font-size:0.75rem; width:100%; cursor:pointer;';
@@ -13835,10 +13830,15 @@ function renderImpOSQueue() {
         const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 2px solid var(--blue);' : '';
         const indexModelo = idx + 1;
 
-        // Opções de Cor — prioridade: amostra_cor_id > fuzzy match no nome > padrao direto
-        const corIdAtual = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
+        // Filtrar cores e numerações pelo formato_id do próprio item
+        const itemFmtId = item.formato_id ? String(item.formato_id) : null;
+        const coresItem = todasCores.filter(c => !itemFmtId || !c.formato_id || String(c.formato_id) === String(itemFmtId));
+        const numsItem  = todasNums.filter(n  => !itemFmtId || !n.formato_id  || String(n.formato_id)  === String(itemFmtId));
+
+        // Opções de Cor — prioridade: amostra_cor_id > fuzzy match no nome
+        const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
         const corNomeAtual = item.cor || item.padrao || '';
-        const coresOptions = coresDisponiveis.map(c => {
+        const coresOptions = coresItem.map(c => {
             let sel = '';
             if (corIdAtual && String(c.id) === corIdAtual) {
                 sel = 'selected';
@@ -13852,7 +13852,7 @@ function renderImpOSQueue() {
         const numValDisplay = item.gabarito_operacional || item.numeracao || '';
 
         // Opções de Numeração — pré-selecionar pelo gabarito_operacional via fuzzy
-        const numsOptions = numsDisponiveis.map(n => {
+        const numsOptions = numsItem.map(n => {
             const sel = globalFuzzyMatch(n.name || n.tipo || '', numValDisplay) ? 'selected' : '';
             return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
         }).join('');
