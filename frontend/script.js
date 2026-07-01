@@ -12280,7 +12280,7 @@ async function loadOSItens(osId) {
                             produto: item.nome_modelo || 'Modelo',
                             modelo: item.id ? item.id.toString() : '--',
                             cor: item.padrao || item.cor || 'STD',
-                            numeracao: item.tipo_numeracao || item.numeracao,
+                            numeracao: item.gabarito_operacional || item.tipo_numeracao || item.numeracao,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
                             verso: item.frente_verso !== undefined ? item.frente_verso : item.verso,
