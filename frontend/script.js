@@ -13568,20 +13568,44 @@ async function enviarParaImposicao(itemId, osId) {
     const navBtn = document.querySelector('[data-view="view-imposicao"]');
     if (navBtn) navBtn.click();
 
-    // --- MATCHING AUTOMÁTICO DE FORMATO ---
+    // --- MATCHING AUTOMÁTICO DE FORMATO (VIA COR OU NOME) E SAÍDA ---
     let formatoId = item.formato_id;
+    
+    // Tentar match do formato via Cor
+    if (!formatoId && item.cor) {
+        const corMatched = state.cores ? state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || fuzzyMatch(c.name, item.cor)) : null;
+        if (corMatched && corMatched.formato_id) {
+            formatoId = corMatched.formato_id;
+            console.log(`[OS→Imp] Formato matched via Cor "${item.cor}" → ${formatoId}`);
+        }
+    }
+
     if (!formatoId && item.formato) {
         formatoId = matchFormato(item.formato);
         if (formatoId) {
             autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OS→Imp] Formato matched: "${item.formato}" → ${formatoId}`);
+            console.log(`[OS→Imp] Formato matched via Nome: "${item.formato}" → ${formatoId}`);
         }
     }
+    
     if (formatoId) {
         const fmtSelect = document.getElementById('imp-formato');
         if (fmtSelect) {
             fmtSelect.value = formatoId;
             fmtSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Tentar match da Saída via Formato
+        const formatoObj = state.formatos ? state.formatos.find(f => f.id == formatoId) : null;
+        if (formatoObj && formatoObj.default_saida_id) {
+            setTimeout(() => {
+                const saidaSelect = document.getElementById('imp-saida');
+                if (saidaSelect) {
+                    saidaSelect.value = formatoObj.default_saida_id;
+                    saidaSelect.dispatchEvent(new Event('change'));
+                    console.log(`[OS→Imp] Saída matched via Formato "${formatoObj.name}" → ${formatoObj.default_saida_id}`);
+                }
+            }, 100); // pequeno delay para garantir que o formato populou as saídas
         }
     }
 
@@ -13632,6 +13656,7 @@ async function enviarParaImposicao(itemId, osId) {
             }
         }
         updateImpSummary();
+        if (typeof drawPreview === 'function') drawPreview();
     }, 500);
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
