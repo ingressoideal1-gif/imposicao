@@ -7554,13 +7554,10 @@ function updateImpSummary() {
     // Update steps
 
     ['step-1', 'step-2', 'step-3', 'step-4'].forEach((s, i) => {
-
         const el = document.getElementById(s);
-
+        if (!el) return;
         el.classList.remove('done', 'active');
-
         el.classList.add(i < 3 ? 'done' : 'active');
-
     });
 
 
