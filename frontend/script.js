@@ -7653,7 +7653,7 @@ function showFileInfo() {
 
         // Mark step 4 as active
 
-        document.getElementById('step-4').classList.add('active');
+        document.getElementById('step-4')?.classList.add('active');
 
         loadImpArtFile(f);
 

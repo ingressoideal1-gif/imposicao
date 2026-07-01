@@ -832,25 +832,7 @@
                     </div>
                 </div>
 
-                <!-- Steps bar -->
-                <div class="steps-bar" id="steps-bar">
-                    <div class="step-item active" id="step-1">
-                        <div class="step-num">1</div>
-                        <span>Formato</span>
-                    </div>
-                    <div class="step-item" id="step-2">
-                        <div class="step-num">2</div>
-                        <span>Numeração</span>
-                    </div>
-                    <div class="step-item" id="step-3">
-                        <div class="step-num">3</div>
-                        <span>Saída</span>
-                    </div>
-                    <div class="step-item" id="step-4">
-                        <div class="step-num">4</div>
-                        <span>Arte</span>
-                    </div>
-                </div>
+                <!-- Steps bar removido da visualização de produção -->
 
                 <div class="imposicao-layout">
                     <div class="imposicao-config">
@@ -866,15 +848,6 @@
                                         <option value="pdf_multiple">Pdf Paginado</option>
                                         <option value="multi_artes">Multi-Artes (Colunas)</option>
                                     </select>
-                                    <select class="form-control" id="imp-modelo-selector" style="width: 180px; padding: 4px 8px; font-size: 0.85rem;" onchange="loadSelectedModelo(this.value)">
-                                        <option value="">— Carregar Modelo —</option>
-                                    </select>
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="promptSaveModelo()" style="padding: 4px 10px; font-size: 0.82rem;" title="Criar Modelo de Imposição">💾 Criar Modelo</button>
-                                    <button type="button" class="btn btn-secondary btn-sm" onclick="exportOS()" style="padding: 4px 10px; font-size: 0.82rem;" title="Salvar OS localmente no computador">💾 Salvar OS</button>
-                                    <label class="btn btn-secondary btn-sm" for="import-os-file" style="margin: 0; padding: 4px 10px; font-size: 0.82rem; cursor: pointer;" title="Carregar OS salva (.json)">
-                                        📂 Carregar OS
-                                    </label>
-                                    <input type="file" id="import-os-file" accept=".json" style="display: none;" onchange="importOS(this)">
                                 </div>
                             </div>
 
