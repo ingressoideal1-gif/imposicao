@@ -13709,7 +13709,9 @@ async function enviarParaImposicao(itemId, osId) {
 
     const os = state.ordens.find(o => o.id === osId);
     const osNum = os ? os.numero : '';
-    toast(`Item "${item.produto} -- ${item.formato}" da OS #${osNum} carregado na Imposição!`, 'info');
+    const formatoObjToast = state.formatos ? state.formatos.find(f => String(f.id) === String(formatoId)) : null;
+    const nomeFmtToast = formatoObjToast ? formatoObjToast.name : (item.formato || 'Formato Não Definido');
+    toast(`Item "${item.produto} -- ${nomeFmtToast}" da OS #${osNum} carregado na Imposição!`, 'info');
 }
 
 // -------------------------------------------------------------------------------
