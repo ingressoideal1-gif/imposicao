@@ -945,12 +945,12 @@ window.desfazerConfirmacao = function(tipo) {
     const btnConfirmar = document.getElementById(`btn-confirmar-${tipo}`);
     const btnAlterar = document.getElementById(`btn-alterar-${tipo}`);
     if (btnConfirmar) {
-        btnConfirmar.style.backgroundColor = 'transparent';
+        btnConfirmar.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
         btnConfirmar.style.borderColor = 'var(--border-color)';
         btnConfirmar.style.color = 'var(--text)';
     }
     if (btnAlterar) {
-        btnAlterar.style.backgroundColor = 'transparent';
+        btnAlterar.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
         btnAlterar.style.borderColor = 'var(--border-color)';
         btnAlterar.style.color = 'var(--text)';
     }
@@ -978,7 +978,7 @@ window.acaoConfirmacaoItem = function(tipo, ok) {
             btnConfirmar.style.color = '#fff';
         }
         if (btnAlterar) {
-            btnAlterar.style.backgroundColor = 'transparent';
+            btnAlterar.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
             btnAlterar.style.borderColor = 'var(--border-color)';
             btnAlterar.style.color = 'var(--text)';
         }
@@ -991,7 +991,7 @@ window.acaoConfirmacaoItem = function(tipo, ok) {
             btnAlterar.style.color = '#fff';
         }
         if (btnConfirmar) {
-            btnConfirmar.style.backgroundColor = 'transparent';
+            btnConfirmar.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
             btnConfirmar.style.borderColor = 'var(--border-color)';
             btnConfirmar.style.color = 'var(--text)';
         }
@@ -1136,8 +1136,8 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                         <div id="status-endereco" style="margin-bottom: 10px;"></div>
                         
                         <div id="acoes-endereco" style="display: flex; gap: 10px;">
-                            <button class="btn" id="btn-confirmar-endereco" onclick="acaoConfirmacaoItem('endereco', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s;">CONFIRMAR</button>
-                            <button class="btn" id="btn-alterar-endereco" onclick="acaoConfirmacaoItem('endereco', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s;">ALTERAR</button>
+                            <button class="btn" id="btn-confirmar-endereco" onclick="acaoConfirmacaoItem('endereco', true)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s; cursor: pointer;">CONFIRMAR</button>
+                            <button class="btn" id="btn-alterar-endereco" onclick="acaoConfirmacaoItem('endereco', false)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s; cursor: pointer;">ALTERAR</button>
                         </div>
 
                         <div id="correcao-endereco" style="display: none; margin-top: 10px;">
@@ -1156,8 +1156,8 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                         <div id="status-nf" style="margin-bottom: 10px;"></div>
                         
                         <div id="acoes-nf" style="display: flex; gap: 10px;">
-                            <button class="btn" id="btn-confirmar-nf" onclick="acaoConfirmacaoItem('nf', true)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s;">CONFIRMAR</button>
-                            <button class="btn" id="btn-alterar-nf" onclick="acaoConfirmacaoItem('nf', false)" style="background-color: transparent; border: 1px solid var(--border-color); color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s;">ALTERAR</button>
+                            <button class="btn" id="btn-confirmar-nf" onclick="acaoConfirmacaoItem('nf', true)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s; cursor: pointer;">CONFIRMAR</button>
+                            <button class="btn" id="btn-alterar-nf" onclick="acaoConfirmacaoItem('nf', false)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s; cursor: pointer;">ALTERAR</button>
                         </div>
 
                         <div id="correcao-nf" style="display: none; margin-top: 10px;">
