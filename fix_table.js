@@ -10,17 +10,16 @@ const newTable = [
   p + '<table class="data-table" style="font-size:0.78rem; margin:0; width:100%;">',
   p + '    <thead>',
   p + '        <tr>',
-  p + '            <th style="padding:6px 8px; text-align:center; width:40px;">Modelo</th>',
-  p + '            <th style="padding:6px 8px; width:70px;">N\u00ba ID</th>',
-  p + '            <th style="padding:6px 8px;">Nome</th>',
-  p + '            <th style="padding:6px 8px; width:65px;">QTD</th>',
-  p + '            <th style="padding:6px 8px; min-width:120px;">Cor</th>',
-  p + '            <th style="padding:6px 8px; min-width:150px;">Numera\u00e7\u00e3o</th>',
-  p + '            <th style="padding:6px 8px; width:65px;">NI</th>',
-  p + '            <th style="padding:6px 8px; width:65px;">NF</th>',
-  p + '            <th style="padding:6px 8px; text-align:center; width:50px;">Verso</th>',
-  p + '            <th style="padding:6px 8px;">Status</th>',
-  p + '            <th style="padding:6px 8px; min-width:190px;">A\u00e7\u00f5es</th>',
+  p + '            <th style="padding:4px 6px; width:32px; text-align:center;">M</th>',
+  p + '            <th style="padding:4px 6px; width:80px;">Modelo</th>',
+  p + '            <th style="padding:4px 6px;">Nome</th>',
+  p + '            <th style="padding:4px 6px; width:60px;">QTD</th>',
+  p + '            <th style="padding:4px 6px; min-width:110px;">COR</th>',
+  p + '            <th style="padding:4px 6px; min-width:140px;">Numera\u00e7\u00e3o</th>',
+  p + '            <th style="padding:4px 6px; width:60px;">NI</th>',
+  p + '            <th style="padding:4px 6px; width:60px;">NF</th>',
+  p + '            <th style="padding:4px 6px; width:44px; text-align:center;">Verso</th>',
+  p + '            <th style="padding:4px 6px;">Status</th>',
   p + '        </tr>',
   p + '    </thead>',
   p + '    <tbody id="tbody-imp-os-queue">',
@@ -32,11 +31,11 @@ html = html.substring(0, tableStart) + newTable + html.substring(tableEnd);
 fs.writeFileSync('frontend/producao.html', html, 'utf8');
 
 // Verify
-const newHtml = fs.readFileSync('frontend/producao.html', 'utf8');
-const ni = newHtml.indexOf('tbody-imp-os-queue');
-const ns = newHtml.lastIndexOf('<table', ni);
-const ne = newHtml.indexOf('</table>', ni) + 8;
-const nt = newHtml.substring(ns, ne);
-console.log('TH count:', (nt.match(/<th/g)||[]).length, '(esperado: 11)');
-console.log('TR count in thead:', (nt.match(/<tr/g)||[]).length, '(esperado: 1)');
-console.log('Done!');
+const h2 = fs.readFileSync('frontend/producao.html', 'utf8');
+const ti = h2.indexOf('tbody-imp-os-queue');
+const ts = h2.lastIndexOf('<table', ti);
+const te = h2.indexOf('</table>', ti) + 8;
+const seg = h2.substring(ts, te);
+const ths = seg.match(/<th[^>]*>([^<]*)<\/th>/g) || [];
+console.log('TH labels:', ths.map(t => t.replace(/<[^>]+>/g,'')).join(' | '));
+console.log('Total TH:', ths.length);
