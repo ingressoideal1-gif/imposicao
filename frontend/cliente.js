@@ -1167,8 +1167,8 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                     </div>
                 </div>
 
-                <div style="display: flex; justify-content: center;">
-                    <button id="btn-finalizar-confirmacoes" class="btn btn-lg" onclick="finalizarConfirmacaoCliente()" disabled style="background-color: #22c55e; border-color: #22c55e; color: #fff; font-weight: bold; width: 100%; opacity: 0.5; cursor: not-allowed; min-height: 50px;">
+                <div style="display: flex; justify-content: center; position: sticky; bottom: 20px; z-index: 100;">
+                    <button id="btn-finalizar-confirmacoes" class="btn btn-lg" onclick="finalizarConfirmacaoCliente()" disabled style="background-color: #22c55e; border-color: #22c55e; color: #fff; font-weight: bold; width: 100%; opacity: 0.5; cursor: not-allowed; min-height: 56px; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);">
                         Verifique os dados acima para Finalizar
                     </button>
                 </div>
