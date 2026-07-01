@@ -13572,9 +13572,24 @@ async function enviarParaImposicao(itemId, osId) {
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
 
-    // Navegar para a view de Imposição
-    const navBtn = document.querySelector('[data-view="view-imposicao"]');
-    if (navBtn) navBtn.click();
+    // Navegar para a view de Imposição, EXCETO se estivermos no Painel de Produção (que quer ver o preview inline)
+    const isPainelProducao = document.getElementById('view-lista-impressao')?.classList.contains('active');
+    if (!isPainelProducao) {
+        const navBtn = document.querySelector('[data-view="view-imposicao"]');
+        if (navBtn) navBtn.click();
+    } else {
+        const previewCard = document.getElementById('os-preview-card-impressao');
+        const canvasContainer = document.querySelector('.preview-canvas-container');
+        if (previewCard && canvasContainer && !previewCard.contains(canvasContainer)) {
+            previewCard.appendChild(canvasContainer);
+        }
+        if (previewCard) {
+            previewCard.style.display = 'flex';
+            setTimeout(() => {
+                previewCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 100);
+        }
+    }
 
     // --- MATCHING AUTOMÁTICO DE FORMATO (VIA COR OU NOME) E SAÍDA ---
     let formatoId = item.formato_id;
@@ -13819,6 +13834,15 @@ window.showView = function(viewId) {
     // Ativar a view destino
     const view = document.getElementById(viewId);
     if (view) view.classList.add('active');
+    
+    // Se estiver voltando para a aba de Imposição, garante que o canvas volte para lá
+    if (viewId === 'view-imposicao') {
+        const origin = document.getElementById('imposicao-preview-card-origin');
+        const canvasContainer = document.querySelector('.preview-canvas-container');
+        if (origin && canvasContainer && !origin.contains(canvasContainer)) {
+            origin.appendChild(canvasContainer);
+        }
+    }
 
     // Ativar o nav-btn correspondente
     const navBtn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);

@@ -1042,7 +1042,7 @@
                     </div>
 
                     <div class="imposicao-preview">
-                        <div class="card">
+                        <div class="card" id="imposicao-preview-card-origin">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                                 <span class="card-title">👁️ Pré-visualização da Folha</span>
                                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -1313,6 +1313,17 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+
+                        <!-- Preview da Imposição (Produção) -->
+                        <div class="prod-table-card mt-4" id="os-preview-card-impressao" style="display: none; flex-direction: column; align-items: center; padding: 20px;">
+                            <div class="prod-table-header flex-wrap" style="width: 100%; margin-bottom: 20px;">
+                                <span class="prod-table-title"><i class="fa-solid fa-eye"></i> Pré-visualização da Folha</span>
+                                <button class="prod-btn-outline" style="margin-left: auto;" onclick="document.getElementById('os-preview-card-impressao').style.display = 'none';">
+                                    <i class="fa-solid fa-xmark"></i> Fechar
+                                </button>
+                            </div>
+                            <!-- O canvas será movido dinamicamente para cá pelo script.js -->
                         </div>
 
                     </div>
