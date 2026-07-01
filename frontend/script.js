@@ -13558,7 +13558,7 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
  */
 async function enviarParaImposicao(itemId, osId) {
     const itens = state.osItens[osId] || [];
-    const item = itens.find(i => i.id === itemId);
+    const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return toast('Item não encontrado.', 'error');
 
     // Guardar referência ao item ativo para atualização automática pós-imposição
