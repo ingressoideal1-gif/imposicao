@@ -11827,7 +11827,7 @@ async function loadOrdens() {
             try {
                 const { data: propData, error: propError } = await supabaseClient
                     .from('propostas')
-                    .select('id_int, cliente, vendedor')
+                    .select('id_int, cliente, vendedor, status_interno')
                     .order('id_int', { ascending: false })
                     .limit(2000);
                 if (!propError && propData) {
@@ -11899,6 +11899,7 @@ async function loadOrdens() {
                     ...os,
                     status: savedStatus || dbStatus,
                     status_arte: pedidoReal?.status_arte || null,
+                    status_interno: propReal?.status_interno || null,
                     cliente: clienteProposta,
                     vendedor: vendedorProposta,
                     data_liberacao: os.data_liberacao || os.created_at,
@@ -11925,7 +11926,8 @@ async function loadOrdens() {
                         ...os,
                         cliente: clienteProposta,
                         vendedor: vendedorProposta,
-                        status_arte: pedidoReal?.status_arte || null
+                        status_arte: pedidoReal?.status_arte || null,
+                        status_interno: propReal?.status_interno || null
                     };
                 });
 
@@ -12129,6 +12131,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
                     numero: key,
                     status: savedStatus || 'Em Arte',
                     status_arte: pedidoReal?.status_arte || null,
+                    status_interno: propReal?.status_interno || null,
                     cliente: cliente,
                     vendedor: vendedor,
                     data_liberacao: dataLiberacao,
@@ -12685,8 +12688,8 @@ function renderOrdens() {
     const searchArte = (document.getElementById('os-search-arte')?.value || '').trim().toLowerCase();
     const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
 
-    // Fila 1: Impressão (Status EM IMPRESSÃO)
-    let ordensImpressao = state.ordens.filter(os => os.status === 'EM IMPRESSÃO');
+    // Fila 1: Impressão (status_interno === 'EM PRODUCAO')
+    let ordensImpressao = state.ordens.filter(os => (os.status_interno || '').toUpperCase() === 'EM PRODUCAO' || (os.status_interno || '').toUpperCase() === 'EM PRODUÇÃO');
 
     // --- Calcular Estatísticas Dinâmicas ---
     let totalItensImpressao = 0;
@@ -12942,7 +12945,7 @@ function renderOrdens() {
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
                 
                 return `
-                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="toggleOSDetail('${os.id}')" style="cursor: pointer;">
+                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="abrirImposicaoDoPedido('${os.id}', '${os.numero}')" style="cursor: pointer;">
                         <td>
                             <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
                         </td>
@@ -13582,6 +13585,23 @@ async function enviarParaImposicao(itemId, osId) {
     const os = state.ordens.find(o => o.id === osId);
     const osNum = os ? os.numero : '';
     toast(`Item "${item.produto} -- ${item.formato}" da OS #${osNum} carregado na Imposição!`, 'info');
+}
+
+// -------------------------------------------------------------------------------
+// ABRIR OS INTEIRA NA IMPOSIÇÃO
+// -------------------------------------------------------------------------------
+function abrirImposicaoDoPedido(osId, numeroOS) {
+    const itens = state.osItens[osId] || [];
+    if (!itens.length) {
+        return toast('Esta OS não possui itens.', 'error');
+    }
+
+    // Pega o primeiro item pendente ou aprovado, se não houver pega o primeiro item.
+    let itemAlvo = itens.find(i => i.impressao !== 'IMPRESSO' && (i.aprovacao === 'APROVADA' || i.aprovacao === 'PRONTA'));
+    if (!itemAlvo) itemAlvo = itens[0];
+
+    // Envia o item alvo para imposição, o que já carrega a OS toda no painel lateral de Itens da OS
+    enviarParaImposicao(itemAlvo.id, osId);
 }
 
 // -------------------------------------------------------------------------------
