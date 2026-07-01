@@ -12943,16 +12943,23 @@ function renderOrdens() {
                 const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
 
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
-                
+                let nomeEventoHtml = '';
+                const osNumeroInt = parseInt(os.numero);
+                const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
+                const arteComEvento = artesDaOS.find(a => a.nome_evento);
+                if (arteComEvento) {
+                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${arteComEvento.nome_evento}</span>`;
+                }
+
                 return `
                     <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="abrirImposicaoDoPedido('${os.id}', '${os.numero}')" style="cursor: pointer;">
                         <td>
                             <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">#${os.numero}</span>
                         </td>
 
-                        <td><strong>${os.cliente || '--'}</strong></td>
-                        <td style="max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${os.evento || os.observacoes || ''}">
-                            ${os.evento || os.observacoes || '--'}
+                        <td>
+                            <strong>${os.cliente || '--'}</strong>
+                            ${nomeEventoHtml}
                         </td>
                         <td>${progressBarHtml}</td>
                         <td style="text-align: center; vertical-align: middle;">${previewHtml}</td>
