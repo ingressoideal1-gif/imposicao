@@ -1805,3 +1805,6 @@ body.not-logged-in .app-shell {
     .prod-side-metrics > div { flex: 1 1 calc(50% - 0.5rem); min-width: 150px; }
     .prod-metrics-title { width: 100%; }
 }
+
+.hover-row:hover { background-color: rgba(255,255,255,0.05) !important; }
+

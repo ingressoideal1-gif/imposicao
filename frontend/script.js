@@ -13654,27 +13654,26 @@ function renderImpOSQueue() {
 
     const pendentes = itens.filter(i => i.impressao !== 'IMPRESSO' && (i.aprovacao === 'APROVADA' || i.aprovacao === 'PRONTA'));
     if (pendingBadge) pendingBadge.textContent = `${pendentes.length} pendente${pendentes.length !== 1 ? 's' : ''}`;
-    tbody.innerHTML = itens.map(item => {
+    tbody.innerHTML = itens.map((item, idx) => {
         const isActive = activeItem.itemId === item.id;
-        const isPending = item.impressao !== 'IMPRESSO';
-        const isApproved = item.aprovacao === 'APROVADA' || item.aprovacao === 'PRONTA';
         const rowBg = isActive ? 'background: rgba(59,130,246,0.12);' : '';
+        const indexModelo = idx + 1;
+        const versoIcon = item.verso ? '<span style="color: var(--green);">Sim</span>' : '<span style="color: var(--text-dim);">Não</span>';
+        
         return `
-            <tr style="${rowBg}">
-                <td style="padding: 5px 8px;">
-                    ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                    <strong>${item.produto || '--'}</strong>
-                </td>
-                <td style="padding: 5px 8px;"><span class="badge">${item.formato || '--'}</span></td>
-                <td style="padding: 5px 8px; text-align: center;">${item.quantidade || 0}</td>
-                <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
+            <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" onclick="enviarParaImposicao('${item.id}', '${osId}')" class="hover-row">
                 <td style="padding: 5px 8px; text-align: center;">
-                    ${isActive
-                        ? '<span style="font-size: 0.72rem; color: var(--blue); font-weight: 600;">ATIVO</span>'
-                        : (isApproved && isPending
-                            ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); enviarParaImposicao(\'' + item.id + '\', \'' + osId + '\')" style="padding: 2px 8px; font-size: 0.72rem;">▶ Carregar</button>'
-                            : '<span style="font-size: 0.72rem; color: var(--text-dim);">--</span>')}
+                    ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
+                    <strong>${indexModelo}</strong>
                 </td>
+                <td style="padding: 5px 8px; color: var(--text-dim); font-size: 0.72rem;">${item.id || '--'}</td>
+                <td style="padding: 5px 8px;"><strong>${item.produto || '--'}</strong></td>
+                <td style="padding: 5px 8px;">${item.cor || '--'}</td>
+                <td style="padding: 5px 8px;">${item.numeracao || '--'}</td>
+                <td style="padding: 5px 8px;">${item.num_inicial || '--'}</td>
+                <td style="padding: 5px 8px;">${item.num_final || '--'}</td>
+                <td style="padding: 5px 8px; text-align: center;">${versoIcon}</td>
+                <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
             </tr>
         `;
     }).join('');
