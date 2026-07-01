@@ -12278,7 +12278,7 @@ async function loadOSItens(osId) {
                         return {
                             ...item,
                             produto: item.nome_modelo || 'Modelo',
-                            modelo: item.ordem ? item.ordem.toString() : item.modelo,
+                            modelo: item.id ? item.id.toString() : '--',
                             cor: item.padrao || item.cor || 'STD',
                             numeracao: item.tipo_numeracao || item.numeracao,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
@@ -12306,7 +12306,7 @@ async function loadOSItens(osId) {
                         id_int: pp.id_int,
                         nome_modelo: pp.nome_produto || `Modelo ${idx + 1}`,
                         produto: pp.nome_produto || `Modelo ${idx + 1}`,
-                        modelo: (idx + 1).toString(),
+                        modelo: pp.id ? pp.id.toString() : '--',
                         cor: pp.padrao || 'STD',
                         numeracao: pp.tipo_numeracao || null,
                         num_inicial: pp.numeracao_inicio || null,
