@@ -1548,7 +1548,7 @@ async function decisionAmostraItem(itemId, osId, status) {
 }
 
 
-function fetchPdfBytes(content) {
+async function fetchPdfBytes(content) {
     if (!content) return null;
 
     // base64 direto (com ou sem prefixo data:)
@@ -1640,7 +1640,7 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
     });
 }
 
-function renderItemAmostraCombinada(idx, osId) {
+async function renderItemAmostraCombinada(idx, osId) {
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
     if (!container) return;
