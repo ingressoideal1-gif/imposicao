@@ -13168,7 +13168,9 @@ async function toggleOSDetail(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) return;
 
-    const isImpressao = os.status === 'EM IMPRESSÃO';
+    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' (vindo do Vibecode)
+    const siUpper = (os.status_interno || '').toUpperCase();
+    const isImpressao = siUpper === 'EM PRODUCAO' || siUpper === 'EM PRODUÇÃO' || os.status === 'EM IMPRESSÃO';
     const activeCard = document.getElementById(isImpressao ? 'os-detail-card-impressao' : 'os-detail-card-arte');
     const inactiveCard = document.getElementById(isImpressao ? 'os-detail-card-arte' : 'os-detail-card-impressao');
 
@@ -13210,7 +13212,9 @@ function renderOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) return;
 
-    const isImpressao = os.status === 'EM IMPRESSÃO';
+    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' (vindo do Vibecode)
+    const siUpperR = (os.status_interno || '').toUpperCase();
+    const isImpressao = siUpperR === 'EM PRODUCAO' || siUpperR === 'EM PRODUÇÃO' || os.status === 'EM IMPRESSÃO';
     const tbody = document.getElementById(isImpressao ? 'tbody-os-itens-impressao' : 'tbody-os-itens-arte');
     if (!tbody) return;
 
