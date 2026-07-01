@@ -13552,6 +13552,14 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
     }
 }
 
+// Função simples para normalizar strings para busca (ignora acentos, cedilha, maiúsculas)
+const globalNormStr = (s) => s ? String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+const globalFuzzyMatch = (a, b) => {
+    const na = globalNormStr(a), nb = globalNormStr(b);
+    if (!na || !nb) return false;
+    return na === nb || na.includes(nb) || nb.includes(na);
+};
+
 /**
  * Envia um item da OS para a tela de Imposição, preenchendo os campos automaticamente
  * com matching inteligente de formato, cor e numeração
@@ -13573,7 +13581,7 @@ async function enviarParaImposicao(itemId, osId) {
     
     // Tentar match do formato via Cor
     if (!formatoId && item.cor) {
-        const corMatched = state.cores ? state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || fuzzyMatch(c.name, item.cor)) : null;
+        const corMatched = state.cores ? state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || globalFuzzyMatch(c.name, item.cor)) : null;
         if (corMatched && corMatched.formato_id) {
             formatoId = corMatched.formato_id;
             console.log(`[OS→Imp] Formato matched via Cor "${item.cor}" → ${formatoId}`);
@@ -13908,13 +13916,7 @@ function renderAmostrasOSItens(osId) {
         else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
         else if (status === 'PRONTO') statusBadge = '<span class="badge badge-blue">🎨 PRONTO</span>';
 
-        // Função simples para normalizar strings para busca (ignora acentos, cedilha, maiúsculas)
-        const normStr = (s) => s ? String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-        const fuzzyMatch = (a, b) => {
-            const na = normStr(a), nb = normStr(b);
-            if (!na || !nb) return false;
-            return na === nb || na.includes(nb) || nb.includes(na);
-        };
+        // Usa a globalFuzzyMatch (declarada acima) para os matches flexíveis
 
         // Determinar o formato ID do item da OS
         const itemFormatoId = item.formato_id || (item.formato ? matchFormato(item.formato) : null);
@@ -13927,7 +13929,7 @@ function renderAmostrasOSItens(osId) {
         // Tentar descobrir a cor selecionada (pelo banco, ou pelo padrao escrito)
         let resolvedCorId = item.amostra_cor_id;
         if (!resolvedCorId && item.padrao) {
-            const matchedCor = filteredCores.find(c => fuzzyMatch(c.name, item.padrao));
+            const matchedCor = filteredCores.find(c => globalFuzzyMatch(c.name, item.padrao));
             if (matchedCor) resolvedCorId = matchedCor.id;
         }
 
@@ -13942,7 +13944,7 @@ function renderAmostrasOSItens(osId) {
         // Tentar descobrir a numeracao selecionada
         let resolvedNumId = item.amostra_num_id;
         if (!resolvedNumId && item.gabarito_operacional) {
-            const matchedNum = (state.numeracoes || []).find(n => fuzzyMatch(n.name, item.gabarito_operacional));
+            const matchedNum = (state.numeracoes || []).find(n => globalFuzzyMatch(n.name, item.gabarito_operacional));
             if (matchedNum) resolvedNumId = matchedNum.id;
         }
 
