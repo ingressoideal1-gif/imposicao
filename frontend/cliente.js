@@ -1546,3 +1546,526 @@ async function decisionAmostraItem(itemId, osId, status) {
         toast('Erro ao registrar decisão: ' + err.message, 'error');
     }
 }
+
+
+function fetchPdfBytes(content) {
+    if (!content) return null;
+
+    // base64 direto (com ou sem prefixo data:)
+    if (!content.startsWith('http')) {
+        const b64 = content.includes('base64,') ? content.split('base64,')[1] : content;
+        const binStr = atob(b64);
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        return bytes.buffer;
+    }
+
+    // É uma URL -- tenta fetch direto primeiro (Supabase tem CORS público)
+    try {
+        const resp = await fetch(content);
+        if (resp.ok) return await resp.arrayBuffer();
+        throw new Error(`HTTP ${resp.status}`);
+    } catch (directErr) {
+        // Fallback: usa proxy se API_BASE_URL estiver disponível (backend local)
+        const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
+        if (baseUrl) {
+            const resp = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(content)}`);
+            if (resp.ok) return await resp.arrayBuffer();
+            throw new Error(`Proxy falhou: HTTP ${resp.status}`);
+        }
+        throw new Error(`Não foi possível buscar o PDF: ${directErr.message}`);
+    }
+}
+
+function getFontCSS(font_name) {
+    if (!font_name || font_name === 'helv') return 'Arial, Helvetica, sans-serif';
+    if (font_name === 'helv-bold') return 'bold Arial, Helvetica, sans-serif';
+    if (font_name === 'times') return '"Times New Roman", Times, serif';
+    if (font_name === 'times-bold') return 'bold "Times New Roman", Times, serif';
+    if (font_name === 'cour') return '"Courier New", Courier, monospace';
+    if (font_name === 'cour-bold') return 'bold "Courier New", Courier, monospace';
+    // Fonte do sistema: "system:Arial Bold" → bold "Arial Bold"
+    if (font_name.startsWith('system:')) {
+        const parts = font_name.slice(7).split('|'); // "NomeFamilia|bold|italic"
+        const family = parts[0];
+        const bold = parts.includes('bold') ? 'bold ' : '';
+        const italic = parts.includes('italic') ? 'italic ' : '';
+        return `${italic}${bold}"${family}", sans-serif`;
+    }
+    return `"${font_name}", sans-serif`;
+}
+
+
+
+function preloadAmostraItemPdfElements(numeracao, idx, osId) {
+    if (!numeracao || !numeracao.elements) return;
+
+    numeracao.elements.forEach(el => {
+        if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
+            el._pdfLoading = true;
+            (async () => {
+                try {
+                    let bytes;
+                    if (el.pdf_content.startsWith('http') || el.pdf_content.startsWith('/')) {
+                        bytes = await fetchPdfBytes(el.pdf_content);
+                    } else {
+                        const base64Data = el.pdf_content.includes('base64,') ? el.pdf_content.split('base64,')[1] : el.pdf_content;
+                        const binStr = atob(base64Data);
+                        bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    }
+
+                    if (!bytes) throw new Error('Falha ao obter os bytes do PDF do elemento');
+
+                    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+                    const page = await pdf.getPage(1);
+                    const vp = page.getViewport({ scale: 2.0 });
+
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = Math.round(vp.width);
+                    offCanvas.height = Math.round(vp.height);
+                    const octx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+                    await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
+
+                    el._pdfCanvas = offCanvas;
+                    delete el._pdfLoading;
+
+                    renderItemAmostraCombinada(idx, osId);
+                } catch (err) {
+                    console.error('[Amostra Item] Erro pré-carregando PDF do elemento:', err);
+                    delete el._pdfLoading;
+                }
+            })();
+        }
+    });
+}
+
+function renderItemAmostraCombinada(idx, osId) {
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const canvas = container.querySelector(`#amostra-item-canvas-${idx}`);
+    const empty = container.querySelector(`#amostra-item-empty-${idx}`);
+    const header = container.querySelector(`#amostra-item-header-${idx}`);
+    const corSelect = container.querySelector(`#amostra-item-cor-${idx}`);
+    const numSelect = container.querySelector(`#amostra-item-num-${idx}`);
+    const arteInput = container.querySelector(`#amostra-item-arte-${idx}`);
+    const arteNameSpan = container.querySelector(`#amostra-item-arte-name-${idx}`);
+    const removeBtn = container.querySelector(`#btn-remove-amostra-arte-${idx}`);
+
+    if (!canvas) return;
+
+    const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
+    const corId = corSelect ? corSelect.value : (item ? item.amostra_cor_id : '');
+    const numId = numSelect ? numSelect.value : (item ? item.amostra_num_id : '');
+    const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
+    const hasSavedArte = !!(item && item.arte_url);
+
+    // Mostrar nome do arquivo e botão remover
+    if (arteNameSpan) {
+        if (hasArte) arteNameSpan.textContent = arteInput.files[0].name;
+        else if (hasSavedArte) arteNameSpan.textContent = '(Arte Salva na Nuvem)';
+        else arteNameSpan.textContent = '';
+    }
+    if (removeBtn) removeBtn.style.display = (hasArte || hasSavedArte) ? '' : 'none';
+
+    // Se nada selecionado, esconder canvas
+    if (!corId && !numId && !hasArte && !hasSavedArte) {
+        canvas.style.display = 'none';
+        if (empty) empty.style.display = 'block';
+        if (header) header.style.display = 'none';
+        return;
+    }
+
+    // Obter cor e formato
+    const cor = corId ? state.cores.find(c => c.id === corId) : null;
+    const num = numId ? state.numeracoes.find(n => n.id === numId) : null;
+
+    if (num) {
+        preloadAmostraItemPdfElements(num, idx, osId);
+    }
+
+    // Determinar formato base
+    let fmt = null;
+    if (cor && cor.formato_id) {
+        fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
+    }
+    if (!fmt && num && num.formato_id) {
+        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
+    }
+    if (!fmt && state.formatos.length > 0) {
+        fmt = state.formatos[0];
+    }
+    if (!fmt) {
+        // Sem formato -- fallback básico
+        fmt = { width_mm: 180, height_mm: 50 };
+    }
+
+    // Escala de renderizacao: 150 DPI para alta nitidez em todas as visualizacoes
+    // O canvas e renderizado em alta resolucao e exibido via CSS (max-width: 100%)
+    const S = 150 / 25.4;
+
+    let targetW = fmt.width_mm;
+    let targetH = fmt.height_mm;
+    if (cor && cor.width_mm && cor.height_mm) {
+        targetW = cor.width_mm;
+        targetH = cor.height_mm;
+    }
+
+    const finalWidth = Math.round(targetW * S);
+    const finalHeight = Math.round(targetH * S);
+    if (finalWidth <= 0 || finalHeight <= 0) return;
+
+    canvas.width = finalWidth;
+    canvas.height = finalHeight;
+    canvas.style.display = 'block';
+    if (empty) empty.style.display = 'none';
+    if (header) header.style.display = 'block';
+
+    const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+    ctx.clearRect(0, 0, finalWidth, finalHeight);
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ====== CAMADA 1: COR (PDF via pdf.js) ======
+    let corRendered = false;
+    if (cor && cor.pdf_base64 && typeof pdfjsLib !== 'undefined') {
+        try {
+            const base64Data = cor.pdf_base64.includes('base64,') ? cor.pdf_base64.split('base64,')[1] : cor.pdf_base64;
+            const binStr = atob(base64Data);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+
+            const loadingTask = pdfjsLib.getDocument({ data: bytes });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+
+            const viewport = page.getViewport({ scale: 1.0 });
+            const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
+            const scaledViewport = page.getViewport({ scale: pdfScale * (S / 2.8346) });
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = scaledViewport.width;
+            offCanvas.height = scaledViewport.height;
+            const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+            await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+
+            // Centralizar como faz o card avulso
+            const dx = (finalWidth - offCanvas.width) / 2;
+            const dy = (finalHeight - offCanvas.height) / 2;
+            ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+            corRendered = true;
+        } catch (e) {
+            console.warn(`[Item ${idx}] Erro ao renderizar cor PDF:`, e);
+        }
+    }
+    if (!corRendered) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, finalWidth, finalHeight);
+    }
+
+    // ====== CAMADA 2: ARTE (imagem ou PDF do upload ou salva, com multiply) ======
+    if (hasArte || hasSavedArte) {
+        try {
+            let isPdf = false;
+            let file = null;
+            if (hasArte) {
+                file = arteInput.files[0];
+                isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+            } else {
+                isPdf = item.arte_url && (item.arte_url.toLowerCase().endsWith('.pdf') || item.arte_url.includes('data:application/pdf'));
+            }
+
+            if (isPdf && typeof pdfjsLib !== 'undefined') {
+                // Configurar o workerSrc do PDF.js
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                
+                let bytes;
+                if (hasArte) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    bytes = new Uint8Array(arrayBuffer);
+                } else {
+                    if (item.arte_url.startsWith('http') || item.arte_url.startsWith('/')) {
+                        const bufferData = await fetchPdfBytes(item.arte_url);
+                        bytes = new Uint8Array(bufferData);
+                    } else {
+                        const base64Data = item.arte_url.includes('base64,') ? item.arte_url.split('base64,')[1] : item.arte_url;
+                        const binStr = atob(base64Data);
+                        bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    }
+                }
+
+                const loadingTask = pdfjsLib.getDocument({ data: bytes });
+                const pdf = await loadingTask.promise;
+                const page = await pdf.getPage(1);
+
+                const vp = page.getViewport({ scale: 1.0 });
+                const artRatio = vp.width / vp.height;
+                const canvasRatio = finalWidth / finalHeight;
+                
+                let pdfScale;
+                if (artRatio > canvasRatio) {
+                    pdfScale = finalWidth / vp.width;
+                } else {
+                    pdfScale = finalHeight / vp.height;
+                }
+
+                const scaledViewport = page.getViewport({ scale: pdfScale });
+
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = Math.round(scaledViewport.width);
+                offCanvas.height = Math.round(scaledViewport.height);
+                const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+                await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+
+                const dx = (finalWidth - offCanvas.width) / 2;
+                const dy = (finalHeight - offCanvas.height) / 2;
+
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+                ctx.globalCompositeOperation = 'source-over';
+            } else {
+                // Tratar como imagem normal (PNG, JPG)
+                let url;
+                if (hasArte) {
+                    url = URL.createObjectURL(file);
+                } else {
+                    url = item.arte_url;
+                }
+                const arteImg = new Image();
+                arteImg.crossOrigin = "Anonymous";
+                await new Promise((resolve, reject) => {
+                    arteImg.onload = resolve;
+                    arteImg.onerror = reject;
+                    arteImg.src = url;
+                });
+                if (arteImg.width > 0 && arteImg.height > 0) {
+                    const tempArte = document.createElement('canvas');
+                    tempArte.width = finalWidth;
+                    tempArte.height = finalHeight;
+                    const tempCtx = tempArte.getContext('2d', { colorSpace: 'srgb' });
+
+                    const artRatio = arteImg.width / arteImg.height;
+                    const canvasRatio = finalWidth / finalHeight;
+                    let dw, dh, ddx, ddy;
+                    if (artRatio > canvasRatio) {
+                        dw = finalWidth;
+                        dh = finalWidth / artRatio;
+                        ddx = 0;
+                        ddy = (finalHeight - dh) / 2;
+                    } else {
+                        dh = finalHeight;
+                        dw = finalHeight * artRatio;
+                        ddx = (finalWidth - dw) / 2;
+                        ddy = 0;
+                    }
+                    tempCtx.drawImage(arteImg, ddx, ddy, dw, dh);
+
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.drawImage(tempArte, 0, 0);
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                if (hasArte) {
+                    URL.revokeObjectURL(url);
+                }
+            }
+        } catch (e) {
+            console.warn(`[Item ${idx}] Erro ao renderizar arte:`, e);
+            if (typeof toast === 'function') toast('Falha visualizando arte: ' + (e.message || 'formato?'), 'error');
+        }
+    }
+
+    // ====== CAMADA 3: NUMERAÇÃO (desenhar elements como o card avulso) ======
+    if (num && num.elements && num.elements.length > 0) {
+        const numCanvas = document.createElement('canvas');
+        numCanvas.width = Math.round(fmt.width_mm * S);
+        numCanvas.height = Math.round(fmt.height_mm * S);
+        const numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
+
+        // Fundo transparente -- contorno do formato
+        numCtx.strokeStyle = '#64748b';
+        numCtx.lineWidth = 1;
+        numCtx.strokeRect(0, 0, numCanvas.width, numCanvas.height);
+
+        // Desenhar cada elemento da numeração
+        num.elements.forEach(el => {
+            const x = el.x_mm * S;
+            const y = el.y_mm * S;
+            const color = el.color || '#000000';
+            const rot = (el.rotation || 0) * Math.PI / 180;
+
+            numCtx.save();
+            numCtx.translate(x, y);
+            numCtx.rotate(rot);
+
+            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+                const fs = (el.font_size || 12) * S / 2.8346;
+                numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+                numCtx.fillStyle = color;
+
+                let label = '';
+                if (el.type === 'FIXED') {
+                    label = el.fixed_value || 'TEXTO';
+                } else if (el.type === 'TEATRO_FILA') {
+                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    label = `${el.prefix || ''}${_fVal}`;
+                } else if (el.type === 'TEATRO_LUGAR') {
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    label = `${el.prefix || ''}${_lVal}`;
+                } else if (el.type === 'TEATRO_COMBO') {
+                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    const fila = `${el.prefix_fila || ''}${_fVal}`;
+                    const lugar = `${el.prefix_lugar || ''}${_lVal}`;
+                    label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+                } else {
+                    const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
+                    label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
+                }
+                numCtx.textAlign = 'center';
+                numCtx.textBaseline = 'middle';
+                if (label.includes('\n')) {
+                    const lines = label.split('\n');
+                    const lineHeight = fs * 1.2;  // igual ao engine.py e drawElement
+                    const totalH = lines.length * lineHeight;
+                    const blockTop = -totalH / 2;
+                    lines.forEach((line, i) => {
+                        const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
+                        numCtx.fillText(line, 0, lineCenter);
+                    });
+                } else {
+                    numCtx.fillText(label, 0, 0);
+                }
+                numCtx.textAlign = 'left';
+                numCtx.textBaseline = 'alphabetic';
+            } else if (el.type === 'QR') {
+                const sz = (el.size_mm || 15) * S;
+                const hsz = sz / 2;
+                numCtx.fillStyle = color;
+                numCtx.fillRect(-hsz, -hsz, sz, sz);
+                numCtx.fillStyle = '#ffffff';
+                const cell = sz / 7;
+                for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
+                    numCtx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
+                    numCtx.fillStyle = color;
+                    numCtx.fillRect(-hsz + cx * cell + cell, -hsz + cy * cell + cell, cell, cell);
+                    numCtx.fillStyle = '#ffffff';
+                }
+            } else if (el.type === 'BARCODE') {
+                const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
+                const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
+                const hbw = bw / 2, hbh = bh / 2;
+                numCtx.fillStyle = color;
+                const barW = bw / 40;
+                const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
+                for (let i = 0; i < pattern.length; i++) {
+                    if (pattern[i]) numCtx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
+                }
+            } else if (el.type === 'PICOTE') {
+                numCtx.strokeStyle = color;
+                numCtx.lineWidth = 2.0;
+                numCtx.setLineDash([6, 3]);
+                numCtx.beginPath();
+                numCtx.moveTo(0, -y);
+                numCtx.lineTo(0, numCanvas.height - y);
+                numCtx.stroke();
+                numCtx.setLineDash([]);
+            } else if (el.type === 'SVG' || el.type === 'PDF') {
+                const w = (el.width_mm || 20) * S;
+                const h = (el.height_mm || 20) * S;
+                const hw = w / 2, hh_el = h / 2;
+
+                numCtx.save();
+                numCtx.beginPath();
+                numCtx.rect(-hw, -hh_el, w, h);
+                numCtx.clip();
+
+                if (el.type === 'PDF') {
+                    const imgObj = el._pdfCanvas || null;
+                    if (imgObj) {
+                        numCtx.drawImage(imgObj, -hw, -hh_el, w, h);
+                    } else {
+                        numCtx.strokeStyle = color;
+                        numCtx.lineWidth = 1;
+                        numCtx.strokeRect(-hw, -hh_el, w, h);
+                        numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                        numCtx.fillStyle = color;
+                        numCtx.textAlign = 'center';
+                        numCtx.textBaseline = 'middle';
+                        numCtx.fillText('PDF', 0, 0);
+                        numCtx.textAlign = 'left';
+                        numCtx.textBaseline = 'alphabetic';
+                    }
+                } else {
+                    // SVG
+                    if (el.svg_content) {
+                        if (!el._svgImage && !el._svgLoading) {
+                            el._svgLoading = true;
+                            const img = new Image();
+                            img.onload = () => {
+                                el._svgImage = img;
+                                delete el._svgLoading;
+                                renderItemAmostraCombinada(idx, osId);
+                            };
+                            img.onerror = () => {
+                                console.error('[Amostra Item] Erro ao carregar SVG do elemento');
+                                delete el._svgLoading;
+                            };
+                            if (el.svg_content.startsWith('http') || el.svg_content.startsWith('data:')) {
+                                img.src = el.svg_content;
+                            } else {
+                                img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(el.svg_content);
+                            }
+                        }
+                        if (el._svgImage) {
+                            numCtx.drawImage(el._svgImage, -hw, -hh_el, w, h);
+                        } else {
+                            numCtx.strokeStyle = color;
+                            numCtx.lineWidth = 1;
+                            numCtx.strokeRect(-hw, -hh_el, w, h);
+                            numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                            numCtx.fillStyle = color;
+                            numCtx.textAlign = 'center';
+                            numCtx.textBaseline = 'middle';
+                            numCtx.fillText('SVG', 0, 0);
+                            numCtx.textAlign = 'left';
+                            numCtx.textBaseline = 'alphabetic';
+                        }
+                    } else {
+                        numCtx.strokeStyle = color;
+                        numCtx.lineWidth = 1;
+                        numCtx.strokeRect(-hw, -hh_el, w, h);
+                        numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                        numCtx.fillStyle = color;
+                        numCtx.textAlign = 'center';
+                        numCtx.textBaseline = 'middle';
+                        numCtx.fillText('SVG', 0, 0);
+                        numCtx.textAlign = 'left';
+                        numCtx.textBaseline = 'alphabetic';
+                    }
+                }
+                numCtx.restore();
+            }
+            numCtx.restore();
+        });
+
+        // Compor numeração sobre o canvas final (centralizado)
+        const ndx = (finalWidth - numCanvas.width) / 2;
+        const ndy = (finalHeight - numCanvas.height) / 2;
+        ctx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+    }
+
+    // Borda decorativa
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, finalWidth, finalHeight);
+
+    // Snapshot para o link do cliente se não for a própria visão do cliente
+    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+        if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
+        item._snapshotTimer = setTimeout(() => {
+            snapshotAmostraAndUpload(idx, osId, item, canvas);
+        }, 2000);
+    }
+}
