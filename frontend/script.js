@@ -13692,7 +13692,11 @@ async function enviarParaImposicao(itemId, osId) {
         const arteSource = arteUrl || arteViaCor;
         
         if (arteSource) {
-            const filename = item.nome_arquivo_arte || (corObj ? `${corObj.name}.pdf` : `Arte_${item.modelo || 'Modelo'}.pdf`);
+            // Extrair o nome do arquivo da URL para preservar a extensão correta (.jpg, .pdf, etc.)
+            const filenameFromUrl = arteSource.startsWith('http')
+                ? decodeURIComponent(arteSource.split('/').pop().split('?')[0])
+                : null;
+            const filename = filenameFromUrl || item.nome_arquivo_arte || (corObj ? `${corObj.name}.pdf` : `Arte_${item.modelo || 'Modelo'}.pdf`);
             
             const loadArte = (src) => {
                 if (!src || !src.startsWith('http')) {
