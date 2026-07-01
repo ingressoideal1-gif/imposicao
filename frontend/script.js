@@ -15712,6 +15712,7 @@ window.loadOrdensFromVibecode = loadOrdensFromVibecode;
 window.mapVibecodeProdutoToOSItem = mapVibecodeProdutoToOSItem;
 window.renderOrdens = renderOrdens;
 window.toggleOSDetail = toggleOSDetail;
+window.abrirImposicaoDoPedido = abrirImposicaoDoPedido;
 window.changeOSStatus = changeOSStatus;
 window.updateItemImpressao = updateItemImpressao;
 window.enviarParaImposicao = enviarParaImposicao;
