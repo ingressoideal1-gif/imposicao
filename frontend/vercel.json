@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/cliente/:match*",
-      "destination": "/index.html"
+      "destination": "/cliente.html"
     }
   ]
 }
