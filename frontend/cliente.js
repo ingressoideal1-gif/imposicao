@@ -1438,3 +1438,111 @@ function atualizarBarraFinalCliente(osId) {
     containerActions.innerHTML = html;
 }
 
+
+async function decisionAmostraItem(itemId, osId, status) {
+    const obsEl = document.getElementById(`amostra-obs-${itemId}`);
+    const obs = obsEl ? obsEl.value : '';
+
+    if (status === 'REPROVADA' && (!obs || obs.trim() === '')) {
+        toast('Anotar alteração no campo ANOTAÇÕES', 'warning');
+        if (obsEl) obsEl.focus();
+        return;
+    }
+    
+    try {
+        await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs });
+        
+        // Se for na página do cliente, vamos notificar no chat do pedido!
+        const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
+        if (isClientePage) {
+            const item = state.osItens[osId].find(i => i.id === itemId);
+            const prodNome = item ? item.produto : 'Produto';
+            
+            // Enviar mensagem no chat da proposta
+            try {
+                await supabaseClient.from('propostas_chat').insert({
+                    id_int: parseInt(clienteState.numero),
+                    tipo: 'PRODUCAO',
+                    setor: 'Cliente',
+                    visivel_externo: true,
+                    mensagem: status === 'APROVADA' 
+                        ? `✅ O cliente APROVOU a amostra do item: "${prodNome}".`
+                        : `❌ O cliente solicitou ALTERAÇÃO na amostra do item: "${prodNome}".\nObservações: ${obs || '(Sem observações)'}`,
+                    remetente_nome: 'Cliente (via link)',
+                });
+            } catch (chatErr) {
+                console.warn('Erro ao inserir mensagem no chat:', chatErr);
+            }
+            
+            // Se for reprovado e for o fluxo do cliente, podemos atualizar a tabela pedidos_artes também
+            if (status === 'REPROVADA') {
+                try {
+                    await supabaseClient
+                        .from('pedidos_artes')
+                        .update({ status: 'REPROVADA_CLIENTE', comentarios_revisao: obs })
+                        .eq('id_modelo', itemId)
+                        .order('versao', { ascending: false })
+                        .limit(1);
+                } catch (e) { /* silencioso */ }
+            }
+        }
+        
+        let msg = '';
+        let toastType = 'info';
+        if (status === 'APROVADA') {
+            msg = 'Item aprovado!';
+            toastType = 'success';
+        } else if (status === 'REPROVADA') {
+            msg = 'Item marcado para alteração!';
+            toastType = 'warning';
+        } else if (status === 'PRONTO') {
+            msg = 'Item marcado como Pronto!';
+            toastType = 'success';
+        } else {
+            msg = `Status atualizado para ${status}`;
+        }
+        toast(msg, toastType);
+        renderAmostrasOSItens(osId);
+
+        // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
+        // verificar se TODOS os modelos da OS estão PRONTO. Se sim → mudar status para 'Enviar Arte'
+        // automaticamente, sem precisar clicar em "Voltar para Atendimento".
+        const isInternal = (state.amostrasContainerId !== 'cliente-amostras-itens-container');
+        if (status === 'PRONTO' && isInternal) {
+            const todosItens = state.osItens[osId] || [];
+            const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO' || i.amostra_status === 'APROVADA');
+            if (todosProntos) {
+                const novoStatusOS = 'Enviar Arte';
+                const os = state.ordens.find(o => o.id === osId);
+                if (os && os.status !== novoStatusOS) {
+                    // Atualizar localStorage
+                    const ov = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+                    ov[osId] = novoStatusOS;
+                    localStorage.setItem('vibe_status_overrides', JSON.stringify(ov));
+                    // Atualizar memória
+                    os.status = novoStatusOS;
+                    // Atualizar banco
+                    try {
+                        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                            if (osId.startsWith('vibe_')) {
+                                await supabaseClient.from('pedidos_links_cliente')
+                                    .update({ status_arte: novoStatusOS })
+                                    .eq('os_id', osId);
+                            } else {
+                                await supabaseClient.from('producao_ordens_servico')
+                                    .update({ status: novoStatusOS })
+                                    .eq('id', osId);
+                            }
+                        }
+                    } catch (autoErr) {
+                        console.warn('[AUTO-STATUS] Erro ao atualizar status para Enviar Arte:', autoErr);
+                    }
+                    toast(`🎉 Todos os modelos prontos! Pedido #${os.numero} mudou para "Enviar Arte" automaticamente.`, 'success');
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Erro na decisão do item:', err);
+        toast('Erro ao registrar decisão: ' + err.message, 'error');
+    }
+}
