@@ -2110,7 +2110,7 @@ function renderPedOSQueue() {
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;' : 'border-bottom: 1px solid #334155;';
+            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;' : 'background: #1473e6; border-bottom: 1px solid rgba(255, 255, 255, 0.15);';
 
             let itemFmtId = boxFmtSel;
 
@@ -2209,6 +2209,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
