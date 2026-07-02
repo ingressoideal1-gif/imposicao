@@ -1894,7 +1894,7 @@ async function enviarParaPedido(itemId, osId) {
     }, 800);
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
-    setTimeout(() => { renderImpOSQueue(); }, 600);
+    setTimeout(() => { renderPedOSQueue(); }, 600);
     
     // --- CARREGAR ARTE (PDF/IMAGEM) ---
     setTimeout(() => {
@@ -2741,7 +2741,7 @@ window.runPedImposition = async function (mode) {
                 
                 if (state.activeOSItem && state.activeOSItem.itemId) {
                     await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+                    if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
                 }
                 return;
             }
@@ -2768,7 +2768,7 @@ window.runPedImposition = async function (mode) {
                 // Auto-atualizar status de impressão do item ativo da OS
                 if (state.activeOSItem && state.activeOSItem.itemId) {
                     await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+                    if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
                 }
 
                 return;
@@ -2822,7 +2822,7 @@ window.runPedImposition = async function (mode) {
         // Auto-atualizar status de impressao do item ativo da OS
         if (state.activeOSItem && state.activeOSItem.itemId) {
             await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-            if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+            if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
         }
 
     } catch (err) {
