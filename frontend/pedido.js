@@ -1984,10 +1984,10 @@ window.enviarParaPedido = enviarParaPedido;
 
 function renderPedOSQueue() {
     const container = document.getElementById('ped-os-queue');
-    const tbody = document.getElementById('tbody-ped-os-queue');
+    const wrapper = document.getElementById('ped-os-queue-body');
     const pendingBadge = document.getElementById('ped-os-queue-pending');
     const numeroBadge = document.getElementById('ped-os-queue-numero');
-    if (!container || !tbody) return;
+    if (!container || !wrapper) return;
 
     const activeItem = state.activeOSItem;
     if (!activeItem || !activeItem.osId) {
@@ -2009,149 +2009,203 @@ function renderPedOSQueue() {
     const pendentes = itens.filter(i => i.impressao !== 'IMPRESSO');
     if (pendingBadge) pendingBadge.textContent = `${pendentes.length} pendente${pendentes.length !== 1 ? 's' : ''}`;
 
-    // Garantir cabeçalho correto (via JS para evitar problema de cache do HTML)
-    const table = tbody.closest('table');
-    if (table) {
-        let thead = table.querySelector('thead');
-        if (!thead) { thead = document.createElement('thead'); table.insertBefore(thead, tbody); }
-        thead.innerHTML = `<tr>
-            <th style="padding:4px 6px; width:32px; text-align:center;">M</th>
-            <th style="padding:4px 6px; width:70px;">Modelo</th>
-            <th style="padding:4px 6px;">Nome</th>
-            <th style="padding:4px 6px; min-width:110px;">Formato</th>
-            <th style="padding:4px 6px; min-width:90px;">Saída</th>
-            <th style="padding:4px 6px; width:50px;">QTD</th>
-            <th style="padding:4px 6px; min-width:110px;">COR</th>
-            <th style="padding:4px 6px; min-width:110px;">Numeração</th>
-            <th style="padding:4px 6px; width:50px;">NI</th>
-            <th style="padding:4px 6px; width:50px;">NF</th>
-            <th style="padding:4px 6px; width:44px; text-align:center;">Vrs</th>
-            <th style="padding:4px 6px;">Sts</th>
-        </tr>`;
-    }
+    // Group items by _vibe_id_produto
+    const groups = {};
+    itens.forEach(item => {
+        const prodId = item._vibe_id_produto || 'sem_produto';
+        if (!groups[prodId]) groups[prodId] = [];
+        groups[prodId].push(item);
+    });
 
-
-    // Todas as cores e numerações (filtro por formato feito por item abaixo)
     const todasCores = state.cores || [];
     const todasNums = state.numeracoes || [];
-
     const inputStyle = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:2px 5px; font-size:0.75rem; width:100%;';
     const selectStyle = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:2px 5px; font-size:0.75rem; width:100%; cursor:pointer;';
+    const selectStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:2px 5px; font-size:0.75rem; width:100%; cursor:not-allowed;';
     const btnStyle = 'border:none; border-radius:4px; padding:3px 8px; font-size:0.72rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
 
-    tbody.innerHTML = itens.map((item, idx) => {
-        const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-        const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 2px solid var(--blue);' : '';
-        const indexModelo = idx + 1;
+    let html = '';
 
-        // Filtrar cores e numerações pelo formato_id do próprio item
-        const itemFmtId = item.formato_id ? String(item.formato_id) : null;
-        const coresItem = todasCores.filter(c => !itemFmtId || !c.formato_id || String(c.formato_id) === String(itemFmtId));
-        const numsItem  = todasNums.filter(n  => !itemFmtId || !n.formato_id  || String(n.formato_id)  === String(itemFmtId));
-
-        // Opções de Cor — prioridade: amostra_cor_id > fuzzy match no nome
-        const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
-        const corNomeAtual = item.cor || item.padrao || '';
-        const coresOptions = coresItem.map(c => {
-            let sel = '';
-            if (corIdAtual && String(c.id) === corIdAtual) {
-                sel = 'selected';
-            } else if (!corIdAtual && corNomeAtual && globalFuzzyMatch(c.name, corNomeAtual)) {
-                sel = 'selected';
+    for (const prodId of Object.keys(groups)) {
+        const groupItens = groups[prodId];
+        let nomeReal = 'Produto Desconhecido';
+        let setorPcp = '';
+        let formatoPadraoId = null;
+        
+        if (prodId !== 'sem_produto') {
+            const prodObj = (state.produtosGlobais || []).find(p => String(p.id_produto) === String(prodId));
+            if (prodObj) {
+                nomeReal = prodObj.nomeReal || `Produto #${prodId}`;
+                setorPcp = prodObj.setor_pcp || '';
+                if (prodObj.id_formato) {
+                    const fmtObj = (state.formatos || []).find(f => String(f.id_formato_num) === String(prodObj.id_formato));
+                    if (fmtObj) formatoPadraoId = fmtObj.id;
+                }
+            } else {
+                nomeReal = `Produto #${prodId}`;
             }
-            return `<option value="${c.id}" ${sel}>${c.name}</option>`;
-        }).join('');
+        }
 
-        // Numeração: usar gabarito_operacional como valor principal (texto livre)
-        const numValDisplay = item.gabarito_operacional || item.numeracao || '';
+        const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem;">${setorPcp}</span>` : '';
 
-        // Opções de Numeração — pré-selecionar pelo gabarito_operacional via fuzzy
-        const numsOptions = numsItem.map(n => {
-            const sel = globalFuzzyMatch(n.name || n.tipo || '', numValDisplay) ? 'selected' : '';
-            return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
-        }).join('');
-
-        const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
-        const nfVal = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
-        const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
-
-        const fmtSel = item.formato_id || '';
-        const saiSel = item.saida_id || '';
-        const formatosOptions = (state.formatos || []).map(f => {
-            const sel = String(f.id) === String(fmtSel) ? 'selected' : '';
-            return `<option value="${f.id}" ${sel}>${f.name}</option>`;
-        }).join('');
-        const saidasOptions = (state.saidas || []).map(s => {
-            const sel = String(s.id) === String(saiSel) ? 'selected' : '';
-            return `<option value="${s.id}" ${sel}>${s.name}</option>`;
-        }).join('');
-
-
-        return `
-            <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}">
-                <td style="padding: 5px 8px; text-align: center;">
-                    ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                    <strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')" title="Carregar este modelo">${indexModelo}</strong>
-                </td>
-                <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem; color:var(--text-dim);">${item.modelo || '--'}</td>
-                <td style="padding: 5px 8px;"><strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')">${item.produto || '--'}</strong></td>
-                
-                <td style="padding: 5px 4px;">
-                    <select style="${selectStyle}" onchange="impQueueUpdateFormato('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                        <option value="">— Formato —</option>
-                        ${formatosOptions}
-                    </select>
-                </td>
-                <td style="padding: 5px 4px;">
-                    <select style="${selectStyle}" onchange="impQueueUpdateSaida('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                        <option value="">— Saída —</option>
-                        ${saidasOptions}
-                    </select>
-                </td>
-                <td style="padding: 5px 4px;">
-                    <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
-
-                        onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
-                        onclick="event.stopPropagation()" />
-                </td>
-                <td style="padding: 5px 4px;">
-                    <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                        <option value="">— Cor —</option>
-                        ${coresOptions}
-                    </select>
-                </td>
-                <td style="padding: 5px 4px;">
-                    <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()" title="${numValDisplay}">
-                        <option value="">${numValDisplay || '— Numeração —'}</option>
-                        ${numsOptions}
-                    </select>
-                </td>
-                <td style="padding: 5px 4px;">
-                    <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
-                        onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
-                        onclick="event.stopPropagation()" />
-                </td>
-                <td style="padding: 5px 4px;">
-                    <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
-                        onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
-                        onclick="event.stopPropagation()" />
-                </td>
-                <td style="padding: 5px 8px; text-align: center;">${item.verso ? '✅' : '--'}</td>
-                <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
-                <td style="padding: 5px 4px; white-space:nowrap; display:flex; gap:4px; align-items:center;">
-                    <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
-                        onclick="event.stopPropagation(); impQueueGerarPDF('${item.id}', '${osId}')">
-                        📄 PDF
-                    </button>
-                    <button style="${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
-                        onclick="event.stopPropagation(); impQueueImprimir('${item.id}', '${osId}')">
-                        🖨️ Imprimir
-                    </button>
-                </td>
-            </tr>
+        html += `
+        <div class="card mb-3" style="background:#1e293b; border:1px solid #334155;" data-setor="${setorPcp}">
+            <div class="card-header" style="background:#0f172a; padding: 6px 12px; border-bottom:1px solid #334155;">
+                <h6 class="mb-0" style="color:#e2e8f0; font-size:0.9rem;">
+                    <i class="fas fa-box-open me-1" style="color:var(--purple);"></i> ${nomeReal} ${setorBadge}
+                </h6>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:0.78rem; margin:0; width:100%;">
+                    <thead>
+                        <tr>
+                            <th style="padding:4px 6px; width:32px; text-align:center;">M</th>
+                            <th style="padding:4px 6px; width:80px;">Modelo</th>
+                            <th style="padding:4px 6px;">Nome</th>
+                            <th style="padding:4px 6px; min-width:90px;">Formato</th>
+                            <th style="padding:4px 6px; min-width:90px;">Saída</th>
+                            <th style="padding:4px 6px; width:60px;">QTD</th>
+                            <th style="padding:4px 6px; min-width:110px;">COR</th>
+                            <th style="padding:4px 6px; min-width:140px;">Numeração</th>
+                            <th style="padding:4px 6px; width:60px;">NI</th>
+                            <th style="padding:4px 6px; width:60px;">NF</th>
+                            <th style="padding:4px 6px; width:44px; text-align:center;">Verso</th>
+                            <th style="padding:4px 6px;">Sts</th>
+                            <th style="padding:4px 6px;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
         `;
-    }).join('');
 
+        html += groupItens.map((item, idx) => {
+            const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
+            const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 2px solid var(--blue);' : '';
+            const indexModelo = idx + 1;
+
+            let itemFmtId = formatoPadraoId || item.formato_id || '';
+            
+            if (formatoPadraoId && String(item.formato_id) !== String(formatoPadraoId)) {
+                setTimeout(() => autoSaveOSItemField(item.id, osId, 'formato_id', formatoPadraoId), 10);
+                item.formato_id = formatoPadraoId;
+                
+                const fObj = state.formatos.find(f => String(f.id) === String(formatoPadraoId));
+                if (fObj && fObj.default_saida_id && String(item.saida_id) !== String(fObj.default_saida_id)) {
+                    setTimeout(() => autoSaveOSItemField(item.id, osId, 'saida_id', fObj.default_saida_id), 10);
+                    item.saida_id = fObj.default_saida_id;
+                }
+            }
+
+            const coresItem = todasCores.filter(c => !itemFmtId || !c.formato_id || String(c.formato_id) === String(itemFmtId));
+            const numsItem  = todasNums.filter(n  => !itemFmtId || !n.formato_id  || String(n.formato_id)  === String(itemFmtId));
+
+            const fmtSel = item.formato_id || '';
+            const saiSel = item.saida_id || '';
+            
+            const dropdownFmtDisabled = formatoPadraoId ? 'disabled' : '';
+            const fmtStyle = formatoPadraoId ? selectStyleDisabled : selectStyle;
+            
+            const formatosOptions = (state.formatos || []).map(f => {
+                const sel = String(f.id) === String(fmtSel) ? 'selected' : '';
+                return `<option value="${f.id}" ${sel}>${f.name}</option>`;
+            }).join('');
+            
+            const saidasOptions = (state.saidas || []).map(s => {
+                const sel = String(s.id) === String(saiSel) ? 'selected' : '';
+                return `<option value="${s.id}" ${sel}>${s.name}</option>`;
+            }).join('');
+
+            const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
+            const corNomeAtual = item.cor || item.padrao || '';
+            const coresOptions = coresItem.map(c => {
+                let sel = '';
+                if (corIdAtual && String(c.id) === corIdAtual) sel = 'selected';
+                else if (!corIdAtual && corNomeAtual && globalFuzzyMatch(c.name, corNomeAtual)) sel = 'selected';
+                return `<option value="${c.id}" ${sel}>${c.name}</option>`;
+            }).join('');
+
+            const numValDisplay = item.gabarito_operacional || item.numeracao || '';
+            const numsOptions = numsItem.map(n => {
+                const sel = globalFuzzyMatch(n.name || n.tipo || '', numValDisplay) ? 'selected' : '';
+                return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
+            }).join('');
+
+            const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
+            const nfVal = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
+            const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
+
+            return `
+                <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}">
+                    <td style="padding: 5px 8px; text-align: center;">
+                        ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
+                        <strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')" title="Carregar este modelo">${indexModelo}</strong>
+                    </td>
+                    <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem; color:var(--text-dim);">${item.modelo || '--'}</td>
+                    <td style="padding: 5px 8px;"><strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')">${item.produto || '--'}</strong></td>
+                    
+                    <td style="padding: 5px 4px;">
+                        <select style="${fmtStyle}" ${dropdownFmtDisabled} onchange="impQueueUpdateFormato('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                            <option value="">— Formato —</option>
+                            ${formatosOptions}
+                        </select>
+                    </td>
+                    <td style="padding: 5px 4px;">
+                        <select style="${selectStyle}" onchange="impQueueUpdateSaida('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                            <option value="">— Saída —</option>
+                            ${saidasOptions}
+                        </select>
+                    </td>
+                    <td style="padding: 5px 4px;">
+                        <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
+                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
+                            onclick="event.stopPropagation()" />
+                    </td>
+                    <td style="padding: 5px 4px;">
+                        <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                            <option value="">— Cor —</option>
+                            ${coresOptions}
+                        </select>
+                    </td>
+                    <td style="padding: 5px 4px;">
+                        <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()" title="${numValDisplay}">
+                            <option value="">${numValDisplay || '— Numeração —'}</option>
+                            ${numsOptions}
+                        </select>
+                    </td>
+                    <td style="padding: 5px 4px;">
+                        <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
+                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
+                            onclick="event.stopPropagation()" />
+                    </td>
+                    <td style="padding: 5px 4px;">
+                        <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
+                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                            onclick="event.stopPropagation()" />
+                    </td>
+                    <td style="padding: 5px 8px; text-align: center;">${item.verso ? '✅' : '--'}</td>
+                    <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
+                    <td style="padding: 5px 4px; white-space:nowrap; display:flex; gap:4px; align-items:center;">
+                        <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
+                            onclick="event.stopPropagation(); impQueueGerarPDF('${item.id}', '${osId}')">
+                            📄 PDF
+                        </button>
+                        <button style="${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
+                            onclick="event.stopPropagation(); impQueueImprimir('${item.id}', '${osId}')">
+                            🖨️ Imprimir
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        `;
+    }
+
+    wrapper.innerHTML = html;
 }
 window.renderPedOSQueue = renderPedOSQueue;
 

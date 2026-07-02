@@ -748,18 +748,13 @@ async function loadAll() {
 
     try {
 
-        const [fmts, nums, sais, cores, modelos] = await Promise.all([
-
+        const [fmts, nums, sais, cores, modelos, vibeProdutos] = await Promise.all([
             api('GET', '/formatos'),
-
             api('GET', '/numeracoes'),
-
             api('GET', '/saidas'),
-
             api('GET', '/cores').catch(() => []),
-
             api('GET', '/modelos_imposicao').catch(() => []),
-
+            (typeof vibeClient !== 'undefined' && vibeClient ? vibeClient.from('produtos').select('*') : Promise.resolve({data:[]})).then(r => r.data).catch(() => [])
         ]);
 
         state.formatos = fmts;
@@ -771,6 +766,7 @@ async function loadAll() {
         state.cores = cores || [];
 
         state.modelosImposicao = modelos || [];
+        state.produtosGlobais = vibeProdutos || [];
 
         renderAll();
 
@@ -12237,6 +12233,7 @@ async function loadOSItens(osId) {
                             os_id: osId,
                             _pedidoModeloId: item.id,
                             amostra_status: statusFrontend,
+                            _vibe_id_produto: prop ? prop.id_produto : null,
                             _dbLoaded: true
                         };
                     });
