@@ -1117,8 +1117,8 @@
                             </div>
 
                             <!-- Status da OS Ativa -->
-                            <div id="active-os-status" style="display: none; font-size: 0.82rem; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); margin: 0 0 16px 0; justify-content: space-between; align-items: center; gap: 10px;">
-                                <span>📋 OS Ativa: <strong id="active-os-name" style="color: var(--blue);">Nenhuma</strong></span>
+                            <div id="ped-active-os-status" style="display: none; font-size: 0.82rem; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); margin: 0 0 16px 0; justify-content: space-between; align-items: center; gap: 10px;">
+                                <span>📋 OS Ativa: <strong id="ped-active-os-name" style="color: var(--blue);">Nenhuma</strong></span>
                                 <button type="button" class="btn btn-ghost btn-sm btn-danger" onclick="clearPedActiveOS()" style="padding: 2px 8px; font-size: 0.75rem; margin: 0;">✕ Limpar OS</button>
                             </div>
 
@@ -1226,7 +1226,7 @@
                             </div>
 
                             <!-- Configuração Cut & Stack -->
-                            <div id="cut-stack-options" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--blue); border-radius: 8px; background: rgba(59,130,246,0.04);">
+                            <div id="ped-cut-stack-options" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--blue); border-radius: 8px; background: rgba(59,130,246,0.04);">
                                 <h4 style="margin:0 0 15px 0; font-size:1rem; color:var(--blue);">Opções de Cut & Stack</h4>
                                 <div class="form-grid form-grid-3">
                                     <div class="form-group">
@@ -1249,7 +1249,7 @@
                             </div>
 
                             <!-- Configuração Multi-Artes -->
-                            <div id="multi-artes-container" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">
+                            <div id="ped-multi-artes-container" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                                     <h4 style="margin:0; font-size:1.1rem; color:var(--text-color);">Configuração de Artes</h4>
                                     <button class="btn btn-outline" onclick="addMultiArte()" title="Adicionar Arte">
@@ -1257,7 +1257,7 @@
                                         Adicionar Arte
                                     </button>
                                 </div>
-                                <div id="multi-artes-list" style="display:flex; flex-direction:column; gap:10px;">
+                                <div id="ped-multi-artes-list" style="display:flex; flex-direction:column; gap:10px;">
                                     <!-- Itens adicionados dinamicamente -->
                                 </div>
                             </div>
@@ -1301,10 +1301,10 @@
                             </p>
 
                             <div style="margin-top:24px;display:flex;gap:8px;">
-                                <button class="btn btn-primary" id="btn-impose" onclick="runPedImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
+                                <button class="btn btn-primary" id="ped-btn-impose" onclick="runPedImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
                                     🚀 Gerar PDF
                                 </button>
-                                <button class="btn btn-primary" id="btn-impose-print" onclick="runPedImposition('print')" style="flex:1;background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; opacity:0.5;" disabled>
+                                <button class="btn btn-primary" id="ped-btn-impose-print" onclick="runPedImposition('print')" style="flex:1;background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; opacity:0.5;" disabled>
                                     🖨️ Imprimir
                                 </button>
                             </div>
@@ -1312,31 +1312,31 @@
                     </div>
 
                     <div class="imposicao-preview">
-                        <div class="card" id="imposicao-preview-card-origin">
+                        <div class="card" id="ped-imposicao-preview-card-origin">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                                 <span class="card-title">👁️ Pré-visualização da Folha</span>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <select id="preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePreviewPage()">
+                                    <select id="ped-preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePreviewPage()">
                                         <option value="miolo">Miolo</option>
                                         <option value="capa">Capa</option>
                                         <option value="contracapa">Contracapa</option>
                                     </select>
-                                    <input type="number" id="preview-page-input" class="form-control" style="width: 70px; padding: 2px 6px; height: 28px; text-align: center; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;" value="1" min="1" onchange="changePreviewPage()">
+                                    <input type="number" id="ped-preview-page-input" class="form-control" style="width: 70px; padding: 2px 6px; height: 28px; text-align: center; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;" value="1" min="1" onchange="changePreviewPage()">
                                     <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="prevPreviewPage()">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                                     </button>
                                     <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="nextPreviewPage()">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                                     </button>
-                                    <span class="badge badge-teal" id="preview-sheet-num">Sem Arte</span>
+                                    <span class="badge badge-teal" id="ped-preview-sheet-num">Sem Arte</span>
                                 </div>
                             </div>
-                             <div class="preview-canvas-container" style="flex-direction: column; gap: 12px;">
-                                 <canvas id="preview-canvas"></canvas>
-                                 <div class="preview-face-selector" id="preview-face-container" style="display: none; width: 100%; text-align: center;">
+                             <div class="ped-preview-canvas-container" style="flex-direction: column; gap: 12px;">
+                                 <canvas id="ped-preview-canvas"></canvas>
+                                 <div class="preview-face-selector" id="ped-preview-face-container" style="display: none; width: 100%; text-align: center;">
                                      <div style="display: inline-flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--border);">
-                                         <button class="btn btn-sm" id="btn-preview-front" style="background: var(--blue); color: white; border-radius: 0;" onclick="setPreviewFace('front')">Frente</button>
-                                         <button class="btn btn-sm" id="btn-preview-back" style="background: rgba(255,255,255,0.06); color: var(--text-dim); border-radius: 0;" onclick="setPreviewFace('back')">Verso</button>
+                                         <button class="btn btn-sm" id="ped-btn-preview-front" style="background: var(--blue); color: white; border-radius: 0;" onclick="setPreviewFace('front')">Frente</button>
+                                         <button class="btn btn-sm" id="ped-btn-preview-back" style="background: rgba(255,255,255,0.06); color: var(--text-dim); border-radius: 0;" onclick="setPreviewFace('back')">Verso</button>
                                      </div>
                                  </div>
                              </div>
@@ -1958,7 +1958,7 @@
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
     <script src="/script.js?v=212"></script>
-    <script src="/pedido.js?v=1"></script>
+    <script src="/pedido.js?v=2"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">
