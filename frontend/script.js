@@ -13992,7 +13992,7 @@ function renderImpOSQueue() {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
+                    <td style="padding: 12px 12px 12px 40px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
                         <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff;" title="Gerar PDF para este modelo"
                             onclick="event.stopPropagation(); impQueueGerarPDF('${jsItemId}', '${jsOsId}')">
                             📄 PDF
@@ -14025,6 +14025,7 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
