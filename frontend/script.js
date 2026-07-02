@@ -13536,6 +13536,7 @@ function matchNumeracao(numText, formatoId) {
  */
 async function autoSaveOSItemField(itemId, osId, field, value) {
     try {
+        if (String(osId).includes('vibe')) { console.log('[OS] Ignorando auto-save para item Vibecode:', itemId); return; }
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const { error } = await supabaseClient
                 .from('producao_os_itens')
@@ -16699,7 +16700,7 @@ window.setFiltroStatusArte = setFiltroStatusArte;
 
 // - ROUTER: Verificar rota do cliente no carregamento -
 document.addEventListener('DOMContentLoaded', () => {
-    checkClienteRoute();
+    // checkClienteRoute removed
 
     // Restaurar a aba salva no localStorage
     const savedView = localStorage.getItem('activeView');
