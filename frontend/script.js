@@ -13946,6 +13946,2021 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
+
+// -----------------------------------------------------------------------
+// Funções auxiliares da fila de itens interativa (imp-os-queue)
+// -----------------------------------------------------------------------
+
+/** Atualiza a cor do item na fila e dispara enviarParaImposicao com a nova cor */
+function impQueueUpdateCor(itemId, osId, corId) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const cor = (state.cores || []).find(c => String(c.id) === String(corId));
+    if (cor) {
+        item.cor = cor.name;
+        item.padrao = cor.name;
+        item.amostra_cor_id = cor.id;
+        // Se tiver formato_id na cor, aplicar ao select de formato
+        if (cor.formato_id) {
+            const fmtSelect = document.getElementById('imp-formato');
+            if (fmtSelect) {
+                fmtSelect.value = cor.formato_id;
+                fmtSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        autoSaveOSItemField(itemId, osId, 'amostra_cor_id', cor.id);
+    }
+    enviarParaImposicao(itemId, osId);
+}
+
+/** Atualiza a numeração do item na fila */
+function impQueueUpdateNum(itemId, osId, numId) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if (num) {
+        item.numeracao = num.name || num.tipo;
+        item.numeracao_id = num.id;
+        autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
+        // Aplicar ao select de numeração na Imposição
+        const numSelect = document.getElementById('imp-numeracao');
+        if (numSelect) {
+            numSelect.value = numId;
+            numSelect.dispatchEvent(new Event('change'));
+        }
+    }
+}
+
+/** Atualiza um campo genérico (NI, NF, QTD ou Numeração) do item */
+function impQueueUpdateField(itemId, osId, field, value) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    item[field] = value;
+
+    // Espelhar nos campos da Imposição se for o item ativo
+    if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
+        if (field === 'num_inicial') {
+            const el = document.getElementById('imp-start');
+            if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        } else if (field === 'num_final') {
+            const el = document.getElementById('imp-end');
+            if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        }
+        updateImpSummary();
+        if (typeof drawPreview === 'function') drawPreview();
+    }
+
+    // Mapear campo local → coluna no banco (pedidos_modelos)
+    const dbFieldMap = {
+        'num_inicial': 'numeracao_inicio',
+        'num_final':   'numeracao_fim',
+        'qtd':         'quantidade',
+        'numeracao':   'gabarito_operacional',
+    };
+    const dbField = dbFieldMap[field] || field;
+    const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')
+        ? (parseInt(value) || 0)
+        : value;
+    autoSaveOSItemField(itemId, osId, dbField, dbValue);
+}
+
+/** Gerar PDF para o item específico */
+async function impQueueGerarPDF(itemId, osId) {
+    // Carregar o item na imposição primeiro
+    await enviarParaImposicao(itemId, osId);
+    // Aguardar renderização e então acionar o botão de gerar PDF
+    setTimeout(() => {
+        const btnGerar = document.getElementById('btn-gerar-pdf') || document.querySelector('[onclick*="gerarPDF"]') || document.querySelector('[onclick*="generatePDF"]');
+        if (btnGerar) {
+            btnGerar.click();
+        } else if (typeof gerarPDF === 'function') {
+            gerarPDF();
+        } else if (typeof generatePDF === 'function') {
+            generatePDF();
+        } else {
+            toast('Use o botão "Gerar PDF" no painel de Imposição.', 'info');
+        }
+    }, 1200);
+}
+
+/** Imprimir o item específico */
+async function impQueueImprimir(itemId, osId) {
+    await enviarParaImposicao(itemId, osId);
+    setTimeout(() => {
+        const btnImprimir = document.getElementById('btn-imprimir') || document.querySelector('[onclick*="imprimir"]') || document.querySelector('[onclick*="print"]');
+        if (btnImprimir) {
+            btnImprimir.click();
+        } else if (typeof imprimirDireto === 'function') {
+            imprimirDireto();
+        } else {
+            window.print();
+        }
+    }, 1200);
+}
+
+/**
+ * Toggle (expandir/colapsar) o corpo da fila de itens OS
+ */
+function toggleImpOSQueue() {
+    const body = document.getElementById('imp-os-queue-body');
+    const arrow = document.getElementById('imp-os-queue-arrow');
+    if (!body) return;
+    if (body.style.display === 'none') {
+        body.style.display = '';
+        if (arrow) arrow.textContent = '▼';
+    } else {
+        body.style.display = 'none';
+        if (arrow) arrow.textContent = '▶';
+    }
+}
+
+// Função global de navegação entre views
+window.showView = function(viewId) {
+    // Salvar no localStorage para persistir após F5
+    localStorage.setItem('activeView', viewId);
+
+    // Trocar a view ativa
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+
+    // Ativar a view destino
+    const view = document.getElementById(viewId);
+    if (view) view.classList.add('active');
+    
+    // Se estiver voltando para a aba de Imposição, garante que o canvas volte para lá
+    if (viewId === 'view-imposicao') {
+        const origin = document.getElementById('imposicao-preview-card-origin');
+        const canvasContainer = document.querySelector('.preview-canvas-container');
+        if (origin && canvasContainer && !origin.contains(canvasContainer)) {
+            origin.appendChild(canvasContainer);
+        }
+    }
+
+    // Ativar o nav-btn correspondente
+    const navBtn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);
+    if (navBtn) navBtn.classList.add('active');
+
+    // Hooks: carregar dados ao abrir certas views
+    if (viewId === 'view-lista-impressao' || viewId === 'view-lista-arte') {
+        loadOrdens();
+    }
+    if (viewId === 'view-imposicao') {
+        renderImpOSQueue();
+    }
+};
+
+/**
+ * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
+ */
+async function navigateToAmostrasFromOS(osId) {
+    const os = state.ordens.find(o => o.id === osId);
+    if (!os) {
+        toast('Pedido não encontrado.', 'error');
+        return;
+    }
+
+    // Garantir que os itens estejam carregados com todos os dados (ignorar cache simples do Vibecode)
+    const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
+    if (needsFullLoad) {
+        await loadOSItens(osId);
+    }
+
+    // Garantir que cores e numerações estejam carregados (necessários para os selects)
+    if (!state.cores || state.cores.length === 0 || !state.numeracoes || state.numeracoes.length === 0) {
+        try {
+            await loadAll();
+        } catch (e) {
+            console.warn('Erro ao carregar dados de cadastro:', e);
+        }
+    }
+
+    // Salvar o ID do pedido ativo na tela de Amostras
+    state.amostrasOSAtivo = osId;
+
+    // Navegar para a view de Amostras (showView cuida de ativar nav + view)
+    window.showView('view-amostras');
+
+    // Renderizar os cards de itens
+    renderAmostrasOSItens(osId);
+}
+
+/**
+ * Renderiza os cards de itens do pedido na página de Amostras
+ * Cada item gera um card com: Produto, Setor, Quantidade, NI→NF, Verso, Cor, Numeração + Decisão
+ */
+function renderAmostrasOSItens(osId) {
+    const os = state.ordens.find(o => o.id === osId);
+    const osNum = os ? (os.numero || os.id_int || os.id) : osId;
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
+    const banner = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-banner' : 'cliente-os-banner');
+    const avulsa = document.getElementById('amostra-combinada-avulsa');
+
+    if (!os || !container) return;
+
+    const itens = state.osItens[osId] || [];
+
+    // Mostrar banner, esconder card avulso se for painel interno
+    if (banner) {
+        banner.style.display = 'flex';
+        const numEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-numero' : 'cliente-pedido-numero');
+        const cliEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-cliente' : 'cliente-pedido-cliente');
+        const countEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-itens-count' : 'cliente-os-itens-count');
+        if (numEl) numEl.textContent = `#${os.numero}`;
+        if (cliEl) cliEl.textContent = os.cliente || '';
+        if (countEl) countEl.textContent = `${itens.length} ${itens.length === 1 ? 'modelo' : 'modelos'}`;
+    }
+    if (containerId === 'amostras-itens-container' && avulsa) {
+        avulsa.style.display = 'none';
+    }
+
+    if (!itens.length) {
+        container.innerHTML = `
+            <div class="card" style="border: 1px dashed var(--border);">
+                <div style="padding: 40px; text-align: center; color: var(--text-dim);">
+                    <div style="font-size: 2.5rem; margin-bottom: 12px;">📦</div>
+                    <p>Nenhum modelo encontrado neste pedido.</p>
+                </div>
+            </div>`;
+        return;
+    }
+
+    const itemsHtml = itens.map((item, idx) => {
+        const status = item.amostra_status || 'PENDENTE';
+        const obs = item.amostra_obs || '';
+        
+        let statusBadge = '<span class="badge badge-amber">⏳ PENDENTE</span>';
+        if (status === 'APROVADA') statusBadge = '<span class="badge badge-green">✅ APROVADO</span>';
+        else if (status === 'REPROVADA') statusBadge = '<span class="badge badge-red">❌ ALTERAÇÃO</span>';
+        else if (status === 'PRONTO') statusBadge = '<span class="badge badge-blue">🎨 PRONTO</span>';
+
+        // Usa a globalFuzzyMatch (declarada acima) para os matches flexíveis
+
+        // Determinar o formato ID do item da OS
+        const itemFormatoId = item.formato_id || (item.formato ? matchFormato(item.formato) : null);
+
+        // Filtrar cores com base no formato do produto
+        const filteredCores = itemFormatoId
+            ? (state.cores || []).filter(c => String(c.formato_id) === String(itemFormatoId))
+            : (state.cores || []);
+
+        // Tentar descobrir a cor selecionada (pelo banco, ou pelo padrao escrito)
+        let resolvedCorId = item.amostra_cor_id;
+        if (!resolvedCorId && item.padrao) {
+            const matchedCor = filteredCores.find(c => globalFuzzyMatch(c.name, item.padrao));
+            if (matchedCor) resolvedCorId = matchedCor.id;
+        }
+
+        const corsOpts = filteredCores.map(c =>
+            `<option value="${c.id}" ${c.id === resolvedCorId ? 'selected' : ''}>${c.name}</option>`
+        ).join('');
+
+        // Determinar o formato ID da cor selecionada
+        const selectedCor = resolvedCorId ? (state.cores || []).find(c => c.id === resolvedCorId) : null;
+        const corFormatoId = selectedCor ? selectedCor.formato_id : null;
+
+        // Tentar descobrir a numeracao selecionada
+        let resolvedNumId = item.amostra_num_id;
+        if (!resolvedNumId && item.gabarito_operacional) {
+            const matchedNum = (state.numeracoes || []).find(n => globalFuzzyMatch(n.name, item.gabarito_operacional));
+            if (matchedNum) resolvedNumId = matchedNum.id;
+        }
+
+
+        // Filtrar numerações com base no formato da cor selecionada
+        const filteredNumeracoes = (state.numeracoes || []).filter(n => {
+            // Se for a numeração salva neste item, sempre exibe
+            if (String(n.id) === String(resolvedNumId)) return true;
+
+            // Se for customizada, só exibe se for vinculada a este item específico
+            if (n.is_custom && String(n.os_item_id) !== String(item.id)) return false;
+            
+            // Se tivermos cor selecionada com formato_id, filtra por ele
+            if (corFormatoId) {
+                const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
+                return ids.some(id => String(id) === String(corFormatoId));
+            }
+            return true; // Se não tiver cor selecionada, mostra todas as numerações
+        });
+
+        const numOpts = filteredNumeracoes.map(n =>
+            `<option value="${n.id}" ${String(n.id) === String(resolvedNumId) ? 'selected' : ''}>${n.name}</option>`
+        ).join('');
+        return `
+        <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
+            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span class="card-title">🧪 <strong>Modelo: ${item.nome_produto_real || item.produto || '--'}</strong></span>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
+                    <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} → NF: ${item.num_final || item.quantidade || 0}</span>
+                    <span class="badge" style="font-size: 0.72rem;">${item.verso ? '✅ Verso' : '-- S/ Verso'}</span>
+                    <span class="badge" style="font-size: 0.72rem;">🏭 ${item.setor || '--'}</span>
+                    ${statusBadge}
+                </div>
+            </div>
+            <div style="padding: 24px;">
+                <div class="amostra-mid-row" style="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'grid-template-columns: 1fr;' : ''}">
+                    <div class="amostra-decisao-panel">
+                        ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
+                        <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
+                        <div class="amostra-decisao-status-box">
+                            <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
+                            ${statusBadge}
+                        </div>
+                        `}
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
+                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
+                                onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
+                        </div>
+                        <div class="amostra-decisao-btns">
+                            ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
+                                ? `
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px #22c55e;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                                    ${status === 'APROVADA' ? '✅ APROVADO' : 'APROVAR'}
+                                </button>
+                                ` 
+                                : `
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'PRONTO' || status === 'APROVADA' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' ? 'disabled' : ''}>
+                                    ${status === 'APROVADA' ? '✅ APROVADO (CLIENTE)' : (status === 'PRONTO' ? '🎨 PRONTO' : 'MARCAR PRONTO')}
+                                </button>
+                                `
+                            }
+                            <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : 'ALTERAR'}
+                            </button>
+                        </div>
+                    </div>
+                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
+                    <div class="amostra-config-panel">
+                        <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+                            ⚙️ Configurações da Amostra
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 14px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
+                                <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
+                                    <option value="">-- Selecione uma Cor --</option>
+                                    ${corsOpts}
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
+                                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>`}
+                                </div>
+                                <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
+                                    <option value="">-- Selecione uma Numeração --</option>
+                                    ${numOpts}
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
+                                <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+                                    <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">
+                                        🖼️ Upload Arte
+                                    </label>
+                                    <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
+                                        onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}')">
+                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}')">✕ Remover</button>
+                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.amostra_arte_base64 ? '(Arte Salva)' : ''}</span>
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 0.95rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
+                                        <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
+                                        <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    `}
+                </div>
+                <div class="amostra-preview-container" style="margin-top: 20px;">
+                    <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 8px; display: ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'block' : 'none'}; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+                        ${item.nome_modelo || `Modelo ${idx + 1}`}
+                    </div>
+                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ?
+                        `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`
+                    :
+                        `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
+                         <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                             <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
+                             <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
+                             <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
+                         </div>`
+                    }
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    const isInternal = containerId === 'amostras-itens-container';
+    
+    let finalHtml = itemsHtml;
+    
+    if (isInternal) {
+        let uniqueProductsMap = new Map();
+        itens.forEach(item => {
+            let prodId = item.id_produto_proposta_origem || item.nome_produto_real || item.produto || item.id;
+            if (!uniqueProductsMap.has(prodId)) {
+                uniqueProductsMap.set(prodId, {
+                    id: prodId,
+                    nome: item.nome_produto_real || item.produto || 'Item',
+                    quantidade: parseInt(item.quantidade) || 0
+                });
+            } else {
+                let existing = uniqueProductsMap.get(prodId);
+                existing.quantidade += (parseInt(item.quantidade) || 0);
+            }
+        });
+        
+        let uniqueProducts = Array.from(uniqueProductsMap.values());
+
+        let obsAccordionHtml = uniqueProducts.map((prod) => {
+            return `
+                <div style="border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px;">
+                    <div style="padding: 10px; background: rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-dim);"><i class="fa-solid fa-cube" style="margin-right: 6px;"></i> Ref: ${prod.quantidade || 0} un. - ${prod.nome}</span>
+                    </div>
+                    <div style="padding: 8px;">
+                        <textarea id="briefing-obs-item-${prod.id}" oninput="saveBriefingField('${osNum}', null, this.value, true, '${prod.id}')" rows="3" style="width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-size: 0.85rem; resize: vertical; background: rgba(0,0,0,0.05); color: var(--text);" placeholder="Observações específicas para este produto..."></textarea>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        finalHtml = `
+            <div style="display: grid; grid-template-columns: 55fr 45fr; gap: 24px; align-items: start;">
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    ${itemsHtml}
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; padding-right: 8px;">
+                    <!-- Briefing Base -->
+                    <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
+                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px;">
+                            <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                Briefing Base do Evento
+                            </div>
+                            <div style="font-size: 0.95rem; color: var(--text-dim); margin-top: 4px;">
+                                Dados preenchidos pelo comercial para guiar a criação da arte.
+                            </div>
+                        </div>
+                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
+                                <input type="text" id="briefing-nome-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'nome_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="Nome do Evento">
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-calendar" style="margin-right: 4px;"></i> Data do Evento</label>
+                                    <input type="text" id="briefing-data-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'data_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="DD/MM/AAAA">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i> Local da Festa/Evento</label>
+                                    <input type="text" id="briefing-local-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'local_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="Local">
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 8px;">
+                                <div style="font-size: 0.8rem; font-weight: 700; color: var(--teal); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-list-check"></i> Observações por produto
+                                </div>
+                                ${obsAccordionHtml}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Designers Ideal -->
+                    <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
+                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px;">
+                            <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                Designers Ideal
+                            </div>
+                            <div style="font-size: 0.95rem; color: var(--text-dim); margin-top: 4px;">
+                                Equipe de design responsável pela criação de artes.
+                            </div>
+                        </div>
+                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+                            ${(() => {
+                                const designers = [
+                                    {uid: 'edison-uid', nome: 'Edison Jr', email: 'ingressoideal1@gmail.com', init: 'E'},
+                                    {uid: 'emily-uid', nome: 'Emily Boeira', email: 'emilyboeira51@gmail.com', init: 'E'},
+                                    {uid: 'vitoria-uid', nome: 'Vitória Colbeich', email: 'vitoria.dseg@gmail.com', init: 'V'}
+                                ];
+                                // Contar pedidos e modelos por designer
+                                const artes = state.todasArtes || [];
+                                const allOrdens = state.ordens || [];
+                                return designers.map(d => {
+                                    // Pedidos: quantos pedidos únicos têm este designer atribuído
+                                    const pedidosSet = new Set();
+                                    artes.forEach(a => {
+                                        if (a.designer_uid === d.uid || a.designer_nome === d.nome) {
+                                            pedidosSet.add(a.id_int);
+                                        }
+                                    });
+                                    const pedidosCount = pedidosSet.size;
+                                    // Modelos: soma de modelos de todos os pedidos designados
+                                    let modelosCount = 0;
+                                    pedidosSet.forEach(idInt => {
+                                        const os = allOrdens.find(o => String(o.numero) === String(idInt));
+                                        if (os && state.osItens[os.id]) {
+                                            modelosCount += state.osItens[os.id].length;
+                                        }
+                                    });
+                                    return `
+                                <div class="designer-card" data-uid="${d.uid}" onclick="selectDesigner('${osNum}', '${d.uid}', '${d.nome}')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.01);">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <div style="width: 36px; height: 36px; border-radius: 50%; background: #a7f3d0; color: #065f46; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">
+                                            ${d.init}
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; color: var(--text); font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
+                                                ${d.nome} <span class="designer-badge badge badge-teal" style="display: none; font-size: 0.6rem; padding: 2px 6px;">Selecionado</span>
+                                            </div>
+                                            <div style="font-size: 0.95rem; color: var(--text-dim);">${d.email}</div>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right; font-size: 0.7rem; color: var(--text-dim);">
+                                        Pedidos: <strong>${pedidosCount}</strong><br>
+                                        Modelos: <strong>${modelosCount}</strong>
+                                    </div>
+                                </div>
+                                    `;
+                                }).join('');
+                            })()}
+                        </div>
+                    </div>
+
+                    <!-- Ultimos Pedidos -->
+                    <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
+                        <div class="card-header" style="background: rgba(16, 185, 129, 0.1); border-bottom: 1px solid var(--border); padding: 12px 16px;">
+                            <span style="font-weight: 700; color: var(--teal); display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-clock-rotate-left"></i> Últimos Pedidos do Cliente
+                            </span>
+                        </div>
+                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;" id="ultimos-pedidos-container-${osId}">
+                            <div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;"><i class="fa-solid fa-spinner fa-spin"></i> Buscando histórico...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Media query hack for responsiveness inline if needed, but flex-wrap handles smaller screens if we used flex. 
+    // Com display grid, podemos precisar de css. Para o painel principal, vamos assumir que o CSS do painel é robusto.
+
+    container.innerHTML = finalHtml;
+    
+    if (isInternal) {
+        loadBriefingBase(osId, osNum);
+        loadUltimosPedidos(osId, os.cliente);
+    }
+
+    setTimeout(() => {
+        itens.forEach((item, idx) => {
+            const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
+            const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+            const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
+            
+            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || hasSelectValue) {
+                renderItemAmostraCombinada(idx, osId);
+            }
+        });
+        // Atualizar a barra final de ações do cliente dinamicamente
+        atualizarBarraFinalCliente(osId);
+    }, 50);
+}
+
+/**
+ * Atualiza a barra final dinamicamente no link do cliente
+ */
+function atualizarBarraFinalCliente(osId) {
+    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') return;
+
+    const containerActions = document.querySelector('.cliente-actions');
+    if (!containerActions) return;
+
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) return;
+
+    // Verificar se todos os modelos estão aprovados
+    const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
+
+    // Verificar se pelo menos um modelo está reprovado (alteração)
+    const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
+
+    let html = '';
+    if (todosAprovados) {
+        // Verde, ativo, Finalizar e Aprovar Pedido Completo
+        html = `
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer;">
+                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+            </button>
+        `;
+    } else if (algumReprovado) {
+        // Tons de laranja e vermelho, ativo, Solicitar Alteração de Arte
+        html = `
+            <button class="btn btn-lg" onclick="clienteFinalizarFluxo('SOLICITAR_ALTERACAO')" id="btn-cliente-aprovar-tudo" style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #ef4444; color: #ffffff; border: none; cursor: pointer;">
+                ⚠️ SOLICITAR ALTERAÇÃO DE ARTE
+            </button>
+        `;
+    } else {
+        // Inativo, cinza desabilitado, escrito Finalizar e Aprovar Pedido Completo
+        html = `
+            <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="width: 100%; font-weight: 700; height: 48px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 10px; background-color: #374151; color: #9ca3af; border: 1px solid #374151; cursor: not-allowed; opacity: 0.6;">
+                ✅ FINALIZAR E APROVAR PEDIDO COMPLETO
+            </button>
+        `;
+    }
+
+    containerActions.innerHTML = html;
+}
+
+/**
+ * Atualiza o status global do pedido ao clicar em "Voltar para Atendimento".
+ * - Se TODOS os modelos estiverem PRONTO → 'Enviar Arte' (mas normalmente isso
+ *   já foi feito automaticamente por decisionAmostraItem)
+ * - Se parcial ou nenhum → 'Pendente Informação'
+ * Não gera link automaticamente — link é gerado manualmente pelo botão na lista.
+ */
+async function voltarParaAtendimento() {
+    const osId = state.amostrasOSAtivo;
+    if (!osId) {
+        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
+        return;
+    }
+
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) {
+        toast('Nenhum modelo de item encontrado neste pedido.', 'warning');
+        return;
+    }
+
+    // Verificar se todos os itens possuem amostra_status === 'PRONTO' ou 'APROVADA'
+    const todasProntas = itens.every(item => item.amostra_status === 'PRONTO' || item.amostra_status === 'APROVADA');
+    const novoStatus = todasProntas ? 'Enviar Arte' : 'Pendente Informação';
+
+    try {
+        const os = state.ordens.find(o => o.id === osId);
+
+        // 1. Atualizar localStorage
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        // 2. Atualizar estado em memória
+        if (os) os.status = novoStatus;
+
+        // 3. Atualizar no banco Supabase
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (osId.startsWith('vibe_')) {
+                const { error } = await supabaseClient
+                    .from('pedidos_links_cliente')
+                    .update({ status_arte: novoStatus })
+                    .eq('os_id', osId);
+                if (error) console.warn('Erro ao atualizar status_arte em links:', error);
+            } else {
+                const { error } = await supabaseClient
+                    .from('producao_ordens_servico')
+                    .update({ status: novoStatus })
+                    .eq('id', osId);
+                if (error) console.warn('Erro ao atualizar status no Supabase:', error);
+            }
+
+            // A atualização do status_arte de pedidos_modelos já ocorre de forma individual e automática 
+            // através da função saveAmostraToDB quando o designer marca como "PRONTO" ou o cliente "APROVA".
+            // Portanto, não reescrevemos o status dos modelos aqui para evitar sobrescrever modelos Aprovados.
+        }
+
+        if (todasProntas) {
+            toast(`Pedido #${os ? os.numero : ''} marcado como "Enviar Arte". Use o botão de link na lista para compartilhar com o cliente.`, 'success');
+        } else {
+            toast(`Pedido #${os ? os.numero : ''} retornado com pendências — status: "Pendente Informação".`, 'warning');
+        }
+
+        clearAmostrasOS();
+        showView('view-lista-arte');
+    } catch (err) {
+        console.error('Erro ao voltar para atendimento:', err);
+        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
+    }
+}
+
+// Expor globalmente
+window.voltarParaAtendimento = voltarParaAtendimento;
+
+/**
+ * Retorna o pedido para o designer (status 'Em Arte').
+ * Usado quando o admin reprovador ou clica em "Voltar para Arte" após reprovação do cliente.
+ * NÃO é 'REPROVADO' — 'REPROVADO' é o status gravado pelo CLIENTE. 'Em Arte' é o status de trabalho do designer.
+ */
+async function voltarParaArte() {
+    const osId = state.amostrasOSAtivo;
+    if (!osId) {
+        toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
+        return;
+    }
+
+    const novoStatus = 'Em Arte';
+
+    try {
+        const os = state.ordens.find(o => o.id === osId);
+
+        // 1. Atualizar localStorage
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        // 2. Atualizar estado em memória
+        if (os) os.status = novoStatus;
+
+        // 3. Atualizar no banco Supabase
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (osId.startsWith('vibe_')) {
+                const { error } = await supabaseClient
+                    .from('pedidos_links_cliente')
+                    .update({ status_arte: novoStatus })
+                    .eq('os_id', osId);
+                if (error) throw error;
+            } else {
+                const { error } = await supabaseClient
+                    .from('producao_ordens_servico')
+                    .update({ status: novoStatus })
+                    .eq('id', osId);
+                if (error) throw error;
+            }
+        }
+
+        toast(`Pedido #${os ? os.numero : ''} retornado para "Em Arte" — o designer pode corrigir.`, 'info');
+        clearAmostrasOS();
+        showView('view-lista-arte');
+    } catch (err) {
+        console.error('Erro ao voltar para arte:', err);
+        toast('Erro ao atualizar status do pedido: ' + err.message, 'error');
+    }
+}
+
+// Expor globalmente
+window.voltarParaArte = voltarParaArte;
+
+/**
+ * Ao selecionar cor em um card dinâmico, filtrar numerações compatíveis
+ * (idêntico ao onAmostraCorSelect do card avulso)
+ */
+function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
+    const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
+    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+    if (!corSelect || !numSelect) return;
+
+    const corId = corSelect.value;
+    const cor = corId ? state.cores.find(c => c.id === corId) : null;
+
+    // Se no for carga inicial, salva no banco
+    if (!isInitialLoad) {
+        saveAmostraToDB(itemId, osId, { amostra_cor_id: corId || null });
+    }
+
+    // Filtrar numerações pelo formato da COR selecionada
+    const curNumVal = numSelect.value;
+    const item = state.osItens[osId].find(i => i.id === itemId);
+    const corFormatoId = cor ? cor.formato_id : null;
+
+    const filteredNums = (state.numeracoes || []).filter(n => {
+        // Sempre exibe a numeração atualmente selecionada (para não sumir do select)
+        if (curNumVal && n.id === curNumVal) return true;
+
+        // Se for customizada, só exibe se for vinculada a este item específico
+        if (n.is_custom && (!item || n.os_item_id !== item.id)) return false;
+        
+        // Se tivermos cor selecionada com formato_id, filtra por ele
+        if (corFormatoId) {
+            const ids = n.formato_ids || (n.formato_id ? [n.formato_id] : []);
+            return ids.some(id => String(id) === String(corFormatoId));
+        }
+        return false;
+    });
+
+    numSelect.innerHTML = '<option value="">-- Selecione uma Numeração --</option>' +
+        filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+
+    if (filteredNums.some(n => String(n.id) === String(curNumVal))) {
+        numSelect.value = curNumVal;
+    } else {
+        numSelect.value = '';
+    }
+
+    if (!isInitialLoad) {
+        renderItemAmostraCombinada(idx, osId);
+    }
+}
+
+function onItemNumSelect(idx, osId, itemId) {
+    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+    if (!numSelect) return;
+    
+    const numId = numSelect.value;
+    const numObj = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+    const numNome = numObj ? numObj.name : null;
+    
+    saveAmostraToDB(itemId, osId, { 
+        amostra_num_id: numId || null,
+        gabarito_operacional: numNome || null
+    });
+    renderItemAmostraCombinada(idx, osId);
+}
+
+async function onItemArteUpload(idx, osId, itemId) {
+    const input = document.getElementById(`amostra-item-arte-${idx}`);
+    const nameLabel = document.getElementById(`amostra-item-arte-name-${idx}`);
+    const removeBtn = document.getElementById(`btn-remove-amostra-arte-${idx}`);
+    
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        nameLabel.textContent = file.name;
+        removeBtn.style.display = 'inline-block';
+        
+        try {
+            toast('Enviando arte original para o servidor...', 'info');
+            const fileExt = file.name.split('.').pop();
+            const fileName = `arte_${osId}_${itemId}_${Date.now()}.${fileExt}`;
+            
+            const { data, error } = await supabaseClient
+                .storage
+                .from('artes')
+                .upload(fileName, file, { cacheControl: '3600', upsert: true });
+                
+            if (error) throw error;
+            
+            const { data: urlData } = supabaseClient
+                .storage
+                .from('artes')
+                .getPublicUrl(fileName);
+                
+            const publicUrl = urlData.publicUrl;
+
+            // Atualizar o state PRIMEIRO
+            const osItems = state.osItens[osId];
+            const item = osItems.find(i => String(i.id) === String(itemId));
+            if (item) item.arte_url = publicUrl;
+            
+            // Renderizar IMEDIATAMENTE a arte
+            renderItemAmostraCombinada(idx, osId);
+
+            // Salvar no banco
+            await saveAmostraToDB(itemId, osId, { arte_url: publicUrl });
+            toast('Arte enviada com sucesso!', 'success');
+        } catch(e) {
+            console.error('Upload falhou:', e);
+            toast('Falha ao enviar arte: ' + e.message, 'error');
+        }
+    }
+}
+
+function onItemArteRemove(idx, osId, itemId) {
+    const input = document.getElementById(`amostra-item-arte-${idx}`);
+    const nameLabel = document.getElementById(`amostra-item-arte-name-${idx}`);
+    const removeBtn = document.getElementById(`btn-remove-amostra-arte-${idx}`);
+    
+    input.value = '';
+    nameLabel.textContent = '';
+    removeBtn.style.display = 'none';
+    
+    const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
+    if (item) item.arte_url = null;
+    renderItemAmostraCombinada(idx, osId);
+
+    saveAmostraToDB(itemId, osId, { arte_url: null })
+        .then(() => toast('Arte removida do banco!', 'success'))
+        .catch(() => toast('Falha ao remover arte.', 'error'));
+}
+
+async function saveAmostraToDB(itemId, osId, dataToUpdate) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+
+    const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    if (!itemLocal) {
+        console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId, '| osId=', osId);
+        return;
+    }
+
+    const modeloId = itemLocal._pedidoModeloId || itemLocal.id;
+
+    if (!modeloId || modeloId === '') {
+        console.warn('[SAVE] modeloId esta vazio, ignorando update no banco');
+        return;
+    }
+
+    try {
+        const dbData = { ...dataToUpdate };
+        
+        // Mapear amostra_status para status_arte (coluna oficial do Supabase)
+        if (dbData.amostra_status) {
+            if (dbData.amostra_status === 'PRONTO') {
+                dbData.status_arte = 'AGUARDANDO_CLIENTE';
+            } else if (dbData.amostra_status === 'APROVADA') {
+                dbData.status_arte = 'APROVADA_CLIENTE';
+            } else if (dbData.amostra_status === 'REPROVADA') {
+                dbData.status_arte = 'REPROVADA_CLIENTE';
+            }
+        }
+
+        // Remove campos virtuais (frontend-only) que no existem na tabela pedidos_modelos
+        if ('amostra_obs' in dbData) {
+            dbData.observacao_arte = dbData.amostra_obs;
+            delete dbData.amostra_obs;
+        }
+        if ('amostra_status' in dbData) {
+            delete dbData.amostra_status;
+        }
+
+        // Se no sobrou nenhum campo para atualizar, evita fazer a requisicao que pode causar erro
+        if (Object.keys(dbData).length === 0) {
+            return;
+        }
+
+        // SE O ID FOR UM ITEM VIRTUAL (Vibecode Fallback), no salvar em pedidos_modelos!
+        // Itens virtuais so gerados pelo carregarVibeOrders e no tm _dbLoaded = true
+        if (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded) {
+            console.log('[SAVE] Ignorando pedidos_modelos para ID virtual:', modeloId);
+            Object.assign(itemLocal, dataToUpdate);
+            // Salvar tambm no localStorage para persistncia na sesso
+            const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
+            const cacheKey = itemLocal.id; // Ex: vibe_item_1224
+            if (!overrides[cacheKey]) overrides[cacheKey] = {};
+            Object.assign(overrides[cacheKey], dataToUpdate);
+            localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
+            return;
+        }
+
+        const { data: updateResult, error } = await vibeClient
+            .from('pedidos_modelos')
+            .update(dbData)
+            .eq('id', modeloId)
+            .select('id');
+        
+        if (error) {
+            console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code);
+            throw error;
+        }
+
+        const rowsUpdated = updateResult ? updateResult.length : 0;
+        if (rowsUpdated === 0) {
+            console.warn('[SAVE] 0 linhas atualizadas! id=', modeloId);
+        } else {
+            console.log('[SAVE] OK -> pedidos_modelos id=', modeloId);
+        }
+
+        Object.assign(itemLocal, dataToUpdate);
+    } catch (e) {
+        console.error('[SAVE] Erro:', e);
+        throw e;
+    }
+}
+
+/**
+ * Renderiza o canvas de preview combinada para um card de item individual.
+ * Usa exatamente a mesma lógica do card avulso:
+ * - Cor: renderiza PDF via pdf.js em offscreen canvas
+ * - Numeração: desenha elements (TEXT, FIXED, QR, BARCODE) em offscreen canvas
+ * - Arte: carrega imagem do upload
+ * - Compõe tudo no canvas final
+ */
+function preloadAmostraItemPdfElements(numeracao, idx, osId) {
+    if (!numeracao || !numeracao.elements) return;
+
+    numeracao.elements.forEach(el => {
+        if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
+            el._pdfLoading = true;
+            (async () => {
+                try {
+                    let bytes;
+                    if (el.pdf_content.startsWith('http') || el.pdf_content.startsWith('/')) {
+                        bytes = await fetchPdfBytes(el.pdf_content);
+                    } else {
+                        const base64Data = el.pdf_content.includes('base64,') ? el.pdf_content.split('base64,')[1] : el.pdf_content;
+                        const binStr = atob(base64Data);
+                        bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    }
+
+                    if (!bytes) throw new Error('Falha ao obter os bytes do PDF do elemento');
+
+                    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+                    const page = await pdf.getPage(1);
+                    const vp = page.getViewport({ scale: 2.0 });
+
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = Math.round(vp.width);
+                    offCanvas.height = Math.round(vp.height);
+                    const octx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+                    await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
+
+                    el._pdfCanvas = offCanvas;
+                    delete el._pdfLoading;
+
+                    renderItemAmostraCombinada(idx, osId);
+                } catch (err) {
+                    console.error('[Amostra Item] Erro pré-carregando PDF do elemento:', err);
+                    delete el._pdfLoading;
+                }
+            })();
+        }
+    });
+}
+
+async function renderItemAmostraCombinada(idx, osId) {
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const canvas = container.querySelector(`#amostra-item-canvas-${idx}`);
+    const empty = container.querySelector(`#amostra-item-empty-${idx}`);
+    const header = container.querySelector(`#amostra-item-header-${idx}`);
+    const corSelect = container.querySelector(`#amostra-item-cor-${idx}`);
+    const numSelect = container.querySelector(`#amostra-item-num-${idx}`);
+    const arteInput = container.querySelector(`#amostra-item-arte-${idx}`);
+    const arteNameSpan = container.querySelector(`#amostra-item-arte-name-${idx}`);
+    const removeBtn = container.querySelector(`#btn-remove-amostra-arte-${idx}`);
+
+    if (!canvas) return;
+
+    const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
+    const corId = corSelect ? corSelect.value : (item ? item.amostra_cor_id : '');
+    const numId = numSelect ? numSelect.value : (item ? item.amostra_num_id : '');
+    const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
+    const hasSavedArte = !!(item && item.arte_url);
+
+    // Mostrar nome do arquivo e botão remover
+    if (arteNameSpan) {
+        if (hasArte) arteNameSpan.textContent = arteInput.files[0].name;
+        else if (hasSavedArte) arteNameSpan.textContent = '(Arte Salva na Nuvem)';
+        else arteNameSpan.textContent = '';
+    }
+    if (removeBtn) removeBtn.style.display = (hasArte || hasSavedArte) ? '' : 'none';
+
+    // Se nada selecionado, esconder canvas
+    if (!corId && !numId && !hasArte && !hasSavedArte) {
+        canvas.style.display = 'none';
+        if (empty) empty.style.display = 'block';
+        if (header) header.style.display = 'none';
+        return;
+    }
+
+    // Obter cor e formato
+    const cor = corId ? state.cores.find(c => c.id === corId) : null;
+    const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+
+    if (num) {
+        preloadAmostraItemPdfElements(num, idx, osId);
+    }
+
+    // Determinar formato base
+    let fmt = null;
+    if (cor && cor.formato_id) {
+        fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
+    }
+    if (!fmt && num && num.formato_id) {
+        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
+    }
+    if (!fmt && state.formatos.length > 0) {
+        fmt = state.formatos[0];
+    }
+    if (!fmt) {
+        // Sem formato -- fallback básico
+        fmt = { width_mm: 180, height_mm: 50 };
+    }
+
+    // Escala de renderizacao: 150 DPI para alta nitidez em todas as visualizacoes
+    // O canvas e renderizado em alta resolucao e exibido via CSS (max-width: 100%)
+    const S = 150 / 25.4;
+
+    let targetW = fmt.width_mm;
+    let targetH = fmt.height_mm;
+    if (cor && cor.width_mm && cor.height_mm) {
+        targetW = cor.width_mm;
+        targetH = cor.height_mm;
+    }
+
+    const finalWidth = Math.round(targetW * S);
+    const finalHeight = Math.round(targetH * S);
+    if (finalWidth <= 0 || finalHeight <= 0) return;
+
+    canvas.width = finalWidth;
+    canvas.height = finalHeight;
+    canvas.style.display = 'block';
+    if (empty) empty.style.display = 'none';
+    if (header) header.style.display = 'block';
+
+    const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+    ctx.clearRect(0, 0, finalWidth, finalHeight);
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ====== CAMADA 1: COR (PDF via pdf.js) ======
+    let corRendered = false;
+    if (cor && cor.pdf_base64 && typeof pdfjsLib !== 'undefined') {
+        try {
+            const base64Data = cor.pdf_base64.includes('base64,') ? cor.pdf_base64.split('base64,')[1] : cor.pdf_base64;
+            const binStr = atob(base64Data);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+
+            const loadingTask = pdfjsLib.getDocument({ data: bytes });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+
+            const viewport = page.getViewport({ scale: 1.0 });
+            const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
+            const scaledViewport = page.getViewport({ scale: pdfScale * (S / 2.8346) });
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = scaledViewport.width;
+            offCanvas.height = scaledViewport.height;
+            const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+            await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+
+            // Centralizar como faz o card avulso
+            const dx = (finalWidth - offCanvas.width) / 2;
+            const dy = (finalHeight - offCanvas.height) / 2;
+            ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+            corRendered = true;
+        } catch (e) {
+            console.warn(`[Item ${idx}] Erro ao renderizar cor PDF:`, e);
+        }
+    }
+    if (!corRendered) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, finalWidth, finalHeight);
+    }
+
+    // ====== CAMADA 2: ARTE (imagem ou PDF do upload ou salva, com multiply) ======
+    if (hasArte || hasSavedArte) {
+        try {
+            let isPdf = false;
+            let file = null;
+            if (hasArte) {
+                file = arteInput.files[0];
+                isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+            } else {
+                isPdf = item.arte_url && (item.arte_url.toLowerCase().endsWith('.pdf') || item.arte_url.includes('data:application/pdf'));
+            }
+
+            if (isPdf && typeof pdfjsLib !== 'undefined') {
+                // Configurar o workerSrc do PDF.js
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                
+                let bytes;
+                if (hasArte) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    bytes = new Uint8Array(arrayBuffer);
+                } else {
+                    if (item.arte_url.startsWith('http') || item.arte_url.startsWith('/')) {
+                        const bufferData = await fetchPdfBytes(item.arte_url);
+                        bytes = new Uint8Array(bufferData);
+                    } else {
+                        const base64Data = item.arte_url.includes('base64,') ? item.arte_url.split('base64,')[1] : item.arte_url;
+                        const binStr = atob(base64Data);
+                        bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    }
+                }
+
+                const loadingTask = pdfjsLib.getDocument({ data: bytes });
+                const pdf = await loadingTask.promise;
+                const page = await pdf.getPage(1);
+
+                const vp = page.getViewport({ scale: 1.0 });
+                const artRatio = vp.width / vp.height;
+                const canvasRatio = finalWidth / finalHeight;
+                
+                let pdfScale;
+                if (artRatio > canvasRatio) {
+                    pdfScale = finalWidth / vp.width;
+                } else {
+                    pdfScale = finalHeight / vp.height;
+                }
+
+                const scaledViewport = page.getViewport({ scale: pdfScale });
+
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = Math.round(scaledViewport.width);
+                offCanvas.height = Math.round(scaledViewport.height);
+                const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+                await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+
+                const dx = (finalWidth - offCanvas.width) / 2;
+                const dy = (finalHeight - offCanvas.height) / 2;
+
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+                ctx.globalCompositeOperation = 'source-over';
+            } else {
+                // Tratar como imagem normal (PNG, JPG)
+                let url;
+                if (hasArte) {
+                    url = URL.createObjectURL(file);
+                } else {
+                    url = item.arte_url;
+                }
+                const arteImg = new Image();
+                arteImg.crossOrigin = "Anonymous";
+                await new Promise((resolve, reject) => {
+                    arteImg.onload = resolve;
+                    arteImg.onerror = reject;
+                    arteImg.src = url;
+                });
+                if (arteImg.width > 0 && arteImg.height > 0) {
+                    const tempArte = document.createElement('canvas');
+                    tempArte.width = finalWidth;
+                    tempArte.height = finalHeight;
+                    const tempCtx = tempArte.getContext('2d', { colorSpace: 'srgb' });
+
+                    const artRatio = arteImg.width / arteImg.height;
+                    const canvasRatio = finalWidth / finalHeight;
+                    let dw, dh, ddx, ddy;
+                    if (artRatio > canvasRatio) {
+                        dw = finalWidth;
+                        dh = finalWidth / artRatio;
+                        ddx = 0;
+                        ddy = (finalHeight - dh) / 2;
+                    } else {
+                        dh = finalHeight;
+                        dw = finalHeight * artRatio;
+                        ddx = (finalWidth - dw) / 2;
+                        ddy = 0;
+                    }
+                    tempCtx.drawImage(arteImg, ddx, ddy, dw, dh);
+
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.drawImage(tempArte, 0, 0);
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                if (hasArte) {
+                    URL.revokeObjectURL(url);
+                }
+            }
+        } catch (e) {
+            console.warn(`[Item ${idx}] Erro ao renderizar arte:`, e);
+            if (typeof toast === 'function') toast('Falha visualizando arte: ' + (e.message || 'formato?'), 'error');
+        }
+    }
+
+    // ====== CAMADA 3: NUMERAÇÃO (desenhar elements como o card avulso) ======
+    if (num && num.elements && num.elements.length > 0) {
+        const numCanvas = document.createElement('canvas');
+        numCanvas.width = Math.round(fmt.width_mm * S);
+        numCanvas.height = Math.round(fmt.height_mm * S);
+        const numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
+
+        // Fundo transparente -- contorno do formato
+        numCtx.strokeStyle = '#64748b';
+        numCtx.lineWidth = 1;
+        numCtx.strokeRect(0, 0, numCanvas.width, numCanvas.height);
+
+        // Desenhar cada elemento da numeração
+        num.elements.forEach(el => {
+            const x = el.x_mm * S;
+            const y = el.y_mm * S;
+            const color = el.color || '#000000';
+            const rot = (el.rotation || 0) * Math.PI / 180;
+
+            numCtx.save();
+            numCtx.translate(x, y);
+            numCtx.rotate(rot);
+
+            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+                const fs = (el.font_size || 12) * S / 2.8346;
+                numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+                numCtx.fillStyle = color;
+
+                let label = '';
+                if (el.type === 'FIXED') {
+                    label = el.fixed_value || 'TEXTO';
+                } else if (el.type === 'TEATRO_FILA') {
+                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    label = `${el.prefix || ''}${_fVal}`;
+                } else if (el.type === 'TEATRO_LUGAR') {
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    label = `${el.prefix || ''}${_lVal}`;
+                } else if (el.type === 'TEATRO_COMBO') {
+                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    const fila = `${el.prefix_fila || ''}${_fVal}`;
+                    const lugar = `${el.prefix_lugar || ''}${_lVal}`;
+                    label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+                } else {
+                    const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
+                    label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
+                }
+                numCtx.textAlign = 'center';
+                numCtx.textBaseline = 'middle';
+                if (label.includes('\n')) {
+                    const lines = label.split('\n');
+                    const lineHeight = fs * 1.2;  // igual ao engine.py e drawElement
+                    const totalH = lines.length * lineHeight;
+                    const blockTop = -totalH / 2;
+                    lines.forEach((line, i) => {
+                        const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
+                        numCtx.fillText(line, 0, lineCenter);
+                    });
+                } else {
+                    numCtx.fillText(label, 0, 0);
+                }
+                numCtx.textAlign = 'left';
+                numCtx.textBaseline = 'alphabetic';
+            } else if (el.type === 'QR') {
+                const sz = (el.size_mm || 15) * S;
+                const hsz = sz / 2;
+                numCtx.fillStyle = color;
+                numCtx.fillRect(-hsz, -hsz, sz, sz);
+                numCtx.fillStyle = '#ffffff';
+                const cell = sz / 7;
+                for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
+                    numCtx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
+                    numCtx.fillStyle = color;
+                    numCtx.fillRect(-hsz + cx * cell + cell, -hsz + cy * cell + cell, cell, cell);
+                    numCtx.fillStyle = '#ffffff';
+                }
+            } else if (el.type === 'BARCODE') {
+                const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
+                const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
+                const hbw = bw / 2, hbh = bh / 2;
+                numCtx.fillStyle = color;
+                const barW = bw / 40;
+                const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
+                for (let i = 0; i < pattern.length; i++) {
+                    if (pattern[i]) numCtx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
+                }
+            } else if (el.type === 'PICOTE') {
+                numCtx.strokeStyle = color;
+                numCtx.lineWidth = 2.0;
+                numCtx.setLineDash([6, 3]);
+                numCtx.beginPath();
+                numCtx.moveTo(0, -y);
+                numCtx.lineTo(0, numCanvas.height - y);
+                numCtx.stroke();
+                numCtx.setLineDash([]);
+            } else if (el.type === 'SVG' || el.type === 'PDF') {
+                const w = (el.width_mm || 20) * S;
+                const h = (el.height_mm || 20) * S;
+                const hw = w / 2, hh_el = h / 2;
+
+                numCtx.save();
+                numCtx.beginPath();
+                numCtx.rect(-hw, -hh_el, w, h);
+                numCtx.clip();
+
+                if (el.type === 'PDF') {
+                    const imgObj = el._pdfCanvas || null;
+                    if (imgObj) {
+                        numCtx.drawImage(imgObj, -hw, -hh_el, w, h);
+                    } else {
+                        numCtx.strokeStyle = color;
+                        numCtx.lineWidth = 1;
+                        numCtx.strokeRect(-hw, -hh_el, w, h);
+                        numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                        numCtx.fillStyle = color;
+                        numCtx.textAlign = 'center';
+                        numCtx.textBaseline = 'middle';
+                        numCtx.fillText('PDF', 0, 0);
+                        numCtx.textAlign = 'left';
+                        numCtx.textBaseline = 'alphabetic';
+                    }
+                } else {
+                    // SVG
+                    if (el.svg_content) {
+                        if (!el._svgImage && !el._svgLoading) {
+                            el._svgLoading = true;
+                            const img = new Image();
+                            img.onload = () => {
+                                el._svgImage = img;
+                                delete el._svgLoading;
+                                renderItemAmostraCombinada(idx, osId);
+                            };
+                            img.onerror = () => {
+                                console.error('[Amostra Item] Erro ao carregar SVG do elemento');
+                                delete el._svgLoading;
+                            };
+                            if (el.svg_content.startsWith('http') || el.svg_content.startsWith('data:')) {
+                                img.src = el.svg_content;
+                            } else {
+                                img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(el.svg_content);
+                            }
+                        }
+                        if (el._svgImage) {
+                            numCtx.drawImage(el._svgImage, -hw, -hh_el, w, h);
+                        } else {
+                            numCtx.strokeStyle = color;
+                            numCtx.lineWidth = 1;
+                            numCtx.strokeRect(-hw, -hh_el, w, h);
+                            numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                            numCtx.fillStyle = color;
+                            numCtx.textAlign = 'center';
+                            numCtx.textBaseline = 'middle';
+                            numCtx.fillText('SVG', 0, 0);
+                            numCtx.textAlign = 'left';
+                            numCtx.textBaseline = 'alphabetic';
+                        }
+                    } else {
+                        numCtx.strokeStyle = color;
+                        numCtx.lineWidth = 1;
+                        numCtx.strokeRect(-hw, -hh_el, w, h);
+                        numCtx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                        numCtx.fillStyle = color;
+                        numCtx.textAlign = 'center';
+                        numCtx.textBaseline = 'middle';
+                        numCtx.fillText('SVG', 0, 0);
+                        numCtx.textAlign = 'left';
+                        numCtx.textBaseline = 'alphabetic';
+                    }
+                }
+                numCtx.restore();
+            }
+            numCtx.restore();
+        });
+
+        // Compor numeração sobre o canvas final (centralizado)
+        const ndx = (finalWidth - numCanvas.width) / 2;
+        const ndy = (finalHeight - numCanvas.height) / 2;
+        ctx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+    }
+
+    // Borda decorativa
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, finalWidth, finalHeight);
+
+    // Snapshot para o link do cliente se não for a própria visão do cliente
+    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+        if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
+        item._snapshotTimer = setTimeout(() => {
+            snapshotAmostraAndUpload(idx, osId, item, canvas);
+        }, 2000);
+    }
+}
+
+async function snapshotAmostraAndUpload(idx, osId, item, canvas) {
+    if (!supabaseClient) return;
+    try {
+        canvas.toBlob(async (blob) => {
+            if (!blob) return;
+            const fileName = `amostra_${osId}_${item.id}_${Date.now()}.jpg`;
+            const { error } = await supabaseClient
+                .storage
+                .from('amostras_renderizadas')
+                .upload(fileName, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: true });
+            
+            if (error) {
+                console.warn('[Snapshot] Não pôde enviar render final (bucket existe?):', error);
+                return;
+            }
+
+            const { data: urlData } = supabaseClient.storage.from('amostras_renderizadas').getPublicUrl(fileName);
+            const publicUrl = urlData.publicUrl;
+            
+            await saveAmostraToDB(item.id, osId, { amostra_arte_base64: publicUrl });
+            item.amostra_arte_base64 = publicUrl;
+        }, 'image/jpeg', 0.85);
+    } catch(e) {
+        console.warn('[Snapshot] Erro ao gerar snapshot:', e);
+    }
+}
+
+// Expor globalmente
+window.renderItemAmostraCombinada = renderItemAmostraCombinada;
+
+window.customNumeracaoEditState = null;
+
+function editCustomNumeracao(idx, osId, itemId) {
+    const numSelect = document.getElementById(`amostra-item-num-${idx}`);
+    if (!numSelect || !numSelect.value) {
+        toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
+        return;
+    }
+    
+    const baseNumId = numSelect.value;
+    const baseNum = state.numeracoes.find(n => String(n.id) === String(baseNumId));
+    if (!baseNum) {
+        toast('Numeração ID ' + baseNumId + ' não encontrada. IDs disponíveis: ' + state.numeracoes.slice(0,5).map(n => n.id).join(', '), 'warning');
+        return;
+    }
+    
+    const osItens = state.osItens[osId];
+    if (!osItens) {
+        toast('Itens da OS não carregados. Tente recarregar.', 'error');
+        return;
+    }
+    
+    const item = osItens.find(i => String(i.id) === String(itemId));
+    if (!item) {
+        toast('Item não encontrado nos itens da OS.', 'error');
+        return;
+    }
+    
+    const modelName = `${item.produto} (Modelo ${idx + 1})`;
+    
+    // Set custom state
+    window.customNumeracaoEditState = {
+        active: true,
+        osId,
+        itemId,
+        idx,
+        modelName,
+        baseNumId
+    };
+    
+    // Mudar view
+    showView('view-numeracao');
+    
+    setTimeout(() => {
+        // Carrega numerao base
+        editNumeracao(baseNumId);
+        
+        setTimeout(() => {
+            // Limpa ID para forcar INSERT e altera o nome
+            document.getElementById('num-id').value = '';
+            document.getElementById('num-name').value = modelName;
+            
+            toast(`Editando numeração exclusivamente para o modelo: ${modelName}`, 'info');
+        }, 150);
+    }, 100);
+}
+window.onItemCorSelect = onItemCorSelect;
+window.onItemNumSelect = onItemNumSelect;
+window.onItemArteUpload = onItemArteUpload;
+window.onItemArteRemove = onItemArteRemove;
+window.saveAmostraToDB = saveAmostraToDB;
+window.editCustomNumeracao = editCustomNumeracao;
+
+window.toggleImpNumEditButtons = function() {
+    const num1 = document.getElementById('imp-numeracao');
+    const btn1 = document.getElementById('btn-edit-imp-num-1');
+    if (num1 && btn1) {
+        btn1.style.display = num1.value ? 'inline-flex' : 'none';
+    }
+    
+    const num2 = document.getElementById('imp-numeracao-2');
+    const btn2 = document.getElementById('btn-edit-imp-num-2');
+    if (num2 && btn2) {
+        btn2.style.display = num2.value ? 'inline-flex' : 'none';
+    }
+};
+
+window.editImposicaoCustomNumeracao = function(fieldId) {
+    const numSelect = document.getElementById(fieldId);
+    if (!numSelect || !numSelect.value) {
+        toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
+        return;
+    }
+    
+    const impName = document.getElementById('imp-name').value.trim() || 'Modelo Imposição';
+    const numId = numSelect.value;
+    const baseNum = state.numeracoes.find(n => String(n.id) === String(numId));
+    if (!baseNum) return;
+    
+    // Configura o state para que no saveNumeracao volte para Imposição
+    window.customNumeracaoEditState = {
+        view: 'imposicao',
+        fieldId: fieldId,
+        modeloName: impName
+    };
+    
+    // Abre a numeração
+    editNumeracao(numId);
+    
+    // Força o nome no editor da numeração
+    const suffix = fieldId === 'imp-numeracao' ? ' Num1' : ' Num2';
+    document.getElementById('num-name').value = impName + suffix;
+    
+    // Marca como um novo cadastro (clone)
+    document.getElementById('num-id').value = '';
+    toast(`Clonando base "${baseNum.name}" para edição customizada.`, 'info');
+};
+
+/**
+ * Salva a decisão (APROVADA/REPROVADA) de um item de amostra
+ */
+async function decisionAmostraItem(itemId, osId, status) {
+    const obsEl = document.getElementById(`amostra-obs-${itemId}`);
+    const obs = obsEl ? obsEl.value : '';
+
+    if (status === 'REPROVADA' && (!obs || obs.trim() === '')) {
+        toast('Anotar alteração no campo ANOTAÇÕES', 'warning');
+        if (obsEl) obsEl.focus();
+        return;
+    }
+    
+    try {
+        await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs });
+        
+        // Se for na página do cliente, vamos notificar no chat do pedido!
+        const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
+        if (isClientePage) {
+            const item = state.osItens[osId].find(i => i.id === itemId);
+            const prodNome = item ? item.produto : 'Produto';
+            
+            // Enviar mensagem no chat da proposta
+            try {
+                await supabaseClient.from('propostas_chat').insert({
+                    id_int: parseInt(clienteState.numero),
+                    tipo: 'PRODUCAO',
+                    setor: 'Cliente',
+                    visivel_externo: true,
+                    mensagem: status === 'APROVADA' 
+                        ? `✅ O cliente APROVOU a amostra do item: "${prodNome}".`
+                        : `❌ O cliente solicitou ALTERAÇÃO na amostra do item: "${prodNome}".\nObservações: ${obs || '(Sem observações)'}`,
+                    remetente_nome: 'Cliente (via link)',
+                });
+            } catch (chatErr) {
+                console.warn('Erro ao inserir mensagem no chat:', chatErr);
+            }
+            
+            // Se for reprovado e for o fluxo do cliente, podemos atualizar a tabela pedidos_artes também
+            if (status === 'REPROVADA') {
+                try {
+                    await supabaseClient
+                        .from('pedidos_artes')
+                        .update({ status: 'REPROVADA_CLIENTE', comentarios_revisao: obs })
+                        .eq('id_modelo', itemId)
+                        .order('versao', { ascending: false })
+                        .limit(1);
+                } catch (e) { /* silencioso */ }
+            }
+        }
+        
+        let msg = '';
+        let toastType = 'info';
+        if (status === 'APROVADA') {
+            msg = 'Item aprovado!';
+            toastType = 'success';
+        } else if (status === 'REPROVADA') {
+            msg = 'Item marcado para alteração!';
+            toastType = 'warning';
+        } else if (status === 'PRONTO') {
+            msg = 'Item marcado como Pronto!';
+            toastType = 'success';
+        } else {
+            msg = `Status atualizado para ${status}`;
+        }
+        toast(msg, toastType);
+        renderAmostrasOSItens(osId);
+
+        // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
+        // verificar se TODOS os modelos da OS estão PRONTO. Se sim → mudar status para 'Enviar Arte'
+        // automaticamente, sem precisar clicar em "Voltar para Atendimento".
+        const isInternal = (state.amostrasContainerId !== 'cliente-amostras-itens-container');
+        if (status === 'PRONTO' && isInternal) {
+            const todosItens = state.osItens[osId] || [];
+            const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO' || i.amostra_status === 'APROVADA');
+            if (todosProntos) {
+                const novoStatusOS = 'Enviar Arte';
+                const os = state.ordens.find(o => o.id === osId);
+                if (os && os.status !== novoStatusOS) {
+                    // Atualizar localStorage
+                    const ov = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+                    ov[osId] = novoStatusOS;
+                    localStorage.setItem('vibe_status_overrides', JSON.stringify(ov));
+                    // Atualizar memória
+                    os.status = novoStatusOS;
+                    // Atualizar banco
+                    try {
+                        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                            if (osId.startsWith('vibe_')) {
+                                await supabaseClient.from('pedidos_links_cliente')
+                                    .update({ status_arte: novoStatusOS })
+                                    .eq('os_id', osId);
+                            } else {
+                                await supabaseClient.from('producao_ordens_servico')
+                                    .update({ status: novoStatusOS })
+                                    .eq('id', osId);
+                            }
+                        }
+                    } catch (autoErr) {
+                        console.warn('[AUTO-STATUS] Erro ao atualizar status para Enviar Arte:', autoErr);
+                    }
+                    toast(`🎉 Todos os modelos prontos! Pedido #${os.numero} mudou para "Enviar Arte" automaticamente.`, 'success');
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Erro na decisão do item:', err);
+        toast('Erro ao registrar decisão: ' + err.message, 'error');
+    }
+}
+
+/**
+ * Salva a observação de um item de amostra
+ */
+function saveAmostraItemObs(itemId, osId, obs) {
+    saveAmostraToDB(itemId, osId, { amostra_obs: obs });
+}
+
+/**
+ * Limpa o pedido ativo da tela de Amostras, voltando ao modo avulso
+ */
+function clearAmostrasOS() {
+    state.amostrasOSAtivo = null;
+    const container = document.getElementById('amostras-itens-container');
+    const banner = document.getElementById('amostras-os-banner');
+    const avulsa = document.getElementById('amostra-combinada-avulsa');
+    
+    if (container) container.innerHTML = '';
+    if (banner) banner.style.display = 'none';
+    if (avulsa) avulsa.style.display = '';
+}
+
+// --- Funções de Briefing e Designers (Tabela: pedidos_artes) ---
+
+async function loadBriefingBase(osId, osIntId) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+    try {
+        const { data, error } = await supabaseClient
+            .from('pedidos_artes')
+            .select('*')
+            .eq('id_int', osIntId);
+            
+        if (error) {
+            if (error.code !== '42P01') throw error;
+            console.warn("Tabela pedidos_artes não existe.");
+            return;
+        }
+        
+        let mergedData = null;
+        if (data && data.length > 0) {
+             console.log("loadBriefingBase: encontrou dados em pedidos_artes", data);
+             mergedData = { observacoes: {} };
+             data.forEach(row => {
+                  if (row.nome_evento) mergedData.nome_evento = row.nome_evento;
+                  if (row.data_evento) mergedData.data_evento = row.data_evento;
+                  if (row.local_evento) mergedData.local_evento = row.local_evento;
+                  if (row.designer_uid) mergedData.designer_uid = row.designer_uid;
+                  if (row.designer_nome) mergedData.designer_nome = row.designer_nome;
+                  if (row.observacoes && Object.keys(row.observacoes).length > 0) {
+                      mergedData.observacoes = Object.assign(mergedData.observacoes, row.observacoes);
+                  }
+             });
+        }
+        
+        if (!state.pedidosArtesData) state.pedidosArtesData = {};
+        state.pedidosArtesData[osIntId] = mergedData;
+        updateBriefingUI(osId, osIntId);
+    } catch (e) {
+        console.error("Erro ao carregar briefing:", e);
+    }
+}
+
+async function loadUltimosPedidos(osId, clienteNome) {
+    if (!clienteNome || typeof supabaseClient === 'undefined') return;
+    
+    try {
+        console.log("Buscando histórico para o cliente:", clienteNome);
+        // 1. Buscar os últimos 5 pedidos em propostas para este cliente (ilike para ignorar maiúsculas/minúsculas)
+        const { data: propostas, error: errProp } = await supabaseClient
+            .from('propostas')
+            .select('id_int, created_at')
+            .ilike('cliente', `%${clienteNome.trim()}%`)
+            .order('created_at', { ascending: false })
+            .limit(5);
+            
+        if (errProp) throw errProp;
+        if (!propostas || propostas.length === 0) {
+            const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
+            if (container) container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 16px; background: rgba(0,0,0,0.02); border-radius: 8px;">Nenhum pedido anterior encontrado para<br><strong>${clienteNome}</strong></div>`;
+            return;
+        }
+        
+        const idInts = propostas.map(p => p.id_int);
+        
+        // 2. Buscar dados dos eventos na tabela pedidos_artes
+        const { data: artes, error: errArtes } = await supabaseClient
+            .from('pedidos_artes')
+            .select('id_int, nome_evento, data_evento')
+            .in('id_int', idInts);
+            
+        if (errArtes && errArtes.code !== '42P01') throw errArtes;
+        
+        // Mapear primeiro evento encontrado de cada pedido
+        const eventoMap = {};
+        if (artes) {
+            artes.forEach(a => {
+                if (a.nome_evento || a.data_evento) {
+                    if (!eventoMap[a.id_int]) eventoMap[a.id_int] = a;
+                }
+            });
+        }
+        
+        // 3. Montar HTML de exibição
+        const html = propostas.map(p => {
+            const ev = eventoMap[p.id_int] || {};
+            const nome = ev.nome_evento ? ev.nome_evento : 'Evento não informado no Briefing';
+            const dataEv = ev.data_evento ? `<div style="margin-top: 4px; font-size: 0.95rem; color: var(--text-dim)"><i class="fa-regular fa-calendar"></i> Evento: ${ev.data_evento}</div>` : '';
+            let dataCriacao = '';
+            if (p.created_at) {
+                const d = new Date(p.created_at);
+                dataCriacao = d.toLocaleDateString('pt-BR');
+            }
+            return `
+                <div style="padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); transition: all 0.2s;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                        <span style="font-weight: 800; font-size: 0.95rem; color: var(--primary);">#${p.id_int}</span>
+                        <span style="font-size: 0.95rem; color: var(--text-dim); background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 12px;">${dataCriacao}</span>
+                    </div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: var(--text);">
+                        ${nome}
+                    </div>
+                    ${dataEv}
+                </div>
+            `;
+        }).join('');
+        
+        const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
+        if (container) container.innerHTML = html;
+        
+    } catch (e) {
+        console.error("Erro ao carregar últimos pedidos:", e);
+        const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
+        if (container) container.innerHTML = `<div style="font-size: 0.8rem; color: var(--red); text-align: center;">Erro ao carregar histórico.</div>`;
+    }
+}
+
+function updateBriefingUI(osId, osIntId) {
+    if (!state.pedidosArtesData) state.pedidosArtesData = {};
+    const data = state.pedidosArtesData[osIntId] || {};
+    
+    // Atualiza campos do Briefing
+    const nomeEl = document.getElementById(`briefing-nome-${osId}`);
+    const dataEl = document.getElementById(`briefing-data-${osId}`);
+    const localEl = document.getElementById(`briefing-local-${osId}`);
+    
+    if (nomeEl) nomeEl.value = data.nome_evento || '';
+    if (dataEl) dataEl.value = data.data_evento ? data.data_evento.split('T')[0].split('-').reverse().join('/') : '';
+    if (localEl) localEl.value = data.local_evento || '';
+    
+    
+    console.log("updateBriefingUI executado para osId:", osId, "Dados recebidos:", data);
+    
+    // Atualiza observações por produto (accordion) agrupando pelo produto pai
+    const obsObj = data.observacoes || {};
+    const itens = state.osItens[osId] || [];
+    let uniqueProductsSet = new Set();
+    
+    itens.forEach(item => {
+        let prodId = item.id_produto_proposta_origem || item.nome_produto_real || item.produto || item.id;
+        if (!uniqueProductsSet.has(prodId)) {
+            uniqueProductsSet.add(prodId);
+            const obsEl = document.getElementById(`briefing-obs-item-${prodId}`);
+            if (obsEl) {
+                let val = '';
+                if (prodId in obsObj) val = obsObj[prodId];
+                else if (`item_${prodId}` in obsObj) val = obsObj[`item_${prodId}`];
+                else val = item.observacoes || '';
+                
+                if (typeof val === 'string' && val.includes('<')) {
+                    const tmp = document.createElement('div');
+                    tmp.innerHTML = val;
+                    val = tmp.textContent || tmp.innerText || '';
+                }
+                
+                obsEl.value = val.trim();
+            }
+        }
+    });
+
+    // Atualiza Designer Ideal Selecionado
+    let designerUid = data.designer_uid;
+    
+    // Se não tem designer_uid salvo, tentar pegar da lista de arte (via designer_nome)
+    if (!designerUid && data.designer_nome) {
+        const designerMap = {
+            'Edison Jr': 'edison-uid',
+            'Emily Boeira': 'emily-uid',
+            'Vitória Colbeich': 'vitoria-uid'
+        };
+        designerUid = designerMap[data.designer_nome] || null;
+    }
+    
+    document.querySelectorAll('.designer-card').forEach(card => {
+        const uid = card.getAttribute('data-uid');
+        if (uid === designerUid) {
+            card.classList.add('selected');
+            card.querySelector('.designer-badge').style.display = 'inline-block';
+            card.style.borderColor = 'var(--teal)';
+            card.style.background = 'rgba(16, 185, 129, 0.05)';
+        } else {
+            card.classList.remove('selected');
+            card.querySelector('.designer-badge').style.display = 'none';
+            card.style.borderColor = 'var(--border)';
+            card.style.background = 'rgba(0,0,0,0.01)';
+        }
+    });
+}
+
+let briefingSaveTimeout = null;
+async function saveBriefingField(osIntId, field, value, isObs = false, itemId = null) {
+    if (!osIntId || typeof supabaseClient === 'undefined') return;
+    
+    if (!state.pedidosArtesData) state.pedidosArtesData = {};
+    
+    if (isObs) {
+        if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = { observacoes: {} };
+        if (!state.pedidosArtesData[osIntId].observacoes) state.pedidosArtesData[osIntId].observacoes = {};
+        state.pedidosArtesData[osIntId].observacoes[itemId] = value;
+    } else {
+        if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = {};
+        state.pedidosArtesData[osIntId][field] = value;
+    }
+
+    clearTimeout(briefingSaveTimeout);
+    briefingSaveTimeout = setTimeout(async () => {
+        try {
+            const current = state.pedidosArtesData[osIntId] || {};
+            const payload = {
+                id_int: osIntId,
+                nome_evento: current.nome_evento || null,
+                data_evento: current.data_evento || null,
+                local_evento: current.local_evento || null,
+                observacoes: current.observacoes || {},
+                designer_uid: current.designer_uid || null,
+                designer_nome: current.designer_nome || null
+            };
+
+            const { data: existingData } = await supabaseClient
+                .from('pedidos_artes')
+                .select('id')
+                .eq('id_int', osIntId)
+                .limit(1);
+                
+            let opError;
+            if (existingData && existingData.length > 0) {
+                const res = await supabaseClient
+                    .from('pedidos_artes')
+                    .update(payload)
+                    .eq('id_int', osIntId);
+                opError = res.error;
+            } else {
+                const res = await supabaseClient
+                    .from('pedidos_artes')
+                    .insert(payload);
+                opError = res.error;
+            }
+
+            if (opError) throw opError;
+            console.log("Briefing salvo via debounced update/insert.");
+        } catch (e) {
+            console.error("Erro ao salvar briefing:", e);
+        }
+    }, 1000); // 1 segundo de debounce
+}
+
+async function selectDesigner(osIntId, uid, nome) {
+    if (!state.pedidosArtesData) state.pedidosArtesData = {};
+    if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = {};
+    state.pedidosArtesData[osIntId].designer_uid = uid;
+    state.pedidosArtesData[osIntId].designer_nome = nome;
+    
+    // Atualiza a UI imediatamente para sensação de resposta instantânea
+    const activeOs = document.getElementById('active-os-name') ? document.getElementById('active-os-name').dataset.osId : null;
+    if (activeOs) updateBriefingUI(activeOs, osIntId);
+
+    // Salva direto no banco
+    if (!osIntId || typeof supabaseClient === 'undefined') return;
+    try {
+        const { error } = await supabaseClient
+            .from('pedidos_artes')
+            .upsert({
+                id_int: osIntId,
+                designer_uid: uid,
+                designer_nome: nome
+            }, { onConflict: 'id_int' });
+
+        if (error) throw error;
+        showToast("Designer atribuído com sucesso!", "success");
+    } catch (e) {
+        console.error("Erro ao salvar designer:", e);
+        showToast("Erro ao atribuir designer.", "error");
+    }
+}
+
+// Expõe para o window
+window.loadBriefingBase = loadBriefingBase;
+window.saveBriefingField = saveBriefingField;
+window.selectDesigner = selectDesigner;
+
+// Expor funções globais
+window.loadOrdens = loadOrdens;
+window.loadOrdensFromVibecode = loadOrdensFromVibecode;
+window.mapVibecodeProdutoToOSItem = mapVibecodeProdutoToOSItem;
+window.renderOrdens = renderOrdens;
+window.toggleOSDetail = toggleOSDetail;
+window.abrirImposicaoDoPedido = abrirImposicaoDoPedido;
+window.changeOSStatus = changeOSStatus;
+window.updateItemImpressao = updateItemImpressao;
+window.enviarParaImposicao = enviarParaImposicao;
+window.autoSaveOSItemField = autoSaveOSItemField;
 window.renderImpOSQueue = renderImpOSQueue;
 window.toggleImpOSQueue = toggleImpOSQueue;
 window.impQueueUpdateCor = impQueueUpdateCor;

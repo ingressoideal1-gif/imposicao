@@ -2207,6 +2207,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 window.renderPedOSQueue = renderPedOSQueue;
 
 function togglePedOSQueue() {
