@@ -13848,8 +13848,7 @@ function renderImpOSQueue() {
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 3px solid var(--blue);' : 'border-bottom: 1px solid #334155;';
-            const indexModelo = idx + 1;
+            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.15); border-left: 3px solid #f97316;' : 'border-bottom: 1px solid #334155;';
 
             let itemFmtId = boxFmtSel;
 
@@ -13859,9 +13858,7 @@ function renderImpOSQueue() {
             const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
             const corNomeAtual = item.cor || item.padrao || '';
             const coresOptions = coresItem.map(c => {
-                let sel = '';
-                if (corIdAtual && String(c.id) === corIdAtual) sel = 'selected';
-                else if (!corIdAtual && corNomeAtual && globalFuzzyMatch(c.name, corNomeAtual)) sel = 'selected';
+                const sel = (corIdAtual && String(c.id) === corIdAtual) || (!corIdAtual && corNomeAtual && globalFuzzyMatch(c.name, corNomeAtual)) ? 'selected' : '';
                 return `<option value="${c.id}" ${sel}>${c.name}</option>`;
             }).join('');
 
@@ -13876,12 +13873,12 @@ function renderImpOSQueue() {
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
             const nomeDoModelo = item.produto || '--';
 
+            const jsItemId = item.id;
+            const jsOsId = osId;
+
             return `
-                <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="imp-queue-row-${item.id}">
-                    <td style="padding: 12px; text-align: center; width: 40px;" title="Selecionar Linha">
-                        ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                        <strong style="cursor:pointer;" onclick="carregarOSItem('${item.id}', '${osId}')">${indexModelo}</strong>
-                    </td>
+                <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="imp-queue-row-${item.id}"
+                    onclick="enviarParaImposicao('${jsItemId}', '${jsOsId}')">
                     <td style="padding: 12px; font-family: monospace; font-size: 0.95rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
@@ -13923,16 +13920,14 @@ function renderImpOSQueue() {
                         ${getImpressaoBadge(item.impressao)}
                     </td>
                     <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
-                        
                         <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
-                            onclick="event.stopPropagation(); impQueueGerarPDF('${item.id}', '${osId}')">
+                            onclick="event.stopPropagation(); impQueueGerarPDF('${jsItemId}', '${jsOsId}')">
                             📄 PDF
                         </button>
                         <button style="${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
-                            onclick="event.stopPropagation(); impQueueImprimir('${item.id}', '${osId}')">
+                            onclick="event.stopPropagation(); impQueueImprimir('${jsItemId}', '${jsOsId}')">
                             🖨️ Imp.
                         </button>
-    
                     </td>
                 </tr>
             `;
@@ -13948,6 +13943,9 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
+
+
 
 
 

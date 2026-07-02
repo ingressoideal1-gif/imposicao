@@ -2109,8 +2109,7 @@ function renderPedOSQueue() {
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 3px solid var(--blue);' : 'border-bottom: 1px solid #334155;';
-            const indexModelo = idx + 1;
+            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.15); border-left: 3px solid #f97316;' : 'border-bottom: 1px solid #334155;';
 
             let itemFmtId = boxFmtSel;
 
@@ -2120,9 +2119,7 @@ function renderPedOSQueue() {
             const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
             const corNomeAtual = item.cor || item.padrao || '';
             const coresOptions = coresItem.map(c => {
-                let sel = '';
-                if (corIdAtual && String(c.id) === corIdAtual) sel = 'selected';
-                else if (!corIdAtual && corNomeAtual && globalFuzzyMatch(c.name, corNomeAtual)) sel = 'selected';
+                const sel = (corIdAtual && String(c.id) === corIdAtual) || (!corIdAtual && corNomeAtual && globalFuzzyMatch(c.name, corNomeAtual)) ? 'selected' : '';
                 return `<option value="${c.id}" ${sel}>${c.name}</option>`;
             }).join('');
 
@@ -2137,12 +2134,12 @@ function renderPedOSQueue() {
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
             const nomeDoModelo = item.produto || '--';
 
+            const jsItemId = item.id;
+            const jsOsId = osId;
+
             return `
-                <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}">
-                    <td style="padding: 12px; text-align: center; width: 40px;" title="Selecionar Linha">
-                        ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                        <strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')">${indexModelo}</strong>
-                    </td>
+                <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}"
+                    onclick="enviarParaPedido('${jsItemId}', '${jsOsId}')">
                     <td style="padding: 12px; font-family: monospace; font-size: 0.95rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
@@ -2184,12 +2181,14 @@ function renderPedOSQueue() {
                         ${getImpressaoBadge(item.impressao)}
                     </td>
                     <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
-                        
-                        <button style="${btnStyle} background:#2563eb; color:#fff;" title="Selecionar para Pedido"
-                            onclick="event.stopPropagation(); enviarParaPedido('${item.id}', '${osId}')">
-                            Selecionar
+                        <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
+                            onclick="event.stopPropagation(); pedQueueGerarPDF('${jsItemId}', '${jsOsId}')">
+                            📄 PDF
                         </button>
-    
+                        <button style="${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
+                            onclick="event.stopPropagation(); pedQueueImprimir('${jsItemId}', '${jsOsId}')">
+                            🖨️ Imp.
+                        </button>
                     </td>
                 </tr>
             `;
@@ -2205,6 +2204,9 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
+
+
 
 
 window.renderPedOSQueue = renderPedOSQueue;
@@ -2973,3 +2975,35 @@ window.toggleBox = function(bodyId, arrowId) {
         if (arrow) arrow.textContent = '▶';
     }
 };
+
+
+
+// Helpers para gerar PDF e imprimir a partir da fila de itens no menu Pedido
+async function pedQueueGerarPDF(itemId, osId) {
+    await enviarParaPedido(itemId, osId);
+    setTimeout(() => {
+        const btnGerar = document.getElementById('btn-impose');
+        if (btnGerar) {
+            btnGerar.click();
+        } else if (typeof runImposition === 'function') {
+            runImposition();
+        }
+    }, 1200);
+}
+
+async function pedQueueImprimir(itemId, osId) {
+    await enviarParaPedido(itemId, osId);
+    setTimeout(() => {
+        const btnImprimir = document.getElementById('btn-impose-print');
+        if (btnImprimir) {
+            btnImprimir.removeAttribute('disabled');
+            btnImprimir.style.opacity = '1';
+            btnImprimir.click();
+        } else if (typeof runImposition === 'function') {
+            runImposition('print');
+        }
+    }, 1200);
+}
+
+window.pedQueueGerarPDF = pedQueueGerarPDF;
+window.pedQueueImprimir = pedQueueImprimir;
