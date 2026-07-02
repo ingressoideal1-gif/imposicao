@@ -1806,7 +1806,12 @@ body.not-logged-in .app-shell {
     .prod-metrics-title { width: 100%; }
 }
 
-.hover-row:hover { background-color: rgba(255,255,255,0.05) !important; }
+.hover-row {
+    transition: opacity 0.15s ease-in-out;
+}
+.hover-row:hover {
+    opacity: 0.6 !important;
+}
 
 /* Remove spinner arrows from number inputs */
 input[type=number]::-webkit-outer-spin-button,
