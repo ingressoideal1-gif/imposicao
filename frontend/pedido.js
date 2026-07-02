@@ -258,7 +258,7 @@ window.loadPedArtFile = loadPedArtFile;
 
 function drawPedPreview() {
 
-    const canvas = document.getElementById('preview-canvas');
+    const canvas = document.getElementById('ped-preview-canvas');
 
     if (!canvas) return;
 
@@ -298,7 +298,7 @@ function drawPedPreview() {
 
         ctx.fillText('Aguardando formato e saída...', 150, 100);
 
-        document.getElementById('preview-sheet-num').textContent = 'Sem Configuração';
+        document.getElementById('ped-preview-sheet-num').textContent = 'Sem Configuração';
 
         return;
 
@@ -311,7 +311,7 @@ function drawPedPreview() {
 
     if (!fmt || !sai) return;
     
-    const previewPartEl = document.getElementById('preview-part-input');
+    const previewPartEl = document.getElementById('ped-preview-part-input');
     let previewPart = 'miolo';
     if (previewPartEl) {
         if (fmt.has_cover) {
@@ -414,7 +414,7 @@ function drawPedPreview() {
         }
     }
 
-    document.getElementById('preview-sheet-num').textContent = `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
+    document.getElementById('ped-preview-sheet-num').textContent = `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
 
     const isBack = state.previewFace === 'back';
 
@@ -1480,7 +1480,7 @@ function updatePedSummary() {
 
     // Exibir/ocultar alternador de face para o preview
 
-    const faceContainer = document.getElementById('preview-face-container');
+    const faceContainer = document.getElementById('ped-preview-face-container');
 
     if (faceContainer) {
 
@@ -1494,9 +1494,9 @@ function updatePedSummary() {
 
             state.previewFace = 'front';
 
-            const btnFront = document.getElementById('btn-preview-front');
+            const btnFront = document.getElementById('ped-btn-preview-front');
 
-            const btnBack = document.getElementById('btn-preview-back');
+            const btnBack = document.getElementById('ped-btn-preview-back');
 
             if (btnFront) {
 
@@ -1748,9 +1748,9 @@ function clearPedActiveOS() {
 
     
 
-    const activeOsStatus = document.getElementById('active-os-status');
+    const activeOsStatus = document.getElementById('ped-active-os-status');
 
-    const activeOsName = document.getElementById('active-os-name');
+    const activeOsName = document.getElementById('ped-active-os-name');
 
     if (activeOsStatus && activeOsName) {
 
@@ -2124,7 +2124,7 @@ window.togglePedOSQueue = togglePedOSQueue;
 
 window.togglePedCutStackOptions = function() {
     const schema = document.getElementById('ped-schema').value;
-    const container = document.getElementById('cut-stack-options');
+    const container = document.getElementById('ped-cut-stack-options');
     if (schema === 'cut_stack') {
         container.style.display = 'block';
     } else {
@@ -2138,7 +2138,7 @@ window.togglePedMultiArtes = function() {
 
     const isMulti = schema === 'multi_artes';
 
-    const container = document.getElementById('multi-artes-container');
+    const container = document.getElementById('ped-multi-artes-container');
 
     const startInput = document.getElementById('ped-start');
 
@@ -2526,7 +2526,7 @@ window.runPedImposition = async function (mode) {
 
     if (pText) pText.textContent = 'Iniciando... (0%)';
 
-    document.getElementById('btn-impose').disabled = true;
+    document.getElementById('ped-btn-impose').disabled = true;
 
 
 
@@ -2847,7 +2847,7 @@ window.runPedImposition = async function (mode) {
 
         setTimeout(() => {
             overlay.classList.remove('active');
-            const btn = document.getElementById('btn-impose');
+            const btn = document.getElementById('ped-btn-impose');
             btn.disabled = false;
             btn.innerHTML = '🚀 Gerar PDF';
             btn.style.opacity = '1';
