@@ -13480,7 +13480,14 @@ function matchNumeracao(numText, formatoId) {
  */
 async function autoSaveOSItemField(itemId, osId, field, value) {
     try {
-        if (String(osId).includes('vibe')) { console.log('[OS] Ignorando auto-save para item Vibecode:', itemId); return; }
+        if (state.osItens[osId]) {
+            const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
+            if (item) item[field] = value;
+        }
+        if (String(osId).includes('vibe')) { 
+            console.log('[OS] Ignorando auto-save para BD no item Vibecode:', itemId); 
+            return; 
+        }
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const { error } = await supabaseClient
                 .from('producao_os_itens')
@@ -13493,10 +13500,6 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ [field]: value })
             });
-        }
-        if (state.osItens[osId]) {
-            const item = state.osItens[osId].find(i => i.id === itemId);
-            if (item) item[field] = value;
         }
     } catch (e) {
         console.error(`[OS] Erro ao auto-salvar ${field}:`, e);
