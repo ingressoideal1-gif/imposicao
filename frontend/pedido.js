@@ -104,6 +104,7 @@ function populatePedNumeracoes() {
 window.populatePedNumeracoes = populatePedNumeracoes;
 
 async function loadPedArtFile(file) {
+    state.pedArtFile = file;
 
     const ext = file.name.split('.').pop().toLowerCase();
 
@@ -2109,7 +2110,7 @@ function renderPedOSQueue() {
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.35); border-left: 5px solid #ea580c;' : 'border-bottom: 1px solid #334155;';
+            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;' : 'border-bottom: 1px solid #334155;';
 
             let itemFmtId = boxFmtSel;
 
@@ -2138,55 +2139,55 @@ function renderPedOSQueue() {
             const jsOsId = osId;
 
             return `
-                <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}"
-                    onclick="enviarParaPedido('${jsItemId}', '${jsOsId}')">
+                <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-\${item.id}"
+                    onclick="enviarParaPedido('\${jsItemId}', '\${jsOsId}')">
                     <td style="padding: 12px; font-family: monospace; font-size: 0.95rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
-                        ${item.modelo || '--'}
+                        \${item.modelo || '--'}
                     </td>
                     <td style="padding: 12px; font-size: 0.95rem; font-weight:600; color:#e2e8f0; min-width:120px;" title="Nome do Modelo">
-                        ${nomeDoModelo}
+                        \${nomeDoModelo}
                     </td>
                     
                     <td style="padding: 12px; width: 70px;" title="Quantidade">
-                        <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
-                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
+                        <input type="number" min="0" value="\${qtdVal}" style="\${inputStyle}" placeholder="QTD"
+                            onchange="pedQueueUpdateField('\${item.id}', '\${osId}', 'qtd', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
                     <td style="padding: 12px; min-width: 120px;" title="Cor">
-                        <select style="${selectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                        <select style="\${selectStyle}" onchange="pedQueueUpdateCor('\${item.id}', '\${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Cor —</option>
-                            ${coresOptions}
+                            \${coresOptions}
                         </select>
                     </td>
                     <td style="padding: 12px; min-width: 140px;" title="Numeração">
-                        <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                            <option value="">${numValDisplay || '— Numeração —'}</option>
-                            ${numsOptions}
+                        <select style="\${selectStyle}" onchange="pedQueueUpdateNum('\${item.id}', '\${osId}', this.value)" onclick="event.stopPropagation()">
+                            <option value="">\${numValDisplay || '— Numeração —'}</option>
+                            \${numsOptions}
                         </select>
                     </td>
                     <td style="padding: 12px; width: 70px;" title="Num. Inicial">
-                        <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
-                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
+                        <input type="number" value="\${niVal}" style="\${inputStyle}" placeholder="NI"
+                            onchange="pedQueueUpdateField('\${item.id}', '\${osId}', 'num_inicial', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
                     <td style="padding: 12px; width: 70px;" title="Num. Final">
-                        <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
-                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                        <input type="number" value="\${nfVal}" style="\${inputStyle}" placeholder="NF"
+                            onchange="pedQueueUpdateField('\${item.id}', '\${osId}', 'num_final', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
                     <td style="padding: 12px; text-align: center; width: 50px;" title="Frente e Verso">
-                        ${item.verso ? '✅' : '--'}
+                        \${item.verso ? '✅' : '--'}
                     </td>
                     <td style="padding: 12px; width: 90px;" title="Status de Produção">
-                        ${getImpressaoBadge(item.impressao)}
+                        \${getImpressaoBadge(item.impressao)}
                     </td>
                     <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
-                        <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
-                            onclick="event.stopPropagation(); pedQueueGerarPDF('${jsItemId}', '${jsOsId}')">
+                        <button style="\${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
+                            onclick="event.stopPropagation(); pedQueueGerarPDF('\${jsItemId}', '\${jsOsId}')">
                             📄 PDF
                         </button>
-                        <button style="${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
-                            onclick="event.stopPropagation(); pedQueueImprimir('${jsItemId}', '${jsOsId}')">
+                        <button style="\${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
+                            onclick="event.stopPropagation(); pedQueueImprimir('\${jsItemId}', '\${jsOsId}')">
                             🖨️ Imp.
                         </button>
                     </td>
@@ -2204,6 +2205,9 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
+
+
 
 
 
@@ -2977,6 +2981,8 @@ window.toggleBox = function(bodyId, arrowId) {
         if (arrow) arrow.textContent = '▶';
     }
 };
+
+
 
 
 
