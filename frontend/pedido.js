@@ -2175,8 +2175,12 @@ function renderPedOSQueue() {
                             ${numsOptions}
                         </select>
                     </td>
-                    <td style="padding: 12px; text-align: center; width: 50px;" title="Frente e Verso">
-                        ${item.verso ? '✅' : '--'}
+                    <td style="padding: 12px; width: 90px; min-width: 90px; max-width: 90px;" title="Frente e Verso/Tipo de Verso">
+                        <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
+                            <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
+                            <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
+                            <option value="VERSO VARIÁVEL" ${item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÁVEL</option>
+                        </select>
                     </td>
                     <td style="padding: 12px; width: 90px;" title="Status de Produção">
                         ${getImpressaoBadge(item.impressao)}
@@ -2205,6 +2209,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 

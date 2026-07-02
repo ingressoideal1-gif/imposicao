@@ -13499,18 +13499,36 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
     try {
         if (state.osItens[osId]) {
             const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
-            if (item) item[field] = value;
+            if (item) {
+                item[field] = value;
+                if (field === 'verso_tipo') {
+                    item.verso = (value !== 'SÓ FRENTE');
+                }
+            }
         }
         if (String(osId).includes('vibe')) { 
             console.log('[OS] Ignorando auto-save para BD no item Vibecode:', itemId); 
             return; 
         }
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const { error } = await supabaseClient
-                .from('producao_os_itens')
-                .update({ [field]: value })
-                .eq('id', parseInt(itemId, 10));
-            if (error) console.error(`[OS] Erro ao auto-salvar ${field}:`, error);
+            const isUUID = isNaN(parseInt(itemId, 10)) || String(itemId).includes('-');
+            if (isUUID) {
+                const updatePayload = { [field]: value };
+                if (field === 'verso_tipo') {
+                    updatePayload.frente_verso = (value !== 'SÓ FRENTE');
+                }
+                const { error } = await supabaseClient
+                    .from('pedidos_modelos')
+                    .update(updatePayload)
+                    .eq('id', itemId);
+                if (error) console.error(`[OS] Erro ao auto-salvar pedidos_modelos ${field}:`, error);
+            } else {
+                const { error } = await supabaseClient
+                    .from('producao_os_itens')
+                    .update({ [field]: value })
+                    .eq('id', parseInt(itemId, 10));
+                if (error) console.error(`[OS] Erro ao auto-salvar producao_os_itens ${field}:`, error);
+            }
         } else {
             await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
                 method: 'PUT',
@@ -13933,8 +13951,12 @@ function renderImpOSQueue() {
                             ${numsOptions}
                         </select>
                     </td>
-                    <td style="padding: 12px; text-align: center; width: 50px;" title="Frente e Verso">
-                        ${item.verso ? '✅' : '--'}
+                    <td style="padding: 12px; width: 90px; min-width: 90px; max-width: 90px;" title="Frente e Verso/Tipo de Verso">
+                        <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
+                            <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
+                            <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
+                            <option value="VERSO VARIÁVEL" ${item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÁVEL</option>
+                        </select>
                     </td>
                     <td style="padding: 12px; width: 90px;" title="Status de Produção">
                         ${getImpressaoBadge(item.impressao)}
@@ -13963,6 +13985,7 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
