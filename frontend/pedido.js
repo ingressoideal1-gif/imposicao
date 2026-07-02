@@ -280,7 +280,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED. Num value:', doc
 
 
 
-    if (!fmtId || !saiId) { console.log(drawPedPreview returning early. fmtId:, fmtId, saiId:, saiId);
+    if (!fmtId || !saiId) {
 
         canvas.width = 300;
 
@@ -880,7 +880,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED. Num value:', doc
 
             // Elementos variáveis (VDP) - Suporte a 2 numerações sobrepostas
 
-        const drawVdpElements = (currentNum, source_id) => { console.log(drawVdpElements CALLED for currentNum:, currentNum ? currentNum.id : null);
+        const drawVdpElements = (currentNum, source_id) => {
 
             if (currentNum && currentNum.elements) {
 
@@ -1386,13 +1386,13 @@ function updatePedSummary() { console.log('updatePedSummary CALLED. Num value:',
 
     const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
-    if (num && num.svg_content && !num._svgImage) { console.log(Loading SVG image for num:, num.id);
+    if (num && num.svg_content && !num._svgImage) {
 
         const img = new Image();
 
         img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(num.svg_content);
 
-        img.onload = () => { console.log(Image loaded for num:, num.id);
+        img.onload = () => {
 
             num._svgImage = img;
 
