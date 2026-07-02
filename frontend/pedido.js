@@ -2044,7 +2044,6 @@ function renderPedOSQueue() {
         const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle;">${setorPcp}</span>` : '';
 
         // Box level Formato & Saida calculation
-        // If the box doesn't have a forced formato (formatoPadraoId), check if the first item has one selected, to populate the header dropdown.
         let boxFmtSel = formatoPadraoId || (groupItens[0].formato_id || '');
         let boxSaiSel = groupItens[0].saida_id || '';
         
@@ -2056,7 +2055,7 @@ function renderPedOSQueue() {
                     setTimeout(() => autoSaveOSItemField(item.id, osId, 'formato_id', formatoPadraoId), 10);
                 }
                 if (!item.saida_id) {
-                    const fObj = state.formatos.find(f => String(f.id) === String(formatoPadraoId));
+                    const fObj = (state.formatos || []).find(f => String(f.id) === String(formatoPadraoId));
                     if (fObj && fObj.default_saida_id) {
                         item.saida_id = fObj.default_saida_id;
                         boxSaiSel = fObj.default_saida_id; // Set header saídas as well
