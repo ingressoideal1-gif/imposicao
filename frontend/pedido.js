@@ -1350,7 +1350,7 @@ function updatePedSummary() {
 
             numSelect2.innerHTML = optionsHtml;
 
-            if (filteredNums.some(n => String(n.id) === String(curNumVal)2)) {
+            if (filteredNums.some(n => String(n.id) === String(curNumVal2))) {
 
                 numSelect2.value = curNumVal2;
 
