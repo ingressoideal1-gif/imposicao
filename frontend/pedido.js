@@ -1983,14 +1983,8 @@ async function enviarParaPedido(itemId, osId) {
 window.enviarParaPedido = enviarParaPedido;
 
 function renderPedOSQueue() {
-    const container = document.getElementById('ped-os-queue');
-    const wrapper = document.getElementById('ped-os-queue-body');
-    const pendingBadge = document.getElementById('ped-os-queue-pending');
-    const numeroBadge = document.getElementById('ped-os-queue-numero');
-    
-    // We removed the main header from HTML, so we don't have numeroBadge/pendingBadge there anymore.
-    // That's fine, we just won't update them if they don't exist.
-    
+    const container = document.getElementById( 'ped-os-queue' );
+    const wrapper = document.getElementById( 'ped-os-queue-body' );
     if (!container || !wrapper) return;
 
     const activeItem = state.activeOSItem;
@@ -2008,7 +2002,6 @@ function renderPedOSQueue() {
 
     container.style.display = 'block';
 
-    // Group items by _vibe_id_produto
     const groups = {};
     itens.forEach(item => {
         const prodId = item._vibe_id_produto || 'sem_produto';
@@ -2022,6 +2015,9 @@ function renderPedOSQueue() {
     const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:8px 10px; font-size:1.0rem; width:100%; cursor:pointer;';
     const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:8px 10px; font-size:1.0rem; width:100%; cursor:not-allowed;';
     const btnStyle = 'border:none; border-radius:4px; padding:8px 14px; font-size:0.95rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
+
+    const selectHeaderStyle = 'background:#1e293b; border:1px solid #3b82f6; border-radius:4px; color:#f1f5f9; padding:4px 8px; font-size:0.85rem; cursor:pointer;';
+    const selectHeaderStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:4px 8px; font-size:0.85rem; cursor:not-allowed;';
 
     let html = '';
 
@@ -2047,57 +2043,80 @@ function renderPedOSQueue() {
 
         const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle;">${setorPcp}</span>` : '';
 
-        // Box com contorno azul e título amarelo em destaque
+        // Box level Formato & Saida calculation
+        // If the box doesn't have a forced formato (formatoPadraoId), check if the first item has one selected, to populate the header dropdown.
+        let boxFmtSel = formatoPadraoId || (groupItens[0].formato_id || '');
+        let boxSaiSel = groupItens[0].saida_id || '';
+        
+        // If there's a forced formato, auto-apply it to all items if missing
+        if (formatoPadraoId) {
+            groupItens.forEach(item => {
+                if (String(item.formato_id) !== String(formatoPadraoId)) {
+                    item.formato_id = formatoPadraoId;
+                    setTimeout(() => autoSaveOSItemField(item.id, osId, 'formato_id', formatoPadraoId), 10);
+                }
+                if (!item.saida_id) {
+                    const fObj = state.formatos.find(f => String(f.id) === String(formatoPadraoId));
+                    if (fObj && fObj.default_saida_id) {
+                        item.saida_id = fObj.default_saida_id;
+                        boxSaiSel = fObj.default_saida_id; // Set header saídas as well
+                        setTimeout(() => autoSaveOSItemField(item.id, osId, 'saida_id', fObj.default_saida_id), 10);
+                    }
+                }
+            });
+        }
+
+        const dropdownFmtDisabled = formatoPadraoId ? 'disabled' : '';
+        const fmtHeaderStyle = formatoPadraoId ? selectHeaderStyleDisabled : selectHeaderStyle;
+        
+        const formatosOptions = (state.formatos || []).map(f => {
+            const sel = String(f.id) === String(boxFmtSel) ? 'selected' : '';
+            return `<option value="${f.id}" ${sel}>${f.name}</option>`;
+        }).join('');
+        
+        const saidasOptions = (state.saidas || []).map(s => {
+            const sel = String(s.id) === String(boxSaiSel) ? 'selected' : '';
+            return `<option value="${s.id}" ${sel}>${s.name}</option>`;
+        }).join('');
+
+        const headerDropdowns = `
+            <div style="display:flex; gap:10px; align-items:center;" onclick="event.stopPropagation()">
+                <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato Padrão do Produto">
+                    <option value="">— Formato —</option>
+                    ${formatosOptions}
+                </select>
+                <select style="${selectHeaderStyle}" onchange="updateBoxSaida('${osId}', '${prodId}', this.value)" title="Saída Padrão do Produto">
+                    <option value="">— Saída —</option>
+                    ${saidasOptions}
+                </select>
+                <span id="box-arrow-${prodId}-${funcName}" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-${funcName}', 'box-arrow-${prodId}-${funcName}')">▼</span>
+            </div>
+        `;
+
         html += `
         <div class="card mb-3" style="background:#1e293b; border: 2px solid var(--blue); border-radius: 6px; overflow:hidden;" data-setor="${setorPcp}">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue); cursor:pointer;" onclick="toggleBox('box-body-${prodId}', 'box-arrow-${prodId}')">
-                <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
-                    <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
-                </h5>
-                <span id="box-arrow-${prodId}" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s;">▼</span>
+            <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue);">
+                <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-${funcName}', 'box-arrow-${prodId}-${funcName}')">
+                    <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
+                        <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
+                    </h5>
+                </div>
+                ${headerDropdowns}
             </div>
-            <div class="table-responsive" id="box-body-${prodId}">
+            <div class="table-responsive" id="box-body-${prodId}-${funcName}">
                 <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border:none;">
                     <tbody>
         `;
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            // Highlight para o modelo ativo
             const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 3px solid var(--blue);' : 'border-bottom: 1px solid #334155;';
             const indexModelo = idx + 1;
 
-            let itemFmtId = formatoPadraoId || item.formato_id || '';
-            
-            if (formatoPadraoId && String(item.formato_id) !== String(formatoPadraoId)) {
-                setTimeout(() => autoSaveOSItemField(item.id, osId, 'formato_id', formatoPadraoId), 10);
-                item.formato_id = formatoPadraoId;
-                
-                const fObj = state.formatos.find(f => String(f.id) === String(formatoPadraoId));
-                if (fObj && fObj.default_saida_id && String(item.saida_id) !== String(fObj.default_saida_id)) {
-                    setTimeout(() => autoSaveOSItemField(item.id, osId, 'saida_id', fObj.default_saida_id), 10);
-                    item.saida_id = fObj.default_saida_id;
-                }
-            }
+            let itemFmtId = boxFmtSel;
 
             const coresItem = todasCores.filter(c => !itemFmtId || !c.formato_id || String(c.formato_id) === String(itemFmtId));
             const numsItem  = todasNums.filter(n  => !itemFmtId || !n.formato_id  || String(n.formato_id)  === String(itemFmtId));
-
-            const fmtSel = item.formato_id || '';
-            const saiSel = item.saida_id || '';
-            
-            const dropdownFmtDisabled = formatoPadraoId ? 'disabled' : '';
-            const fmtStyle = formatoPadraoId ? selectStyleDisabled : selectStyle;
-            
-            const formatosOptions = (state.formatos || []).map(f => {
-                const sel = String(f.id) === String(fmtSel) ? 'selected' : '';
-                return `<option value="${f.id}" ${sel}>${f.name}</option>`;
-            }).join('');
-            
-            const saidasOptions = (state.saidas || []).map(s => {
-                const sel = String(s.id) === String(saiSel) ? 'selected' : '';
-                return `<option value="${s.id}" ${sel}>${s.name}</option>`;
-            }).join('');
 
             const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
             const corNomeAtual = item.cor || item.padrao || '';
@@ -2117,29 +2136,21 @@ function renderPedOSQueue() {
             const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
             const nfVal = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
+            const nomeDoModelo = item.produto || '--';
 
             return `
-                <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}">
+                <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="${funcName === 'renderPedOSQueue' ? 'ped' : 'imp'}-queue-row-${item.id}">
                     <td style="padding: 12px; text-align: center; width: 40px;" title="Selecionar Linha">
                         ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                        <strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')">${indexModelo}</strong>
+                        <strong style="cursor:pointer;" onclick="${funcName === 'renderPedOSQueue' ? 'enviarParaPedido' : 'carregarOSItem'}('${item.id}', '${osId}')">${indexModelo}</strong>
                     </td>
                     <td style="padding: 12px; font-family: monospace; font-size: 0.95rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
+                    <td style="padding: 12px; font-size: 0.95rem; font-weight:600; color:#e2e8f0; min-width:120px;" title="Nome do Modelo">
+                        ${nomeDoModelo}
+                    </td>
                     
-                    <td style="padding: 12px; width: 120px;" title="Formato">
-                        <select style="${fmtStyle}" ${dropdownFmtDisabled} onchange="impQueueUpdateFormato('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                            <option value="">— Formato —</option>
-                            ${formatosOptions}
-                        </select>
-                    </td>
-                    <td style="padding: 12px; width: 120px;" title="Saída">
-                        <select style="${selectStyle}" onchange="impQueueUpdateSaida('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                            <option value="">— Saída —</option>
-                            ${saidasOptions}
-                        </select>
-                    </td>
                     <td style="padding: 12px; width: 70px;" title="Quantidade">
                         <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
                             onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"

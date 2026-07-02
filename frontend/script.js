@@ -17225,3 +17225,38 @@ window.impQueueUpdateSaida = function(itemId, osId, value) {
         if(typeof drawPedPreview === 'function') drawPedPreview();
     }
 };
+
+window.updateBoxFormato = async function(osId, prodId, formatoId) {
+    if (!state.osItens[osId]) return;
+    const items = state.osItens[osId].filter(i => String(i._vibe_id_produto || 'sem_produto') === String(prodId));
+    let fObj = state.formatos.find(f => String(f.id) === String(formatoId));
+    let defaultSaida = fObj ? fObj.default_saida_id : '';
+    
+    for (const item of items) {
+        item.formato_id = formatoId;
+        autoSaveOSItemField(item.id, osId, 'formato_id', formatoId);
+        if (defaultSaida && String(item.saida_id) !== String(defaultSaida)) {
+            item.saida_id = defaultSaida;
+            autoSaveOSItemField(item.id, osId, 'saida_id', defaultSaida);
+        }
+    }
+    
+    if (window.renderPedOSQueue) window.renderPedOSQueue();
+    if (window.renderImpOSQueue) window.renderImpOSQueue();
+    if (window.updatePedSummary) window.updatePedSummary();
+    if (window.updateImpSummary) window.updateImpSummary();
+};
+
+window.updateBoxSaida = async function(osId, prodId, saidaId) {
+    if (!state.osItens[osId]) return;
+    const items = state.osItens[osId].filter(i => String(i._vibe_id_produto || 'sem_produto') === String(prodId));
+    for (const item of items) {
+        item.saida_id = saidaId;
+        autoSaveOSItemField(item.id, osId, 'saida_id', saidaId);
+    }
+    
+    if (window.renderPedOSQueue) window.renderPedOSQueue();
+    if (window.renderImpOSQueue) window.renderImpOSQueue();
+    if (window.updatePedSummary) window.updatePedSummary();
+    if (window.updateImpSummary) window.updateImpSummary();
+};
