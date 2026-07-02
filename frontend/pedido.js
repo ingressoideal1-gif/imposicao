@@ -256,7 +256,7 @@ async function loadPedArtFile(file) {
 }
 window.loadPedArtFile = loadPedArtFile;
 
-function drawPedPreview() {
+function drawPedPreview() { console.log('drawPedPreview CALLED. Num value:', document.getElementById('ped-numeracao')?.value);
 
     const canvas = document.getElementById('ped-preview-canvas');
 
@@ -280,7 +280,7 @@ function drawPedPreview() {
 
 
 
-    if (!fmtId || !saiId) {
+    if (!fmtId || !saiId) { console.log(drawPedPreview returning early. fmtId:, fmtId, saiId:, saiId);
 
         canvas.width = 300;
 
@@ -880,7 +880,7 @@ function drawPedPreview() {
 
             // Elementos variáveis (VDP) - Suporte a 2 numerações sobrepostas
 
-        const drawVdpElements = (currentNum, source_id) => {
+        const drawVdpElements = (currentNum, source_id) => { console.log(drawVdpElements CALLED for currentNum:, currentNum ? currentNum.id : null);
 
             if (currentNum && currentNum.elements) {
 
@@ -1260,7 +1260,7 @@ function drawPedPreview() {
 }
 window.drawPedPreview = drawPedPreview;
 
-function updatePedSummary() {
+function updatePedSummary() { console.log('updatePedSummary CALLED. Num value:', document.getElementById('ped-numeracao')?.value);
 
     const fmtSelect = document.getElementById('ped-formato');
 
@@ -1386,13 +1386,13 @@ function updatePedSummary() {
 
     const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
-    if (num && num.svg_content && !num._svgImage) {
+    if (num && num.svg_content && !num._svgImage) { console.log(Loading SVG image for num:, num.id);
 
         const img = new Image();
 
         img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(num.svg_content);
 
-        img.onload = () => {
+        img.onload = () => { console.log(Image loaded for num:, num.id);
 
             num._svgImage = img;
 

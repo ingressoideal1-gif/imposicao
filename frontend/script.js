@@ -5629,7 +5629,7 @@ async function loadImpArtFile(file) {
 
 
 
-function drawPreview() {
+function drawPreview() { console.log(drawPreview CALLED. Num value:, document.getElementById(imp-numeracao)?.value);
 
     const canvas = document.getElementById('preview-canvas');
 
@@ -7099,7 +7099,7 @@ async function loadMapaTeatroData(mapaId) {
     drawPreview();
 }
 
-function updateImpSummary() {
+function updateImpSummary() { console.log(updateImpSummary CALLED. Num value:, document.getElementById(imp-numeracao)?.value);
 
     const fmtSelect = document.getElementById('imp-formato');
 
