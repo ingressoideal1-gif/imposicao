@@ -2018,8 +2018,8 @@ function renderPedOSQueue() {
     const todasCores = state.cores || [];
     const todasNums = state.numeracoes || [];
     const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%;';
-    const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%; max-width:100%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; cursor:pointer;';
-    const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%; cursor:not-allowed;';
+    const selectStyle = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; color: #ffffff; padding: 8px 12px; font-size: 1.15rem; width: 100%; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; cursor: pointer; text-align: center; text-align-last: center; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: all 0.2s ease;';
+    const selectStyleDisabled = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: rgba(255, 255, 255, 0.5); padding: 8px 12px; font-size: 1.15rem; width: 100%; cursor: not-allowed; text-align: center; text-align-last: center; font-weight: 600;';
     const btnStyle = 'border:none; border-radius:6px; padding:10px 18px; font-size:1.05rem; cursor:pointer; font-weight:700; transition:all 0.2s ease; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);';
 
     const selectHeaderStyle = 'background:#1e293b; border:1px solid #3b82f6; border-radius:4px; color:#f1f5f9; padding:4px 8px; font-size:0.85rem; cursor:pointer;';
@@ -2243,6 +2243,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 

@@ -1812,6 +1812,30 @@ body.not-logged-in .app-shell {
 .hover-row:hover {
     opacity: 0.6 !important;
 }
+.hover-row:has(select:hover),
+.hover-row:has(button:hover) {
+    opacity: 1 !important;
+}
+
+/* Estilo premium e hovers para os dropdowns select na fila de modelos */
+.hover-row select {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    text-align: center !important;
+    text-align-last: center !important;
+}
+.hover-row select:hover {
+    background: rgba(30, 41, 59, 0.95) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4) !important;
+    transform: translateY(-1px);
+}
+.hover-row select:focus {
+    outline: none !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4) !important;
+}
 
 /* Remove spinner arrows from number inputs */
 input[type=number]::-webkit-outer-spin-button,
