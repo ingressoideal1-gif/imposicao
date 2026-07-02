@@ -13924,39 +13924,57 @@ function renderImpOSQueue() {
                         ${nomeDoModelo}
                     </td>
                     
-                    <td style="padding: 12px; width: 105px;" title="Quantidade">
-                        <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
-                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
-                            onclick="event.stopPropagation()" />
+                    <td style="padding: 12px; width: 145px; min-width: 145px; max-width: 145px;" title="Quantidade">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">QTD</span>
+                            <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
+                                onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
+                                onclick="event.stopPropagation()" />
+                        </div>
                     </td>
-                    <td style="padding: 12px; width: 105px;" title="Num. Inicial">
-                        <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
-                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
-                            onclick="event.stopPropagation()" />
+                    <td style="padding: 12px; width: 135px; min-width: 135px; max-width: 135px;" title="Num. Inicial">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">NI</span>
+                            <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
+                                onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
+                                onclick="event.stopPropagation()" />
+                        </div>
                     </td>
-                    <td style="padding: 12px; width: 105px;" title="Num. Final">
-                        <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
-                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
-                            onclick="event.stopPropagation()" />
+                    <td style="padding: 12px; width: 135px; min-width: 135px; max-width: 135px;" title="Num. Final">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">NF</span>
+                            <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
+                                onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                                onclick="event.stopPropagation()" />
+                        </div>
                     </td>
-                    <td style="padding: 12px; width: 60px; min-width: 60px; max-width: 60px;" title="Cor">
-                        <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                            <option value="">— Cor —</option>
-                            ${coresOptions}
-                        </select>
+                    <td style="padding: 12px; width: 105px; min-width: 105px; max-width: 105px;" title="Cor">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">COR</span>
+                            <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                                <option value="">— Cor —</option>
+                                ${coresOptions}
+                            </select>
+                        </div>
                     </td>
-                    <td style="padding: 12px; width: 70px; min-width: 70px; max-width: 70px;" title="Numeração">
-                        <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                            <option value="">${numValDisplay || '— Numeração —'}</option>
-                            ${numsOptions}
-                        </select>
+                    <td style="padding: 12px; width: 115px; min-width: 115px; max-width: 115px;" title="Numeração">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">Núm.</span>
+                            <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                                <option value="">${numValDisplay || '— Numeração —'}</option>
+                                ${numsOptions}
+                            </select>
+                        </div>
                     </td>
-                    <td style="padding: 12px; width: 90px; min-width: 90px; max-width: 90px;" title="Frente e Verso/Tipo de Verso">
-                        <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
-                            <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
-                            <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
-                            <option value="VERSO VARIÁVEL" ${item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÁVEL</option>
-                        </select>
+                    <td style="padding: 12px; width: 145px; min-width: 145px; max-width: 145px;" title="Frente e Verso/Tipo de Verso">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">Verso</span>
+                            <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
+                                <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
+                                <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
+                                <option value="VERSO VARIÁVEL" ${item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÁVEL</option>
+                            </select>
+                        </div>
                     </td>
                     <td style="padding: 12px; width: 90px;" title="Status de Produção">
                         ${getImpressaoBadge(item.impressao)}
@@ -13985,6 +14003,7 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
