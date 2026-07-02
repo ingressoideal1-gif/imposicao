@@ -24,7 +24,7 @@ function applyPedFormatoDefaults() {
         const saidaSel = document.getElementById('ped-saida');
         if (saidaSel) {
             // Verifica se a opção existe
-            if (Array.from(saidaSel.options).some(opt => opt.value === fmt.default_saida_id)) {
+            if (Array.from(saidaSel.options).some(opt => String(opt.value) === String(fmt.default_saida_id))) {
                 saidaSel.value = fmt.default_saida_id;
             }
         }
@@ -32,7 +32,7 @@ function applyPedFormatoDefaults() {
     
     // Cut & Stack mode
     if (fmt.default_cut_stack_mode) {
-        const modeSel = document.getElementById('ped-cut-stack-mode');
+        const modeSel = document.getElementById('ped-cutstack-mode');
         if (modeSel) modeSel.value = fmt.default_cut_stack_mode;
     }
     

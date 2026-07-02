@@ -2153,7 +2153,7 @@ function applyFormatoDefaults() {
         const saidaSel = document.getElementById('imp-saida');
         if (saidaSel) {
             // Verifica se a opção existe
-            if (Array.from(saidaSel.options).some(opt => opt.value === fmt.default_saida_id)) {
+            if (Array.from(saidaSel.options).some(opt => String(opt.value) === String(fmt.default_saida_id))) {
                 saidaSel.value = fmt.default_saida_id;
             }
         }
@@ -2161,7 +2161,7 @@ function applyFormatoDefaults() {
     
     // Cut & Stack mode
     if (fmt.default_cut_stack_mode) {
-        const modeSel = document.getElementById('imp-cut-stack-mode');
+        const modeSel = document.getElementById('imp-cutstack-mode');
         if (modeSel) modeSel.value = fmt.default_cut_stack_mode;
     }
     
