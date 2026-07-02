@@ -13886,7 +13886,12 @@ function renderImpOSQueue() {
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;' : 'border-bottom: 1px solid #334155;';
+            const statusImpressaoVal = item.status_impressao || 'Aguardando';
+            const isImpresso = statusImpressaoVal === 'IMPRESSO';
+            const inactiveBg = isImpresso ? '#007f41' : '#1473e6';
+            const rowBg = isActive
+                ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;'
+                : `background: ${inactiveBg}; border-bottom: 1px solid rgba(255, 255, 255, 0.15);`;
 
             let itemFmtId = boxFmtSel;
 
@@ -13976,8 +13981,14 @@ function renderImpOSQueue() {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 90px;" title="Status de Produção">
-                        ${getImpressaoBadge(item.impressao)}
+                    <td style="padding: 12px; width: 180px; min-width: 180px; max-width: 180px;" title="Status de Produção">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
+                            <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
+                                <option value="Aguardando" ${item.status_impressao === 'Aguardando' || !item.status_impressao ? 'selected' : ''}>Aguardando</option>
+                                <option value="IMPRESSO" ${item.status_impressao === 'IMPRESSO' ? 'selected' : ''}>IMPRESSO</option>
+                            </select>
+                        </div>
                     </td>
                     <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
                         <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
@@ -14003,6 +14014,7 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
@@ -14100,12 +14112,18 @@ function impQueueUpdateField(itemId, osId, field, value) {
         ? (parseInt(value) || 0)
         : value;
     autoSaveOSItemField(itemId, osId, dbField, dbValue);
+
+    if (field === 'status_impressao') {
+        renderImpOSQueue();
+    }
 }
 
 /** Gerar PDF para o item específico */
 async function impQueueGerarPDF(itemId, osId) {
     // Carregar o item na imposição primeiro
     await enviarParaImposicao(itemId, osId);
+    // Definir status como IMPRESSO
+    impQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
     // Aguardar renderização e então acionar o botão de gerar PDF
     setTimeout(() => {
         const btnGerar = document.getElementById('btn-gerar-pdf') || document.querySelector('[onclick*="gerarPDF"]') || document.querySelector('[onclick*="generatePDF"]');
@@ -14124,6 +14142,8 @@ async function impQueueGerarPDF(itemId, osId) {
 /** Imprimir o item específico */
 async function impQueueImprimir(itemId, osId) {
     await enviarParaImposicao(itemId, osId);
+    // Definir status como IMPRESSO
+    impQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
     setTimeout(() => {
         const btnImprimir = document.getElementById('btn-imprimir') || document.querySelector('[onclick*="imprimir"]') || document.querySelector('[onclick*="print"]');
         if (btnImprimir) {

@@ -2110,7 +2110,12 @@ function renderPedOSQueue() {
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;' : 'background: #1473e6; border-bottom: 1px solid rgba(255, 255, 255, 0.15);';
+            const statusImpressaoVal = item.status_impressao || 'Aguardando';
+            const isImpresso = statusImpressaoVal === 'IMPRESSO';
+            const inactiveBg = isImpresso ? '#007f41' : '#1473e6';
+            const rowBg = isActive
+                ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;'
+                : `background: ${inactiveBg}; border-bottom: 1px solid rgba(255, 255, 255, 0.15);`;
 
             let itemFmtId = boxFmtSel;
 
@@ -2200,8 +2205,14 @@ function renderPedOSQueue() {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 90px;" title="Status de Produção">
-                        ${getImpressaoBadge(item.impressao)}
+                    <td style="padding: 12px; width: 180px; min-width: 180px; max-width: 180px;" title="Status de Produção">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
+                            <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
+                                <option value="Aguardando" ${item.status_impressao === 'Aguardando' || !item.status_impressao ? 'selected' : ''}>Aguardando</option>
+                                <option value="IMPRESSO" ${item.status_impressao === 'IMPRESSO' ? 'selected' : ''}>IMPRESSO</option>
+                            </select>
+                        </div>
                     </td>
                     <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
                         <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
@@ -2227,6 +2238,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
@@ -3026,6 +3038,8 @@ window.toggleBox = function(bodyId, arrowId) {
 // Helpers para gerar PDF e imprimir a partir da fila de itens no menu Pedido
 async function pedQueueGerarPDF(itemId, osId) {
     await enviarParaPedido(itemId, osId);
+    // Definir status como IMPRESSO
+    pedQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
     setTimeout(() => {
         const btnGerar = document.getElementById('btn-impose');
         if (btnGerar) {
@@ -3038,6 +3052,8 @@ async function pedQueueGerarPDF(itemId, osId) {
 
 async function pedQueueImprimir(itemId, osId) {
     await enviarParaPedido(itemId, osId);
+    // Definir status como IMPRESSO
+    pedQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
     setTimeout(() => {
         const btnImprimir = document.getElementById('btn-impose-print');
         if (btnImprimir) {
@@ -3109,6 +3125,10 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
         }
     }
     enviarParaPedido(itemId, osId);
+
+    if (field === 'status_impressao') {
+        renderPedOSQueue();
+    }
 }
 
 window.pedQueueGerarPDF = pedQueueGerarPDF;
