@@ -2012,9 +2012,9 @@ function renderPedOSQueue() {
 
     const todasCores = state.cores || [];
     const todasNums = state.numeracoes || [];
-    const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:8px 10px; font-size:1.0rem; width:100%;';
-    const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:8px 10px; font-size:1.0rem; width:100%; max-width:100%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; cursor:pointer;';
-    const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:8px 10px; font-size:1.0rem; width:100%; cursor:not-allowed;';
+    const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%;';
+    const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%; max-width:100%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; cursor:pointer;';
+    const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%; cursor:not-allowed;';
     const btnStyle = 'border:none; border-radius:4px; padding:8px 14px; font-size:0.95rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
 
     const selectHeaderStyle = 'background:#1e293b; border:1px solid #3b82f6; border-radius:4px; color:#f1f5f9; padding:4px 8px; font-size:0.85rem; cursor:pointer;';
@@ -2141,58 +2141,58 @@ function renderPedOSQueue() {
             return `
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}"
                     onclick="enviarParaPedido('${jsItemId}', '${jsOsId}')">
-                    <td style="padding: 12px; font-size: 0.95rem; font-weight:600; color:var(--warning); min-width:80px;" title="Código do Modelo">
+                    <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:100px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
-                    <td style="padding: 12px; font-size: 0.95rem; font-weight:600; color:#e2e8f0; min-width:120px;" title="Nome do Modelo">
+                    <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:140px;" title="Nome do Modelo">
                         ${nomeDoModelo}
                     </td>
                     
-                    <td style="padding: 12px; width: 145px; min-width: 145px; max-width: 145px;" title="Quantidade">
+                    <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Quantidade">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">QTD</span>
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">QTD</span>
                             <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 135px; min-width: 135px; max-width: 135px;" title="Num. Inicial">
+                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Inicial">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">NI</span>
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NI</span>
                             <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 135px; min-width: 135px; max-width: 135px;" title="Num. Final">
+                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Final">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">NF</span>
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NF</span>
                             <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 105px; min-width: 105px; max-width: 105px;" title="Cor">
+                    <td style="padding: 12px; width: 125px; min-width: 125px; max-width: 125px;" title="Cor">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">COR</span>
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">COR</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                                 <option value="">— Cor —</option>
                                 ${coresOptions}
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 115px; min-width: 115px; max-width: 115px;" title="Numeração">
+                    <td style="padding: 12px; width: 135px; min-width: 135px; max-width: 135px;" title="Numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">Núm.</span>
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Núm.</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                                 <option value="">${numValDisplay || '— Numeração —'}</option>
                                 ${numsOptions}
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 145px; min-width: 145px; max-width: 145px;" title="Frente e Verso/Tipo de Verso">
+                    <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Frente e Verso/Tipo de Verso">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 0.85rem; font-weight: bold; color: #94a3b8; white-space: nowrap;">Verso</span>
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Verso</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
                                 <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
                                 <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
@@ -2227,6 +2227,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
