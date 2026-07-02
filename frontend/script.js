@@ -13827,21 +13827,21 @@ function renderImpOSQueue() {
                     <option value="">— Saída —</option>
                     ${saidasOptions}
                 </select>
-                <span id="box-arrow-${prodId}-${funcName}" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-${funcName}', 'box-arrow-${prodId}-${funcName}')">▼</span>
+                <span id="box-arrow-${prodId}-renderImpOSQueue" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-renderImpOSQueue', 'box-arrow-${prodId}-renderImpOSQueue')">▼</span>
             </div>
         `;
 
         html += `
         <div class="card mb-3" style="background:#1e293b; border: 2px solid var(--blue); border-radius: 6px; overflow:hidden;" data-setor="${setorPcp}">
             <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue);">
-                <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-${funcName}', 'box-arrow-${prodId}-${funcName}')">
+                <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderImpOSQueue', 'box-arrow-${prodId}-renderImpOSQueue')">
                     <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
                         <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
                     </h5>
                 </div>
                 ${headerDropdowns}
             </div>
-            <div class="table-responsive" id="box-body-${prodId}-${funcName}">
+            <div class="table-responsive" id="box-body-${prodId}-renderImpOSQueue">
                 <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border:none;">
                     <tbody>
         `;
@@ -13877,10 +13877,10 @@ function renderImpOSQueue() {
             const nomeDoModelo = item.produto || '--';
 
             return `
-                <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="${funcName === 'renderPedOSQueue' ? 'ped' : 'imp'}-queue-row-${item.id}">
+                <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="imp-queue-row-${item.id}">
                     <td style="padding: 12px; text-align: center; width: 40px;" title="Selecionar Linha">
                         ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                        <strong style="cursor:pointer;" onclick="${funcName === 'renderPedOSQueue' ? 'enviarParaPedido' : 'carregarOSItem'}('${item.id}', '${osId}')">${indexModelo}</strong>
+                        <strong style="cursor:pointer;" onclick="carregarOSItem('${item.id}', '${osId}')">${indexModelo}</strong>
                     </td>
                     <td style="padding: 12px; font-family: monospace; font-size: 0.95rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
                         ${item.modelo || '--'}
@@ -13923,6 +13923,7 @@ function renderImpOSQueue() {
                         ${getImpressaoBadge(item.impressao)}
                     </td>
                     <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
+                        
                         <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
                             onclick="event.stopPropagation(); impQueueGerarPDF('${item.id}', '${osId}')">
                             📄 PDF
@@ -13931,6 +13932,7 @@ function renderImpOSQueue() {
                             onclick="event.stopPropagation(); impQueueImprimir('${item.id}', '${osId}')">
                             🖨️ Imp.
                         </button>
+    
                     </td>
                 </tr>
             `;
@@ -13946,6 +13948,7 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 // -----------------------------------------------------------------------
