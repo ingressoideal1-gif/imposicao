@@ -2050,12 +2050,13 @@ function renderPedOSQueue() {
         // Box com contorno azul e título amarelo em destaque
         html += `
         <div class="card mb-3" style="background:#1e293b; border: 2px solid var(--blue); border-radius: 6px; overflow:hidden;" data-setor="${setorPcp}">
-            <div class="card-header" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue);">
+            <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue); cursor:pointer;" onclick="toggleBox('box-body-${prodId}', 'box-arrow-${prodId}')">
                 <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
                     <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
                 </h5>
+                <span id="box-arrow-${prodId}" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s;">▼</span>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" id="box-body-${prodId}">
                 <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:0.8rem; margin:0; width:100%; border:none;">
                     <tbody>
         `;
@@ -2949,3 +2950,16 @@ window.runPedImposition = async function (mode) {
 
 };
 
+
+window.toggleBox = function(bodyId, arrowId) {
+    const body = document.getElementById(bodyId);
+    const arrow = document.getElementById(arrowId);
+    if (!body) return;
+    if (body.style.display === 'none') {
+        body.style.display = '';
+        if (arrow) arrow.textContent = '▼';
+    } else {
+        body.style.display = 'none';
+        if (arrow) arrow.textContent = '▶';
+    }
+};
