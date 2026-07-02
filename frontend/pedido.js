@@ -2018,10 +2018,10 @@ function renderPedOSQueue() {
 
     const todasCores = state.cores || [];
     const todasNums = state.numeracoes || [];
-    const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:4px 6px; font-size:0.75rem; width:100%;';
-    const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:4px 6px; font-size:0.75rem; width:100%; cursor:pointer;';
-    const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:4px 6px; font-size:0.75rem; width:100%; cursor:not-allowed;';
-    const btnStyle = 'border:none; border-radius:4px; padding:5px 10px; font-size:0.75rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
+    const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:8px 10px; font-size:1.0rem; width:100%;';
+    const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:8px 10px; font-size:1.0rem; width:100%; cursor:pointer;';
+    const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:8px 10px; font-size:1.0rem; width:100%; cursor:not-allowed;';
+    const btnStyle = 'border:none; border-radius:4px; padding:8px 14px; font-size:0.95rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
 
     let html = '';
 
@@ -2057,7 +2057,7 @@ function renderPedOSQueue() {
                 <span id="box-arrow-${prodId}" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s;">▼</span>
             </div>
             <div class="table-responsive" id="box-body-${prodId}">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:0.8rem; margin:0; width:100%; border:none;">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border:none;">
                     <tbody>
         `;
 
@@ -2120,60 +2120,60 @@ function renderPedOSQueue() {
 
             return `
                 <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}">
-                    <td style="padding: 8px; text-align: center; width: 40px;" title="Selecionar Linha">
+                    <td style="padding: 12px; text-align: center; width: 40px;" title="Selecionar Linha">
                         ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
                         <strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')">${indexModelo}</strong>
                     </td>
-                    <td style="padding: 8px; font-family: monospace; font-size: 0.75rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
+                    <td style="padding: 12px; font-family: monospace; font-size: 0.95rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
                     
-                    <td style="padding: 8px; width: 120px;" title="Formato">
+                    <td style="padding: 12px; width: 120px;" title="Formato">
                         <select style="${fmtStyle}" ${dropdownFmtDisabled} onchange="impQueueUpdateFormato('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Formato —</option>
                             ${formatosOptions}
                         </select>
                     </td>
-                    <td style="padding: 8px; width: 120px;" title="Saída">
+                    <td style="padding: 12px; width: 120px;" title="Saída">
                         <select style="${selectStyle}" onchange="impQueueUpdateSaida('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Saída —</option>
                             ${saidasOptions}
                         </select>
                     </td>
-                    <td style="padding: 8px; width: 70px;" title="Quantidade">
+                    <td style="padding: 12px; width: 70px;" title="Quantidade">
                         <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
                             onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
-                    <td style="padding: 8px; min-width: 120px;" title="Cor">
+                    <td style="padding: 12px; min-width: 120px;" title="Cor">
                         <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Cor —</option>
                             ${coresOptions}
                         </select>
                     </td>
-                    <td style="padding: 8px; min-width: 140px;" title="Numeração">
+                    <td style="padding: 12px; min-width: 140px;" title="Numeração">
                         <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">${numValDisplay || '— Numeração —'}</option>
                             ${numsOptions}
                         </select>
                     </td>
-                    <td style="padding: 8px; width: 70px;" title="Num. Inicial">
+                    <td style="padding: 12px; width: 70px;" title="Num. Inicial">
                         <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
                             onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
-                    <td style="padding: 8px; width: 70px;" title="Num. Final">
+                    <td style="padding: 12px; width: 70px;" title="Num. Final">
                         <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
                             onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
-                    <td style="padding: 8px; text-align: center; width: 50px;" title="Frente e Verso">
+                    <td style="padding: 12px; text-align: center; width: 50px;" title="Frente e Verso">
                         ${item.verso ? '✅' : '--'}
                     </td>
-                    <td style="padding: 8px; width: 90px;" title="Status de Produção">
+                    <td style="padding: 12px; width: 90px;" title="Status de Produção">
                         ${getImpressaoBadge(item.impressao)}
                     </td>
-                    <td style="padding: 8px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
+                    <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
                         <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
                             onclick="event.stopPropagation(); impQueueGerarPDF('${item.id}', '${osId}')">
                             📄 PDF

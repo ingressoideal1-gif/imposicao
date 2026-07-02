@@ -4480,7 +4480,7 @@ function renderElementsList() {
 
                         <span class="badge ${typeBadge[el.type]}">${typeLabel[el.type]}</span>
 
-                        <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
+                        <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.95rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
 
                     </span>
 
@@ -4681,7 +4681,7 @@ function renderElementsList() {
 
                     <span class="badge ${typeBadge[el.type]}">${typeLabel[el.type]}</span>
 
-                    <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
+                    <input class="form-control" style="flex: 1; max-width: 60%; padding: 2px 6px; font-size: 0.95rem; height: 24px; min-width: 80px; background: rgba(0,0,0,0.4);" type="text" placeholder="Nome do item (opcional)" value="${el.name || ''}" onchange="updateEl('${el.id}','name',this.value)" onclick="event.stopPropagation()">
 
                 </span>
 
@@ -14245,7 +14245,7 @@ function renderAmostrasOSItens(osId) {
                                         onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}')">
                                     <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}')">✕ Remover</button>
                                     <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.amostra_arte_base64 ? '(Arte Salva)' : ''}</span>
-                                    <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 0.75rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 0.95rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
                                         <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
                                         <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
                                     </span>
@@ -14322,22 +14322,22 @@ function renderAmostrasOSItens(osId) {
                             <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
                                 Briefing Base do Evento
                             </div>
-                            <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 4px;">
+                            <div style="font-size: 0.95rem; color: var(--text-dim); margin-top: 4px;">
                                 Dados preenchidos pelo comercial para guiar a criação da arte.
                             </div>
                         </div>
                         <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                             <div class="form-group" style="margin: 0;">
-                                <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
+                                <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-file-lines" style="margin-right: 4px;"></i> Nome do Evento / Tema</label>
                                 <input type="text" id="briefing-nome-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'nome_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="Nome do Evento">
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                                 <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-calendar" style="margin-right: 4px;"></i> Data do Evento</label>
+                                    <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-regular fa-calendar" style="margin-right: 4px;"></i> Data do Evento</label>
                                     <input type="text" id="briefing-data-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'data_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="DD/MM/AAAA">
                                 </div>
                                 <div class="form-group" style="margin: 0;">
-                                    <label style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i> Local da Festa/Evento</label>
+                                    <label style="font-size: 0.95rem; color: var(--text-dim); font-weight: 600;"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i> Local da Festa/Evento</label>
                                     <input type="text" id="briefing-local-${osId}" class="form-control" oninput="saveBriefingField('${osNum}', 'local_evento', this.value)" style="background: rgba(0,0,0,0.02); margin-top: 4px; color: #f59e0b;" placeholder="Local">
                                 </div>
                             </div>
@@ -14357,7 +14357,7 @@ function renderAmostrasOSItens(osId) {
                             <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
                                 Designers Ideal
                             </div>
-                            <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 4px;">
+                            <div style="font-size: 0.95rem; color: var(--text-dim); margin-top: 4px;">
                                 Equipe de design responsável pela criação de artes.
                             </div>
                         </div>
@@ -14398,7 +14398,7 @@ function renderAmostrasOSItens(osId) {
                                             <div style="font-weight: 700; color: var(--text); font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
                                                 ${d.nome} <span class="designer-badge badge badge-teal" style="display: none; font-size: 0.6rem; padding: 2px 6px;">Selecionado</span>
                                             </div>
-                                            <div style="font-size: 0.75rem; color: var(--text-dim);">${d.email}</div>
+                                            <div style="font-size: 0.95rem; color: var(--text-dim);">${d.email}</div>
                                         </div>
                                     </div>
                                     <div style="text-align: right; font-size: 0.7rem; color: var(--text-dim);">
@@ -15674,7 +15674,7 @@ async function loadUltimosPedidos(osId, clienteNome) {
         const html = propostas.map(p => {
             const ev = eventoMap[p.id_int] || {};
             const nome = ev.nome_evento ? ev.nome_evento : 'Evento não informado no Briefing';
-            const dataEv = ev.data_evento ? `<div style="margin-top: 4px; font-size: 0.75rem; color: var(--text-dim)"><i class="fa-regular fa-calendar"></i> Evento: ${ev.data_evento}</div>` : '';
+            const dataEv = ev.data_evento ? `<div style="margin-top: 4px; font-size: 0.95rem; color: var(--text-dim)"><i class="fa-regular fa-calendar"></i> Evento: ${ev.data_evento}</div>` : '';
             let dataCriacao = '';
             if (p.created_at) {
                 const d = new Date(p.created_at);
@@ -15684,7 +15684,7 @@ async function loadUltimosPedidos(osId, clienteNome) {
                 <div style="padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); transition: all 0.2s;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
                         <span style="font-weight: 800; font-size: 0.95rem; color: var(--primary);">#${p.id_int}</span>
-                        <span style="font-size: 0.75rem; color: var(--text-dim); background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 12px;">${dataCriacao}</span>
+                        <span style="font-size: 0.95rem; color: var(--text-dim); background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 12px;">${dataCriacao}</span>
                     </div>
                     <div style="font-size: 0.85rem; font-weight: 600; color: var(--text);">
                         ${nome}
@@ -15982,7 +15982,7 @@ function renderArtesTimeline() {
                 📅 ${new Date(arte.created_at).toLocaleString('pt-BR')} <br>
                 👤 Enviado por: ${arte.enviado_por || 'Sistema'}
             </div>
-            ${arte.url_arquivo ? `<div><a href="${arte.url_arquivo}" target="_blank" class="btn btn-sm btn-secondary" style="font-size: 0.75rem;">👁️ Ver Arquivo</a></div>` : ''}
+            ${arte.url_arquivo ? `<div><a href="${arte.url_arquivo}" target="_blank" class="btn btn-sm btn-secondary" style="font-size: 0.95rem;">👁️ Ver Arquivo</a></div>` : ''}
             ${arte.comentarios_revisao ? `<div style="margin-top: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; font-size: 0.85rem;">💬 ${arte.comentarios_revisao}</div>` : ''}
         </div>
         `;
