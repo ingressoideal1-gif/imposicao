@@ -13561,6 +13561,11 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
 
+    const impPreview = document.getElementById('imp-preview-card-container');
+    if (impPreview) impPreview.style.display = 'block';
+    const pedPreview = document.getElementById('ped-preview-card-container');
+    if (pedPreview) pedPreview.style.display = 'block';
+
     // Navegar para a view de Imposição condicionalmente
     if (switchTab) {
         const navBtn = document.querySelector('[data-view="view-imposicao"]');
@@ -13740,16 +13745,22 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
         return toast('Esta OS não possui itens.', 'error');
     }
 
-    // Pega o primeiro item pendente ou aprovado, se não houver pega o primeiro item.
-    let itemAlvo = itens.find(i => i.impressao !== 'IMPRESSO' && (i.aprovacao === 'APROVADA' || i.aprovacao === 'PRONTA'));
-    if (!itemAlvo) itemAlvo = itens[0];
+    // Inicializar o item ativo com itemId null para que nenhum venha selecionado
+    state.activeOSItem = { itemId: null, osId: osId };
 
-    // Envia o item alvo para o novo menu PEDIDO, o que já carrega a OS toda no painel lateral
-    if (typeof enviarParaPedido === 'function') {
-        enviarParaPedido(itemAlvo.id, osId);
-    } else {
-        enviarParaImposicao(itemAlvo.id, osId);
-    }
+    // Ocultar as janelas de visualização por padrão
+    const impPreview = document.getElementById('imp-preview-card-container');
+    if (impPreview) impPreview.style.display = 'none';
+    const pedPreview = document.getElementById('ped-preview-card-container');
+    if (pedPreview) pedPreview.style.display = 'none';
+
+    // Renderizar as filas de itens
+    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+
+    // Navegar para a view de Pedido
+    const navBtn = document.querySelector('[data-view="view-pedido"]');
+    if (navBtn) navBtn.click();
 }
 
 // -------------------------------------------------------------------------------

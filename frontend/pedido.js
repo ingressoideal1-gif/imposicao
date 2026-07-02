@@ -1806,6 +1806,11 @@ async function enviarParaPedido(itemId, osId) {
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
 
+    const previewContainer = document.getElementById('ped-preview-card-container');
+    if (previewContainer) {
+        previewContainer.style.display = 'block';
+    }
+
     // Navegar para a view de Imposição
     const navBtn = document.querySelector('[data-view="view-pedido"]');
     if (navBtn) navBtn.click();
