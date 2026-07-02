@@ -2017,6 +2017,13 @@ function populateSelects() {
 
     // Imposição -- formato e saída
     const selImpFmt = document.getElementById('imp-formato');
+    const selPedFmt = document.getElementById('ped-formato');
+    if (selPedFmt) {
+        const cur = selPedFmt.value;
+        selPedFmt.innerHTML = '<option value="">-- Selecione --</option>' +
+            state.formatos.map(f => `<option value="${f.id}">${f.name} (${f.width_mm}×${f.height_mm}mm)</option>`).join('');
+        if (cur) selPedFmt.value = cur;
+    }
     if (selImpFmt) {
         const cur = selImpFmt.value;
         selImpFmt.innerHTML = '<option value="">-- Selecione --</option>' +
@@ -2025,17 +2032,27 @@ function populateSelects() {
     }
 
     const selImpSaida = document.getElementById('imp-saida');
+    const selPedSaida = document.getElementById('ped-saida');
     const selFmtDefSaida = document.getElementById('fmt-def-saida');
     if (selImpSaida) {
         const cur = selImpSaida.value;
-        const curDef = selFmtDefSaida ? selFmtDefSaida.value : '';
         const optionsHtml = '<option value="">-- Selecione --</option>' +
             state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-        
         selImpSaida.innerHTML = optionsHtml;
         if (cur) selImpSaida.value = cur;
-        
-        if (selFmtDefSaida) {
+    }
+    if (selPedSaida) {
+        const cur = selPedSaida.value;
+        const optionsHtml = '<option value="">-- Selecione --</option>' +
+            state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        selPedSaida.innerHTML = optionsHtml;
+        if (cur) selPedSaida.value = cur;
+    }
+    if (selFmtDefSaida) {
+        const curDef = selFmtDefSaida.value;
+        const optionsHtml = '<option value="">-- Selecione --</option>' +
+            state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
             selFmtDefSaida.innerHTML = '<option value="">-- Nenhuma (Livre) --</option>' +
                 state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
             if (curDef) selFmtDefSaida.value = curDef;
