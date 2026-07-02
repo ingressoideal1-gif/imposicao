@@ -256,27 +256,35 @@ async function loadPedArtFile(file) {
 }
 window.loadPedArtFile = loadPedArtFile;
 
-function drawPedPreview() { console.log('drawPedPreview CALLED. Num value:', document.getElementById('ped-numeracao')?.value);
+function drawPedPreview() { console.log('drawPedPreview CALLED');
+
+    let fmtId, numId, saiId, start, end, schema = 'strict_assembly';
+    const activeItem = state.activeOSItem;
+    if (activeItem) {
+        const itens = state.osItens[activeItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+        if (item) {
+            fmtId = item.formato_id;
+            numId = item.numeracao_id;
+            saiId = item.saida_id;
+            if (!saiId && fmtId) {
+                const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+                if (fmtObj) saiId = fmtObj.default_saida_id;
+            }
+            start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
+            end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
+            schema = item.cut_stack_mode || document.getElementById('ped-cutstack-mode')?.value || 'strict_assembly';
+        }
+    } else {
+        fmtId = document.getElementById('ped-formato')?.value;
+        numId = document.getElementById('ped-numeracao')?.value;
+        saiId = document.getElementById('ped-saida')?.value;
+        start = parseInt(document.getElementById('ped-start')?.value) || 1;
+        end = parseInt(document.getElementById('ped-end')?.value) || 100;
+        schema = document.getElementById('ped-schema')?.value || 'strict_assembly';
+    }
 
     const canvas = document.getElementById('ped-preview-canvas');
-
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-
-
-
-    const fmtId = document.getElementById('ped-formato').value;
-
-    const numId = document.getElementById('ped-numeracao').value;
-
-    const saiId = document.getElementById('ped-saida').value;
-
-    const start = parseInt(document.getElementById('ped-start').value) || 1;
-
-    const end = parseInt(document.getElementById('ped-end').value) || 100;
-
-    const schema = document.getElementById('ped-schema').value;
 
 
 
@@ -1997,15 +2005,17 @@ function renderPedOSQueue() {
         if (!thead) { thead = document.createElement('thead'); table.insertBefore(thead, tbody); }
         thead.innerHTML = `<tr>
             <th style="padding:4px 6px; width:32px; text-align:center;">M</th>
-            <th style="padding:4px 6px; width:80px;">Modelo</th>
+            <th style="padding:4px 6px; width:70px;">Modelo</th>
             <th style="padding:4px 6px;">Nome</th>
-            <th style="padding:4px 6px; width:60px;">QTD</th>
+            <th style="padding:4px 6px; min-width:110px;">Formato</th>
+            <th style="padding:4px 6px; min-width:90px;">Saída</th>
+            <th style="padding:4px 6px; width:50px;">QTD</th>
             <th style="padding:4px 6px; min-width:110px;">COR</th>
-            <th style="padding:4px 6px; min-width:140px;">Numera\u00e7\u00e3o</th>
-            <th style="padding:4px 6px; width:60px;">NI</th>
-            <th style="padding:4px 6px; width:60px;">NF</th>
-            <th style="padding:4px 6px; width:44px; text-align:center;">Verso</th>
-            <th style="padding:4px 6px;">Status</th>
+            <th style="padding:4px 6px; min-width:110px;">Numeração</th>
+            <th style="padding:4px 6px; width:50px;">NI</th>
+            <th style="padding:4px 6px; width:50px;">NF</th>
+            <th style="padding:4px 6px; width:44px; text-align:center;">Vrs</th>
+            <th style="padding:4px 6px;">Sts</th>
         </tr>`;
     }
 
@@ -2062,8 +2072,22 @@ function renderPedOSQueue() {
                 </td>
                 <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem; color:var(--text-dim);">${item.modelo || '--'}</td>
                 <td style="padding: 5px 8px;"><strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')">${item.produto || '--'}</strong></td>
+                
+                <td style="padding: 5px 4px;">
+                    <select style="${selectStyle}" onchange="impQueueUpdateFormato('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                        <option value="">— Formato —</option>
+                        ${formatosOptions}
+                    </select>
+                </td>
+                <td style="padding: 5px 4px;">
+                    <select style="${selectStyle}" onchange="impQueueUpdateSaida('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                        <option value="">— Saída —</option>
+                        ${saidasOptions}
+                    </select>
+                </td>
                 <td style="padding: 5px 4px;">
                     <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
+
                         onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
                         onclick="event.stopPropagation()" />
                 </td>

@@ -5631,6 +5631,32 @@ async function loadImpArtFile(file) {
 
 function drawPreview() {
 
+    let fmtId, numId, saiId, start, end, schema = 'strict_assembly';
+    const activeItem = state.activeOSItem;
+    if (activeItem) {
+        const itens = state.osItens[activeItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+        if (item) {
+            fmtId = item.formato_id;
+            numId = item.numeracao_id;
+            saiId = item.saida_id;
+            if (!saiId && fmtId) {
+                const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+                if (fmtObj) saiId = fmtObj.default_saida_id;
+            }
+            start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
+            end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
+            schema = item.cut_stack_mode || document.getElementById('imp-cutstack-mode')?.value || 'strict_assembly';
+        }
+    } else {
+        fmtId = document.getElementById('imp-formato')?.value;
+        numId = document.getElementById('imp-numeracao')?.value;
+        saiId = document.getElementById('imp-saida')?.value;
+        start = parseInt(document.getElementById('imp-start')?.value) || 1;
+        end = parseInt(document.getElementById('imp-end')?.value) || 100;
+        schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
+    }
+
     const canvas = document.getElementById('preview-canvas');
 
     if (!canvas) return;
@@ -7678,17 +7704,31 @@ let impositionAbortController = null;
 
 window.runImposition = async function (mode) {
 
-    const fmtId = document.getElementById('imp-formato').value;
-
-    const numId = document.getElementById('imp-numeracao').value;
-
-    const saiId = document.getElementById('imp-saida').value;
-
-    const start = parseInt(document.getElementById('imp-start').value);
-
-    const end = parseInt(document.getElementById('imp-end').value);
-
-    const schema = document.getElementById('imp-schema').value;
+    let fmtId, numId, saiId, start, end, schema = 'strict_assembly';
+    const activeItem = state.activeOSItem;
+    if (activeItem) {
+        const itens = state.osItens[activeItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+        if (item) {
+            fmtId = item.formato_id;
+            numId = item.numeracao_id;
+            saiId = item.saida_id;
+            if (!saiId && fmtId) {
+                const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+                if (fmtObj) saiId = fmtObj.default_saida_id;
+            }
+            start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
+            end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
+            schema = item.cut_stack_mode || document.getElementById('imp-cutstack-mode')?.value || 'strict_assembly';
+        }
+    } else {
+        fmtId = document.getElementById('imp-formato')?.value;
+        numId = document.getElementById('imp-numeracao')?.value;
+        saiId = document.getElementById('imp-saida')?.value;
+        start = parseInt(document.getElementById('imp-start')?.value) || 1;
+        end = parseInt(document.getElementById('imp-end')?.value) || 100;
+        schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
+    }
 
     const rotateEl = document.getElementById('imp-rotate-page');
 
@@ -13583,7 +13623,7 @@ const globalFuzzyMatch = (a, b) => {
  * Envia um item da OS para a tela de Imposição, preenchendo os campos automaticamente
  * com matching inteligente de formato, cor e numeração
  */
-async function enviarParaImposicao(itemId, osId) {
+async function enviarParaImposicao(itemId, osId, switchTab = true) {
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return toast('Item não encontrado.', 'error');
@@ -13591,9 +13631,11 @@ async function enviarParaImposicao(itemId, osId) {
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
 
-    // Navegar para a view de Imposição
-    const navBtn = document.querySelector('[data-view="view-imposicao"]');
-    if (navBtn) navBtn.click();
+    // Navegar para a view de Imposição condicionalmente
+    if (switchTab) {
+        const navBtn = document.querySelector('[data-view="view-imposicao"]');
+        if (navBtn) navBtn.click();
+    }
 
     // --- MATCHING AUTOMÁTICO DE FORMATO (VIA COR OU NOME) E SAÍDA ---
     let formatoId = item.formato_id;
@@ -17265,3 +17307,19 @@ document.addEventListener('keydown', (e) => {
 
 
 
+
+window.impQueueUpdateFormato = function(itemId, osId, value) {
+    autoSaveOSItemField(itemId, osId, 'formato_id', value);
+    if(state.activeOSItem && state.activeOSItem.itemId === itemId) {
+        if(typeof updatePedSummary === 'function') updatePedSummary();
+        if(typeof drawPedPreview === 'function') drawPedPreview();
+    }
+};
+
+window.impQueueUpdateSaida = function(itemId, osId, value) {
+    autoSaveOSItemField(itemId, osId, 'saida_id', value);
+    if(state.activeOSItem && state.activeOSItem.itemId === itemId) {
+        if(typeof updatePedSummary === 'function') updatePedSummary();
+        if(typeof drawPedPreview === 'function') drawPedPreview();
+    }
+};
