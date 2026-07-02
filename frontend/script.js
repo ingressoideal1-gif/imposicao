@@ -12014,7 +12014,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte, impressao')
+                .select('id, id_int, status_arte')
                 .in('id_int', chunk);
                 
             if (error) throw error;
@@ -16688,10 +16688,10 @@ window.onPPDMapChange = onPPDMapChange;
 
 // Exportar funcoes globais (existentes)
 window.gerarLinkCliente = gerarLinkCliente;
-window.clienteAprovarTudo = clienteAprovarTudo;
-window.clienteFinalizarFluxo = clienteFinalizarFluxo;
-window.openClienteLightbox = openClienteLightbox;
-window.closeClienteLightbox = closeClienteLightbox;
+
+
+
+
 window.setFiltroSetor = setFiltroSetor;
 window.setFiltroStatus = setFiltroStatus;
 window.setFiltroSetorArte = setFiltroSetorArte;
