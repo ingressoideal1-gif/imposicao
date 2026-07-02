@@ -2064,6 +2064,18 @@ function renderPedOSQueue() {
         const nfVal = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
         const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
 
+        const fmtSel = item.formato_id || '';
+        const saiSel = item.saida_id || '';
+        const formatosOptions = (state.formatos || []).map(f => {
+            const sel = String(f.id) === String(fmtSel) ? 'selected' : '';
+            return `<option value="${f.id}" ${sel}>${f.name}</option>`;
+        }).join('');
+        const saidasOptions = (state.saidas || []).map(s => {
+            const sel = String(s.id) === String(saiSel) ? 'selected' : '';
+            return `<option value="${s.id}" ${sel}>${s.name}</option>`;
+        }).join('');
+
+
         return `
             <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}">
                 <td style="padding: 5px 8px; text-align: center;">
