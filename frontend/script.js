@@ -7703,8 +7703,6 @@ window.runImposition = async function (mode) {
 
 
 
-    const formato = state.formatos.find(f => f.id === fmtId);
-
     const saida = state.saidas.find(s => s.id === saiId);
 
 
