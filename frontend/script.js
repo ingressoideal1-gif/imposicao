@@ -13232,7 +13232,7 @@ function renderOSItens(osId) {
         
         if (isImpressao) {
             return `
-            <tr class="hover-row" style="transition: all 0.2s; cursor: pointer;" id="row-item-${item.id}" onclick="enviarParaImposicao('${item.id}', '${osId}')">
+            <tr class="hover-row" style="transition: all 0.2s; cursor: pointer;" id="row-item-${item.id}" onclick="typeof enviarParaPedido === 'function' ? enviarParaPedido('${item.id}', '${osId}') : enviarParaImposicao('${item.id}', '${osId}')">
                 <td style="text-align: center; font-weight: bold; color: var(--text-dim);">${indexModelo}</td>
                 <td style="font-family: monospace; font-size: 0.85rem;">${item.modelo || '--'}</td>
                 <td><strong>${item.produto || '--'}</strong></td>
@@ -13291,7 +13291,7 @@ function renderOSItens(osId) {
                     🎨 Artes
                 </button>
                 ` : ''}
-                <button class="btn btn-sm btn-primary" onclick="enviarParaImposicao('${item.id}', '${osId}')" title="Enviar para Imposição" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled' : ''}>
+                <button class="btn btn-sm btn-primary" onclick="typeof enviarParaPedido === 'function' ? enviarParaPedido('${item.id}', '${osId}') : enviarParaImposicao('${item.id}', '${osId}')" title="Enviar para Imposição" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled' : ''}>
                     🖨️ Impor
                 </button>
             </td>
@@ -13869,10 +13869,10 @@ function renderImpOSQueue() {
             <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="imp-queue-row-${item.id}">
                 <td style="padding: 5px 8px; text-align: center;">
                     ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                    <strong style="cursor:pointer;" onclick="enviarParaImposicao('${item.id}', '${osId}')" title="Carregar este modelo">${indexModelo}</strong>
+                    <strong style="cursor:pointer;" onclick="typeof enviarParaPedido === 'function' ? enviarParaPedido('${item.id}', '${osId}') : enviarParaImposicao('${item.id}', '${osId}')" title="Carregar este modelo">${indexModelo}</strong>
                 </td>
                 <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem; color:var(--text-dim);">${item.modelo || '--'}</td>
-                <td style="padding: 5px 8px;"><strong style="cursor:pointer;" onclick="enviarParaImposicao('${item.id}', '${osId}')">${item.produto || '--'}</strong></td>
+                <td style="padding: 5px 8px;"><strong style="cursor:pointer;" onclick="typeof enviarParaPedido === 'function' ? enviarParaPedido('${item.id}', '${osId}') : enviarParaImposicao('${item.id}', '${osId}')">${item.produto || '--'}</strong></td>
                 <td style="padding: 5px 4px;">
                     <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
                         onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
