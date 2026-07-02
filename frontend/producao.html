@@ -1108,34 +1108,8 @@
 
                             <!-- Fila de Itens OS pendentes -->
                             <div id="ped-os-queue" style="display: none; margin-bottom: 16px;">
-                                <div class="card" style="border: 1px solid var(--blue); background: rgba(59,130,246,0.04);">
-                                    <div class="card-header" style="padding: 8px 12px; cursor: pointer;" onclick="togglePedOSQueue()">
-                                        <span class="card-title" style="font-size: 0.88rem;"><span class="icon">📦</span> Itens da OS <span id="ped-os-queue-numero" style="color: var(--blue);"></span></span>
-                                        <div style="display: flex; align-items: center; gap: 8px;">
-                                            <span class="badge badge-amber" id="ped-os-queue-pending">0 pendentes</span>
-                                            <span id="ped-os-queue-arrow" style="font-size: 0.8rem; transition: transform 0.2s;">▼</span>
-                                        </div>
-                                    </div>
-                                    <div id="ped-os-queue-body" style="max-height: 220px; overflow-y: auto;">
-                                                                                                                        <table class="data-table" style="font-size:0.78rem; margin:0; width:100%;">
-                                            <thead>
-                                                <tr>
-                                                    <th style="padding:4px 6px; width:32px; text-align:center;">M</th>
-                                                    <th style="padding:4px 6px; width:80px;">Modelo</th>
-                                                    <th style="padding:4px 6px;">Nome</th>
-                                                    <th style="padding:4px 6px; width:60px;">QTD</th>
-                                                    <th style="padding:4px 6px; min-width:110px;">COR</th>
-                                                    <th style="padding:4px 6px; min-width:140px;">Numeração</th>
-                                                    <th style="padding:4px 6px; width:60px;">NI</th>
-                                                    <th style="padding:4px 6px; width:60px;">NF</th>
-                                                    <th style="padding:4px 6px; width:44px; text-align:center;">Verso</th>
-                                                    <th style="padding:4px 6px;">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="tbody-ped-os-queue">
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                <!-- Caixas por Produto serão injetadas aqui -->
+                                <div id="ped-os-queue-body" style="display: flex; flex-direction: column; gap: 15px;">
                                 </div>
                             </div>
 
@@ -1941,8 +1915,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="/script.js?v=240"></script>
-    <script src="/pedido.js?v=240"></script>
+    <script src="/script.js?v=241"></script>
+    <script src="/pedido.js?v=241"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">

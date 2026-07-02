@@ -1987,6 +1987,10 @@ function renderPedOSQueue() {
     const wrapper = document.getElementById('ped-os-queue-body');
     const pendingBadge = document.getElementById('ped-os-queue-pending');
     const numeroBadge = document.getElementById('ped-os-queue-numero');
+    
+    // We removed the main header from HTML, so we don't have numeroBadge/pendingBadge there anymore.
+    // That's fine, we just won't update them if they don't exist.
+    
     if (!container || !wrapper) return;
 
     const activeItem = state.activeOSItem;
@@ -2003,11 +2007,6 @@ function renderPedOSQueue() {
     }
 
     container.style.display = 'block';
-    const os = state.ordens.find(o => o.id === osId);
-    if (numeroBadge) numeroBadge.textContent = os ? `#${os.numero}` : '';
-
-    const pendentes = itens.filter(i => i.impressao !== 'IMPRESSO');
-    if (pendingBadge) pendingBadge.textContent = `${pendentes.length} pendente${pendentes.length !== 1 ? 's' : ''}`;
 
     // Group items by _vibe_id_produto
     const groups = {};
@@ -2019,10 +2018,10 @@ function renderPedOSQueue() {
 
     const todasCores = state.cores || [];
     const todasNums = state.numeracoes || [];
-    const inputStyle = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:2px 5px; font-size:0.75rem; width:100%;';
-    const selectStyle = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:2px 5px; font-size:0.75rem; width:100%; cursor:pointer;';
-    const selectStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:2px 5px; font-size:0.75rem; width:100%; cursor:not-allowed;';
-    const btnStyle = 'border:none; border-radius:4px; padding:3px 8px; font-size:0.72rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
+    const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:4px 6px; font-size:0.75rem; width:100%;';
+    const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:4px 6px; font-size:0.75rem; width:100%; cursor:pointer;';
+    const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:4px 6px; font-size:0.75rem; width:100%; cursor:not-allowed;';
+    const btnStyle = 'border:none; border-radius:4px; padding:5px 10px; font-size:0.75rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
 
     let html = '';
 
@@ -2046,40 +2045,25 @@ function renderPedOSQueue() {
             }
         }
 
-        const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem;">${setorPcp}</span>` : '';
+        const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle;">${setorPcp}</span>` : '';
 
+        // Box com contorno azul e título amarelo em destaque
         html += `
-        <div class="card mb-3" style="background:#1e293b; border:1px solid #334155;" data-setor="${setorPcp}">
-            <div class="card-header" style="background:#0f172a; padding: 6px 12px; border-bottom:1px solid #334155;">
-                <h6 class="mb-0" style="color:#e2e8f0; font-size:0.9rem;">
-                    <i class="fas fa-box-open me-1" style="color:var(--purple);"></i> ${nomeReal} ${setorBadge}
-                </h6>
+        <div class="card mb-3" style="background:#1e293b; border: 2px solid var(--blue); border-radius: 6px; overflow:hidden;" data-setor="${setorPcp}">
+            <div class="card-header" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue);">
+                <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
+                    <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
+                </h5>
             </div>
             <div class="table-responsive">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:0.78rem; margin:0; width:100%;">
-                    <thead>
-                        <tr>
-                            <th style="padding:4px 6px; width:32px; text-align:center;">M</th>
-                            <th style="padding:4px 6px; width:80px;">Modelo</th>
-                            <th style="padding:4px 6px;">Nome</th>
-                            <th style="padding:4px 6px; min-width:90px;">Formato</th>
-                            <th style="padding:4px 6px; min-width:90px;">Saída</th>
-                            <th style="padding:4px 6px; width:60px;">QTD</th>
-                            <th style="padding:4px 6px; min-width:110px;">COR</th>
-                            <th style="padding:4px 6px; min-width:140px;">Numeração</th>
-                            <th style="padding:4px 6px; width:60px;">NI</th>
-                            <th style="padding:4px 6px; width:60px;">NF</th>
-                            <th style="padding:4px 6px; width:44px; text-align:center;">Verso</th>
-                            <th style="padding:4px 6px;">Sts</th>
-                            <th style="padding:4px 6px;">Ações</th>
-                        </tr>
-                    </thead>
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:0.8rem; margin:0; width:100%; border:none;">
                     <tbody>
         `;
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 2px solid var(--blue);' : '';
+            // Highlight para o modelo ativo
+            const rowBg = isActive ? 'background: rgba(59,130,246,0.15); border-left: 3px solid var(--blue);' : 'border-bottom: 1px solid #334155;';
             const indexModelo = idx + 1;
 
             let itemFmtId = formatoPadraoId || item.formato_id || '';
@@ -2135,62 +2119,67 @@ function renderPedOSQueue() {
 
             return `
                 <tr style="${rowBg} transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}">
-                    <td style="padding: 5px 8px; text-align: center;">
+                    <td style="padding: 8px; text-align: center; width: 40px;" title="Selecionar Linha">
                         ${isActive ? '<strong style="color: var(--blue);">▶</strong> ' : ''}
-                        <strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')" title="Carregar este modelo">${indexModelo}</strong>
+                        <strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')">${indexModelo}</strong>
                     </td>
-                    <td style="padding: 5px 8px; font-family: monospace; font-size: 0.72rem; color:var(--text-dim);">${item.modelo || '--'}</td>
-                    <td style="padding: 5px 8px;"><strong style="cursor:pointer;" onclick="enviarParaPedido('${item.id}', '${osId}')">${item.produto || '--'}</strong></td>
+                    <td style="padding: 8px; font-family: monospace; font-size: 0.75rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
+                        ${item.modelo || '--'}
+                    </td>
                     
-                    <td style="padding: 5px 4px;">
+                    <td style="padding: 8px; width: 120px;" title="Formato">
                         <select style="${fmtStyle}" ${dropdownFmtDisabled} onchange="impQueueUpdateFormato('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Formato —</option>
                             ${formatosOptions}
                         </select>
                     </td>
-                    <td style="padding: 5px 4px;">
+                    <td style="padding: 8px; width: 120px;" title="Saída">
                         <select style="${selectStyle}" onchange="impQueueUpdateSaida('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Saída —</option>
                             ${saidasOptions}
                         </select>
                     </td>
-                    <td style="padding: 5px 4px;">
+                    <td style="padding: 8px; width: 70px;" title="Quantidade">
                         <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
                             onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
-                    <td style="padding: 5px 4px;">
+                    <td style="padding: 8px; min-width: 120px;" title="Cor">
                         <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Cor —</option>
                             ${coresOptions}
                         </select>
                     </td>
-                    <td style="padding: 5px 4px;">
-                        <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()" title="${numValDisplay}">
+                    <td style="padding: 8px; min-width: 140px;" title="Numeração">
+                        <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">${numValDisplay || '— Numeração —'}</option>
                             ${numsOptions}
                         </select>
                     </td>
-                    <td style="padding: 5px 4px;">
+                    <td style="padding: 8px; width: 70px;" title="Num. Inicial">
                         <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
                             onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
-                    <td style="padding: 5px 4px;">
+                    <td style="padding: 8px; width: 70px;" title="Num. Final">
                         <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
                             onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
-                    <td style="padding: 5px 8px; text-align: center;">${item.verso ? '✅' : '--'}</td>
-                    <td style="padding: 5px 8px;">${getImpressaoBadge(item.impressao)}</td>
-                    <td style="padding: 5px 4px; white-space:nowrap; display:flex; gap:4px; align-items:center;">
+                    <td style="padding: 8px; text-align: center; width: 50px;" title="Frente e Verso">
+                        ${item.verso ? '✅' : '--'}
+                    </td>
+                    <td style="padding: 8px; width: 90px;" title="Status de Produção">
+                        ${getImpressaoBadge(item.impressao)}
+                    </td>
+                    <td style="padding: 8px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
                         <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
                             onclick="event.stopPropagation(); impQueueGerarPDF('${item.id}', '${osId}')">
                             📄 PDF
                         </button>
                         <button style="${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
                             onclick="event.stopPropagation(); impQueueImprimir('${item.id}', '${osId}')">
-                            🖨️ Imprimir
+                            🖨️ Imp.
                         </button>
                     </td>
                 </tr>
