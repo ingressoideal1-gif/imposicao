@@ -2141,39 +2141,39 @@ function renderPedOSQueue() {
             return `
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}"
                     onclick="enviarParaPedido('${jsItemId}', '${jsOsId}')">
-                    <td style="padding: 12px; font-family: monospace; font-size: 0.95rem; color:var(--text-dim); min-width:80px;" title="Código do Modelo">
+                    <td style="padding: 12px; font-size: 0.95rem; font-weight:600; color:var(--warning); min-width:80px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
                     <td style="padding: 12px; font-size: 0.95rem; font-weight:600; color:#e2e8f0; min-width:120px;" title="Nome do Modelo">
                         ${nomeDoModelo}
                     </td>
                     
-                    <td style="padding: 12px; width: 70px;" title="Quantidade">
+                    <td style="padding: 12px; width: 105px;" title="Quantidade">
                         <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
                             onchange="pedQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
-                    <td style="padding: 12px; min-width: 120px;" title="Cor">
+                    <td style="padding: 12px; width: 105px;" title="Num. Inicial">
+                        <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
+                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
+                            onclick="event.stopPropagation()" />
+                    </td>
+                    <td style="padding: 12px; width: 105px;" title="Num. Final">
+                        <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
+                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                            onclick="event.stopPropagation()" />
+                    </td>
+                    <td style="padding: 12px; width: 60px; min-width: 60px;" title="Cor">
                         <select style="${selectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Cor —</option>
                             ${coresOptions}
                         </select>
                     </td>
-                    <td style="padding: 12px; min-width: 140px;" title="Numeração">
+                    <td style="padding: 12px; width: 70px; min-width: 70px;" title="Numeração">
                         <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">${numValDisplay || '— Numeração —'}</option>
                             ${numsOptions}
                         </select>
-                    </td>
-                    <td style="padding: 12px; width: 70px;" title="Num. Inicial">
-                        <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
-                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
-                            onclick="event.stopPropagation()" />
-                    </td>
-                    <td style="padding: 12px; width: 70px;" title="Num. Final">
-                        <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
-                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
-                            onclick="event.stopPropagation()" />
                     </td>
                     <td style="padding: 12px; text-align: center; width: 50px;" title="Frente e Verso">
                         ${item.verso ? '✅' : '--'}
@@ -2205,6 +2205,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
