@@ -5665,17 +5665,7 @@ function drawPreview() {
 
 
 
-    const fmtId = document.getElementById('imp-formato').value;
-
-    const numId = document.getElementById('imp-numeracao').value;
-
-    const saiId = document.getElementById('imp-saida').value;
-
-    const start = parseInt(document.getElementById('imp-start').value) || 1;
-
-    const end = parseInt(document.getElementById('imp-end').value) || 100;
-
-    const schema = document.getElementById('imp-schema').value;
+    
 
 
 
@@ -7231,105 +7221,7 @@ function updateImpSummary() {
 
 
 
-    const fmtId = document.getElementById('imp-formato').value;
-
-    const numId = document.getElementById('imp-numeracao').value;
-
-    const saiId = document.getElementById('imp-saida').value;
-
-    const start = parseInt(document.getElementById('imp-start').value) || 1;
-
-    const end = parseInt(document.getElementById('imp-end').value) || 100;
-
-    const box = document.getElementById('imp-summary');
-
-
-
-    const num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
-
-    const num2Id = document.getElementById('imp-numeracao-2')?.value || '';
-
-    const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
-
-    if (num && num.svg_content && !num._svgImage) {
-
-        const img = new Image();
-
-        img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(num.svg_content);
-
-        img.onload = () => {
-
-            num._svgImage = img;
-
-            drawPreview();
-
-        };
-
-    }
-
-    // Pré-carregar canvas de cada elemento PDF da numeração selecionada
-
-    function preloadNumPdfElements(numeracao) {
-
-        if (!numeracao || !numeracao.elements) return;
-
-        numeracao.elements.forEach(el => {
-
-            if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
-
-                el._pdfLoading = true;
-
-                (async () => {
-
-                    try {
-
-                        const pdfData = await fetchPdfBytes(el.pdf_content);
-
-                        if (!pdfData) throw new Error('fetchPdfBytes retornou null');
-
-                        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
-
-                        const page = await pdf.getPage(1);
-
-                        const vp = page.getViewport({ scale: 2 });
-
-                        const offCanvas = document.createElement('canvas');
-
-                        offCanvas.width = Math.round(vp.width);
-
-                        offCanvas.height = Math.round(vp.height);
-
-                        const octx = offCanvas.getContext('2d');
-
-                        await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
-
-                        el._pdfCanvas = offCanvas;
-
-                        delete el._pdfLoading;
-
-                        drawPreview();
-
-                    } catch (err) {
-
-                        console.error('[Preview] Erro pré-carregando PDF do elemento:', err);
-
-                        delete el._pdfLoading;
-
-                    }
-
-                })();
-
-            }
-
-        });
-
-    }
-
-    preloadNumPdfElements(num);
-
-    preloadNumPdfElements(num2);
-
-    const schema = document.getElementById('imp-schema').value;
+    
 
     const isPdfMultiple = (schema === "pdf_multiple");
 
