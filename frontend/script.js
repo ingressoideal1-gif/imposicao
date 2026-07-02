@@ -17205,6 +17205,16 @@ document.addEventListener('keydown', (e) => {
 
 window.impQueueUpdateFormato = function(itemId, osId, value) {
     autoSaveOSItemField(itemId, osId, 'formato_id', value);
+    
+    // Auto-update saida se o formato tiver saida default
+    const fmtObj = state.formatos ? state.formatos.find(f => String(f.id) === String(value)) : null;
+    if (fmtObj && fmtObj.default_saida_id) {
+        autoSaveOSItemField(itemId, osId, 'saida_id', fmtObj.default_saida_id);
+    }
+    
+    // Atualizar UI
+    if(typeof renderPedOSQueue === 'function') renderPedOSQueue();
+    
     if(state.activeOSItem && state.activeOSItem.itemId === itemId) {
         if(typeof updatePedSummary === 'function') updatePedSummary();
         if(typeof drawPedPreview === 'function') drawPedPreview();

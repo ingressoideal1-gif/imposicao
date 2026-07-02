@@ -1817,15 +1817,26 @@ async function enviarParaPedido(itemId, osId) {
         const corMatched = state.cores ? state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || globalFuzzyMatch(c.name, item.cor)) : null;
         if (corMatched && corMatched.formato_id) {
             formatoId = corMatched.formato_id;
+            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
             console.log(`[OS→Imp] Formato matched via Cor "${item.cor}" → ${formatoId}`);
         }
     }
 
+    // Tentar match do formato via Nome da arte
     if (!formatoId && item.formato) {
         formatoId = matchFormato(item.formato);
         if (formatoId) {
             autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
             console.log(`[OS→Imp] Formato matched via Nome: "${item.formato}" → ${formatoId}`);
+        }
+    }
+    
+    // Tentar match do formato via Nome da Numeração
+    if (!formatoId && item.numeracao) {
+        formatoId = matchFormato(item.numeracao);
+        if (formatoId) {
+            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            console.log(`[OS→Imp] Formato matched via Numeração: "${item.numeracao}" → ${formatoId}`);
         }
     }
     
