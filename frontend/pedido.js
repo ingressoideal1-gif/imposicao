@@ -285,8 +285,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     }
 
     const canvas = document.getElementById('ped-preview-canvas');
-
-
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
     if (!fmtId || !saiId) {
 
