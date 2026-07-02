@@ -13925,17 +13925,49 @@ function renderImpOSQueue() {
             const coresItem = todasCores.filter(c => !itemFmtId || !c.formato_id || String(c.formato_id) === String(itemFmtId));
             const numsItem  = todasNums.filter(n  => !itemFmtId || !n.formato_id  || String(n.formato_id)  === String(itemFmtId));
 
+            let selectedCorId = null;
             const corIdAtual   = item.amostra_cor_id ? String(item.amostra_cor_id) : null;
             const corNomeAtual = item.cor || item.padrao || '';
+            if (corIdAtual) {
+                const found = coresItem.find(c => String(c.id) === corIdAtual);
+                if (found) selectedCorId = String(found.id);
+            }
+            if (!selectedCorId && corNomeAtual) {
+                const exactMatch = coresItem.find(c => globalNormStr(c.name) === globalNormStr(corNomeAtual));
+                if (exactMatch) {
+                    selectedCorId = String(exactMatch.id);
+                } else {
+                    const fuzzyMatch = coresItem.find(c => globalFuzzyMatch(c.name, corNomeAtual));
+                    if (fuzzyMatch) {
+                        selectedCorId = String(fuzzyMatch.id);
+                    }
+                }
+            }
             const coresOptions = coresItem.map(c => {
-                const sel = (corIdAtual && String(c.id) === corIdAtual) || (!corIdAtual && corNomeAtual && globalFuzzyMatch(c.name, corNomeAtual)) ? 'selected' : '';
+                const sel = selectedCorId && String(c.id) === selectedCorId ? 'selected' : '';
                 return `<option value="${c.id}" ${sel}>${c.name}</option>`;
             }).join('');
 
+            let selectedNumId = null;
             const numIdAtual = item.numeracao_id ? String(item.numeracao_id) : (item.amostra_num_id ? String(item.amostra_num_id) : null);
             const numValDisplay = item.gabarito_operacional || item.numeracao || '';
+            if (numIdAtual) {
+                const found = numsItem.find(n => String(n.id) === numIdAtual);
+                if (found) selectedNumId = String(found.id);
+            }
+            if (!selectedNumId && numValDisplay) {
+                const exactMatch = numsItem.find(n => globalNormStr(n.name || n.tipo || '') === globalNormStr(numValDisplay));
+                if (exactMatch) {
+                    selectedNumId = String(exactMatch.id);
+                } else {
+                    const fuzzyMatch = numsItem.find(n => globalFuzzyMatch(n.name || n.tipo || '', numValDisplay));
+                    if (fuzzyMatch) {
+                        selectedNumId = String(fuzzyMatch.id);
+                    }
+                }
+            }
             const numsOptions = numsItem.map(n => {
-                const sel = (numIdAtual && String(n.id) === numIdAtual) || (!numIdAtual && numValDisplay && globalFuzzyMatch(n.name || n.tipo || '', numValDisplay)) ? 'selected' : '';
+                const sel = selectedNumId && String(n.id) === selectedNumId ? 'selected' : '';
                 return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
             }).join('');
 
@@ -14042,6 +14074,7 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
