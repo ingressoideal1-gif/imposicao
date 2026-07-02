@@ -5697,11 +5697,11 @@ function drawPreview() {
         }
     }
 
-    const num = state.numeracoes.find(n => n.id === numId) || null;
+    const num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
 
     const num2Id = document.getElementById('imp-numeracao-2')?.value || '';
 
-    const num2 = state.numeracoes.find(n => n.id === num2Id) || null;
+    const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
 
 
@@ -7171,7 +7171,7 @@ function updateImpSummary() {
 
         numSelect.innerHTML = optionsHtml;
 
-        if (filteredNums.some(n => n.id === curNumVal)) {
+        if (filteredNums.some(n => String(n.id) === String(curNumVal))) {
 
             numSelect.value = curNumVal;
 
@@ -7189,7 +7189,7 @@ function updateImpSummary() {
 
             numSelect2.innerHTML = optionsHtml;
 
-            if (filteredNums.some(n => n.id === curNumVal2)) {
+            if (filteredNums.some(n => String(n.id) === String(curNumVal)2)) {
 
                 numSelect2.value = curNumVal2;
 
@@ -7219,11 +7219,11 @@ function updateImpSummary() {
 
 
 
-    const num = state.numeracoes.find(n => n.id === numId) || null;
+    const num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
 
     const num2Id = document.getElementById('imp-numeracao-2')?.value || '';
 
-    const num2 = state.numeracoes.find(n => n.id === num2Id) || null;
+    const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
     if (num && num.svg_content && !num._svgImage) {
 
@@ -7788,11 +7788,11 @@ window.runImposition = async function (mode) {
 
 
 
-    const numeracao = numId ? state.numeracoes.find(n => n.id === numId) : null;
+    const numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
 
     const num2Id = document.getElementById('imp-numeracao-2')?.value || '';
 
-    const num2 = state.numeracoes.find(n => n.id === num2Id) || null;
+    const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
 
 
@@ -9802,7 +9802,7 @@ function getAmostraFormato() {
 
     if (numId) {
 
-        const num = state.numeracoes.find(n => n.id === numId);
+        const num = state.numeracoes.find(n => String(n.id) === String(numId));
 
         if (num) {
 
@@ -9887,7 +9887,7 @@ window.onAmostraCorSelect = async function() {
 
         
 
-        if (filteredNums.some(n => n.id === curNumVal)) {
+        if (filteredNums.some(n => String(n.id) === String(curNumVal))) {
 
             numSelect.value = curNumVal;
 
@@ -10079,7 +10079,7 @@ window.onAmostraNumeracaoSelect = function() {
 
 
 
-    const num = state.numeracoes.find(n => n.id === numId);
+    const num = state.numeracoes.find(n => String(n.id) === String(numId));
 
     if (!num) return;
 
@@ -14731,7 +14731,7 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
     numSelect.innerHTML = '<option value="">-- Selecione uma Numeração --</option>' +
         filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
 
-    if (filteredNums.some(n => n.id === curNumVal)) {
+    if (filteredNums.some(n => String(n.id) === String(curNumVal))) {
         numSelect.value = curNumVal;
     } else {
         numSelect.value = '';
@@ -14996,7 +14996,7 @@ async function renderItemAmostraCombinada(idx, osId) {
 
     // Obter cor e formato
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
-    const num = numId ? state.numeracoes.find(n => n.id === numId) : null;
+    const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
 
     if (num) {
         preloadAmostraItemPdfElements(num, idx, osId);
@@ -15502,7 +15502,7 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
     
     const impName = document.getElementById('imp-name').value.trim() || 'Modelo Imposição';
     const numId = numSelect.value;
-    const baseNum = state.numeracoes.find(n => n.id === numId);
+    const baseNum = state.numeracoes.find(n => String(n.id) === String(numId));
     if (!baseNum) return;
     
     // Configura o state para que no saveNumeracao volte para Imposição

@@ -324,11 +324,11 @@ function drawPedPreview() {
         }
     }
 
-    const num = state.numeracoes.find(n => n.id === numId) || null;
+    const num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
 
     const num2Id = document.getElementById('ped-numeracao-2')?.value || '';
 
-    const num2 = state.numeracoes.find(n => n.id === num2Id) || null;
+    const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
 
 
@@ -1332,7 +1332,7 @@ function updatePedSummary() {
 
         numSelect.innerHTML = optionsHtml;
 
-        if (filteredNums.some(n => n.id === curNumVal)) {
+        if (filteredNums.some(n => String(n.id) === String(curNumVal))) {
 
             numSelect.value = curNumVal;
 
@@ -1350,7 +1350,7 @@ function updatePedSummary() {
 
             numSelect2.innerHTML = optionsHtml;
 
-            if (filteredNums.some(n => n.id === curNumVal2)) {
+            if (filteredNums.some(n => String(n.id) === String(curNumVal)2)) {
 
                 numSelect2.value = curNumVal2;
 
@@ -1380,11 +1380,11 @@ function updatePedSummary() {
 
 
 
-    const num = state.numeracoes.find(n => n.id === numId) || null;
+    const num = state.numeracoes.find(n => String(n.id) === String(numId)) || null;
 
     const num2Id = document.getElementById('ped-numeracao-2')?.value || '';
 
-    const num2 = state.numeracoes.find(n => n.id === num2Id) || null;
+    const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
     if (num && num.svg_content && !num._svgImage) {
 
@@ -2211,7 +2211,7 @@ window.editPedidoCustomNumeracao = function(fieldId) {
     
     const impName = document.getElementById('ped-name').value.trim() || 'Modelo Imposição';
     const numId = numSelect.value;
-    const baseNum = state.numeracoes.find(n => n.id === numId);
+    const baseNum = state.numeracoes.find(n => String(n.id) === String(numId));
     if (!baseNum) return;
     
     // Configura o state para que no saveNumeracao volte para Imposição
@@ -2345,11 +2345,11 @@ window.runPedImposition = async function (mode) {
 
 
 
-    const numeracao = numId ? state.numeracoes.find(n => n.id === numId) : null;
+    const numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
 
     const num2Id = document.getElementById('ped-numeracao-2')?.value || '';
 
-    const num2 = state.numeracoes.find(n => n.id === num2Id) || null;
+    const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
 
 
