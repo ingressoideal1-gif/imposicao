@@ -259,7 +259,7 @@ window.loadPedArtFile = loadPedArtFile;
 
 function drawPedPreview() { console.log('drawPedPreview CALLED');
 
-    let fmtId, numId, saiId, start, end, schema = 'strict_assembly';
+    let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
     if (activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
@@ -274,7 +274,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             }
             start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
             end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
-            schema = item.cut_stack_mode || document.getElementById('ped-cutstack-mode')?.value || 'strict_assembly';
+            const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+            schema = fmtObj ? fmtObj.default_schema : 'sequential';
         }
     } else {
         fmtId = document.getElementById('ped-formato')?.value;
@@ -282,7 +283,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         saiId = document.getElementById('ped-saida')?.value;
         start = parseInt(document.getElementById('ped-start')?.value) || 1;
         end = parseInt(document.getElementById('ped-end')?.value) || 100;
-        schema = document.getElementById('ped-schema')?.value || 'strict_assembly';
+        schema = document.getElementById('ped-schema')?.value || 'sequential';
     }
 
     const canvas = document.getElementById('ped-preview-canvas');
@@ -290,35 +291,57 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     const ctx = canvas.getContext('2d');
 
     if (!fmtId || !saiId) {
-
         canvas.width = 300;
-
         canvas.height = 200;
-
         ctx.fillStyle = '#1e293b';
-
         ctx.fillRect(0, 0, 300, 200);
-
         ctx.fillStyle = '#94a3b8';
-
         ctx.font = '12px Inter, sans-serif';
-
         ctx.textAlign = 'center';
-
         ctx.fillText('Aguardando formato e saída...', 150, 100);
-
         document.getElementById('ped-preview-sheet-num').textContent = 'Sem Configuração';
-
         return;
-
     }
-
-
 
     const fmt = state.formatos.find(f => String(f.id) === String(fmtId));
     const sai = state.saidas.find(s => String(s.id) === String(saiId));
 
     if (!fmt || !sai) return;
+
+    // Validação estrita das regras de imposição do formato na visualização
+    if (!fmt.default_schema || !fmt.default_saida_id) {
+        canvas.width = 300;
+        canvas.height = 200;
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, 300, 200);
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Erro: Regras de Imposição ausentes no Formato.', 150, 100);
+        document.getElementById('ped-preview-sheet-num').textContent = 'Erro de Regra';
+        return;
+    }
+
+    if (fmt.default_schema === 'cut_stack') {
+        if (!fmt.default_cut_stack_mode || !fmt.default_sheets_per_block) {
+            canvas.width = 300;
+            canvas.height = 200;
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, 300, 200);
+            ctx.fillStyle = '#ef4444';
+            ctx.font = '12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Erro: Parâmetros Cut & Stack ausentes.', 150, 100);
+            document.getElementById('ped-preview-sheet-num').textContent = 'Erro de Regra';
+            return;
+        }
+    }
+
+    // Usar os padrões obrigatórios do formato
+    schema = fmt.default_schema;
+    saiId = fmt.default_saida_id;
+
+
     
     const previewPartEl = document.getElementById('ped-preview-part-input');
     let previewPart = 'miolo';

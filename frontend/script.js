@@ -5628,7 +5628,7 @@ async function loadImpArtFile(file) {
 
 function drawPreview() {
 
-    let fmtId, numId, saiId, start, end, schema = 'strict_assembly';
+    let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
     if (activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
@@ -5643,7 +5643,8 @@ function drawPreview() {
             }
             start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
             end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
-            schema = item.cut_stack_mode || document.getElementById('imp-cutstack-mode')?.value || 'strict_assembly';
+            const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+            schema = fmtObj ? fmtObj.default_schema : 'sequential';
         }
     } else {
         fmtId = document.getElementById('imp-formato')?.value;
@@ -5651,7 +5652,7 @@ function drawPreview() {
         saiId = document.getElementById('imp-saida')?.value;
         start = parseInt(document.getElementById('imp-start')?.value) || 1;
         end = parseInt(document.getElementById('imp-end')?.value) || 100;
-        schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
+        schema = document.getElementById('imp-schema')?.value || 'sequential';
     }
 
     const canvas = document.getElementById('preview-canvas');
@@ -5660,24 +5661,12 @@ function drawPreview() {
 
     const ctx = canvas.getContext('2d');
 
-
-
-    
-
-
-
     if (!fmtId || !saiId) {
-
         canvas.width = 300;
-
         canvas.height = 200;
-
         ctx.fillStyle = '#1e293b';
-
         ctx.fillRect(0, 0, 300, 200);
-
         ctx.fillStyle = '#94a3b8';
-
         ctx.font = '12px Inter, sans-serif';
 
         ctx.textAlign = 'center';
@@ -5696,6 +5685,39 @@ function drawPreview() {
     const sai = state.saidas.find(s => String(s.id) === String(saiId));
 
     if (!fmt || !sai) return;
+
+    // Validação estrita das regras de imposição do formato na visualização
+    if (!fmt.default_schema || !fmt.default_saida_id) {
+        canvas.width = 300;
+        canvas.height = 200;
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, 300, 200);
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Erro: Regras de Imposição ausentes no Formato.', 150, 100);
+        document.getElementById('preview-sheet-num').textContent = 'Erro de Regra';
+        return;
+    }
+
+    if (fmt.default_schema === 'cut_stack') {
+        if (!fmt.default_cut_stack_mode || !fmt.default_sheets_per_block) {
+            canvas.width = 300;
+            canvas.height = 200;
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, 300, 200);
+            ctx.fillStyle = '#ef4444';
+            ctx.font = '12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Erro: Parâmetros Cut & Stack ausentes.', 150, 100);
+            document.getElementById('preview-sheet-num').textContent = 'Erro de Regra';
+            return;
+        }
+    }
+
+    // Usar os padrões obrigatórios do formato
+    schema = fmt.default_schema;
+    saiId = fmt.default_saida_id;
     
     const previewPartEl = document.getElementById('preview-part-input');
     let previewPart = 'miolo';
@@ -7594,7 +7616,7 @@ let impositionAbortController = null;
 
 window.runImposition = async function (mode) {
 
-    let fmtId, numId, saiId, start, end, schema = 'strict_assembly';
+    let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
     if (activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
@@ -7609,7 +7631,8 @@ window.runImposition = async function (mode) {
             }
             start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
             end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
-            schema = item.cut_stack_mode || document.getElementById('imp-cutstack-mode')?.value || 'strict_assembly';
+            const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+            schema = fmtObj ? fmtObj.default_schema : 'sequential';
         }
     } else {
         fmtId = document.getElementById('imp-formato')?.value;
@@ -7617,18 +7640,38 @@ window.runImposition = async function (mode) {
         saiId = document.getElementById('imp-saida')?.value;
         start = parseInt(document.getElementById('imp-start')?.value) || 1;
         end = parseInt(document.getElementById('imp-end')?.value) || 100;
-        schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
+        schema = document.getElementById('imp-schema')?.value || 'sequential';
     }
 
     const rotateEl = document.getElementById('imp-rotate-page');
 
     const rotatePage = rotateEl ? (rotateEl.value === 'true') : false;
 
-
-
     if (!fmtId) return toast('Selecione um Formato.', 'error');
 
-    if (!saiId) return toast('Selecione uma Saída.', 'error');
+    const formato = state.formatos.find(f => String(f.id) === String(fmtId));
+    if (!formato) return toast('Formato não encontrado no sistema.', 'error');
+
+    // Validação estrita das regras de imposição do formato
+    if (!formato.default_schema) {
+        return toast(`O formato "${formato.name}" não possui uma Regra de Paginação configurada no cadastro. Defina-a nas configurações de formato.`, 'error');
+    }
+    if (!formato.default_saida_id) {
+        return toast(`O formato "${formato.name}" não possui uma Saída Padrão configurada no cadastro. Defina-a nas configurações de formato.`, 'error');
+    }
+
+    if (formato.default_schema === 'cut_stack') {
+        if (!formato.default_cut_stack_mode) {
+            return toast(`O formato "${formato.name}" (Cut & Stack) não possui o Modo Cut & Stack configurado no cadastro.`, 'error');
+        }
+        if (!formato.default_sheets_per_block) {
+            return toast(`O formato "${formato.name}" (Cut & Stack) não possui as Folhas por Bloco configuradas no cadastro.`, 'error');
+        }
+    }
+
+    // Usar os padrões obrigatórios do formato
+    schema = formato.default_schema;
+    saiId = formato.default_saida_id;
 
     
 
@@ -13556,6 +13599,89 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
         console.error(`[OS] Erro ao auto-salvar ${field}:`, e);
     }
 }
+
+/**
+ * Salva um campo do item ativo atualmente selecionado na imposição
+ */
+async function saveActiveOSItemField(field, value) {
+    if (state.activeOSItem) {
+        const { itemId, osId } = state.activeOSItem;
+        const itens = state.osItens[osId] || [];
+        const item = itens.find(i => String(i.id) === String(itemId));
+        if (item) {
+            item[field] = value;
+            
+            // Mapear campo local → coluna no banco (pedidos_modelos)
+            const dbFieldMap = {
+                'num_inicial':   'numeracao_inicio',
+                'num_final':     'numeracao_fim',
+                'qtd':           'quantidade',
+                'numeracao':     'gabarito_operacional',
+                'formato_id':    'formato_id',
+                'saida_id':      'saida_id',
+                'numeracao_id':  'amostra_num_id',
+                'verso_tipo':    'verso_tipo'
+            };
+            const dbField = dbFieldMap[field] || field;
+            const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')
+                ? (parseInt(value) || 0)
+                : value;
+                
+            await autoSaveOSItemField(itemId, osId, dbField, dbValue);
+            
+            // Re-renderizar filas para manter sincronizadas as tabelas de OS
+            if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+            if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+        }
+    }
+}
+window.saveActiveOSItemField = saveActiveOSItemField;
+
+function onImposicaoFormatoChange(value) {
+    populateImpNumeracoes();
+    applyFormatoDefaults();
+    updateImpSummary();
+    saveActiveOSItemField('formato_id', value);
+    const fmtObj = state.formatos.find(f => String(f.id) === String(value));
+    if (fmtObj && fmtObj.default_saida_id) {
+        saveActiveOSItemField('saida_id', fmtObj.default_saida_id);
+    }
+}
+window.onImposicaoFormatoChange = onImposicaoFormatoChange;
+
+function onImposicaoNumeracaoChange(value) {
+    updateImpSummary();
+    toggleImpNumEditButtons();
+    saveActiveOSItemField('numeracao_id', value);
+    const numObj = state.numeracoes.find(n => String(n.id) === String(value));
+    saveActiveOSItemField('numeracao', numObj ? (numObj.name || numObj.tipo) : null);
+}
+window.onImposicaoNumeracaoChange = onImposicaoNumeracaoChange;
+
+function onImposicaoSaidaChange(value) {
+    updateImpSummary();
+    saveActiveOSItemField('saida_id', value);
+}
+window.onImposicaoSaidaChange = onImposicaoSaidaChange;
+
+function onImposicaoStartInput(value) {
+    updateImpSummary();
+    saveActiveOSItemField('num_inicial', value);
+}
+window.onImposicaoStartInput = onImposicaoStartInput;
+
+function onImposicaoEndInput(value) {
+    updateImpSummary();
+    saveActiveOSItemField('num_final', value);
+}
+window.onImposicaoEndInput = onImposicaoEndInput;
+
+function onImposicaoPrintModeChange(value) {
+    updateImpSummary();
+    const isDuplex = value === 'duplex';
+    saveActiveOSItemField('verso_tipo', isDuplex ? 'FRENTE E VERSO' : 'SÓ FRENTE');
+}
+window.onImposicaoPrintModeChange = onImposicaoPrintModeChange;
 
 // Função simples para normalizar strings para busca (ignora acentos, cedilha, maiúsculas)
 const globalNormStr = (s) => s ? String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, '') : '';

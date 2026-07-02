@@ -872,7 +872,7 @@
                             <div class="form-grid form-grid-4" style="margin-bottom:20px;">
                                 <div class="form-group">
                                     <label>1. Formato</label>
-                                    <select class="form-control" id="imp-formato" onchange="populateImpNumeracoes(); applyFormatoDefaults(); updateImpSummary()">
+                                    <select class="form-control" id="imp-formato" onchange="onImposicaoFormatoChange(this.value)">
                                         <option value="">— Selecione —</option>
                                     </select>
                                 </div>
@@ -883,7 +883,7 @@
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                                         </button>
                                     </label>
-                                    <select class="form-control" id="imp-numeracao" onchange="updateImpSummary(); toggleImpNumEditButtons();">
+                                    <select class="form-control" id="imp-numeracao" onchange="onImposicaoNumeracaoChange(this.value)">
                                         <option value="">— Sem numeração —</option>
                                     </select>
                                 </div>
@@ -894,13 +894,13 @@
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                                         </button>
                                     </label>
-                                    <select class="form-control" id="imp-numeracao-2" onchange="updateImpSummary(); toggleImpNumEditButtons();">
+                                    <select class="form-control" id="imp-numeracao-2" onchange="updateImpSummary(); toggleImpNumEditButtons(); saveActiveOSItemField('amostra_num2_id', this.value);">
                                         <option value="">— Sem numeração —</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
                                     <label>4. Saída</label>
-                                    <select class="form-control" id="imp-saida" onchange="updateImpSummary()">
+                                     <select class="form-control" id="imp-saida" onchange="onImposicaoSaidaChange(this.value)">
                                         <option value="">— Selecione —</option>
                                     </select>
                                 </div>
@@ -916,16 +916,16 @@
                                 <div class="form-group" id="imp-start-group">
                                     <label>Número Inicial</label>
                                     <input type="number" class="form-control" id="imp-start" value="1" min="1"
-                                        oninput="updateImpSummary()">
+                                        oninput="onImposicaoStartInput(this.value)">
                                 </div>
                                 <div class="form-group" id="imp-end-group">
                                     <label>Número Final</label>
                                     <input type="number" class="form-control" id="imp-end" value="100" min="1"
-                                        oninput="updateImpSummary()">
+                                        oninput="onImposicaoEndInput(this.value)">
                                 </div>
                                 <div class="form-group">
                                     <label>Modo de Impressão</label>
-                                    <select class="form-control" id="imp-print-mode" onchange="updateImpSummary()">
+                                     <select class="form-control" id="imp-print-mode" onchange="onImposicaoPrintModeChange(this.value)">
                                         <option value="front" selected>Apenas Frente</option>
                                         <option value="duplex">Frente e Verso</option>
                                     </select>
