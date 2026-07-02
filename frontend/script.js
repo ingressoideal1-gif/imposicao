@@ -13759,8 +13759,12 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     let itemAlvo = itens.find(i => i.impressao !== 'IMPRESSO' && (i.aprovacao === 'APROVADA' || i.aprovacao === 'PRONTA'));
     if (!itemAlvo) itemAlvo = itens[0];
 
-    // Envia o item alvo para imposição, o que já carrega a OS toda no painel lateral de Itens da OS
-    enviarParaImposicao(itemAlvo.id, osId);
+    // Envia o item alvo para o novo menu PEDIDO, o que já carrega a OS toda no painel lateral
+    if (typeof enviarParaPedido === 'function') {
+        enviarParaPedido(itemAlvo.id, osId);
+    } else {
+        enviarParaImposicao(itemAlvo.id, osId);
+    }
 }
 
 // -------------------------------------------------------------------------------

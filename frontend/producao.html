@@ -93,6 +93,11 @@
                 Imposição
             </button>
 
+            <button class="nav-btn" data-view="view-pedido" id="nav-pedido">
+                <span class="nav-icon">📦</span>
+                Pedido
+            </button>
+
             <button class="nav-btn" data-view="view-amostras" id="nav-amostras">
                 <span class="nav-icon">🧪</span>
                 Amostras
@@ -1080,6 +1085,267 @@
                 </div>
             </section>
 
+
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: PEDIDO                                                -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <section id="view-pedido" class="view-section" style="max-width: 100%;">
+                <div class="page-header">
+                    <div class="page-header-text">
+                        <h1>📦 Pedido</h1>
+                        <p>Selecione o Formato, a Numeração e a Saída, depois envie a arte para gerar o PDF imposto.</p>
+                    </div>
+                </div>
+
+                <!-- Steps bar removido da visualização de produção -->
+
+                <div class="imposicao-layout">
+                    <div class="imposicao-config">
+                        <div class="card">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                                <span class="card-title"><span class="icon">⚙️</span> Configuração da Imposição</span>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="font-size: 0.82rem; color: var(--text-dim); font-weight: 500;">Regra de Paginação:</span>
+                                    <select class="form-control" id="ped-schema" style="width: 180px; padding: 4px 8px; font-size: 0.85rem; border: 1px solid var(--blue); font-weight: 500;" onchange="updatePedSummary(); togglePedMultiArtes(); togglePedCutStackOptions();">
+                                        <option value="sequential">Sequencial</option>
+                                        <option value="cut_stack">Cut &amp; Stack (Blocos)</option>
+                                        <option value="step_repeat">Step &amp; Repeat</option>
+                                        <option value="pdf_multiple">Pdf Paginado</option>
+                                        <option value="multi_artes">Multi-Artes (Colunas)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Status da OS Ativa -->
+                            <div id="active-os-status" style="display: none; font-size: 0.82rem; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); margin: 0 0 16px 0; justify-content: space-between; align-items: center; gap: 10px;">
+                                <span>📋 OS Ativa: <strong id="active-os-name" style="color: var(--blue);">Nenhuma</strong></span>
+                                <button type="button" class="btn btn-ghost btn-sm btn-danger" onclick="clearPedActiveOS()" style="padding: 2px 8px; font-size: 0.75rem; margin: 0;">✕ Limpar OS</button>
+                            </div>
+
+                            <!-- Fila de Itens OS pendentes -->
+                            <div id="ped-os-queue" style="display: none; margin-bottom: 16px;">
+                                <div class="card" style="border: 1px solid var(--blue); background: rgba(59,130,246,0.04);">
+                                    <div class="card-header" style="padding: 8px 12px; cursor: pointer;" onclick="togglePedOSQueue()">
+                                        <span class="card-title" style="font-size: 0.88rem;"><span class="icon">📦</span> Itens da OS <span id="ped-os-queue-numero" style="color: var(--blue);"></span></span>
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span class="badge badge-amber" id="ped-os-queue-pending">0 pendentes</span>
+                                            <span id="ped-os-queue-arrow" style="font-size: 0.8rem; transition: transform 0.2s;">▼</span>
+                                        </div>
+                                    </div>
+                                    <div id="ped-os-queue-body" style="max-height: 220px; overflow-y: auto;">
+                                                                                                                        <table class="data-table" style="font-size:0.78rem; margin:0; width:100%;">
+                                            <thead>
+                                                <tr>
+                                                    <th style="padding:4px 6px; width:32px; text-align:center;">M</th>
+                                                    <th style="padding:4px 6px; width:80px;">Modelo</th>
+                                                    <th style="padding:4px 6px;">Nome</th>
+                                                    <th style="padding:4px 6px; width:60px;">QTD</th>
+                                                    <th style="padding:4px 6px; min-width:110px;">COR</th>
+                                                    <th style="padding:4px 6px; min-width:140px;">Numeração</th>
+                                                    <th style="padding:4px 6px; width:60px;">NI</th>
+                                                    <th style="padding:4px 6px; width:60px;">NF</th>
+                                                    <th style="padding:4px 6px; width:44px; text-align:center;">Verso</th>
+                                                    <th style="padding:4px 6px;">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-ped-os-queue">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-grid form-grid-4" style="margin-bottom:20px;">
+                                <div class="form-group">
+                                    <label>1. Formato</label>
+                                    <select class="form-control" id="ped-formato" onchange="populatePedNumeracoes(); applyPedFormatoDefaults(); updatePedSummary()">
+                                        <option value="">— Selecione —</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label id="lbl-ped-num-1" style="display:flex; justify-content:space-between; align-items:center;">
+                                        2. Numeração 1 (opcional)
+                                        <button id="btn-edit-ped-num-1" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numeração" onclick="editPedidoCustomNumeracao('ped-numeracao')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                        </button>
+                                    </label>
+                                    <select class="form-control" id="ped-numeracao" onchange="updatePedSummary(); togglePedNumEditButtons();">
+                                        <option value="">— Sem numeração —</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label id="lbl-ped-num-2" style="display:flex; justify-content:space-between; align-items:center;">
+                                        3. Numeração 2 (opcional)
+                                        <button id="btn-edit-ped-num-2" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numeração" onclick="editPedidoCustomNumeracao('ped-numeracao-2')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                        </button>
+                                    </label>
+                                    <select class="form-control" id="ped-numeracao-2" onchange="updatePedSummary(); togglePedNumEditButtons();">
+                                        <option value="">— Sem numeração —</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>4. Saída</label>
+                                    <select class="form-control" id="ped-saida" onchange="updatePedSummary()">
+                                        <option value="">— Selecione —</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-grid form-grid-4" style="margin-bottom:20px;">
+                                <div class="form-group" id="ped-mapa-teatro-group" style="display:none; grid-column: span 2;">
+                                    <label>Mapa de Teatro</label>
+                                    <select class="form-control" id="ped-mapa-teatro" onchange="updatePedSummary()">
+                                        <option value="">— Selecione um mapa —</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="ped-start-group">
+                                    <label>Número Inicial</label>
+                                    <input type="number" class="form-control" id="ped-start" value="1" min="1"
+                                        oninput="updatePedSummary()">
+                                </div>
+                                <div class="form-group" id="ped-end-group">
+                                    <label>Número Final</label>
+                                    <input type="number" class="form-control" id="ped-end" value="100" min="1"
+                                        oninput="updatePedSummary()">
+                                </div>
+                                <div class="form-group">
+                                    <label>Modo de Impressão</label>
+                                    <select class="form-control" id="ped-print-mode" onchange="updatePedSummary()">
+                                        <option value="front" selected>Apenas Frente</option>
+                                        <option value="duplex">Frente e Verso</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Rotacionar Página</label>
+                                    <select class="form-control" id="ped-rotate-page" onchange="updatePedSummary()">
+                                        <option value="false" selected>Sem Rotação</option>
+                                        <option value="true">Rotacionar 90°</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Configuração Cut & Stack -->
+                            <div id="cut-stack-options" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--blue); border-radius: 8px; background: rgba(59,130,246,0.04);">
+                                <h4 style="margin:0 0 15px 0; font-size:1rem; color:var(--blue);">Opções de Cut & Stack</h4>
+                                <div class="form-grid form-grid-3">
+                                    <div class="form-group">
+                                        <label>Modo Cut & Stack</label>
+                                        <select class="form-control" id="ped-cutstack-mode" onchange="updatePedSummary()">
+                                            <option value="independent" selected>Colunas Independentes (Otimizado)</option>
+                                            <option value="strict">Blocos Estritos (Pilhas fixas)</option>
+                                            <option value="strict_assembly">Estrito + Montagem (Pilhas fixas + Final Independente)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Folhas por Bloco</label>
+                                        <input type="number" class="form-control" id="ped-sheets-per-block" value="50" min="1" onchange="updatePedSummary()">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Profundidade (Blocos/Pilha)</label>
+                                        <input type="number" class="form-control" id="ped-block-depth" value="1" min="1" onchange="updatePedSummary()">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Configuração Multi-Artes -->
+                            <div id="multi-artes-container" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                    <h4 style="margin:0; font-size:1.1rem; color:var(--text-color);">Configuração de Artes</h4>
+                                    <button class="btn btn-outline" onclick="addMultiArte()" title="Adicionar Arte">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                        Adicionar Arte
+                                    </button>
+                                </div>
+                                <div id="multi-artes-list" style="display:flex; flex-direction:column; gap:10px;">
+                                    <!-- Itens adicionados dinamicamente -->
+                                </div>
+                            </div>
+
+                            <!-- Sumário -->
+                            <div class="summary-box" id="ped-summary" style="display:none">
+                                <div class="summary-item">
+                                    <span class="summary-label">Formato</span>
+                                    <span class="summary-value" id="sum-formato">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Grade</span>
+                                    <span class="summary-value" id="sum-grade">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Total de Itens</span>
+                                    <span class="summary-value" id="sum-total">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Folhas Estimadas</span>
+                                    <span class="summary-value" id="sum-folhas">—</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Saída</span>
+                                    <span class="summary-value" id="sum-saida">—</span>
+                                </div>
+                            </div>
+
+<!-- Upload Arte -->
+                            <div class="file-drop" id="ped-drop-area">
+                                <div class="file-drop-icon">📁</div>
+                                <div class="file-drop-text">
+                                    <strong>Arraste a arte aqui</strong> ou clique para selecionar<br>
+                                    <small style="color:var(--text-faint);font-size:0.8rem;">PDF, JPG ou PNG · A arte
+                                        será centralizada no formato</small>
+                                </div>
+                                <input type="file" id="ped-file" accept=".pdf,.jpg,.jpeg,.png">
+                            </div>
+                            <p id="ped-file-info"
+                                style="text-align:center;color:var(--blue);font-size:0.88rem;margin-top:10px;display:none;">
+                            </p>
+
+                            <div style="margin-top:24px;display:flex;gap:8px;">
+                                <button class="btn btn-primary" id="btn-impose" onclick="runPedImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
+                                    🚀 Gerar PDF
+                                </button>
+                                <button class="btn btn-primary" id="btn-impose-print" onclick="runPedImposition('print')" style="flex:1;background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; opacity:0.5;" disabled>
+                                    🖨️ Imprimir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="imposicao-preview">
+                        <div class="card" id="imposicao-preview-card-origin">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="card-title">👁️ Pré-visualização da Folha</span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <select id="preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePreviewPage()">
+                                        <option value="miolo">Miolo</option>
+                                        <option value="capa">Capa</option>
+                                        <option value="contracapa">Contracapa</option>
+                                    </select>
+                                    <input type="number" id="preview-page-input" class="form-control" style="width: 70px; padding: 2px 6px; height: 28px; text-align: center; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;" value="1" min="1" onchange="changePreviewPage()">
+                                    <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="prevPreviewPage()">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                    </button>
+                                    <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="nextPreviewPage()">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </button>
+                                    <span class="badge badge-teal" id="preview-sheet-num">Sem Arte</span>
+                                </div>
+                            </div>
+                             <div class="preview-canvas-container" style="flex-direction: column; gap: 12px;">
+                                 <canvas id="preview-canvas"></canvas>
+                                 <div class="preview-face-selector" id="preview-face-container" style="display: none; width: 100%; text-align: center;">
+                                     <div style="display: inline-flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--border);">
+                                         <button class="btn btn-sm" id="btn-preview-front" style="background: var(--blue); color: white; border-radius: 0;" onclick="setPreviewFace('front')">Frente</button>
+                                         <button class="btn btn-sm" id="btn-preview-back" style="background: rgba(255,255,255,0.06); color: var(--text-dim); border-radius: 0;" onclick="setPreviewFace('back')">Verso</button>
+                                     </div>
+                                 </div>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
             <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: AMOSTRAS                                                 -->
             <!-- ══════════════════════════════════════════════════════════════ -->
@@ -1691,9 +1957,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=211"></script>
-
-
+    <script src="/script.js?v=212"></script>
+    <script src="/pedido.js?v=1"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">
