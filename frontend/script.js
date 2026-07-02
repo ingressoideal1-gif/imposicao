@@ -12232,13 +12232,20 @@ async function loadOSItens(osId) {
                         else if (item.status_arte === 'APROVADA_CLIENTE' || item.status_arte === 'APROVADA') statusFrontend = 'APROVADA';
                         else if (item.status_arte === 'REPROVADA_CLIENTE' || item.status_arte === 'REPROVADA') statusFrontend = 'REPROVADA';
 
+                        const resolvedNumId = item.amostra_num_id || (prop ? prop.amostra_num_id : null);
+                        const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
+                        
+                        const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || item.tipo_numeracao || item.numeracao);
+                        const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || null);
+
                         return {
                             ...item,
                             produto: item.nome_modelo || 'Modelo',
                             modelo: item.id ? item.id.toString() : '--',
                             cor: item.padrao || item.cor || 'STD',
-                            numeracao: item.gabarito_operacional || item.tipo_numeracao || item.numeracao,
-                            gabarito_operacional: item.gabarito_operacional || null,
+                            numeracao: resolvedNumeracao,
+                            gabarito_operacional: resolvedGabarito,
+                            numeracao_id: resolvedNumId || null,
                             qtd: item.quantidade || item.qtd || 0,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
@@ -12246,7 +12253,7 @@ async function loadOSItens(osId) {
                             impressao: item.status_producao || item.impressao || 'AGUARD.',
                             nome_produto_real: prop ? prop.nome_produto : null,
                             amostra_cor_id: item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
-                            amostra_num_id: item.amostra_num_id || (prop ? prop.amostra_num_id : null),
+                            amostra_num_id: resolvedNumId || null,
                             amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
                             arte_url: item.arte_url || (prop ? prop.arte_url : null),
                             amostra_obs: item.observacao_arte || item.amostra_obs || (prop ? prop.observacao_arte : null) || '',
@@ -12264,35 +12271,44 @@ async function loadOSItens(osId) {
                 } else if (propData && propData.length > 0) {
                     // Fallback: usar produtos_proposta diretamente quando pedidos_modelos está vazio
                     console.log('[loadOSItens] Fallback: usando produtos_proposta para id_int=' + queryNum);
-                    const mappedItems = propData.map((pp, idx) => ({
-                        id: pp.id,
-                        id_int: pp.id_int,
-                        nome_modelo: pp.nome_produto || `Modelo ${idx + 1}`,
-                        produto: pp.nome_produto || `Modelo ${idx + 1}`,
-                        modelo: pp.id ? pp.id.toString() : '--',
-                        cor: pp.padrao || 'STD',
-                        numeracao: pp.tipo_numeracao || null,
-                        num_inicial: pp.numeracao_inicio || null,
-                        num_final: pp.numeracao_fim || null,
-                        verso: pp.frente_verso || false,
-                        impressao: 'AGUARD.',
-                        nome_produto_real: pp.nome_produto,
-                        gabarito_operacional: pp.gabarito_operacional || null,
-                        padrao: pp.padrao || null,
-                        largura: pp.largura || null,
-                        altura: pp.altura || null,
-                        qtd: pp.qtd || null,
-                        amostra_cor_id: pp.amostra_cor_id || null,
-                        amostra_num_id: pp.amostra_num_id || null,
-                        amostra_arte_base64: pp.amostra_arte_base64 || null,
-                        arte_url: pp.arte_url || null,
-                        ordem: idx + 1,
-                        os_id: osId,
-                        id_produto_proposta_origem: pp.id,
-                        created_at: pp.created_at,
-                        updated_at: pp.updated_at,
-                        _dbLoaded: true
-                    }));
+                    const mappedItems = propData.map((pp, idx) => {
+                        const resolvedNumId = pp.amostra_num_id || null;
+                        const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
+                        
+                        const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (pp.tipo_numeracao || null);
+                        const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (pp.gabarito_operacional || null);
+
+                        return {
+                            id: pp.id,
+                            id_int: pp.id_int,
+                            nome_modelo: pp.nome_produto || `Modelo ${idx + 1}`,
+                            produto: pp.nome_produto || `Modelo ${idx + 1}`,
+                            modelo: pp.id ? pp.id.toString() : '--',
+                            cor: pp.padrao || 'STD',
+                            numeracao: resolvedNumeracao,
+                            gabarito_operacional: resolvedGabarito,
+                            numeracao_id: resolvedNumId || null,
+                            num_inicial: pp.numeracao_inicio || null,
+                            num_final: pp.numeracao_fim || null,
+                            verso: pp.frente_verso || false,
+                            impressao: 'AGUARD.',
+                            nome_produto_real: pp.nome_produto,
+                            padrao: pp.padrao || null,
+                            largura: pp.largura || null,
+                            altura: pp.altura || null,
+                            qtd: pp.qtd || null,
+                            amostra_cor_id: pp.amostra_cor_id || null,
+                            amostra_num_id: resolvedNumId || null,
+                            amostra_arte_base64: pp.amostra_arte_base64 || null,
+                            arte_url: pp.arte_url || null,
+                            ordem: idx + 1,
+                            os_id: osId,
+                            id_produto_proposta_origem: pp.id,
+                            created_at: pp.created_at,
+                            updated_at: pp.updated_at,
+                            _dbLoaded: true
+                        };
+                    });
 
                     // Auto-criar registros em pedidos_modelos para que salvamentos futuros funcionem
                     try {
@@ -13916,9 +13932,10 @@ function renderImpOSQueue() {
                 return `<option value="${c.id}" ${sel}>${c.name}</option>`;
             }).join('');
 
+            const numIdAtual = item.numeracao_id ? String(item.numeracao_id) : (item.amostra_num_id ? String(item.amostra_num_id) : null);
             const numValDisplay = item.gabarito_operacional || item.numeracao || '';
             const numsOptions = numsItem.map(n => {
-                const sel = globalFuzzyMatch(n.name || n.tipo || '', numValDisplay) ? 'selected' : '';
+                const sel = (numIdAtual && String(n.id) === numIdAtual) || (!numIdAtual && numValDisplay && globalFuzzyMatch(n.name || n.tipo || '', numValDisplay)) ? 'selected' : '';
                 return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
             }).join('');
 
@@ -13977,7 +13994,7 @@ function renderImpOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Núm.</span>
                             <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                                <option value="">${numValDisplay || '— Numeração —'}</option>
+                                <option value="">— Numeração —</option>
                                 ${numsOptions}
                             </select>
                         </div>
@@ -14025,6 +14042,7 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 

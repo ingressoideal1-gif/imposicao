@@ -2134,9 +2134,10 @@ function renderPedOSQueue() {
                 return `<option value="${c.id}" ${sel}>${c.name}</option>`;
             }).join('');
 
+            const numIdAtual = item.numeracao_id ? String(item.numeracao_id) : (item.amostra_num_id ? String(item.amostra_num_id) : null);
             const numValDisplay = item.gabarito_operacional || item.numeracao || '';
             const numsOptions = numsItem.map(n => {
-                const sel = globalFuzzyMatch(n.name || n.tipo || '', numValDisplay) ? 'selected' : '';
+                const sel = (numIdAtual && String(n.id) === numIdAtual) || (!numIdAtual && numValDisplay && globalFuzzyMatch(n.name || n.tipo || '', numValDisplay)) ? 'selected' : '';
                 return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
             }).join('');
 
@@ -2195,7 +2196,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Núm.</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                                <option value="">${numValDisplay || '— Numeração —'}</option>
+                                <option value="">— Numeração —</option>
                                 ${numsOptions}
                             </select>
                         </div>
@@ -2243,6 +2244,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
