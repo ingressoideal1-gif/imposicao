@@ -7112,6 +7112,7 @@ async function loadMapaTeatroData(mapaId) {
 }
 
 function updateImpSummary() {
+    const schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
 
     const fmtSelect = document.getElementById('imp-formato');
 
@@ -13679,7 +13680,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
             loadArte(arteSource);
             if (corObj) console.log(`[OS→Imp] Arte carregada via Cor "${corObj.name}"`);
         } else {
-            console.warn(`[OS→Imp] Nenhuma arte encontrada para item ${item.id} (cor: ${corNome})`);
+            console.warn(`[OS→Imp] Nenhuma arte encontrada para item ${item.id} (cor: ${item.cor || item.padrao || ''})`);
         }
     }, 700);
 
@@ -13848,7 +13849,7 @@ function renderImpOSQueue() {
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.15); border-left: 3px solid #f97316;' : 'border-bottom: 1px solid #334155;';
+            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.35); border-left: 5px solid #ea580c;' : 'border-bottom: 1px solid #334155;';
 
             let itemFmtId = boxFmtSel;
 
@@ -13943,6 +13944,8 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
+
 
 
 

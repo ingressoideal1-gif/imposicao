@@ -1970,7 +1970,7 @@ async function enviarParaPedido(itemId, osId) {
             loadArte(arteSource);
             if (corObj) console.log(`[OS→Imp] Arte carregada via Cor "${corObj.name}"`);
         } else {
-            console.warn(`[OS→Imp] Nenhuma arte encontrada para item ${item.id} (cor: ${corNome})`);
+            console.warn(`[OS→Imp] Nenhuma arte encontrada para item ${item.id} (cor: ${item.cor || item.padrao || ''})`);
         }
     }, 700);
 
@@ -2109,7 +2109,7 @@ function renderPedOSQueue() {
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.15); border-left: 3px solid #f97316;' : 'border-bottom: 1px solid #334155;';
+            const rowBg = isActive ? 'background: rgba(249, 115, 22, 0.35); border-left: 5px solid #ea580c;' : 'border-bottom: 1px solid #334155;';
 
             let itemFmtId = boxFmtSel;
 
@@ -2149,29 +2149,29 @@ function renderPedOSQueue() {
                     
                     <td style="padding: 12px; width: 70px;" title="Quantidade">
                         <input type="number" min="0" value="${qtdVal}" style="${inputStyle}" placeholder="QTD"
-                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
+                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'qtd', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
                     <td style="padding: 12px; min-width: 120px;" title="Cor">
-                        <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                        <select style="${selectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Cor —</option>
                             ${coresOptions}
                         </select>
                     </td>
                     <td style="padding: 12px; min-width: 140px;" title="Numeração">
-                        <select style="${selectStyle}" onchange="impQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                        <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">${numValDisplay || '— Numeração —'}</option>
                             ${numsOptions}
                         </select>
                     </td>
                     <td style="padding: 12px; width: 70px;" title="Num. Inicial">
                         <input type="number" value="${niVal}" style="${inputStyle}" placeholder="NI"
-                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
+                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_inicial', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
                     <td style="padding: 12px; width: 70px;" title="Num. Final">
                         <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
-                            onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                            onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
                     <td style="padding: 12px; text-align: center; width: 50px;" title="Frente e Verso">
@@ -2204,6 +2204,8 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
+
 
 
 
@@ -2978,6 +2980,8 @@ window.toggleBox = function(bodyId, arrowId) {
 
 
 
+
+
 // Helpers para gerar PDF e imprimir a partir da fila de itens no menu Pedido
 async function pedQueueGerarPDF(itemId, osId) {
     await enviarParaPedido(itemId, osId);
@@ -3005,5 +3009,69 @@ async function pedQueueImprimir(itemId, osId) {
     }, 1200);
 }
 
+async function pedQueueUpdateCor(itemId, osId, corId) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const cor = (state.cores || []).find(c => String(c.id) === String(corId));
+    if (cor) {
+        item.cor = cor.name;
+        item.padrao = cor.name;
+        item.amostra_cor_id = cor.id;
+        if (cor.formato_id) {
+            const fmtSelect = document.getElementById('ped-formato');
+            if (fmtSelect) {
+                fmtSelect.value = cor.formato_id;
+                fmtSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        autoSaveOSItemField(itemId, osId, 'amostra_cor_id', cor.id);
+    }
+    enviarParaPedido(itemId, osId);
+}
+
+async function pedQueueUpdateNum(itemId, osId, numId) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if (num) {
+        item.numeracao = num.name || num.tipo;
+        item.numeracao_id = num.id;
+        autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
+        const numSelect = document.getElementById('ped-numeracao');
+        if (numSelect) {
+            numSelect.value = numId;
+            numSelect.dispatchEvent(new Event('change'));
+        }
+    }
+    enviarParaPedido(itemId, osId);
+}
+
+async function pedQueueUpdateField(itemId, osId, field, value) {
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    item[field] = value;
+    autoSaveOSItemField(itemId, osId, field, value);
+
+    if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
+        if (field === 'num_inicial') {
+            const el = document.getElementById('ped-start');
+            if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        } else if (field === 'num_final') {
+            const el = document.getElementById('ped-end');
+            if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        } else if (field === 'qtd') {
+            const el = document.getElementById('ped-qtd');
+            if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        }
+    }
+    enviarParaPedido(itemId, osId);
+}
+
 window.pedQueueGerarPDF = pedQueueGerarPDF;
 window.pedQueueImprimir = pedQueueImprimir;
+window.pedQueueUpdateCor = pedQueueUpdateCor;
+window.pedQueueUpdateNum = pedQueueUpdateNum;
+window.pedQueueUpdateField = pedQueueUpdateField;
