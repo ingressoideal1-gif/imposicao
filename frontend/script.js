@@ -13802,7 +13802,7 @@ function renderImpOSQueue() {
     const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%;';
     const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%; max-width:100%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; cursor:pointer;';
     const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%; cursor:not-allowed;';
-    const btnStyle = 'border:none; border-radius:4px; padding:8px 14px; font-size:0.95rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
+    const btnStyle = 'border:none; border-radius:6px; padding:10px 18px; font-size:1.05rem; cursor:pointer; font-weight:700; transition:all 0.2s ease; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);';
 
     const selectHeaderStyle = 'background:#1e293b; border:1px solid #3b82f6; border-radius:4px; color:#f1f5f9; padding:4px 8px; font-size:0.85rem; cursor:pointer;';
     const selectHeaderStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:4px 8px; font-size:0.85rem; cursor:not-allowed;';
@@ -13992,7 +13992,17 @@ function renderImpOSQueue() {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 180px; min-width: 180px; max-width: 180px;" title="Status de Produção">
+                    <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
+                        <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff;" title="Gerar PDF para este modelo"
+                            onclick="event.stopPropagation(); impQueueGerarPDF('${jsItemId}', '${jsOsId}')">
+                            📄 PDF
+                        </button>
+                        <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff;" title="Imprimir este modelo"
+                            onclick="event.stopPropagation(); impQueueImprimir('${jsItemId}', '${jsOsId}')">
+                            🖨️ Imp.
+                        </button>
+                    </td>
+                    <td style="padding: 12px; width: 270px; min-width: 270px; max-width: 270px;" title="Status de Produção">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
@@ -14000,16 +14010,6 @@ function renderImpOSQueue() {
                                 <option value="IMPRESSO" ${item.status_impressao === 'IMPRESSO' ? 'selected' : ''}>IMPRESSO</option>
                             </select>
                         </div>
-                    </td>
-                    <td style="padding: 12px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
-                        <button style="${btnStyle} background:#7c3aed; color:#fff;" title="Gerar PDF para este modelo"
-                            onclick="event.stopPropagation(); impQueueGerarPDF('${jsItemId}', '${jsOsId}')">
-                            📄 PDF
-                        </button>
-                        <button style="${btnStyle} background:#16a34a; color:#fff;" title="Imprimir este modelo"
-                            onclick="event.stopPropagation(); impQueueImprimir('${jsItemId}', '${jsOsId}')">
-                            🖨️ Imp.
-                        </button>
                     </td>
                 </tr>
             `;
@@ -14025,6 +14025,7 @@ function renderImpOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
