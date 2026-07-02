@@ -2013,7 +2013,7 @@ function renderPedOSQueue() {
     const todasCores = state.cores || [];
     const todasNums = state.numeracoes || [];
     const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:8px 10px; font-size:1.0rem; width:100%;';
-    const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:8px 10px; font-size:1.0rem; width:100%; cursor:pointer;';
+    const selectStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#f1f5f9; padding:8px 10px; font-size:1.0rem; width:100%; max-width:100%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; cursor:pointer;';
     const selectStyleDisabled = 'background:#1e293b; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:8px 10px; font-size:1.0rem; width:100%; cursor:not-allowed;';
     const btnStyle = 'border:none; border-radius:4px; padding:8px 14px; font-size:0.95rem; cursor:pointer; font-weight:600; transition:opacity 0.2s;';
 
@@ -2163,13 +2163,13 @@ function renderPedOSQueue() {
                             onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
                             onclick="event.stopPropagation()" />
                     </td>
-                    <td style="padding: 12px; width: 60px; min-width: 60px;" title="Cor">
+                    <td style="padding: 12px; width: 60px; min-width: 60px; max-width: 60px;" title="Cor">
                         <select style="${selectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">— Cor —</option>
                             ${coresOptions}
                         </select>
                     </td>
-                    <td style="padding: 12px; width: 70px; min-width: 70px;" title="Numeração">
+                    <td style="padding: 12px; width: 70px; min-width: 70px; max-width: 70px;" title="Numeração">
                         <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                             <option value="">${numValDisplay || '— Numeração —'}</option>
                             ${numsOptions}
@@ -2205,6 +2205,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
