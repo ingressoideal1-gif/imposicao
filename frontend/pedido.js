@@ -2172,7 +2172,7 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 125px; min-width: 125px; max-width: 125px;" title="Cor">
+                    <td style="padding: 12px; width: 250px; min-width: 250px; max-width: 250px;" title="Cor">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">COR</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
@@ -2181,7 +2181,7 @@ function renderPedOSQueue() {
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 135px; min-width: 135px; max-width: 135px;" title="Numeração">
+                    <td style="padding: 12px; width: 260px; min-width: 260px; max-width: 260px;" title="Numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Núm.</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
@@ -2227,6 +2227,7 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
 }
+
 
 
 
