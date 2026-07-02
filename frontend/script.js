@@ -2050,15 +2050,10 @@ function populateSelects() {
     }
     if (selFmtDefSaida) {
         const curDef = selFmtDefSaida.value;
-        const optionsHtml = '<option value="">-- Selecione --</option>' +
+        selFmtDefSaida.innerHTML = '<option value="">-- Nenhuma (Livre) --</option>' +
             state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-
-            selFmtDefSaida.innerHTML = '<option value="">-- Nenhuma (Livre) --</option>' +
-                state.saidas.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-            if (curDef) selFmtDefSaida.value = curDef;
-        }
+        if (curDef) selFmtDefSaida.value = curDef;
     }
-
     // Imposição -- numerações (filtradas por tamanho do formato selecionado)
     populateImpNumeracoes();
 
