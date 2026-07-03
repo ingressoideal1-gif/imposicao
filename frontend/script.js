@@ -13993,7 +13993,7 @@ function renderImpOSQueue() {
             }
         }
 
-        const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle;">${setorPcp}</span>` : '';
+        const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle; color: #ffffff;">${setorPcp}</span>` : '';
 
         // Box level Formato & Saida calculation
         let boxFmtSel = formatoPadraoId || (groupItens[0].formato_id || '');
@@ -14418,6 +14418,29 @@ window.showView = function(viewId) {
     }
     if (viewId === 'view-imposicao') {
         renderImpOSQueue();
+    }
+    if (viewId === 'view-pedido') {
+        if (state.activeOSItem) {
+            const { osId } = state.activeOSItem;
+            const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
+            let nomeEvento = '';
+            if (state.todasArtes) {
+                const arteObj = state.todasArtes.find(a => String(a.id_int) === String(osId).replace('vibe_', ''));
+                if (arteObj) nomeEvento = arteObj.nome_evento || '';
+            }
+            const pedViewTitle = document.getElementById('ped-view-title');
+            const pedViewSubtitle = document.getElementById('ped-view-subtitle');
+            if (pedViewTitle) {
+                const orderNum = os ? (os.numero || '') : '';
+                const displayTitle = nomeEvento ? `${orderNum} - ${nomeEvento}` : `${orderNum}`;
+                pedViewTitle.textContent = displayTitle;
+                pedViewTitle.style.fontSize = 'calc(2.2rem + 5pt)';
+                pedViewTitle.style.fontWeight = 'bold';
+            }
+            if (pedViewSubtitle) {
+                pedViewSubtitle.style.display = 'none';
+            }
+        }
     }
 };
 

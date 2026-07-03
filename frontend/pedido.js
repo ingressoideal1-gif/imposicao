@@ -1829,6 +1829,26 @@ async function enviarParaPedido(itemId, osId) {
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
 
+    // Atualizar o título do cabeçalho da página de Pedido
+    const activeOS = state.ordens ? state.ordens.find(o => o.id === osId) : null;
+    let nomeEvento = '';
+    if (state.todasArtes) {
+        const arteObj = state.todasArtes.find(a => String(a.id_int) === String(osId).replace('vibe_', ''));
+        if (arteObj) nomeEvento = arteObj.nome_evento || '';
+    }
+    const pedViewTitle = document.getElementById('ped-view-title');
+    const pedViewSubtitle = document.getElementById('ped-view-subtitle');
+    if (pedViewTitle) {
+        const orderNum = activeOS ? (activeOS.numero || '') : '';
+        const displayTitle = nomeEvento ? `${orderNum} - ${nomeEvento}` : `${orderNum}`;
+        pedViewTitle.textContent = displayTitle;
+        pedViewTitle.style.fontSize = 'calc(2.2rem + 5pt)';
+        pedViewTitle.style.fontWeight = 'bold';
+    }
+    if (pedViewSubtitle) {
+        pedViewSubtitle.style.display = 'none';
+    }
+
     const previewContainer = document.getElementById('ped-preview-card-container');
     if (previewContainer) {
         previewContainer.style.display = 'block';
@@ -2070,7 +2090,7 @@ function renderPedOSQueue() {
             }
         }
 
-        const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle;">${setorPcp}</span>` : '';
+        const setorBadge = setorPcp ? `<span class="badge bg-secondary ms-2" style="font-size:0.7rem; vertical-align:middle; color: #ffffff;">${setorPcp}</span>` : '';
 
         // Box level Formato & Saida calculation
         let boxFmtSel = formatoPadraoId || (groupItens[0].formato_id || '');
