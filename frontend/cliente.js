@@ -1743,9 +1743,11 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
     // ====== CAMADA 1: COR (PDF via pdf.js) ======
     let corRendered = false;
-    if (cor && cor.pdf_base64 && typeof pdfjsLib !== 'undefined') {
+    if (cor && (cor.pdf_base64 || (face === 'back' && cor.pdf_verso_base64)) && typeof pdfjsLib !== 'undefined') {
         try {
-            const base64Data = cor.pdf_base64.includes('base64,') ? cor.pdf_base64.split('base64,')[1] : cor.pdf_base64;
+            const hasVersoFile = (face === 'back' && cor.pdf_verso_base64);
+            const rawPdfData = hasVersoFile ? cor.pdf_verso_base64 : cor.pdf_base64;
+            const base64Data = rawPdfData.includes('base64,') ? rawPdfData.split('base64,')[1] : rawPdfData;
             const binStr = atob(base64Data);
             const bytes = new Uint8Array(binStr.length);
             for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
@@ -1753,8 +1755,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             const loadingTask = pdfjsLib.getDocument({ data: bytes });
             const pdf = await loadingTask.promise;
             
-            // Usar página 2 se for verso e o PDF tiver 2 ou mais páginas
-            const pageNum = (face === 'back' && pdf.numPages >= 2) ? 2 : 1;
+            // Usar página 2 se for verso e o PDF tiver 2 ou mais páginas e não tivermos arquivo de verso separado
+            const pageNum = (face === 'back' && !hasVersoFile && pdf.numPages >= 2) ? 2 : 1;
             const page = await pdf.getPage(pageNum);
 
             const viewport = page.getViewport({ scale: 1.0 });
