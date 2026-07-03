@@ -11799,27 +11799,49 @@ async function loadOrdens() {
         // Carrega usuários do Supabase
         await loadUsuarios();
         
-        // Buscar pedidos da tabela comercial se disponível (Apenas Leitura)
-        let pedidosComerciais = [];
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            try {
-                const { data: pedData, error: pedError } = await supabaseClient
-                    .from('pedidos')
-                    .select('*');
-                if (pedError) {
-                    console.error('[Supabase] Erro na resposta da tabela pedidos:', pedError);
-                }
-                if (!pedError && pedData) {
-                    pedidosComerciais = pedData;
-                }
-            } catch (err) {
-                console.error('[Supabase] Falha catastrófica ao carregar tabela pedidos:', err);
-            }
-        }
-        state.hasPedidosComerciais = pedidosComerciais.length > 0;
-        console.log('[Supabase] Pedidos comerciais carregados:', pedidosComerciais.length, pedidosComerciais);
+        // Deixar pedidosComerciais fixo vazio já que a tabela 'pedidos' não existe no banco.
+        // Isso economiza uma consulta lenta que sempre falharia.
+        const pedidosComerciais = [];
+        state.hasPedidosComerciais = false;
 
-        // Buscar propostas da tabela pai para sobrescrever cliente e vendedor
+        // Disparar buscas iniciais em paralelo
+        const promises = [
+            carregarArtesGlobais(),
+            carregarLinksExistentes()
+        ];
+        
+        // Se o Vibecode estiver ativo, carregamos os produtos em paralelo
+        let vibeProdutosPromise = null;
+        if (typeof vibeClient !== 'undefined' && vibeClient) {
+            vibeProdutosPromise = vibeClient
+                .from('produtos_proposta')
+                .select('*')
+                .order('created_at', { ascending: false });
+            promises.push(vibeProdutosPromise);
+        }
+        
+        const results = await Promise.all(promises);
+        
+        // Se o Vibecode estiver ativo, a resposta de produtos está na lista de resultados
+        if (typeof vibeClient !== 'undefined' && vibeClient && vibeProdutosPromise) {
+            const produtosResult = results[results.length - 1] || { data: [] };
+            const produtos = produtosResult.data || [];
+            
+            if (produtos.length > 0) {
+                console.log('[OS] Carregando do Vibecode...');
+                // Passamos os produtos já carregados em paralelo para o loadOrdensFromVibecode
+                const loaded = await loadOrdensFromVibecode(pedidosComerciais, produtos);
+                if (loaded) {
+                    await carregarModelosGlobais();
+                    await sincronizarStatusOrdensDinamico();
+                    renderOrdens();
+                    return;
+                }
+            }
+            console.log('[OS] Vibecode sem dados, tentando fallback...');
+        }
+
+        // Buscar propostas para o fluxo de fallback apenas se necessário
         let propostasComerciais = [];
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             try {
@@ -11834,22 +11856,6 @@ async function loadOrdens() {
             } catch (err) {
                 console.warn('[Supabase] Falha ao carregar tabela propostas:', err);
             }
-        }
-
-        await carregarArtesGlobais();
-        await carregarLinksExistentes();
-
-        // Fonte 1: Vibecode (ERP do parceiro)
-        if (typeof vibeClient !== 'undefined' && vibeClient) {
-            console.log('[OS] Carregando do Vibecode...');
-            const loaded = await loadOrdensFromVibecode(pedidosComerciais);
-            if (loaded) {
-                await carregarModelosGlobais();
-                await sincronizarStatusOrdensDinamico();
-                renderOrdens();
-                return;
-            }
-            console.log('[OS] Vibecode sem dados, tentando fallback...');
         }
 
         // Fonte 2: Supabase do Imposition (Banco único do Vibecode)
@@ -12039,17 +12045,20 @@ async function carregarModelosGlobais() {
  * Cada id_int = 1 proposta = 1 OS virtual
  * Retorna true se conseguiu carregar, false se não há dados
  */
-async function loadOrdensFromVibecode(pedidosComerciais = []) {
+async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded = null) {
     try {
-        // Buscar todos os produtos_proposta
-        const { data: produtos, error } = await vibeClient
-            .from('produtos_proposta')
-            .select('*')
-            .order('created_at', { ascending: false });
+        let produtos = produtosPreloaded;
+        if (!produtos) {
+            const { data, error } = await vibeClient
+                .from('produtos_proposta')
+                .select('*')
+                .order('created_at', { ascending: false });
 
-        if (error) {
-            console.error('[Vibecode] Erro ao ler produtos_proposta:', error);
-            return false;
+            if (error) {
+                console.error('[Vibecode] Erro ao ler produtos_proposta:', error);
+                return false;
+            }
+            produtos = data;
         }
 
         if (!produtos || produtos.length === 0) return false;
@@ -12057,34 +12066,21 @@ async function loadOrdensFromVibecode(pedidosComerciais = []) {
         // Buscar propostas (tabela pai) se existir e for acessível
         let propostas = [];
         try {
-            const { data: propData, error: propError } = await vibeClient
-                .from('propostas')
-                .select('*')
-                .order('id_int', { ascending: false })
-                .limit(2000);
-            if (!propError && propData) {
-                propostas = propData;
+            const uniqueIdInts = [...new Set(produtos.map(p => p.id_int).filter(Boolean))];
+            if (uniqueIdInts.length > 0) {
+                const { data: propData, error: propError } = await vibeClient
+                    .from('propostas')
+                    .select('id, id_int, cliente, cliente_nome, dados_cliente, vendedor, vendedor_nome, data_liberacao, data_libera, prazo_entrega, prazo, status_interno')
+                    .in('id_int', uniqueIdInts);
+                if (!propError && propData) {
+                    propostas = propData;
+                }
             }
         } catch (pe) {
             console.warn('[Vibecode] Não foi possível ler tabela propostas (usando fallbacks):', pe);
         }
 
-        // Se pedidosComerciais não foi passado ou está vazio, e temos supabaseClient, tenta carregar
-        if ((!pedidosComerciais || pedidosComerciais.length === 0) && typeof supabaseClient !== 'undefined' && supabaseClient) {
-            try {
-                const { data: pedData, error: pedError } = await supabaseClient
-                    .from('pedidos')
-                    .select('*');
-                if (pedError) {
-                    console.error('[Supabase] Erro na resposta da tabela pedidos:', pedError);
-                }
-                if (!pedError && pedData) {
-                    pedidosComerciais = pedData;
-                }
-            } catch (err) {
-                console.error('[Supabase] Falha ao carregar tabela pedidos:', err);
-            }
-        }
+        // pedidosComerciais ignorado/tabela 'pedidos' inexistente
 
         const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
 
@@ -12540,6 +12536,9 @@ const DESIGNERS_LISTA = [
  * Carrega a lista de usuários da tabela producao_usuarios do Supabase
  */
 async function loadUsuarios() {
+    if (usuariosSupabase && usuariosSupabase.length > 0) {
+        return;
+    }
     try {
         if (!supabaseClient) {
             console.log("SupabaseClient não inicializado. Usando fallbacks locais para usuários.");
