@@ -509,8 +509,47 @@ async def impose_file(
                 tmp_in.write(content)
                 base_file_path = tmp_in.name
         elif data.get("schema") != "multi_artes" and not mapa_teatro_id:
-            # Sem arquivo enviado e sem mapa de teatro: base_file_path fica vazio.
-            # O engine.py suporta base_file="" gerando imposição apenas com numeração.
+            # Sem arquivo enviado e sem mapa de teatro: tentar buscar via cor_id se for template da cor
+            if data.get("is_color_template") and data.get("cor_id"):
+                cor_id = data.get("cor_id")
+                cor_obj = db.get_cor(cor_id)
+                if cor_obj:
+                    pdf_frente = cor_obj.get("pdf_base64")
+                    pdf_verso = cor_obj.get("pdf_verso_base64") if (data.get("print_mode") == "duplex" and cor_obj.get("frente_verso")) else None
+                    
+                    if pdf_frente:
+                        import base64
+                        try:
+                            frente_data = pdf_frente.split("base64,")[1] if "base64," in pdf_frente else pdf_frente
+                            frente_bytes = base64.b64decode(frente_data)
+                            
+                            if pdf_verso:
+                                verso_data = pdf_verso.split("base64,")[1] if "base64," in pdf_verso else pdf_verso
+                                verso_bytes = base64.b64decode(verso_data)
+                                
+                                doc_merged = fitz.open()
+                                doc_frente = fitz.open(stream=frente_bytes, filetype="pdf")
+                                doc_merged.insert_pdf(doc_frente)
+                                doc_frente.close()
+                                
+                                doc_verso = fitz.open(stream=verso_bytes, filetype="pdf")
+                                doc_merged.insert_pdf(doc_verso)
+                                doc_verso.close()
+                                
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_in:
+                                    doc_merged.save(tmp_in.name)
+                                    base_file_path = tmp_in.name
+                                doc_merged.close()
+                                print(f"[impose] Mesclados Frente e Verso da cor {cor_obj.get('name')} para imposicao duplex")
+                            else:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_in:
+                                    tmp_in.write(frente_bytes)
+                                    base_file_path = tmp_in.name
+                                print(f"[impose] Carregada apenas Frente da cor {cor_obj.get('name')} para imposicao simplex")
+                        except Exception as e_cor:
+                            print(f"[impose] Erro ao decodificar/mesclar PDF da cor: {e_cor}")
+            
+            # Se não resolveu acima, base_file_path continua vazio (engine gera apenas numeração)
             pass
 
         if base_file_path:
