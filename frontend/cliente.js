@@ -673,14 +673,7 @@ async function initClientePage(numero, token) {
                         produto: item.nome_modelo || 'Modelo',
                         nome_produto_real: prop ? prop.nome_produto : null,
                         os_id: osId,
-                        verso: (() => {
-                            const corId = item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null);
-                            const selectedCor = corId ? (state.cores || []).find(c => c.id === corId) : null;
-                            const isCorFrenteVerso = selectedCor ? !!selectedCor.frente_verso : false;
-                            return item.verso_tipo === 'FRENTE E VERSO' 
-                                || (item.frente_verso !== undefined ? !!item.frente_verso : !!item.verso)
-                                || isCorFrenteVerso;
-                        })(),
+                        verso: !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE'),
                         amostra_obs: item.observacao_arte || item.amostra_obs || '',
                         amostra_status: statusFrontend
                     };

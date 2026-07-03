@@ -12619,14 +12619,7 @@ async function loadOSItens(osId) {
                             qtd: item.quantidade || item.qtd || 0,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
-                            verso: (() => {
-                                const corId = item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null);
-                                const selectedCor = corId ? (state.cores || []).find(c => c.id === corId) : null;
-                                const isCorFrenteVerso = selectedCor ? !!selectedCor.frente_verso : false;
-                                return item.verso_tipo === 'FRENTE E VERSO' 
-                                    || (item.frente_verso !== undefined ? !!item.frente_verso : !!item.verso)
-                                    || isCorFrenteVerso;
-                            })(),
+                            verso: !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE'),
                             impressao: item.status_producao || item.impressao || 'AGUARD.',
                             nome_produto_real: prop ? prop.nome_produto : null,
                             amostra_cor_id: item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
