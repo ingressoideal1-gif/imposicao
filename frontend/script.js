@@ -12070,7 +12070,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             if (uniqueIdInts.length > 0) {
                 const { data: propData, error: propError } = await vibeClient
                     .from('propostas')
-                    .select('id, id_int, cliente, cliente_nome, dados_cliente, vendedor, vendedor_nome, data_liberacao, data_libera, prazo_entrega, prazo, status_interno')
+                    .select('id, id_int, cliente, vendedor, status_interno, created_at')
                     .in('id_int', uniqueIdInts);
                 if (!propError && propData) {
                     propostas = propData;
