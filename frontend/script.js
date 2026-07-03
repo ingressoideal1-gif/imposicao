@@ -13444,27 +13444,34 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
             impOverrides[itemId] = novoStatus;
             localStorage.setItem('vibe_item_impressao_overrides', JSON.stringify(impOverrides));
-        } else {
-            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                const { error } = await supabaseClient
-                    .from('producao_os_itens')
-                    .update({ impressao: novoStatus })
-                    .eq('id', parseInt(itemId, 10));
-                if (error) throw error;
+        }
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const isNumericId = /^\d+$/.test(String(itemId).trim());
+            let query = supabaseClient.from('pedidos_modelos').update({ status_impressao: novoStatus });
+            if (isNumericId) {
+                query = query.eq('id', parseInt(itemId, 10));
             } else {
-                const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ impressao: novoStatus })
-                });
-                if (!res.ok) throw new Error('Falha ao atualizar');
+                query = query.eq('id', itemId);
             }
+            const { error } = await query;
+            if (error) throw error;
+        } else {
+            const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status_impressao: novoStatus })
+            });
+            if (!res.ok) throw new Error('Falha ao atualizar');
         }
 
         // Atualizar estado local
         if (state.osItens[osId]) {
-            const item = state.osItens[osId].find(i => i.id === itemId);
-            if (item) item.impressao = novoStatus;
+            const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
+            if (item) {
+                item.impressao = novoStatus;
+                item.status_impressao = novoStatus;
+            }
         }
 
         toast(`Impressão atualizada: ${novoStatus}`, 'success');
@@ -13560,54 +13567,38 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 }
             }
         }
-        const isVibe = String(osId).includes('vibe');
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            if (isVibe) {
-                const dbFieldMap = {
-                    'num_inicial':   'numeracao_inicio',
-                    'num_final':     'numeracao_fim',
-                    'qtd':           'quantidade',
-                    'formato_id':    'formato_id',
-                    'saida_id':      'saida_id',
-                    'numeracao_id':  'amostra_num_id',
-                    'verso_tipo':    'verso_tipo'
-                };
-                const dbField = dbFieldMap[field] || field;
-                const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')
-                    ? (parseInt(value, 10) || 0)
-                    : value;
-                
-                const updatePayload = { [dbField]: dbValue };
-                if (dbField === 'verso_tipo') {
-                    updatePayload.frente_verso = (value !== 'SÓ FRENTE');
-                }
-                
-                const { error } = await supabaseClient
-                    .from('pedidos_modelos')
-                    .update(updatePayload)
-                    .eq('id', parseInt(itemId, 10));
-                
-                if (error) console.error(`[OS-Vibe] Erro ao auto-salvar pedidos_modelos ${dbField}:`, error);
-                return;
+            const dbFieldMap = {
+                'num_inicial':      'numeracao_inicio',
+                'num_final':        'numeracao_fim',
+                'qtd':              'quantidade',
+                'formato_id':       'formato_id',
+                'saida_id':         'saida_id',
+                'numeracao_id':     'amostra_num_id',
+                'verso_tipo':       'verso_tipo',
+                'status_impressao': 'status_impressao'
+            };
+            const dbField = dbFieldMap[field] || field;
+            const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')
+                ? (parseInt(value, 10) || 0)
+                : value;
+            
+            const updatePayload = { [dbField]: dbValue };
+            if (dbField === 'verso_tipo') {
+                updatePayload.frente_verso = (value !== 'SÓ FRENTE');
             }
-            const isUUID = isNaN(parseInt(itemId, 10)) || String(itemId).includes('-');
-            if (isUUID) {
-                const updatePayload = { [field]: value };
-                if (field === 'verso_tipo') {
-                    updatePayload.frente_verso = (value !== 'SÓ FRENTE');
-                }
-                const { error } = await supabaseClient
-                    .from('pedidos_modelos')
-                    .update(updatePayload)
-                    .eq('id', itemId);
-                if (error) console.error(`[OS] Erro ao auto-salvar pedidos_modelos ${field}:`, error);
+            
+            const isNumericId = /^\d+$/.test(String(itemId).trim());
+            
+            let query = supabaseClient.from('pedidos_modelos').update(updatePayload);
+            if (isNumericId) {
+                query = query.eq('id', parseInt(itemId, 10));
             } else {
-                const { error } = await supabaseClient
-                    .from('producao_os_itens')
-                    .update({ [field]: value })
-                    .eq('id', parseInt(itemId, 10));
-                if (error) console.error(`[OS] Erro ao auto-salvar producao_os_itens ${field}:`, error);
+                query = query.eq('id', itemId);
             }
+            
+            const { error } = await query;
+            if (error) console.error(`[OS] Erro ao auto-salvar pedidos_modelos ${dbField}:`, error);
         } else {
             await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
                 method: 'PUT',
