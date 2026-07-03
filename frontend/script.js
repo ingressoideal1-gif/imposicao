@@ -13562,11 +13562,36 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 }
             }
         }
-        if (String(osId).includes('vibe')) { 
-            console.log('[OS] Ignorando auto-save para BD no item Vibecode:', itemId); 
-            return; 
-        }
+        const isVibe = String(osId).includes('vibe');
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (isVibe) {
+                const dbFieldMap = {
+                    'num_inicial':   'numeracao_inicio',
+                    'num_final':     'numeracao_fim',
+                    'qtd':           'quantidade',
+                    'formato_id':    'formato_id',
+                    'saida_id':      'saida_id',
+                    'numeracao_id':  'amostra_num_id',
+                    'verso_tipo':    'verso_tipo'
+                };
+                const dbField = dbFieldMap[field] || field;
+                const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')
+                    ? (parseInt(value, 10) || 0)
+                    : value;
+                
+                const updatePayload = { [dbField]: dbValue };
+                if (dbField === 'verso_tipo') {
+                    updatePayload.frente_verso = (value !== 'SÓ FRENTE');
+                }
+                
+                const { error } = await supabaseClient
+                    .from('pedidos_modelos')
+                    .update(updatePayload)
+                    .eq('id', parseInt(itemId, 10));
+                
+                if (error) console.error(`[OS-Vibe] Erro ao auto-salvar pedidos_modelos ${dbField}:`, error);
+                return;
+            }
             const isUUID = isNaN(parseInt(itemId, 10)) || String(itemId).includes('-');
             if (isUUID) {
                 const updatePayload = { [field]: value };
