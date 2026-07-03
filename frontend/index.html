@@ -1884,8 +1884,12 @@
                         <div class="modal-artes-right" style="border-left: 1px solid var(--border); padding-left: 20px;">
                             <h4 style="margin-top: 0;">Enviar Nova Arte</h4>
                             <div class="form-group">
-                                <label>Arquivo (PDF/Imagem)</label>
+                                <label id="modal-artes-file-label">Arquivo (PDF/Imagem)</label>
                                 <input type="file" id="modal-artes-file" class="form-control" accept=".pdf,image/*">
+                            </div>
+                            <div class="form-group" id="modal-artes-file-verso-group" style="display: none; margin-top: 12px;">
+                                <label id="modal-artes-file-verso-label">Arquivo Verso (PDF/Imagem)</label>
+                                <input type="file" id="modal-artes-file-verso" class="form-control" accept=".pdf,image/*">
                             </div>
                             <div class="form-group" style="margin-top: 12px;">
                                 <label>Comentário / Observação</label>
@@ -1913,7 +1917,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=266"></script>
+    <script src="script.js?v=267"></script>
     <script src="/pedido.js?v=249"></script>
 
 

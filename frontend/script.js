@@ -16495,11 +16495,27 @@ async function openArtesModal(itemId, osId) {
     artesModalState.osId = osId;
     artesModalState.id_int = os.numero || osId.replace('vibe_', '');
     artesModalState.modeloNome = item.modelo || 'Padrão';
+    artesModalState.versoTipo = item.verso_tipo || 'SÓ FRENTE';
     
     document.getElementById('modal-artes-modelo-nome').textContent = artesModalState.modeloNome;
     document.getElementById('modal-artes').style.display = 'flex';
     document.getElementById('modal-artes-file').value = '';
+    
+    const fileVersoInput = document.getElementById('modal-artes-file-verso');
+    if (fileVersoInput) fileVersoInput.value = '';
+    
     document.getElementById('modal-artes-comment').value = '';
+    
+    const fileLabel = document.getElementById('modal-artes-file-label');
+    const fileVersoGroup = document.getElementById('modal-artes-file-verso-group');
+    
+    if (artesModalState.versoTipo === 'FRENTE E VERSO') {
+        if (fileLabel) fileLabel.textContent = 'Arquivo Frente (PDF/Imagem)';
+        if (fileVersoGroup) fileVersoGroup.style.display = 'block';
+    } else {
+        if (fileLabel) fileLabel.textContent = 'Arquivo (PDF/Imagem)';
+        if (fileVersoGroup) fileVersoGroup.style.display = 'none';
+    }
     
     await loadArtesDoModelo();
 }
@@ -16553,6 +16569,44 @@ function renderArtesTimeline() {
         if (arte.status.includes('APROVADA') || arte.status === 'LIBERADA') badgeClass = 'badge-teal';
         else if (arte.status.includes('REPROVADA')) badgeClass = 'badge-red';
         
+        let previewHtml = '';
+        const isPdf = arte.url_arquivo && arte.url_arquivo.toLowerCase().endsWith('.pdf');
+        const isVersoPdf = arte.verso_url_arquivo && arte.verso_url_arquivo.toLowerCase().endsWith('.pdf');
+
+        if (artesModalState.versoTipo === 'FRENTE E VERSO') {
+            previewHtml = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                <div style="border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px; position: relative;">
+                    <span style="font-size: 0.65rem; font-weight: 700; color: var(--blue); position: absolute; top: 4px; left: 8px; text-transform: uppercase;">Frente</span>
+                    ${arte.url_arquivo ? (isPdf 
+                        ? `<iframe src="${arte.url_arquivo}" style="width: 100%; height: 80px; border: none; border-radius: 4px;"></iframe>`
+                        : `<img src="${arte.url_arquivo}" style="max-width: 100%; max-height: 80px; object-fit: contain; border-radius: 4px;">`
+                    ) : '<span style="color: var(--text-dim); font-size: 0.8rem;">Sem arquivo</span>'}
+                    ${arte.url_arquivo ? `<a href="${arte.url_arquivo}" target="_blank" class="btn btn-sm btn-ghost" style="margin-top: 6px; font-size: 0.68rem; padding: 2px 6px;">👁️ Ver Frente</a>` : ''}
+                </div>
+                <div style="border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px; position: relative;">
+                    <span style="font-size: 0.65rem; font-weight: 700; color: var(--amber); position: absolute; top: 4px; left: 8px; text-transform: uppercase;">Verso</span>
+                    ${arte.verso_url_arquivo ? (isVersoPdf 
+                        ? `<iframe src="${arte.verso_url_arquivo}" style="width: 100%; height: 80px; border: none; border-radius: 4px;"></iframe>`
+                        : `<img src="${arte.verso_url_arquivo}" style="max-width: 100%; max-height: 80px; object-fit: contain; border-radius: 4px;">`
+                    ) : '<span style="color: var(--text-dim); font-size: 0.8rem;">Sem arquivo</span>'}
+                    ${arte.verso_url_arquivo ? `<a href="${arte.verso_url_arquivo}" target="_blank" class="btn btn-sm btn-ghost" style="margin-top: 6px; font-size: 0.68rem; padding: 2px 6px;">👁️ Ver Verso</a>` : ''}
+                </div>
+            </div>
+            `;
+        } else {
+            previewHtml = `
+            <div style="margin-top: 10px; border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px; position: relative;">
+                <span style="font-size: 0.65rem; font-weight: 700; color: var(--blue); position: absolute; top: 4px; left: 8px; text-transform: uppercase;">Frente</span>
+                ${arte.url_arquivo ? (isPdf 
+                    ? `<iframe src="${arte.url_arquivo}" style="width: 100%; height: 80px; border: none; border-radius: 4px;"></iframe>`
+                    : `<img src="${arte.url_arquivo}" style="max-width: 100%; max-height: 80px; object-fit: contain; border-radius: 4px;">`
+                ) : '<span style="color: var(--text-dim); font-size: 0.8rem;">Sem arquivo</span>'}
+                ${arte.url_arquivo ? `<a href="${arte.url_arquivo}" target="_blank" class="btn btn-sm btn-ghost" style="margin-top: 6px; font-size: 0.68rem; padding: 2px 6px;">👁️ Ver Arquivo</a>` : ''}
+            </div>
+            `;
+        }
+        
         return `
         <div style="border: 1px solid ${isLatest ? 'var(--blue)' : 'var(--border)'}; border-radius: 6px; padding: 12px; background: var(--bg-card); opacity: ${isLatest ? '1' : '0.8'};">
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -16563,7 +16617,7 @@ function renderArtesTimeline() {
                 📅 ${new Date(arte.created_at).toLocaleString('pt-BR')} <br>
                 👤 Enviado por: ${arte.enviado_por || 'Sistema'}
             </div>
-            ${arte.url_arquivo ? `<div><a href="${arte.url_arquivo}" target="_blank" class="btn btn-sm btn-secondary" style="font-size: 0.95rem;">👁️ Ver Arquivo</a></div>` : ''}
+            ${previewHtml}
             ${arte.comentarios_revisao ? `<div style="margin-top: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; font-size: 0.85rem;">💬 ${arte.comentarios_revisao}</div>` : ''}
         </div>
         `;
@@ -16572,58 +16626,148 @@ function renderArtesTimeline() {
 
 async function submitNovaArte() {
     const fileInput = document.getElementById('modal-artes-file');
+    const fileVersoInput = document.getElementById('modal-artes-file-verso');
     const comment = document.getElementById('modal-artes-comment').value.trim();
     const btn = document.getElementById('btn-submit-arte');
     
-    if (!fileInput.files || fileInput.files.length === 0) {
-        toast('Selecione um arquivo (PDF ou Imagem) primeiro!', 'warning');
+    const hasFront = fileInput.files && fileInput.files.length > 0;
+    const hasVerso = fileVersoInput && fileVersoInput.files && fileVersoInput.files.length > 0;
+    
+    if (!hasFront && !hasVerso) {
+        toast('Selecione pelo menos um arquivo (PDF ou Imagem) primeiro!', 'warning');
         return;
     }
     
-    const file = fileInput.files[0];
     btn.disabled = true;
     btn.textContent = '⏳ Enviando...';
     
     try {
         let proximaVersao = artesModalState.artes.length > 0 ? artesModalState.artes[0].versao + 1 : 1;
         const timestamp = Date.now();
-        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        const storagePath = `propostas/${artesModalState.id_int}/artes/${artesModalState.itemId}/${timestamp}_${safeName}`;
         
-        const { error: uploadError } = await supabaseClient.storage
-            .from('chat-ideal')
-            .upload(storagePath, file, { upsert: true });
+        let frontUrl = null;
+        let frontStoragePath = null;
+        let frontNome = null;
+        let frontMime = null;
+        let frontSize = null;
+        
+        if (hasFront) {
+            const file = fileInput.files[0];
+            frontNome = file.name;
+            frontMime = file.type;
+            frontSize = file.size;
+            const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+            frontStoragePath = `propostas/${artesModalState.id_int}/artes/${artesModalState.itemId}/${timestamp}_${safeName}`;
             
-        if (uploadError) throw new Error('Falha no upload: ' + uploadError.message);
+            const { error: uploadError } = await supabaseClient.storage
+                .from('chat-ideal')
+                .upload(frontStoragePath, file, { upsert: true });
+                
+            if (uploadError) throw new Error('Falha no upload da frente: ' + uploadError.message);
+            
+            const { data: publicUrlData } = supabaseClient.storage.from('chat-ideal').getPublicUrl(frontStoragePath);
+            frontUrl = publicUrlData.publicUrl;
+        }
         
-        const { data: publicUrlData } = supabaseClient.storage.from('chat-ideal').getPublicUrl(storagePath);
+        let versoUrl = null;
+        let versoStoragePath = null;
+        let versoNome = null;
+        let versoMime = null;
+        let versoSize = null;
+        
+        if (hasVerso) {
+            const fileVerso = fileVersoInput.files[0];
+            versoNome = fileVerso.name;
+            versoMime = fileVerso.type;
+            versoSize = fileVerso.size;
+            const safeNameVerso = fileVerso.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+            versoStoragePath = `propostas/${artesModalState.id_int}/artes/${artesModalState.itemId}/${timestamp}_verso_${safeNameVerso}`;
+            
+            const { error: uploadError } = await supabaseClient.storage
+                .from('chat-ideal')
+                .upload(versoStoragePath, fileVerso, { upsert: true });
+                
+            if (uploadError) throw new Error('Falha no upload do verso: ' + uploadError.message);
+            
+            const { data: publicUrlData } = supabaseClient.storage.from('chat-ideal').getPublicUrl(versoStoragePath);
+            versoUrl = publicUrlData.publicUrl;
+        }
+        
+        // Obter arte anterior para preservar arquivos caso só um tenha sido enviado agora
+        const ultimaArte = artesModalState.artes.length > 0 ? artesModalState.artes[0] : null;
+        
+        const insertPayload = {
+            id_int: artesModalState.id_int,
+            id_modelo: artesModalState.itemId,
+            versao: proximaVersao,
+            nome_arquivo: frontNome || (ultimaArte ? ultimaArte.nome_arquivo : (versoNome || 'verso')),
+            storage_bucket: 'chat-ideal',
+            storage_path: frontStoragePath || (ultimaArte ? ultimaArte.storage_path : null),
+            url_arquivo: frontUrl || (ultimaArte ? ultimaArte.url_arquivo : null),
+            tipo_arquivo: frontMime ? (frontMime.includes('pdf') ? 'PDF' : 'IMAGEM') : (ultimaArte ? ultimaArte.tipo_arquivo : null),
+            mime_type: frontMime || (ultimaArte ? ultimaArte.mime_type : null),
+            tamanho_bytes: frontSize || (ultimaArte ? ultimaArte.tamanho_bytes : 0),
+            status: 'EM_REVISAO_INTERNA',
+            enviado_por: 'Usuário do Sistema',
+            comentarios_revisao: comment,
+            // Colunas de verso
+            verso_nome_arquivo: versoNome || (ultimaArte ? ultimaArte.verso_nome_arquivo : null),
+            verso_storage_path: versoStoragePath || (ultimaArte ? ultimaArte.verso_storage_path : null),
+            verso_url_arquivo: versoUrl || (ultimaArte ? ultimaArte.verso_url_arquivo : null),
+            verso_tipo_arquivo: versoMime ? (versoMime.includes('pdf') ? 'PDF' : 'IMAGEM') : (ultimaArte ? ultimaArte.verso_tipo_arquivo : null),
+            verso_mime_type: versoMime || (ultimaArte ? ultimaArte.verso_mime_type : null),
+            verso_tamanho_bytes: versoSize || (ultimaArte ? ultimaArte.verso_tamanho_bytes : 0)
+        };
         
         const { error: insertError } = await supabaseClient
             .from('pedidos_artes')
-            .insert({
-                id_int: artesModalState.id_int,
-                id_modelo: artesModalState.itemId,
-                versao: proximaVersao,
-                nome_arquivo: file.name,
-                storage_bucket: 'chat-ideal',
-                storage_path: storagePath,
-                url_arquivo: publicUrlData.publicUrl,
-                tipo_arquivo: file.type.includes('pdf') ? 'PDF' : 'IMAGEM',
-                mime_type: file.type,
-                tamanho_bytes: file.size,
-                status: 'EM_REVISAO_INTERNA',
-                enviado_por: 'Usuário do Sistema',
-                comentarios_revisao: comment
-            });
+            .insert(insertPayload);
             
         if (insertError) throw insertError;
         
-        await logToChatIdeal(`Arte enviada para o Modelo ${artesModalState.modeloNome} (versão ${proximaVersao}). Aguardando análise.\\nObs: ${comment}`);
+        // Atualizar pedidos_modelos com o novo status e URLs
+        const updatePayload = {
+            status_arte: 'EM_REVISAO_INTERNA'
+        };
+        if (frontUrl) {
+            updatePayload.arte_url = frontUrl;
+        }
+        if (versoUrl) {
+            updatePayload.verso_arte_url = versoUrl;
+        }
+        
+        await supabaseClient.from('pedidos_modelos')
+            .update(updatePayload)
+            .eq('id', artesModalState.itemId)
+            .catch(err => console.error('[submitNovaArte] Erro ao sincronizar pedidos_modelos:', err));
+            
+        // Atualizar estado local
+        const item = (state.osItens[artesModalState.osId] || []).find(i => i.id === artesModalState.itemId);
+        if (item) {
+            item.aprovacao = 'EM_REVISAO_INTERNA';
+            if (frontUrl) {
+                item.arte_url = frontUrl;
+                item.url_arquivo_arte = frontUrl;
+                item.nome_arquivo_arte = frontNome;
+                item.versao_arte = proximaVersao;
+            }
+            if (versoUrl) {
+                item.verso_arte_url = versoUrl;
+                item.url_arquivo_arte_verso = versoUrl;
+                item.nome_arquivo_arte_verso = versoNome;
+                item.versao_arte = proximaVersao;
+            }
+        }
+        
+        await logToChatIdeal(`Nova arte enviada para o Modelo ${artesModalState.modeloNome} (versão ${proximaVersao}).\\nObs: ${comment}`);
         
         toast('Nova versão enviada com sucesso!', 'success');
         fileInput.value = '';
+        if (fileVersoInput) fileVersoInput.value = '';
         document.getElementById('modal-artes-comment').value = '';
+        
         await loadArtesDoModelo();
+        renderOSItens(artesModalState.osId);
         
     } catch (e) {
         console.error('Erro no submit:', e);
@@ -16675,6 +16819,12 @@ async function setStatusArteAtual(novoStatus) {
             .update({ status_arte: novoStatus })
             .eq('id', artesModalState.itemId)
             .catch(e => console.warn('Sem sync modelo:', e));
+            
+        // Atualizar estado local
+        const item = (state.osItens[artesModalState.osId] || []).find(i => i.id === artesModalState.itemId);
+        if (item) {
+            item.aprovacao = novoStatus;
+        }
             
         const statusTexto = novoStatus === 'LIBERADA' ? 'LIBERADA PARA IMPRESSÃO' : novoStatus;
         await logToChatIdeal(`Arte do Modelo ${artesModalState.modeloNome} (versão ${arteAtual.versao}) alterada para: ${statusTexto}.\\n${comment ? 'Obs: '+comment : ''}`);
