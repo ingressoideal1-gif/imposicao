@@ -12173,7 +12173,11 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
 function mapVibecodeProdutoToOSItem(p, osId) {
     // Detectar tipo de produto pelo nome
     const nomeProd = (p.nome_produto || '').toUpperCase();
-    let setor = 'PVC';
+    
+    // Buscar o setor real do produto globalmente cadastrado
+    const prodObj = (state.produtosGlobais || []).find(pg => String(pg.id_produto) === String(p.id_produto));
+    let setor = prodObj && prodObj.setor_pcp ? prodObj.setor_pcp : 'PVC';
+    
     let produto = nomeProd;
     
     // Mapear nomes conhecidos
@@ -12298,6 +12302,11 @@ async function loadOSItens(osId) {
                             _pedidoModeloId: item.id,
                             amostra_status: statusFrontend,
                             _vibe_id_produto: prop ? prop.id_produto : null,
+                            setor: (() => {
+                                const vibeProdId = prop ? prop.id_produto : null;
+                                const prodObj = vibeProdId ? (state.produtosGlobais || []).find(pg => String(pg.id_produto) === String(vibeProdId)) : null;
+                                return prodObj ? (prodObj.setor_pcp || '') : '';
+                            })() || item.setor || 'PVC',
                             _dbLoaded: true
                         };
                     });
@@ -12343,6 +12352,11 @@ async function loadOSItens(osId) {
                             id_produto_proposta_origem: pp.id,
                             created_at: pp.created_at,
                             updated_at: pp.updated_at,
+                            setor: (() => {
+                                const vibeProdId = pp.id_produto || null;
+                                const prodObj = vibeProdId ? (state.produtosGlobais || []).find(pg => String(pg.id_produto) === String(vibeProdId)) : null;
+                                return prodObj ? (prodObj.setor_pcp || '') : '';
+                            })() || 'PVC',
                             _dbLoaded: true
                         };
                     });
@@ -12783,7 +12797,11 @@ function renderOrdens() {
 
         // 2. Filtro de Setor
         if (state.filtroSetor) {
-            const matchSetor = itens.some(item => (item.setor || '').toUpperCase() === state.filtroSetor.toUpperCase());
+            const matchSetor = itens.some(item => {
+                const itemS = item.setor || '';
+                const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+                return norm(itemS) === norm(state.filtroSetor);
+            });
             if (!matchSetor) return false;
         }
 
@@ -12881,7 +12899,11 @@ function renderOrdens() {
 
         // 3. Filtro de Setor
         if (state.filtroSetorArte) {
-            const matchSetor = itens.some(item => (item.setor || '').toUpperCase() === state.filtroSetorArte.toUpperCase());
+            const matchSetor = itens.some(item => {
+                const itemS = item.setor || '';
+                const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+                return norm(itemS) === norm(state.filtroSetorArte);
+            });
             if (!matchSetor) return false;
         }
 
@@ -16641,13 +16663,23 @@ async function gerarLinkCliente(osId, numero) {
 function setFiltroSetor(setor) {
     state.filtroSetor = setor;
     
+    // Atualizar botão "Todos os Setores"
+    const btnTodos = document.getElementById('btn-filtro-todos-setores');
+    if (btnTodos) {
+        if (setor === '') {
+            btnTodos.classList.add('active');
+        } else {
+            btnTodos.classList.remove('active');
+        }
+    }
+    
     // Atualizar botões de setor no HTML
     const container = document.getElementById('filter-container-setor');
     if (container) {
         const btns = container.querySelectorAll('.filter-btn-pill');
         btns.forEach(btn => {
             const clickAttr = btn.getAttribute('onclick') || '';
-            if (clickAttr.includes(`'${setor}'`)) {
+            if (clickAttr.includes(`'${setor}'`) && setor !== '') {
                 btn.classList.add('active');
             } else {
                 btn.classList.remove('active');
