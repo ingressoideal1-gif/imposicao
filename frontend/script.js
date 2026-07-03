@@ -5998,8 +5998,37 @@ function drawPreview() {
     const previewPartEl = document.getElementById('preview-part-input');
     let previewPart = 'miolo';
     if (previewPartEl) {
-        if (fmt.has_cover) {
+        const isDuplex = state.printMode === 'duplex';
+        if (fmt.has_cover || isDuplex) {
             previewPartEl.style.display = 'inline-block';
+            
+            const currentVal = previewPartEl.value;
+            
+            let optionsHtml = '';
+            optionsHtml += '<option value="miolo">Miolo</option>';
+            if (isDuplex) {
+                optionsHtml += '<option value="miolo_verso">Miolo (Verso)</option>';
+            }
+            if (fmt.has_cover) {
+                optionsHtml += '<option value="capa">Capa</option>';
+                optionsHtml += '<option value="contracapa">Contracapa</option>';
+            }
+            
+            // Só atualizar o HTML se as opções mudaram para evitar loops de re-renderização
+            const existingOptions = Array.from(previewPartEl.options).map(o => o.value).join(',');
+            const newOptions = isDuplex 
+                ? (fmt.has_cover ? 'miolo,miolo_verso,capa,contracapa' : 'miolo,miolo_verso')
+                : (fmt.has_cover ? 'miolo,capa,contracapa' : 'miolo');
+                
+            if (existingOptions !== newOptions) {
+                previewPartEl.innerHTML = optionsHtml;
+                if (optionsHtml.includes(`value="${currentVal}"`)) {
+                    previewPartEl.value = currentVal;
+                } else {
+                    previewPartEl.value = 'miolo';
+                }
+            }
+            
             previewPart = previewPartEl.value;
         } else {
             previewPartEl.style.display = 'none';
@@ -6100,7 +6129,7 @@ function drawPreview() {
 
     document.getElementById('preview-sheet-num').textContent = `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
 
-    const isBack = state.previewFace === 'back';
+    const isBack = state.previewFace === 'back' || previewPart === 'miolo_verso';
 
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -6234,7 +6263,7 @@ function drawPreview() {
 
 
 
-            let activePdfDoc = state.impArtPdfDoc;
+            let activePdfDoc = (isBack && state.impArtVersoPdfDoc) ? state.impArtVersoPdfDoc : state.impArtPdfDoc;
 
             let activeImage = state.impArtImage;
 
@@ -6310,11 +6339,7 @@ function drawPreview() {
 
                             }
 
-                        } else {
-
-                            pageNum = isBack ? 2 : 1;
-
-                        }
+                            pageNum = (isBack && !state.impArtVersoPdfDoc) ? 2 : 1;
 
 
 
@@ -14191,6 +14216,29 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                     setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 600);
                 })
                 .catch(err => console.warn('[OS→Imp] Erro ao baixar arte via URL:', err));
+                
+            // Carregar Verso se houver
+            state.impArtVersoPdfDoc = null;
+            if (item.verso_arte_url) {
+                const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
+                fetch(item.verso_arte_url)
+                    .then(res => {
+                        const ct = res.headers.get('content-type') || '';
+                        return res.blob().then(blob => ({ blob, ct }));
+                    })
+                    .then(({ blob, ct }) => {
+                        const isPdf = ct.includes('pdf') || filenameV.toLowerCase().endsWith('.pdf');
+                        if (isPdf && typeof pdfjsLib !== 'undefined') {
+                            blob.arrayBuffer().then(arrayBuffer => {
+                                pdfjsLib.getDocument({ data: arrayBuffer }).promise.then(pdfV => {
+                                    state.impArtVersoPdfDoc = pdfV;
+                                    setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
+                                }).catch(e => console.error('[OS→Imp] Erro ao carregar PDF de verso da arte:', e));
+                            });
+                        }
+                    })
+                    .catch(err => console.warn('[OS→Imp] Erro ao baixar arte de verso via URL:', err));
+            }
         } else if (corObj && corObj.pdf_base64) {
             state.isColorTemplate = true;
             try {
@@ -14205,6 +14253,22 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
                 const file = new File([blob], filename, { type: 'application/pdf' });
                 state.expectedArteName = filename;
                 loadImpArtFile(file);
+                
+                // Carregar Verso da Cor se for Duplex
+                state.impArtVersoPdfDoc = null;
+                if (corObj.frente_verso && corObj.pdf_verso_base64) {
+                    const base64DataV = corObj.pdf_verso_base64.includes('base64,') ? corObj.pdf_verso_base64.split('base64,')[1] : corObj.pdf_verso_base64;
+                    const binStrV = atob(base64DataV);
+                    const bytesV = new Uint8Array(binStrV.length);
+                    for (let i = 0; i < binStrV.length; i++) {
+                        bytesV[i] = binStrV.charCodeAt(i);
+                    }
+                    pdfjsLib.getDocument({ data: bytesV }).promise.then(pdfV => {
+                        state.impArtVersoPdfDoc = pdfV;
+                        setTimeout(() => { if (typeof drawPreview === 'function') drawPreview(); }, 300);
+                    }).catch(e => console.error('[OS→Imp] Erro ao carregar PDF de verso da cor:', e));
+                }
+                
                 const impInfo = document.getElementById('imp-file-info');
                 if (impInfo) {
                     impInfo.textContent = `✅ ${filename} (Carregado da Cor)`;
@@ -14220,6 +14284,7 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
             // Limpar arte de imposição anterior se não houver arte definida neste item
             state.impArtFile = null;
             state.impArtPdfDoc = null;
+            state.impArtVersoPdfDoc = null;
             state.impArtImage = null;
             const impInfo = document.getElementById('imp-file-info');
             if (impInfo) {
