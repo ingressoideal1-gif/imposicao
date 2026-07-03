@@ -6599,6 +6599,14 @@ function drawPreview() {
 
                 const val = start + item_index;
 
+                let numPrintMode = currentNum.print_mode;
+                if (!numPrintMode && currentNum.elements) {
+                    const metaEl = currentNum.elements.find(x => x.type === 'METADATA');
+                    if (metaEl) {
+                        numPrintMode = metaEl.print_mode;
+                    }
+                }
+
                 currentNum.elements.forEach(el => {
 
                     const printMode = document.getElementById('imp-print-mode')?.value || 'front';
@@ -6606,9 +6614,11 @@ function drawPreview() {
                     let effectiveFace = el.face || 'both';
 
                     if (printMode === 'duplex') {
-
-                        effectiveFace = source_id === 1 ? 'front' : 'back';
-
+                        if (numPrintMode === 'duplex') {
+                            effectiveFace = el.face || 'both';
+                        } else {
+                            effectiveFace = source_id === 1 ? 'front' : 'back';
+                        }
                     }
 
 
