@@ -5686,38 +5686,15 @@ function drawPreview() {
 
     if (!fmt || !sai) return;
 
-    // Validação estrita das regras de imposição do formato na visualização
-    if (!fmt.default_schema || !fmt.default_saida_id) {
-        canvas.width = 300;
-        canvas.height = 200;
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(0, 0, 300, 200);
-        ctx.fillStyle = '#ef4444';
-        ctx.font = '12px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Erro: Regras de Imposição ausentes no Formato.', 150, 100);
-        document.getElementById('preview-sheet-num').textContent = 'Erro de Regra';
-        return;
+    // Se estivermos em modo OS ativo, priorizamos os valores padrões do formato (se existirem)
+    if (state.activeOSItem) {
+        if (fmt.default_schema) schema = fmt.default_schema;
+        if (fmt.default_saida_id) saiId = fmt.default_saida_id;
+    } else {
+        // Modo manual: usar os valores selecionados no DOM
+        schema = document.getElementById('imp-schema')?.value || fmt.default_schema || 'sequential';
+        saiId = document.getElementById('imp-saida')?.value || fmt.default_saida_id || saiId;
     }
-
-    if (fmt.default_schema === 'cut_stack') {
-        if (!fmt.default_cut_stack_mode || !fmt.default_sheets_per_block) {
-            canvas.width = 300;
-            canvas.height = 200;
-            ctx.fillStyle = '#1e293b';
-            ctx.fillRect(0, 0, 300, 200);
-            ctx.fillStyle = '#ef4444';
-            ctx.font = '12px Inter, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Erro: Parâmetros Cut & Stack ausentes.', 150, 100);
-            document.getElementById('preview-sheet-num').textContent = 'Erro de Regra';
-            return;
-        }
-    }
-
-    // Usar os padrões obrigatórios do formato
-    schema = fmt.default_schema;
-    saiId = fmt.default_saida_id;
     
     const previewPartEl = document.getElementById('preview-part-input');
     let previewPart = 'miolo';
@@ -7652,26 +7629,25 @@ window.runImposition = async function (mode) {
     const formato = state.formatos.find(f => String(f.id) === String(fmtId));
     if (!formato) return toast('Formato não encontrado no sistema.', 'error');
 
-    // Validação estrita das regras de imposição do formato
-    if (!formato.default_schema) {
-        return toast(`O formato "${formato.name}" não possui uma Regra de Paginação configurada no cadastro. Defina-a nas configurações de formato.`, 'error');
-    }
-    if (!formato.default_saida_id) {
-        return toast(`O formato "${formato.name}" não possui uma Saída Padrão configurada no cadastro. Defina-a nas configurações de formato.`, 'error');
-    }
-
-    if (formato.default_schema === 'cut_stack') {
-        if (!formato.default_cut_stack_mode) {
-            return toast(`O formato "${formato.name}" (Cut & Stack) não possui o Modo Cut & Stack configurado no cadastro.`, 'error');
+    // Se estivermos em modo OS ativo, priorizamos os valores padrões do formato (se existirem)
+    if (state.activeOSItem) {
+        if (formato.default_schema) schema = formato.default_schema;
+        if (formato.default_saida_id) saiId = formato.default_saida_id;
+        
+        if (!schema) {
+            return toast(`O formato "${formato.name}" não possui uma Regra de Paginação configurada.`, 'error');
         }
-        if (!formato.default_sheets_per_block) {
-            return toast(`O formato "${formato.name}" (Cut & Stack) não possui as Folhas por Bloco configuradas no cadastro.`, 'error');
+        if (!saiId) {
+            return toast(`O formato "${formato.name}" não possui uma Saída Padrão configurada.`, 'error');
         }
+    } else {
+        // Modo manual: ler os valores selecionados nos dropdowns da tela
+        schema = document.getElementById('imp-schema')?.value || formato.default_schema || 'sequential';
+        saiId = document.getElementById('imp-saida')?.value || formato.default_saida_id || saiId;
+        
+        if (!schema) return toast('Selecione uma Regra de Paginação.', 'error');
+        if (!saiId) return toast('Selecione uma Saída.', 'error');
     }
-
-    // Usar os padrões obrigatórios do formato
-    schema = formato.default_schema;
-    saiId = formato.default_saida_id;
 
     
 
@@ -14440,10 +14416,12 @@ window.showView = function(viewId) {
     }
     if (viewId === 'view-imposicao') {
         renderImpOSQueue();
+        const impPreview = document.getElementById('imp-preview-card-container');
+        if (impPreview) impPreview.style.display = 'block';
     }
     if (viewId === 'view-pedido') {
         if (state.activeOSItem) {
-            const { osId } = state.activeOSItem;
+            const { osId, itemId } = state.activeOSItem;
             const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
             let nomeEvento = '';
             if (state.todasArtes) {
@@ -14461,6 +14439,10 @@ window.showView = function(viewId) {
             }
             if (pedViewSubtitle) {
                 pedViewSubtitle.style.display = 'none';
+            }
+            if (itemId) {
+                const pedPreview = document.getElementById('ped-preview-card-container');
+                if (pedPreview) pedPreview.style.display = 'block';
             }
         }
     }
