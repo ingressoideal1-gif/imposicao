@@ -14026,6 +14026,19 @@ function onImposicaoNumeracaoChange(value) {
     saveActiveOSItemField('numeracao_id', value);
     const numObj = state.numeracoes.find(n => String(n.id) === String(value));
     saveActiveOSItemField('numeracao', numObj ? (numObj.name || numObj.tipo) : null);
+    
+    // Se a numeração contém verso, mudar automaticamente para duplex (frente e verso)
+    if (numObj) {
+        const hasVerso = (numObj.name && numObj.name.toLowerCase().includes('verso')) || 
+                         (numObj.elements && numObj.elements.some(el => el.face === 'back'));
+        if (hasVerso) {
+            const printMode = document.getElementById('imp-print-mode');
+            if (printMode && printMode.value !== 'duplex') {
+                printMode.value = 'duplex';
+                printMode.dispatchEvent(new Event('change'));
+            }
+        }
+    }
 }
 window.onImposicaoNumeracaoChange = onImposicaoNumeracaoChange;
 
