@@ -15225,7 +15225,7 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
 
     // Filtrar numerações pelo formato da COR selecionada
     const curNumVal = numSelect.value;
-    const item = state.osItens[osId].find(i => i.id === itemId);
+    const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
     const corFormatoId = cor ? cor.formato_id : null;
 
     const filteredNums = (state.numeracoes || []).filter(n => {
@@ -16058,7 +16058,7 @@ async function decisionAmostraItem(itemId, osId, status) {
         // Se for na página do cliente, vamos notificar no chat do pedido!
         const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');
         if (isClientePage) {
-            const item = state.osItens[osId].find(i => i.id === itemId);
+            const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
             const prodNome = item ? item.produto : 'Produto';
             
             // Enviar mensagem no chat da proposta
@@ -16488,7 +16488,7 @@ let artesModalState = {
 
 async function openArtesModal(itemId, osId) {
     const os = state.ordens.find(o => o.id === osId);
-    const item = (state.osItens[osId] || []).find(i => i.id === itemId);
+    const item = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
     if (!os || !item) return;
     
     artesModalState.itemId = itemId;
@@ -16742,7 +16742,7 @@ async function submitNovaArte() {
             .catch(err => console.error('[submitNovaArte] Erro ao sincronizar pedidos_modelos:', err));
             
         // Atualizar estado local
-        const item = (state.osItens[artesModalState.osId] || []).find(i => i.id === artesModalState.itemId);
+        const item = (state.osItens[artesModalState.osId] || []).find(i => String(i.id) === String(artesModalState.itemId));
         if (item) {
             item.aprovacao = 'EM_REVISAO_INTERNA';
             if (frontUrl) {
@@ -16821,7 +16821,7 @@ async function setStatusArteAtual(novoStatus) {
             .catch(e => console.warn('Sem sync modelo:', e));
             
         // Atualizar estado local
-        const item = (state.osItens[artesModalState.osId] || []).find(i => i.id === artesModalState.itemId);
+        const item = (state.osItens[artesModalState.osId] || []).find(i => String(i.id) === String(artesModalState.itemId));
         if (item) {
             item.aprovacao = novoStatus;
         }
