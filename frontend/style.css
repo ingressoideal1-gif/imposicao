@@ -685,7 +685,7 @@ input[type="color"].element-card-fields .form-control,
     max-width: 200px;
 }
 
-#numeracao-canvas {
+#numeracao-canvas, #numeracao-canvas-verso {
     border: 1px solid var(--border-glow);
     border-radius: var(--radius-sm);
     background: white;

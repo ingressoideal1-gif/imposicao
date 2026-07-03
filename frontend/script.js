@@ -2887,6 +2887,26 @@ window.onFormatoSelect = function (clearElements = true) {
 
 
 
+window.onNumPrintModeChange = function() {
+    const printMode = document.getElementById('num-print-mode')?.value || 'front';
+    const containerVerso = document.getElementById('num-canvas-container-verso');
+    const titleFrente = document.getElementById('num-canvas-title-frente');
+
+    if (printMode === 'duplex') {
+        if (containerVerso) containerVerso.style.display = 'flex';
+        if (titleFrente) titleFrente.style.display = 'inline-block';
+    } else {
+        if (containerVerso) containerVerso.style.display = 'none';
+        if (titleFrente) titleFrente.style.display = 'none';
+    }
+
+    initCanvas();
+    drawCanvas();
+};
+
+
+
+
 // - CANVAS -
 
 const CANVAS_MAX_W = 2000;
