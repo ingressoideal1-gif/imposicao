@@ -1197,11 +1197,17 @@ class ImpositionEngine:
                             )
 
                         for el in current_elements:
-                            # Filtrar elementos que são apenas para frente
-                            if el.get("face", "both") == "front":
+                            # Filtrar elementos que são apenas para frente (exceto PICOTE)
+                            if el.get("face", "both") == "front" and el.get("type") != "PICOTE":
                                 continue
 
                             rotated_el = dict(el)
+                            if el.get("type") == "PICOTE":
+                                # Refletir X no verso
+                                width_mm = cfg.item_w / MM2PT
+                                rotated_el["x_mm"] = width_mm - el.get("x_mm", 0)
+                                rotated_el["_x"] = rotated_el["x_mm"] * MM2PT
+
                             rotated_el["rotation"] = el.get("rotation", 0)
 
                             if "size_mm" in el:

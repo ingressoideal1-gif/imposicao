@@ -3168,11 +3168,18 @@ function drawCanvasFace(canvas, face) {
     state.numElements.forEach(el => {
         const elFace = el.face || 'both';
         if (face === 'back') {
-            if (elFace === 'back' || elFace === 'both') {
+            if (el.type === 'PICOTE') {
+                // Refletir coordenada X do picote no verso
+                const reflectedEl = {
+                    ...el,
+                    x_mm: state.numFormato.width_mm - el.x_mm
+                };
+                drawElement(ctx, reflectedEl, S);
+            } else if (elFace === 'back' || elFace === 'both') {
                 drawElement(ctx, el, S);
             }
         } else {
-            if (elFace === 'front' || elFace === 'both') {
+            if (elFace === 'front' || elFace === 'both' || el.type === 'PICOTE') {
                 drawElement(ctx, el, S);
             }
         }
@@ -3612,6 +3619,10 @@ function onCanvasMouseDown(e) {
     for (let i = state.numElements.length - 1; i >= 0; i--) {
 
         const el = state.numElements[i];
+        
+        // Picote no verso não é interativo/selecionável
+        if (face === 'back' && el.type === 'PICOTE') continue;
+
         const elFace = el.face || 'both';
         const isVisibleOnFace = (face === 'back') ? (elFace === 'back' || elFace === 'both') : (elFace === 'front' || elFace === 'both');
 
