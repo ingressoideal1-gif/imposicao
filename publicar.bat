@@ -43,11 +43,13 @@ echo.
 echo  Commit: !MSG!
 echo.
 
-REM ── 3. Bumpar versão no index.html ──────────────────────────────────────────
-echo  Atualizando index.html: v%CURRENT_V% → v%NEXT_V%...
+REM ── 3. Bumpar versão no index.html e outras páginas ──────────────────────────
+echo  Atualizando index.html, cliente.html e producao.html para v%NEXT_V%...
 powershell -NoProfile -Command "(Get-Content '%INDEX%') -replace 'script\.js\?v=%CURRENT_V%', 'script.js?v=%NEXT_V%' | Set-Content '%INDEX%'"
+powershell -NoProfile -Command "(Get-Content 'frontend\cliente.html') -replace 'cliente\.js\?v=\d+', 'cliente.js?v=%NEXT_V%' | Set-Content 'frontend\cliente.html'"
+powershell -NoProfile -Command "(Get-Content 'frontend\producao.html') -replace 'script\.js\?v=\d+', 'script.js?v=%NEXT_V%' | Set-Content 'frontend\producao.html'"
 if errorlevel 1 (
-    echo  [ERRO] Falha ao atualizar versão no index.html
+    echo  [ERRO] Falha ao atualizar versão nos arquivos HTML
     goto :fim_erro
 )
 

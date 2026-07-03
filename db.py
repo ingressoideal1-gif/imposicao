@@ -512,7 +512,14 @@ def add_cor(data: dict) -> str:
             "name": data.get("name"),
             "hex": data.get("hex", ""),
             "pdf_url": data.get("pdf_url", ""),
-            "pdf_filename": data.get("pdf_filename", "")
+            "pdf_filename": data.get("pdf_filename", ""),
+            "formato_id": data.get("formato_id"),
+            "width_mm": float(data["width_mm"]) if data.get("width_mm") is not None else None,
+            "height_mm": float(data["height_mm"]) if data.get("height_mm") is not None else None,
+            "pdf_base64": data.get("pdf_base64"),
+            "frente_verso": bool(data.get("frente_verso", False)),
+            "name_verso": data.get("name_verso", ""),
+            "pdf_verso_base64": data.get("pdf_verso_base64")
         }
         _supabase_request("POST", "producao_cores", clean_data)
         return new_id
@@ -528,7 +535,14 @@ def update_cor(cor_id: str, data: dict) -> bool:
                 "name": data.get("name"),
                 "hex": data.get("hex", ""),
                 "pdf_url": data.get("pdf_url", ""),
-                "pdf_filename": data.get("pdf_filename", "")
+                "pdf_filename": data.get("pdf_filename", ""),
+                "formato_id": data.get("formato_id"),
+                "width_mm": float(data["width_mm"]) if data.get("width_mm") is not None else None,
+                "height_mm": float(data["height_mm"]) if data.get("height_mm") is not None else None,
+                "pdf_base64": data.get("pdf_base64"),
+                "frente_verso": bool(data.get("frente_verso", False)),
+                "name_verso": data.get("name_verso", ""),
+                "pdf_verso_base64": data.get("pdf_verso_base64")
             }
             res = _supabase_request("PATCH", f"producao_cores?id=eq.{cor_id}", clean_data)
             return bool(res)

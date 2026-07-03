@@ -308,7 +308,32 @@ function renderAmostrasOSItens(osId) {
                         ${item.nome_modelo || `Modelo ${idx + 1}`}
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ?
-                        `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`
+                        (item.verso ? `
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                                <div style="font-size: 0.8rem; font-weight: 700; color: var(--blue); margin-bottom: 6px; text-transform: uppercase;">Frente</div>
+                                <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 ? 'none' : 'block'};">
+                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Frente</p>
+                                </div>
+                            </div>
+                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                                <div style="font-size: 0.8rem; font-weight: 700; color: var(--amber); margin-bottom: 6px; text-transform: uppercase;">Verso</div>
+                                <img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.verso_amostra_arte_base64 ? 'none' : 'block'};">
+                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
+                                </div>
+                            </div>
+                        </div>
+                        ` : `
+                        <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 ? 'none' : 'block'};">
+                             <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
+                             <p style="font-size: 0.95rem; font-weight: 600;">Aguardando visualização da Arte...</p>
+                        </div>
+                        `)
                     :
                         `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
                          <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
@@ -492,7 +517,7 @@ function renderAmostrasOSItens(osId) {
             const numSelect = document.getElementById(`amostra-item-num-${idx}`);
             const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
             
-            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || hasSelectValue) {
+            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.verso_amostra_arte_base64 || hasSelectValue) {
                 renderItemAmostraCombinada(idx, osId);
             }
         });
@@ -648,6 +673,14 @@ async function initClientePage(numero, token) {
                         produto: item.nome_modelo || 'Modelo',
                         nome_produto_real: prop ? prop.nome_produto : null,
                         os_id: osId,
+                        verso: (() => {
+                            const corId = item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null);
+                            const selectedCor = corId ? (state.cores || []).find(c => c.id === corId) : null;
+                            const isCorFrenteVerso = selectedCor ? !!selectedCor.frente_verso : false;
+                            return item.verso_tipo === 'FRENTE E VERSO' 
+                                || (item.frente_verso !== undefined ? !!item.frente_verso : !!item.verso)
+                                || isCorFrenteVerso;
+                        })(),
                         amostra_obs: item.observacao_arte || item.amostra_obs || '',
                         amostra_status: statusFrontend
                     };
@@ -1666,71 +1699,27 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
     });
 }
 
-async function renderItemAmostraCombinada(idx, osId) {
-    const containerId = state.amostrasContainerId || 'amostras-itens-container';
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    const canvas = container.querySelector(`#amostra-item-canvas-${idx}`);
-    const empty = container.querySelector(`#amostra-item-empty-${idx}`);
-    const header = container.querySelector(`#amostra-item-header-${idx}`);
-    const corSelect = container.querySelector(`#amostra-item-cor-${idx}`);
-    const numSelect = container.querySelector(`#amostra-item-num-${idx}`);
-    const arteInput = container.querySelector(`#amostra-item-arte-${idx}`);
-    const arteNameSpan = container.querySelector(`#amostra-item-arte-name-${idx}`);
-    const removeBtn = container.querySelector(`#btn-remove-amostra-arte-${idx}`);
-
+async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
     if (!canvas) return;
 
-    const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
-    const corId = corSelect ? corSelect.value : (item ? item.amostra_cor_id : '');
-    const numId = numSelect ? numSelect.value : (item ? item.amostra_num_id : '');
+    // Determinar se tem arte selecionada ou salva para esta face
+    const inputId = face === 'back' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
+    const arteInput = container ? container.querySelector(`#${inputId}`) : null;
+
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
-    const hasSavedArte = !!(item && item.arte_url);
+    const faceArteUrl = face === 'back' ? item.verso_arte_url : item.arte_url;
+    const hasSavedArte = !!faceArteUrl;
 
-    // Mostrar nome do arquivo e botão remover
-    if (arteNameSpan) {
-        if (hasArte) arteNameSpan.textContent = arteInput.files[0].name;
-        else if (hasSavedArte) arteNameSpan.textContent = '(Arte Salva na Nuvem)';
-        else arteNameSpan.textContent = '';
-    }
-    if (removeBtn) removeBtn.style.display = (hasArte || hasSavedArte) ? '' : 'none';
-
-    // Se nada selecionado, esconder canvas
+    // Se nada selecionado (sem cor, sem numeração, sem arte para esta face), esconder canvas e mostrar vazio
+    const corId = item.amostra_cor_id || '';
+    const numId = item.amostra_num_id || '';
     if (!corId && !numId && !hasArte && !hasSavedArte) {
         canvas.style.display = 'none';
         if (empty) empty.style.display = 'block';
-        if (header) header.style.display = 'none';
         return;
     }
-
-    // Obter cor e formato
-    const cor = corId ? state.cores.find(c => c.id === corId) : null;
-    const num = numId ? state.numeracoes.find(n => n.id === numId) : null;
-
-    if (num) {
-        preloadAmostraItemPdfElements(num, idx, osId);
-    }
-
-    // Determinar formato base
-    let fmt = null;
-    if (cor && cor.formato_id) {
-        fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
-    }
-    if (!fmt && num && num.formato_id) {
-        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
-    }
-    if (!fmt && state.formatos.length > 0) {
-        fmt = state.formatos[0];
-    }
-    if (!fmt) {
-        // Sem formato -- fallback básico
-        fmt = { width_mm: 180, height_mm: 50 };
-    }
-
-    // Escala de renderizacao: 150 DPI para alta nitidez em todas as visualizacoes
-    // O canvas e renderizado em alta resolucao e exibido via CSS (max-width: 100%)
-    const S = 150 / 25.4;
 
     let targetW = fmt.width_mm;
     let targetH = fmt.height_mm;
@@ -1747,7 +1736,6 @@ async function renderItemAmostraCombinada(idx, osId) {
     canvas.height = finalHeight;
     canvas.style.display = 'block';
     if (empty) empty.style.display = 'none';
-    if (header) header.style.display = 'block';
 
     const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
     ctx.clearRect(0, 0, finalWidth, finalHeight);
@@ -1764,7 +1752,10 @@ async function renderItemAmostraCombinada(idx, osId) {
 
             const loadingTask = pdfjsLib.getDocument({ data: bytes });
             const pdf = await loadingTask.promise;
-            const page = await pdf.getPage(1);
+            
+            // Usar página 2 se for verso e o PDF tiver 2 ou mais páginas
+            const pageNum = (face === 'back' && pdf.numPages >= 2) ? 2 : 1;
+            const page = await pdf.getPage(pageNum);
 
             const viewport = page.getViewport({ scale: 1.0 });
             const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
@@ -1776,13 +1767,12 @@ async function renderItemAmostraCombinada(idx, osId) {
             const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
             await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
 
-            // Centralizar como faz o card avulso
             const dx = (finalWidth - offCanvas.width) / 2;
             const dy = (finalHeight - offCanvas.height) / 2;
             ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
             corRendered = true;
         } catch (e) {
-            console.warn(`[Item ${idx}] Erro ao renderizar cor PDF:`, e);
+            console.warn(`[Item ${idx} - Face ${face}] Erro ao renderizar cor PDF:`, e);
         }
     }
     if (!corRendered) {
@@ -1799,11 +1789,10 @@ async function renderItemAmostraCombinada(idx, osId) {
                 file = arteInput.files[0];
                 isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
             } else {
-                isPdf = item.arte_url && (item.arte_url.toLowerCase().endsWith('.pdf') || item.arte_url.includes('data:application/pdf'));
+                isPdf = faceArteUrl && (faceArteUrl.toLowerCase().endsWith('.pdf') || faceArteUrl.includes('data:application/pdf'));
             }
 
             if (isPdf && typeof pdfjsLib !== 'undefined') {
-                // Configurar o workerSrc do PDF.js
                 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
                 
                 let bytes;
@@ -1811,11 +1800,11 @@ async function renderItemAmostraCombinada(idx, osId) {
                     const arrayBuffer = await file.arrayBuffer();
                     bytes = new Uint8Array(arrayBuffer);
                 } else {
-                    if (item.arte_url.startsWith('http') || item.arte_url.startsWith('/')) {
-                        const bufferData = await fetchPdfBytes(item.arte_url);
+                    if (faceArteUrl.startsWith('http') || faceArteUrl.startsWith('/')) {
+                        const bufferData = await fetchPdfBytes(faceArteUrl);
                         bytes = new Uint8Array(bufferData);
                     } else {
-                        const base64Data = item.arte_url.includes('base64,') ? item.arte_url.split('base64,')[1] : item.arte_url;
+                        const base64Data = faceArteUrl.includes('base64,') ? faceArteUrl.split('base64,')[1] : faceArteUrl;
                         const binStr = atob(base64Data);
                         bytes = new Uint8Array(binStr.length);
                         for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
@@ -1852,12 +1841,11 @@ async function renderItemAmostraCombinada(idx, osId) {
                 ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
                 ctx.globalCompositeOperation = 'source-over';
             } else {
-                // Tratar como imagem normal (PNG, JPG)
                 let url;
                 if (hasArte) {
                     url = URL.createObjectURL(file);
                 } else {
-                    url = item.arte_url;
+                    url = faceArteUrl;
                 }
                 const arteImg = new Image();
                 arteImg.crossOrigin = "Anonymous";
@@ -1897,12 +1885,11 @@ async function renderItemAmostraCombinada(idx, osId) {
                 }
             }
         } catch (e) {
-            console.warn(`[Item ${idx}] Erro ao renderizar arte:`, e);
-            if (typeof toast === 'function') toast('Falha visualizando arte: ' + (e.message || 'formato?'), 'error');
+            console.warn(`[Item ${idx} - Face ${face}] Erro ao renderizar arte:`, e);
         }
     }
 
-    // ====== CAMADA 3: NUMERAÇÃO (desenhar elements como o card avulso) ======
+    // ====== CAMADA 3: NUMERAÇÃO ======
     if (num && num.elements && num.elements.length > 0) {
         const numCanvas = document.createElement('canvas');
         numCanvas.width = Math.round(fmt.width_mm * S);
@@ -1916,10 +1903,24 @@ async function renderItemAmostraCombinada(idx, osId) {
 
         // Desenhar cada elemento da numeração
         num.elements.forEach(el => {
-            const x = el.x_mm * S;
+            const elFace = el.face || 'both';
+
+            // Filtrar elementos por face
+            if (face === 'back') {
+                if (el.type !== 'PICOTE' && elFace !== 'back' && elFace !== 'both') return;
+            } else {
+                if (elFace !== 'front' && elFace !== 'both' && el.type !== 'PICOTE') return;
+            }
+
+            let x = el.x_mm * S;
             const y = el.y_mm * S;
             const color = el.color || '#000000';
             const rot = (el.rotation || 0) * Math.PI / 180;
+
+            // PICOTE: espelhamento no verso
+            if (face === 'back' && el.type === 'PICOTE') {
+                x = (fmt.width_mm - el.x_mm) * S;
+            }
 
             numCtx.save();
             numCtx.translate(x, y);
@@ -1953,7 +1954,7 @@ async function renderItemAmostraCombinada(idx, osId) {
                 numCtx.textBaseline = 'middle';
                 if (label.includes('\n')) {
                     const lines = label.split('\n');
-                    const lineHeight = fs * 1.2;  // igual ao engine.py e drawElement
+                    const lineHeight = fs * 1.2;
                     const totalH = lines.length * lineHeight;
                     const blockTop = -totalH / 2;
                     lines.forEach((line, i) => {
@@ -2024,7 +2025,6 @@ async function renderItemAmostraCombinada(idx, osId) {
                         numCtx.textBaseline = 'alphabetic';
                     }
                 } else {
-                    // SVG
                     if (el.svg_content) {
                         if (!el._svgImage && !el._svgLoading) {
                             el._svgLoading = true;
@@ -2035,7 +2035,7 @@ async function renderItemAmostraCombinada(idx, osId) {
                                 renderItemAmostraCombinada(idx, osId);
                             };
                             img.onerror = () => {
-                                console.error('[Amostra Item] Erro ao carregar SVG do elemento');
+                                console.error('[Amostra Item] Erro ao carregar SVG');
                                 delete el._svgLoading;
                             };
                             if (el.svg_content.startsWith('http') || el.svg_content.startsWith('data:')) {
@@ -2086,12 +2086,105 @@ async function renderItemAmostraCombinada(idx, osId) {
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, finalWidth, finalHeight);
+}
 
-    // Snapshot para o link do cliente se não for a própria visão do cliente
-    if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
-        if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
-        item._snapshotTimer = setTimeout(() => {
-            snapshotAmostraAndUpload(idx, osId, item, canvas);
-        }, 2000);
+async function renderItemAmostraCombinada(idx, osId) {
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
+    if (!item) return;
+
+    const corSelect = container.querySelector(`#amostra-item-cor-${idx}`);
+    const numSelect = container.querySelector(`#amostra-item-num-${idx}`);
+    const corId = corSelect ? corSelect.value : item.amostra_cor_id;
+    const numId = numSelect ? numSelect.value : item.amostra_num_id;
+
+    // Atualizar labels e remover btns para Frente e Verso
+    const hasFrontArte = container.querySelector(`#amostra-item-arte-${idx}`)?.files?.length > 0;
+    const hasSavedFrontArte = !!item.arte_url;
+    const frontNameSpan = container.querySelector(`#amostra-item-arte-name-${idx}`);
+    const removeFrontBtn = container.querySelector(`#btn-remove-amostra-arte-${idx}`);
+
+    if (frontNameSpan) {
+        if (hasFrontArte) frontNameSpan.textContent = container.querySelector(`#amostra-item-arte-${idx}`).files[0].name;
+        else if (hasSavedFrontArte) frontNameSpan.textContent = '(Arte Salva na Nuvem)';
+        else frontNameSpan.textContent = '';
+    }
+    if (removeFrontBtn) removeFrontBtn.style.display = (hasFrontArte || hasSavedFrontArte) ? '' : 'none';
+
+    if (item.verso) {
+        const hasVersoArte = container.querySelector(`#amostra-item-arte-verso-${idx}`)?.files?.length > 0;
+        const hasSavedVersoArte = !!item.verso_arte_url;
+        const versoNameSpan = container.querySelector(`#amostra-item-arte-verso-name-${idx}`);
+        const removeVersoBtn = container.querySelector(`#btn-remove-amostra-arte-verso-${idx}`);
+
+        if (versoNameSpan) {
+            if (hasVersoArte) versoNameSpan.textContent = container.querySelector(`#amostra-item-arte-verso-${idx}`).files[0].name;
+            else if (hasSavedVersoArte) versoNameSpan.textContent = '(Arte Salva na Nuvem)';
+            else versoNameSpan.textContent = '';
+        }
+        if (removeVersoBtn) removeVersoBtn.style.display = (hasVersoArte || hasSavedVersoArte) ? '' : 'none';
+    }
+
+    // Obter cor, formato e numeração
+    const cor = corId ? state.cores.find(c => c.id === corId) : null;
+    const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+
+    if (num) {
+        preloadAmostraItemPdfElements(num, idx, osId);
+    }
+
+    let fmt = null;
+    if (cor && cor.formato_id) {
+        fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
+    }
+    if (!fmt && num && num.formato_id) {
+        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
+    }
+    if (!fmt && state.formatos.length > 0) {
+        fmt = state.formatos[0];
+    }
+    if (!fmt) {
+        fmt = { width_mm: 180, height_mm: 50 };
+    }
+
+    const S = 150 / 25.4;
+
+    if (item.verso) {
+        const canvasFront = container.querySelector(`#amostra-item-canvas-${idx}`);
+        const emptyFront = container.querySelector(`#amostra-item-empty-${idx}`);
+        const canvasBack = container.querySelector(`#amostra-item-canvas-verso-${idx}`);
+        const emptyBack = container.querySelector(`#amostra-item-empty-verso-${idx}`);
+
+        await drawAmostraFace(item, 'front', canvasFront, emptyFront, fmt, cor, num, idx, osId, S);
+        await drawAmostraFace(item, 'back', canvasBack, emptyBack, fmt, cor, num, idx, osId, S);
+        
+        // Snapshot para link do cliente (Frente e Verso)
+        if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+            if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
+            item._snapshotTimer = setTimeout(() => {
+                snapshotAmostraAndUpload(idx, osId, item, canvasFront, 'frente');
+                snapshotAmostraAndUpload(idx, osId, item, canvasBack, 'verso');
+            }, 2000);
+        }
+    } else {
+        const canvas = container.querySelector(`#amostra-item-canvas-${idx}`);
+        const empty = container.querySelector(`#amostra-item-empty-${idx}`);
+        
+        await drawAmostraFace(item, 'front', canvas, empty, fmt, cor, num, idx, osId, S);
+        
+        if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+            if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
+            item._snapshotTimer = setTimeout(() => {
+                snapshotAmostraAndUpload(idx, osId, item, canvas);
+            }, 2000);
+        }
     }
 }
+
+function saveAmostraItemObs(itemId, osId, obs) {
+    saveAmostraToDB(itemId, osId, { amostra_obs: obs });
+}
+window.saveAmostraItemObs = saveAmostraItemObs;

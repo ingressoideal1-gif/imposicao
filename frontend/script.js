@@ -1407,6 +1407,10 @@ let corPdfBase64 = "";
 
 let corPdfFilename = "";
 
+let corPdfVersoBase64 = "";
+
+let corPdfVersoFilename = "";
+
 
 
 // Função para renderizar a primeira página do PDF de referência no Canvas
@@ -1536,6 +1540,137 @@ async function renderPdfPreview(pdfBase64) {
 }
 
 window.renderPdfPreview = renderPdfPreview;
+
+async function renderPdfVersoPreview(pdfBase64) {
+    const canvas = document.getElementById('cor-pdf-preview-verso-canvas');
+    const emptyEl = document.getElementById('cor-pdf-preview-verso-empty');
+    if (!canvas) return;
+
+    if (!pdfBase64) {
+        canvas.style.display = 'none';
+        if (emptyEl) {
+            emptyEl.style.display = 'block';
+            emptyEl.innerHTML = `
+                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                <p style="font-size: 0.85rem; font-weight: 500;">Faça upload de um PDF de Verso para visualizar.</p>
+            `;
+        }
+        return;
+    }
+
+    try {
+        if (emptyEl) {
+            emptyEl.style.display = 'block';
+            emptyEl.innerHTML = '<div class="spinner"></div><p style="margin-top:10px; font-size:0.88rem; font-weight:500;">Carregando PDF...</p>';
+        }
+        
+        const base64Data = pdfBase64.includes('base64,') ? pdfBase64.split('base64,')[1] : pdfBase64;
+        const binStr = atob(base64Data);
+        const len = binStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binStr.charCodeAt(i);
+        }
+
+        const loadingTask = pdfjsLib.getDocument({ data: bytes });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+        
+        const viewport = page.getViewport({ scale: 1.0 });
+        const containerW = canvas.parentElement.clientWidth - 30; // compensar paddings
+        const scale = containerW / viewport.width;
+        const scaledViewport = page.getViewport({ scale: Math.min(scale, 1.5) });
+        
+        const context = canvas.getContext('2d');
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+        
+        const renderContext = {
+            canvasContext: context,
+            viewport: scaledViewport
+        };
+        await page.render(renderContext).promise;
+        
+        if (emptyEl) emptyEl.style.display = 'none';
+        canvas.style.display = 'block';
+    } catch (e) {
+        console.error("Erro ao renderizar preview do PDF do verso:", e);
+        if (emptyEl) {
+            emptyEl.style.display = 'block';
+            emptyEl.innerHTML = '<div style="font-size: 2rem; color: var(--red); margin-bottom:10px;">✕</div><p style="font-size:0.88rem; font-weight:500;">Falha ao carregar visualização do PDF.</p>';
+        }
+        canvas.style.display = 'none';
+    }
+}
+window.renderPdfVersoPreview = renderPdfVersoPreview;
+
+function toggleCorVersoFields() {
+    const checkbox = document.getElementById('cor-frente-verso');
+    const isChecked = checkbox ? checkbox.checked : false;
+    
+    // Mostra/oculta campos de upload do verso
+    const versoGroup = document.getElementById('cor-pdf-verso-group');
+    if (versoGroup) {
+        versoGroup.style.display = isChecked ? 'block' : 'none';
+    }
+    
+    // Ajusta a grid de preview
+    const previewGrid = document.getElementById('cor-pdf-preview-container-grid');
+    const frontLabel = document.getElementById('cor-pdf-front-label');
+    const frontEmptyText = document.getElementById('cor-pdf-preview-front-empty-text');
+    const backBlock = document.getElementById('cor-pdf-preview-back-block');
+    
+    if (isChecked) {
+        if (previewGrid) previewGrid.style.gridTemplateColumns = '1fr 1fr';
+        if (frontLabel) frontLabel.textContent = 'Arquivo PDF de Referência - FRENTE';
+        if (frontEmptyText) frontEmptyText.textContent = 'Faça upload de um PDF de Frente para visualizar.';
+        if (backBlock) {
+            backBlock.style.display = 'flex';
+            backBlock.style.flexDirection = 'column';
+        }
+        renderPdfVersoPreview(corPdfVersoBase64);
+    } else {
+        if (previewGrid) previewGrid.style.gridTemplateColumns = '1fr';
+        if (frontLabel) frontLabel.textContent = 'Arquivo PDF de Referência';
+        if (frontEmptyText) frontEmptyText.textContent = 'Faça upload de um PDF para visualizar.';
+        if (backBlock) backBlock.style.display = 'none';
+    }
+}
+window.toggleCorVersoFields = toggleCorVersoFields;
+
+// Event Listener para ler o arquivo PDF do verso em Base64
+document.getElementById('cor-pdf-verso-file')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+        toast('Selecione apenas arquivos PDF.', 'error');
+        e.target.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        corPdfVersoBase64 = evt.target.result;
+        corPdfVersoFilename = file.name;
+        document.getElementById('cor-pdf-verso-file-name').textContent = "📎 " + file.name;
+        document.getElementById('btn-remove-cor-pdf-verso').style.display = 'inline-flex';
+        renderPdfVersoPreview(corPdfVersoBase64);
+    };
+    reader.readAsDataURL(file);
+});
+
+function clearCorPdfVersoFile() {
+    corPdfVersoBase64 = "";
+    corPdfVersoFilename = "";
+    const fileEl = document.getElementById('cor-pdf-verso-file');
+    if (fileEl) fileEl.value = "";
+    const labelEl = document.getElementById('cor-pdf-verso-file-name');
+    if (labelEl) labelEl.textContent = "";
+    const btnRemove = document.getElementById('btn-remove-cor-pdf-verso');
+    if (btnRemove) btnRemove.style.display = 'none';
+    renderPdfVersoPreview(null);
+}
+window.clearCorPdfVersoFile = clearCorPdfVersoFile;
+
 
 
 
@@ -1718,24 +1853,24 @@ function renderCores() {
                     <tbody>
 
                         ${coresDoFormato.map(c => {
-
-                            const pdfLink = c.pdf_base64 
-
-                                ? `<a href="${c.pdf_base64}" download="${c.pdf_filename || 'referencia.pdf'}" class="badge badge-teal" style="text-decoration:none;" onclick="event.stopPropagation();">📥 Baixar PDF</a>`
-
-                                : '<span style="color:var(--text-faint)">Sem arquivo</span>';
-
+                            let pdfLinkFront = c.pdf_base64 
+                                ? `<a href="${c.pdf_base64}" download="${c.pdf_filename || 'referencia_frente.pdf'}" class="badge badge-teal" style="text-decoration:none;" onclick="event.stopPropagation();">📥 Frente</a>`
+                                : '<span style="color:var(--text-faint)">Sem arquivo (Frente)</span>';
                             
-
+                            let pdfLinkBack = '';
+                            if (c.frente_verso) {
+                                pdfLinkBack = c.pdf_verso_base64
+                                    ? ` <a href="${c.pdf_verso_base64}" download="${c.name_verso || 'referencia_verso.pdf'}" class="badge badge-amber" style="text-decoration:none;" onclick="event.stopPropagation();">📥 Verso</a>`
+                                    : ' <span style="color:var(--text-faint)">(Verso pendente)</span>';
+                            }
+                            
+                            const pdfLinks = pdfLinkFront + pdfLinkBack;
+                            
                             return `
-
                                 <tr style="cursor: pointer;" onclick="editCor('${c.id}')" title="Clique para editar/visualizar esta cor">
-
                                     <td><strong>${c.name}</strong></td>
-
                                     <td>${c.width_mm} × ${c.height_mm} mm</td>
-
-                                    <td>${pdfLink}</td>
+                                    <td>${pdfLinks}</td>
 
                                     <td class="actions-cell" style="text-align: right;" onclick="event.stopPropagation();">
                                         <button class="btn btn-secondary btn-sm" onclick="duplicateCor('${c.id}')" title="Duplicar Cor">⧉</button>
@@ -1779,6 +1914,9 @@ async function duplicateCor(id) {
             height_mm: parseFloat(c.height_mm),
             pdf_base64: c.pdf_base64 || null,
             pdf_filename: c.pdf_filename || "",
+            frente_verso: c.frente_verso || false,
+            name_verso: c.name_verso || "",
+            pdf_verso_base64: c.pdf_verso_base64 || null
         };
 
         await api('POST', '/cores', clone);
@@ -1812,22 +1950,21 @@ async function saveCor() {
 
     if (isNaN(w) || w <= 0 || isNaN(h) || h <= 0) return toast('Informe dimensões de tamanho válidas.', 'error');
 
-
+    const frenteVerso = document.getElementById('cor-frente-verso')?.checked || false;
+    if (frenteVerso && !corPdfVersoBase64) {
+        return toast('Para cores frente e verso, faça o upload do PDF de referência do Verso.', 'error');
+    }
 
     const data = {
-
         name,
-
         formato_id: formatoId,
-
         width_mm: w,
-
         height_mm: h,
-
         pdf_base64: corPdfBase64 || null,
-
-        pdf_filename: corPdfFilename || ""
-
+        pdf_filename: corPdfFilename || "",
+        frente_verso: frenteVerso,
+        name_verso: frenteVerso ? (corPdfVersoFilename || "") : "",
+        pdf_verso_base64: frenteVerso ? (corPdfVersoBase64 || null) : null
     };
 
 
@@ -1900,30 +2037,33 @@ function editCor(id) {
 
     
 
+    const chkFrenteVerso = document.getElementById('cor-frente-verso');
+    if (chkFrenteVerso) chkFrenteVerso.checked = c.frente_verso || false;
+    
+    toggleCorVersoFields();
+
     if (c.pdf_base64) {
-
         corPdfBase64 = c.pdf_base64;
-
         corPdfFilename = c.pdf_filename || "referencia.pdf";
-
         document.getElementById('cor-pdf-file-name').textContent = "📎 " + corPdfFilename;
-
         document.getElementById('btn-remove-cor-pdf').style.display = 'inline-flex';
-
-        renderPdfPreview(c.pdf_base64); // Exibir preview do PDF ao editar
-
+        renderPdfPreview(c.pdf_base64);
     } else {
-
         clearCorPdfFile();
-
     }
 
+    if (c.frente_verso && c.pdf_verso_base64) {
+        corPdfVersoBase64 = c.pdf_verso_base64;
+        corPdfVersoFilename = c.name_verso || "referencia_verso.pdf";
+        document.getElementById('cor-pdf-verso-file-name').textContent = "📎 " + corPdfVersoFilename;
+        document.getElementById('btn-remove-cor-pdf-verso').style.display = 'inline-flex';
+        renderPdfVersoPreview(c.pdf_verso_base64);
+    } else {
+        clearCorPdfVersoFile();
+    }
     
-
     document.getElementById('cor-form-title').textContent = 'Editar Cor';
-
     document.getElementById('btn-cor-cancel').style.display = 'inline-flex';
-
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
 }
@@ -1933,25 +2073,23 @@ window.editCor = editCor;
 
 
 function cancelCorEdit() {
-
     document.getElementById('cor-id').value = '';
-
     document.getElementById('cor-name').value = '';
-
     document.getElementById('cor-formato').value = '';
-
     document.getElementById('cor-w').value = '';
-
     document.getElementById('cor-h').value = '';
-
+    
+    const chkFrenteVerso = document.getElementById('cor-frente-verso');
+    if (chkFrenteVerso) chkFrenteVerso.checked = false;
+    
     clearCorPdfFile();
+    clearCorPdfVersoFile();
+    toggleCorVersoFields();
 
     document.getElementById('cor-form-title').textContent = 'Nova Cor';
-
     document.getElementById('btn-cor-cancel').style.display = 'none';
-
     renderPdfPreview(null); // Resetar preview do PDF
-
+    renderPdfVersoPreview(null); // Resetar preview do PDF do verso
 }
 
 window.cancelCorEdit = cancelCorEdit;
@@ -12438,13 +12576,22 @@ async function loadOSItens(osId) {
                             qtd: item.quantidade || item.qtd || 0,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
-                            verso: item.verso_tipo === 'FRENTE E VERSO' || (item.frente_verso !== undefined ? item.frente_verso : item.verso),
+                            verso: (() => {
+                                const corId = item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null);
+                                const selectedCor = corId ? (state.cores || []).find(c => c.id === corId) : null;
+                                const isCorFrenteVerso = selectedCor ? !!selectedCor.frente_verso : false;
+                                return item.verso_tipo === 'FRENTE E VERSO' 
+                                    || (item.frente_verso !== undefined ? !!item.frente_verso : !!item.verso)
+                                    || isCorFrenteVerso;
+                            })(),
                             impressao: item.status_producao || item.impressao || 'AGUARD.',
                             nome_produto_real: prop ? prop.nome_produto : null,
                             amostra_cor_id: item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
                             amostra_num_id: resolvedNumId || null,
                             amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
+                            verso_amostra_arte_base64: item.verso_amostra_arte_base64 || (prop ? prop.verso_amostra_arte_base64 : null),
                             arte_url: item.arte_url || (prop ? prop.arte_url : null),
+                            verso_arte_url: item.verso_arte_url || (prop ? prop.verso_arte_url : null),
                             amostra_obs: item.observacao_arte || item.amostra_obs || (prop ? prop.observacao_arte : null) || '',
                             os_id: osId,
                             _pedidoModeloId: item.id,
@@ -14880,7 +15027,32 @@ function renderAmostrasOSItens(osId) {
                         ${item.nome_modelo || `Modelo ${idx + 1}`}
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ?
-                        `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`
+                        (item.verso ? `
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                                <div style="font-size: 0.8rem; font-weight: 700; color: var(--blue); margin-bottom: 6px; text-transform: uppercase;">Frente</div>
+                                <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 ? 'none' : 'block'};">
+                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Frente</p>
+                                </div>
+                            </div>
+                            <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                                <div style="font-size: 0.8rem; font-weight: 700; color: var(--amber); margin-bottom: 6px; text-transform: uppercase;">Verso</div>
+                                <img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.verso_amostra_arte_base64 ? 'none' : 'block'};">
+                                     <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
+                                </div>
+                            </div>
+                        </div>
+                        ` : `
+                        <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 ? 'none' : 'block'};">
+                             <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
+                             <p style="font-size: 0.95rem; font-weight: 600;">Aguardando visualização da Arte...</p>
+                        </div>
+                        `)
                     :
                         (item.verso ? `
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
@@ -16015,11 +16187,12 @@ async function renderItemAmostraCombinada(idx, osId) {
         await drawAmostraFace(item, 'front', canvasFront, emptyFront, fmt, cor, num, idx, osId, S);
         await drawAmostraFace(item, 'back', canvasBack, emptyBack, fmt, cor, num, idx, osId, S);
         
-        // Snapshot para link do cliente (usando a frente como representativa ou a combinada)
+        // Snapshot para link do cliente (Frente e Verso)
         if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
             if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
             item._snapshotTimer = setTimeout(() => {
-                snapshotAmostraAndUpload(idx, osId, item, canvasFront);
+                snapshotAmostraAndUpload(idx, osId, item, canvasFront, 'frente');
+                snapshotAmostraAndUpload(idx, osId, item, canvasBack, 'verso');
             }, 2000);
         }
     } else {
@@ -16037,12 +16210,12 @@ async function renderItemAmostraCombinada(idx, osId) {
     }
 }
 
-async function snapshotAmostraAndUpload(idx, osId, item, canvas) {
+async function snapshotAmostraAndUpload(idx, osId, item, canvas, face = 'frente') {
     if (!supabaseClient) return;
     try {
         canvas.toBlob(async (blob) => {
             if (!blob) return;
-            const fileName = `amostra_${osId}_${item.id}_${Date.now()}.jpg`;
+            const fileName = `amostra_${face}_${osId}_${item.id}_${Date.now()}.jpg`;
             const { error } = await supabaseClient
                 .storage
                 .from('amostras_renderizadas')
@@ -16056,8 +16229,13 @@ async function snapshotAmostraAndUpload(idx, osId, item, canvas) {
             const { data: urlData } = supabaseClient.storage.from('amostras_renderizadas').getPublicUrl(fileName);
             const publicUrl = urlData.publicUrl;
             
-            await saveAmostraToDB(item.id, osId, { amostra_arte_base64: publicUrl });
-            item.amostra_arte_base64 = publicUrl;
+            const dbField = face === 'verso' ? 'verso_amostra_arte_base64' : 'amostra_arte_base64';
+            await saveAmostraToDB(item.id, osId, { [dbField]: publicUrl });
+            if (face === 'verso') {
+                item.verso_amostra_arte_base64 = publicUrl;
+            } else {
+                item.amostra_arte_base64 = publicUrl;
+            }
         }, 'image/jpeg', 0.85);
     } catch(e) {
         console.warn('[Snapshot] Erro ao gerar snapshot:', e);
