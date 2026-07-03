@@ -390,7 +390,7 @@
                         </div>
                     </div>
                     <input type="hidden" id="num-id">
-                    <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;">
+                    <div class="form-grid" style="grid-template-columns: 2fr 1.2fr 1.2fr 1fr;">
                         <div class="form-group">
                             <label>Nome da Numeração</label>
                             <input type="text" class="form-control" id="num-name"
@@ -400,6 +400,13 @@
                             <label>Formato Base <span style="font-weight:400;color:var(--text-dim);font-size:0.78rem;">(define o canvas)</span></label>
                             <select class="form-control" id="num-formato" onchange="onFormatoSelect()">
                                 <option value="">— Selecione um Formato —</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Modo de Impressão</label>
+                            <select class="form-control" id="num-print-mode" onchange="onNumPrintModeChange()">
+                                <option value="front" selected>Apenas Frente</option>
+                                <option value="duplex">Frente e Verso</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -551,8 +558,15 @@
                                 <button class="btn btn-sm btn-secondary" onclick="ungroupSelectedElements()" title="Desagrupar Selecionados" style="padding: 4px 8px; font-size: 0.8rem;">🔓 Desagrupar</button>
                             </div>
                         </div>
-                        <div style="display: flex; width: 100%; justify-content: center; overflow: auto; padding: 8px 0;">
-                            <canvas id="numeracao-canvas"></canvas>
+                        <div style="display: flex; width: 100%; justify-content: center; gap: 24px; overflow: auto; padding: 8px 0; flex-wrap: wrap;">
+                            <div id="num-canvas-container-frente" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                                <span id="num-canvas-title-frente" style="font-weight: 700; color: var(--blue); font-size: 0.85rem; display: none;">FRENTE</span>
+                                <canvas id="numeracao-canvas"></canvas>
+                            </div>
+                            <div id="num-canvas-container-verso" style="display: none; flex-direction: column; align-items: center; gap: 8px;">
+                                <span style="font-weight: 700; color: var(--blue); font-size: 0.85rem;">VERSO</span>
+                                <canvas id="numeracao-canvas-verso"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1899,7 +1913,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=263"></script>
+    <script src="script.js?v=264"></script>
     <script src="/pedido.js?v=249"></script>
 
 

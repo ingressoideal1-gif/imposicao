@@ -614,6 +614,20 @@ async function api(method, path, body = null) {
 
                     }
 
+                    if (col === 'producao_numeracoes' && data) {
+                        if (data.elements && Array.isArray(data.elements)) {
+                            const metadataEl = data.elements.find(el => el.type === 'METADATA');
+                            if (metadataEl) {
+                                data.print_mode = metadataEl.print_mode;
+                                data.elements = data.elements.filter(el => el.type !== 'METADATA');
+                            } else {
+                                data.print_mode = 'front';
+                            }
+                        } else {
+                            data.print_mode = 'front';
+                        }
+                    }
+
                     return data;
 
                 } else {
@@ -626,6 +640,22 @@ async function api(method, path, body = null) {
 
                         return data.map(item => ({ id: item.id, name: item.name, ...item.config }));
 
+                    }
+
+                    if (col === 'producao_numeracoes' && data) {
+                        data.forEach(n => {
+                            if (n.elements && Array.isArray(n.elements)) {
+                                const metadataEl = n.elements.find(el => el.type === 'METADATA');
+                                if (metadataEl) {
+                                    n.print_mode = metadataEl.print_mode;
+                                    n.elements = n.elements.filter(el => el.type !== 'METADATA');
+                                } else {
+                                    n.print_mode = 'front';
+                                }
+                            } else {
+                                n.print_mode = 'front';
+                            }
+                        });
                     }
 
                     return data;
@@ -2430,6 +2460,9 @@ function editNumeracao(id) {
     document.getElementById('num-name').value = n.name;
 
     document.getElementById('num-formato').value = n.formato_id;
+
+    document.getElementById('num-print-mode').value = n.print_mode || 'front';
+    if (window.onNumPrintModeChange) window.onNumPrintModeChange();
     
     document.getElementById('num-tipo').value = n.tipo || 'SEQUENCIAL';
     document.getElementById('num-ticket-qtd').value = n.ticket_qtd || 1;
@@ -2862,6 +2895,8 @@ const CANVAS_MAX_H = 1400;
 
 
 
+
+
 function initCanvas() {
 
     const fmt = state.numFormato;
@@ -2887,6 +2922,12 @@ function initCanvas() {
     canvas.height = Math.round(fmt.height_mm * state.canvasScale);
 
 
+    const canvasVerso = document.getElementById('numeracao-canvas-verso');
+    if (canvasVerso) {
+        canvasVerso.width = canvas.width;
+        canvasVerso.height = canvas.height;
+    }
+
 
     document.getElementById('canvas-dim-label').textContent = `${fmt.width_mm} × ${fmt.height_mm} mm`;
 
@@ -2904,15 +2945,19 @@ function initCanvas() {
 
     canvas.onmouseleave = onCanvasMouseUp;
 
+
+    if (canvasVerso) {
+        canvasVerso.onmousedown = onCanvasMouseDown;
+        canvasVerso.onmousemove = onCanvasMouseMove;
+        canvasVerso.onmouseup = onCanvasMouseUp;
+        canvasVerso.onmouseleave = onCanvasMouseUp;
+    }
+
 }
 
 
 
-function drawCanvas() {
-
-    const canvas = document.getElementById('numeracao-canvas');
-
-    if (!canvas || !state.numFormato) return;
+function drawCanvasFace(canvas, face) {
 
     const ctx = canvas.getContext('2d');
 
@@ -2932,39 +2977,72 @@ function drawCanvas() {
 
 
 
-    // Determinar qual imagem de fundo usar dependendo da view ativa
-    let refBg = state.bgImage;
-    const viewNumeracao = document.getElementById('view-numeracao');
-    if (!refBg && viewNumeracao && viewNumeracao.classList.contains('active')) {
-        refBg = state.numPdfImage || state.numSvgImage;
+    // Determinar qual imagem de fundo usar dependendo da view ativa e face
+    let refBg = null;
+    if (face === 'back') {
+        refBg = state.bgImageVerso || state.numPdfImageVerso;
+    } else {
+        refBg = state.bgImage;
+        const viewNumeracao = document.getElementById('view-numeracao');
+        if (!refBg && viewNumeracao && viewNumeracao.classList.contains('active')) {
+            refBg = state.numPdfImage || state.numSvgImage;
+        }
     }
 
+
+
     // Arte de fundo (camada de referência semitransparente em tamanho original e centralizada)
+
     if (refBg) {
+
         // Para garantir escala 100% (tamanho máximo no canvas) sem distorção, usamos o aspect ratio
+
         const imgW = refBg.originalPdfWidthPt || refBg.width;
+
         const imgH = refBg.originalPdfHeightPt || refBg.height;
+
         
+
         const imgAspect = imgW / imgH;
+
         const canvasAspect = W / H;
+
+
 
         let drawW, drawH;
 
+
+
         // Ajusta (contain) a imagem ao tamanho exato do formato/canvas sem distorcer
+
         if (imgAspect > canvasAspect) {
+
             drawW = W;
+
             drawH = W / imgAspect;
+
         } else {
+
             drawH = H;
+
             drawW = H * imgAspect;
+
         }
 
+
+
         const drawX = (W - drawW) / 2;
+
         const drawY = (H - drawH) / 2;
 
+
+
         ctx.globalAlpha = 0.55;
+
         ctx.drawImage(refBg, drawX, drawY, drawW, drawH);
+
         ctx.globalAlpha = 1.0;
+
     }
 
 
@@ -3058,13 +3136,45 @@ function drawCanvas() {
     });
 
     // Renderizar elementos (com clipping no formato para evitar overflow para fora dos limites)
+
     ctx.save();
+
     ctx.beginPath();
+
     ctx.rect(0, 0, W, H);
+
     ctx.clip();
-    state.numElements.forEach(el => drawElement(ctx, el, S));
+
+    state.numElements.forEach(el => {
+        const elFace = el.face || 'both';
+        if (face === 'back') {
+            if (elFace === 'back' || elFace === 'both') {
+                drawElement(ctx, el, S);
+            }
+        } else {
+            if (elFace === 'front' || elFace === 'both') {
+                drawElement(ctx, el, S);
+            }
+        }
+    });
+
     ctx.restore();
 
+}
+
+function drawCanvas() {
+    const canvasFront = document.getElementById('numeracao-canvas');
+    if (!canvasFront || !state.numFormato) return;
+
+    // Desenhar Frente
+    drawCanvasFace(canvasFront, 'front');
+
+    // Desenhar Verso (se modo duplex ativo)
+    const canvasBack = document.getElementById('numeracao-canvas-verso');
+    const printMode = document.getElementById('num-print-mode')?.value || 'front';
+    if (printMode === 'duplex' && canvasBack) {
+        drawCanvasFace(canvasBack, 'back');
+    }
 }
 
 
@@ -3467,10 +3577,12 @@ function hitTest(el, mx, my) {
 
 function onCanvasMouseDown(e) {
 
-    const canvas = document.getElementById('numeracao-canvas');
+    const canvas = e.currentTarget;
 
     const { x, y } = getCanvasPos(canvas, e);
 
+    const face = canvas.id === 'numeracao-canvas-verso' ? 'back' : 'front';
+    state.lastActiveFace = face;
 
 
     // Verificar hit em sentido inverso (último = mais ao topo)
@@ -3479,9 +3591,13 @@ function onCanvasMouseDown(e) {
 
     for (let i = state.numElements.length - 1; i >= 0; i--) {
 
-        if (hitTest(state.numElements[i], x, y)) {
+        const el = state.numElements[i];
+        const elFace = el.face || 'both';
+        const isVisibleOnFace = (face === 'back') ? (elFace === 'back' || elFace === 'both') : (elFace === 'front' || elFace === 'both');
 
-            hit = state.numElements[i];
+        if (isVisibleOnFace && hitTest(el, x, y)) {
+
+            hit = el;
 
             break;
 
@@ -3555,7 +3671,7 @@ function onCanvasMouseMove(e) {
 
     if (!state.dragging) return;
 
-    const canvas = document.getElementById('numeracao-canvas');
+    const canvas = e.currentTarget;
 
     const { x, y } = getCanvasPos(canvas, e);
 
@@ -4363,15 +4479,25 @@ window.addElement = function (type) {
     }
 
     const base = { 
+
         id, 
+
         type, 
+
         x_mm: type === 'PICOTE' ? 25 : startX, 
+
         y_mm: type === 'PICOTE' ? 0 : startY, 
+
         rotation: 0, 
+
         color: type === 'PICOTE' ? '#ef4444' : '#000000', 
-        face: 'both', 
+
+        face: document.getElementById('num-print-mode')?.value === 'duplex' ? (state.lastActiveFace || 'front') : 'both', 
+
         _centerAnchor: type !== 'PICOTE',
+
         last_interaction: Date.now()
+
     };
 
 
@@ -5249,22 +5375,19 @@ window.saveNumeracao = async function () {
 is_custom: window.customNumeracaoEditState ? true : false,
 os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.itemId : null,
 
-            elements: state.numElements.map(el => {
-
-                // Remover propriedades internas do frontend (não serializáveis)
-                const { _pdfCanvas, _pdfLoading, _svgImage, _pdfPreview, ...e } = el;
-
-                if (e.type === 'FIXED') e.fixed = true;
-
-                if (e.type === 'SVG') e.svg_content = svgUrl || e.svg_content || "";
-
-                // Para PDF: usar pdfUrl se válido, senão manter o pdf_content original do elemento
-                // Isso evita apagar o PDF ao re-editar sem recarregar o arquivo
-                if (e.type === 'PDF') e.pdf_content = pdfUrl || e.pdf_content || "";
-
-                return e;
-
-            })
+            elements: [
+                ...state.numElements.map(el => {
+                    // Remover propriedades internas do frontend (não serializáveis)
+                    const { _pdfCanvas, _pdfLoading, _svgImage, _pdfPreview, ...e } = el;
+                    if (e.type === 'FIXED') e.fixed = true;
+                    if (e.type === 'SVG') e.svg_content = svgUrl || e.svg_content || "";
+                    // Para PDF: usar pdfUrl se válido, senão manter o pdf_content original do elemento
+                    // Isso evita apagar o PDF ao re-editar sem recarregar o arquivo
+                    if (e.type === 'PDF') e.pdf_content = pdfUrl || e.pdf_content || "";
+                    return e;
+                }),
+                { id: 'metadata', type: 'METADATA', print_mode: document.getElementById('num-print-mode')?.value || 'front' }
+            ]
 
         };
 

@@ -231,7 +231,15 @@ class ImpositionConfig:
         
         # Carregar numeração 1
         if numeracao and "elements" in numeracao:
+            num_print_mode = numeracao.get("print_mode")
+            if not num_print_mode and "elements" in numeracao:
+                meta_el = next((x for x in numeracao["elements"] if x.get("type") == "METADATA"), None)
+                if meta_el:
+                    num_print_mode = meta_el.get("print_mode")
+
             for el in numeracao["elements"]:
+                if el.get("type") == "METADATA":
+                    continue
                 e = dict(el)
                 # Converter mm → pt para todos os campos de posição/tamanho
                 e["_x"] = e.get("x_mm", 0) * MM2PT
@@ -242,7 +250,10 @@ class ImpositionConfig:
                     e["_w"] = e["width_mm"] * MM2PT
                     e["_h"] = e.get("height_mm", 10) * MM2PT
                 if self.print_mode == "duplex":
-                    e["face"] = "front"
+                    if num_print_mode == "duplex":
+                        e["face"] = el.get("face", "both")
+                    else:
+                        e["face"] = "front"
                 else:
                     e["face"] = el.get("face", "both")
                 e["_num_source"] = 1
@@ -250,7 +261,15 @@ class ImpositionConfig:
 
         # Carregar numeração 2
         if numeracao_2 and "elements" in numeracao_2:
+            num_print_mode_2 = numeracao_2.get("print_mode")
+            if not num_print_mode_2 and "elements" in numeracao_2:
+                meta_el_2 = next((x for x in numeracao_2["elements"] if x.get("type") == "METADATA"), None)
+                if meta_el_2:
+                    num_print_mode_2 = meta_el_2.get("print_mode")
+
             for el in numeracao_2["elements"]:
+                if el.get("type") == "METADATA":
+                    continue
                 e = dict(el)
                 # Converter mm → pt para todos os campos de posição/tamanho
                 e["_x"] = e.get("x_mm", 0) * MM2PT
@@ -261,7 +280,10 @@ class ImpositionConfig:
                     e["_w"] = e["width_mm"] * MM2PT
                     e["_h"] = e.get("height_mm", 10) * MM2PT
                 if self.print_mode == "duplex":
-                    e["face"] = "back"
+                    if num_print_mode_2 == "duplex":
+                        e["face"] = el.get("face", "both")
+                    else:
+                        e["face"] = "back"
                 else:
                     e["face"] = el.get("face", "both")
                 e["_num_source"] = 2
@@ -695,7 +717,15 @@ class ImpositionEngine:
             def parse_elements(num_obj, source_id):
                 els = []
                 if num_obj and "elements" in num_obj:
+                    num_print_mode = num_obj.get("print_mode")
+                    if not num_print_mode and "elements" in num_obj:
+                        meta_el = next((x for x in num_obj["elements"] if x.get("type") == "METADATA"), None)
+                        if meta_el:
+                            num_print_mode = meta_el.get("print_mode")
+
                     for el in num_obj["elements"]:
+                        if el.get("type") == "METADATA":
+                            continue
                         e = dict(el)
                         e["_x"] = e.get("x_mm", 0) * MM2PT
                         e["_y"] = e.get("y_mm", 0) * MM2PT
@@ -707,7 +737,10 @@ class ImpositionEngine:
                             e["width_mm"] = e["width_mm"]
                             e["height_mm"] = e.get("height_mm", 20)
                         if cfg.print_mode == "duplex":
-                            e["face"] = "front" if source_id == 1 else "back"
+                            if num_print_mode == "duplex":
+                                e["face"] = el.get("face", "both")
+                            else:
+                                e["face"] = "front" if source_id == 1 else "back"
                         else:
                             e["face"] = el.get("face", "both")
                         e["_num_source"] = source_id
