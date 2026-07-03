@@ -5628,31 +5628,38 @@ async function loadImpArtFile(file) {
 
 function drawPreview() {
 
-    let fmtId, numId, saiId, start, end, schema = 'sequential';
+    let fmtId = document.getElementById('imp-formato')?.value || '';
+    let numId = document.getElementById('imp-numeracao')?.value || '';
+    let saiId = document.getElementById('imp-saida')?.value || '';
+    let start = parseInt(document.getElementById('imp-start')?.value, 10) || 1;
+    let end = parseInt(document.getElementById('imp-end')?.value, 10) || 100;
+    let schema = document.getElementById('imp-schema')?.value || 'sequential';
+
     const activeItem = state.activeOSItem;
-    if (activeItem) {
+    if (activeItem && (!fmtId || !saiId)) {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
-            fmtId = item.formato_id;
-            numId = item.numeracao_id;
-            saiId = item.saida_id;
-            if (!saiId && fmtId) {
-                const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
-                if (fmtObj) saiId = fmtObj.default_saida_id;
+            if (!fmtId) fmtId = item.formato_id;
+            if (!numId) numId = item.numeracao_id;
+            if (!saiId) {
+                saiId = item.saida_id;
+                if (!saiId && fmtId) {
+                    const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+                    if (fmtObj) saiId = fmtObj.default_saida_id;
+                }
             }
-            start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
-            end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
-            const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
-            schema = fmtObj ? fmtObj.default_schema : 'sequential';
+            if (isNaN(parseInt(document.getElementById('imp-start')?.value, 10))) {
+                start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial, 10) : (parseInt(item.numeracao_inicio, 10) || 1);
+            }
+            if (isNaN(parseInt(document.getElementById('imp-end')?.value, 10))) {
+                end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final, 10) : (parseInt(item.numeracao_fim, 10) || 100);
+            }
+            if (!document.getElementById('imp-schema')?.value) {
+                const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+                schema = fmtObj ? fmtObj.default_schema : 'sequential';
+            }
         }
-    } else {
-        fmtId = document.getElementById('imp-formato')?.value;
-        numId = document.getElementById('imp-numeracao')?.value;
-        saiId = document.getElementById('imp-saida')?.value;
-        start = parseInt(document.getElementById('imp-start')?.value) || 1;
-        end = parseInt(document.getElementById('imp-end')?.value) || 100;
-        schema = document.getElementById('imp-schema')?.value || 'sequential';
     }
 
     const canvas = document.getElementById('preview-canvas');
@@ -7119,7 +7126,15 @@ function updateImpSummary() {
 
     const fmtId = fmtSelect ? fmtSelect.value : '';
     const numId = numSelect ? numSelect.value : '';
+    const num2Id = numSelect2 ? numSelect2.value : '';
     const saiId = document.getElementById('imp-saida')?.value || '';
+    
+    const num = (state.numeracoes && numId) ? (state.numeracoes.find(n => String(n.id) === String(numId)) || null) : null;
+    const num2 = (state.numeracoes && num2Id) ? (state.numeracoes.find(n => String(n.id) === String(num2Id)) || null) : null;
+
+    const start = parseInt(document.getElementById('imp-start')?.value, 10) || 1;
+    const end = parseInt(document.getElementById('imp-end')?.value, 10) || 100;
+
     const box = document.getElementById('imp-summary');
     if (!box) return;
 
