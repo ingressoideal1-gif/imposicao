@@ -1300,16 +1300,16 @@
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                                 <span class="card-title">👁️ Pré-visualização da Folha</span>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <select id="ped-preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePreviewPage()">
+                                    <select id="ped-preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePedPreviewPage()">
                                         <option value="miolo">Miolo</option>
                                         <option value="capa">Capa</option>
                                         <option value="contracapa">Contracapa</option>
                                     </select>
-                                    <input type="number" id="ped-preview-page-input" class="form-control" style="width: 70px; padding: 2px 6px; height: 28px; text-align: center; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;" value="1" min="1" onchange="changePreviewPage()">
-                                    <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="prevPreviewPage()">
+                                    <input type="number" id="ped-preview-page-input" class="form-control" style="width: 70px; padding: 2px 6px; height: 28px; text-align: center; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.85rem;" value="1" min="1" onchange="changePedPreviewPage()">
+                                    <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="prevPedPreviewPage()">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                                     </button>
-                                    <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="nextPreviewPage()">
+                                    <button class="btn btn-sm btn-ghost" style="padding: 2px 6px; height: 28px;" onclick="nextPedPreviewPage()">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                                     </button>
                                     <span class="badge badge-teal" id="ped-preview-sheet-num">Sem Arte</span>
@@ -1319,8 +1319,8 @@
                                  <canvas id="ped-preview-canvas"></canvas>
                                  <div class="preview-face-selector" id="ped-preview-face-container" style="display: none; width: 100%; text-align: center;">
                                      <div style="display: inline-flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--border);">
-                                         <button class="btn btn-sm" id="ped-btn-preview-front" style="background: var(--blue); color: white; border-radius: 0;" onclick="setPreviewFace('front')">Frente</button>
-                                         <button class="btn btn-sm" id="ped-btn-preview-back" style="background: rgba(255,255,255,0.06); color: var(--text-dim); border-radius: 0;" onclick="setPreviewFace('back')">Verso</button>
+                                         <button class="btn btn-sm" id="ped-btn-preview-front" style="background: var(--blue); color: white; border-radius: 0;" onclick="setPedPreviewFace('front')">Frente</button>
+                                         <button class="btn btn-sm" id="ped-btn-preview-back" style="background: rgba(255,255,255,0.06); color: var(--text-dim); border-radius: 0;" onclick="setPedPreviewFace('back')">Verso</button>
                                      </div>
                                  </div>
                              </div>
@@ -1941,8 +1941,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="/script.js?v=279"></script>
-    <script src="/pedido.js?v=250"></script>
+    <script src="/script.js?v=280"></script>
+    <script src="/pedido.js?v=251"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">

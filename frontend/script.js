@@ -5928,6 +5928,19 @@ function drawPreview() {
     let schema = document.getElementById('imp-schema')?.value || 'sequential';
 
     const activeItem = state.activeOSItem;
+    
+    const printModeEl = document.getElementById('imp-print-mode');
+    if (printModeEl) {
+        state.printMode = printModeEl.value;
+    } else if (activeItem) {
+        const itens = state.osItens[activeItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+        if (item) {
+            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            state.printMode = wantsDuplex ? 'duplex' : 'front';
+        }
+    }
+
     if (activeItem && (!fmtId || !saiId)) {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));

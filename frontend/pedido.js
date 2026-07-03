@@ -286,6 +286,18 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         schema = document.getElementById('ped-schema')?.value || 'sequential';
     }
 
+    const printModeEl = document.getElementById('ped-print-mode');
+    if (printModeEl) {
+        state.printMode = printModeEl.value;
+    } else if (activeItem) {
+        const itens = state.osItens[activeItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+        if (item) {
+            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            state.printMode = wantsDuplex ? 'duplex' : 'front';
+        }
+    }
+
     const canvas = document.getElementById('ped-preview-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -346,8 +358,37 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     const previewPartEl = document.getElementById('ped-preview-part-input');
     let previewPart = 'miolo';
     if (previewPartEl) {
-        if (fmt.has_cover) {
+        const isDuplex = state.printMode === 'duplex';
+        if (fmt.has_cover || isDuplex) {
             previewPartEl.style.display = 'inline-block';
+            
+            const currentVal = previewPartEl.value;
+            
+            let optionsHtml = '';
+            optionsHtml += '<option value="miolo">Miolo</option>';
+            if (isDuplex) {
+                optionsHtml += '<option value="miolo_verso">Miolo (Verso)</option>';
+            }
+            if (fmt.has_cover) {
+                optionsHtml += '<option value="capa">Capa</option>';
+                optionsHtml += '<option value="contracapa">Contracapa</option>';
+            }
+            
+            // Só atualizar o HTML se as opções mudaram para evitar loops de re-renderização
+            const existingOptions = Array.from(previewPartEl.options).map(o => o.value).join(',');
+            const newOptions = isDuplex 
+                ? (fmt.has_cover ? 'miolo,miolo_verso,capa,contracapa' : 'miolo,miolo_verso')
+                : (fmt.has_cover ? 'miolo,capa,contracapa' : 'miolo');
+                
+            if (existingOptions !== newOptions) {
+                previewPartEl.innerHTML = optionsHtml;
+                if (optionsHtml.includes(`value="${currentVal}"`)) {
+                    previewPartEl.value = currentVal;
+                } else {
+                    previewPartEl.value = 'miolo';
+                }
+            }
+            
             previewPart = previewPartEl.value;
         } else {
             previewPartEl.style.display = 'none';
@@ -448,7 +489,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     document.getElementById('ped-preview-sheet-num').textContent = `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
 
-    const isBack = state.previewFace === 'back';
+    const isBack = state.previewFace === 'back' || previewPart === 'miolo_verso';
 
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -918,6 +959,14 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                 const val = start + item_index;
 
+                let numPrintMode = currentNum.print_mode;
+                if (!numPrintMode && currentNum.elements) {
+                    const metaEl = currentNum.elements.find(x => x.type === 'METADATA');
+                    if (metaEl) {
+                        numPrintMode = metaEl.print_mode;
+                    }
+                }
+
                 currentNum.elements.forEach(el => {
 
                     const printMode = document.getElementById('ped-print-mode')?.value || 'front';
@@ -925,9 +974,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     let effectiveFace = el.face || 'both';
 
                     if (printMode === 'duplex') {
-
-                        effectiveFace = source_id === 1 ? 'front' : 'back';
-
+                        if (numPrintMode === 'duplex') {
+                            effectiveFace = el.face || 'both';
+                        } else {
+                            effectiveFace = source_id === 1 ? 'front' : 'back';
+                        }
                     }
 
 
@@ -1291,6 +1342,57 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 }
 window.drawPedPreview = drawPedPreview;
+
+window.setPedPreviewFace = function (face) {
+    state.previewFace = face;
+    const btnFront = document.getElementById('ped-btn-preview-front');
+    const btnBack = document.getElementById('ped-btn-preview-back');
+    if (face === 'front') {
+        if (btnFront) {
+            btnFront.style.background = 'var(--blue)';
+            btnFront.style.color = 'white';
+        }
+        if (btnBack) {
+            btnBack.style.background = 'rgba(255,255,255,0.06)';
+            btnBack.style.color = 'var(--text-dim)';
+        }
+    } else {
+        if (btnFront) {
+            btnFront.style.background = 'rgba(255,255,255,0.06)';
+            btnFront.style.color = 'var(--text-dim)';
+        }
+        if (btnBack) {
+            btnBack.style.background = 'var(--blue)';
+            btnBack.style.color = 'white';
+        }
+    }
+    drawPedPreview();
+};
+
+window.changePedPreviewPage = function() {
+    const input = document.getElementById('ped-preview-page-input');
+    if (!input) return;
+    let val = parseInt(input.value);
+    if (isNaN(val) || val < 1) val = 1;
+    window.currentPreviewPage = val;
+    drawPedPreview();
+};
+
+window.prevPedPreviewPage = function() {
+    if ((window.currentPreviewPage || 1) > 1) {
+        window.currentPreviewPage = (window.currentPreviewPage || 1) - 1;
+        const input = document.getElementById('ped-preview-page-input');
+        if (input) input.value = window.currentPreviewPage;
+        drawPedPreview();
+    }
+};
+
+window.nextPedPreviewPage = function() {
+    window.currentPreviewPage = (window.currentPreviewPage || 1) + 1;
+    const input = document.getElementById('ped-preview-page-input');
+    if (input) input.value = window.currentPreviewPage;
+    drawPedPreview();
+};
 
 function updatePedSummary() { console.log('updatePedSummary CALLED. Num value:', document.getElementById('ped-numeracao')?.value);
 
