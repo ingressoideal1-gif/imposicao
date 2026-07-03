@@ -6339,7 +6339,11 @@ function drawPreview() {
 
                             }
 
+                        } else {
+
                             pageNum = (isBack && !state.impArtVersoPdfDoc) ? 2 : 1;
+
+                        }
 
 
 
