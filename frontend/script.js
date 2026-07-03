@@ -13926,7 +13926,7 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
             if (item) {
                 item[field] = value;
                 if (field === 'verso_tipo') {
-                    item.verso = (value !== 'SÓ FRENTE');
+                    item.verso = !!(value && value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
                 }
             }
         }
@@ -13984,6 +13984,9 @@ async function saveActiveOSItemField(field, value) {
         const item = itens.find(i => String(i.id) === String(itemId));
         if (item) {
             item[field] = value;
+            if (field === 'verso_tipo') {
+                item.verso = !!(value && value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
+            }
             
             // Mapear campo local → coluna no banco (pedidos_modelos)
             const dbFieldMap = {
@@ -14038,7 +14041,9 @@ function onImposicaoNumeracaoChange(value) {
             const printMode = document.getElementById('imp-print-mode');
             if (printMode && printMode.value !== 'duplex') {
                 printMode.value = 'duplex';
-                printMode.dispatchEvent(new Event('change'));
+                if (typeof onImposicaoPrintModeChange === 'function') {
+                    onImposicaoPrintModeChange('duplex');
+                }
             }
         }
     }
@@ -14066,6 +14071,24 @@ window.onImposicaoEndInput = onImposicaoEndInput;
 function onImposicaoPrintModeChange(value) {
     updateImpSummary();
     const isDuplex = value === 'duplex';
+    
+    // Evitar sobrescrever opções de verso duplex como VERSO VARIÁVEL com VERSO COMUM/FRENTE E VERSO
+    const activeItem = state.activeOSItem;
+    if (activeItem) {
+        const itens = state.osItens[activeItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+        if (item) {
+            if (isDuplex) {
+                const currentIsVerso = item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE';
+                if (!currentIsVerso) {
+                    saveActiveOSItemField('verso_tipo', 'FRENTE E VERSO');
+                }
+            } else {
+                saveActiveOSItemField('verso_tipo', 'SÓ FRENTE');
+            }
+            return;
+        }
+    }
     saveActiveOSItemField('verso_tipo', isDuplex ? 'FRENTE E VERSO' : 'SÓ FRENTE');
 }
 window.onImposicaoPrintModeChange = onImposicaoPrintModeChange;

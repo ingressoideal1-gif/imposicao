@@ -1945,8 +1945,11 @@ async function enviarParaPedido(itemId, osId) {
     setTimeout(() => {
         const printMode = document.getElementById('ped-print-mode');
         if (printMode) {
-            printMode.value = item.verso ? 'duplex' : 'front';
-            printMode.dispatchEvent(new Event('change'));
+            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            printMode.value = wantsDuplex ? 'duplex' : 'front';
+            if (typeof updatePedSummary === 'function') {
+                updatePedSummary();
+            }
         }
         if (item.blocos && item.blocos !== 'N') {
             const schemaSelect = document.getElementById('ped-schema');
@@ -3208,11 +3211,14 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
             const el = document.getElementById('ped-qtd');
             if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
         } else if (field === 'verso_tipo') {
+            item.verso = !!(value && value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
             const printMode = document.getElementById('ped-print-mode');
             if (printMode) {
                 const wantsDuplex = (value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
                 printMode.value = wantsDuplex ? 'duplex' : 'front';
-                printMode.dispatchEvent(new Event('change'));
+                if (typeof updatePedSummary === 'function') {
+                    updatePedSummary();
+                }
             }
         }
     }

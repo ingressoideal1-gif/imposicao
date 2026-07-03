@@ -952,16 +952,16 @@
                                 <div class="form-group" id="imp-start-group">
                                     <label>Número Inicial</label>
                                     <input type="number" class="form-control" id="imp-start" value="1" min="1"
-                                        oninput="updateImpSummary()">
+                                        oninput="onImposicaoStartInput(this.value)">
                                 </div>
                                 <div class="form-group" id="imp-end-group">
                                     <label>Número Final</label>
                                     <input type="number" class="form-control" id="imp-end" value="100" min="1"
-                                        oninput="updateImpSummary()">
+                                        oninput="onImposicaoEndInput(this.value)">
                                 </div>
                                 <div class="form-group">
                                     <label>Modo de Impressão</label>
-                                    <select class="form-control" id="imp-print-mode" onchange="updateImpSummary()">
+                                    <select class="form-control" id="imp-print-mode" onchange="onImposicaoPrintModeChange(this.value)">
                                         <option value="front" selected>Apenas Frente</option>
                                         <option value="duplex">Frente e Verso</option>
                                     </select>
@@ -1941,8 +1941,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="/script.js?v=278"></script>
-    <script src="/pedido.js?v=249"></script>
+    <script src="/script.js?v=279"></script>
+    <script src="/pedido.js?v=250"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">
