@@ -7113,12 +7113,15 @@ async function loadMapaTeatroData(mapaId) {
 
 function updateImpSummary() {
     const schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
-
     const fmtSelect = document.getElementById('imp-formato');
-
     const numSelect = document.getElementById('imp-numeracao');
-
     const numSelect2 = document.getElementById('imp-numeracao-2');
+
+    const fmtId = fmtSelect ? fmtSelect.value : '';
+    const numId = numSelect ? numSelect.value : '';
+    const saiId = document.getElementById('imp-saida')?.value || '';
+    const box = document.getElementById('imp-summary');
+    if (!box) return;
 
 
 

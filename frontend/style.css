@@ -831,20 +831,6 @@ input[type="color"].element-card-fields .form-control,
     }
 }
 
-.imp-page-layout {
-    display: grid !important;
-    grid-template-columns: 1.25fr 1fr;
-    gap: 24px;
-    align-items: start;
-}
-
-@media (max-width: 1024px) {
-    .imp-page-layout {
-        display: flex !important;
-        flex-direction: column;
-    }
-}
-
 .preview-canvas-container {
     display: flex;
     justify-content: center;
