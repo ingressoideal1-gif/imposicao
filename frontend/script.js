@@ -14172,15 +14172,11 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
         if (numEnd && item.num_final) numEnd.value = item.num_final;
     }, 400);
 
-    // --- PREENCHER MODO DE IMPRESSÃO ---
-    // Aguardar a navegação de aba + preenchimento dos selects antes de desenhar
     setTimeout(() => {
-        if (item.verso) {
-            const printMode = document.getElementById('imp-print-mode');
-            if (printMode) {
-                printMode.value = 'duplex';
-                printMode.dispatchEvent(new Event('change'));
-            }
+        const printMode = document.getElementById('imp-print-mode');
+        if (printMode) {
+            printMode.value = item.verso ? 'duplex' : 'front';
+            printMode.dispatchEvent(new Event('change'));
         }
         if (item.blocos && item.blocos !== 'N') {
             const schemaSelect = document.getElementById('imp-schema');
@@ -14608,8 +14604,8 @@ function renderImpOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Verso</span>
                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
-                                <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
-                                <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
+                                <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
+                                <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' || item.verso_tipo === 'FRENTE E VERSO' ? 'selected' : ''}>VERSO COMUM</option>
                                 <option value="VERSO VARIÁVEL" ${item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÁVEL</option>
                             </select>
                         </div>
@@ -14734,6 +14730,13 @@ function impQueueUpdateField(itemId, osId, field, value) {
         } else if (field === 'num_final') {
             const el = document.getElementById('imp-end');
             if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        } else if (field === 'verso_tipo') {
+            const printMode = document.getElementById('imp-print-mode');
+            if (printMode) {
+                const wantsDuplex = (value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
+                printMode.value = wantsDuplex ? 'duplex' : 'front';
+                printMode.dispatchEvent(new Event('change'));
+            }
         }
         updateImpSummary();
         if (typeof drawPreview === 'function') drawPreview();

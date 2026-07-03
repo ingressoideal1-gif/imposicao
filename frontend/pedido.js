@@ -1943,12 +1943,10 @@ async function enviarParaPedido(itemId, osId) {
     // --- PREENCHER MODO DE IMPRESSÃO ---
     // Aguardar a navegação de aba + preenchimento dos selects antes de desenhar
     setTimeout(() => {
-        if (item.verso) {
-            const printMode = document.getElementById('ped-print-mode');
-            if (printMode) {
-                printMode.value = 'duplex';
-                printMode.dispatchEvent(new Event('change'));
-            }
+        const printMode = document.getElementById('ped-print-mode');
+        if (printMode) {
+            printMode.value = item.verso ? 'duplex' : 'front';
+            printMode.dispatchEvent(new Event('change'));
         }
         if (item.blocos && item.blocos !== 'N') {
             const schemaSelect = document.getElementById('ped-schema');
@@ -3209,6 +3207,13 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
         } else if (field === 'qtd') {
             const el = document.getElementById('ped-qtd');
             if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
+        } else if (field === 'verso_tipo') {
+            const printMode = document.getElementById('ped-print-mode');
+            if (printMode) {
+                const wantsDuplex = (value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
+                printMode.value = wantsDuplex ? 'duplex' : 'front';
+                printMode.dispatchEvent(new Event('change'));
+            }
         }
     }
     enviarParaPedido(itemId, osId);
