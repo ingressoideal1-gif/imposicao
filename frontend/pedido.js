@@ -2125,7 +2125,7 @@ function renderPedOSQueue() {
         <div class="card mb-3" style="background:#1e293b; border: 2px solid var(--blue); border-radius: 6px; overflow:hidden;" data-setor="${setorPcp}">
             <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue);">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">
-                    <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
+                    <h5 class="mb-0" style="color: #facc15; font-size: calc(1.1rem + 3pt); font-weight:bold;">
                         <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
                     </h5>
                 </div>
