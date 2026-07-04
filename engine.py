@@ -705,6 +705,9 @@ class ImpositionEngine:
         set_idx_current = -1
         
         is_duplex = (cfg.print_mode == "duplex")
+        if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0):
+            if any(art.get("pdf_verso_url") for art in cfg.multi_artes):
+                is_duplex = True
 
         # Preparar mapa de Multi-Artes
         multi_map = []
@@ -831,6 +834,7 @@ class ImpositionEngine:
                 art_els = els1 + els2
                 
                 pdf_url = art.get("pdf_url")
+                pdf_verso_url = art.get("pdf_verso_url")
                 local_path = art.get("local_path")
                 art_doc = None
                 
@@ -839,6 +843,11 @@ class ImpositionEngine:
                         art_doc = _load_art_as_pdf(local_path, is_url=False)
                     elif pdf_url:
                         art_doc = _load_art_as_pdf(pdf_url, is_url=True)
+                        if pdf_verso_url and art_doc:
+                            verso_doc = _load_art_as_pdf(pdf_verso_url, is_url=True)
+                            if verso_doc:
+                                art_doc.insert_pdf(verso_doc)
+                                verso_doc.close()
                 except Exception as ex:
                     print(f"[multi_artes] Erro ao preparar arte: {ex}")
 
@@ -848,6 +857,7 @@ class ImpositionEngine:
                         "elements": art_els,
                         "val1": n1 + i,
                         "val2": n2 + i,
+                        "local_idx": i,
                         "local_path": local_path,
                         "pdf_url": pdf_url,
                         "nome": art.get("nome", ""),
@@ -867,7 +877,7 @@ class ImpositionEngine:
                     doc_out = fitz.open()
                 
                 if cfg.has_cover:
-                    self._generate_capa(set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets)
+                    self._generate_capa(set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets, multi_map)
                 
                 set_idx_current = set_idx
 
@@ -1280,7 +1290,7 @@ class ImpositionEngine:
         doc_c.close()
         self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
 
-    def _generate_capa(self, set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets):
+    def _generate_capa(self, set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets, multi_map=None):
 
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
@@ -1345,14 +1355,33 @@ class ImpositionEngine:
                     p.insert_text(fitz.Point(cx, cy), text, fontname="hebo", fontsize=font_size, color=(0,0,0))
                     continue
                     
-                # Draw cover art (doc_base scaled)
-                if doc_base:
-                    page_base = doc_base[0]
+                current_doc_base = doc_base
+                v_start = cfg.seq_start + (i_start * cfg.seq_increment)
+                v_end = cfg.seq_start + (i_end * cfg.seq_increment)
+                
+                if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) and multi_map:
+                    if i_start < len(multi_map):
+                        arte_data_start = multi_map[i_start]
+                        if arte_data_start["doc_base"]:
+                            current_doc_base = arte_data_start["doc_base"]
+                        v_start = arte_data_start["val1"]
+                        bloco_num = (arte_data_start["local_idx"] // stack_size) + 1
+                        
+                        if i_end < len(multi_map):
+                            v_end = multi_map[i_end]["val1"]
+                        else:
+                            v_end = multi_map[-1]["val1"]
+
+                # Draw cover art (current_doc_base scaled)
+                if current_doc_base:
+                    page_base = current_doc_base[0]
                     bw = page_base.rect.width
                     bh = page_base.rect.height
                     
                     # Apply scale and offset
                     scale = cfg.cover_scale / 100.0
+                    if scale <= 0.05:
+                        scale = 0.8
                     new_w = bw * scale
                     new_h = bh * scale
                     
@@ -1364,11 +1393,8 @@ class ImpositionEngine:
                     
                     p.show_pdf_page(
                         fitz.Rect(cx, cy, cx + new_w, cy + new_h),
-                        doc_base, 0, keep_proportion=False
+                        current_doc_base, 0, keep_proportion=False, clip=page_base.rect
                     )
-
-                v_start = cfg.seq_start + (i_start * cfg.seq_increment)
-                v_end = cfg.seq_start + (i_end * cfg.seq_increment)
                 
                 v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
                 v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)

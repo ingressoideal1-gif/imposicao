@@ -606,6 +606,12 @@ async def impose_file(
             _embed_system_fonts(ma.get("numeracao"))
             _embed_system_fonts(ma.get("numeracao_2"))
 
+        # Forçar print_mode para duplex se qualquer item em multi_artes tiver verso
+        print_mode_val = data.get("print_mode", "front")
+        if data.get("schema") == "multi_artes" or len(multi_artes_list) > 0:
+            if any(ma.get("pdf_verso_url") for ma in multi_artes_list):
+                print_mode_val = "duplex"
+
         config = ImpositionConfig(
             base_file=base_file_path,
             out_pdf=out_pdf_path,
@@ -617,7 +623,7 @@ async def impose_file(
             seq_increment=data.get("seq_increment", 1),
             layout_schema=data.get("schema", "sequential"),
             csv_data=csv_data,
-            print_mode=data.get("print_mode", "front"),
+            print_mode=print_mode_val,
             numeracao_2=numeracao_2,
             rotate_page=data.get("rotate_page", False),
             multi_artes=multi_artes_list,

@@ -2775,6 +2775,9 @@ window.editPedidoCustomNumeracao = function(fieldId) {
 };
 
 window.runPedImposition = async function (mode) {
+    if (window.isImposing) return;
+    window.isImposing = true;
+    try {
 
     let fmtId = document.getElementById('ped-formato').value;
 
@@ -2816,6 +2819,9 @@ window.runPedImposition = async function (mode) {
             const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
             const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
             
+            const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
+            const itemArteVersoUrl = sItem ? sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor : null;
+            
             const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
                 ? decodeURIComponent(itemArteUrl.split('/').pop().split('?')[0])
                 : null;
@@ -2831,6 +2837,7 @@ window.runPedImposition = async function (mode) {
                 is_selected: true,
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
                 pdf_url: itemArteUrl,
+                pdf_verso_url: itemArteVersoUrl,
                 pdf_name: itemPdfName,
                 rawFile: null,
                 nome_color: '#000000'
@@ -2966,6 +2973,8 @@ window.runPedImposition = async function (mode) {
                 qtd: arte.qtd,
 
                 pdf_url: arte.pdf_url,
+
+                pdf_verso_url: arte.pdf_verso_url || null,
 
                 pdf_name: arte.pdf_name,
 
@@ -3441,7 +3450,7 @@ window.runPedImposition = async function (mode) {
         }
 
     } finally {
-
+        window.isImposing = false;
         if (progressInterval) clearInterval(progressInterval);
 
         if (pBar) pBar.style.width = '100%';

@@ -7968,7 +7968,11 @@ let impositionAbortController = null;
 
 
 
+window.isImposing = false;
 window.runImposition = async function (mode, returnBlob = false) {
+    if (window.isImposing) return;
+    window.isImposing = true;
+    try {
 
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
@@ -8000,6 +8004,9 @@ window.runImposition = async function (mode, returnBlob = false) {
             const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
             const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
             
+            const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
+            const itemArteVersoUrl = sItem ? sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor : null;
+            
             const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
                 ? decodeURIComponent(itemArteUrl.split('/').pop().split('?')[0])
                 : null;
@@ -8015,6 +8022,7 @@ window.runImposition = async function (mode, returnBlob = false) {
                 is_selected: true,
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
                 pdf_url: itemArteUrl,
+                pdf_verso_url: itemArteVersoUrl,
                 pdf_name: itemPdfName,
                 rawFile: null,
                 nome_color: '#000000'
@@ -8190,6 +8198,8 @@ window.runImposition = async function (mode, returnBlob = false) {
                 qtd: arte.qtd,
 
                 pdf_url: arte.pdf_url,
+                
+                pdf_verso_url: arte.pdf_verso_url || null,
 
                 pdf_name: arte.pdf_name,
 
@@ -14994,7 +15004,13 @@ window.showView = function(viewId) {
                 const pedPreview = document.getElementById('ped-preview-card-container');
                 if (pedPreview) pedPreview.style.display = 'block';
             }
-        }
+    } catch (e) {
+        console.error("Erro na imposicao:", e);
+        toast("Erro ao gerar PDF", "error");
+    } finally {
+        window.isImposing = false;
+        const loader = document.getElementById('loading-overlay');
+        if (loader) loader.classList.remove('active');
     }
 };
 
