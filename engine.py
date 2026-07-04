@@ -836,7 +836,7 @@ class ImpositionEngine:
                     print(f"Erro ao carregar/converter arte como PDF ({file_path}): {e}")
                     return None
 
-            for art in sorted_artes:
+            for model_idx, art in enumerate(sorted_artes):
                 qtd = int(art.get("qtd", 0))
                 num1_obj = art.get("numeracao")
                 num2_obj = art.get("numeracao_2")
@@ -877,7 +877,8 @@ class ImpositionEngine:
                         "local_path": local_path,
                         "pdf_url": pdf_url,
                         "nome": art.get("nome", ""),
-                        "nome_color": art.get("nome_color", "#000000")
+                        "nome_color": art.get("nome_color", "#000000"),
+                        "model_idx": model_idx
                     })
 
         if is_strict_assembly:
@@ -923,6 +924,10 @@ class ImpositionEngine:
             remaining_blocks = complete_blocks[full_strict_sets * poses_per_sheet :]
             for model_idx, block_items in remaining_blocks:
                 leftovers_by_model[model_idx].extend(block_items)
+                
+            # Ordenar as sobras de cada modelo pelo local_idx para manter a numeração sequencial
+            for j in range(len(leftovers_by_model)):
+                leftovers_by_model[j] = sorted(leftovers_by_model[j], key=lambda x: x["local_idx"])
                 
             # Criar sets de montagem individuais por modelo
             for j, leftovers in enumerate(leftovers_by_model):
