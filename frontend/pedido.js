@@ -286,6 +286,27 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         schema = document.getElementById('ped-schema')?.value || 'sequential';
     }
 
+    let isMultiSelected = false;
+    let tempMultiArtes = null;
+
+    if (state.selectedOSItems && state.selectedOSItems.length > 1) {
+        isMultiSelected = true;
+        schema = 'multi_artes';
+        tempMultiArtes = state.selectedOSItems.map(s => {
+            const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
+            const qt = sItem ? (parseInt(sItem.qtd !== undefined && sItem.qtd !== null ? sItem.qtd : (sItem.quantidade || 0))) : 0;
+            return {
+                qtd: qt,
+                nome: sItem ? sItem.modelo : '',
+                num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
+                start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
+                has_raw_file: false,
+                is_selected: true,
+                amostra_cor_id: sItem ? sItem.amostra_cor_id : null
+            };
+        });
+    }
+
     const printModeEl = document.getElementById('ped-print-mode');
     if (printModeEl) {
         state.printMode = printModeEl.value;
@@ -600,16 +621,16 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             let multiArteItem = null;
 
             if (schema === "multi_artes") {
-
+                const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
                 let accumulated = 0;
 
-                for (let i = 0; i < state.impMultiArtes.length; i++) {
+                for (let i = 0; i < artesList.length; i++) {
 
-                    let q = parseInt(state.impMultiArtes[i].qtd) || 0;
+                    let q = parseInt(artesList[i].qtd) || 0;
 
                     if (item_index >= accumulated && item_index < accumulated + q) {
 
-                        multiArteItem = state.impMultiArtes[i];
+                        multiArteItem = artesList[i];
 
                         break;
 
@@ -2134,6 +2155,76 @@ async function enviarParaPedido(itemId, osId) {
 }
 window.enviarParaPedido = enviarParaPedido;
 
+window.togglePedItemSelection = function(itemId, osId) {
+    if (!state.selectedOSItems) state.selectedOSItems = [];
+    
+    const itens = state.osItens[osId] || [];
+    const item = itens.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+
+    const idx = state.selectedOSItems.findIndex(s => String(s.itemId) === String(itemId));
+    
+    if (idx !== -1) {
+        state.selectedOSItems.splice(idx, 1);
+    } else {
+        // Validação de mesma cor
+        if (state.selectedOSItems.length > 0) {
+            const firstSelectedId = state.selectedOSItems[0].itemId;
+            const firstSelectedItem = itens.find(i => String(i.id) === String(firstSelectedId));
+            const firstColor = firstSelectedItem ? (firstSelectedItem.cor || firstSelectedItem.padrao || '').toLowerCase().trim() : '';
+            const thisColor = (item.cor || item.padrao || '').toLowerCase().trim();
+            
+            if (firstColor !== thisColor) {
+                toast('Só é possível selecionar modelos que compartilhem da mesma COR.', 'warning');
+                return;
+            }
+        }
+        state.selectedOSItems.push({ itemId, osId });
+    }
+    
+    renderPedOSQueue();
+    drawPedPreview();
+};
+
+window.pedQueueGerarPDFMulti = async function() {
+    if (!state.selectedOSItems || state.selectedOSItems.length === 0) {
+        return toast('Selecione pelo menos um modelo.', 'warning');
+    }
+    const first = state.selectedOSItems[0];
+    await enviarParaPedido(first.itemId, first.osId);
+    
+    state.selectedOSItems.forEach(s => {
+        pedQueueUpdateField(s.itemId, s.osId, 'status_impressao', 'IMPRESSO');
+    });
+    
+    setTimeout(() => {
+        const btnGerar = document.getElementById('btn-impose');
+        if (btnGerar) btnGerar.click();
+        else if (typeof runImposition === 'function') runImposition();
+    }, 1200);
+};
+
+window.pedQueueImprimirMulti = async function() {
+    if (!state.selectedOSItems || state.selectedOSItems.length === 0) {
+        return toast('Selecione pelo menos um modelo.', 'warning');
+    }
+    const first = state.selectedOSItems[0];
+    await enviarParaPedido(first.itemId, first.osId);
+    
+    state.selectedOSItems.forEach(s => {
+        pedQueueUpdateField(s.itemId, s.osId, 'status_impressao', 'IMPRESSO');
+    });
+    
+    setTimeout(() => {
+        const btnImprimir = document.getElementById('btn-impose-print');
+        if (btnImprimir) {
+            btnImprimir.removeAttribute('disabled');
+            btnImprimir.style.opacity = '1';
+            btnImprimir.click();
+        } else if (typeof runImposition === 'function') runImposition('print');
+    }, 1200);
+};
+
 function renderPedOSQueue() {
     const container = document.getElementById( 'ped-os-queue' );
     const wrapper = document.getElementById( 'ped-os-queue-body' );
@@ -2232,6 +2323,14 @@ function renderPedOSQueue() {
 
         const headerDropdowns = `
             <div style="display:flex; gap:10px; align-items:center;" onclick="event.stopPropagation()">
+                <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Gerar PDF dos modelos selecionados"
+                    onclick="pedQueueGerarPDFMulti()">
+                    📄 PDF Sel.
+                </button>
+                <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Imprimir modelos selecionados"
+                    onclick="pedQueueImprimirMulti()">
+                    🖨️ Imp. Sel.
+                </button>
                 <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato Padrão do Produto">
                     <option value="">— Formato —</option>
                     ${formatosOptions}
@@ -2264,9 +2363,12 @@ function renderPedOSQueue() {
             const statusImpressaoVal = item.status_impressao || 'Aguardando';
             const isImpresso = statusImpressaoVal === 'IMPRESSO';
             const inactiveBg = isImpresso ? '#007f41' : '#1473e6';
-            const rowBg = isActive
-                ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;'
-                : `background: ${inactiveBg}; border-bottom: 1px solid rgba(255, 255, 255, 0.15);`;
+            const isSelected = state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id));
+            const rowBg = isSelected 
+                ? 'background: rgba(34, 197, 94, 0.25); border-left: 5px solid #22c55e;' 
+                : (isActive
+                    ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;'
+                    : `background: ${inactiveBg}; border-bottom: 1px solid rgba(255, 255, 255, 0.15);`);
 
             let itemFmtId = boxFmtSel;
 
@@ -2330,6 +2432,11 @@ function renderPedOSQueue() {
             return `
                 <tr style="${rowBg} cursor: pointer; transition: background 0.2s;" class="hover-row" id="ped-queue-row-${item.id}"
                     onclick="enviarParaPedido('${jsItemId}', '${jsOsId}')">
+                    <td style="padding: 12px; width: 40px; text-align: center;">
+                        <input type="checkbox" style="width: 20px; height: 20px; cursor: pointer;"
+                               onclick="event.stopPropagation(); togglePedItemSelection('${jsItemId}', '${jsOsId}')"
+                               ${isSelected ? 'checked' : ''} />
+                    </td>
                     <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:100px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
@@ -2581,17 +2688,52 @@ window.editPedidoCustomNumeracao = function(fieldId) {
 
 window.runPedImposition = async function (mode) {
 
-    const fmtId = document.getElementById('ped-formato').value;
+    let fmtId = document.getElementById('ped-formato').value;
 
-    const numId = document.getElementById('ped-numeracao').value;
+    let numId = document.getElementById('ped-numeracao').value;
 
-    const saiId = document.getElementById('ped-saida').value;
+    let saiId = document.getElementById('ped-saida').value;
 
-    const start = parseInt(document.getElementById('ped-start').value);
+    let start = parseInt(document.getElementById('ped-start').value);
 
-    const end = parseInt(document.getElementById('ped-end').value);
+    let end = parseInt(document.getElementById('ped-end').value);
 
-    const schema = document.getElementById('ped-schema').value;
+    let schema = document.getElementById('ped-schema').value;
+
+    let isMultiSelected = false;
+    let tempMultiArtes = null;
+
+    if (state.selectedOSItems && state.selectedOSItems.length > 1) {
+        isMultiSelected = true;
+        schema = 'multi_artes';
+        const firstId = state.selectedOSItems[0].itemId;
+        const firstOs = state.selectedOSItems[0].osId;
+        const firstItem = state.osItens[firstOs]?.find(i => String(i.id) === String(firstId));
+        if (firstItem) {
+            fmtId = firstItem.formato_id;
+            saiId = firstItem.saida_id;
+            numId = firstItem.numeracao_id;
+        }
+
+        tempMultiArtes = state.selectedOSItems.map(s => {
+            const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
+            const qt = sItem ? parseInt(sItem.qtd !== undefined && sItem.qtd !== null ? sItem.qtd : (sItem.quantidade || 0)) : 0;
+            return {
+                qtd: qt,
+                nome: sItem ? sItem.modelo : '',
+                num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
+                num2_id: null,
+                start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
+                has_raw_file: false,
+                is_selected: true,
+                amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
+                pdf_url: null,
+                pdf_name: null,
+                rawFile: null,
+                nome_color: '#000000'
+            };
+        });
+    }
 
     const rotateEl = document.getElementById('ped-rotate-page');
 
@@ -2607,16 +2749,19 @@ window.runPedImposition = async function (mode) {
 
     if (schema === 'multi_artes') {
 
-        // Valida se todas as artes da lista têm PDF carregado
+        // Valida se todas as artes da lista têm PDF carregado, caso não seja multi seleção virtual
 
-        for (let i = 0; i < state.impMultiArtes.length; i++) {
+        const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+        if (!isMultiSelected) {
+            for (let i = 0; i < artesList.length; i++) {
 
-            if (!state.impMultiArtes[i].pdf_url || (state.impMultiArtes[i].pdf_url === 'local_file' && !state.impMultiArtes[i].rawFile)) {
+                if (!artesList[i].pdf_url || (artesList[i].pdf_url === 'local_file' && !artesList[i].rawFile)) {
 
-                return toast(`Arte ${i + 1}: faça o upload do PDF da arte (necessário a cada sessão).`, 'error');
+                    return toast(`Arte ${i + 1}: faça o upload do PDF da arte (necessário a cada sessão).`, 'error');
+
+                }
 
             }
-
         }
 
     } else {
@@ -2703,7 +2848,9 @@ window.runPedImposition = async function (mode) {
 
     if (schema === 'multi_artes') {
 
-        payloadMultiArtes = state.impMultiArtes.map(arte => {
+        const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+
+        payloadMultiArtes = artesList.map(arte => {
 
             return {
 
@@ -2723,9 +2870,9 @@ window.runPedImposition = async function (mode) {
 
                 start: arte.start,
 
-                numeracao: state.numeracoes.find(n => n.id === arte.num1_id) || null,
+                numeracao: state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null,
 
-                numeracao_2: state.numeracoes.find(n => n.id === arte.num2_id) || null,
+                numeracao_2: state.numeracoes.find(n => String(n.id) === String(arte.num2_id)) || null,
 
                 has_raw_file: !!arte.rawFile
 
@@ -2800,7 +2947,7 @@ window.runPedImposition = async function (mode) {
 
     }
 
-    if (schema === 'multi_artes') {
+    if (schema === 'multi_artes' && !isMultiSelected) {
 
         state.impMultiArtes.forEach((arte, i) => { if (arte.rawFile) { formData.append('multi_artes_files', arte.rawFile); formData.append('ma_file_' + i, arte.rawFile); } });
 
@@ -2850,7 +2997,8 @@ window.runPedImposition = async function (mode) {
 
     } else if (schema === 'multi_artes') {
 
-        total = state.impMultiArtes.reduce((acc, a) => acc + (parseInt(a.qtd) || 0), 0);
+        const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+        total = artesList.reduce((acc, a) => acc + (parseInt(a.qtd) || 0), 0);
 
     } else if (state.csvData) {
 

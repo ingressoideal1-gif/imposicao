@@ -7957,7 +7957,40 @@ window.runImposition = async function (mode) {
 
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
-    if (activeItem) {
+    let isMultiSelected = false;
+    let tempMultiArtes = null;
+
+    if (state.selectedOSItems && state.selectedOSItems.length > 1) {
+        isMultiSelected = true;
+        schema = 'multi_artes';
+        const firstId = state.selectedOSItems[0].itemId;
+        const firstOs = state.selectedOSItems[0].osId;
+        const firstItem = state.osItens[firstOs]?.find(i => String(i.id) === String(firstId));
+        if (firstItem) {
+            fmtId = firstItem.formato_id;
+            saiId = firstItem.saida_id;
+            numId = firstItem.numeracao_id;
+        }
+
+        tempMultiArtes = state.selectedOSItems.map(s => {
+            const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
+            const qt = sItem ? parseInt(sItem.qtd !== undefined && sItem.qtd !== null ? sItem.qtd : (sItem.quantidade || 0)) : 0;
+            return {
+                qtd: qt,
+                nome: sItem ? sItem.modelo : '',
+                num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
+                num2_id: null,
+                start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
+                has_raw_file: false,
+                is_selected: true,
+                amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
+                pdf_url: null,
+                pdf_name: null,
+                rawFile: null,
+                nome_color: '#000000'
+            };
+        });
+    } else if (activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
@@ -8015,16 +8048,19 @@ window.runImposition = async function (mode) {
 
     if (schema === 'multi_artes') {
 
-        // Valida se todas as artes da lista têm PDF carregado
+        // Valida se todas as artes da lista têm PDF carregado, caso não seja multi seleção virtual
 
-        for (let i = 0; i < state.impMultiArtes.length; i++) {
+        const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+        if (!isMultiSelected) {
+            for (let i = 0; i < artesList.length; i++) {
 
-            if (!state.impMultiArtes[i].pdf_url || (state.impMultiArtes[i].pdf_url === 'local_file' && !state.impMultiArtes[i].rawFile)) {
+                if (!artesList[i].pdf_url || (artesList[i].pdf_url === 'local_file' && !artesList[i].rawFile)) {
 
-                return toast(`Arte ${i + 1}: faça o upload do PDF da arte (necessário a cada sessão).`, 'error');
+                    return toast(`Arte ${i + 1}: faça o upload do PDF da arte (necessário a cada sessão).`, 'error');
+
+                }
 
             }
-
         }
 
     } else {
@@ -8109,7 +8145,9 @@ window.runImposition = async function (mode) {
 
     if (schema === 'multi_artes') {
 
-        payloadMultiArtes = state.impMultiArtes.map(arte => {
+        const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+
+        payloadMultiArtes = artesList.map(arte => {
 
             return {
 
@@ -8129,9 +8167,9 @@ window.runImposition = async function (mode) {
 
                 start: arte.start,
 
-                numeracao: state.numeracoes.find(n => n.id === arte.num1_id) || null,
+                numeracao: state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null,
 
-                numeracao_2: state.numeracoes.find(n => n.id === arte.num2_id) || null,
+                numeracao_2: state.numeracoes.find(n => String(n.id) === String(arte.num2_id)) || null,
 
                 has_raw_file: !!arte.rawFile
 
@@ -8228,7 +8266,7 @@ window.runImposition = async function (mode) {
 
     }
 
-    if (schema === 'multi_artes') {
+    if (schema === 'multi_artes' && !isMultiSelected) {
 
         state.impMultiArtes.forEach((arte, i) => { if (arte.rawFile) { formData.append('multi_artes_files', arte.rawFile); formData.append('ma_file_' + i, arte.rawFile); } });
 
@@ -13948,12 +13986,15 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 'num_inicial':      'numeracao_inicio',
                 'num_final':        'numeracao_fim',
                 'qtd':              'quantidade',
-                'formato_id':       'formato_id',
-                'saida_id':         'saida_id',
                 'numeracao_id':     'amostra_num_id',
                 'verso_tipo':       'verso_tipo',
                 'status_impressao': 'status_impressao'
             };
+
+            // Campos locais que não existem no banco de dados
+            if (field === 'formato_id' || field === 'saida_id') {
+                return;
+            }
             const dbField = dbFieldMap[field] || field;
             const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')
                 ? (parseInt(value, 10) || 0)
