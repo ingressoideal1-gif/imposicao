@@ -2204,11 +2204,18 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
             if (sub) sub.textContent = `Processando modelos combinados...`;
             
             // Verificar se algum item tem blocagem definida e configurar os dropdowns antes de chamar runImposition
+            // item.blocos = flag 'S'/'N', item.bloco = valor numérico do tamanho do bloco
             const anyHasBloco = state.selectedOSItems.some(sel => {
                 const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
-                return sItem && sItem.bloco && parseInt(sItem.bloco) > 0;
+                console.log('[pedQueueGerarPDFMulti] Item check:', sItem?.modelo, 'bloco=', sItem?.bloco, 'blocos=', sItem?.blocos, 'qtd=', sItem?.qtd);
+                const hasBlocoNum = sItem && sItem.bloco && parseInt(sItem.bloco) > 0;
+                const hasBlocosFlag = sItem && sItem.blocos && sItem.blocos !== 'N' && sItem.blocos !== 'n';
+                return hasBlocoNum || hasBlocosFlag;
             });
-            if (anyHasBloco) {
+            // Sempre forçar cut_stack + strict_assembly para multi-seleção com modelos combinados
+            // pois é a regra padrão quando se combinam modelos
+            const forceStrictAssembly = anyHasBloco || state.selectedOSItems.length > 1;
+            if (forceStrictAssembly) {
                 const schemaSel = document.getElementById('ped-schema');
                 if (schemaSel) schemaSel.value = 'cut_stack';
                 const modeSel = document.getElementById('ped-cutstack-mode');
@@ -2216,14 +2223,14 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                 // Aplicar bloco do primeiro item selecionado que tem bloco
                 const firstWithBloco = state.selectedOSItems.find(sel => {
                     const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
-                    return sItem && sItem.bloco && parseInt(sItem.bloco) > 0;
+                    return sItem && ((sItem.bloco && parseInt(sItem.bloco) > 0) || (sItem.blocos && sItem.blocos !== 'N'));
                 });
                 if (firstWithBloco) {
                     const blocItem = state.osItens[firstWithBloco.osId]?.find(i => String(i.id) === String(firstWithBloco.itemId));
                     const sheetsInp = document.getElementById('ped-sheets-per-block');
                     if (sheetsInp && blocItem?.bloco) sheetsInp.value = parseInt(blocItem.bloco);
                 }
-                console.log('[pedQueueGerarPDFMulti] Blocagem detectada -> schema=cut_stack, mode=strict_assembly');
+                console.log('[pedQueueGerarPDFMulti] Forçando schema=cut_stack, mode=strict_assembly, anyHasBloco=', anyHasBloco);
             }
             
             const blob = await runImposition('', true);
