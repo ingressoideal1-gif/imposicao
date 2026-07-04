@@ -784,7 +784,18 @@ async function loadAll() {
             api('GET', '/saidas'),
             api('GET', '/cores').catch(() => []),
             api('GET', '/modelos_imposicao').catch(() => []),
-            (typeof vibeClient !== 'undefined' && vibeClient ? vibeClient.from('produtos').select('*') : Promise.resolve({data:[]})).then(r => r.data).catch(() => [])
+            (typeof vibeClient !== 'undefined' && vibeClient ? vibeClient.from('produtos').select('*') : Promise.resolve({data:[]}))
+                .then(r => {
+                    if (r && r.error) {
+                        console.error('[loadAll] Erro ao buscar produtos:', r.error);
+                    }
+                    console.log('[loadAll] vibeProdutos carregados:', r ? (r.data ? r.data.length : 0) : 0);
+                    return r ? r.data : [];
+                })
+                .catch(err => {
+                    console.error('[loadAll] Exception ao buscar produtos:', err);
+                    return [];
+                })
         ]);
 
         state.formatos = fmts;
@@ -799,6 +810,10 @@ async function loadAll() {
         state.produtosGlobais = vibeProdutos || [];
 
         renderAll();
+        if (typeof renderPedOSQueue === 'function') {
+            console.log('[loadAll] Re-renderizando fila de pedidos após carregar produtos...');
+            renderPedOSQueue();
+        }
 
     } catch (e) {
 

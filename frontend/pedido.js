@@ -2252,6 +2252,9 @@ function renderPedOSQueue() {
         groups[prodId].push(item);
     });
 
+    console.log('[renderPedOSQueue] state.produtosGlobais:', state.produtosGlobais);
+    console.log('[renderPedOSQueue] groups keys:', Object.keys(groups));
+
     const todasCores = state.cores || [];
     const todasNums = state.numeracoes || [];
     const inputStyle = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%;';
