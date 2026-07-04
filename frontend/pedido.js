@@ -1924,9 +1924,14 @@ function clearPedActiveOS() {
 window.clearPedActiveOS = clearPedActiveOS;
 
 async function enviarParaPedido(itemId, osId) {
+    console.log('[DEBUG enviarParaPedido] itemId:', itemId, 'typeof:', typeof itemId, 'osId:', osId, 'typeof:', typeof osId);
     const itens = state.osItens[osId] || [];
+    console.log('[DEBUG enviarParaPedido] itens in state.osItens[' + osId + ']:', itens.map(i => ({ id: i.id, type: typeof i.id, name: i.produto || i.nome_modelo })));
     const item = itens.find(i => String(i.id) === String(itemId));
-    if (!item) return toast('Item não encontrado.', 'error');
+    if (!item) {
+        console.error('[DEBUG enviarParaPedido] Item not found. itemId=', itemId, 'osId=', osId);
+        return toast('Item não encontrado.', 'error');
+    }
 
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
