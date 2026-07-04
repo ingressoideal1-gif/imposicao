@@ -891,8 +891,10 @@ class ImpositionEngine:
                 models_items.append(multi_map[curr_idx : curr_idx + qtd])
                 curr_idx += qtd
                 
-            stack_size = cfg.sheets_per_block * cfg.block_depth
-            complete_blocks = []
+            stack_size = cfg.sheets_per_block  # Itens por bloco (ex: 50)
+            
+            # 2. Dividir cada modelo em blocos completos de stack_size
+            complete_blocks = []  # lista de (model_idx, [itens do bloco])
             leftovers_by_model = [[] for _ in sorted_artes]
             
             for j, items in enumerate(models_items):
@@ -903,34 +905,62 @@ class ImpositionEngine:
                 leftovers_by_model[j] = items[num_blocks * stack_size :]
                 
             total_blocks = len(complete_blocks)
-            full_strict_sets = total_blocks // poses_per_sheet
+            print(f"[engine] strict_assembly: total_blocks={total_blocks} poses_per_sheet={poses_per_sheet} stack_size={stack_size}")
             
             set_definitions = []
             
-            # Criar sets estritos completos
-            for s in range(full_strict_sets):
-                set_blocks = complete_blocks[s * poses_per_sheet : (s + 1) * poses_per_sheet]
-                cell_allocations = []
-                for P in range(poses_per_sheet):
-                    model_idx, block_items = set_blocks[P]
-                    cell_allocations.append(block_items)
-                set_definitions.append({
-                    "type": "strict",
-                    "num_sheets": stack_size,
-                    "cell_allocations": cell_allocations,
-                    "model_idx": None
-                })
-                
-            # Devolver blocos restantes para leftovers
-            remaining_blocks = complete_blocks[full_strict_sets * poses_per_sheet :]
-            for model_idx, block_items in remaining_blocks:
-                leftovers_by_model[model_idx].extend(block_items)
-                
+            # 3. Empacotar blocos em sets com profundidade de corte
+            # Cada set tem poses_per_sheet células, cada célula empilha 'depth' blocos
+            # Um set completo precisa de poses_per_sheet blocos no mínimo
+            if total_blocks >= poses_per_sheet:
+                # Calcular a profundidade máxima possível para sets estritos
+                # Usar todos os blocos completos distribuídos em sets
+                blocks_used = 0
+                while blocks_used + poses_per_sheet <= total_blocks:
+                    # Quantos blocos restam
+                    blocks_remaining = total_blocks - blocks_used
+                    # Profundidade deste set = quantos "layers" de poses_per_sheet cabem
+                    depth = blocks_remaining // poses_per_sheet
+                    if depth < 1:
+                        break
+                    
+                    num_blocks_in_set = depth * poses_per_sheet
+                    set_blocks = complete_blocks[blocks_used : blocks_used + num_blocks_in_set]
+                    
+                    # Distribuir blocos nas células com profundidade
+                    # Célula 0: blocos [0, 1, ..., depth-1]
+                    # Célula 1: blocos [depth, depth+1, ..., 2*depth-1]
+                    # etc.
+                    cell_allocations = []
+                    for P in range(poses_per_sheet):
+                        cell_items = []
+                        for d in range(depth):
+                            block_idx = P * depth + d
+                            if block_idx < len(set_blocks):
+                                _, block_data = set_blocks[block_idx]
+                                cell_items.extend(block_data)
+                        cell_allocations.append(cell_items)
+                    
+                    set_definitions.append({
+                        "type": "strict",
+                        "num_sheets": stack_size * depth,  # Folhas = blocos empilhados × tamanho do bloco
+                        "cell_allocations": cell_allocations,
+                        "model_idx": None,
+                        "depth": depth
+                    })
+                    blocks_used += num_blocks_in_set
+                    break  # Um set estrito consome todos os blocos possíveis
+                    
+                # Devolver blocos restantes para leftovers
+                remaining_blocks = complete_blocks[blocks_used:]
+                for model_idx, block_items in remaining_blocks:
+                    leftovers_by_model[model_idx].extend(block_items)
+            
             # Ordenar as sobras de cada modelo pelo local_idx para manter a numeração sequencial
             for j in range(len(leftovers_by_model)):
                 leftovers_by_model[j] = sorted(leftovers_by_model[j], key=lambda x: x["local_idx"])
                 
-            # Criar sets de montagem individuais por modelo
+            # 4. Criar sets de montagem individuais por modelo (sobras)
             for j, leftovers in enumerate(leftovers_by_model):
                 if len(leftovers) > 0:
                     num_sheets = math.ceil(len(leftovers) / poses_per_sheet)
@@ -944,7 +974,8 @@ class ImpositionEngine:
                         "type": "assembly",
                         "num_sheets": num_sheets,
                         "cell_allocations": cell_allocations,
-                        "model_idx": j
+                        "model_idx": j,
+                        "depth": 1
                     })
 
             # Executar o loop usando set_definitions
