@@ -2186,43 +2186,119 @@ window.togglePedItemSelection = function(itemId, osId) {
     drawPedPreview();
 };
 
-window.pedQueueGerarPDFMulti = async function() {
+window.pedQueueGerarPDFMulti = async function(isPrint = false) {
     if (!state.selectedOSItems || state.selectedOSItems.length === 0) {
         return toast('Selecione pelo menos um modelo.', 'warning');
     }
-    const first = state.selectedOSItems[0];
-    await enviarParaPedido(first.itemId, first.osId);
     
-    state.selectedOSItems.forEach(s => {
-        pedQueueUpdateField(s.itemId, s.osId, 'status_impressao', 'IMPRESSO');
-    });
+    const overlay = document.getElementById('loading-overlay');
+    const sub = document.getElementById('loading-sub');
+    if (overlay) overlay.classList.add('active');
+    if (sub) sub.textContent = `Gerando ${state.selectedOSItems.length} modelos selecionados...`;
+
+    const originalActive = state.activeOSItem; 
+    const blobs = [];
     
-    setTimeout(() => {
-        const btnGerar = document.getElementById('btn-impose');
-        if (btnGerar) btnGerar.click();
-        else if (typeof runImposition === 'function') runImposition();
-    }, 1200);
+    try {
+        for (let i = 0; i < state.selectedOSItems.length; i++) {
+            const sel = state.selectedOSItems[i];
+            
+            state.activeOSItem = { osId: sel.osId, itemId: sel.itemId };
+            
+            if (sub) sub.textContent = `Processando modelo ${i + 1} de ${state.selectedOSItems.length}...`;
+            
+            const blob = await runImposition('', true);
+            if (blob) {
+                blobs.push(blob);
+                if (typeof pedQueueUpdateField === 'function') {
+                    pedQueueUpdateField(sel.itemId, sel.osId, 'status_impressao', 'IMPRESSO');
+                }
+            }
+        }
+        
+        state.activeOSItem = originalActive;
+        
+        if (blobs.length > 0) {
+            if (sub) sub.textContent = `Mesclando ${blobs.length} PDFs...`;
+            
+            let finalBlob = blobs[0];
+            
+            if (blobs.length > 1 && typeof PDFLib !== 'undefined') {
+                const { PDFDocument } = PDFLib;
+                const mergedPdf = await PDFDocument.create();
+                
+                for (const blob of blobs) {
+                    try {
+                        const arrayBuffer = await blob.arrayBuffer();
+                        const pdf = await PDFDocument.load(arrayBuffer);
+                        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                        copiedPages.forEach((page) => mergedPdf.addPage(page));
+                    } catch(mergeErr) {
+                        console.error("Erro mesclando parte do PDF", mergeErr);
+                    }
+                }
+                const mergedPdfBytes = await mergedPdf.save();
+                finalBlob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+            }
+
+            if (isPrint) {
+                if (sub) sub.textContent = "Enviando para impressão local...";
+                const formData = new FormData();
+                formData.append('file', finalBlob, 'impressao_multipla.pdf');
+                
+                try {
+                    const res = await fetch("http://localhost:8080/api/print", {
+                        method: "POST",
+                        body: formData
+                    });
+                    if (res.ok) {
+                        toast('Enviado para a fila de impressão local!', 'success');
+                    } else {
+                        throw new Error('Falha na API local');
+                    }
+                } catch (err) {
+                    toast('Erro na impressão local. Verifique se o Ideal Imposition agent está rodando.', 'error');
+                }
+            } else {
+                let fileHandle = null;
+                if (window.showSaveFilePicker) {
+                    const options = {
+                        suggestedName: `Selecionados_OS_${state.selectedOSItems[0].osId}.pdf`,
+                        types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
+                    };
+                    fileHandle = await window.showSaveFilePicker(options).catch(()=>null);
+                }
+                
+                if (fileHandle) {
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(finalBlob);
+                    await writable.close();
+                    toast('PDFs selecionados mesclados e salvos!', 'success');
+                } else {
+                    const url = window.URL.createObjectURL(finalBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Selecionados_OS_${state.selectedOSItems[0].osId}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                    toast('PDFs selecionados mesclados com sucesso!', 'success');
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Erro no processo de PDF múltiplo:", e);
+        toast("Erro ao gerar PDFs múltiplos: " + e.message, 'error');
+    } finally {
+        if (overlay) overlay.classList.remove('active');
+        state.activeOSItem = originalActive;
+        if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+    }
 };
 
 window.pedQueueImprimirMulti = async function() {
-    if (!state.selectedOSItems || state.selectedOSItems.length === 0) {
-        return toast('Selecione pelo menos um modelo.', 'warning');
-    }
-    const first = state.selectedOSItems[0];
-    await enviarParaPedido(first.itemId, first.osId);
-    
-    state.selectedOSItems.forEach(s => {
-        pedQueueUpdateField(s.itemId, s.osId, 'status_impressao', 'IMPRESSO');
-    });
-    
-    setTimeout(() => {
-        const btnImprimir = document.getElementById('btn-impose-print');
-        if (btnImprimir) {
-            btnImprimir.removeAttribute('disabled');
-            btnImprimir.style.opacity = '1';
-            btnImprimir.click();
-        } else if (typeof runImposition === 'function') runImposition('print');
-    }, 1200);
+    return window.pedQueueGerarPDFMulti(true);
 };
 
 function renderPedOSQueue() {
@@ -2427,6 +2503,7 @@ function renderPedOSQueue() {
             const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
             const nfVal = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
+            const blocoVal = item.bloco !== undefined && item.bloco !== null ? item.bloco : '';
             const nomeDoModelo = item.produto || '--';
 
             const jsItemId = item.id;
@@ -2463,11 +2540,19 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Final">
+                                        <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Final">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NF</span>
                             <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
                                 onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                                onclick="event.stopPropagation()" />
+                        </div>
+                    </td>
+                    <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Ingressos por Bloco">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Bloco</span>
+                            <input type="number" value="${blocoVal}" style="${inputStyle}" placeholder="Bloco"
+                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'bloco', this.value)"
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>

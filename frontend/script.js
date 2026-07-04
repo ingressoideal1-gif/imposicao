@@ -7968,7 +7968,7 @@ let impositionAbortController = null;
 
 
 
-window.runImposition = async function (mode) {
+window.runImposition = async function (mode, returnBlob = false) {
 
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
@@ -8127,7 +8127,7 @@ window.runImposition = async function (mode) {
 
 
 
-    if (window.showSaveFilePicker && mode !== 'print') {
+    if (window.showSaveFilePicker && mode !== 'print' && !returnBlob) {
 
         try {
 
@@ -8258,7 +8258,7 @@ window.runImposition = async function (mode) {
 
         cut_stack_mode: document.getElementById('imp-cutstack-mode') ? document.getElementById('imp-cutstack-mode').value : 'independent',
 
-        sheets_per_block: document.getElementById('imp-sheets-per-block') ? parseInt(document.getElementById('imp-sheets-per-block').value) || 50 : 50,
+        sheets_per_block: (state.activeOSItem && state.osItens[state.activeOSItem.osId] && state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.bloco) ? parseInt(state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId)).bloco) : (document.getElementById('imp-sheets-per-block') ? parseInt(document.getElementById('imp-sheets-per-block').value) || 50 : 50),
 
         block_depth: document.getElementById('imp-block-depth') ? parseInt(document.getElementById('imp-block-depth').value) || 1 : 1,
 
