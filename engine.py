@@ -713,9 +713,24 @@ class ImpositionEngine:
         multi_map = []
         pdf_cache = {}
 
-        if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0):
+        is_strict_assembly = (cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict_assembly")
+        if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0) or is_strict_assembly:
 
-            sorted_artes = sorted(cfg.multi_artes, key=lambda a: int(a.get("qtd", 0)), reverse=True)
+            if cfg.multi_artes and len(cfg.multi_artes) > 0:
+                sorted_artes = sorted(cfg.multi_artes, key=lambda a: int(a.get("qtd", 0)), reverse=True)
+            else:
+                sorted_artes = [{
+                    "qtd": cfg.total_items,
+                    "numeracao": {
+                        "start": cfg.seq_start,
+                        "elements": cfg.elements,
+                        "print_mode": cfg.print_mode
+                    },
+                    "numeracao_2": cfg.numeracao_2,
+                    "pdf_url": None,
+                    "pdf_verso_url": None,
+                    "local_path": None
+                }]
             
             def parse_elements(num_obj, source_id):
                 els = []
@@ -858,11 +873,132 @@ class ImpositionEngine:
                         "val1": n1 + i,
                         "val2": n2 + i,
                         "local_idx": i,
+                        "global_idx": len(multi_map),
                         "local_path": local_path,
                         "pdf_url": pdf_url,
                         "nome": art.get("nome", ""),
                         "nome_color": art.get("nome_color", "#000000")
                     })
+
+        if is_strict_assembly:
+            # 1. Agrupar itens do multi_map por modelo
+            models_items = []
+            curr_idx = 0
+            for art in sorted_artes:
+                qtd = int(art.get("qtd", 0))
+                models_items.append(multi_map[curr_idx : curr_idx + qtd])
+                curr_idx += qtd
+                
+            stack_size = cfg.sheets_per_block * cfg.block_depth
+            complete_blocks = []
+            leftovers_by_model = [[] for _ in sorted_artes]
+            
+            for j, items in enumerate(models_items):
+                num_blocks = len(items) // stack_size
+                for b in range(num_blocks):
+                    block = items[b * stack_size : (b + 1) * stack_size]
+                    complete_blocks.append((j, block))
+                leftovers_by_model[j] = items[num_blocks * stack_size :]
+                
+            total_blocks = len(complete_blocks)
+            full_strict_sets = total_blocks // poses_per_sheet
+            
+            set_definitions = []
+            
+            # Criar sets estritos completos
+            for s in range(full_strict_sets):
+                set_blocks = complete_blocks[s * poses_per_sheet : (s + 1) * poses_per_sheet]
+                cell_allocations = []
+                for P in range(poses_per_sheet):
+                    model_idx, block_items = set_blocks[P]
+                    cell_allocations.append(block_items)
+                set_definitions.append({
+                    "type": "strict",
+                    "num_sheets": stack_size,
+                    "cell_allocations": cell_allocations,
+                    "model_idx": None
+                })
+                
+            # Devolver blocos restantes para leftovers
+            remaining_blocks = complete_blocks[full_strict_sets * poses_per_sheet :]
+            for model_idx, block_items in remaining_blocks:
+                leftovers_by_model[model_idx].extend(block_items)
+                
+            # Criar sets de montagem individuais por modelo
+            for j, leftovers in enumerate(leftovers_by_model):
+                if len(leftovers) > 0:
+                    num_sheets = math.ceil(len(leftovers) / poses_per_sheet)
+                    cell_allocations = [None] * poses_per_sheet
+                    for P in range(poses_per_sheet):
+                        cell_items = leftovers[P * num_sheets : (P + 1) * num_sheets]
+                        if len(cell_items) < num_sheets:
+                            cell_items = cell_items + [None] * (num_sheets - len(cell_items))
+                        cell_allocations[P] = cell_items
+                    set_definitions.append({
+                        "type": "assembly",
+                        "num_sheets": num_sheets,
+                        "cell_allocations": cell_allocations,
+                        "model_idx": j
+                    })
+
+            # Executar o loop usando set_definitions
+            total_sheets = sum(s["num_sheets"] for s in set_definitions)
+            print(f"[engine] strict_assembly: total_sheets={total_sheets} partitioned into {len(set_definitions)} sets")
+            
+            for set_idx, set_def in enumerate(set_definitions):
+                doc_out = fitz.open()
+                set_sheets = set_def["num_sheets"]
+                
+                # 1. Gerar capa para o set
+                if cfg.has_cover:
+                    self._generate_capa_for_set(set_idx, set_def, cfg, multi_map)
+                
+                # 2. Gerar miolo para o set
+                for sheet_within_set in range(set_sheets):
+                    # Frente
+                    out_page_front = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+                    if cfg.rotate_page:
+                        out_page_front.set_rotation(90)
+                        
+                    for row in range(rows):
+                        for col in range(cols):
+                            P = row * cols + col
+                            item_data = set_def["cell_allocations"][P][sheet_within_set]
+                            if item_data is not None:
+                                self._render_item_front(out_page_front, item_data, row, col, cfg, start_x, start_y)
+                                
+                    # Verso (se for duplex)
+                    if is_duplex:
+                        out_page_back = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+                        if cfg.rotate_page:
+                            out_page_back.set_rotation(90)
+                            
+                        for row in range(rows):
+                            for col in range(cols):
+                                col_verso = cols - 1 - col
+                                P_frente = row * cols + col_verso
+                                item_data = set_def["cell_allocations"][P_frente][sheet_within_set]
+                                if item_data is not None:
+                                    self._render_item_back(out_page_back, item_data, row, col, cfg, start_x, start_y)
+                                    
+                # 3. Salvar miolo para o set
+                out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_02_miolo.pdf")
+                doc_out.save(out_name, garbage=4, deflate=True)
+                doc_out.close()
+                self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
+                
+                # 4. Gerar contracapa para o set
+                if cfg.has_cover:
+                    self._generate_contracapa_for_set(set_idx, set_def, cfg)
+                    
+            # Fechar recursos
+            if doc_base:
+                doc_base.close()
+            for doc in pdf_cache.values():
+                if doc:
+                    doc.close()
+            print(f"[engine] strict_assembly: Gerado com sucesso.")
+            return
 
         for S in range(total_sheets):
             set_idx = S // stack_size
@@ -1412,6 +1548,228 @@ class ImpositionEngine:
                 w_bloco = fitz.get_text_length(bloco_str, fontname="hebo", fontsize=cfg.cover_font_size)
                 font_x = cell_x0 + (cfg.cover_font_x * 2.83465)
                 
+                p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
+                p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
+
+        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_01_capa.pdf")
+        doc_c.save(out_name, garbage=4, deflate=True)
+        doc_c.close()
+        self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
+
+    def _render_item_front(self, out_page_front, item_data, row, col, cfg, start_x, start_y):
+        P = row * cfg.cols + col
+        cell_x0 = start_x + col * (cfg.item_w + cfg.gap_h)
+        cell_y0 = start_y + row * (cfg.item_h + cfg.gap_v)
+        cell_x1 = cell_x0 + cfg.item_w
+        cell_y1 = cell_y0 + cfg.item_h
+
+        cell_rotation = int(cfg.rotations.get(str(P), 0))
+
+        temp_doc = fitz.open()
+        temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+
+        current_doc_base = item_data["doc_base"]
+        current_elements = item_data["elements"]
+        val = item_data["val1"]
+        val2 = item_data["val2"]
+        local_idx = item_data["local_idx"]
+
+        if cfg.layout_schema == "pdf_multiple":
+            page_idx_front = local_idx * 2 if current_doc_base and (local_idx * 2) < len(current_doc_base) else 0
+        else:
+            page_idx_front = 0
+
+        if current_doc_base:
+            page_base_f = current_doc_base[page_idx_front]
+            base_w_frente = page_base_f.rect.width
+            base_h_frente = page_base_f.rect.height
+
+            art_temp_x0 = (cfg.item_w - base_w_frente) / 2 + cfg.offset_h
+            art_temp_y0 = (cfg.item_h - base_h_frente) / 2 - cfg.offset_v
+            art_temp_x1 = art_temp_x0 + base_w_frente
+            art_temp_y1 = art_temp_y0 + base_h_frente
+            rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
+
+            temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base_f.rect)
+
+        global_idx = item_data.get("global_idx", 0)
+        csv_row = cfg.csv_data[global_idx] if (cfg.csv_data and global_idx < len(cfg.csv_data)) else None
+        for el in current_elements:
+            if el.get("face", "both") == "back":
+                continue
+            current_val = val2 if el.get("_num_source", 1) == 2 else val
+            rotated_el = dict(el)
+            if cell_rotation > 0:
+                rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
+            self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+
+        _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
+        temp_doc.close()
+        _temp_doc_m = fitz.open("pdf", _temp_bytes)
+        out_page_front.show_pdf_page(
+            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+            _temp_doc_m,
+            0,
+            keep_proportion=False,
+            rotate=cell_rotation,
+            clip=_temp_doc_m[0].rect
+        )
+        _temp_doc_m.close()
+
+    def _render_item_back(self, out_page_back, item_data, row, col, cfg, start_x, start_y):
+        col_verso = cfg.cols - 1 - col
+        P = row * cfg.cols + col_verso
+        cell_x0 = start_x + col * (cfg.item_w + cfg.gap_h)
+        cell_y0 = start_y + row * (cfg.item_h + cfg.gap_v)
+        cell_x1 = cell_x0 + cfg.item_w
+        cell_y1 = cell_y0 + cfg.item_h
+
+        cell_rotation_frente = int(cfg.rotations.get(str(P), 0))
+        cell_rotation = (360 - cell_rotation_frente) % 360
+
+        temp_doc = fitz.open()
+        temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+
+        current_doc_base = item_data["doc_base"]
+        current_elements = item_data["elements"]
+        val = item_data["val1"]
+        val2 = item_data["val2"]
+        local_idx = item_data["local_idx"]
+
+        if cfg.layout_schema == "pdf_multiple":
+            page_idx_back = (local_idx * 2 + 1) if current_doc_base and (local_idx * 2 + 1) < len(current_doc_base) else None
+        else:
+            page_idx_back = 1 if current_doc_base and len(current_doc_base) >= 2 else None
+
+        if page_idx_back is not None and current_doc_base:
+            page_base_v = current_doc_base[page_idx_back]
+            base_w_verso = page_base_v.rect.width
+            base_h_verso = page_base_v.rect.height
+
+            art_temp_x0 = (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
+            art_temp_y0 = (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
+            art_temp_x1 = art_temp_x0 + base_w_verso
+            art_temp_y1 = art_temp_y0 + base_h_verso
+            rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
+
+            temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back, clip=page_base_v.rect)
+
+        global_idx = item_data.get("global_idx", 0)
+        csv_row = cfg.csv_data[global_idx] if (cfg.csv_data and global_idx < len(cfg.csv_data)) else None
+        for el in current_elements:
+            if el.get("face", "both") == "front":
+                continue
+            current_val = val2 if el.get("_num_source", 1) == 2 else val
+            rotated_el = dict(el)
+            if cell_rotation > 0:
+                rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
+            self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+
+        _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
+        temp_doc.close()
+        _temp_doc_m = fitz.open("pdf", _temp_bytes)
+        out_page_back.show_pdf_page(
+            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+            _temp_doc_m,
+            0,
+            keep_proportion=False,
+            rotate=cell_rotation,
+            clip=_temp_doc_m[0].rect
+        )
+        _temp_doc_m.close()
+
+    def _generate_contracapa_for_set(self, set_idx, set_def, cfg):
+        doc_c = fitz.open()
+        p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+        if cfg.rotate_page:
+            p.set_rotation(90)
+        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_03_contracapa.pdf")
+        doc_c.save(out_name, garbage=4, deflate=True)
+        doc_c.close()
+        self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
+
+    def _generate_capa_for_set(self, set_idx, set_def, cfg, multi_map):
+        doc_c = fitz.open()
+        p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+        if cfg.rotate_page:
+            p.set_rotation(90)
+
+        start_x = (cfg.sheet_w - (cfg.cols * cfg.item_w + (cfg.cols - 1) * cfg.gap_h)) / 2
+        start_y = (cfg.sheet_h - (cfg.rows * cfg.item_h + (cfg.rows - 1) * cfg.gap_v)) / 2
+
+        stack_size = cfg.sheets_per_block * cfg.block_depth
+
+        for row in range(cfg.rows):
+            for col in range(cfg.cols):
+                P = row * cfg.cols + col
+                cell_x0 = start_x + col * (cfg.item_w + cfg.gap_h)
+                cell_y0 = start_y + row * (cfg.item_h + cfg.gap_v)
+                cell_x1 = cell_x0 + cfg.item_w
+                cell_y1 = cell_y0 + cfg.item_h
+
+                cell_items = set_def["cell_allocations"][P]
+                valid_items = [item for item in cell_items if item is not None]
+                if not valid_items:
+                    continue
+
+                item_start = valid_items[0]
+                item_end = valid_items[-1]
+
+                is_montagem = (set_def["type"] == "assembly")
+
+                if is_montagem:
+                    font_size = 50
+                    text = "MONTAGEM"
+                    w_text = fitz.get_text_length(text, fontname="hebo", fontsize=font_size)
+                    cx = cell_x0 + (cfg.item_w - w_text) / 2
+                    cy = cell_y0 + (cfg.item_h / 2) + (font_size / 3)
+                    p.insert_text(fitz.Point(cx, cy), text, fontname="hebo", fontsize=font_size, color=(0,0,0))
+                    continue
+
+                current_doc_base = item_start["doc_base"]
+                v_start = item_start["val1"]
+                v_end = item_end["val1"]
+
+                bloco_num = (item_start["local_idx"] // stack_size) + 1
+
+                if current_doc_base:
+                    page_base = current_doc_base[0]
+                    bw = page_base.rect.width
+                    bh = page_base.rect.height
+
+                    scale = cfg.cover_scale / 100.0
+                    if scale <= 0.05:
+                        scale = 0.8
+                    new_w = bw * scale
+                    new_h = bh * scale
+
+                    off_x = cfg.cover_offset_x * 2.83465
+                    off_y = cfg.cover_offset_y * 2.83465
+
+                    cx = cell_x0 + (cfg.item_w - new_w) / 2 + off_x
+                    cy = cell_y0 + (cfg.item_h - new_h) / 2 - off_y
+
+                    p.show_pdf_page(
+                        fitz.Rect(cx, cy, cx + new_w, cy + new_h),
+                        current_doc_base, 0, keep_proportion=False, clip=page_base.rect
+                    )
+
+                v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
+                v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
+
+                bloco_str = f"Bloco {bloco_num:02d}"
+                sufixo_str = f" - de {v_start_str} a {v_end_str}"
+                font_y = cell_y0 + (cfg.cover_font_y * 2.83465)
+
+                def hex_to_rgb(h):
+                    h = str(h).lstrip('#')
+                    if len(h) < 6: h = "000000"
+                    return tuple(int(h[i:i+2], 16)/255.0 for i in (0, 2, 4))
+
+                color_rgb = hex_to_rgb(cfg.cover_font_color)
+                w_bloco = fitz.get_text_length(bloco_str, fontname="hebo", fontsize=cfg.cover_font_size)
+                font_x = cell_x0 + (cfg.cover_font_x * 2.83465)
+
                 p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
                 p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
 

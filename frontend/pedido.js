@@ -2819,8 +2819,9 @@ window.runPedImposition = async function (mode) {
             const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
             const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
             
+            const wantsDuplex = sItem ? !!(sItem.verso_tipo && sItem.verso_tipo !== 'SÓ FRENTE' && sItem.verso_tipo !== 'SO FRENTE') : false;
             const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
-            const itemArteVersoUrl = sItem ? sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor : null;
+            const itemArteVersoUrl = (sItem && wantsDuplex) ? (sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor) : null;
             
             const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
                 ? decodeURIComponent(itemArteUrl.split('/').pop().split('?')[0])
