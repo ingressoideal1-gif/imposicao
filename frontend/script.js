@@ -12209,18 +12209,16 @@ async function sincronizarStatusOrdensDinamico() {
  */
 async function loadOrdens() {
     try {
-        // Carrega usuários do Supabase
-        await loadUsuarios();
-        
         // Deixar pedidosComerciais fixo vazio já que a tabela 'pedidos' não existe no banco.
         // Isso economiza uma consulta lenta que sempre falharia.
         const pedidosComerciais = [];
         state.hasPedidosComerciais = false;
 
-        // Disparar buscas iniciais em paralelo
+        // Disparar buscas iniciais em paralelo (incluindo loadUsuarios para não bloquear o início)
         const promises = [
             carregarArtesGlobais(),
-            carregarLinksExistentes()
+            carregarLinksExistentes(),
+            loadUsuarios()
         ];
         
         // Se o Vibecode estiver ativo, carregamos os produtos em paralelo (excluindo campos de imagem base64 pesados que causavam travamentos)
@@ -12245,9 +12243,18 @@ async function loadOrdens() {
                 // Passamos os produtos já carregados em paralelo para o loadOrdensFromVibecode
                 const loaded = await loadOrdensFromVibecode(pedidosComerciais, produtos);
                 if (loaded) {
-                    await carregarModelosGlobais();
-                    await sincronizarStatusOrdensDinamico();
+                    // Renderiza a lista de OS imediatamente para liberar a UI
                     renderOrdens();
+                    
+                    // Executa as sincronizações pesadas em background sem travar a navegação
+                    carregarModelosGlobais().then(() => {
+                        renderOrdens();
+                    }).catch(e => console.warn('Erro ao carregar modelos globais:', e));
+                    
+                    sincronizarStatusOrdensDinamico().then(() => {
+                        renderOrdens();
+                    }).catch(e => console.warn('Erro ao sincronizar status:', e));
+                    
                     return;
                 }
             }
