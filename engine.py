@@ -214,7 +214,7 @@ class ImpositionConfig:
             except Exception as ex:
                 print(f"Erro ao contar paginas do PDF: {ex}")
                 self.total_items = 1
-        elif layout_schema == "multi_artes":
+        elif layout_schema == "multi_artes" or (self.multi_artes and len(self.multi_artes) > 0):
             self.total_items = sum(int(a.get("qtd", 0)) for a in self.multi_artes)
             if self.total_items < 1: self.total_items = 1
         elif csv_data:
@@ -710,7 +710,7 @@ class ImpositionEngine:
         multi_map = []
         pdf_cache = {}
 
-        if cfg.layout_schema == "multi_artes":
+        if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0):
 
             sorted_artes = sorted(cfg.multi_artes, key=lambda a: int(a.get("qtd", 0)), reverse=True)
             
@@ -925,7 +925,7 @@ class ImpositionEngine:
                     arte_fsize = 10
                     arte_data = {}
 
-                    if cfg.layout_schema == "multi_artes" and item_index < len(multi_map):
+                    if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) and item_index < len(multi_map):
                         arte_data = multi_map[item_index]
                         if arte_data["doc_base"]:
                             current_doc_base = arte_data["doc_base"]
@@ -1139,7 +1139,7 @@ class ImpositionEngine:
                         arte_fsize = 10
                         arte_data = {}
 
-                        if cfg.layout_schema == "multi_artes" and item_index < len(multi_map):
+                        if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) and item_index < len(multi_map):
                             arte_data = multi_map[item_index]
                             if arte_data["doc_base"]:
                                 current_doc_base = arte_data["doc_base"]

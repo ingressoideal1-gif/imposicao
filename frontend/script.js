@@ -7977,7 +7977,6 @@ window.runImposition = async function (mode) {
 
     if (state.selectedOSItems && state.selectedOSItems.length > 1) {
         isMultiSelected = true;
-        schema = 'multi_artes';
         const firstId = state.selectedOSItems[0].itemId;
         const firstOs = state.selectedOSItems[0].osId;
         const firstItem = state.osItens[firstOs]?.find(i => String(i.id) === String(firstId));
@@ -7985,6 +7984,10 @@ window.runImposition = async function (mode) {
             fmtId = firstItem.formato_id;
             saiId = firstItem.saida_id;
             numId = firstItem.numeracao_id;
+            const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
+            schema = fmtObj ? fmtObj.default_schema : 'multi_artes';
+        } else {
+            schema = 'multi_artes';
         }
 
         tempMultiArtes = state.selectedOSItems.map(s => {
@@ -8073,7 +8076,7 @@ window.runImposition = async function (mode) {
 
     
 
-    if (schema === 'multi_artes') {
+    if (schema === 'multi_artes' || isMultiSelected) {
 
         // Valida se todas as artes da lista têm PDF carregado, caso não seja multi seleção virtual
 
@@ -8176,7 +8179,7 @@ window.runImposition = async function (mode) {
 
     let payloadMultiArtes = [];
 
-    if (schema === 'multi_artes') {
+    if (schema === 'multi_artes' || isMultiSelected) {
 
         const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
 
