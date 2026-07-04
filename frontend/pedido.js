@@ -2202,6 +2202,30 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
     try {
         if (state.selectedOSItems.length > 1) {
             if (sub) sub.textContent = `Processando modelos combinados...`;
+            
+            // Verificar se algum item tem blocagem definida e configurar os dropdowns antes de chamar runImposition
+            const anyHasBloco = state.selectedOSItems.some(sel => {
+                const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
+                return sItem && sItem.bloco && parseInt(sItem.bloco) > 0;
+            });
+            if (anyHasBloco) {
+                const schemaSel = document.getElementById('ped-schema');
+                if (schemaSel) schemaSel.value = 'cut_stack';
+                const modeSel = document.getElementById('ped-cutstack-mode');
+                if (modeSel) modeSel.value = 'strict_assembly';
+                // Aplicar bloco do primeiro item selecionado que tem bloco
+                const firstWithBloco = state.selectedOSItems.find(sel => {
+                    const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
+                    return sItem && sItem.bloco && parseInt(sItem.bloco) > 0;
+                });
+                if (firstWithBloco) {
+                    const blocItem = state.osItens[firstWithBloco.osId]?.find(i => String(i.id) === String(firstWithBloco.itemId));
+                    const sheetsInp = document.getElementById('ped-sheets-per-block');
+                    if (sheetsInp && blocItem?.bloco) sheetsInp.value = parseInt(blocItem.bloco);
+                }
+                console.log('[pedQueueGerarPDFMulti] Blocagem detectada -> schema=cut_stack, mode=strict_assembly');
+            }
+            
             const blob = await runImposition('', true);
             if (blob) {
                 blobs.push(blob);

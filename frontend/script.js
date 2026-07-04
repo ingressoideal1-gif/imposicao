@@ -7989,7 +7989,7 @@ window.runImposition = async function (mode, returnBlob = false) {
             saiId = firstItem.saida_id;
             numId = firstItem.numeracao_id;
             const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
-            schema = fmtObj ? fmtObj.default_schema : 'multi_artes';
+            schema = document.getElementById('ped-schema')?.value || (fmtObj ? fmtObj.default_schema : null) || 'cut_stack';
         } else {
             schema = 'multi_artes';
         }
@@ -8064,7 +8064,8 @@ window.runImposition = async function (mode, returnBlob = false) {
     if (!formato) return toast('Formato não encontrado no sistema.', 'error');
 
     // Se estivermos em modo OS ativo, priorizamos os valores padrões do formato (se existirem)
-    if (state.activeOSItem) {
+    // Mas NÃO sobrescrevemos schema quando isMultiSelected (já foi lido do dropdown ped-schema)
+    if (state.activeOSItem && !isMultiSelected) {
         if (formato.default_schema) schema = formato.default_schema;
         if (formato.default_saida_id) saiId = formato.default_saida_id;
         
@@ -8260,6 +8261,9 @@ window.runImposition = async function (mode, returnBlob = false) {
         seq_increment: 1,
 
         schema,
+        // DIAG: remover após validar
+        _diag_schema: schema,
+        _diag_cut_stack_mode: (isMultiSelected || state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent'),
 
         print_mode: state.printMode,
 
@@ -8279,7 +8283,7 @@ window.runImposition = async function (mode, returnBlob = false) {
 
     };
 
-
+    console.log('[DIAG runImposition] schema=', payload.schema, 'cut_stack_mode=', payload.cut_stack_mode, 'sheets_per_block=', payload.sheets_per_block, 'multi_artes_count=', payload.multi_artes?.length, 'isMultiSelected=', isMultiSelected);
 
     const formData = new FormData();
     const isPedTab = document.getElementById('view-pedido')?.classList.contains('active');
