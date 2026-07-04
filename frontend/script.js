@@ -12223,12 +12223,12 @@ async function loadOrdens() {
             carregarLinksExistentes()
         ];
         
-        // Se o Vibecode estiver ativo, carregamos os produtos em paralelo
+        // Se o Vibecode estiver ativo, carregamos os produtos em paralelo (excluindo campos de imagem base64 pesados que causavam travamentos)
         let vibeProdutosPromise = null;
         if (typeof vibeClient !== 'undefined' && vibeClient) {
             vibeProdutosPromise = vibeClient
                 .from('produtos_proposta')
-                .select('*')
+                .select('id, id_int, id_produto, nome_produto, modelo_descri, qtd, created_at, updated_at, amostra_cor_id, amostra_num_id, amostra_status, amostra_obs')
                 .order('created_at', { ascending: false });
             promises.push(vibeProdutosPromise);
         }
