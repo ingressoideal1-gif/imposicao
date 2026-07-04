@@ -8267,11 +8267,11 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         multi_artes: payloadMultiArtes,
 
-        cut_stack_mode: document.getElementById('imp-cutstack-mode') ? document.getElementById('imp-cutstack-mode').value : 'independent',
+        cut_stack_mode: (isMultiSelected || state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent'),
 
-        sheets_per_block: (state.activeOSItem && state.osItens[state.activeOSItem.osId] && state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.bloco) ? parseInt(state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId)).bloco) : (document.getElementById('imp-sheets-per-block') ? parseInt(document.getElementById('imp-sheets-per-block').value) || 50 : 50),
+        sheets_per_block: (state.activeOSItem && state.osItens[state.activeOSItem.osId] && state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.bloco) ? parseInt(state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId)).bloco) : ((isMultiSelected || state.activeOSItem) ? (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) : (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50)),
 
-        block_depth: document.getElementById('imp-block-depth') ? parseInt(document.getElementById('imp-block-depth').value) || 1 : 1,
+        block_depth: (isMultiSelected || state.activeOSItem) ? (parseInt(document.getElementById('ped-block-depth')?.value) || 1) : (parseInt(document.getElementById('imp-block-depth')?.value) || 1),
 
         cor_id: (state.activeOSItem && state.osItens[state.activeOSItem.osId]) ? (state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.amostra_cor_id || null) : null,
 

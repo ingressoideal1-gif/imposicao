@@ -1849,9 +1849,9 @@ class ImpositionEngine:
                 item_start = valid_items[0]
                 item_end = valid_items[-1]
 
-                is_montagem = (set_def["type"] == "assembly")
+                is_montagem_cell = (set_def["type"] == "assembly" and (item_start["local_idx"] % stack_size != 0))
 
-                if is_montagem:
+                if is_montagem_cell:
                     font_size = 50
                     text = "MONTAGEM"
                     w_text = fitz.get_text_length(text, fontname="hebo", fontsize=font_size)
@@ -1861,8 +1861,18 @@ class ImpositionEngine:
                     continue
 
                 current_doc_base = item_start["doc_base"]
-                v_start = item_start["val1"]
-                v_end = item_end["val1"]
+                
+                model_idx = item_start.get("model_idx")
+                if model_idx is not None:
+                    global_start_of_model = item_start["global_idx"] - item_start["local_idx"]
+                    model_total_items = max(item["local_idx"] for item in multi_map if item.get("model_idx") == model_idx) + 1
+                    end_local_idx = min(item_start["local_idx"] + stack_size - 1, model_total_items - 1)
+                    item_end_of_block = multi_map[global_start_of_model + end_local_idx]
+                    v_start = item_start["val1"]
+                    v_end = item_end_of_block["val1"]
+                else:
+                    v_start = item_start["val1"]
+                    v_end = item_end["val1"]
 
                 bloco_num = (item_start["local_idx"] // stack_size) + 1
 
