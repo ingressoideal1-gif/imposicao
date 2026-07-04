@@ -159,6 +159,7 @@ class ImpositionConfig:
         self.layout_schema = layout_schema
         self.print_mode = print_mode
         self.rotate_page = rotate_page
+        self.numeracao_2 = numeracao_2
         self.multi_artes = multi_artes or []
         self.cut_stack_mode = cut_stack_mode
         self.sheets_per_block = sheets_per_block
