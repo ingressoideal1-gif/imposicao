@@ -8715,6 +8715,10 @@ window.runImposition = async function (mode, returnBlob = false) {
 
     }
 
+    } finally {
+        window.isImposing = false;
+    }
+
 };;
 
 
@@ -15004,13 +15008,7 @@ window.showView = function(viewId) {
                 const pedPreview = document.getElementById('ped-preview-card-container');
                 if (pedPreview) pedPreview.style.display = 'block';
             }
-    } catch (e) {
-        console.error("Erro na imposicao:", e);
-        toast("Erro ao gerar PDF", "error");
-    } finally {
-        window.isImposing = false;
-        const loader = document.getElementById('loading-overlay');
-        if (loader) loader.classList.remove('active');
+        }
     }
 };
 

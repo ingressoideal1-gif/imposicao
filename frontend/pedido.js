@@ -3469,6 +3469,10 @@ window.runPedImposition = async function (mode) {
 
     }
 
+    } finally {
+        window.isImposing = false;
+    }
+
 };
 
 
