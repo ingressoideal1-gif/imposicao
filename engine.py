@@ -1564,9 +1564,7 @@ class ImpositionEngine:
         cell_y1 = cell_y0 + cfg.item_h
 
         cell_rotation = int(cfg.rotations.get(str(P), 0))
-
-        temp_doc = fitz.open()
-        temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+        arte_nome = item_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
 
         current_doc_base = item_data["doc_base"]
         current_elements = item_data["elements"]
@@ -1583,38 +1581,107 @@ class ImpositionEngine:
             page_base_f = current_doc_base[page_idx_front]
             base_w_frente = page_base_f.rect.width
             base_h_frente = page_base_f.rect.height
-
-            art_temp_x0 = (cfg.item_w - base_w_frente) / 2 + cfg.offset_h
-            art_temp_y0 = (cfg.item_h - base_h_frente) / 2 - cfg.offset_v
-            art_temp_x1 = art_temp_x0 + base_w_frente
-            art_temp_y1 = art_temp_y0 + base_h_frente
-            rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
-
-            temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base_f.rect)
+        else:
+            base_w_frente = cfg.item_w
+            base_h_frente = cfg.item_h
 
         global_idx = item_data.get("global_idx", 0)
         csv_row = cfg.csv_data[global_idx] if (cfg.csv_data and global_idx < len(cfg.csv_data)) else None
-        for el in current_elements:
-            if el.get("face", "both") == "back":
-                continue
-            current_val = val2 if el.get("_num_source", 1) == 2 else val
-            rotated_el = dict(el)
-            if cell_rotation > 0:
-                rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
-            self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
-        _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
-        temp_doc.close()
-        _temp_doc_m = fitz.open("pdf", _temp_bytes)
-        out_page_front.show_pdf_page(
-            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-            _temp_doc_m,
-            0,
-            keep_proportion=False,
-            rotate=cell_rotation,
-            clip=_temp_doc_m[0].rect
-        )
-        _temp_doc_m.close()
+        if cell_rotation == 0 and not arte_nome:
+            if current_doc_base:
+                art_out_x0 = cell_x0 + (cfg.item_w - base_w_frente) / 2 + cfg.offset_h
+                art_out_y0 = cell_y0 + (cfg.item_h - base_h_frente) / 2 - cfg.offset_v
+                out_page_front.show_pdf_page(
+                    fitz.Rect(art_out_x0, art_out_y0, art_out_x0 + base_w_frente, art_out_y0 + base_h_frente),
+                    current_doc_base, page_idx_front,
+                    keep_proportion=False, clip=page_base_f.rect
+                )
+            for el in current_elements:
+                if el.get("face", "both") == "back":
+                    continue
+                current_val = val2 if el.get("_num_source", 1) == 2 else val
+                rotated_el = dict(el)
+                rotated_el["rotation"] = el.get("rotation", 0)
+                if "size_mm" in el:
+                    rotated_el["_size"] = el["size_mm"] * MM2PT
+                if "width_mm" in el and el["type"] == "BARCODE":
+                    rotated_el["_w"] = el["width_mm"] * MM2PT
+                    rotated_el["_h"] = el.get("height_mm", 10) * MM2PT
+                if "width_mm" in el and el["type"] == "SVG":
+                    rotated_el["width_mm"] = el["width_mm"]
+                    rotated_el["height_mm"] = el.get("height_mm", 20)
+                if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
+                    rotated_el["font_size"] = el.get("font_size", 12)
+                    rotated_el["font_name"] = el.get("font_name", "helv")
+                self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
+        else:
+            temp_doc = fitz.open()
+            temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+
+            if current_doc_base:
+                art_temp_x0 = (cfg.item_w - base_w_frente) / 2 + cfg.offset_h
+                art_temp_y0 = (cfg.item_h - base_h_frente) / 2 - cfg.offset_v
+                art_temp_x1 = art_temp_x0 + base_w_frente
+                art_temp_y1 = art_temp_y0 + base_h_frente
+                rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
+                temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front, clip=page_base_f.rect)
+
+            for el in current_elements:
+                if el.get("face", "both") == "back":
+                    continue
+                current_val = val2 if el.get("_num_source", 1) == 2 else val
+                rotated_el = dict(el)
+                if cell_rotation > 0:
+                    rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
+                self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+
+            if arte_nome:
+                nome_str = str(arte_nome).zfill(6)
+                nome_color_hex = item_data.get("nome_color", "#000000")
+                nome_rgb = _hex_to_rgb(nome_color_hex)
+                nome_font_size = 14
+                nome_x = nome_font_size
+                import os as _os
+                _impact_candidates = [
+                    "C:/Windows/Fonts/impact.ttf",
+                    "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
+                    "/usr/share/fonts/impact/impact.ttf",
+                ]
+                _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
+                _font_name_calc = "Impact" if _impact_file else "hebo"
+                _font_file_calc = _impact_file
+                try:
+                    text_width = fitz.get_text_length(nome_str, fontname=_font_name_calc, fontsize=nome_font_size, fontfile=_font_file_calc)
+                except Exception:
+                    text_width = len(nome_str) * nome_font_size * 0.6
+                nome_y = (cfg.item_h + text_width) / 2
+                pivot = fitz.Point(nome_x, nome_y)
+                _nome_insert_kwargs = dict(
+                    fontsize=nome_font_size,
+                    color=nome_rgb,
+                    morph=(pivot, fitz.Matrix(math.cos(math.radians(-90)), -math.sin(math.radians(-90)),
+                                              math.sin(math.radians(-90)),  math.cos(math.radians(-90)), 0, 0))
+                )
+                if _impact_file:
+                    _nome_insert_kwargs["fontname"] = "Impact"
+                    _nome_insert_kwargs["fontfile"] = _impact_file
+                else:
+                    _nome_insert_kwargs["fontname"] = "hebo"
+                temp_page.insert_text(pivot, nome_str, **_nome_insert_kwargs)
+
+            _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
+            temp_doc.close()
+            _temp_doc_m = fitz.open("pdf", _temp_bytes)
+            out_page_front.show_pdf_page(
+                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                _temp_doc_m,
+                0,
+                keep_proportion=False,
+                rotate=cell_rotation,
+                clip=_temp_doc_m[0].rect
+            )
+            _temp_doc_m.close()
 
     def _render_item_back(self, out_page_back, item_data, row, col, cfg, start_x, start_y):
         col_verso = cfg.cols - 1 - col
@@ -1626,9 +1693,7 @@ class ImpositionEngine:
 
         cell_rotation_frente = int(cfg.rotations.get(str(P), 0))
         cell_rotation = (360 - cell_rotation_frente) % 360
-
-        temp_doc = fitz.open()
-        temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+        arte_nome = item_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
 
         current_doc_base = item_data["doc_base"]
         current_elements = item_data["elements"]
@@ -1645,38 +1710,107 @@ class ImpositionEngine:
             page_base_v = current_doc_base[page_idx_back]
             base_w_verso = page_base_v.rect.width
             base_h_verso = page_base_v.rect.height
-
-            art_temp_x0 = (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
-            art_temp_y0 = (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
-            art_temp_x1 = art_temp_x0 + base_w_verso
-            art_temp_y1 = art_temp_y0 + base_h_verso
-            rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
-
-            temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back, clip=page_base_v.rect)
+        else:
+            base_w_verso = cfg.item_w
+            base_h_verso = cfg.item_h
 
         global_idx = item_data.get("global_idx", 0)
         csv_row = cfg.csv_data[global_idx] if (cfg.csv_data and global_idx < len(cfg.csv_data)) else None
-        for el in current_elements:
-            if el.get("face", "both") == "front":
-                continue
-            current_val = val2 if el.get("_num_source", 1) == 2 else val
-            rotated_el = dict(el)
-            if cell_rotation > 0:
-                rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
-            self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
-        _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
-        temp_doc.close()
-        _temp_doc_m = fitz.open("pdf", _temp_bytes)
-        out_page_back.show_pdf_page(
-            fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
-            _temp_doc_m,
-            0,
-            keep_proportion=False,
-            rotate=cell_rotation,
-            clip=_temp_doc_m[0].rect
-        )
-        _temp_doc_m.close()
+        if cell_rotation == 0 and not arte_nome:
+            if page_idx_back is not None and current_doc_base:
+                art_out_x0 = cell_x0 + (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
+                art_out_y0 = cell_y0 + (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
+                out_page_back.show_pdf_page(
+                    fitz.Rect(art_out_x0, art_out_y0, art_out_x0 + base_w_verso, art_out_y0 + base_h_verso),
+                    current_doc_base, page_idx_back,
+                    keep_proportion=False, clip=page_base_v.rect
+                )
+            for el in current_elements:
+                if el.get("face", "both") == "front":
+                    continue
+                current_val = val2 if el.get("_num_source", 1) == 2 else val
+                rotated_el = dict(el)
+                rotated_el["rotation"] = el.get("rotation", 0)
+                if "size_mm" in el:
+                    rotated_el["_size"] = el["size_mm"] * MM2PT
+                if "width_mm" in el and el["type"] == "BARCODE":
+                    rotated_el["_w"] = el["width_mm"] * MM2PT
+                    rotated_el["_h"] = el.get("height_mm", 10) * MM2PT
+                if "width_mm" in el and el["type"] == "SVG":
+                    rotated_el["width_mm"] = el["width_mm"]
+                    rotated_el["height_mm"] = el.get("height_mm", 20)
+                if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
+                    rotated_el["font_size"] = el.get("font_size", 12)
+                    rotated_el["font_name"] = el.get("font_name", "helv")
+                self._render_element(out_page_back, rotated_el, cell_x0, cell_y0, current_val, csv_row)
+        else:
+            temp_doc = fitz.open()
+            temp_page = temp_doc.new_page(width=cfg.item_w, height=cfg.item_h)
+
+            if page_idx_back is not None and current_doc_base:
+                art_temp_x0 = (cfg.item_w - base_w_verso) / 2 + cfg.offset_h
+                art_temp_y0 = (cfg.item_h - base_h_verso) / 2 - cfg.offset_v
+                art_temp_x1 = art_temp_x0 + base_w_verso
+                art_temp_y1 = art_temp_y0 + base_h_verso
+                rect_art_temp = fitz.Rect(art_temp_x0, art_temp_y0, art_temp_x1, art_temp_y1)
+                temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back, clip=page_base_v.rect)
+
+            for el in current_elements:
+                if el.get("face", "both") == "front":
+                    continue
+                current_val = val2 if el.get("_num_source", 1) == 2 else val
+                rotated_el = dict(el)
+                if cell_rotation > 0:
+                    rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
+                self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
+
+            if arte_nome:
+                nome_str = str(arte_nome).zfill(6)
+                nome_color_hex = item_data.get("nome_color", "#000000")
+                nome_rgb = _hex_to_rgb(nome_color_hex)
+                nome_font_size = 14
+                nome_x = nome_font_size
+                import os as _os
+                _impact_candidates = [
+                    "C:/Windows/Fonts/impact.ttf",
+                    "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
+                    "/usr/share/fonts/impact/impact.ttf",
+                ]
+                _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
+                _font_name_calc = "Impact" if _impact_file else "hebo"
+                _font_file_calc = _impact_file
+                try:
+                    text_width = fitz.get_text_length(nome_str, fontname=_font_name_calc, fontsize=nome_font_size, fontfile=_font_file_calc)
+                except Exception:
+                    text_width = len(nome_str) * nome_font_size * 0.6
+                nome_y = (cfg.item_h + text_width) / 2
+                pivot = fitz.Point(nome_x, nome_y)
+                _nome_insert_kwargs = dict(
+                    fontsize=nome_font_size,
+                    color=nome_rgb,
+                    morph=(pivot, fitz.Matrix(math.cos(math.radians(-90)), -math.sin(math.radians(-90)),
+                                              math.sin(math.radians(-90)),  math.cos(math.radians(-90)), 0, 0))
+                )
+                if _impact_file:
+                    _nome_insert_kwargs["fontname"] = "Impact"
+                    _nome_insert_kwargs["fontfile"] = _impact_file
+                else:
+                    _nome_insert_kwargs["fontname"] = "hebo"
+                temp_page.insert_text(pivot, nome_str, **_nome_insert_kwargs)
+
+            _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
+            temp_doc.close()
+            _temp_doc_m = fitz.open("pdf", _temp_bytes)
+            out_page_back.show_pdf_page(
+                fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
+                _temp_doc_m,
+                0,
+                keep_proportion=False,
+                rotate=cell_rotation,
+                clip=_temp_doc_m[0].rect
+            )
+            _temp_doc_m.close()
 
     def _generate_contracapa_for_set(self, set_idx, set_def, cfg):
         doc_c = fitz.open()
