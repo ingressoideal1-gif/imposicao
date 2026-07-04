@@ -57,7 +57,7 @@ def health_check():
 @app.get("/api/version")
 def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
-    return {"commit": "fast_path_v2", "desc": "fast path universal + save sem clean", "engine": "fastpath+garbage4"}
+    return {"commit": "fix_document_closed_v1", "desc": "fast path universal + save sem clean", "engine": "fastpath+garbage4"}
 
 
 @app.get("/favicon.ico", include_in_schema=False)
