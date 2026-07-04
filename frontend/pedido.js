@@ -2200,13 +2200,21 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
     const blobs = [];
     
     try {
-        for (let i = 0; i < state.selectedOSItems.length; i++) {
-            const sel = state.selectedOSItems[i];
-            
+        if (state.selectedOSItems.length > 1) {
+            if (sub) sub.textContent = `Processando modelos combinados...`;
+            const blob = await runImposition('', true);
+            if (blob) {
+                blobs.push(blob);
+                for (const sel of state.selectedOSItems) {
+                    if (typeof pedQueueUpdateField === 'function') {
+                        pedQueueUpdateField(sel.itemId, sel.osId, 'status_impressao', 'IMPRESSO');
+                    }
+                }
+            }
+        } else {
+            const sel = state.selectedOSItems[0];
             state.activeOSItem = { osId: sel.osId, itemId: sel.itemId };
-            
-            if (sub) sub.textContent = `Processando modelo ${i + 1} de ${state.selectedOSItems.length}...`;
-            
+            if (sub) sub.textContent = `Processando modelo 1 de 1...`;
             const blob = await runImposition('', true);
             if (blob) {
                 blobs.push(blob);
