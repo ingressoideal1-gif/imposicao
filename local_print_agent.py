@@ -189,7 +189,7 @@ async def impose_file(
             # Usa cache: se o mesmo arquivo já foi enviado antes, reutiliza o temp em disco
             art_bytes = await file.read()
             base_file_path = _get_cached_art_path(art_bytes, ext)
-        elif data.get("schema") != "multi_artes":
+        elif data.get("schema") != "multi_artes" and not data.get("multi_artes"):
             raise HTTPException(status_code=400, detail="Arquivo principal nao enviado.")
 
         # Saída: arquivo temp para o engine escrever
