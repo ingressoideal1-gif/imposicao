@@ -7990,6 +7990,18 @@ window.runImposition = async function (mode) {
         tempMultiArtes = state.selectedOSItems.map(s => {
             const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
             const qt = sItem ? parseInt(sItem.qtd !== undefined && sItem.qtd !== null ? sItem.qtd : (sItem.quantidade || 0)) : 0;
+            
+            const corObj = sItem && sItem.amostra_cor_id
+                ? (state.cores || []).find(c => String(c.id) === String(sItem.amostra_cor_id))
+                : (sItem ? (state.cores || []).find(c => globalFuzzyMatch(c.name, sItem.cor || sItem.padrao || '')) : null);
+            const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
+            const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
+            
+            const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
+                ? decodeURIComponent(itemArteUrl.split('/').pop().split('?')[0])
+                : null;
+            const itemPdfName = filenameFromUrl || (sItem ? sItem.nome_arquivo_arte : null) || (corObj ? `${corObj.name}.pdf` : `Arte_${sItem ? sItem.modelo : 'Modelo'}.pdf`);
+
             return {
                 qtd: qt,
                 nome: sItem ? sItem.modelo : '',
@@ -7999,8 +8011,8 @@ window.runImposition = async function (mode) {
                 has_raw_file: false,
                 is_selected: true,
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
-                pdf_url: null,
-                pdf_name: null,
+                pdf_url: itemArteUrl,
+                pdf_name: itemPdfName,
                 rawFile: null,
                 nome_color: '#000000'
             };
@@ -8075,6 +8087,12 @@ window.runImposition = async function (mode) {
 
                 }
 
+            }
+        } else {
+            for (let i = 0; i < artesList.length; i++) {
+                if (!artesList[i].pdf_url) {
+                    return toast(`O modelo "${artesList[i].nome}" não possui arte cadastrada nem cor vinculada.`, 'error');
+                }
             }
         }
 
