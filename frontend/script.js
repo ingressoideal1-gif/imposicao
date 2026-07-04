@@ -8063,9 +8063,14 @@ window.runImposition = async function (mode, returnBlob = false) {
     const formato = state.formatos.find(f => String(f.id) === String(fmtId));
     if (!formato) return toast('Formato não encontrado no sistema.', 'error');
 
-    // Se estivermos em modo OS ativo, priorizamos os valores padrões do formato (se existirem)
-    // Mas NÃO sobrescrevemos schema quando isMultiSelected (já foi lido do dropdown ped-schema)
-    if (state.activeOSItem && !isMultiSelected) {
+    if (isMultiSelected) {
+        // Multi-seleção: schema e cut_stack_mode já foram definidos acima como hardcode
+        // Apenas pegar saiId do formato se não existir
+        if (!saiId) saiId = formato.default_saida_id;
+        if (!saiId) {
+            saiId = document.getElementById('ped-saida')?.value || document.getElementById('imp-saida')?.value;
+        }
+    } else if (state.activeOSItem) {
         if (formato.default_schema) schema = formato.default_schema;
         if (formato.default_saida_id) saiId = formato.default_saida_id;
         
