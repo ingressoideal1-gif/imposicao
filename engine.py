@@ -844,10 +844,10 @@ class ImpositionEngine:
                     elif pdf_url:
                         art_doc = _load_art_as_pdf(pdf_url, is_url=True)
                         if pdf_verso_url and art_doc:
-                            verso_doc = _load_art_as_pdf(pdf_verso_url, is_url=True)
-                            if verso_doc:
-                                art_doc.insert_pdf(verso_doc)
-                                verso_doc.close()
+                            if len(art_doc) < 2:
+                                verso_doc = _load_art_as_pdf(pdf_verso_url, is_url=True)
+                                if verso_doc:
+                                    art_doc.insert_pdf(verso_doc)
                 except Exception as ex:
                     print(f"[multi_artes] Erro ao preparar arte: {ex}")
 
