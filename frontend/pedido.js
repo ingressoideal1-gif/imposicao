@@ -3835,18 +3835,19 @@ function buildStrictAssemblySets(artesList, isMulti, totItems, stackSize, posesP
         if (depth >= 1) {
             let num_blocks_in_set = depth * posesPerSheet;
             let set_blocks = complete_blocks.slice(blocks_used, blocks_used + num_blocks_in_set);
-            let cell_allocations = [];
-            for (let P = 0; P < posesPerSheet; P++) {
-                let cell_items = [];
-                for (let d = 0; d < depth; d++) {
+            
+            for (let d = 0; d < depth; d++) {
+                let layer_allocations = [];
+                for (let P = 0; P < posesPerSheet; P++) {
                     let block_idx = P * depth + d;
                     if (block_idx < set_blocks.length) {
-                        cell_items = cell_items.concat(set_blocks[block_idx].block);
+                        layer_allocations.push(set_blocks[block_idx].block);
+                    } else {
+                        layer_allocations.push([]);
                     }
                 }
-                cell_allocations.push(cell_items);
+                set_definitions.push({ type: "strict", num_sheets: stackSize, cell_allocations: layer_allocations, depth: 1 });
             }
-            set_definitions.push({ type: "strict", num_sheets: stackSize * depth, cell_allocations: cell_allocations, depth: depth });
             blocks_used += num_blocks_in_set;
         }
     }
