@@ -1719,7 +1719,9 @@ class ImpositionEngine:
                     rotated_el["font_size"] = el.get("font_size", 12)
                     rotated_el["font_name"] = el.get("font_name", "helv")
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
-                    c_idx, c_l_cam, c_start = self._get_camarote_params(global_idx, multi_map)
+                    c_idx = item_data.get("local_idx", 0)
+                    c_l_cam = item_data.get("l_cam")
+                    c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
                 self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
@@ -1742,7 +1744,9 @@ class ImpositionEngine:
                 if cell_rotation > 0:
                     rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
-                    c_idx, c_l_cam, c_start = self._get_camarote_params(global_idx, multi_map)
+                    c_idx = item_data.get("local_idx", 0)
+                    c_l_cam = item_data.get("l_cam")
+                    c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
                 self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
@@ -1854,7 +1858,9 @@ class ImpositionEngine:
                     rotated_el["font_size"] = el.get("font_size", 12)
                     rotated_el["font_name"] = el.get("font_name", "helv")
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
-                    c_idx, c_l_cam, c_start = self._get_camarote_params(global_idx, multi_map)
+                    c_idx = item_data.get("local_idx", 0)
+                    c_l_cam = item_data.get("l_cam")
+                    c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
                 self._render_element(out_page_back, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
@@ -1877,7 +1883,9 @@ class ImpositionEngine:
                 if cell_rotation > 0:
                     rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
-                    c_idx, c_l_cam, c_start = self._get_camarote_params(global_idx, multi_map)
+                    c_idx = item_data.get("local_idx", 0)
+                    c_l_cam = item_data.get("l_cam")
+                    c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
                 self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
