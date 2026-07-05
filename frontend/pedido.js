@@ -2972,11 +2972,14 @@ window.editPedidoCustomNumeracao = function(fieldId) {
     if (!baseNum) return;
     
     const activeOSItem = state.activeOSItem;
+    console.log('[editPedidoCustomNumeracao] activeOSItem:', activeOSItem);
     let cliNum = null;
     if (activeOSItem) {
         const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
+        console.log('[editPedidoCustomNumeracao] Found OS:', os);
         if (os) cliNum = os.id_cliente;
     }
+    console.log('[editPedidoCustomNumeracao] resolved cliNum:', cliNum);
 
     // Configura o state para que no saveNumeracao volte para Imposição
     window.customNumeracaoEditState = {

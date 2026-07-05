@@ -16753,17 +16753,21 @@ window.togglePedNumEditButtons = function() {
 };
 
 window.showClienteNumeracoesModal = function(fieldId, forceIdCliente = null) {
+    console.log('[showClienteNumeracoesModal] started. fieldId:', fieldId, 'forceIdCliente:', forceIdCliente);
     let idCliente = forceIdCliente;
     if (!idCliente) {
         const activeOSItem = state.activeOSItem;
+        console.log('[showClienteNumeracoesModal] activeOSItem:', activeOSItem);
         if (activeOSItem) {
             const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
+            console.log('[showClienteNumeracoesModal] Found OS:', os);
             if (os) idCliente = os.id_cliente;
         }
     }
     
+    console.log('[showClienteNumeracoesModal] idCliente resolved to:', idCliente);
     if (!idCliente) {
-        toast('Este pedido não está associado a um cliente válido!', 'warning');
+        toast('Este pedido não está associado a um cliente válido! (Cliente ID: ' + idCliente + ')', 'warning');
         return;
     }
 
