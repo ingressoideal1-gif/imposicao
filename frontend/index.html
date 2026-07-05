@@ -507,6 +507,14 @@
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_COMBO')">Fila & Lugar</button>
                             </div>
                         </div>
+                        <div id="num-camarote-elements-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; background: rgba(255, 160, 0, 0.04); border-radius: var(--radius); padding: 12px;">
+                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🏛️</span> Elementos de Camarote</span>
+                            <div class="add-elements-bar">
+                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_LOCAL')" title="Local onde as pessoas ficam (Mesa, Camarote, Sala…)">🏛️ Local</button>
+                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_PESSOA')" title="Número da pessoa dentro do local (Cadeira, Lugar…)">👤 Pessoas</button>
+                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_PESSOA_TOTAL')" title="Número da pessoa / total do local (ex: 1/5)">👥 Pessoas 1/Total</button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Painel esquerdo (agora Carrossel na Base) -->
@@ -1247,6 +1255,9 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- Hidden inputs: dados CAMAROTE (preenchidos automaticamente pelo enviarParaPedido) -->
+                            <input type="hidden" id="ped-q-cam" value="0">
+                            <input type="hidden" id="ped-l-cam" value="1">
 
                             <!-- Configuração Multi-Artes -->
                             <div id="ped-multi-artes-container" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">

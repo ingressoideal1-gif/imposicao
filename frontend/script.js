@@ -2954,6 +2954,7 @@ window.onTipoSelect = function() {
     const tipo = document.getElementById('num-tipo').value;
     const ticketSettings = document.getElementById('num-ticket-settings');
     const teatroSettings = document.getElementById('num-teatro-elements-container');
+    const camaroteSettings = document.getElementById('num-camarote-elements-container');
     
     if (tipo === 'TICKET') {
         ticketSettings.style.display = 'block';
@@ -2965,6 +2966,12 @@ window.onTipoSelect = function() {
         if(teatroSettings) teatroSettings.style.display = 'block';
     } else {
         if(teatroSettings) teatroSettings.style.display = 'none';
+    }
+
+    if (tipo === 'CAMAROTE') {
+        if(camaroteSettings) camaroteSettings.style.display = 'block';
+    } else {
+        if(camaroteSettings) camaroteSettings.style.display = 'none';
     }
     
     // Re-render elements so any ticket_pos dropdowns are created/removed
@@ -3388,7 +3395,7 @@ function drawElement(ctx, el, S) {
 
 
 
-    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
 
         const fs = (el.font_size || 12) * S / 2.8346;
 
@@ -3412,6 +3419,12 @@ function drawElement(ctx, el, S) {
             const fila = `${el.prefix_fila || ''}${_fVal}`;
             const lugar = `${el.prefix_lugar || ''}${_lVal}`;
             label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+        } else if (el.type === 'CAMAROTE_LOCAL') {
+            label = `${el.prefix || ''}7`;
+        } else if (el.type === 'CAMAROTE_PESSOA') {
+            label = `${el.prefix || ''}1`;
+        } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+            label = `${el.prefix || ''}1/5`;
         } else if (el.source === 'database') {
             label = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
         } else {
@@ -4061,7 +4074,7 @@ function getElementSizeMM(el) {
 
     let w = 20, h = 8;
 
-    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
 
         const canvas = document.getElementById('numeracao-canvas');
 
@@ -4095,6 +4108,12 @@ function getElementSizeMM(el) {
                 const fila = `${el.prefix_fila || ''}${_fVal}`;
                 const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                 label = el.layout === '2lines' ? fila : `${fila} - ${lugar}`;
+            } else if (el.type === 'CAMAROTE_LOCAL') {
+                label = `${el.prefix || ''}7`;
+            } else if (el.type === 'CAMAROTE_PESSOA') {
+                label = `${el.prefix || ''}1`;
+            } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                label = `${el.prefix || ''}1/5`;
             } else if (el.source === 'database') {
                 label = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
             } else {
@@ -4709,6 +4728,10 @@ window.addElement = function (type) {
     if (type === 'TEATRO_LUGAR') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Poltrona: ' });
     if (type === 'TEATRO_COMBO') Object.assign(base, { font_size: 12, font_name: 'helv', prefix_fila: 'Fila: ', prefix_lugar: 'Lugar: ', layout: '1line' });
 
+    if (type === 'CAMAROTE_LOCAL') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Mesa ' });
+    if (type === 'CAMAROTE_PESSOA') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Cadeira ' });
+    if (type === 'CAMAROTE_PESSOA_TOTAL') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Cadeira ' });
+
 
 
     state.numElements.push(base);
@@ -4760,9 +4783,9 @@ function renderElementsList() {
 
 
 
-    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar' };
+    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
 
-    const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray', TEATRO_FILA: 'badge-purple', TEATRO_LUGAR: 'badge-purple', TEATRO_COMBO: 'badge-purple' };
+    const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray', TEATRO_FILA: 'badge-purple', TEATRO_LUGAR: 'badge-purple', TEATRO_COMBO: 'badge-purple', CAMAROTE_LOCAL: 'badge-amber', CAMAROTE_PESSOA: 'badge-amber', CAMAROTE_PESSOA_TOTAL: 'badge-amber' };
 
 
 
@@ -4960,6 +4983,18 @@ function renderElementsList() {
                 </div>
                 <div class="form-group"><label>Prefixo Fila</label><input class="form-control" type="text" value="${el.prefix_fila || ''}" onchange="updateEl('${el.id}','prefix_fila',this.value)"></div>
                 <div class="form-group"><label>Prefixo Lugar</label><input class="form-control" type="text" value="${el.prefix_lugar || ''}" onchange="updateEl('${el.id}','prefix_lugar',this.value)"></div>
+            `;
+        } else if (el.type === 'CAMAROTE_LOCAL' || el.type === 'CAMAROTE_PESSOA' || el.type === 'CAMAROTE_PESSOA_TOTAL') {
+            const camLabel = el.type === 'CAMAROTE_LOCAL' ? 'Local (Mesa, Camarote…)' : el.type === 'CAMAROTE_PESSOA' ? 'Pessoas (Cadeira, Lugar…)' : 'Pessoas 1/Total';
+            extraFields = `
+                <div class="form-group el-full" style="background:rgba(255,160,0,0.06); border-radius:6px; padding:8px; margin-bottom:4px;">
+                    <label style="color: var(--amber, #f59e0b); font-size:0.78rem;">🏛️ ${camLabel}</label>
+                </div>
+                <div class="form-group el-full"><label>Fonte</label>
+                    ${fontPickerHTML(el.id, el.font_name)}
+                </div>
+                <div class="form-group"><label>Tamanho (pt)</label><input class="form-control el-font" type="number" value="${el.font_size || 12}" min="4" max="120" onchange="updateEl('${el.id}','font_size',+this.value)"></div>
+                <div class="form-group"><label>Prefixo</label><input class="form-control" type="text" value="${el.prefix || ''}" placeholder="ex: Mesa , Cadeira …" onchange="updateEl('${el.id}','prefix',this.value)"></div>
             `;
         }
         
@@ -6700,6 +6735,21 @@ function drawPreview() {
                         const lugarT = `${el.prefix_lugar || ''}${lugarVal}`;
                         val_str = el.layout === '2lines' ? `${filaT}\n${lugarT}` : `${filaT} - ${lugarT}`;
 
+                    } else if (el.type === 'CAMAROTE_LOCAL') {
+                        // local_num = seq_start + floor(item_index / l_cam)
+                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        const _qStart = start || 1;
+                        const _localNum = _qStart + Math.floor(item_index / _lCam);
+                        val_str = `${el.prefix || ''}${_localNum}`;
+
+                    } else if (el.type === 'CAMAROTE_PESSOA') {
+                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}`;
+
+                    } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}/${_lCam}`;
+
                     } else if (el.source === 'database') {
 
                         if (state.csvData && state.csvData[item_index]) {
@@ -6749,7 +6799,7 @@ function drawPreview() {
 
 
 
-                    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+                    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
 
                         const fs = (el.font_size || 12) * scale;
 
@@ -10614,7 +10664,7 @@ window.onAmostraNumeracaoSelect = function() {
 
 
 
-            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
 
                 const fs = (el.font_size || 12) * S / 2.8346;
 
@@ -10642,6 +10692,12 @@ window.onAmostraNumeracaoSelect = function() {
                     const fila = `${el.prefix_fila || ''}${_fVal}`;
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+                } else if (el.type === 'CAMAROTE_LOCAL') {
+                    label = `${el.prefix || ''}7`;
+                } else if (el.type === 'CAMAROTE_PESSOA') {
+                    label = `${el.prefix || ''}1`;
+                } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                    label = `${el.prefix || ''}1/5`;
                 } else {
 
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
@@ -16220,7 +16276,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             numCtx.translate(x, y);
             numCtx.rotate(rot);
 
-            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
                 const fs = (el.font_size || 12) * S / 2.8346;
                 numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
                 numCtx.fillStyle = color;
@@ -16236,10 +16292,27 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     label = `${el.prefix || ''}${_lVal}`;
                 } else if (el.type === 'TEATRO_COMBO') {
                     const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
-                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : 'A';
                     const fila = `${el.prefix_fila || ''}${_fVal}`;
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+                } else if (el.type === 'CAMAROTE_LOCAL') {
+                    // Ler início da numeração real do item — cobre maiusc/minusc
+                    const _inicio = parseInt(
+                        item?.numeracao_inicio || item?.num_inicial ||
+                        item?.NUMERACAO_INICIO || 1
+                    );
+                    label = `${el.prefix || ''}${_inicio}`;
+                } else if (el.type === 'CAMAROTE_PESSOA') {
+                    label = `${el.prefix || ''}1`;
+                } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                    // Cobrir Q_CAM / L_CAM em qualquer capitalização
+                    const _lCamB = parseInt(
+                        item?.L_CAM || item?.l_cam ||
+                        item?.lotacao_cam || item?.LOTACAO_CAM ||
+                        item?.lotacao || 5
+                    );
+                    label = `${el.prefix || ''}1/${_lCamB}`;
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                     label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
@@ -18242,7 +18315,7 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
         numCtx.translate(x, y);
         numCtx.rotate(rot);
 
-        if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+        if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
             const fs = (el.font_size || 12) * S / 2.8346;
             numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
             numCtx.fillStyle = color;
@@ -18262,6 +18335,12 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
                 const fila = `${el.prefix_fila || ''}${_fVal}`;
                 const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                 label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+            } else if (el.type === 'CAMAROTE_LOCAL') {
+                label = `${el.prefix || ''}7`;
+            } else if (el.type === 'CAMAROTE_PESSOA') {
+                label = `${el.prefix || ''}1`;
+            } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                label = `${el.prefix || ''}1/5`;
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                 label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;

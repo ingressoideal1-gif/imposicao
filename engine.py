@@ -151,7 +151,9 @@ class ImpositionConfig:
                  multi_artes: list[dict] | None = None,
                  cut_stack_mode: str = "independent",
                  sheets_per_block: int = 50,
-                 block_depth: int = 1):
+                 block_depth: int = 1,
+                 q_cam: int = 0,
+                 l_cam: int = 1):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -198,6 +200,9 @@ class ImpositionConfig:
         self.num_tipo = numeracao.get("tipo", "SEQUENCIAL") if numeracao else "SEQUENCIAL"
         self.ticket_qtd = numeracao.get("ticket_qtd", 1) if numeracao else 1
         self.ticket_logica = numeracao.get("ticket_logica", "PILHA") if numeracao else "PILHA"
+        # CAMAROTE: quantidade de locais e lotação por local
+        self.q_cam = int(q_cam) if q_cam else 0
+        self.l_cam = max(1, int(l_cam) if l_cam else 1)
         
         if layout_schema == "pdf_multiple":
             # Para Pdf Múltiplo, a quantidade total de itens é baseada na quantidade de páginas
@@ -220,6 +225,9 @@ class ImpositionConfig:
             if self.total_items < 1: self.total_items = 1
         elif csv_data:
             self.total_items = len(csv_data)
+        elif self.num_tipo == "CAMAROTE" and self.q_cam > 0:
+            # CAMAROTE: total = numero de locais × lotação por local
+            self.total_items = self.q_cam * self.l_cam
         else:
             total_expected = math.floor((seq_end - seq_start) / seq_increment) + 1
             if self.num_tipo == "TICKET":
@@ -339,6 +347,24 @@ class ImpositionEngine:
             return fitz.open(stream=pdf_bytes, filetype="pdf")
 
 
+    def _resolve_camarote_val(self, el: dict, item_index: int, base_val: int) -> int:
+        """Calcula o valor correto para elementos CAMAROTE_* com base no item_index.
+        
+        Para CAMAROTE_LOCAL: retorna o número do local (seq_start + item_index // l_cam).
+        Para CAMAROTE_PESSOA / CAMAROTE_PESSOA_TOTAL: retorna o número da pessoa (item_index % l_cam + 1).
+        Também injeta _l_cam no el para uso em CAMAROTE_PESSOA_TOTAL.
+        """
+        t = el.get("type", "")
+        if not t.startswith("CAMAROTE_"):
+            return base_val
+        cfg = self.cfg
+        l_cam = cfg.l_cam if hasattr(cfg, "l_cam") else 1
+        el["_l_cam"] = l_cam
+        if t == "CAMAROTE_LOCAL":
+            return cfg.seq_start + (item_index // l_cam)
+        else:  # CAMAROTE_PESSOA ou CAMAROTE_PESSOA_TOTAL
+            return (item_index % l_cam) + 1
+
     def _render_element(self, page: fitz.Page, el: dict, cell_x0: float, cell_y0: float, val: int, csv_row: dict | None = None):
         """Renderiza um elemento VDP na posicao absoluta da celula."""
         # O frontend usa ancoragem central: (x_mm, y_mm) = centro do elemento.
@@ -404,6 +430,19 @@ class ImpositionEngine:
                 val_str = f"{prefix_fila}{fila}\n{prefix_lugar}{num}"
             else:
                 val_str = f"{prefix_fila}{fila} - {prefix_lugar}{num}"
+        elif t == "CAMAROTE_LOCAL":
+            # val já foi calculado no loop principal como local_num
+            prefix = str(el.get("prefix", "") or "")
+            val_str = f"{prefix}{val}"
+        elif t == "CAMAROTE_PESSOA":
+            # val já foi calculado no loop principal como pessoa_num
+            prefix = str(el.get("prefix", "") or "")
+            val_str = f"{prefix}{val}"
+        elif t == "CAMAROTE_PESSOA_TOTAL":
+            # val = pessoa_num, _l_cam = lotacao por local
+            prefix = str(el.get("prefix", "") or "")
+            l_cam = el.get("_l_cam", 1)
+            val_str = f"{prefix}{val}/{l_cam}"
         else:
             pad = int(el.get("pad", 0) or 0)
             prefix = str(el.get("prefix", "") or "")
@@ -412,7 +451,7 @@ class ImpositionEngine:
             val_str = f"{prefix}{raw}{suffix}"
 
 
-        if t in ("TEXT", "FIXED") or t.startswith("TEATRO_"):
+        if t in ("TEXT", "FIXED") or t.startswith("TEATRO_") or t.startswith("CAMAROTE_"):
             font_size = float(el.get("font_size", 12))
             raw_font_name = el.get("font_name", "helv")
 
@@ -1183,7 +1222,7 @@ class ImpositionEngine:
                             if "width_mm" in el and el["type"] == "SVG":
                                 rotated_el["width_mm"] = el["width_mm"]
                                 rotated_el["height_mm"] = el.get("height_mm", 20)
-                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
+                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_") or el["type"].startswith("CAMAROTE_"):
                                 rotated_el["font_size"] = el.get("font_size", 12)
                                 rotated_el["font_name"] = el.get("font_name", "helv")
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
@@ -1191,6 +1230,8 @@ class ImpositionEngine:
                                 pos = int(rotated_el.get("ticket_pos", 1))
                                 N = int(cfg.ticket_qtd)
                                 current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+                            if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
+                                current_val = self._resolve_camarote_val(rotated_el, item_index, current_val)
                             self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
 
                     else:
@@ -1226,7 +1267,7 @@ class ImpositionEngine:
                             if "width_mm" in el and el["type"] == "SVG":
                                 rotated_el["width_mm"] = el["width_mm"]
                                 rotated_el["height_mm"] = el.get("height_mm", 20)
-                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
+                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_") or el["type"].startswith("CAMAROTE_"):
                                 rotated_el["font_size"] = el.get("font_size", 12)
                                 rotated_el["font_name"] = el.get("font_name", "helv")
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
@@ -1236,6 +1277,8 @@ class ImpositionEngine:
                                 logic = str(cfg.ticket_logica).strip().upper()
                                 Q = int(cfg.total_items)
                                 current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+                            if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
+                                current_val = self._resolve_camarote_val(rotated_el, item_index, current_val)
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
                         if arte_nome:
@@ -1656,9 +1699,11 @@ class ImpositionEngine:
                 if "width_mm" in el and el["type"] == "SVG":
                     rotated_el["width_mm"] = el["width_mm"]
                     rotated_el["height_mm"] = el.get("height_mm", 20)
-                if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
+                if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_") or el["type"].startswith("CAMAROTE_"):
                     rotated_el["font_size"] = el.get("font_size", 12)
                     rotated_el["font_name"] = el.get("font_name", "helv")
+                if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
+                    current_val = self._resolve_camarote_val(rotated_el, item_index, current_val)
                 self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
             temp_doc = fitz.open()
@@ -1679,6 +1724,8 @@ class ImpositionEngine:
                 rotated_el = dict(el)
                 if cell_rotation > 0:
                     rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
+                if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
+                    current_val = self._resolve_camarote_val(rotated_el, item_index, current_val)
                 self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
             if arte_nome:
@@ -1785,9 +1832,11 @@ class ImpositionEngine:
                 if "width_mm" in el and el["type"] == "SVG":
                     rotated_el["width_mm"] = el["width_mm"]
                     rotated_el["height_mm"] = el.get("height_mm", 20)
-                if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
+                if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_") or el["type"].startswith("CAMAROTE_"):
                     rotated_el["font_size"] = el.get("font_size", 12)
                     rotated_el["font_name"] = el.get("font_name", "helv")
+                if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
+                    current_val = self._resolve_camarote_val(rotated_el, item_index, current_val)
                 self._render_element(out_page_back, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
             temp_doc = fitz.open()
@@ -1808,6 +1857,8 @@ class ImpositionEngine:
                 rotated_el = dict(el)
                 if cell_rotation > 0:
                     rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
+                if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
+                    current_val = self._resolve_camarote_val(rotated_el, item_index, current_val)
                 self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
             if arte_nome:

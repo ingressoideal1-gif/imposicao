@@ -629,7 +629,9 @@ async def impose_file(
             multi_artes=multi_artes_list,
             cut_stack_mode=data.get("cut_stack_mode", "independent"),
             sheets_per_block=data.get("sheets_per_block", 50),
-            block_depth=data.get("block_depth", 1)
+            block_depth=data.get("block_depth", 1),
+            q_cam=int(data.get("q_cam", 0) or 0),
+            l_cam=int(data.get("l_cam", 1) or 1)
         )
 
         engine = ImpositionEngine(config)

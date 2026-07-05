@@ -1053,6 +1053,20 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         const lugarT = `${el.prefix_lugar || ''}${lugarVal}`;
                         val_str = el.layout === '2lines' ? `${filaT}\n${lugarT}` : `${filaT} - ${lugarT}`;
 
+                    } else if (el.type === 'CAMAROTE_LOCAL') {
+                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        const _qStart = start || 1;
+                        const _localNum = _qStart + Math.floor(item_index / _lCam);
+                        val_str = `${el.prefix || ''}${_localNum}`;
+
+                    } else if (el.type === 'CAMAROTE_PESSOA') {
+                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}`;
+
+                    } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}/${_lCam}`;
+
                     } else if (el.source === 'database') {
 
                         if (state.csvData && state.csvData[item_index]) {
@@ -1102,7 +1116,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-                    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+                    if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
 
                         const fs = (el.font_size || 12) * scale;
 
@@ -2063,6 +2077,12 @@ async function enviarParaPedido(itemId, osId) {
         const numEnd = document.getElementById('ped-end');
         if (numStart && item.num_inicial) numStart.value = item.num_inicial;
         if (numEnd && item.num_final) numEnd.value = item.num_final;
+
+        // --- CAMAROTE: guardar Q_CAM e L_CAM do item para uso no payload ---
+        const qCamHidden = document.getElementById('ped-q-cam');
+        const lCamHidden = document.getElementById('ped-l-cam');
+        if (qCamHidden) qCamHidden.value = item.Q_CAM || item.q_cam || 0;
+        if (lCamHidden) lCamHidden.value = item.L_CAM || item.l_cam || 1;
     }, 400);
 
     // --- PREENCHER MODO DE IMPRESSÃO ---
@@ -3087,7 +3107,11 @@ window.runPedImposition = async function (mode) {
 
         sheets_per_block: document.getElementById('ped-sheets-per-block') ? parseInt(document.getElementById('ped-sheets-per-block').value) || 50 : 50,
 
-        block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1
+        block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1,
+
+        // CAMAROTE: Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden)
+        q_cam: parseInt(document.getElementById('ped-q-cam')?.value || 0) || 0,
+        l_cam: parseInt(document.getElementById('ped-l-cam')?.value || 1) || 1
 
     };
 
