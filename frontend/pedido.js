@@ -2899,6 +2899,9 @@ window.runPedImposition = async function (mode) {
                 : null;
             const itemPdfName = filenameFromUrl || (sItem ? sItem.nome_arquivo_arte : null) || (corObj ? `${corObj.name}.pdf` : `Arte_${sItem ? sItem.modelo : 'Modelo'}.pdf`);
 
+            const qCamVal = sItem ? (sItem.Q_CAM || sItem.q_cam || sItem.qtd_locais || sItem.qtd_cam || 0) : 0;
+            const lCamVal = sItem ? (sItem.L_CAM || sItem.l_cam || sItem.lotacao_cam || sItem.lotacao || sItem.lotacao_por_local || 1) : 1;
+
             return {
                 qtd: qt,
                 nome: sItem ? sItem.modelo : '',
@@ -2908,6 +2911,8 @@ window.runPedImposition = async function (mode) {
                 has_raw_file: false,
                 is_selected: true,
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
+                q_cam: qCamVal,
+                l_cam: lCamVal,
                 pdf_url: itemArteUrl,
                 pdf_verso_url: itemArteVersoUrl,
                 pdf_name: itemPdfName,
@@ -3064,7 +3069,11 @@ window.runPedImposition = async function (mode) {
 
                 numeracao_2: state.numeracoes.find(n => String(n.id) === String(arte.num2_id)) || null,
 
-                has_raw_file: !!arte.rawFile
+                has_raw_file: !!arte.rawFile,
+
+                q_cam: arte.q_cam || 0,
+
+                l_cam: arte.l_cam || 1
 
             };
 
