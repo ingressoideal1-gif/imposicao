@@ -2113,8 +2113,11 @@ class ImpositionEngine:
                         temp_path = gf["path"] + ".tmp.pdf"
                         doc.save(temp_path, garbage=4, deflate=True)
                         doc.close()
-                        os.replace(temp_path, gf["path"])
-                        filtered_files.append(gf)
+                        
+                        # Garantir que o arquivo foi salvo antes de substituir
+                        if os.path.exists(temp_path):
+                            os.replace(temp_path, gf["path"])
+                            filtered_files.append(gf)
                 else:
                     doc.close()
                     if os.path.exists(gf["path"]):
@@ -2124,4 +2127,7 @@ class ImpositionEngine:
             except Exception as e:
                 print(f"[Refazer] Erro processando {gf['path']}: {e}")
                 
+        if not filtered_files:
+            raise ValueError(f"As páginas selecionadas para refazer (De: {r_de} Até: {r_ate}) estão fora do alcance do documento gerado (Total de Folhas: {current_global_sheet}). Verifique os números informados.")
+            
         self.generated_files = filtered_files
