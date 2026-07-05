@@ -619,9 +619,9 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
             let multiArteItem = null;
+            const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
 
-            if (schema === "multi_artes") {
-                const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+            if (schema === "multi_artes" || (artesList && artesList.length > 0)) {
                 let accumulated = 0;
 
                 for (let i = 0; i < artesList.length; i++) {
@@ -656,7 +656,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-            if (schema === "multi_artes" && multiArteItem) {
+             if (multiArteItem) {
 
                 if (multiArteItem.pdfDoc) {
 
@@ -951,7 +951,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 continue;
             }
 
-            if (schema === 'multi_artes' && multiArteItem && multiArteItem.nome) {
+            if (multiArteItem && multiArteItem.nome) {
                 ctx.save();
                 const nomeTxt = String(multiArteItem.nome).padStart(6, '0');
                 const nomeColor = multiArteItem.nome_color || '#000000';
@@ -1334,10 +1334,12 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
         };
 
-        // Para multi_artes, usar a numeração específica de cada arte
-        if (schema === 'multi_artes' && multiArteItem) {
-            drawVdpElements(multiArteItem.numeracao, 1);
-            drawVdpElements(multiArteItem.numeracao_2, 2);
+        // Para multi_artes ou imposição combinada, usar a numeração específica de cada arte se disponível
+        const artNum1 = multiArteItem ? (multiArteItem.numeracao || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num1_id))) : null;
+        const artNum2 = multiArteItem ? (multiArteItem.numeracao_2 || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num2_id))) : null;
+        if (multiArteItem) {
+            drawVdpElements(artNum1, 1);
+            drawVdpElements(artNum2, 2);
         } else {
             drawVdpElements(num, 1);
             drawVdpElements(num2, 2);
