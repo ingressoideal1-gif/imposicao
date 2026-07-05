@@ -8348,6 +8348,9 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         cor_id: (state.activeOSItem && state.osItens[state.activeOSItem.osId]) ? (state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.amostra_cor_id || null) : null,
 
+        q_cam: isMultiSelected ? 0 : (parseInt(document.getElementById('ped-q-cam')?.value) || parseInt(document.getElementById('imp-q-cam')?.value) || 0),
+
+        l_cam: isMultiSelected ? 1 : (parseInt(document.getElementById('ped-l-cam')?.value) || parseInt(document.getElementById('imp-l-cam')?.value) || 1),
         is_color_template: state.isColorTemplate || false
 
     };
