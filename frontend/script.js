@@ -12745,6 +12745,9 @@ function mapVibecodeProdutoToOSItem(p, osId) {
             const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
             return (overrides[`vibe_item_${p.id}`] && overrides[`vibe_item_${p.id}`].amostra_obs) || p.amostra_obs || '';
         })(),
+        
+        q_cam: p.Q_CAM || p.q_cam || p.qtd_locais || p.qtd_cam || 0,
+        l_cam: p.L_CAM || p.l_cam || p.lotacao_cam || p.lotacao || p.lotacao_por_local || 1,
 
         _source: 'vibecode',
         _vibe_produto_id: p.id,

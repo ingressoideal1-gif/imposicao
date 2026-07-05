@@ -1054,17 +1054,17 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         val_str = el.layout === '2lines' ? `${filaT}\n${lugarT}` : `${filaT} - ${lugarT}`;
 
                     } else if (el.type === 'CAMAROTE_LOCAL') {
-                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        const _lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
                         const _qStart = start || 1;
                         const _localNum = _qStart + Math.floor(item_index / _lCam);
                         val_str = `${el.prefix || ''}${_localNum}`;
 
                     } else if (el.type === 'CAMAROTE_PESSOA') {
-                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        const _lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
                         val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}`;
 
                     } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
-                        const _lCam = (currentNum && currentNum.l_cam) ? parseInt(currentNum.l_cam) : 1;
+                        const _lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
                         val_str = `${el.prefix || ''}${(item_index % _lCam) + 1}/${_lCam}`;
 
                     } else if (el.source === 'database') {
