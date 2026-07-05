@@ -19,7 +19,7 @@ function applyPedFormatoDefaults() {
         }
     }
     
-    // Aplica a SaÃ­da se houver
+    // Aplica a Saída se houver
     if (fmt.default_saida_id) {
         const saidaSel = document.getElementById('ped-saida');
         if (saidaSel) {
@@ -80,7 +80,7 @@ function populatePedNumeracoes() {
     }
     filteredNums.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
 
-    // Popula NumeraÃ§Ã£o 1 e NumeraÃ§Ã£o 2
+    // Popula Numeração 1 e Numeração 2
     ['ped-numeracao', 'ped-numeracao-2'].forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
@@ -385,7 +385,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
-            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÃ“ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
             state.printMode = wantsDuplex ? 'duplex' : 'front';
         }
     }
@@ -1104,7 +1104,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 // PosiÃ§Ã£o X: 0mm da lateral esquerda da cÃ©lula
-                // ApÃ³s rotaÃ§Ã£o -90Â°, textBaseline='middle' centraliza horizontalmente,
+                // ApÃ³s rotaÃ§Ã£o -90°, textBaseline='middle' centraliza horizontalmente,
                 // entÃ£o o ponto de translate Ã© o CENTRO do texto rotacionado.
                 // Para a borda esquerda do texto ficar a 0mm: center_x = -cw/2 + fontSize/2
                 ctx.translate(-cw / 2 + nomeFontSizePx / 2, 0);
@@ -1593,15 +1593,15 @@ function updatePedSummary() {
 
         if (printMode === 'duplex') {
 
-            lblNum1.innerHTML = '2. NumeraÃ§Ã£o <b style="color:var(--blue)">FRENTE</b> (opcional)';
+            lblNum1.innerHTML = '2. Numeração <b style="color:var(--blue)">FRENTE</b> (opcional)';
 
-            lblNum2.innerHTML = '3. NumeraÃ§Ã£o <b style="color:var(--blue)">VERSO</b> (opcional)';
+            lblNum2.innerHTML = '3. Numeração <b style="color:var(--blue)">VERSO</b> (opcional)';
 
         } else {
 
-            lblNum1.innerHTML = '2. NumeraÃ§Ã£o 1 (opcional)';
+            lblNum1.innerHTML = '2. Numeração 1 (opcional)';
 
-            lblNum2.innerHTML = '3. NumeraÃ§Ã£o 2 (opcional)';
+            lblNum2.innerHTML = '3. Numeração 2 (opcional)';
 
         }
 
@@ -2166,12 +2166,12 @@ async function enviarParaPedido(itemId, osId) {
         }
     }
     
-    // Tentar match do formato via Nome da NumeraÃ§Ã£o
+    // Tentar match do formato via Nome da Numeração
     if (!formatoId && item.numeracao) {
         formatoId = matchFormato(item.numeracao);
         if (formatoId) {
             autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OSâ†’Imp] Formato matched via NumeraÃ§Ã£o: "${item.numeracao}" â†’ ${formatoId}`);
+            console.log(`[OSâ†’Imp] Formato matched via Numeração: "${item.numeracao}" â†’ ${formatoId}`);
         }
     }
     
@@ -2182,7 +2182,7 @@ async function enviarParaPedido(itemId, osId) {
             fmtSelect.dispatchEvent(new Event('change'));
         }
 
-        // Tentar match da SaÃ­da via Formato
+        // Tentar match da Saída via Formato
         const formatoObj = state.formatos ? state.formatos.find(f => f.id == formatoId) : null;
         if (formatoObj && formatoObj.default_saida_id) {
             setTimeout(() => {
@@ -2190,7 +2190,7 @@ async function enviarParaPedido(itemId, osId) {
                 if (saidaSelect) {
                     saidaSelect.value = formatoObj.default_saida_id;
                     saidaSelect.dispatchEvent(new Event('change'));
-                    console.log(`[OSâ†’Imp] SaÃ­da matched via Formato "${formatoObj.name}" â†’ ${formatoObj.default_saida_id}`);
+                    console.log(`[OSâ†’Imp] Saída matched via Formato "${formatoObj.name}" â†’ ${formatoObj.default_saida_id}`);
                 }
             }, 100); // pequeno delay para garantir que o formato populou as saÃ­das
         }
@@ -2203,7 +2203,7 @@ async function enviarParaPedido(itemId, osId) {
             numId = matchNumeracao(item.numeracao, formatoId);
             if (numId) {
                 autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
-                console.log(`[OSâ†’Imp] NumeraÃ§Ã£o matched: "${item.numeracao}" â†’ ${numId}`);
+                console.log(`[OSâ†’Imp] Numeração matched: "${item.numeracao}" â†’ ${numId}`);
             }
         }
         if (numId) {
@@ -2245,7 +2245,7 @@ async function enviarParaPedido(itemId, osId) {
     setTimeout(() => {
         const printMode = document.getElementById('ped-print-mode');
         if (printMode) {
-            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÃ“ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
             printMode.value = wantsDuplex ? 'duplex' : 'front';
             if (typeof updatePedSummary === 'function') {
                 updatePedSummary();
@@ -2271,7 +2271,7 @@ async function enviarParaPedido(itemId, osId) {
         // Prioridade 2: pdf_url da cor correspondente
         const arteUrl = item.arte_url || null;
         
-        // Tentar encontrar a arte via cor â€” prioridade: amostra_cor_id > fuzzy match
+        // Tentar encontrar a arte via cor — prioridade: amostra_cor_id > fuzzy match
         const corObj = item.amostra_cor_id
             ? (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id))
             : (state.cores || []).find(c => globalFuzzyMatch(c.name, item.cor || item.padrao || ''));
@@ -2620,21 +2620,21 @@ function renderPedOSQueue() {
             <div style="display:flex; gap:10px; align-items:center;" onclick="event.stopPropagation()">
                 <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Gerar PDF dos modelos selecionados"
                     onclick="pedQueueGerarPDFMulti()">
-                    ðŸ“„ PDF Sel.
+                    📄 PDF Sel.
                 </button>
                 <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Imprimir modelos selecionados"
                     onclick="pedQueueImprimirMulti()">
-                    ðŸ–¨ï¸ Imp. Sel.
+                    🖨️ Imp. Sel.
                 </button>
-                <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato PadrÃ£o do Produto">
-                    <option value="">â€” Formato â€”</option>
+                <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato Padrão do Produto">
+                    <option value="">— Formato —</option>
                     ${formatosOptions}
                 </select>
-                <select style="${selectHeaderStyle}" onchange="updateBoxSaida('${osId}', '${prodId}', this.value)" title="SaÃ­da PadrÃ£o do Produto">
-                    <option value="">â€” SaÃ­da â€”</option>
+                <select style="${selectHeaderStyle}" onchange="updateBoxSaida('${osId}', '${prodId}', this.value)" title="Saída Padrão do Produto">
+                    <option value="">— Saída —</option>
                     ${saidasOptions}
                 </select>
-                <span id="box-arrow-${prodId}-renderPedOSQueue" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">â–¼</span>
+                <span id="box-arrow-${prodId}-renderPedOSQueue" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">▼</span>
             </div>
         `;
 
@@ -2733,7 +2733,7 @@ function renderPedOSQueue() {
                                onclick="event.stopPropagation(); togglePedItemSelection('${jsItemId}', '${jsOsId}')"
                                ${isSelected ? 'checked' : ''} />
                     </td>
-                    <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:100px;" title="CÃ³digo do Modelo">
+                    <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:100px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
                     <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:140px;" title="Nome do Modelo">
@@ -2776,16 +2776,16 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">COR</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                                <option value="">â€” Cor â€”</option>
+                                <option value="">— Cor —</option>
                                 ${coresOptions}
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 260px; min-width: 260px; max-width: 260px;" title="NumeraÃ§Ã£o">
+                    <td style="padding: 12px; width: 260px; min-width: 260px; max-width: 260px;" title="Numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NÃºm.</span>
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Núm.</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                                <option value="">â€” NumeraÃ§Ã£o â€”</option>
+                                <option value="">— Numeração —</option>
                                 ${numsOptions}
                             </select>
                         </div>
@@ -2794,7 +2794,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Verso</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
-                                <option value="SÃ“ FRENTE" ${item.verso_tipo === 'SÃ“ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÃ“ FRENTE</option>
+                                <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
                                 <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
                                 <option value="VERSO VARIÃVEL" ${item.verso_tipo === 'VERSO VARIÃVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÃVEL</option>
                             </select>
@@ -2803,14 +2803,14 @@ function renderPedOSQueue() {
                     <td style="padding: 12px 12px 12px 100px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
                         <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff;" title="Gerar PDF para este modelo"
                             onclick="event.stopPropagation(); pedQueueGerarPDF('${jsItemId}', '${jsOsId}')">
-                            ðŸ“„ PDF
+                            📄 PDF
                         </button>
                         <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff;" title="Imprimir este modelo"
                             onclick="event.stopPropagation(); pedQueueImprimir('${jsItemId}', '${jsOsId}')">
-                            ðŸ–¨ï¸ Imp.
+                            🖨️ Imp.
                         </button>
                     </td>
-                    <td style="padding: 12px; width: 270px; min-width: 270px; max-width: 270px;" title="Status de ProduÃ§Ã£o">
+                    <td style="padding: 12px; width: 270px; min-width: 270px; max-width: 270px;" title="Status de Produção">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
@@ -2871,7 +2871,7 @@ function togglePedOSQueue() {
     if (!body) return;
     if (body.style.display === 'none') {
         body.style.display = '';
-        if (arrow) arrow.textContent = 'â–¼';
+        if (arrow) arrow.textContent = '▼';
     } else {
         body.style.display = 'none';
         if (arrow) arrow.textContent = 'â–¶';
@@ -3088,7 +3088,7 @@ window.runPedImposition = async function (mode) {
 
     if (!fmtId) return toast('Selecione um Formato.', 'error');
 
-    if (!saiId) return toast('Selecione uma SaÃ­da.', 'error');
+    if (!saiId) return toast('Selecione uma Saída.', 'error');
 
     
 
@@ -3729,7 +3729,7 @@ window.toggleBox = function(bodyId, arrowId) {
     if (!body) return;
     if (body.style.display === 'none') {
         body.style.display = '';
-        if (arrow) arrow.textContent = 'â–¼';
+        if (arrow) arrow.textContent = '▼';
     } else {
         body.style.display = 'none';
         if (arrow) arrow.textContent = 'â–¶';
@@ -3830,10 +3830,10 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
             const el = document.getElementById('ped-qtd');
             if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
         } else if (field === 'verso_tipo') {
-            item.verso = !!(value && value !== 'SÃ“ FRENTE' && value !== 'SO FRENTE');
+            item.verso = !!(value && value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
             const printMode = document.getElementById('ped-print-mode');
             if (printMode) {
-                const wantsDuplex = (value !== 'SÃ“ FRENTE' && value !== 'SO FRENTE');
+                const wantsDuplex = (value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
                 printMode.value = wantsDuplex ? 'duplex' : 'front';
                 if (typeof updatePedSummary === 'function') {
                     updatePedSummary();
