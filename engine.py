@@ -983,50 +983,56 @@ class ImpositionEngine:
             print(f"[engine] strict_assembly: total_sheets={total_sheets} partitioned into {len(set_definitions)} sets")
             
             for set_idx, set_def in enumerate(set_definitions):
-                doc_out = fitz.open()
-                set_sheets = set_def["num_sheets"]
+                depth = set_def.get("depth", 1)
+                stack_size = cfg.sheets_per_block
                 
-                # 1. Gerar capa para o set
-                if cfg.has_cover:
-                    self._generate_capa_for_set(set_idx, set_def, cfg, multi_map)
-                
-                # 2. Gerar miolo para o set
-                for sheet_within_set in range(set_sheets):
-                    # Frente
-                    out_page_front = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-                    if cfg.rotate_page:
-                        out_page_front.set_rotation(90)
-                        
-                    for row in range(rows):
-                        for col in range(cols):
-                            P = row * cols + col
-                            item_data = set_def["cell_allocations"][P][sheet_within_set]
-                            if item_data is not None:
-                                self._render_item_front(out_page_front, item_data, row, col, cfg, start_x, start_y)
-                                
-                    # Verso (se for duplex)
-                    if is_duplex:
-                        out_page_back = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+                for layer_idx in range(depth):
+                    doc_out = fitz.open()
+                    
+                    # 1. Gerar capa para o layer (chunk)
+                    if cfg.has_cover:
+                        self._generate_capa_for_chunk(set_idx, layer_idx, set_def, cfg, multi_map)
+                    
+                    # 2. Gerar miolo para o layer
+                    start_sheet = layer_idx * stack_size
+                    end_sheet = min((layer_idx + 1) * stack_size, set_def["num_sheets"])
+                    
+                    for sheet_within_set in range(start_sheet, end_sheet):
+                        # Frente
+                        out_page_front = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
                         if cfg.rotate_page:
-                            out_page_back.set_rotation(90)
+                            out_page_front.set_rotation(90)
                             
                         for row in range(rows):
                             for col in range(cols):
-                                col_verso = cols - 1 - col
-                                P_frente = row * cols + col_verso
-                                item_data = set_def["cell_allocations"][P_frente][sheet_within_set]
+                                P = row * cols + col
+                                item_data = set_def["cell_allocations"][P][sheet_within_set]
                                 if item_data is not None:
-                                    self._render_item_back(out_page_back, item_data, row, col, cfg, start_x, start_y)
+                                    self._render_item_front(out_page_front, item_data, row, col, cfg, start_x, start_y)
                                     
-                # 3. Salvar miolo para o set
-                out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_02_miolo.pdf")
-                doc_out.save(out_name, garbage=4, deflate=True)
-                doc_out.close()
-                self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
-                
-                # 4. Gerar contracapa para o set
-                if cfg.has_cover:
-                    self._generate_contracapa_for_set(set_idx, set_def, cfg)
+                        # Verso (se for duplex)
+                        if is_duplex:
+                            out_page_back = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+                            if cfg.rotate_page:
+                                out_page_back.set_rotation(90)
+                                
+                            for row in range(rows):
+                                for col in range(cols):
+                                    col_verso = cols - 1 - col
+                                    P_frente = row * cols + col_verso
+                                    item_data = set_def["cell_allocations"][P_frente][sheet_within_set]
+                                    if item_data is not None:
+                                        self._render_item_back(out_page_back, item_data, row, col, cfg, start_x, start_y)
+                                        
+                    # 3. Salvar miolo para o layer
+                    out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_02_miolo.pdf")
+                    doc_out.save(out_name, garbage=4, deflate=True)
+                    doc_out.close()
+                    self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
+                    
+                    # 4. Gerar contracapa para o layer
+                    if cfg.has_cover:
+                        self._generate_contracapa_for_chunk(set_idx, layer_idx, set_def, cfg)
                     
             # Fechar recursos
             if doc_base:
@@ -1849,17 +1855,17 @@ class ImpositionEngine:
             )
             _temp_doc_m.close()
 
-    def _generate_contracapa_for_set(self, set_idx, set_def, cfg):
+    def _generate_contracapa_for_chunk(self, set_idx, layer_idx, set_def, cfg):
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
         if cfg.rotate_page:
             p.set_rotation(90)
-        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_03_contracapa.pdf")
+        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_03_contracapa.pdf")
         doc_c.save(out_name, garbage=4, deflate=True)
         doc_c.close()
         self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
 
-    def _generate_capa_for_set(self, set_idx, set_def, cfg, multi_map):
+    def _generate_capa_for_chunk(self, set_idx, layer_idx, set_def, cfg, multi_map):
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
         if cfg.rotate_page:
@@ -1868,7 +1874,7 @@ class ImpositionEngine:
         start_x = (cfg.sheet_w - (cfg.cols * cfg.item_w + (cfg.cols - 1) * cfg.gap_h)) / 2
         start_y = (cfg.sheet_h - (cfg.rows * cfg.item_h + (cfg.rows - 1) * cfg.gap_v)) / 2
 
-        stack_size = cfg.sheets_per_block * cfg.block_depth
+        stack_size = cfg.sheets_per_block
 
         for row in range(cfg.rows):
             for col in range(cfg.cols):
@@ -1879,7 +1885,9 @@ class ImpositionEngine:
                 cell_y1 = cell_y0 + cfg.item_h
 
                 cell_items = set_def["cell_allocations"][P]
-                valid_items = [item for item in cell_items if item is not None]
+                # Pegar apenas os items da camada atual
+                layer_items = cell_items[layer_idx * stack_size : (layer_idx + 1) * stack_size]
+                valid_items = [item for item in layer_items if item is not None]
                 if not valid_items:
                     continue
 
@@ -1954,7 +1962,7 @@ class ImpositionEngine:
                 p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
                 p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
 
-        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_01_capa.pdf")
+        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_01_capa.pdf")
         doc_c.save(out_name, garbage=4, deflate=True)
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
