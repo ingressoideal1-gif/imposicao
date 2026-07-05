@@ -12383,7 +12383,7 @@ async function loadOrdens() {
             try {
                 const { data: propData, error: propError } = await supabaseClient
                     .from('propostas')
-                    .select('id_int, cliente, vendedor, status_interno, id_cliente')
+                    .select('id_int, cliente, vendedor, status_interno, id_cliente, id_faturado')
                     .order('id_int', { ascending: false })
                     .limit(2000);
                 if (!propError && propData) {
@@ -12442,7 +12442,7 @@ async function loadOrdens() {
                     status_interno: propReal?.status_interno || null,
                     cliente: clienteProposta,
                     vendedor: vendedorProposta,
-                    id_cliente: propReal?.id_cliente || null,
+                    id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
                     data_liberacao: os.data_liberacao || os.created_at,
                     prazo_entrega: os.prazo_entrega || getFallbackPrazo(os.created_at, os.numero || 0),
                     _itens_count: os.producao_os_itens ? os.producao_os_itens.length : 0
@@ -12467,7 +12467,7 @@ async function loadOrdens() {
                         ...os,
                         cliente: clienteProposta,
                         vendedor: vendedorProposta,
-                        id_cliente: propReal?.id_cliente || null,
+                        id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
                         status_arte: pedidoReal?.status_arte || null,
                         status_interno: propReal?.status_interno || null
                     };
@@ -12608,7 +12608,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             if (uniqueIdInts.length > 0) {
                 const { data: propData, error: propError } = await vibeClient
                     .from('propostas')
-                    .select('id, id_int, cliente, vendedor, status_interno, created_at')
+                    .select('id, id_int, cliente, vendedor, status_interno, created_at, id_cliente, id_faturado')
                     .in('id_int', uniqueIdInts);
                 if (!propError && propData) {
                     propostas = propData;
@@ -12666,7 +12666,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                     status_interno: propReal?.status_interno || null,
                     cliente: cliente,
                     vendedor: vendedor,
-                    id_cliente: propReal?.id_cliente || null,
+                    id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
                     data_liberacao: dataLiberacao,
                     data_pedido: dataPedido,
                     valor_total: valorTotal,
