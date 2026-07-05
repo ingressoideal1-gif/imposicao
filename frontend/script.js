@@ -1,4 +1,4 @@
-// - VDP Engine -- Frontend Script -
+﻿// - VDP Engine -- Frontend Script -
 
 'use strict';
 

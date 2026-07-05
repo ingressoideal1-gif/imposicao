@@ -1,4 +1,4 @@
-// mapas.js - Lógica para o módulo Mapas de Teatro
+﻿// mapas.js - Lógica para o módulo Mapas de Teatro
 
 // ==========================================
 // ESTADO DO MÓDULO

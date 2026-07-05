@@ -1,4 +1,4 @@
-// --- ARQUIVO DO CLIENTE ISOLADO ---
+﻿// --- ARQUIVO DO CLIENTE ISOLADO ---
 let state = {
     osItens: {},
     ordens: [],
