@@ -304,7 +304,7 @@ function renderAmostrasOSItens(osId) {
                     `}
                 </div>
                 <div class="amostra-preview-container" style="margin-top: 20px;">
-                    <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 8px; display: ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'block' : 'none'}; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+                    <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 8px; display: block; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
                         ${item.nome_modelo || `Modelo ${idx + 1}`}
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ?
