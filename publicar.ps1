@@ -1,8 +1,8 @@
-﻿$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 
 Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition"
 
-# 1. Obter a versÃ£o atual do index.html
+# 1. Obter a versão atual do index.html
 $indexFile = "frontend\index.html"
 $content = Get-Content -Encoding UTF8 $indexFile -Raw
 $match = [regex]::Match($content, 'script\.js\?v=(\d+)')
@@ -10,12 +10,12 @@ if ($match.Success) {
     $currentV = [int]$match.Groups[1].Value
     $nextV = $currentV + 1
 } else {
-    Write-Host "NÃ£o foi possÃ­vel encontrar a versÃ£o atual."
+    Write-Host "Não foi possível encontrar a versão atual."
     exit 1
 }
 
-Write-Host "VersÃ£o atual: v$currentV"
-Write-Host "Nova versÃ£o: v$nextV"
+Write-Host "Versão atual: v$currentV"
+Write-Host "Nova versão: v$nextV"
 
 # 2. Atualizar arquivos HTML
 Write-Host "Atualizando arquivos HTML..."

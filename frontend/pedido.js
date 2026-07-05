@@ -10,7 +10,7 @@ function applyPedFormatoDefaults() {
     const fmt = state.formatos.find(f => String(f.id) === String(selectedFmtId));
     if (!fmt) return;
     
-    // Aplica a Regra de PaginaÃ§Ã£o se houver
+    // Aplica a Regra de Paginação se houver
     if (fmt.default_schema) {
         const schemaSel = document.getElementById('ped-schema');
         if (schemaSel) {
@@ -23,7 +23,7 @@ function applyPedFormatoDefaults() {
     if (fmt.default_saida_id) {
         const saidaSel = document.getElementById('ped-saida');
         if (saidaSel) {
-            // Verifica se a opÃ§Ã£o existe
+            // Verifica se a opção existe
             if (Array.from(saidaSel.options).some(opt => String(opt.value) === String(fmt.default_saida_id))) {
                 saidaSel.value = fmt.default_saida_id;
             }
@@ -66,12 +66,12 @@ function populatePedNumeracoes() {
 
     const selectedFmtId = fmtSel.value;
 
-    // Filtra numeraÃ§Ãµes cujo formato_ids inclui o formato selecionado
+    // Filtra numerações cujo formato_ids inclui o formato selecionado
     let filteredNums;
     if (selectedFmtId) {
         filteredNums = state.numeracoes.filter(n => {
             // formato_ids Ã© o array de formatos compatÃ­veis (novo campo)
-            // fallback: se nÃ£o existir, usa [formato_id] (dados antigos)
+            // fallback: se não existir, usa [formato_id] (dados antigos)
             const ids = n.formato_ids || [n.formato_id];
             return ids.some(id => String(id) === String(selectedFmtId));
         });
@@ -80,20 +80,20 @@ function populatePedNumeracoes() {
     }
     filteredNums.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
 
-    // Popula NumeraÃ§Ã£o 1 e NumeraÃ§Ã£o 2
+    // Popula Numeração 1 e Numeração 2
     ['ped-numeracao', 'ped-numeracao-2'].forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
         const cur = sel.value;
 
-        sel.innerHTML = '<option value="">-- Sem numeraÃ§Ã£o --</option>' +
+        sel.innerHTML = '<option value="">-- Sem numeração --</option>' +
             filteredNums.map(n => {
                 const nFmt = state.formatos.find(f => String(f.id) === String(n.formato_id));
                 const label = nFmt ? ` (${nFmt.name})` : '';
                 return `<option value="${n.id}">${n.name}${label}</option>`;
             }).join('');
 
-        // Restaurar seleÃ§Ã£o anterior se ainda existir na lista filtrada
+        // Restaurar seleção anterior se ainda existir na lista filtrada
         if (cur && filteredNums.some(n => String(n.id) === String(cur))) {
             sel.value = cur;
         } else {
@@ -114,7 +114,7 @@ async function loadPedArtFile(file) {
 
             if (typeof pdfjsLib === 'undefined') {
 
-                return toast('PDF.js nÃ£o disponÃ­vel. Use JPG/PNG.', 'error');
+                return toast('PDF.js não disponÃ­vel. Use JPG/PNG.', 'error');
 
             }
 
@@ -128,7 +128,7 @@ async function loadPedArtFile(file) {
 
             
 
-            // Salvar documento PDF e inicializar caches para paginaÃ§Ã£o especial de Pdf MÃºltiplo
+            // Salvar documento PDF e inicializar caches para paginação especial de Pdf MÃºltiplo
 
             state.pedArtPdfDoc = pdf;
 
@@ -144,7 +144,7 @@ async function loadPedArtFile(file) {
 
 
 
-            const scale = 2; // Renderizar em maior resoluÃ§Ã£o para melhor qualidade de preview
+            const scale = 2; // Renderizar em maior resolução para melhor qualidade de preview
 
             const off = document.createElement('canvas');
 
@@ -200,7 +200,7 @@ async function loadPedArtFile(file) {
 
         } else {
 
-            // Se for imagem normal, limpa referÃªncias de PDF
+            // Se for imagem normal, limpa referências de PDF
 
             state.pedArtPdfDoc = null;
 
@@ -385,7 +385,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
-            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÃ“ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
             state.printMode = wantsDuplex ? 'duplex' : 'front';
         }
     }
@@ -402,8 +402,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         ctx.fillStyle = '#94a3b8';
         ctx.font = '12px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Aguardando formato e saÃ­da...', 150, 100);
-        document.getElementById('ped-preview-sheet-num').textContent = 'Sem ConfiguraÃ§Ã£o';
+        ctx.fillText('Aguardando formato e saída...', 150, 100);
+        document.getElementById('ped-preview-sheet-num').textContent = 'Sem Configuração';
         return;
     }
 
@@ -412,7 +412,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     if (!fmt || !sai) return;
 
-    // ValidaÃ§Ã£o estrita das regras de imposiÃ§Ã£o do formato na visualizaÃ§Ã£o
+    // Validação estrita das regras de imposição do formato na visualização
     if (!fmt.default_schema || !fmt.default_saida_id) {
         canvas.width = 300;
         canvas.height = 200;
@@ -421,7 +421,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         ctx.fillStyle = '#ef4444';
         ctx.font = '12px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Erro: Regras de ImposiÃ§Ã£o ausentes no Formato.', 150, 100);
+        ctx.fillText('Erro: Regras de Imposição ausentes no Formato.', 150, 100);
         document.getElementById('ped-preview-sheet-num').textContent = 'Erro de Regra';
         return;
     }
@@ -441,7 +441,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         }
     }
 
-    // Usar os padrÃµes obrigatÃ³rios do formato
+    // Usar os padrÃµes obrigatórios do formato
     schema = fmt.default_schema;
     saiId = fmt.default_saida_id;
 
@@ -466,7 +466,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 optionsHtml += '<option value="contracapa">Contracapa</option>';
             }
             
-            // SÃ³ atualizar o HTML se as opÃ§Ãµes mudaram para evitar loops de re-renderizaÃ§Ã£o
+            // SÃ³ atualizar o HTML se as opções mudaram para evitar loops de re-renderização
             const existingOptions = Array.from(previewPartEl.options).map(o => o.value).join(',');
             const newOptions = isDuplex 
                 ? (fmt.has_cover ? 'miolo,miolo_verso,capa,contracapa' : 'miolo,miolo_verso')
@@ -711,7 +711,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-            // Centro da cÃ©lula para rotaÃ§Ã£o
+            // Centro da cÃ©lula para rotação
 
             const centerX = (cell_x0 + item_w / 2) * scale;
 
@@ -719,7 +719,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
             
 
-            // Inverter a rotaÃ§Ã£o da cÃ©lula no verso para bater frente/verso
+            // Inverter a rotação da cÃ©lula no verso para bater frente/verso
 
             const cellRotationFrente = fmt.rotations ? (parseInt(fmt.rotations[P]) || 0) : 0;
 
@@ -818,13 +818,13 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
             if (activeImage || activePdfDoc) {
-                // Centralizar a arte na cÃ©lula + aplicar offset do formato (em relaÃ§Ã£o ao centro da cÃ©lula que Ã© 0,0)
+                // Centralizar a arte na cÃ©lula + aplicar offset do formato (em relação ao centro da cÃ©lula que Ã© 0,0)
                 // (positivo H = direita, positivo V = para cima â†’ negar Y)
                 let offH = fmt_off_h * scale;
                 let offV = -fmt_off_v * scale;
                 
                 // O backend (engine.py) sempre ajusta proporcionalmente a arte base (JPG ou PDF) 
-                // para caber na caixa de dimensÃµes item_w x item_h. Replicamos o mesmo comportamento aqui:
+                // para caber na caixa de dimensões item_w x item_h. Replicamos o mesmo comportamento aqui:
                 const fitScale = Math.min(item_w / art_orig_w, item_h / art_orig_h);
                 let dw = art_orig_w * fitScale * scale;
                 let dh = art_orig_h * fitScale * scale;
@@ -845,7 +845,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                     if (activePdfDoc) {
 
-                        // Determinar qual pÃ¡gina fÃ­sica real do PDF base exibir
+                        // Determinar qual página física real do PDF base exibir
 
                         let pageNum = 1;
 
@@ -941,7 +941,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                                         } catch (err) {
 
-                                            console.error(`Erro ao renderizar pÃ¡g. ${pageNum}:`, err);
+                                            console.error(`Erro ao renderizar pág. ${pageNum}:`, err);
 
                                         } finally {
 
@@ -955,7 +955,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                                 
 
-                                // Placeholder enquanto carrega a pÃ¡gina
+                                // Placeholder enquanto carrega a página
 
                                 ctx.fillStyle = '#f1f5f9';
 
@@ -975,13 +975,13 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                                 ctx.textBaseline = 'middle';
 
-                                ctx.fillText(`Carregando PÃ¡g. ${pageNum}...`, offH, offV);
+                                ctx.fillText(`Carregando Pág. ${pageNum}...`, offH, offV);
 
                             }
 
                         } else {
 
-                            // PÃ¡gina excedente ou sem verso, desenha vazio
+                            // Página excedente ou sem verso, desenha vazio
 
                             ctx.fillStyle = '#ffffff';
 
@@ -999,7 +999,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                         if (isBack) {
 
-                            // Imagem Ãºnica nÃ£o tem verso de arte
+                            // Imagem Ãºnica não tem verso de arte
 
                             ctx.fillStyle = '#ffffff';
 
@@ -1104,17 +1104,17 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 // PosiÃ§Ã£o X: 0mm da lateral esquerda da cÃ©lula
-                // ApÃ³s rotaÃ§Ã£o -90Â°, textBaseline='middle' centraliza horizontalmente,
+                // ApÃ³s rotação -90Â°, textBaseline='middle' centraliza horizontalmente,
                 // entÃ£o o ponto de translate Ã© o CENTRO do texto rotacionado.
                 // Para a borda esquerda do texto ficar a 0mm: center_x = -cw/2 + fontSize/2
                 ctx.translate(-cw / 2 + nomeFontSizePx / 2, 0);
                 ctx.rotate(-Math.PI / 2);
-                // textAlign='center' centraliza o texto verticalmente (eixo X prÃ©-rotaÃ§Ã£o = eixo Y pÃ³s-rotaÃ§Ã£o)
+                // textAlign='center' centraliza o texto verticalmente (eixo X pré-rotação = eixo Y pÃ³s-rotação)
                 ctx.fillText(nomeTxt, 0, 0);
                 ctx.restore();
             }
 
-            // Elementos variÃ¡veis (VDP) - Suporte a 2 numeraÃ§Ãµes sobrepostas
+            // Elementos variáveis (VDP) - Suporte a 2 numerações sobrepostas
 
         const drawVdpElements = (currentNum, source_id) => {
 
@@ -1146,7 +1146,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-                    // Pular elementos que nÃ£o sÃ£o da face ativa
+                    // Pular elementos que não são da face ativa
 
                     if (isBack && effectiveFace === 'front') return;
 
@@ -1490,7 +1490,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
         };
 
-        // Para multi_artes ou imposiÃ§Ã£o combinada, usar a numeraÃ§Ã£o especÃ­fica de cada arte se disponÃ­vel
+        // Para multi_artes ou imposição combinada, usar a numeração especÃ­fica de cada arte se disponÃ­vel
         const artNum1 = multiArteItem ? (multiArteItem.numeracao || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num1_id))) : null;
         const artNum2 = multiArteItem ? (multiArteItem.numeracao_2 || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num2_id))) : null;
         if (multiArteItem) {
@@ -1593,15 +1593,15 @@ function updatePedSummary() {
 
         if (printMode === 'duplex') {
 
-            lblNum1.innerHTML = '2. NumeraÃ§Ã£o <b style="color:var(--blue)">FRENTE</b> (opcional)';
+            lblNum1.innerHTML = '2. Numeração <b style="color:var(--blue)">FRENTE</b> (opcional)';
 
-            lblNum2.innerHTML = '3. NumeraÃ§Ã£o <b style="color:var(--blue)">VERSO</b> (opcional)';
+            lblNum2.innerHTML = '3. Numeração <b style="color:var(--blue)">VERSO</b> (opcional)';
 
         } else {
 
-            lblNum1.innerHTML = '2. NumeraÃ§Ã£o 1 (opcional)';
+            lblNum1.innerHTML = '2. Numeração 1 (opcional)';
 
-            lblNum2.innerHTML = '3. NumeraÃ§Ã£o 2 (opcional)';
+            lblNum2.innerHTML = '3. Numeração 2 (opcional)';
 
         }
 
@@ -1637,7 +1637,7 @@ function updatePedSummary() {
 
         
 
-        const optionsHtml = '<option value="">-- Sem numeraÃ§Ã£o --</option>' + 
+        const optionsHtml = '<option value="">-- Sem numeração --</option>' + 
 
             filteredNums.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
 
@@ -1699,7 +1699,7 @@ function updatePedSummary() {
 
     const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
-    // Mostrar/esconder painel CAMAROTE conforme tipo da numeraÃ§Ã£o
+    // Mostrar/esconder painel CAMAROTE conforme tipo da numeração
     const camarotePanel = document.getElementById('ped-camarote-panel');
     const isCamarote = num && (num.tipo === 'CAMAROTE' || num.type === 'CAMAROTE');
     if (camarotePanel) camarotePanel.style.display = isCamarote ? 'block' : 'none';
@@ -1720,7 +1720,7 @@ function updatePedSummary() {
 
     }
 
-    // PrÃ©-carregar canvas de cada elemento PDF da numeraÃ§Ã£o selecionada
+    // PrÃ©-carregar canvas de cada elemento PDF da numeração selecionada
 
     function preloadNumPdfElements(numeracao) {
 
@@ -1764,7 +1764,7 @@ function updatePedSummary() {
 
                     } catch (err) {
 
-                        console.error('[Preview] Erro prÃ©-carregando PDF do elemento:', err);
+                        console.error('[Preview] Erro pré-carregando PDF do elemento:', err);
 
                         delete el._pdfLoading;
 
@@ -1788,7 +1788,7 @@ function updatePedSummary() {
 
 
 
-    // Atualizar modo de impressÃ£o no estado global
+    // Atualizar modo de impressão no estado global
 
     const printModeEl = document.getElementById('ped-print-mode');
 
@@ -2102,7 +2102,7 @@ function clearPedActiveOS() {
 
 
 
-    toast('OS desvinculada. ValidaÃ§Ãµes de arquivo liberadas.', 'info');
+    toast('OS desvinculada. Validações de arquivo liberadas.', 'info');
 
 }
 window.clearPedActiveOS = clearPedActiveOS;
@@ -2110,12 +2110,12 @@ window.clearPedActiveOS = clearPedActiveOS;
 async function enviarParaPedido(itemId, osId) {
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
-    if (!item) return toast('Item nÃ£o encontrado.', 'error');
+    if (!item) return toast('Item não encontrado.', 'error');
 
-    // Guardar referÃªncia ao item ativo para atualizaÃ§Ã£o automÃ¡tica pÃ³s-imposiÃ§Ã£o
+    // Guardar referência ao item ativo para atualização automÃ¡tica pÃ³s-imposição
     state.activeOSItem = { itemId, osId };
 
-    // Atualizar o tÃ­tulo do cabeÃ§alho da pÃ¡gina de Pedido
+    // Atualizar o título do cabeçalho da página de Pedido
     const activeOS = state.ordens ? state.ordens.find(o => o.id === osId) : null;
     let nomeEvento = '';
     if (state.todasArtes) {
@@ -2140,7 +2140,7 @@ async function enviarParaPedido(itemId, osId) {
         previewContainer.style.display = 'block';
     }
 
-    // Navegar para a view de ImposiÃ§Ã£o
+    // Navegar para a view de Imposição
     const navBtn = document.querySelector('[data-view="view-pedido"]');
     if (navBtn) navBtn.click();
 
@@ -2166,12 +2166,12 @@ async function enviarParaPedido(itemId, osId) {
         }
     }
     
-    // Tentar match do formato via Nome da NumeraÃ§Ã£o
+    // Tentar match do formato via Nome da Numeração
     if (!formatoId && item.numeracao) {
         formatoId = matchFormato(item.numeracao);
         if (formatoId) {
             autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OSâ†’Imp] Formato matched via NumeraÃ§Ã£o: "${item.numeracao}" â†’ ${formatoId}`);
+            console.log(`[OSâ†’Imp] Formato matched via Numeração: "${item.numeracao}" â†’ ${formatoId}`);
         }
     }
     
@@ -2192,7 +2192,7 @@ async function enviarParaPedido(itemId, osId) {
                     saidaSelect.dispatchEvent(new Event('change'));
                     console.log(`[OSâ†’Imp] SaÃ­da matched via Formato "${formatoObj.name}" â†’ ${formatoObj.default_saida_id}`);
                 }
-            }, 100); // pequeno delay para garantir que o formato populou as saÃ­das
+            }, 100); // pequeno delay para garantir que o formato populou as saídas
         }
     }
 
@@ -2203,7 +2203,7 @@ async function enviarParaPedido(itemId, osId) {
             numId = matchNumeracao(item.numeracao, formatoId);
             if (numId) {
                 autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
-                console.log(`[OSâ†’Imp] NumeraÃ§Ã£o matched: "${item.numeracao}" â†’ ${numId}`);
+                console.log(`[OSâ†’Imp] Numeração matched: "${item.numeracao}" â†’ ${numId}`);
             }
         }
         if (numId) {
@@ -2237,15 +2237,15 @@ async function enviarParaPedido(itemId, osId) {
         if (qCamHidden) qCamHidden.value = qCamVal;
         if (lCamHidden) lCamHidden.value = lCamVal;
 
-        // ForÃ§ar atualizaÃ§Ã£o da visibilidade do painel CAMAROTE
+        // ForÃ§ar atualização da visibilidade do painel CAMAROTE
     }, 400);
 
     // --- PREENCHER MODO DE IMPRESSÃƒO ---
-    // Aguardar a navegaÃ§Ã£o de aba + preenchimento dos selects antes de desenhar
+    // Aguardar a navegação de aba + preenchimento dos selects antes de desenhar
     setTimeout(() => {
         const printMode = document.getElementById('ped-print-mode');
         if (printMode) {
-            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÃ“ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
             printMode.value = wantsDuplex ? 'duplex' : 'front';
             if (typeof updatePedSummary === 'function') {
                 updatePedSummary();
@@ -2271,7 +2271,7 @@ async function enviarParaPedido(itemId, osId) {
         // Prioridade 2: pdf_url da cor correspondente
         const arteUrl = item.arte_url || null;
         
-        // Tentar encontrar a arte via cor â€” prioridade: amostra_cor_id > fuzzy match
+        // Tentar encontrar a arte via cor — prioridade: amostra_cor_id > fuzzy match
         const corObj = item.amostra_cor_id
             ? (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id))
             : (state.cores || []).find(c => globalFuzzyMatch(c.name, item.cor || item.padrao || ''));
@@ -2280,7 +2280,7 @@ async function enviarParaPedido(itemId, osId) {
         const arteSource = arteUrl || arteViaCor;
         
         if (arteSource) {
-            // Extrair o nome do arquivo da URL para preservar a extensÃ£o correta (.jpg, .pdf, etc.)
+            // Extrair o nome do arquivo da URL para preservar a extensão correta (.jpg, .pdf, etc.)
             const filenameFromUrl = arteSource.startsWith('http')
                 ? decodeURIComponent(arteSource.split('/').pop().split('?')[0])
                 : null;
@@ -2288,7 +2288,7 @@ async function enviarParaPedido(itemId, osId) {
             
             const loadArte = (src) => {
                 if (!src || !src.startsWith('http')) {
-                    console.warn('[OSâ†’Imp] Fonte de arte invÃ¡lida (nÃ£o Ã© URL HTTP):', src);
+                    console.warn('[OSâ†’Imp] Fonte de arte invÃ¡lida (não Ã© URL HTTP):', src);
                     return;
                 }
                 fetch(src)
@@ -2301,7 +2301,7 @@ async function enviarParaPedido(itemId, osId) {
                         const isPdf = ct.includes('pdf') || filename.toLowerCase().endsWith('.pdf');
                         const isImg = ct.includes('image') || /\.(png|jpg|jpeg|webp)$/i.test(filename);
                         if (!isPdf && !isImg) {
-                            console.warn('[OSâ†’Imp] ConteÃºdo retornado nÃ£o Ã© PDF nem imagem. Content-Type:', ct);
+                            console.warn('[OSâ†’Imp] ConteÃºdo retornado não Ã© PDF nem imagem. Content-Type:', ct);
                             return;
                         }
                         const file = new File([blob], filename, { type: ct || (isPdf ? 'application/pdf' : 'image/png') });
@@ -2328,7 +2328,7 @@ async function enviarParaPedido(itemId, osId) {
     const osNum = os ? os.numero : '';
     const formatoObjToast = state.formatos ? state.formatos.find(f => String(f.id) === String(formatoId)) : null;
     const nomeFmtToast = formatoObjToast ? formatoObjToast.name : (item.formato || 'Formato NÃ£o Definido');
-    toast(`Item "${item.produto} -- ${nomeFmtToast}" da OS #${osNum} carregado na ImposiÃ§Ã£o!`, 'info');
+    toast(`Item "${item.produto} -- ${nomeFmtToast}" da OS #${osNum} carregado na Imposição!`, 'info');
 }
 window.enviarParaPedido = enviarParaPedido;
 
@@ -2344,7 +2344,7 @@ window.togglePedItemSelection = function(itemId, osId) {
     if (idx !== -1) {
         state.selectedOSItems.splice(idx, 1);
     } else {
-        // ValidaÃ§Ã£o de mesma cor
+        // Validação de mesma cor
         if (state.selectedOSItems.length > 0) {
             const firstSelectedId = state.selectedOSItems[0].itemId;
             const firstSelectedItem = itens.find(i => String(i.id) === String(firstSelectedId));
@@ -2352,7 +2352,7 @@ window.togglePedItemSelection = function(itemId, osId) {
             const thisColor = (item.cor || item.padrao || '').toLowerCase().trim();
             
             if (firstColor !== thisColor) {
-                toast('SÃ³ Ã© possÃ­vel selecionar modelos que compartilhem da mesma COR.', 'warning');
+                toast('SÃ³ Ã© possível selecionar modelos que compartilhem da mesma COR.', 'warning');
                 return;
             }
         }
@@ -2389,8 +2389,8 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                 const hasBlocosFlag = sItem && sItem.blocos && sItem.blocos !== 'N' && sItem.blocos !== 'n';
                 return hasBlocoNum || hasBlocosFlag;
             });
-            // Sempre forÃ§ar cut_stack + strict_assembly para multi-seleÃ§Ã£o com modelos combinados
-            // pois Ã© a regra padrÃ£o quando se combinam modelos
+            // Sempre forÃ§ar cut_stack + strict_assembly para multi-seleção com modelos combinados
+            // pois Ã© a regra padrão quando se combinam modelos
             const forceStrictAssembly = anyHasBloco || state.selectedOSItems.length > 1;
             if (forceStrictAssembly) {
                 const schemaSel = document.getElementById('ped-schema');
@@ -2458,7 +2458,7 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
             }
 
             if (isPrint) {
-                if (sub) sub.textContent = "Enviando para impressÃ£o local...";
+                if (sub) sub.textContent = "Enviando para impressão local...";
                 const formData = new FormData();
                 formData.append('file', finalBlob, 'impressao_multipla.pdf');
                 
@@ -2468,12 +2468,12 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                         body: formData
                     });
                     if (res.ok) {
-                        toast('Enviado para a fila de impressÃ£o local!', 'success');
+                        toast('Enviado para a fila de impressão local!', 'success');
                     } else {
                         throw new Error('Falha na API local');
                     }
                 } catch (err) {
-                    toast('Erro na impressÃ£o local. Verifique se o Ideal Imposition agent estÃ¡ rodando.', 'error');
+                    toast('Erro na impressão local. Verifique se o Ideal Imposition agent está rodando.', 'error');
                 }
             } else {
                 let fileHandle = null;
@@ -2596,7 +2596,7 @@ function renderPedOSQueue() {
                     const fObj = (state.formatos || []).find(f => String(f.id) === String(formatoPadraoId));
                     if (fObj && fObj.default_saida_id) {
                         item.saida_id = fObj.default_saida_id;
-                        boxSaiSel = fObj.default_saida_id; // Set header saÃ­das as well
+                        boxSaiSel = fObj.default_saida_id; // Set header saídas as well
                         setTimeout(() => autoSaveOSItemField(item.id, osId, 'saida_id', fObj.default_saida_id), 10);
                     }
                 }
@@ -2620,18 +2620,18 @@ function renderPedOSQueue() {
             <div style="display:flex; gap:10px; align-items:center;" onclick="event.stopPropagation()">
                 <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Gerar PDF dos modelos selecionados"
                     onclick="pedQueueGerarPDFMulti()">
-                    ðŸ“„ PDF Sel.
+                    📄 PDF Sel.
                 </button>
                 <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Imprimir modelos selecionados"
                     onclick="pedQueueImprimirMulti()">
-                    ðŸ–¨ï¸ Imp. Sel.
+                    🖨️ Imp. Sel.
                 </button>
                 <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato PadrÃ£o do Produto">
-                    <option value="">â€” Formato â€”</option>
+                    <option value="">— Formato —</option>
                     ${formatosOptions}
                 </select>
                 <select style="${selectHeaderStyle}" onchange="updateBoxSaida('${osId}', '${prodId}', this.value)" title="SaÃ­da PadrÃ£o do Produto">
-                    <option value="">â€” SaÃ­da â€”</option>
+                    <option value="">— SaÃ­da —</option>
                     ${saidasOptions}
                 </select>
                 <span id="box-arrow-${prodId}-renderPedOSQueue" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">â–¼</span>
@@ -2776,16 +2776,16 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">COR</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                                <option value="">â€” Cor â€”</option>
+                                <option value="">— Cor —</option>
                                 ${coresOptions}
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px; width: 260px; min-width: 260px; max-width: 260px;" title="NumeraÃ§Ã£o">
+                    <td style="padding: 12px; width: 260px; min-width: 260px; max-width: 260px;" title="Numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NÃºm.</span>
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Núm.</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateNum('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
-                                <option value="">â€” NumeraÃ§Ã£o â€”</option>
+                                <option value="">— Numeração —</option>
                                 ${numsOptions}
                             </select>
                         </div>
@@ -2794,7 +2794,7 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Verso</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
-                                <option value="SÃ“ FRENTE" ${item.verso_tipo === 'SÃ“ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÃ“ FRENTE</option>
+                                <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
                                 <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
                                 <option value="VERSO VARIÃVEL" ${item.verso_tipo === 'VERSO VARIÃVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÃVEL</option>
                             </select>
@@ -2803,11 +2803,11 @@ function renderPedOSQueue() {
                     <td style="padding: 12px 12px 12px 100px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
                         <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff;" title="Gerar PDF para este modelo"
                             onclick="event.stopPropagation(); pedQueueGerarPDF('${jsItemId}', '${jsOsId}')">
-                            ðŸ“„ PDF
+                            📄 PDF
                         </button>
                         <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff;" title="Imprimir este modelo"
                             onclick="event.stopPropagation(); pedQueueImprimir('${jsItemId}', '${jsOsId}')">
-                            ðŸ–¨ï¸ Imp.
+                            🖨️ Imp.
                         </button>
                     </td>
                     <td style="padding: 12px; width: 270px; min-width: 270px; max-width: 270px;" title="Status de ProduÃ§Ã£o">
@@ -2962,32 +2962,32 @@ window.togglePedMultiArtes = function() {
 window.editPedidoCustomNumeracao = function(fieldId) {
     const numSelect = document.getElementById(fieldId);
     if (!numSelect || !numSelect.value) {
-        toast('Selecione uma numeraÃ§Ã£o base primeiro antes de editar!', 'warning');
+        toast('Selecione uma numeração base primeiro antes de editar!', 'warning');
         return;
     }
     
-    const impName = document.getElementById('ped-name').value.trim() || 'Modelo ImposiÃ§Ã£o';
+    const impName = document.getElementById('ped-name').value.trim() || 'Modelo Imposição';
     const numId = numSelect.value;
     const baseNum = state.numeracoes.find(n => String(n.id) === String(numId));
     if (!baseNum) return;
     
-    // Configura o state para que no saveNumeracao volte para ImposiÃ§Ã£o
+    // Configura o state para que no saveNumeracao volte para Imposição
     window.customNumeracaoEditState = {
         view: 'imposicao',
         fieldId: fieldId,
         modeloName: impName
     };
     
-    // Abre a numeraÃ§Ã£o
+    // Abre a numeração
     editNumeracao(numId);
     
-    // ForÃ§a o nome no editor da numeraÃ§Ã£o
+    // ForÃ§a o nome no editor da numeração
     const suffix = fieldId === 'ped-numeracao' ? ' Num1' : ' Num2';
     document.getElementById('num-name').value = impName + suffix;
     
     // Marca como um novo cadastro (clone)
     document.getElementById('num-id').value = '';
-    toast(`Clonando base "${baseNum.name}" para ediÃ§Ã£o customizada.`, 'info');
+    toast(`Clonando base "${baseNum.name}" para edição customizada.`, 'info');
 };
 
 window.runPedImposition = async function (mode) {
@@ -3094,7 +3094,7 @@ window.runPedImposition = async function (mode) {
 
     if (schema === 'multi_artes' || isMultiSelected) {
 
-        // Valida se todas as artes da lista tÃªm PDF carregado, caso nÃ£o seja multi seleÃ§Ã£o virtual
+        // Valida se todas as artes da lista tÃªm PDF carregado, caso não seja multi seleção virtual
 
         const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
         if (!isMultiSelected) {
@@ -3102,7 +3102,7 @@ window.runPedImposition = async function (mode) {
 
                 if (!artesList[i].pdf_url || (artesList[i].pdf_url === 'local_file' && !artesList[i].rawFile)) {
 
-                    return toast(`Arte ${i + 1}: faÃ§a o upload do PDF da arte (necessÃ¡rio a cada sessÃ£o).`, 'error');
+                    return toast(`Arte ${i + 1}: faÃ§a o upload do PDF da arte (necessário a cada sessão).`, 'error');
 
                 }
 
@@ -3110,20 +3110,20 @@ window.runPedImposition = async function (mode) {
         } else {
             for (let i = 0; i < artesList.length; i++) {
                 if (!artesList[i].pdf_url) {
-                    return toast(`O modelo "${artesList[i].nome}" nÃ£o possui arte cadastrada nem cor vinculada.`, 'error');
+                    return toast(`O modelo "${artesList[i].nome}" não possui arte cadastrada nem cor vinculada.`, 'error');
                 }
             }
         }
 
     } else {
-        // NÃ£o exige arte, permite gerar apenas com a numeraÃ§Ã£o
+        // NÃ£o exige arte, permite gerar apenas com a numeração
     }
 
     
 
     if (schema !== 'multi_artes' && schema !== 'pdf_multiple') {
 
-        if (start > end) return toast('NÃºmero inicial deve ser menor que o final.', 'error');
+        if (start > end) return toast('Número inicial deve ser menor que o final.', 'error');
 
     }
 
@@ -3135,7 +3135,7 @@ window.runPedImposition = async function (mode) {
 
 
 
-    // 1. SOLICITAR DESTINO DO ARQUIVO IMEDIATAMENTE (dentro do clique do usuÃ¡rio para manter o gesto ativo)
+    // 1. SOLICITAR DESTINO DO ARQUIVO IMEDIATAMENTE (dentro do clique do usuário para manter o gesto ativo)
 
     let fileHandle = null;
 
@@ -3171,7 +3171,7 @@ window.runPedImposition = async function (mode) {
 
         } catch (err) {
 
-            // Se o usuÃ¡rio cancelou o diÃ¡logo de salvamento, interrompe o processo antes de chamar o servidor
+            // Se o usuário cancelou o diálogo de salvamento, interrompe o processo antes de chamar o servidor
 
             if (err.name === 'AbortError') {
 
@@ -3179,7 +3179,7 @@ window.runPedImposition = async function (mode) {
 
             }
 
-            console.error("Erro ao abrir showSaveFilePicker no inÃ­cio:", err);
+            console.error("Erro ao abrir showSaveFilePicker no início:", err);
 
         }
 
@@ -3322,7 +3322,7 @@ window.runPedImposition = async function (mode) {
 
     formData.append('payload', JSON.stringify(payload, (key, value) => {
 
-        // Filtrar propriedades internas do frontend (nÃ£o-serializÃ¡veis ou irrelevantes ao backend)
+        // Filtrar propriedades internas do frontend (não-serializÃ¡veis ou irrelevantes ao backend)
 
         if (key === '_svgImage' || key === '_pdfPreview' || key === '_pdfCanvas' || key === '_pdfLoading' ||
 
@@ -3389,7 +3389,7 @@ window.runPedImposition = async function (mode) {
 
 
 
-    // Instancia o AbortController e associa ao botÃ£o de cancelamento
+    // Instancia o AbortController e associa ao botão de cancelamento
 
     impositionAbortController = new AbortController();
 
@@ -3441,7 +3441,7 @@ window.runPedImposition = async function (mode) {
 
         
 
-        // 1. Verificar primeiro se o servidor FastAPI principal estÃ¡ rodando localmente (porta 8080)
+        // 1. Verificar primeiro se o servidor FastAPI principal está rodando localmente (porta 8080)
 
         let localApiActive = false;
 
@@ -3547,7 +3547,7 @@ window.runPedImposition = async function (mode) {
 
             } catch (e) {
 
-                console.error("Erro ao obter Firebase ID Token para imposiÃ§Ã£o:", e);
+                console.error("Erro ao obter Firebase ID Token para imposição:", e);
 
             }
 
@@ -3610,7 +3610,7 @@ window.runPedImposition = async function (mode) {
 
         
 
-        // Salvar os dados na pasta e arquivo jÃ¡ escolhidos pelo usuÃ¡rio
+        // Salvar os dados na pasta e arquivo já escolhidos pelo usuário
 
         if (fileHandle) {
 
@@ -3624,7 +3624,7 @@ window.runPedImposition = async function (mode) {
 
                 toast('PDF salvo com sucesso!', 'success');
 
-                // Auto-atualizar status de impressÃ£o do item ativo da OS
+                // Auto-atualizar status de impressão do item ativo da OS
                 if (state.activeOSItem && state.activeOSItem.itemId) {
                     await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
                     if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
@@ -3688,7 +3688,7 @@ window.runPedImposition = async function (mode) {
 
         if (err.name === 'AbortError') {
 
-            toast('GeraÃ§Ã£o do PDF cancelada pelo usuÃ¡rio.', 'info');
+            toast('Geração do PDF cancelada pelo usuário.', 'info');
 
         } else {
 
@@ -3830,10 +3830,10 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
             const el = document.getElementById('ped-qtd');
             if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
         } else if (field === 'verso_tipo') {
-            item.verso = !!(value && value !== 'SÃ“ FRENTE' && value !== 'SO FRENTE');
+            item.verso = !!(value && value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
             const printMode = document.getElementById('ped-print-mode');
             if (printMode) {
-                const wantsDuplex = (value !== 'SÃ“ FRENTE' && value !== 'SO FRENTE');
+                const wantsDuplex = (value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
                 printMode.value = wantsDuplex ? 'duplex' : 'front';
                 if (typeof updatePedSummary === 'function') {
                     updatePedSummary();
