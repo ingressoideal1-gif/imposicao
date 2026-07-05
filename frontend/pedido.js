@@ -993,7 +993,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     ctx.textBaseline = 'top';
                     ctx.textAlign = 'left';
                     
-                    const blocoNum = String(P + 1).padStart(2, '0');
+                    const absBlocoNum = Math.floor(item_index / stack_size) + 1;
+                    const blocoNum = String(absBlocoNum).padStart(2, '0');
                     const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
                     
                     const textX = -cw/2 + (xPdf * MM2PT * scale);
