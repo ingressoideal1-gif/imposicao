@@ -1431,7 +1431,7 @@ window.nextPedPreviewPage = function() {
     drawPedPreview();
 };
 
-function updatePedSummary() { console.log('updatePedSummary CALLED. Num value:', document.getElementById('ped-numeracao')?.value);
+function updatePedSummary() {
 
     const fmtSelect = document.getElementById('ped-formato');
 
@@ -2093,7 +2093,6 @@ async function enviarParaPedido(itemId, osId) {
         if (lCamHidden) lCamHidden.value = lCamVal;
 
         // Forçar atualização da visibilidade do painel CAMAROTE
-        if (typeof updatePedSummary === 'function') setTimeout(updatePedSummary, 600);
     }, 400);
 
     // --- PREENCHER MODO DE IMPRESSÃO ---
