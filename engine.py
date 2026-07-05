@@ -1148,7 +1148,7 @@ class ImpositionEngine:
                     cell_y1 = cell_y0 + cfg.item_h
 
                     cell_rotation = int(cfg.rotations.get(str(P), 0))
-                    arte_nome = arte_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
+                    arte_nome = arte_data.get("nome", "")
 
                     if cell_rotation == 0 and not arte_nome:
                         # FAST PATH: render arte e VDP diretamente na folha de saída
@@ -1609,7 +1609,7 @@ class ImpositionEngine:
         cell_y1 = cell_y0 + cfg.item_h
 
         cell_rotation = int(cfg.rotations.get(str(P), 0))
-        arte_nome = item_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
+        arte_nome = item_data.get("nome", "")
 
         current_doc_base = item_data["doc_base"]
         current_elements = item_data["elements"]
@@ -1738,7 +1738,7 @@ class ImpositionEngine:
 
         cell_rotation_frente = int(cfg.rotations.get(str(P), 0))
         cell_rotation = (360 - cell_rotation_frente) % 360
-        arte_nome = item_data.get("nome", "") if cfg.layout_schema == "multi_artes" else ""
+        arte_nome = item_data.get("nome", "")
 
         current_doc_base = item_data["doc_base"]
         current_elements = item_data["elements"]
