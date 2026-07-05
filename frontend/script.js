@@ -6416,17 +6416,15 @@ function drawPreview() {
 
                         if (pageNum <= activePdfDoc.numPages) {
 
-                            let pagesCache = isMultiArtePdf ? multiArteItem.pagesCache : state.impArtPagesCache;
+                            let pagesCache = activePdfDoc.pagesCache;
 
-                            let pagesRendering = isMultiArtePdf ? multiArteItem.pagesRendering : state.impArtPagesRendering;
+                            let pagesRendering = activePdfDoc.pagesRendering;
 
                             if (!pagesCache) {
 
                                 pagesCache = {};
 
-                                if (isMultiArtePdf) multiArteItem.pagesCache = pagesCache;
-
-                                else state.impArtPagesCache = pagesCache;
+                                activePdfDoc.pagesCache = pagesCache;
 
                             }
 
@@ -6434,9 +6432,7 @@ function drawPreview() {
 
                                 pagesRendering = {};
 
-                                if (isMultiArtePdf) multiArteItem.pagesRendering = pagesRendering;
-
-                                else state.impArtPagesRendering = pagesRendering;
+                                activePdfDoc.pagesRendering = pagesRendering;
 
                             }
 

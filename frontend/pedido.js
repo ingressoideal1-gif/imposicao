@@ -871,17 +871,15 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                         if (pageNum <= activePdfDoc.numPages) {
 
-                            let pagesCache = isMultiArtePdf ? multiArteItem.pagesCache : state.pedArtPagesCache;
+                            let pagesCache = activePdfDoc.pagesCache;
 
-                            let pagesRendering = isMultiArtePdf ? multiArteItem.pagesRendering : state.pedArtPagesRendering;
+                            let pagesRendering = activePdfDoc.pagesRendering;
 
                             if (!pagesCache) {
 
                                 pagesCache = {};
 
-                                if (isMultiArtePdf) multiArteItem.pagesCache = pagesCache;
-
-                                else state.pedArtPagesCache = pagesCache;
+                                activePdfDoc.pagesCache = pagesCache;
 
                             }
 
@@ -889,9 +887,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                                 pagesRendering = {};
 
-                                if (isMultiArtePdf) multiArteItem.pagesRendering = pagesRendering;
-
-                                else state.pedArtPagesRendering = pagesRendering;
+                                activePdfDoc.pagesRendering = pagesRendering;
 
                             }
 
