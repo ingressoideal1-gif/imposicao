@@ -759,21 +759,28 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-                        let multiArteItem = null;
-            let multiArteAccumulated = 0;
+            let multiArteItem = null;
             const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
 
             if (schema === "multi_artes" || (artesList && artesList.length > 0)) {
                 let accumulated = 0;
+
                 for (let i = 0; i < artesList.length; i++) {
+
                     let q = parseInt(artesList[i].qtd) || 0;
+
                     if (item_index >= accumulated && item_index < accumulated + q) {
+
                         multiArteItem = artesList[i];
-                        multiArteAccumulated = accumulated;
+
                         break;
+
                     }
+
                     accumulated += q;
+
                 }
+
             }
 
 
@@ -864,15 +871,28 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                         if (pageNum <= activePdfDoc.numPages) {
 
-                                                        let pagesCache = activePdfDoc.pagesCache;
-                            let pagesRendering = activePdfDoc.pagesRendering;
+                            let pagesCache = isMultiArtePdf ? multiArteItem.pagesCache : state.pedArtPagesCache;
+
+                            let pagesRendering = isMultiArtePdf ? multiArteItem.pagesRendering : state.pedArtPagesRendering;
+
                             if (!pagesCache) {
+
                                 pagesCache = {};
-                                activePdfDoc.pagesCache = pagesCache;
+
+                                if (isMultiArtePdf) multiArteItem.pagesCache = pagesCache;
+
+                                else state.pedArtPagesCache = pagesCache;
+
                             }
+
                             if (!pagesRendering) {
+
                                 pagesRendering = {};
-                                activePdfDoc.pagesRendering = pagesRendering;
+
+                                if (isMultiArtePdf) multiArteItem.pagesRendering = pagesRendering;
+
+                                else state.pedArtPagesRendering = pagesRendering;
+
                             }
 
 
@@ -1098,9 +1118,9 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
         const drawVdpElements = (currentNum, source_id) => {
 
-                        if (currentNum && currentNum.elements) {
+            if (currentNum && currentNum.elements) {
 
-                const val = multiArteItem ? (multiArteItem.start + (item_index - multiArteAccumulated)) : (start + item_index);
+                const val = start + item_index;
 
                 let numPrintMode = currentNum.print_mode;
                 if (!numPrintMode && currentNum.elements) {
@@ -2324,29 +2344,16 @@ window.togglePedItemSelection = function(itemId, osId) {
     if (idx !== -1) {
         state.selectedOSItems.splice(idx, 1);
     } else {
-        // Validações
+        // ValidaÃ§Ã£o de mesma cor
         if (state.selectedOSItems.length > 0) {
             const firstSelectedId = state.selectedOSItems[0].itemId;
             const firstSelectedItem = itens.find(i => String(i.id) === String(firstSelectedId));
-            
-            // 1. Validação de Cor
             const firstColor = firstSelectedItem ? (firstSelectedItem.cor || firstSelectedItem.padrao || '').toLowerCase().trim() : '';
             const thisColor = (item.cor || item.padrao || '').toLowerCase().trim();
-            if (firstColor !== thisColor) {
-                toast('Só é possível selecionar modelos que compartilhem da mesma COR.', 'warning');
-                renderPedOSQueue();
-                return;
-            }
             
-            // 2. Validação de Bloco (Mesma quantidade de folhas por bloco)
-            const firstBloco = firstSelectedItem ? parseInt(firstSelectedItem.bloco) || 0 : 0;
-            const thisBloco = parseInt(item.bloco) || 0;
-            if (firstBloco > 0 || thisBloco > 0) {
-                if (firstBloco !== thisBloco) {
-                    toast('Não é possível combinar modelos com quantidades de folhas por bloco diferentes.', 'warning');
-                    renderPedOSQueue();
-                    return;
-                }
+            if (firstColor !== thisColor) {
+                toast('SÃ³ Ã© possÃ­vel selecionar modelos que compartilhem da mesma COR.', 'warning');
+                return;
             }
         }
         state.selectedOSItems.push({ itemId, osId });
