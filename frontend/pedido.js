@@ -527,9 +527,20 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
         if (schema === "multi_artes" || cutstackMode === 'strict' || cutstackMode === 'strict_assembly') {
             is_strict_mode = true;
-            const itemsPerSet = stack_size * poses_per_sheet;
-            sets_needed = Math.ceil(total_items / itemsPerSet);
-            total_sheets = sets_needed * stack_size;
+            if (cutstackMode === 'strict_assembly' || schema === "multi_artes") {
+                if (typeof buildStrictAssemblySets === 'function') {
+                    window.currentAssemblySets = buildStrictAssemblySets(isMultiSelected ? tempMultiArtes : state.impMultiArtes, isMultiSelected, total_items, stack_size, poses_per_sheet);
+                    sets_needed = window.currentAssemblySets.length;
+                    total_sheets = window.currentAssemblySets.reduce((sum, s) => sum + s.num_sheets, 0);
+                } else {
+                    const itemsPerSet = stack_size * poses_per_sheet;
+                    sets_needed = Math.ceil(total_items / itemsPerSet);
+                }
+            } else {
+                const itemsPerSet = stack_size * poses_per_sheet;
+                sets_needed = Math.ceil(total_items / itemsPerSet);
+                total_sheets = sets_needed * stack_size;
+            }
         }
     }
 
@@ -565,10 +576,14 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     // Determinar o total de folhas visíveis neste set
     let visible_sheets = total_sheets;
     if (is_strict_mode) {
-        if (currentSet < sets_needed) {
-            visible_sheets = stack_size;
+        if (window.currentAssemblySets) {
+            visible_sheets = window.currentAssemblySets[currentSet - 1]?.num_sheets || 0;
         } else {
-            visible_sheets = total_sheets - ((sets_needed - 1) * stack_size);
+            if (currentSet < sets_needed) {
+                visible_sheets = stack_size;
+            } else {
+                visible_sheets = total_sheets - ((sets_needed - 1) * stack_size);
+            }
         }
     }
 
@@ -585,18 +600,29 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             if (local_S < 0) local_S = 0;
             
             let S = local_S;
-            if (is_strict_mode) {
+            if (is_strict_mode && !window.currentAssemblySets) {
                 S = ((currentSet - 1) * stack_size) + local_S;
             }
 
             let item_index = (S * poses_per_sheet) + P;
-            if (schema === "cut_stack") {
+            if (schema === "cut_stack" || schema === "multi_artes") {
                 const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
-                if (cutstackMode === 'strict') {
+                if (cutstackMode === 'strict' && !window.currentAssemblySets) {
                     const full_sets = Math.floor(total_sheets / stack_size);
                     const set_index = Math.floor(S / stack_size);
                     const sheet_within_set = S % stack_size;
                     item_index = ((P * full_sets) + set_index) * stack_size + sheet_within_set;
+                } else if ((cutstackMode === 'strict_assembly' || schema === "multi_artes") && window.currentAssemblySets) {
+                    let set_def = window.currentAssemblySets[currentSet - 1];
+                    if (set_def && set_def.cell_allocations[P] && set_def.cell_allocations[P][local_S]) {
+                        let item_data = set_def.cell_allocations[P][local_S];
+                        item_index = item_data.global_index;
+                    } else {
+                        item_index = total_items; // skip rendering this cell
+                    }
+                } else if (schema === "multi_artes") {
+                    const P_col_first = col * rows + row;
+                    item_index = (P_col_first * total_sheets) + S;
                 } else if (cutstackMode === 'strict_assembly') {
                     const full_sets = Math.floor(total_sheets / stack_size);
                     if (S < full_sets * stack_size) {
@@ -614,17 +640,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 }
             } else if (schema === "step_repeat") {
                 item_index = S;
-            } else if (schema === "multi_artes") {
-                const P_col_first = col * rows + row;
-                item_index = (P_col_first * total_sheets) + S;
             }
 
             if (item_index >= total_items) continue;
 
-
-
             // Para o verso da folha (tombamento horizontal), espelhamos as colunas fisicamente
-
             const col_fisico = isBack ? (cols - 1 - col) : col;
 
             const cell_x0 = start_x + col_fisico * (item_w + gap_h);
@@ -3768,3 +3788,91 @@ window.pedQueueImprimir = pedQueueImprimir;
 window.pedQueueUpdateCor = pedQueueUpdateCor;
 window.pedQueueUpdateNum = pedQueueUpdateNum;
 window.pedQueueUpdateField = pedQueueUpdateField;
+function buildStrictAssemblySets(artesList, isMulti, totItems, stackSize, posesPerSheet) {
+    let multiMap = [];
+    let curr_idx = 0;
+    let hasArtes = artesList && artesList.length > 0;
+    if (hasArtes) {
+        for (let i = 0; i < artesList.length; i++) {
+            let q = parseInt(artesList[i].qtd) || 0;
+            for (let j = 0; j < q; j++) {
+                multiMap.push({ global_index: curr_idx + j, arte_index: i, local_index: j });
+            }
+            curr_idx += q;
+        }
+    } else {
+        for (let j = 0; j < totItems; j++) {
+            multiMap.push({ global_index: j, arte_index: 0, local_index: j });
+        }
+    }
+    let models_items = [];
+    if (hasArtes) {
+        let start = 0;
+        for (let i = 0; i < artesList.length; i++) {
+            let q = parseInt(artesList[i].qtd) || 0;
+            models_items.push(multiMap.slice(start, start + q));
+            start += q;
+        }
+    } else {
+        models_items.push(multiMap);
+    }
+    let complete_blocks = [];
+    let leftovers_by_model = models_items.map(() => []);
+    for (let j = 0; j < models_items.length; j++) {
+        let items = models_items[j];
+        let num_blocks = Math.floor(items.length / stackSize);
+        for (let b = 0; b < num_blocks; b++) {
+            complete_blocks.push({ model_idx: j, block: items.slice(b * stackSize, (b + 1) * stackSize) });
+        }
+        leftovers_by_model[j] = items.slice(num_blocks * stackSize);
+    }
+    let total_blocks = complete_blocks.length;
+    let set_definitions = [];
+    let blocks_used = 0;
+    if (total_blocks >= posesPerSheet) {
+        let blocks_remaining = total_blocks - blocks_used;
+        let depth = Math.floor(blocks_remaining / posesPerSheet);
+        if (depth >= 1) {
+            let num_blocks_in_set = depth * posesPerSheet;
+            let set_blocks = complete_blocks.slice(blocks_used, blocks_used + num_blocks_in_set);
+            let cell_allocations = [];
+            for (let P = 0; P < posesPerSheet; P++) {
+                let cell_items = [];
+                for (let d = 0; d < depth; d++) {
+                    let block_idx = P * depth + d;
+                    if (block_idx < set_blocks.length) {
+                        cell_items = cell_items.concat(set_blocks[block_idx].block);
+                    }
+                }
+                cell_allocations.push(cell_items);
+            }
+            set_definitions.push({ type: "strict", num_sheets: stackSize * depth, cell_allocations: cell_allocations, depth: depth });
+            blocks_used += num_blocks_in_set;
+        }
+    }
+    let remaining_blocks = complete_blocks.slice(blocks_used);
+    for (let i = 0; i < remaining_blocks.length; i++) {
+        leftovers_by_model[remaining_blocks[i].model_idx] = leftovers_by_model[remaining_blocks[i].model_idx].concat(remaining_blocks[i].block);
+    }
+    for (let j = 0; j < leftovers_by_model.length; j++) {
+        leftovers_by_model[j].sort((a, b) => a.local_index - b.local_index);
+    }
+    for (let j = 0; j < leftovers_by_model.length; j++) {
+        let leftovers = leftovers_by_model[j];
+        if (leftovers.length > 0) {
+            let num_sheets = Math.ceil(leftovers.length / posesPerSheet);
+            let cell_allocations = [];
+            for (let P = 0; P < posesPerSheet; P++) {
+                let cell_items = leftovers.slice(P * num_sheets, (P + 1) * num_sheets);
+                if (cell_items.length < num_sheets) {
+                    let diff = num_sheets - cell_items.length;
+                    for (let k = 0; k < diff; k++) cell_items.push(null);
+                }
+                cell_allocations.push(cell_items);
+            }
+            set_definitions.push({ type: "assembly", num_sheets: num_sheets, cell_allocations: cell_allocations, depth: 1 });
+        }
+    }
+    return set_definitions;
+}
+window.buildStrictAssemblySets = buildStrictAssemblySets;
