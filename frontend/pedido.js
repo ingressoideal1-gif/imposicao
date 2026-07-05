@@ -1055,8 +1055,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                     } else if (el.type === 'CAMAROTE_LOCAL') {
                         const _lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
-                        const _qStart = start || 1;
-                        const _localNum = _qStart + Math.floor(item_index / _lCam);
+                        const _cIni = parseInt(document.getElementById('ped-c-ini')?.value) || 1;
+                        const _localNum = _cIni + Math.floor(item_index / _lCam);
                         val_str = `${el.prefix || ''}${_localNum}`;
 
                     } else if (el.type === 'CAMAROTE_PESSOA') {
@@ -2083,12 +2083,15 @@ async function enviarParaPedido(itemId, osId) {
         if (numStart && item.num_inicial) numStart.value = item.num_inicial;
         if (numEnd && item.num_final) numEnd.value = item.num_final;
 
-        // --- CAMAROTE: preencher Q_CAM e L_CAM do item de OS e mostrar painel ---
+        // --- CAMAROTE: preencher C_INI, Q_CAM e L_CAM do item de OS e mostrar painel ---
+        const cIniHidden = document.getElementById('ped-c-ini');
         const qCamHidden = document.getElementById('ped-q-cam');
         const lCamHidden = document.getElementById('ped-l-cam');
         // Cobre: Q_CAM, q_cam, qtd_locais, qtd_cam (várias colunas possíveis no Supabase)
+        const cIniVal = item.C_INI || item.c_ini || 1;
         const qCamVal = item.Q_CAM || item.q_cam || item.qtd_locais || item.qtd_cam || 0;
         const lCamVal = item.L_CAM || item.l_cam || item.lotacao_cam || item.lotacao || item.lotacao_por_local || 1;
+        if (cIniHidden) cIniHidden.value = cIniVal;
         if (qCamHidden) qCamHidden.value = qCamVal;
         if (lCamHidden) lCamHidden.value = lCamVal;
 
@@ -3128,7 +3131,8 @@ window.runPedImposition = async function (mode) {
 
         block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1,
 
-        // CAMAROTE: Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden)
+        // CAMAROTE: C_INI, Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden)
+        c_ini: parseInt(document.getElementById('ped-c-ini')?.value || 1) || 1,
         q_cam: parseInt(document.getElementById('ped-q-cam')?.value || 0) || 0,
         l_cam: parseInt(document.getElementById('ped-l-cam')?.value || 1) || 1
 

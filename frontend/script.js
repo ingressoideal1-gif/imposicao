@@ -8348,6 +8348,8 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         cor_id: (state.activeOSItem && state.osItens[state.activeOSItem.osId]) ? (state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.amostra_cor_id || null) : null,
 
+        c_ini: isMultiSelected ? 1 : (parseInt(document.getElementById('ped-c-ini')?.value) || parseInt(document.getElementById('imp-c-ini')?.value) || 1),
+
         q_cam: isMultiSelected ? 0 : (parseInt(document.getElementById('ped-q-cam')?.value) || parseInt(document.getElementById('imp-q-cam')?.value) || 0),
 
         l_cam: isMultiSelected ? 1 : (parseInt(document.getElementById('ped-l-cam')?.value) || parseInt(document.getElementById('imp-l-cam')?.value) || 1),
@@ -12732,6 +12734,14 @@ function mapVibecodeProdutoToOSItem(p, osId) {
             const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
             return impOverrides[`vibe_item_${p.id}`] || 'AGUARD.';
         })(),
+        sheets_per_block: p.bloco && parseInt(p.bloco) > 0 ? parseInt(p.bloco) : (() => {
+            const format = state.formatos.find(f => String(f.id) === String(p.formato_id));
+            return format ? (parseInt(format.default_sheets_per_block) || 50) : 50;
+        })(),
+        
+        c_ini: p.C_INI || p.c_ini || 1,
+        q_cam: p.Q_CAM || p.q_cam || p.qtd_locais || p.qtd_cam || 0,
+        l_cam: p.L_CAM || p.l_cam || p.lotacao_cam || p.lotacao || p.lotacao_por_local || 1,
         observacoes: p.modelo_descri || p.nome_produto || '',
         created_at: p.created_at,
         updated_at: p.updated_at || p.created_at,
@@ -12749,9 +12759,6 @@ function mapVibecodeProdutoToOSItem(p, osId) {
             return (overrides[`vibe_item_${p.id}`] && overrides[`vibe_item_${p.id}`].amostra_obs) || p.amostra_obs || '';
         })(),
         
-        q_cam: p.Q_CAM || p.q_cam || p.qtd_locais || p.qtd_cam || 0,
-        l_cam: p.L_CAM || p.l_cam || p.lotacao_cam || p.lotacao || p.lotacao_por_local || 1,
-
         _source: 'vibecode',
         _vibe_produto_id: p.id,
         _vibe_id_produto: p.id_produto,
@@ -14131,7 +14138,10 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 'qtd':              'quantidade',
                 'numeracao_id':     'amostra_num_id',
                 'verso_tipo':       'verso_tipo',
-                'status_impressao': 'status_impressao'
+                'status_impressao': 'status_impressao',
+                'c_ini':            'C_INI',
+                'q_cam':            'Q_CAM',
+                'l_cam':            'L_CAM'
             };
 
             // Campos locais que não existem no banco de dados
@@ -14139,7 +14149,7 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 return;
             }
             const dbField = dbFieldMap[field] || field;
-            const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')
+            const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd' || field === 'c_ini' || field === 'q_cam' || field === 'l_cam')
                 ? (parseInt(value, 10) || 0)
                 : value;
             
@@ -14968,6 +14978,9 @@ function impQueueUpdateField(itemId, osId, field, value) {
         'num_final':   'numeracao_fim',
         'qtd':         'quantidade',
         'numeracao':   'gabarito_operacional',
+        'c_ini':       'C_INI',
+        'q_cam':       'Q_CAM',
+        'l_cam':       'L_CAM'
     };
     const dbField = dbFieldMap[field] || field;
     const dbValue = (field === 'num_inicial' || field === 'num_final' || field === 'qtd')

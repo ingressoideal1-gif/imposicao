@@ -1260,6 +1260,10 @@
                                 <div style="font-size:0.75rem; font-weight:700; color:var(--amber,#f59e0b); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">🏛️ Configuração Camarote</div>
                                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
                                     <div class="form-group" style="flex:1; min-width:100px;">
+                                        <label style="font-size:0.75rem;">Início do Local (C_INI)</label>
+                                        <input type="number" class="form-control" id="ped-c-ini" value="1" min="1" onchange="if(state.activeOSItem){ pedQueueUpdateField(state.activeOSItem.itemId, state.activeOSItem.osId, 'c_ini', this.value); } updatePedSummary()" placeholder="Ex: 7">
+                                    </div>
+                                    <div class="form-group" style="flex:1; min-width:100px;">
                                         <label style="font-size:0.75rem;">Qtde de Locais (Q_CAM)</label>
                                         <input type="number" class="form-control" id="ped-q-cam" value="0" min="0" onchange="if(state.activeOSItem){ pedQueueUpdateField(state.activeOSItem.itemId, state.activeOSItem.osId, 'q_cam', this.value); } updatePedSummary()" placeholder="Ex: 10">
                                     </div>
@@ -1977,8 +1981,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=316"></script>
-    <script src="/pedido.js?v=316"></script>
+    <script src="script.js?v=317"></script>
+    <script src="/pedido.js?v=317"></script>
 
 
 

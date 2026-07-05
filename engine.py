@@ -152,6 +152,7 @@ class ImpositionConfig:
                  cut_stack_mode: str = "independent",
                  sheets_per_block: int = 50,
                  block_depth: int = 1,
+                 c_ini: int = 1,
                  q_cam: int = 0,
                  l_cam: int = 1):
 
@@ -200,7 +201,8 @@ class ImpositionConfig:
         self.num_tipo = numeracao.get("tipo", "SEQUENCIAL") if numeracao else "SEQUENCIAL"
         self.ticket_qtd = numeracao.get("ticket_qtd", 1) if numeracao else 1
         self.ticket_logica = numeracao.get("ticket_logica", "PILHA") if numeracao else "PILHA"
-        # CAMAROTE: quantidade de locais e lotação por local
+        # CAMAROTE: inicio do local (c_ini), quantidade de locais e lotação por local
+        self.c_ini = max(1, int(c_ini) if c_ini else 1)
         self.q_cam = int(q_cam) if q_cam else 0
         self.l_cam = max(1, int(l_cam) if l_cam else 1)
         
@@ -347,10 +349,10 @@ class ImpositionEngine:
             return fitz.open(stream=pdf_bytes, filetype="pdf")
 
 
-    def _resolve_camarote_val(self, el: dict, item_index: int, base_val: int, l_cam: int = None, seq_start: int = None) -> int:
+    def _resolve_camarote_val(self, el: dict, item_index: int, base_val: int, l_cam: int = None, c_ini: int = None, seq_start: int = None) -> int:
         """Calcula o valor correto para elementos CAMAROTE_* com base no item_index.
         
-        Para CAMAROTE_LOCAL: retorna o número do local (seq_start + item_index // l_cam).
+        Para CAMAROTE_LOCAL: retorna o número do local (c_ini + item_index // l_cam).
         Para CAMAROTE_PESSOA / CAMAROTE_PESSOA_TOTAL: retorna o número da pessoa (item_index % l_cam + 1).
         Também injeta _l_cam no el para uso em CAMAROTE_PESSOA_TOTAL.
         """
@@ -364,17 +366,17 @@ class ImpositionEngine:
         
         el["_l_cam"] = actual_l_cam
         if t == "CAMAROTE_LOCAL":
-            actual_seq_start = seq_start if seq_start is not None else cfg.seq_start
-            return actual_seq_start + (item_index // actual_l_cam)
+            actual_c_ini = c_ini if c_ini is not None else (cfg.c_ini if hasattr(cfg, "c_ini") else 1)
+            return actual_c_ini + (item_index // actual_l_cam)
         else:  # CAMAROTE_PESSOA ou CAMAROTE_PESSOA_TOTAL
             return (item_index % actual_l_cam) + 1
 
     def _get_camarote_params(self, item_index: int, multi_map: list = None):
-        """Retorna (local_idx, l_cam, start_base) para o item_index, suportando multi_artes."""
+        """Retorna (local_idx, l_cam, c_ini, start_base) para o item_index, suportando multi_artes."""
         if multi_map and item_index < len(multi_map):
             arte_data = multi_map[item_index]
-            return arte_data.get("local_idx", item_index), arte_data.get("l_cam"), arte_data.get("start_base")
-        return item_index, None, None
+            return arte_data.get("local_idx", item_index), arte_data.get("l_cam"), arte_data.get("c_ini"), arte_data.get("start_base")
+        return item_index, None, None, None
 
     def _render_element(self, page: fitz.Page, el: dict, cell_x0: float, cell_y0: float, val: int, csv_row: dict | None = None):
         """Renderiza um elemento VDP na posicao absoluta da celula."""
@@ -1245,8 +1247,8 @@ class ImpositionEngine:
                                 N = int(cfg.ticket_qtd)
                                 current_val = cfg.seq_start + (item_index * N) + (pos - 1)
                             if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
-                                c_idx, c_l_cam, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
-                                current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
+                                c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
+                                current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                             self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
 
                     else:
@@ -1293,8 +1295,8 @@ class ImpositionEngine:
                                 Q = int(cfg.total_items)
                                 current_val = cfg.seq_start + (item_index * N) + (pos - 1)
                             if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
-                                c_idx, c_l_cam, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
-                                current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
+                                c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
+                                current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
                         if arte_nome:
@@ -1721,8 +1723,9 @@ class ImpositionEngine:
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
                     c_idx = item_data.get("local_idx", 0)
                     c_l_cam = item_data.get("l_cam")
+                    c_c_ini = item_data.get("c_ini")
                     c_start = item_data.get("start_base")
-                    current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
+                    current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                 self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
             temp_doc = fitz.open()
@@ -1746,8 +1749,9 @@ class ImpositionEngine:
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
                     c_idx = item_data.get("local_idx", 0)
                     c_l_cam = item_data.get("l_cam")
+                    c_c_ini = item_data.get("c_ini")
                     c_start = item_data.get("start_base")
-                    current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
+                    current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                 self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
             if arte_nome:
@@ -1860,8 +1864,9 @@ class ImpositionEngine:
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
                     c_idx = item_data.get("local_idx", 0)
                     c_l_cam = item_data.get("l_cam")
+                    c_c_ini = item_data.get("c_ini")
                     c_start = item_data.get("start_base")
-                    current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
+                    current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                 self._render_element(out_page_back, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
             temp_doc = fitz.open()
@@ -1885,8 +1890,9 @@ class ImpositionEngine:
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
                     c_idx = item_data.get("local_idx", 0)
                     c_l_cam = item_data.get("l_cam")
+                    c_c_ini = item_data.get("c_ini")
                     c_start = item_data.get("start_base")
-                    current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_start)
+                    current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
                 self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
             if arte_nome:
