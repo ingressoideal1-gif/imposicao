@@ -855,7 +855,9 @@ class ImpositionEngine:
                 art_doc = None
                 
                 try:
-                    if local_path and os.path.exists(local_path):
+                    if not cfg.multi_artes and doc_base:
+                        art_doc = doc_base
+                    elif local_path and os.path.exists(local_path):
                         art_doc = _load_art_as_pdf(local_path, is_url=False)
                     elif pdf_url:
                         art_doc = _load_art_as_pdf(pdf_url, is_url=True)
