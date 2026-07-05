@@ -1341,8 +1341,25 @@
 
                     <div class="imposicao-preview" id="ped-preview-card-container" style="display: none;">
                         <div class="card">
-                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                                <span class="card-title">👁️ Pré-visualização da Folha</span>
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+                                <div style="display: flex; gap: 16px; align-items: center;">
+                                    <span class="card-title">👁️ Pré-visualização da Folha</span>
+                                    
+                                    <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1);">
+                                        <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                            <input type="checkbox" id="ped-refazer-checkbox" onchange="document.getElementById('ped-refazer-inputs').style.display = this.checked ? 'flex' : 'none'">
+                                            Refazer Folhas
+                                        </label>
+                                        <div id="ped-refazer-inputs" style="display: none; align-items: center; gap: 6px;">
+                                            <span style="font-size:0.75rem; color:var(--text-muted);">De:</span>
+                                            <input type="number" id="ped-refazer-de" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 5">
+                                            <span style="font-size:0.75rem; color:var(--text-muted);">Até:</span>
+                                            <input type="number" id="ped-refazer-ate" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 10">
+                                            <button class="btn btn-sm" style="background: var(--primary); height: 24px; font-size: 0.7rem; padding: 0 8px;" onclick="runPedImposition('pdf', true)">Gerar PDF</button>
+                                            <button class="btn btn-sm" style="background: var(--success); height: 24px; font-size: 0.7rem; padding: 0 8px;" onclick="runPedImposition('print', true)">Imprimir</button>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <select id="ped-preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePedPreviewPage()">
                                         <option value="miolo">Miolo</option>
@@ -1981,8 +1998,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=317"></script>
-    <script src="/pedido.js?v=317"></script>
+    <script src="script.js?v=318"></script>
+    <script src="/pedido.js?v=318"></script>
 
 
 

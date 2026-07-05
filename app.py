@@ -633,7 +633,9 @@ async def impose_file(
             block_depth=data.get("block_depth", 1),
             c_ini=int(data.get("c_ini", 1) or 1),
             q_cam=int(data.get("q_cam", 0) or 0),
-            l_cam=int(data.get("l_cam", 1) or 1)
+            l_cam=int(data.get("l_cam", 1) or 1),
+            refazer_de=int(data.get("refazer_de", 0) or 0),
+            refazer_ate=int(data.get("refazer_ate", 0) or 0)
         )
 
         engine = ImpositionEngine(config)

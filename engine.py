@@ -154,7 +154,9 @@ class ImpositionConfig:
                  block_depth: int = 1,
                  c_ini: int = 1,
                  q_cam: int = 0,
-                 l_cam: int = 1):
+                 l_cam: int = 1,
+                 refazer_de: int = 0,
+                 refazer_ate: int = 0):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -205,6 +207,8 @@ class ImpositionConfig:
         self.c_ini = max(1, int(c_ini) if c_ini else 1)
         self.q_cam = int(q_cam) if q_cam else 0
         self.l_cam = max(1, int(l_cam) if l_cam else 1)
+        self.refazer_de = int(refazer_de) if refazer_de else 0
+        self.refazer_ate = int(refazer_ate) if refazer_ate else 0
         
         if layout_schema == "pdf_multiple":
             # Para Pdf Múltiplo, a quantidade total de itens é baseada na quantidade de páginas
@@ -1513,6 +1517,8 @@ class ImpositionEngine:
         else:
             doc_out.save(cfg.out_pdf, garbage=4, deflate=True)
             self.generated_files.append({"type": "single", "path": cfg.out_pdf, "name": os.path.basename(cfg.out_pdf)})
+        
+        self._apply_refazer_filter()
         print(f"[engine] save done elapsed={_time.monotonic()-_t0:.1f}s")
         if doc_base:
             doc_base.close()
@@ -2053,3 +2059,67 @@ class ImpositionEngine:
         doc_c.save(out_name, garbage=4, deflate=True)
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
+
+    def _apply_refazer_filter(self):
+        """Filtra as folhas fisicas geradas de acordo com refazer_de e refazer_ate."""
+        r_de = self.cfg.refazer_de
+        r_ate = self.cfg.refazer_ate
+        if r_de <= 0:
+            return
+            
+        if r_ate <= 0:
+            r_ate = r_de
+            
+        is_duplex = (self.cfg.print_mode == "duplex")
+        pages_per_sheet = 2 if is_duplex else 1
+        
+        req_start_sheet = r_de - 1
+        req_end_sheet = r_ate - 1
+        if req_end_sheet < req_start_sheet:
+            req_end_sheet = req_start_sheet
+            
+        filtered_files = []
+        current_global_sheet = 0
+        
+        for gf in self.generated_files:
+            if gf["type"] in ["capa", "contracapa"]:
+                # Excluir capas se refazer > 0
+                if os.path.exists(gf["path"]):
+                    os.remove(gf["path"])
+                continue
+                
+            try:
+                doc = fitz.open(gf["path"])
+                chunk_sheets = len(doc) // pages_per_sheet
+                
+                chunk_start_sheet = current_global_sheet
+                chunk_end_sheet = current_global_sheet + chunk_sheets - 1
+                
+                # Checar intersecção
+                if req_start_sheet <= chunk_end_sheet and req_end_sheet >= chunk_start_sheet:
+                    local_start = max(0, req_start_sheet - chunk_start_sheet)
+                    local_end = min(chunk_sheets - 1, req_end_sheet - chunk_start_sheet)
+                    
+                    start_page = local_start * pages_per_sheet
+                    end_page = min(len(doc) - 1, (local_end + 1) * pages_per_sheet - 1)
+                    
+                    if start_page == 0 and end_page == len(doc) - 1:
+                        doc.close()
+                        filtered_files.append(gf)
+                    else:
+                        doc.select(list(range(start_page, end_page + 1)))
+                        temp_path = gf["path"] + ".tmp.pdf"
+                        doc.save(temp_path, garbage=4, deflate=True)
+                        doc.close()
+                        os.replace(temp_path, gf["path"])
+                        filtered_files.append(gf)
+                else:
+                    doc.close()
+                    if os.path.exists(gf["path"]):
+                        os.remove(gf["path"])
+                
+                current_global_sheet += chunk_sheets
+            except Exception as e:
+                print(f"[Refazer] Erro processando {gf['path']}: {e}")
+                
+        self.generated_files = filtered_files

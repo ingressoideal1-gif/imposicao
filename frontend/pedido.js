@@ -3134,8 +3134,10 @@ window.runPedImposition = async function (mode) {
         // CAMAROTE: C_INI, Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden)
         c_ini: parseInt(document.getElementById('ped-c-ini')?.value || 1) || 1,
         q_cam: parseInt(document.getElementById('ped-q-cam')?.value || 0) || 0,
-        l_cam: parseInt(document.getElementById('ped-l-cam')?.value || 1) || 1
+        l_cam: parseInt(document.getElementById('ped-l-cam')?.value || 1) || 1,
 
+        refazer_de: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-de')?.value) || 0) : 0,
+        refazer_ate: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-ate')?.value) || 0) : 0
     };
 
 
