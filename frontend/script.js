@@ -6106,6 +6106,10 @@ function drawPreview() {
 
     const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
+    // Mostrar/esconder painel CAMAROTE conforme tipo da numeração (tela principal)
+    const camPanel = document.getElementById('ped-camarote-panel');
+    const isNumCamarote = num && (num.tipo === 'CAMAROTE' || num.type === 'CAMAROTE');
+    if (camPanel) camPanel.style.display = isNumCamarote ? 'block' : 'none';
 
 
     const MM2PT = 2.8346;

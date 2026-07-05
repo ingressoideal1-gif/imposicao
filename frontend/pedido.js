@@ -1557,6 +1557,11 @@ function updatePedSummary() { console.log('updatePedSummary CALLED. Num value:',
 
     const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
+    // Mostrar/esconder painel CAMAROTE conforme tipo da numeração
+    const camarotePanel = document.getElementById('ped-camarote-panel');
+    const isCamarote = num && (num.tipo === 'CAMAROTE' || num.type === 'CAMAROTE');
+    if (camarotePanel) camarotePanel.style.display = isCamarote ? 'block' : 'none';
+
     if (num && num.svg_content && !num._svgImage) {
 
         const img = new Image();
@@ -2078,11 +2083,17 @@ async function enviarParaPedido(itemId, osId) {
         if (numStart && item.num_inicial) numStart.value = item.num_inicial;
         if (numEnd && item.num_final) numEnd.value = item.num_final;
 
-        // --- CAMAROTE: guardar Q_CAM e L_CAM do item para uso no payload ---
+        // --- CAMAROTE: preencher Q_CAM e L_CAM do item de OS e mostrar painel ---
         const qCamHidden = document.getElementById('ped-q-cam');
         const lCamHidden = document.getElementById('ped-l-cam');
-        if (qCamHidden) qCamHidden.value = item.Q_CAM || item.q_cam || 0;
-        if (lCamHidden) lCamHidden.value = item.L_CAM || item.l_cam || 1;
+        // Cobre: Q_CAM, q_cam, qtd_locais, qtd_cam (várias colunas possíveis no Supabase)
+        const qCamVal = item.Q_CAM || item.q_cam || item.qtd_locais || item.qtd_cam || 0;
+        const lCamVal = item.L_CAM || item.l_cam || item.lotacao_cam || item.lotacao || item.lotacao_por_local || 1;
+        if (qCamHidden) qCamHidden.value = qCamVal;
+        if (lCamHidden) lCamHidden.value = lCamVal;
+
+        // Forçar atualização da visibilidade do painel CAMAROTE
+        if (typeof updatePedSummary === 'function') setTimeout(updatePedSummary, 600);
     }, 400);
 
     // --- PREENCHER MODO DE IMPRESSÃO ---

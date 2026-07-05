@@ -1240,9 +1240,21 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- Hidden inputs: dados CAMAROTE (preenchidos automaticamente pelo enviarParaPedido) -->
-                            <input type="hidden" id="ped-q-cam" value="0">
-                            <input type="hidden" id="ped-l-cam" value="1">
+                            <!-- Painel CAMAROTE: mostrado somente quando numeracao.tipo === CAMAROTE -->
+                            <div id="ped-camarote-panel" style="display:none; margin-top:10px; padding:12px; border:1px dashed rgba(255,160,0,0.4); border-radius:8px; background:rgba(255,160,0,0.06);">
+                                <div style="font-size:0.75rem; font-weight:700; color:var(--amber,#f59e0b); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">🏛️ Configuração Camarote</div>
+                                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                    <div class="form-group" style="flex:1; min-width:100px;">
+                                        <label style="font-size:0.75rem;">Qtde de Locais (Q_CAM)</label>
+                                        <input type="number" class="form-control" id="ped-q-cam" value="0" min="0" onchange="updatePedSummary()" placeholder="Ex: 10">
+                                    </div>
+                                    <div class="form-group" style="flex:1; min-width:100px;">
+                                        <label style="font-size:0.75rem;">Lotação por Local (L_CAM)</label>
+                                        <input type="number" class="form-control" id="ped-l-cam" value="1" min="1" onchange="updatePedSummary()" placeholder="Ex: 5">
+                                    </div>
+                                </div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); margin-top:4px;">Total de ingressos = Q_CAM × L_CAM. O início da Mesa é lido do campo Início (acima).</div>
+                            </div>
 
                             <!-- Configuração Multi-Artes -->
                             <div id="ped-multi-artes-container" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">

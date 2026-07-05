@@ -612,6 +612,9 @@ async def impose_file(
             if any(ma.get("pdf_verso_url") for ma in multi_artes_list):
                 print_mode_val = "duplex"
 
+        # [DIAG CAMAROTE] ver o que chega no payload
+        print(f"[DIAG CAMAROTE APP] q_cam={data.get('q_cam')!r} l_cam={data.get('l_cam')!r} seq_start={data.get('seq_start')!r} seq_end={data.get('seq_end')!r} num_tipo={numeracao.get('tipo') if numeracao else 'sem_num'!r}")
+
         config = ImpositionConfig(
             base_file=base_file_path,
             out_pdf=out_pdf_path,

@@ -235,6 +235,9 @@ class ImpositionConfig:
             else:
                 self.total_items = total_expected
 
+        # [DIAG CAMAROTE]
+        print(f"[DIAG CAMAROTE] num_tipo={self.num_tipo!r} q_cam={self.q_cam} l_cam={self.l_cam} seq_start={self.seq_start} total_items={self.total_items} numeracao_keys={list(numeracao.keys()) if numeracao else 'None'}")
+
         # Elementos VDP da numeração
         self.elements = []
         
