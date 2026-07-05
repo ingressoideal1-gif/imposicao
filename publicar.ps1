@@ -1,33 +1,33 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition"
 
-# 1. Obter a versão atual do index.html
+# 1. Obter a versÃ£o atual do index.html
 $indexFile = "frontend\index.html"
-$content = Get-Content $indexFile -Raw
+$content = Get-Content -Encoding UTF8 $indexFile -Raw
 $match = [regex]::Match($content, 'script\.js\?v=(\d+)')
 if ($match.Success) {
     $currentV = [int]$match.Groups[1].Value
     $nextV = $currentV + 1
 } else {
-    Write-Host "Não foi possível encontrar a versão atual."
+    Write-Host "NÃ£o foi possÃ­vel encontrar a versÃ£o atual."
     exit 1
 }
 
-Write-Host "Versão atual: v$currentV"
-Write-Host "Nova versão: v$nextV"
+Write-Host "VersÃ£o atual: v$currentV"
+Write-Host "Nova versÃ£o: v$nextV"
 
 # 2. Atualizar arquivos HTML
 Write-Host "Atualizando arquivos HTML..."
-(Get-Content $indexFile) -replace "script\.js\?v=$currentV", "script.js?v=$nextV" | Set-Content $indexFile
-(Get-Content $indexFile) -replace "pedido\.js\?v=\d+", "pedido.js?v=$nextV" | Set-Content $indexFile
+(Get-Content -Encoding UTF8 $indexFile) -replace "script\.js\?v=$currentV", "script.js?v=$nextV" | Set-Content -Encoding UTF8 $indexFile
+(Get-Content -Encoding UTF8 $indexFile) -replace "pedido\.js\?v=\d+", "pedido.js?v=$nextV" | Set-Content -Encoding UTF8 $indexFile
 
 $clienteFile = "frontend\cliente.html"
-(Get-Content $clienteFile) -replace "cliente\.js\?v=\d+", "cliente.js?v=$nextV" | Set-Content $clienteFile
+(Get-Content -Encoding UTF8 $clienteFile) -replace "cliente\.js\?v=\d+", "cliente.js?v=$nextV" | Set-Content -Encoding UTF8 $clienteFile
 
 $producaoFile = "frontend\producao.html"
-(Get-Content $producaoFile) -replace "script\.js\?v=\d+", "script.js?v=$nextV" | Set-Content $producaoFile
-(Get-Content $producaoFile) -replace "pedido\.js\?v=\d+", "pedido.js?v=$nextV" | Set-Content $producaoFile
+(Get-Content -Encoding UTF8 $producaoFile) -replace "script\.js\?v=\d+", "script.js?v=$nextV" | Set-Content -Encoding UTF8 $producaoFile
+(Get-Content -Encoding UTF8 $producaoFile) -replace "pedido\.js\?v=\d+", "pedido.js?v=$nextV" | Set-Content -Encoding UTF8 $producaoFile
 
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."

@@ -1,12 +1,12 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ideal Imposition � Sistema de Imposi��o Gr�fica</title>
+    <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
-        content="Ideal Imposition � Sistema profissional de imposi��o gr�fica com dados vari�veis (VDP): numera��o, QR Code, c�digo de barras.">
+        content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/style.css?v=6">
     <script src="pdf-lib.min.js"></script>
 </head>
@@ -17,12 +17,12 @@
     <div class="loading-overlay" id="loading-overlay">
         <div class="spinner"></div>
         <p class="loading-text">Gerando PDF...</p>
-        <p class="loading-sub" id="loading-sub">Aguarde enquanto processamos a imposi��o.</p>
+        <p class="loading-sub" id="loading-sub">Aguarde enquanto processamos a imposição.</p>
         <div class="progress-container">
             <div class="progress-bar-fill" id="loading-progress-bar"></div>
         </div>
         <div class="progress-text" id="loading-progress-text">Iniciando... (0%)</div>
-        <button class="btn btn-danger btn-sm" id="btn-cancel-imposition" style="margin-top: 15px; padding: 6px 16px; font-weight: 600;">? Cancelar Gera��o</button>
+        <button class="btn btn-danger btn-sm" id="btn-cancel-imposition" style="margin-top: 15px; padding: 6px 16px; font-weight: 600;">✕ Cancelar Geração</button>
     </div>
 
     <!-- Toast Container -->
@@ -30,136 +30,136 @@
 
     <div class="app-shell">
 
-        <!-- -- Sidebar ------------------------------------------------------- -->
+        <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
         <aside class="sidebar">
             <div class="sidebar-logo">
                 <img src="/Logo Ideal Dark.png" alt="Ingresso Ideal" style="height: 32px; border-radius: var(--radius-sm); object-fit: contain; flex-shrink: 0;">
                 <div class="sidebar-logo-text">
                     <strong>Ideal Imposition</strong>
-                    <span>Imposi��o Gr�fica</span>
+                    <span>Imposição Gráfica</span>
                 </div>
             </div>
 
-            <span class="nav-group-label">Configura��o</span>
+            <span class="nav-group-label">Configuração</span>
 
             <button class="nav-btn" data-view="view-formatos" id="nav-formatos">
-                <span class="nav-icon">??</span>
+                <span class="nav-icon">📐</span>
                 Formatos
             </button>
 
             <button class="nav-btn" data-view="view-lista-formatos" id="nav-lista-formatos">
-                <span class="nav-icon">??</span>
+                <span class="nav-icon">📋</span>
                 Lista Formatos
                 <span class="nav-badge" id="badge-formatos">0</span>
             </button>
 
             <button class="nav-btn" data-view="view-numeracao" id="nav-numeracao">
-                <span class="nav-icon">??</span>
-                Numera��o
+                <span class="nav-icon">🔢</span>
+                Numeração
             </button>
 
             <button class="nav-btn" data-view="view-catalogo" id="nav-catalogo">
-                <span class="nav-icon">??</span>
-                Lista de Numera��es
+                <span class="nav-icon">📚</span>
+                Lista de Numerações
                 <span class="nav-badge" id="badge-numeracao">0</span>
             </button>
 
             <button class="nav-btn" data-view="view-mapas" id="nav-mapas">
-                <span class="nav-icon">???</span>
+                <span class="nav-icon">🗺️</span>
                 Mapas de Teatro
                 <span class="nav-badge" id="badge-mapas">0</span>
             </button>
 
             <button class="nav-btn" data-view="view-saidas" id="nav-saidas">
-                <span class="nav-icon">??</span>
-                Sa�das
+                <span class="nav-icon">📄</span>
+                Saídas
                 <span class="nav-badge" id="badge-saidas">0</span>
             </button>
 
             <button class="nav-btn" data-view="view-cores" id="nav-cores">
-                <span class="nav-icon">??</span>
+                <span class="nav-icon">🎨</span>
                 Cores
             </button>
 
             <button class="nav-btn" data-view="view-lista-cores" id="nav-lista-cores">
-                <span class="nav-icon">??</span>
+                <span class="nav-icon">📋</span>
                 Lista Cores
                 <span class="nav-badge" id="badge-cores">0</span>
             </button>
 
-            <span class="nav-group-label" style="margin-top:8px;">Produ��o</span>
+            <span class="nav-group-label" style="margin-top:8px;">Produção</span>
 
             <button class="nav-btn active" data-view="view-imposicao" id="nav-imposicao">
-                <span class="nav-icon">???</span>
-                Imposi��o
+                <span class="nav-icon">🖨️</span>
+                Imposição
             </button>
 
             <button class="nav-btn" data-view="view-pedido" id="nav-pedido">
-                <span class="nav-icon">??</span>
+                <span class="nav-icon">📦</span>
                 Pedido
             </button>
 
             <button class="nav-btn" data-view="view-amostras" id="nav-amostras">
-                <span class="nav-icon">??</span>
+                <span class="nav-icon">🧪</span>
                 Amostras
             </button>
 
             <button class="nav-btn" data-view="view-lista-impressao" id="nav-lista-impressao">
-                <span class="nav-icon">???</span>
-                Painel de Produ��o
+                <span class="nav-icon">🖨️</span>
+                Painel de Produção
                 <span class="nav-badge" id="badge-impressao">0</span>
             </button>
 
             <button class="nav-btn" data-view="view-lista-arte" id="nav-lista-arte">
-                <span class="nav-icon">??</span>
+                <span class="nav-icon">🎨</span>
                 Lista de Arte
                 <span class="nav-badge" id="badge-arte">0</span>
             </button>
 
             <button class="nav-btn" data-view="view-impressoras" id="nav-impressoras">
-                <span class="nav-icon">???</span>
+                <span class="nav-icon">🖨️</span>
                 Impressoras
-                <span class="nav-badge" id="badge-impressoras" style="background:var(--success);display:none;">?</span>
+                <span class="nav-badge" id="badge-impressoras" style="background:var(--success);display:none;">●</span>
             </button>
 
-            <span class="nav-group-label admin-only" style="margin-top:8px; display:none;">Administra��o</span>
+            <span class="nav-group-label admin-only" style="margin-top:8px; display:none;">Administração</span>
 
             <button class="nav-btn admin-only" data-view="view-admin" id="nav-admin" style="display:none;">
-                <span class="nav-icon">???</span>
-                Usu�rios
+                <span class="nav-icon">🛡️</span>
+                Usuários
             </button>
 
             <div style="flex-grow: 1;"></div>
             <div class="user-profile-bar" id="user-profile-bar" style="margin-top:auto; padding: 12px 0; border-top: 1px solid var(--border); display:none;">
-                <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="user-email-display">�</div>
-                <button class="btn btn-ghost btn-sm btn-full btn-danger" onclick="handleSignOut()" style="padding: 4px 8px; font-size: 0.75rem;">?? Sair</button>
+                <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="user-email-display">—</div>
+                <button class="btn btn-ghost btn-sm btn-full btn-danger" onclick="handleSignOut()" style="padding: 4px 8px; font-size: 0.75rem;">🚪 Sair</button>
             </div>
         </aside>
 
 
-        <!-- -- Main Content --------------------------------------------------- -->
+        <!-- ── Main Content ─────────────────────────────────────────────────── -->
         <main class="main-content">
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: FORMATOS                                                 -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-formatos" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>?? Formatos</h1>
-                        <p>Defina o tamanho do item, o modelo de imposi��o em grade e o espa�amento entre itens.</p>
+                        <h1>📐 Formatos</h1>
+                        <p>Defina o tamanho do item, o modelo de imposição em grade e o espaçamento entre itens.</p>
                     </div>
                 </div>
 
-                <!-- 1. Card Novo Formato (Dimens�es do Item) -->
+                <!-- 1. Card Novo Formato (Dimensões do Item) -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> <span id="fmt-form-title">Novo
+                        <span class="card-title"><span class="icon">📐</span> <span id="fmt-form-title">Novo
                                 Formato</span></span>
                         <div style="display:flex;gap:8px;">
                             <button class="btn btn-ghost btn-sm" id="btn-fmt-cancel" style="display:none"
                                 onclick="cancelFmtEdit()">Cancelar</button>
-                            <button class="btn btn-primary btn-sm" id="btn-fmt-save" onclick="saveFmt()">??
+                            <button class="btn btn-primary btn-sm" id="btn-fmt-save" onclick="saveFmt()">💾
                                 Salvar</button>
                         </div>
                     </div>
@@ -167,7 +167,7 @@
                     <div class="form-subgrid-dimension">
                         <div class="form-group col-span-name">
                             <label>Nome do Formato</label>
-                            <input type="text" class="form-control" id="fmt-name" placeholder="Ex: Ingresso 100�50mm">
+                            <input type="text" class="form-control" id="fmt-name" placeholder="Ex: Ingresso 100×50mm">
                         </div>
                         <div class="form-group">
                             <label>Largura (mm)</label>
@@ -180,10 +180,10 @@
                     </div>
                 </div>
 
-                <!-- 2. Card Elementos (Grade e Espa�amentos) -->
+                <!-- 2. Card Elementos (Grade e Espaçamentos) -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> Elementos (Grade de Imposi��o)</span>
+                        <span class="card-title"><span class="icon">📋</span> Elementos (Grade de Imposição)</span>
                     </div>
                     <div class="form-subgrid-grid">
                         <div class="form-group">
@@ -217,30 +217,30 @@
                     </div>
                 </div>
 
-                <!-- 2.5 Card Padr�es de Imposi��o -->
+                <!-- 2.5 Card Padrões de Imposição -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> Padr�es de Imposi��o (Opcional)</span>
+                        <span class="card-title"><span class="icon">⚙️</span> Padrões de Imposição (Opcional)</span>
                     </div>
                     <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
                         <div class="form-group">
-                            <label>Regra de Pagina��o</label>
+                            <label>Regra de Paginação</label>
                             <select class="form-control" id="fmt-def-schema" onchange="document.getElementById('fmt-def-cut-stack-options').style.display = (this.value === 'cut_stack') ? 'block' : 'none'">
-                                <option value="sequential">Padr�o Sequencial (VDP Simples)</option>
+                                <option value="sequential">Padrão Sequencial (VDP Simples)</option>
                                 <option value="cut_stack">Cut & Stack (Corte e Pilha)</option>
-                                <option value="pdf_multiple">Repetir PDF M�ltiplas P�ginas</option>
+                                <option value="pdf_multiple">Repetir PDF Múltiplas Páginas</option>
                                 <option value="multi_artes">Multi-Artes (VDP c/ Artes Variadas)</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Sa�da Padr�o</label>
+                            <label>Saída Padrão</label>
                             <select class="form-control" id="fmt-def-saida">
-                                <option value="">� Nenhuma (Livre) �</option>
+                                <option value="">— Nenhuma (Livre) —</option>
                             </select>
                         </div>
                     </div>
                     
-                    <!-- Op��es espec�ficas de Cut & Stack (mesma l�gica visual da p�gina principal) -->
+                    <!-- Opções específicas de Cut & Stack (mesma lógica visual da página principal) -->
                     <div id="fmt-def-cut-stack-options" style="display:none; margin-top: 12px; padding: 12px; background: rgba(0, 168, 255, 0.05); border: 1px solid rgba(0, 168, 255, 0.2); border-radius: var(--radius);">
                         <div class="form-grid form-grid-3">
                             <div class="form-group">
@@ -264,10 +264,10 @@
                     
                     <div class="form-group" style="margin-top: 12px; display: flex; align-items: center; gap: 10px;">
                         <input type="checkbox" id="fmt-def-rotate" style="width:18px; height:18px;">
-                        <label for="fmt-def-rotate" style="margin:0; cursor:pointer;">Rotacionar P�ginas Pares (Duplex Flip)</label>
+                        <label for="fmt-def-rotate" style="margin:0; cursor:pointer;">Rotacionar Páginas Pares (Duplex Flip)</label>
                     </div>
 
-                    <!-- Sess�o de Capas -->
+                    <!-- Sessão de Capas -->
                     <div class="form-group" style="margin-top: 20px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 15px;">
                         <input type="checkbox" id="fmt-has-cover" style="width:18px; height:18px;" onchange="document.getElementById('fmt-cover-options').style.display = this.checked ? 'block' : 'none'">
                         <label for="fmt-has-cover" style="margin:0; cursor:pointer; font-weight: 600; color: var(--accent);">Gerar Capa e Contracapa por Conjunto</label>
@@ -276,7 +276,7 @@
                     <div id="fmt-cover-options" style="display:none; margin-top: 12px; padding: 12px; background: rgba(162, 155, 254, 0.05); border: 1px solid rgba(162, 155, 254, 0.2); border-radius: var(--radius);">
                         <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 12px;">
                             <div class="form-group">
-                                <label style="color: var(--accent);">Redu��o da Arte (%)</label>
+                                <label style="color: var(--accent);">Redução da Arte (%)</label>
                                 <input type="number" class="form-control" id="fmt-cover-scale" value="80" min="1" max="100">
                             </div>
                             <div class="form-group">
@@ -298,21 +298,21 @@
                                 <input type="color" class="form-control" id="fmt-cover-font-color" value="#000000" style="padding: 2px; height: 38px;">
                             </div>
                             <div class="form-group">
-                                <label style="color: var(--accent);">Posi��o Texto X (mm)</label>
+                                <label style="color: var(--accent);">Posição Texto X (mm)</label>
                                 <input type="number" class="form-control" id="fmt-cover-font-x" value="10" step="0.1">
                             </div>
                             <div class="form-group">
-                                <label style="color: var(--accent);">Posi��o Texto Y (mm)</label>
+                                <label style="color: var(--accent);">Posição Texto Y (mm)</label>
                                 <input type="number" class="form-control" id="fmt-cover-font-y" value="10" step="0.1">
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 3. Card Preview da Imposi��o -->
+                <!-- 3. Card Preview da Imposição -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title">??? Preview da Imposi��o</span>
+                        <span class="card-title">👁️ Preview da Imposição</span>
                         <span class="badge badge-teal" id="fmt-preview-info">Total: 10 itens</span>
                     </div>
                     <div class="preview-canvas-container">
@@ -320,34 +320,34 @@
                     </div>
                     <div class="rotation-control-panel" style="padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: var(--bg-card);">
                         <div style="font-size: 0.85rem; color: var(--text-dim);">
-                            <span id="rotation-selected-label">Nenhuma c�lula selecionada (clique em uma p�gina acima)</span>
+                            <span id="rotation-selected-label">Nenhuma célula selecionada (clique em uma página acima)</span>
                         </div>
                         <div style="display: flex; gap: 6px;">
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-rot-0" disabled onclick="setCellRotation(0)">0�</button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-rot-90" disabled onclick="setCellRotation(90)">90�</button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-rot-180" disabled onclick="setCellRotation(180)">180�</button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-rot-270" disabled onclick="setCellRotation(270)">270�</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-rot-0" disabled onclick="setCellRotation(0)">0°</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-rot-90" disabled onclick="setCellRotation(90)">90°</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-rot-180" disabled onclick="setCellRotation(180)">180°</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-rot-270" disabled onclick="setCellRotation(270)">270°</button>
                         </div>
                     </div>
                 </div>
 
             </section>
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: LISTA FORMATOS                                           -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-lista-formatos" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>?? Lista de Formatos</h1>
-                        <p>Formatos cadastrados dispon�veis para edi��o, exclus�o ou duplica��o.</p>
+                        <h1>📋 Lista de Formatos</h1>
+                        <p>Formatos cadastrados disponíveis para edição, exclusão ou duplicação.</p>
                     </div>
                 </div>
 
                 <!-- Tabela -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> Formatos Cadastrados</span>
+                        <span class="card-title"><span class="icon">📋</span> Formatos Cadastrados</span>
                     </div>
                     <table class="data-table" id="table-formatos">
                         <thead>
@@ -355,63 +355,63 @@
                                 <th>Nome</th>
                                 <th>Tamanho</th>
                                 <th>Grade</th>
-                                <th>Gap H � V</th>
-                                <th>A��es</th>
+                                <th>Gap H × V</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-formatos"></tbody>
                     </table>
                     <div class="empty-state" id="empty-formatos" style="display:none">
-                        <div class="empty-state-icon">??</div>
+                        <div class="empty-state-icon">📐</div>
                         <p>Nenhum formato cadastrado ainda.</p>
                     </div>
                 </div>
             </section>
 
-            <!-- -------------------------------------------------------------- -->
-            <!-- VIEW: NUMERA��O                                                -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: NUMERAÇÃO                                                -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-numeracao" class="view-section" style="max-width: 100%;">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>?? Numera��o</h1>
-                        <p>Crie conjuntos de elementos vari�veis: numera��o, QR Code, c�digo de barras e textos.</p>
+                        <h1>🔢 Numeração</h1>
+                        <p>Crie conjuntos de elementos variáveis: numeração, QR Code, código de barras e textos.</p>
                     </div>
                 </div>
 
                 <!-- Seletor de Formato + Nome -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> Configura��o da Numera��o</span>
+                        <span class="card-title"><span class="icon">⚙️</span> Configuração da Numeração</span>
                         <div style="display:flex;gap:8px;">
                             <button class="btn btn-ghost btn-sm" id="btn-num-cancel" style="display:none"
                                 onclick="cancelNumEdit()">Cancelar</button>
-                            <button class="btn btn-primary btn-sm" id="btn-num-save" onclick="saveNumeracao()">?? Salvar
-                                Numera��o</button>
+                            <button class="btn btn-primary btn-sm" id="btn-num-save" onclick="saveNumeracao()">💾 Salvar
+                                Numeração</button>
                         </div>
                     </div>
                     <input type="hidden" id="num-id">
                     <div class="form-grid" style="grid-template-columns: 2fr 1.2fr 1.2fr 1fr;">
                         <div class="form-group">
-                            <label>Nome da Numera��o</label>
+                            <label>Nome da Numeração</label>
                             <input type="text" class="form-control" id="num-name"
-                                placeholder="Ex: Numera��o Ingresso VIP">
+                                placeholder="Ex: Numeração Ingresso VIP">
                         </div>
                         <div class="form-group">
                             <label>Formato Base <span style="font-weight:400;color:var(--text-dim);font-size:0.78rem;">(define o canvas)</span></label>
                             <select class="form-control" id="num-formato" onchange="onFormatoSelect()">
-                                <option value="">� Selecione um Formato �</option>
+                                <option value="">— Selecione um Formato —</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Modo de Impress�o</label>
+                            <label>Modo de Impressão</label>
                             <select class="form-control" id="num-print-mode" onchange="onNumPrintModeChange()">
                                 <option value="front" selected>Apenas Frente</option>
                                 <option value="duplex">Frente e Verso</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Tipo de Numera��o</label>
+                            <label>Tipo de Numeração</label>
                             <select class="form-control" id="num-tipo" onchange="onTipoSelect()">
                                 <option value="SEQUENCIAL" selected>SEQUENCIAL</option>
                                 <option value="TICKET">TICKET</option>
@@ -425,15 +425,15 @@
                     <div id="num-ticket-settings" style="display:none; margin-top: 12px; padding: 12px; background: rgba(0, 168, 255, 0.05); border: 1px solid rgba(0, 168, 255, 0.2); border-radius: var(--radius);">
                         <div class="form-grid form-grid-1">
                             <div class="form-group">
-                                <label style="color: var(--blue);">Tickets por C�lula (Folha)</label>
+                                <label style="color: var(--blue);">Tickets por Célula (Folha)</label>
                                 <input type="number" class="form-control" id="num-ticket-qtd" min="1" value="1" onchange="onTicketQtdChange()">
                             </div>
                             <input type="hidden" id="num-ticket-logica" value="HORIZONTAL">
                         </div>
                     </div>
-                    <!-- Checkboxes de formatos compat�veis -->
+                    <!-- Checkboxes de formatos compatíveis -->
                     <div id="num-formatos-compat" style="display:none; margin: 12px 0 0 0; padding: 12px 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--radius);">
-                        <label style="display:block; margin-bottom:8px; font-size:0.82rem; font-weight:600;">?? Formatos compat�veis com esta numera��o <span style="font-weight:400;color:var(--text-dim);font-size:0.75rem;">(marque todos os formatos onde esta numera��o deve aparecer na Imposi��o)</span></label>
+                        <label style="display:block; margin-bottom:8px; font-size:0.82rem; font-weight:600;">📐 Formatos compatíveis com esta numeração <span style="font-weight:400;color:var(--text-dim);font-size:0.75rem;">(marque todos os formatos onde esta numeração deve aparecer na Imposição)</span></label>
                         <div id="num-formatos-checks" style="display:flex; flex-wrap:wrap; gap:8px 16px;"></div>
                     </div>
                     <div class="divider" style="margin: 16px 0 12px 0;"></div>
@@ -443,10 +443,10 @@
                             <label>Banco de Dados (CSV)</label>
                             <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
                                 <label class="btn btn-sm btn-secondary" for="num-csv-file" style="margin: 0; cursor: pointer;">
-                                    ?? Upload CSV
+                                    📊 Upload CSV
                                 </label>
                                 <input type="file" id="num-csv-file" accept=".csv" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-csv" style="display:none; padding: 4px 8px;" onclick="clearNumCsvFile()">? Remover</button>
+                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-csv" style="display:none; padding: 4px 8px;" onclick="clearNumCsvFile()">✕ Remover</button>
                                 <span id="num-csv-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
                             </div>
                         </div>
@@ -454,21 +454,21 @@
                             <label>Desenho Vetorial (SVG)</label>
                             <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
                                 <label class="btn btn-sm btn-secondary" for="num-svg-file" style="margin: 0; cursor: pointer;">
-                                    ?? Upload SVG
+                                    🎨 Upload SVG
                                 </label>
                                 <input type="file" id="num-svg-file" accept=".svg" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-svg" style="display:none; padding: 4px 8px;" onclick="clearNumSvgFile()">? Remover</button>
+                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-svg" style="display:none; padding: 4px 8px;" onclick="clearNumSvgFile()">✕ Remover</button>
                                 <span id="num-svg-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Arquivo PDF (Elementos Vari�veis)</label>
+                            <label>Arquivo PDF (Elementos Variáveis)</label>
                             <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
                                 <label class="btn btn-sm btn-secondary" for="num-pdf-file" style="margin: 0; cursor: pointer;">
-                                    ?? Upload PDF
+                                    📄 Upload PDF
                                 </label>
                                 <input type="file" id="num-pdf-file" accept=".pdf" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-pdf" style="display:none; padding: 4px 8px;" onclick="clearNumPdfFile()">? Remover</button>
+                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-pdf" style="display:none; padding: 4px 8px;" onclick="clearNumPdfFile()">✕ Remover</button>
                                 <span id="num-pdf-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
                             </div>
                         </div>
@@ -481,26 +481,26 @@
                     <!-- Barra de Elementos (Topo) -->
                     <div class="top-elements-panel card" style="padding:16px; margin-bottom: 0;">
                         <div class="card-header" style="margin-bottom:12px; padding-bottom: 8px;">
-                            <span class="card-title" style="font-size:0.85rem;"><span class="icon">??</span> Adicionar
+                            <span class="card-title" style="font-size:0.85rem;"><span class="icon">🎯</span> Adicionar
                                 Elementos</span>
                         </div>
                         <div class="add-elements-bar">
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('TEXT')">?? Numera��o</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('QR')">?? QR Code</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('BARCODE')">�� Barcode</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('FIXED')">?? Texto Fixo</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('SVG')">?? SVG</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('PDF')">?? PDF</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('PICOTE')">?? Picote</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('TEXT')">🔤 Numeração</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('QR')">📱 QR Code</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('BARCODE')">▌▌ Barcode</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('FIXED')">🔠 Texto Fixo</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('SVG')">🎨 SVG</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('PDF')">📄 PDF</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('PICOTE')">✂️ Picote</button>
                         </div>
                         <div id="num-csv-columns-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
-                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">??</span> Colunas do Banco de Dados (CSV)</span>
+                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">📊</span> Colunas do Banco de Dados (CSV)</span>
                             <div class="add-elements-bar" id="num-csv-columns-bar">
-                                <!-- Bot�es din�micos de colunas do CSV ser�o inseridos aqui -->
+                                <!-- Botões dinâmicos de colunas do CSV serão inseridos aqui -->
                             </div>
                         </div>
                         <div id="num-teatro-elements-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
-                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">??</span> Elementos de Teatro</span>
+                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🎭</span> Elementos de Teatro</span>
                             <div class="add-elements-bar">
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_FILA')">Fila</button>
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_LUGAR')">Lugar</button>
@@ -508,11 +508,11 @@
                             </div>
                         </div>
                         <div id="num-camarote-elements-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; background: rgba(255, 160, 0, 0.04); border-radius: var(--radius); padding: 12px;">
-                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">???</span> Elementos de Camarote</span>
+                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🏛️</span> Elementos de Camarote</span>
                             <div class="add-elements-bar">
-                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_LOCAL')" title="Local onde as pessoas ficam (Mesa, Camarote, Sala�)">??? Local</button>
-                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_PESSOA')" title="N�mero da pessoa dentro do local (Cadeira, Lugar�)">?? Pessoas</button>
-                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_PESSOA_TOTAL')" title="N�mero da pessoa / total do local (ex: 1/5)">?? Pessoas 1/Total</button>
+                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_LOCAL')" title="Local onde as pessoas ficam (Mesa, Camarote, Sala…)">🏛️ Local</button>
+                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_PESSOA')" title="Número da pessoa dentro do local (Cadeira, Lugar…)">👤 Pessoas</button>
+                                <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_PESSOA_TOTAL')" title="Número da pessoa / total do local (ex: 1/5)">👥 Pessoas 1/Total</button>
                             </div>
                         </div>
                     </div>
@@ -523,7 +523,7 @@
                         <!-- Lista de elementos -->
                         <div id="elements-list">
                             <div class="empty-state" id="empty-elements">
-                                <div class="empty-state-icon">??</div>
+                                <div class="empty-state-icon">🎯</div>
                                 <p>Adicione elementos acima</p>
                             </div>
                         </div>
@@ -532,39 +532,39 @@
                     <!-- Canvas direito -->
                     <div class="canvas-wrapper">
                         <div class="canvas-info">
-                            <span id="canvas-dim-label">�</span>
+                            <span id="canvas-dim-label">—</span>
                             <span>Clique e arraste os elementos</span>
-                            <span id="canvas-scale-label">�</span>
+                            <span id="canvas-scale-label">—</span>
                         </div>
                         <div class="canvas-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                <label class="btn btn-sm btn-secondary canvas-bg-label" for="canvas-bg-file" style="margin: 0;" title="Carregar arte de fundo para visualiza��o">
-                                    ??? Arte de Fundo
+                                <label class="btn btn-sm btn-secondary canvas-bg-label" for="canvas-bg-file" style="margin: 0;" title="Carregar arte de fundo para visualização">
+                                    🖼️ Arte de Fundo
                                 </label>
                                 <input type="file" id="canvas-bg-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
                                 <span id="bg-file-name" style="font-size: 0.85rem; color: var(--blue); font-weight: 500; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
                                 <button class="btn btn-sm btn-danger" id="btn-remove-bg" style="display:none; padding: 4px 8px;" onclick="clearBgImage()" title="Remover arte de fundo">
-                                    ? Remover
+                                    ✕ Remover
                                 </button>
                             </div>
                             
                             <!-- Ferramentas de Alinhamento Compactas -->
                             <div class="align-tools-horizontal" style="display: flex; gap: 4px; align-items: center; background: rgba(0,0,0,0.15); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 8px;">
                                 <span style="font-size: 0.68rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-right: 6px; user-select: none;">Alinhar:</span>
-                                <button class="btn btn-sm btn-secondary" onclick="alignSelectedElement('left')" title="Alinhar � Esquerda" style="padding: 4px 8px; font-size: 0.8rem;">??</button>
-                                <button class="btn btn-sm btn-secondary" onclick="alignSelectedElement('center-h')" title="Centralizar Horizontal" style="padding: 4px 8px; font-size: 0.8rem;">??</button>
-                                <button class="btn btn-sm btn-secondary" onclick="alignSelectedElement('right')" title="Alinhar � Direita" style="padding: 4px 8px; font-size: 0.8rem;">??</button>
+                                <button class="btn btn-sm btn-secondary" onclick="alignSelectedElement('left')" title="Alinhar à Esquerda" style="padding: 4px 8px; font-size: 0.8rem;">⬅️</button>
+                                <button class="btn btn-sm btn-secondary" onclick="alignSelectedElement('center-h')" title="Centralizar Horizontal" style="padding: 4px 8px; font-size: 0.8rem;">↔️</button>
+                                <button class="btn btn-sm btn-secondary" onclick="alignSelectedElement('right')" title="Alinhar à Direita" style="padding: 4px 8px; font-size: 0.8rem;">➡️</button>
                                 <div style="width: 1px; background: var(--border); height: 16px; margin: 0 4px;"></div>
-                                <button class="btn btn-sm btn-secondary" id="btn-align-top" onclick="alignSelectedElement('top')" title="Alinhar ao Topo" style="padding: 4px 8px; font-size: 0.8rem;">??</button>
-                                <button class="btn btn-sm btn-secondary" id="btn-align-centerv" onclick="alignSelectedElement('center-v')" title="Centralizar Vertical" style="padding: 4px 8px; font-size: 0.8rem;">??</button>
-                                <button class="btn btn-sm btn-secondary" id="btn-align-bottom" onclick="alignSelectedElement('bottom')" title="Alinhar � Base" style="padding: 4px 8px; font-size: 0.8rem;">??</button>
+                                <button class="btn btn-sm btn-secondary" id="btn-align-top" onclick="alignSelectedElement('top')" title="Alinhar ao Topo" style="padding: 4px 8px; font-size: 0.8rem;">⬆️</button>
+                                <button class="btn btn-sm btn-secondary" id="btn-align-centerv" onclick="alignSelectedElement('center-v')" title="Centralizar Vertical" style="padding: 4px 8px; font-size: 0.8rem;">↕️</button>
+                                <button class="btn btn-sm btn-secondary" id="btn-align-bottom" onclick="alignSelectedElement('bottom')" title="Alinhar à Base" style="padding: 4px 8px; font-size: 0.8rem;">⬇️</button>
                             </div>
 
                             <!-- Ferramentas de Agrupamento -->
                             <div class="group-tools-horizontal" style="display: flex; gap: 4px; align-items: center; background: rgba(0,0,0,0.15); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 8px;">
                                 <span style="font-size: 0.68rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-right: 6px; user-select: none;">Grupo:</span>
-                                <button class="btn btn-sm btn-secondary" onclick="groupSelectedElements()" title="Agrupar Selecionados" style="padding: 4px 8px; font-size: 0.8rem;">?? Agrupar</button>
-                                <button class="btn btn-sm btn-secondary" onclick="ungroupSelectedElements()" title="Desagrupar Selecionados" style="padding: 4px 8px; font-size: 0.8rem;">?? Desagrupar</button>
+                                <button class="btn btn-sm btn-secondary" onclick="groupSelectedElements()" title="Agrupar Selecionados" style="padding: 4px 8px; font-size: 0.8rem;">🔗 Agrupar</button>
+                                <button class="btn btn-sm btn-secondary" onclick="ungroupSelectedElements()" title="Desagrupar Selecionados" style="padding: 4px 8px; font-size: 0.8rem;">🔓 Desagrupar</button>
                             </div>
                         </div>
                         <div style="display: flex; width: 100%; justify-content: center; gap: 24px; overflow: auto; padding: 8px 0; flex-wrap: wrap;">
@@ -582,14 +582,14 @@
 
             </section>
 
-            <!-- -------------------------------------------------------------- -->
-            <!-- VIEW: CAT�LOGO                                                 -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: CATÁLOGO                                                 -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-catalogo" class="view-section">
                 <div class="page-header" style="flex-wrap: wrap;">
                     <div class="page-header-text">
-                        <h1>?? Cat�logo de Numera��es</h1>
-                        <p>Suas numera��es cadastradas agrupadas pelo formato base.</p>
+                        <h1>📚 Catálogo de Numerações</h1>
+                        <p>Suas numerações cadastradas agrupadas pelo formato base.</p>
                     </div>
                     <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <div style="position: relative;">
@@ -597,7 +597,7 @@
                                 placeholder="Buscar por nome..." oninput="renderNumeracoes()"
                                 style="padding-left: 32px; width: 220px;">
                             <span
-                                style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">??</span>
+                                style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">🔍</span>
                         </div>
                         <select id="catalogo-filter-format" class="form-control" onchange="renderNumeracoes()"
                             style="width: 200px;">
@@ -612,7 +612,7 @@
                             <option value="TEATRO">TEATRO</option>
                             <option value="CAMAROTE">CAMAROTE</option>
                         </select>
-                        <button class="btn btn-primary" onclick="novaNumeracao()">+ Nova Numera��o</button>
+                        <button class="btn btn-primary" onclick="novaNumeracao()">+ Nova Numeração</button>
                     </div>
                 </div>
 
@@ -621,28 +621,28 @@
                 </div>
 
                 <div class="empty-state" id="empty-catalogo" style="display:none; margin-top:20px;">
-                    <div class="empty-state-icon">??</div>
-                    <p>Nenhuma numera��o cadastrada ainda no cat�logo.</p>
+                    <div class="empty-state-icon">📚</div>
+                    <p>Nenhuma numeração cadastrada ainda no catálogo.</p>
                 </div>
             </section>
 
-            <!-- -------------------------------------------------------------- -->
-            <!-- VIEW: SA�DAS                                                   -->
-            <!-- -------------------------------------------------------------- -->
-            <!-- ---------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: SAÍDAS                                                   -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- ──────────────────────────────────────────────────────────────── -->
             <!-- VIEW: MAPAS DE TEATRO                                            -->
-            <!-- ---------------------------------------------------------------- -->
+            <!-- ──────────────────────────────────────────────────────────────── -->
             <section id="view-mapas" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>??? Mapas de Teatro</h1>
-                        <p>Crie e gerencie as configura��es de poltronas de teatros para o seu sistema.</p>
+                        <h1>🗺️ Mapas de Teatro</h1>
+                        <p>Crie e gerencie as configurações de poltronas de teatros para o seu sistema.</p>
                     </div>
                 </div>
 
                 <div class="toolbar-actions" style="justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
                     <div style="position:relative; flex:1; max-width: 360px;">
-                        <span style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-dim); pointer-events:none;">??</span>
+                        <span style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-dim); pointer-events:none;">🔍</span>
                         <input
                             type="text"
                             id="input-busca-mapa"
@@ -657,7 +657,7 @@
 
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">???</span> Mapas Cadastrados</span>
+                        <span class="card-title"><span class="icon">🗺️</span> Mapas Cadastrados</span>
                     </div>
                     <table class="data-table" id="table-mapas">
                         <thead>
@@ -665,13 +665,13 @@
                                 <th>NOME DO MAPA</th>
                                 <th>SETORES</th>
                                 <th>ASSENTOS TOTAIS</th>
-                                <th class="text-right">A��ES</th>
+                                <th class="text-right">AÇÕES</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-mapas"></tbody>
                     </table>
                     <div class="empty-state" id="empty-mapas" style="display:none">
-                        <div class="empty-state-icon">???</div>
+                        <div class="empty-state-icon">🗺️</div>
                         <p>Nenhum mapa cadastrado ainda.</p>
                     </div>
                 </div>
@@ -682,25 +682,25 @@
             <section id="view-saidas" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>?? Sa�das</h1>
-                        <p>Cadastre os formatos de papel (folha de impress�o) para gera��o do arquivo final.</p>
+                        <h1>📄 Saídas</h1>
+                        <p>Cadastre os formatos de papel (folha de impressão) para geração do arquivo final.</p>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> <span id="sai-form-title">Nova
-                                Sa�da</span></span>
+                        <span class="card-title"><span class="icon">✏️</span> <span id="sai-form-title">Nova
+                                Saída</span></span>
                         <div style="display:flex;gap:8px;">
                             <button class="btn btn-ghost btn-sm" id="btn-sai-cancel" style="display:none"
                                 onclick="cancelSaiEdit()">Cancelar</button>
-                            <button class="btn btn-primary btn-sm" id="btn-sai-save" onclick="saveSaida()">??
+                            <button class="btn btn-primary btn-sm" id="btn-sai-save" onclick="saveSaida()">💾
                                 Salvar</button>
                         </div>
                     </div>
                     <input type="hidden" id="sai-id">
 
-                    <!-- Presets r�pidos -->
+                    <!-- Presets rápidos -->
                     <div style="margin-bottom:16px;">
                         <span style="font-size:0.8rem;color:var(--text-dim);margin-right:8px;">Presets:</span>
                         <button class="btn btn-sm btn-ghost" onclick="setPreset(450,320)">SRA3 Paisagem</button>
@@ -736,7 +736,7 @@
 
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> Sa�das Cadastradas</span>
+                        <span class="card-title"><span class="icon">📋</span> Saídas Cadastradas</span>
                     </div>
                     <table class="data-table">
                         <thead>
@@ -744,36 +744,36 @@
                                 <th>Nome</th>
                                 <th>Tamanho</th>
                                 <th>Formato</th>
-                                <th>A��es</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-saidas"></tbody>
                     </table>
                     <div class="empty-state" id="empty-saidas" style="display:none">
-                        <div class="empty-state-icon">??</div>
-                        <p>Nenhuma sa�da cadastrada ainda.</p>
+                        <div class="empty-state-icon">📄</div>
+                        <p>Nenhuma saída cadastrada ainda.</p>
                     </div>
                 </div>
             </section>
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: CORES                                                    -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-cores" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>?? Cores</h1>
-                        <p>Cadastre as cores de refer�ncia vinculadas aos formatos do seu item e fa�a upload do arquivo PDF correspondente.</p>
+                        <h1>🎨 Cores</h1>
+                        <p>Cadastre as cores de referência vinculadas aos formatos do seu item e faça upload do arquivo PDF correspondente.</p>
                     </div>
                 </div>
 
-                <!-- Formul�rio de Nova Cor -->
+                <!-- Formulário de Nova Cor -->
                 <div class="card" style="margin-bottom: 20px;">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> <span id="cor-form-title">Nova Cor</span></span>
+                        <span class="card-title"><span class="icon">🎨</span> <span id="cor-form-title">Nova Cor</span></span>
                         <div style="display:flex;gap:8px;">
                             <button class="btn btn-ghost btn-sm" id="btn-cor-cancel" style="display:none" onclick="cancelCorEdit()">Cancelar</button>
-                            <button class="btn btn-primary btn-sm" id="btn-cor-save" onclick="saveCor()">?? Salvar</button>
+                            <button class="btn btn-primary btn-sm" id="btn-cor-save" onclick="saveCor()">💾 Salvar</button>
                         </div>
                     </div>
                     <input type="hidden" id="cor-id">
@@ -785,7 +785,7 @@
                         <div class="form-group">
                             <label>Formato Base</label>
                             <select class="form-control" id="cor-formato" onchange="onCorFormatoSelect()">
-                                <option value="">� Selecione �</option>
+                                <option value="">— Selecione —</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -802,41 +802,41 @@
                     <div class="form-group" style="margin-bottom: 15px;">
                         <label class="checkbox-container" style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer;">
                             <input type="checkbox" id="cor-frente-verso" onchange="toggleCorVersoFields()" style="width: 18px; height: 18px; cursor: pointer;">
-                            <span>Esta cor possui Verso de Refer�ncia (Frente e Verso)</span>
+                            <span>Esta cor possui Verso de Referência (Frente e Verso)</span>
                         </label>
                     </div>
 
                     <div class="form-grid" id="cor-pdfs-grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div class="form-group">
-                            <label id="cor-pdf-front-label">Arquivo PDF de Refer�ncia - FRENTE</label>
+                            <label id="cor-pdf-front-label">Arquivo PDF de Referência - FRENTE</label>
                             <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
                                 <label class="btn btn-sm btn-secondary" for="cor-pdf-file" style="margin: 0; cursor: pointer;">
-                                    ?? Upload Frente
+                                    📄 Upload Frente
                                 </label>
                                 <input type="file" id="cor-pdf-file" accept=".pdf" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-cor-pdf" style="display:none; padding: 4px 8px;" onclick="clearCorPdfFile()">? Remover</button>
+                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-cor-pdf" style="display:none; padding: 4px 8px;" onclick="clearCorPdfFile()">✕ Remover</button>
                                 <span id="cor-pdf-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
                             </div>
                         </div>
 
                         <div class="form-group" id="cor-pdf-verso-group" style="display: none;">
-                            <label>Arquivo PDF de Refer�ncia - VERSO</label>
+                            <label>Arquivo PDF de Referência - VERSO</label>
                             <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
                                 <label class="btn btn-sm btn-secondary" for="cor-pdf-verso-file" style="margin: 0; cursor: pointer;">
-                                    ?? Upload Verso
+                                    📄 Upload Verso
                                 </label>
                                 <input type="file" id="cor-pdf-verso-file" accept=".pdf" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-cor-pdf-verso" style="display:none; padding: 4px 8px;" onclick="clearCorPdfVersoFile()">? Remover</button>
+                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-cor-pdf-verso" style="display:none; padding: 4px 8px;" onclick="clearCorPdfVersoFile()">✕ Remover</button>
                                 <span id="cor-pdf-verso-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Janela de Visualiza��o do PDF de Refer�ncia (Abaixo do formul�rio, alinhado na largura) -->
+                <!-- Janela de Visualização do PDF de Referência (Abaixo do formulário, alinhado na largura) -->
                 <div class="card" style="margin-bottom: 0;">
                     <div class="card-header">
-                        <span class="card-title">??? Visualiza��o do PDF de Refer�ncia</span>
+                        <span class="card-title">👁️ Visualização do PDF de Referência</span>
                     </div>
                     <div id="cor-pdf-preview-container-grid" style="display: grid; grid-template-columns: 1fr; gap: 20px; background: var(--bg-body); border-radius: var(--radius); padding: 15px; border: 1px solid var(--border);">
                         <!-- Bloco Frente -->
@@ -844,31 +844,31 @@
                             <div style="font-size: 0.85rem; font-weight: 700; color: var(--blue); margin-bottom: 8px; text-transform: uppercase;" id="cor-pdf-preview-front-label">FRENTE</div>
                             <canvas id="cor-pdf-preview-canvas" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
                             <div id="cor-pdf-preview-empty" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">??</div>
-                                <p style="font-size: 0.85rem; font-weight: 500;" id="cor-pdf-preview-front-empty-text">Fa�a upload de um PDF de Frente para visualizar.</p>
+                                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                                <p style="font-size: 0.85rem; font-weight: 500;" id="cor-pdf-preview-front-empty-text">Faça upload de um PDF de Frente para visualizar.</p>
                             </div>
                         </div>
                         
-                        <!-- Bloco Verso (Ocult�vel) -->
+                        <!-- Bloco Verso (Ocultável) -->
                         <div id="cor-pdf-preview-back-block" style="display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; border-left: 1px solid var(--border); padding-left: 20px;">
                             <div style="font-size: 0.85rem; font-weight: 700; color: var(--amber); margin-bottom: 8px; text-transform: uppercase;">VERSO</div>
                             <canvas id="cor-pdf-preview-verso-canvas" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff;"></canvas>
                             <div id="cor-pdf-preview-verso-empty" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">??</div>
-                                <p style="font-size: 0.85rem; font-weight: 500;">Fa�a upload de um PDF de Verso para visualizar.</p>
+                                <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                                <p style="font-size: 0.85rem; font-weight: 500;">Faça upload de um PDF de Verso para visualizar.</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: LISTA CORES                                              -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-lista-cores" class="view-section">
                 <div class="page-header" style="flex-wrap: wrap;">
                     <div class="page-header-text">
-                        <h1>?? Lista de Cores</h1>
+                        <h1>📋 Lista de Cores</h1>
                         <p>Cores cadastradas no sistema organizadas por formato.</p>
                     </div>
                     <div style="margin-left: auto;">
@@ -877,35 +877,35 @@
                 </div>
 
                 <div id="cores-grouped-container">
-                    <!-- Cores agrupadas por formato ser�o geradas aqui pelo JS -->
+                    <!-- Cores agrupadas por formato serão geradas aqui pelo JS -->
                 </div>
 
                 <div class="empty-state" id="empty-cores" style="display:none">
-                    <div class="empty-state-icon">??</div>
+                    <div class="empty-state-icon">🎨</div>
                     <p>Nenhuma cor cadastrada ainda.</p>
                 </div>
             </section>
 
-            <!-- -------------------------------------------------------------- -->
-            <!-- VIEW: IMPOSI��O                                                -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: IMPOSIÇÃO                                                -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-imposicao" class="view-section active" style="max-width: 100%;">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>??? Imposi��o</h1>
-                        <p>Selecione o Formato, a Numera��o e a Sa�da, depois envie a arte para gerar o PDF imposto.</p>
+                        <h1>🖨️ Imposição</h1>
+                        <p>Selecione o Formato, a Numeração e a Saída, depois envie a arte para gerar o PDF imposto.</p>
                     </div>
                 </div>
 
-                <!-- Steps bar removido da visualiza��o de produ��o -->
+                <!-- Steps bar removido da visualização de produção -->
 
                 <div class="imposicao-layout">
                     <div class="imposicao-config">
                         <div class="card">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                                <span class="card-title"><span class="icon">??</span> Configura��o da Imposi��o</span>
+                                <span class="card-title"><span class="icon">⚙️</span> Configuração da Imposição</span>
                                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    <span style="font-size: 0.82rem; color: var(--text-dim); font-weight: 500;">Regra de Pagina��o:</span>
+                                    <span style="font-size: 0.82rem; color: var(--text-dim); font-weight: 500;">Regra de Paginação:</span>
                                     <select class="form-control" id="imp-schema" style="width: 180px; padding: 4px 8px; font-size: 0.85rem; border: 1px solid var(--blue); font-weight: 500;" onchange="updateImpSummary(); toggleMultiArtes(); toggleCutStackOptions();">
                                         <option value="sequential">Sequencial</option>
                                         <option value="cut_stack">Cut &amp; Stack (Blocos)</option>
@@ -918,8 +918,8 @@
 
                             <!-- Status da OS Ativa -->
                             <div id="active-os-status" style="display: none; font-size: 0.82rem; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); margin: 0 0 16px 0; justify-content: space-between; align-items: center; gap: 10px;">
-                                <span>?? OS Ativa: <strong id="active-os-name" style="color: var(--blue);">Nenhuma</strong></span>
-                                <button type="button" class="btn btn-ghost btn-sm btn-danger" onclick="clearActiveOS()" style="padding: 2px 8px; font-size: 0.75rem; margin: 0;">? Limpar OS</button>
+                                <span>📋 OS Ativa: <strong id="active-os-name" style="color: var(--blue);">Nenhuma</strong></span>
+                                <button type="button" class="btn btn-ghost btn-sm btn-danger" onclick="clearActiveOS()" style="padding: 2px 8px; font-size: 0.75rem; margin: 0;">✕ Limpar OS</button>
                             </div>
 
                             <!-- Fila de Itens OS pendentes -->
@@ -932,35 +932,35 @@
                                 <div class="form-group">
                                     <label>1. Formato</label>
                                     <select class="form-control" id="imp-formato" onchange="onImposicaoFormatoChange(this.value)">
-                                        <option value="">� Selecione �</option>
+                                        <option value="">— Selecione —</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
                                     <label id="lbl-imp-num-1" style="display:flex; justify-content:space-between; align-items:center;">
-                                        2. Numera��o 1 (opcional)
-                                        <button id="btn-edit-imp-num-1" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numera��o" onclick="editImposicaoCustomNumeracao('imp-numeracao')">
+                                        2. Numeração 1 (opcional)
+                                        <button id="btn-edit-imp-num-1" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numeração" onclick="editImposicaoCustomNumeracao('imp-numeracao')">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                                         </button>
                                     </label>
                                     <select class="form-control" id="imp-numeracao" onchange="onImposicaoNumeracaoChange(this.value)">
-                                        <option value="">� Sem numera��o �</option>
+                                        <option value="">— Sem numeração —</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
                                     <label id="lbl-imp-num-2" style="display:flex; justify-content:space-between; align-items:center;">
-                                        3. Numera��o 2 (opcional)
-                                        <button id="btn-edit-imp-num-2" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numera��o" onclick="editImposicaoCustomNumeracao('imp-numeracao-2')">
+                                        3. Numeração 2 (opcional)
+                                        <button id="btn-edit-imp-num-2" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numeração" onclick="editImposicaoCustomNumeracao('imp-numeracao-2')">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                                         </button>
                                     </label>
                                     <select class="form-control" id="imp-numeracao-2" onchange="updateImpSummary(); toggleImpNumEditButtons(); saveActiveOSItemField('amostra_num2_id', this.value);">
-                                        <option value="">� Sem numera��o �</option>
+                                        <option value="">— Sem numeração —</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>4. Sa�da</label>
+                                    <label>4. Saída</label>
                                      <select class="form-control" id="imp-saida" onchange="onImposicaoSaidaChange(this.value)">
-                                        <option value="">� Selecione �</option>
+                                        <option value="">— Selecione —</option>
                                     </select>
                                 </div>
                             </div>
@@ -969,38 +969,38 @@
                                 <div class="form-group" id="imp-mapa-teatro-group" style="display:none; grid-column: span 2;">
                                     <label>Mapa de Teatro</label>
                                     <select class="form-control" id="imp-mapa-teatro" onchange="updateImpSummary()">
-                                        <option value="">� Selecione um mapa �</option>
+                                        <option value="">— Selecione um mapa —</option>
                                     </select>
                                 </div>
                                 <div class="form-group" id="imp-start-group">
-                                    <label>N�mero Inicial</label>
+                                    <label>Número Inicial</label>
                                     <input type="number" class="form-control" id="imp-start" value="1" min="1"
                                         oninput="onImposicaoStartInput(this.value)">
                                 </div>
                                 <div class="form-group" id="imp-end-group">
-                                    <label>N�mero Final</label>
+                                    <label>Número Final</label>
                                     <input type="number" class="form-control" id="imp-end" value="100" min="1"
                                         oninput="onImposicaoEndInput(this.value)">
                                 </div>
                                 <div class="form-group">
-                                    <label>Modo de Impress�o</label>
+                                    <label>Modo de Impressão</label>
                                      <select class="form-control" id="imp-print-mode" onchange="onImposicaoPrintModeChange(this.value)">
                                         <option value="front" selected>Apenas Frente</option>
                                         <option value="duplex">Frente e Verso</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Rotacionar P�gina</label>
+                                    <label>Rotacionar Página</label>
                                     <select class="form-control" id="imp-rotate-page" onchange="updateImpSummary()">
-                                        <option value="false" selected>Sem Rota��o</option>
-                                        <option value="true">Rotacionar 90�</option>
+                                        <option value="false" selected>Sem Rotação</option>
+                                        <option value="true">Rotacionar 90°</option>
                                     </select>
                                 </div>
                             </div>
 
-                            <!-- Configura��o Cut & Stack -->
+                            <!-- Configuração Cut & Stack -->
                             <div id="cut-stack-options" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--blue); border-radius: 8px; background: rgba(59,130,246,0.04);">
-                                <h4 style="margin:0 0 15px 0; font-size:1rem; color:var(--blue);">Op��es de Cut & Stack</h4>
+                                <h4 style="margin:0 0 15px 0; font-size:1rem; color:var(--blue);">Opções de Cut & Stack</h4>
                                 <div class="form-grid form-grid-3">
                                     <div class="form-group">
                                         <label>Modo Cut & Stack</label>
@@ -1021,10 +1021,10 @@
                                 </div>
                             </div>
 
-                            <!-- Configura��o Multi-Artes -->
+                            <!-- Configuração Multi-Artes -->
                             <div id="multi-artes-container" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                                    <h4 style="margin:0; font-size:1.1rem; color:var(--text-color);">Configura��o de Artes</h4>
+                                    <h4 style="margin:0; font-size:1.1rem; color:var(--text-color);">Configuração de Artes</h4>
                                     <button class="btn btn-outline" onclick="addMultiArte()" title="Adicionar Arte">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                         Adicionar Arte
@@ -1035,37 +1035,37 @@
                                 </div>
                             </div>
 
-                            <!-- Sum�rio -->
+                            <!-- Sumário -->
                             <div class="summary-box" id="imp-summary" style="display:none">
                                 <div class="summary-item">
                                     <span class="summary-label">Formato</span>
-                                    <span class="summary-value" id="sum-formato">�</span>
+                                    <span class="summary-value" id="sum-formato">—</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-label">Grade</span>
-                                    <span class="summary-value" id="sum-grade">�</span>
+                                    <span class="summary-value" id="sum-grade">—</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-label">Total de Itens</span>
-                                    <span class="summary-value" id="sum-total">�</span>
+                                    <span class="summary-value" id="sum-total">—</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-label">Folhas Estimadas</span>
-                                    <span class="summary-value" id="sum-folhas">�</span>
+                                    <span class="summary-value" id="sum-folhas">—</span>
                                 </div>
                                 <div class="summary-item">
-                                    <span class="summary-label">Sa�da</span>
-                                    <span class="summary-value" id="sum-saida">�</span>
+                                    <span class="summary-label">Saída</span>
+                                    <span class="summary-value" id="sum-saida">—</span>
                                 </div>
                             </div>
 
 <!-- Upload Arte -->
                             <div class="file-drop" id="imp-drop-area">
-                                <div class="file-drop-icon">??</div>
+                                <div class="file-drop-icon">📁</div>
                                 <div class="file-drop-text">
                                     <strong>Arraste a arte aqui</strong> ou clique para selecionar<br>
-                                    <small style="color:var(--text-faint);font-size:0.8rem;">PDF, JPG ou PNG � A arte
-                                        ser� centralizada no formato</small>
+                                    <small style="color:var(--text-faint);font-size:0.8rem;">PDF, JPG ou PNG · A arte
+                                        será centralizada no formato</small>
                                 </div>
                                 <input type="file" id="imp-file" accept=".pdf,.jpg,.jpeg,.png">
                             </div>
@@ -1075,10 +1075,10 @@
 
                             <div style="margin-top:24px;display:flex;gap:8px;">
                                 <button class="btn btn-primary" id="btn-impose" onclick="runImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
-                                    ?? Gerar PDF
+                                    🚀 Gerar PDF
                                 </button>
                                 <button class="btn btn-primary" id="btn-impose-print" onclick="runImposition('print')" style="flex:1;background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; opacity:0.5;" disabled>
-                                    ??? Imprimir
+                                    🖨️ Imprimir
                                 </button>
                             </div>
                         </div>
@@ -1087,7 +1087,7 @@
                     <div class="imposicao-preview" id="imp-preview-card-container">
                         <div class="card">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                                <span class="card-title">??? Pr�-visualiza��o da Folha</span>
+                                <span class="card-title">👁️ Pré-visualização da Folha</span>
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <select id="preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePreviewPage()">
                                         <option value="miolo">Miolo</option>
@@ -1119,26 +1119,26 @@
             </section>
 
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: PEDIDO                                                -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-pedido" class="view-section" style="max-width: 100%;">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1 id="ped-view-title">?? Pedido</h1>
-                        <p id="ped-view-subtitle">Selecione o Formato, a Numera��o e a Sa�da, depois envie a arte para gerar o PDF imposto.</p>
+                        <h1 id="ped-view-title">📦 Pedido</h1>
+                        <p id="ped-view-subtitle">Selecione o Formato, a Numeração e a Saída, depois envie a arte para gerar o PDF imposto.</p>
                     </div>
                 </div>
 
-                <!-- Steps bar removido da visualiza��o de produ��o -->
+                <!-- Steps bar removido da visualização de produção -->
 
                 <div class="imposicao-layout">
                     <div class="imposicao-config">
                         <div class="card">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                                <span class="card-title"><span class="icon">??</span> Configura��o do Pedido</span>
+                                <span class="card-title"><span class="icon">⚙️</span> Configuração do Pedido</span>
                                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    <span style="font-size: 0.82rem; color: var(--text-dim); font-weight: 500;">Regra de Pagina��o:</span>
+                                    <span style="font-size: 0.82rem; color: var(--text-dim); font-weight: 500;">Regra de Paginação:</span>
                                     <select class="form-control" id="ped-schema" style="width: 180px; padding: 4px 8px; font-size: 0.85rem; border: 1px solid var(--blue); font-weight: 500;" onchange="updatePedSummary(); togglePedMultiArtes(); togglePedCutStackOptions();">
                                         <option value="sequential">Sequencial</option>
                                         <option value="cut_stack">Cut &amp; Stack (Blocos)</option>
@@ -1151,13 +1151,13 @@
 
                             <!-- Status da OS Ativa -->
                             <div id="ped-active-os-status" style="display: none; font-size: 0.82rem; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); margin: 0 0 16px 0; justify-content: space-between; align-items: center; gap: 10px;">
-                                <span>?? OS Ativa: <strong id="ped-active-os-name" style="color: var(--blue);">Nenhuma</strong></span>
-                                <button type="button" class="btn btn-ghost btn-sm btn-danger" onclick="clearPedActiveOS()" style="padding: 2px 8px; font-size: 0.75rem; margin: 0;">? Limpar OS</button>
+                                <span>📋 OS Ativa: <strong id="ped-active-os-name" style="color: var(--blue);">Nenhuma</strong></span>
+                                <button type="button" class="btn btn-ghost btn-sm btn-danger" onclick="clearPedActiveOS()" style="padding: 2px 8px; font-size: 0.75rem; margin: 0;">✕ Limpar OS</button>
                             </div>
 
                             <!-- Fila de Itens OS pendentes -->
                             <div id="ped-os-queue" style="display: none; margin-bottom: 16px;">
-                                <!-- Caixas por Produto ser�o injetadas aqui -->
+                                <!-- Caixas por Produto serão injetadas aqui -->
                                 <div id="ped-os-queue-body" style="display: flex; flex-direction: column; gap: 15px;">
                                 </div>
                             </div>
@@ -1166,35 +1166,35 @@
                                 <div class="form-group">
                                     <label>1. Formato</label>
                                     <select class="form-control" id="ped-formato" onchange="populatePedNumeracoes(); applyPedFormatoDefaults(); updatePedSummary()">
-                                        <option value="">� Selecione �</option>
+                                        <option value="">— Selecione —</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
                                     <label id="lbl-ped-num-1" style="display:flex; justify-content:space-between; align-items:center;">
-                                        2. Numera��o 1 (opcional)
-                                        <button id="btn-edit-ped-num-1" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numera��o" onclick="editPedidoCustomNumeracao('ped-numeracao')">
+                                        2. Numeração 1 (opcional)
+                                        <button id="btn-edit-ped-num-1" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numeração" onclick="editPedidoCustomNumeracao('ped-numeracao')">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                                         </button>
                                     </label>
                                     <select class="form-control" id="ped-numeracao" onchange="updatePedSummary(); ">
-                                        <option value="">� Sem numera��o �</option>
+                                        <option value="">— Sem numeração —</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
                                     <label id="lbl-ped-num-2" style="display:flex; justify-content:space-between; align-items:center;">
-                                        3. Numera��o 2 (opcional)
-                                        <button id="btn-edit-ped-num-2" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numera��o" onclick="editPedidoCustomNumeracao('ped-numeracao-2')">
+                                        3. Numeração 2 (opcional)
+                                        <button id="btn-edit-ped-num-2" class="btn btn-sm btn-ghost" style="display:none; padding: 2px 6px;" title="Editar esta Numeração" onclick="editPedidoCustomNumeracao('ped-numeracao-2')">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                                         </button>
                                     </label>
                                     <select class="form-control" id="ped-numeracao-2" onchange="updatePedSummary(); ">
-                                        <option value="">� Sem numera��o �</option>
+                                        <option value="">— Sem numeração —</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>4. Sa�da</label>
+                                    <label>4. Saída</label>
                                     <select class="form-control" id="ped-saida" onchange="updatePedSummary()">
-                                        <option value="">� Selecione �</option>
+                                        <option value="">— Selecione —</option>
                                     </select>
                                 </div>
                             </div>
@@ -1204,38 +1204,38 @@
                                 <div class="form-group" id="ped-mapa-teatro-group" style="display:none; grid-column: span 2;">
                                     <label>Mapa de Teatro</label>
                                     <select class="form-control" id="ped-mapa-teatro" onchange="updatePedSummary()">
-                                        <option value="">� Selecione um mapa �</option>
+                                        <option value="">— Selecione um mapa —</option>
                                     </select>
                                 </div>
                                 <div class="form-group" id="ped-start-group">
-                                    <label>N�mero Inicial</label>
+                                    <label>Número Inicial</label>
                                     <input type="number" class="form-control" id="ped-start" value="1" min="1"
                                         oninput="updatePedSummary()">
                                 </div>
                                 <div class="form-group" id="ped-end-group">
-                                    <label>N�mero Final</label>
+                                    <label>Número Final</label>
                                     <input type="number" class="form-control" id="ped-end" value="100" min="1"
                                         oninput="updatePedSummary()">
                                 </div>
                                 <div class="form-group">
-                                    <label>Modo de Impress�o</label>
+                                    <label>Modo de Impressão</label>
                                     <select class="form-control" id="ped-print-mode" onchange="updatePedSummary()">
                                         <option value="front" selected>Apenas Frente</option>
                                         <option value="duplex">Frente e Verso</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Rotacionar P�gina</label>
+                                    <label>Rotacionar Página</label>
                                     <select class="form-control" id="ped-rotate-page" onchange="updatePedSummary()">
-                                        <option value="false" selected>Sem Rota��o</option>
-                                        <option value="true">Rotacionar 90�</option>
+                                        <option value="false" selected>Sem Rotação</option>
+                                        <option value="true">Rotacionar 90°</option>
                                     </select>
                                 </div>
                             </div>
 
-                            <!-- Configura��o Cut & Stack -->
+                            <!-- Configuração Cut & Stack -->
                             <div id="ped-cut-stack-options" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--blue); border-radius: 8px; background: rgba(59,130,246,0.04);">
-                                <h4 style="margin:0 0 15px 0; font-size:1rem; color:var(--blue);">Op��es de Cut & Stack</h4>
+                                <h4 style="margin:0 0 15px 0; font-size:1rem; color:var(--blue);">Opções de Cut & Stack</h4>
                                 <div class="form-grid form-grid-3">
                                     <div class="form-group">
                                         <label>Modo Cut & Stack</label>
@@ -1257,10 +1257,10 @@
                             </div>
                             <!-- Painel CAMAROTE: mostrado somente quando numeracao.tipo === CAMAROTE -->
                             <div id="ped-camarote-panel" style="display:none; margin-top:10px; padding:12px; border:1px dashed rgba(255,160,0,0.4); border-radius:8px; background:rgba(255,160,0,0.06);">
-                                <div style="font-size:0.75rem; font-weight:700; color:var(--amber,#f59e0b); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">??? Configura��o Camarote</div>
+                                <div style="font-size:0.75rem; font-weight:700; color:var(--amber,#f59e0b); margin-bottom:8px; text-transform:uppercase; letter-spacing:.05em;">🏛️ Configuração Camarote</div>
                                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
                                     <div class="form-group" style="flex:1; min-width:100px;">
-                                        <label style="font-size:0.75rem;">In�cio do Local (C_INI)</label>
+                                        <label style="font-size:0.75rem;">Início do Local (C_INI)</label>
                                         <input type="number" class="form-control" id="ped-c-ini" value="1" min="1" onchange="if(state.activeOSItem){ pedQueueUpdateField(state.activeOSItem.itemId, state.activeOSItem.osId, 'c_ini', this.value); } updatePedSummary()" placeholder="Ex: 7">
                                     </div>
                                     <div class="form-group" style="flex:1; min-width:100px;">
@@ -1268,17 +1268,17 @@
                                         <input type="number" class="form-control" id="ped-q-cam" value="0" min="0" onchange="if(state.activeOSItem){ pedQueueUpdateField(state.activeOSItem.itemId, state.activeOSItem.osId, 'q_cam', this.value); } updatePedSummary()" placeholder="Ex: 10">
                                     </div>
                                     <div class="form-group" style="flex:1; min-width:100px;">
-                                        <label style="font-size:0.75rem;">Lota��o por Local (L_CAM)</label>
+                                        <label style="font-size:0.75rem;">Lotação por Local (L_CAM)</label>
                                         <input type="number" class="form-control" id="ped-l-cam" value="1" min="1" onchange="if(state.activeOSItem){ pedQueueUpdateField(state.activeOSItem.itemId, state.activeOSItem.osId, 'l_cam', this.value); } updatePedSummary()" placeholder="Ex: 5">
                                     </div>
                                 </div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); margin-top:4px;">Total de ingressos = Q_CAM � L_CAM. O in�cio da Mesa � lido do campo In�cio (acima).</div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); margin-top:4px;">Total de ingressos = Q_CAM × L_CAM. O início da Mesa é lido do campo Início (acima).</div>
                             </div>
 
-                            <!-- Configura��o Multi-Artes -->
+                            <!-- Configuração Multi-Artes -->
                             <div id="ped-multi-artes-container" style="display:none; margin-bottom: 20px; padding: 15px; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                                    <h4 style="margin:0; font-size:1.1rem; color:var(--text-color);">Configura��o de Artes</h4>
+                                    <h4 style="margin:0; font-size:1.1rem; color:var(--text-color);">Configuração de Artes</h4>
                                     <button class="btn btn-outline" onclick="addMultiArte()" title="Adicionar Arte">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                         Adicionar Arte
@@ -1289,37 +1289,37 @@
                                 </div>
                             </div>
 
-                            <!-- Sum�rio -->
+                            <!-- Sumário -->
                             <div class="summary-box" id="ped-summary" style="display:none">
                                 <div class="summary-item">
                                     <span class="summary-label">Formato</span>
-                                    <span class="summary-value" id="ped-sum-formato">�</span>
+                                    <span class="summary-value" id="ped-sum-formato">—</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-label">Grade</span>
-                                    <span class="summary-value" id="ped-sum-grade">�</span>
+                                    <span class="summary-value" id="ped-sum-grade">—</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-label">Total de Itens</span>
-                                    <span class="summary-value" id="ped-sum-total">�</span>
+                                    <span class="summary-value" id="ped-sum-total">—</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-label">Folhas Estimadas</span>
-                                    <span class="summary-value" id="ped-sum-folhas">�</span>
+                                    <span class="summary-value" id="ped-sum-folhas">—</span>
                                 </div>
                                 <div class="summary-item">
-                                    <span class="summary-label">Sa�da</span>
-                                    <span class="summary-value" id="ped-sum-saida">�</span>
+                                    <span class="summary-label">Saída</span>
+                                    <span class="summary-value" id="ped-sum-saida">—</span>
                                 </div>
                             </div>
 
 <!-- Upload Arte -->
                             <div class="file-drop" id="ped-drop-area">
-                                <div class="file-drop-icon">??</div>
+                                <div class="file-drop-icon">📁</div>
                                 <div class="file-drop-text">
                                     <strong>Arraste a arte aqui</strong> ou clique para selecionar<br>
-                                    <small style="color:var(--text-faint);font-size:0.8rem;">PDF, JPG ou PNG � A arte
-                                        ser� centralizada no formato</small>
+                                    <small style="color:var(--text-faint);font-size:0.8rem;">PDF, JPG ou PNG · A arte
+                                        será centralizada no formato</small>
                                 </div>
                                 <input type="file" id="ped-file" accept=".pdf,.jpg,.jpeg,.png">
                             </div>
@@ -1329,10 +1329,10 @@
 
                             <div style="margin-top:24px;display:flex;gap:8px;">
                                 <button class="btn btn-primary" id="ped-btn-impose" onclick="runPedImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
-                                    ?? Gerar PDF
+                                    🚀 Gerar PDF
                                 </button>
                                 <button class="btn btn-primary" id="ped-btn-impose-print" onclick="runPedImposition('print')" style="flex:1;background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; opacity:0.5;" disabled>
-                                    ??? Imprimir
+                                    🖨️ Imprimir
                                 </button>
                             </div>
                             </div>
@@ -1343,7 +1343,7 @@
                         <div class="card">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
                                 <div style="display: flex; gap: 16px; align-items: center;">
-                                    <span class="card-title">??? Pr�-visualiza��o da Folha</span>
+                                    <span class="card-title">👁️ Pré-visualização da Folha</span>
                                     
                                     <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1);">
                                         <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;">
@@ -1356,7 +1356,7 @@
                                             </select>
                                             <span style="font-size:0.75rem; color:var(--text-muted);">De:</span>
                                             <input type="number" id="ped-refazer-de" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 5">
-                                            <span style="font-size:0.75rem; color:var(--text-muted);">At�:</span>
+                                            <span style="font-size:0.75rem; color:var(--text-muted);">Até:</span>
                                             <input type="number" id="ped-refazer-ate" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 10">
                                             <button class="btn btn-sm" style="background: linear-gradient(135deg, #a78bfa, #7c3aed); color: #fff; border: none; height: 24px; font-size: 0.7rem; padding: 0 8px;" onclick="runPedImposition('pdf', true)">Gerar PDF</button>
                                             <button class="btn btn-sm" style="background: linear-gradient(135deg, #34d399, #059669); color: #fff; border: none; height: 24px; font-size: 0.7rem; padding: 0 8px;" onclick="runPedImposition('print', true)">Imprimir</button>
@@ -1397,31 +1397,31 @@
             </section>
 
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: AMOSTRAS                                                 -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-amostras" class="view-section">
-                <!-- Banner do Pedido Ativo (vis�vel quando navegando da Lista de Arte) -->
+                <!-- Banner do Pedido Ativo (visível quando navegando da Lista de Arte) -->
                 <div id="amostras-os-banner" style="display: none; margin-bottom: 24px; padding: 12px 0 20px 0; flex-direction: column; align-items: flex-start; gap: 28px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <span style="font-size: 1.45rem; font-weight: 800; color: #ffffff;">Pedido <span id="amostras-os-numero"></span> <span style="color: var(--text-dim); font-weight: 400; margin: 0 12px;">�</span> <span id="amostras-os-cliente" style="font-weight: 600; font-size: 1.3rem; color: #e2e8f0;"></span></span>
+                    <span style="font-size: 1.45rem; font-weight: 800; color: #ffffff;">Pedido <span id="amostras-os-numero"></span> <span style="color: var(--text-dim); font-weight: 400; margin: 0 12px;">—</span> <span id="amostras-os-cliente" style="font-weight: 600; font-size: 1.3rem; color: #e2e8f0;"></span></span>
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <span id="amostras-os-itens-count" class="badge badge-yellow"></span>
                                 <button class="btn btn-secondary btn-sm" id="btn-export-pdf-gabarito" onclick="exportarPdfGabarito()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-pdf" style="color: #f472b6;"></i> PDF Gabarito</button>
                                 <button class="btn btn-secondary btn-sm" id="btn-export-pdf-arte" onclick="exportarPdfSomenteArte()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-pdf" style="color: #60a5fa;"></i> PDF Arte</button>
                                 <button class="btn btn-secondary btn-sm" id="btn-export-pdf" onclick="exportarPdfModelos()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-pdf"></i> PDF Prova</button>
-                                <button class="btn btn-primary btn-sm" onclick="voltarParaAtendimento()" style="font-size: 0.78rem; font-weight: 600;">?? Voltar para Atendimento</button>
-                                <button class="btn btn-danger btn-sm" onclick="voltarParaArte()" style="font-size: 0.78rem; font-weight: 600;">?? Voltar para Arte</button>
-                                <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem;">? Fechar Pedido</button>
+                                <button class="btn btn-primary btn-sm" onclick="voltarParaAtendimento()" style="font-size: 0.78rem; font-weight: 600;">↩️ Voltar para Atendimento</button>
+                                <button class="btn btn-danger btn-sm" onclick="voltarParaArte()" style="font-size: 0.78rem; font-weight: 600;">🎨 Voltar para Arte</button>
+                                <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem;">✕ Fechar Pedido</button>
                             </div>
                 </div>
 
-                <!-- Container din�mico dos cards de itens do pedido -->
+                <!-- Container dinâmico dos cards de itens do pedido -->
                 <div id="amostras-itens-container" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;"></div>
 
-                <!-- Painel �nico de Amostra Combinada (modo avulso) -->
+                <!-- Painel Único de Amostra Combinada (modo avulso) -->
                 <div class="card" id="amostra-combinada-avulsa" style="border: 2px solid var(--blue); margin-bottom: 0;">
                     <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center;">
-                        <span class="card-title">?? <strong>Amostra Combinada Unificada</strong></span>
+                        <span class="card-title">🧪 <strong>Amostra Combinada Unificada</strong></span>
                         <span class="badge badge-blue">Resultado Final</span>
                     </div>
                     <div style="padding: 24px;">
@@ -1429,11 +1429,11 @@
                         <!-- LINHA 1: Ajustes da Camada de Arte (full-width) -->
                         <div class="amostra-ajustes-row">
                             <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                                ?? Ajustes da Camada de Arte
+                                🎨 Ajustes da Camada de Arte
                             </h3>
                             <div class="amostra-sliders-grid">
                                 <div class="form-group" style="margin-bottom: 0;">
-                                    <label style="display: flex; justify-content: space-between; font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Satura��o <span id="val-amostra-sat">100%</span></label>
+                                    <label style="display: flex; justify-content: space-between; font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Saturação <span id="val-amostra-sat">100%</span></label>
                                     <input type="range" id="amostra-sat" min="0" max="200" value="100" style="width: 100%; cursor: pointer;" oninput="document.getElementById('val-amostra-sat').textContent = this.value + '%'; renderAmostraCombinada();">
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0;">
@@ -1451,60 +1451,60 @@
                             </div>
                         </div>
 
-                        <!-- LINHA 2: Decis�o + Configura��es (lado a lado) -->
+                        <!-- LINHA 2: Decisão + Configurações (lado a lado) -->
                         <div class="amostra-mid-row">
-                            <!-- Coluna Esquerda: Decis�o de Qualidade -->
+                            <!-- Coluna Esquerda: Decisão de Qualidade -->
                             <div class="amostra-decisao-panel">
                                 <div class="amostra-decisao-title">
-                                    ?? Decis�o de Qualidade
+                                    ⚖️ Decisão de Qualidade
                                 </div>
                                 
                                 <div class="amostra-decisao-status-box">
                                     <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
-                                    <span id="amostra-status-badge" class="badge">? Sem Sele��o</span>
+                                    <span id="amostra-status-badge" class="badge">⏳ Sem Seleção</span>
                                 </div>
 
                                 <div class="form-group" style="margin-bottom: 0;">
-                                    <label for="amostra-obs-alteracao" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anota��es / Observa��es de Altera��o</label>
-                                    <textarea id="amostra-obs-alteracao" class="form-control" rows="3" placeholder="Insira aqui os detalhes das altera��es solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"></textarea>
+                                    <label for="amostra-obs-alteracao" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
+                                    <textarea id="amostra-obs-alteracao" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"></textarea>
                                 </div>
 
                                 <div class="amostra-decisao-btns">
                                     <button class="btn btn-success" id="btn-amostra-aprovar" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="window.decisionAmostra('APROVADA')">
-                                        ? APROVAR
+                                        ✅ APROVAR
                                     </button>
                                     <button class="btn btn-danger" id="btn-amostra-alterar" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="window.decisionAmostra('REPROVADA')">
-                                        ? ALTERAR
+                                        ❌ ALTERAR
                                     </button>
                                 </div>
                             </div>
 
-                            <!-- Coluna Direita: Configura��es da Amostra -->
+                            <!-- Coluna Direita: Configurações da Amostra -->
                             <div class="amostra-config-panel">
                                 <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
-                                    ?? Configura��es da Amostra
+                                    ⚙️ Configurações da Amostra
                                 </h3>
                                 <div style="display: flex; flex-direction: column; gap: 14px;">
                                     <div class="form-group" style="margin-bottom: 0;">
                                         <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
                                         <select class="form-control" id="amostra-cor" onchange="onAmostraCorSelect()">
-                                            <option value="">� Selecione uma Cor �</option>
+                                            <option value="">— Selecione uma Cor —</option>
                                         </select>
                                     </div>
                                     <div class="form-group" style="margin-bottom: 0;">
-                                        <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Numera��o Cadastrada</label>
+                                        <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Numeração Cadastrada</label>
                                         <select class="form-control" id="amostra-numeracao" onchange="onAmostraNumeracaoSelect()">
-                                            <option value="">� Selecione uma Numera��o �</option>
+                                            <option value="">— Selecione uma Numeração —</option>
                                         </select>
                                     </div>
                                     <div class="form-group" style="margin-bottom: 0;">
                                         <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
                                         <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
                                             <label class="btn btn-sm btn-secondary" for="amostra-arte-file" style="margin: 0; cursor: pointer;">
-                                                ??? Upload Arte
+                                                🖼️ Upload Arte
                                             </label>
                                             <input type="file" id="amostra-arte-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
-                                            <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte" style="display:none; padding: 4px 8px;" onclick="clearAmostraArteFile()">? Remover</button>
+                                            <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte" style="display:none; padding: 4px 8px;" onclick="clearAmostraArteFile()">✕ Remover</button>
                                             <span id="amostra-arte-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
                                         </div>
                                     </div>
@@ -1512,13 +1512,13 @@
                             </div>
                         </div>
 
-                        <!-- LINHA 3: Canvas de Visualiza��o Combinada (full-width) -->
+                        <!-- LINHA 3: Canvas de Visualização Combinada (full-width) -->
                         <div class="amostra-preview-container" style="margin-top: 20px;">
                             <canvas id="amostra-comb-canvas" style="max-width: 100%; height: auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-comb-canvas')"></canvas>
                             <div id="amostra-comb-empty" style="text-align: center; color: var(--text-dim); padding: 20px;">
-                                <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">??</div>
-                                <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numera��o e carregue uma Arte</p>
-                                <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualiza��o combinada aparecer� em tempo real neste espa�o.</p>
+                                <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🧪</div>
+                                <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
+                                <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
                             </div>
                         </div>
 
@@ -1527,9 +1527,9 @@
             </section>
 
 
-            <!-- -------------------------------------------------------------- -->
-            <!-- VIEW: LISTA DE IMPRESS�O                                       -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: LISTA DE IMPRESSÃO                                       -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-lista-impressao" class="view-section prod-panel-section" style="max-width: 100%; height: 100%;">
                 <div class="prod-panel-container">
                     
@@ -1538,7 +1538,7 @@
                         <div class="prod-top-bar">
                             <div class="prod-top-header">
                                 <h2 class="prod-title">
-                                    Fila de Produ��o:
+                                    Fila de Produção:
                                 </h2>
                                 <button class="prod-btn-dark filter-btn-pill active" id="btn-filtro-todos-setores" onclick="setFiltroSetor('')" style="width: auto;">
                                     Todos os Setores
@@ -1553,10 +1553,10 @@
                                     <i class="fa-solid fa-id-card"></i> PVC
                                 </button>
                                 <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('TEXTIL')">
-                                    <i class="fa-solid fa-shirt"></i> T�xtil
+                                    <i class="fa-solid fa-shirt"></i> Têxtil
                                 </button>
                                 <button class="prod-btn-dark filter-btn-pill" onclick="setFiltroSetor('IMPRESSAO')">
-                                    <i class="fa-solid fa-print"></i> Impress�o
+                                    <i class="fa-solid fa-print"></i> Impressão
                                 </button>
                             </div>
 
@@ -1584,7 +1584,7 @@
                                 <table class="prod-table" id="table-impressao">
                                     <thead>
                                         <tr>
-                                            <th>N� Pedido</th>
+                                            <th>Nº Pedido</th>
                                             <th>Cliente / Evento</th>
                                             <th>Progresso</th>
                                             <th style="text-align: center;">Preview</th>
@@ -1601,8 +1601,8 @@
                                 </table>
                             </div>
                             <div class="empty-state" id="empty-impressao" style="display:none; padding: 2rem; text-align: center;">
-                                <div class="empty-state-icon" style="font-size: 2rem; color: #475569;">???</div>
-                                <p style="color: #94a3b8; margin-top: 1rem;">Nenhum pedido liberado para produ��o encontrado.</p>
+                                <div class="empty-state-icon" style="font-size: 2rem; color: #475569;">🖨️</div>
+                                <p style="color: #94a3b8; margin-top: 1rem;">Nenhum pedido liberado para produção encontrado.</p>
                             </div>
                         </div>
 
@@ -1624,13 +1624,13 @@
                                             <th>Modelo</th>
                                             <th>Formato</th>
                                             <th>Qtd</th>
-                                            <th>Numera��o</th>
+                                            <th>Numeração</th>
                                             <th>Cor</th>
                                             <th>Verso</th>
                                             <th>Blocos</th>
-                                            <th>Aprova��o</th>
-                                            <th>Impress�o</th>
-                                            <th>A��es</th>
+                                            <th>Aprovação</th>
+                                            <th>Impressão</th>
+                                            <th>Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody id="tbody-os-itens-impressao">
@@ -1645,7 +1645,7 @@
                     <!-- Side metrics -->
                     <div class="prod-side-metrics custom-scroll">
                         <div class="prod-metrics-title">
-                            M�tricas do Dia
+                            Métricas do Dia
                             <p class="prod-metrics-subtitle">Geral</p>
                         </div>
 
@@ -1659,7 +1659,7 @@
                         <div class="prod-metric-card">
                             <span class="prod-metric-value text-purple" id="stat-itens-impressao">0</span>
                             <div class="prod-metric-label">
-                                Itens em<br><span>Impress�o</span>
+                                Itens em<br><span>Impressão</span>
                             </div>
                         </div>
 
@@ -1673,14 +1673,14 @@
                         <div class="prod-metric-card">
                             <span class="prod-metric-value text-amber" id="stat-pedidos-concluidos">0</span>
                             <div class="prod-metric-label">
-                                Pedidos<br><span>Conclu�dos</span>
+                                Pedidos<br><span>Concluídos</span>
                             </div>
                         </div>
                         
                         <div class="prod-metric-card opacity-50">
                             <span class="prod-metric-value text-green">--<span style="font-size: 1rem;">%</span></span>
                             <div class="prod-metric-label">
-                                Capacidade<br><span>Di�ria</span>
+                                Capacidade<br><span>Diária</span>
                             </div>
                         </div>
                         
@@ -1692,82 +1692,82 @@
                         </div>
 
                         <div class="prod-metrics-title" style="margin-top: 1rem;">
-                            Est�gio de Produ��o
+                            Estágio de Produção
                         </div>
                         <div class="prod-status-filters" id="filter-container-status">
-                            <button class="prod-filter-status filter-btn-pill active teal" onclick="setFiltroStatus('')">?? Todos</button>
-                            <button class="prod-filter-status filter-btn-pill" onclick="setFiltroStatus('AGUARD.')">? Aguardando</button>
-                            <button class="prod-filter-status filter-btn-pill" onclick="setFiltroStatus('PARCIAL')">?? Parcial</button>
-                            <button class="prod-filter-status filter-btn-pill" onclick="setFiltroStatus('IMPRESSO')">? Impresso</button>
+                            <button class="prod-filter-status filter-btn-pill active teal" onclick="setFiltroStatus('')">🌐 Todos</button>
+                            <button class="prod-filter-status filter-btn-pill" onclick="setFiltroStatus('AGUARD.')">⏳ Aguardando</button>
+                            <button class="prod-filter-status filter-btn-pill" onclick="setFiltroStatus('PARCIAL')">⚙️ Parcial</button>
+                            <button class="prod-filter-status filter-btn-pill" onclick="setFiltroStatus('IMPRESSO')">✅ Impresso</button>
                         </div>
 
                     </div>
                 </div>
             </section>
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: LISTA DE ARTE                                            -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-lista-arte" class="view-section" style="max-width: 100%;">
                 <div class="page-header" style="flex-wrap: wrap;">
                     <div class="page-header-text">
-                        <h1>?? Lista de Arte</h1>
-                        <p>Pedidos em fase de cria��o, revis�o ou aprova��o de arte gr�fica.</p>
+                        <h1>🎨 Lista de Arte</h1>
+                        <p>Pedidos em fase de criação, revisão ou aprovação de arte gráfica.</p>
                     </div>
                     <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <div style="position: relative;">
                             <input type="text" id="os-search-arte" class="form-control" placeholder="Buscar Pedido, Evento ou Cliente..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;">
-                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">??</span>
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">🔍</span>
                         </div>
                         <select id="os-filter-designer" class="form-control" onchange="renderOrdens()" style="width: 200px; font-size: 0.85rem;">
-                            <option value="">?? Todos os Designers</option>
+                            <option value="">🎨 Todos os Designers</option>
                         </select>
-                        <button class="btn btn-secondary btn-sm" onclick="loadOrdens()" title="Atualizar lista">?? Atualizar</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadOrdens()" title="Atualizar lista">🔄 Atualizar</button>
                     </div>
                 </div>
 
-                <!-- CARDS DE ESTAT�STICA (Din�micos) -->
+                <!-- CARDS DE ESTATÍSTICA (Dinâmicos) -->
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-card-title">Pedidos em Fila</div>
                         <div class="stat-card-value blue" id="stat-pedidos-fila-arte">0</div>
-                        <div class="stat-card-icon">??</div>
+                        <div class="stat-card-icon">📋</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-card-title">Aguardando Arte</div>
                         <div class="stat-card-value purple" id="stat-itens-pendentes-arte">0</div>
-                        <div class="stat-card-icon">??</div>
+                        <div class="stat-card-icon">🎨</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-card-title">Artes Aprovadas</div>
                         <div class="stat-card-value teal" id="stat-itens-aprovados-arte">0</div>
-                        <div class="stat-card-icon">?</div>
+                        <div class="stat-card-icon">✅</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-card-title">Pedidos Conclu�dos</div>
+                        <div class="stat-card-title">Pedidos Concluídos</div>
                         <div class="stat-card-value amber" id="stat-pedidos-concluidos-arte">0</div>
-                        <div class="stat-card-icon">??</div>
+                        <div class="stat-card-icon">🏆</div>
                     </div>
                 </div>
 
-                <!-- FILTROS (Setores e Status de Aprova��o) -->
+                <!-- FILTROS (Setores e Status de Aprovação) -->
                 <div class="filter-section-wrapper">
                     <div>
                         <div class="filter-group-label">Filtrar por Setor</div>
                         <div class="filter-btns-container" id="filter-container-setor-arte">
-                            <button class="filter-btn-pill active" onclick="setFiltroSetorArte('')">?? Todos</button>
-                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('FLEXO')">?? Flexo</button>
-                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('PVC')">?? PVC</button>
-                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('TEXTIL')">?? T�xtil</button>
+                            <button class="filter-btn-pill active" onclick="setFiltroSetorArte('')">🌐 Todos</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('FLEXO')">✂️ Flexo</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('PVC')">🪪 PVC</button>
+                            <button class="filter-btn-pill" onclick="setFiltroSetorArte('TEXTIL')">👕 Têxtil</button>
                         </div>
                     </div>
                     <div style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 6px;">
-                        <div class="filter-group-label">Status de Aprova��o</div>
+                        <div class="filter-group-label">Status de Aprovação</div>
                         <div class="filter-btns-container" id="filter-container-status-arte">
-                            <button class="filter-btn-pill active teal" onclick="setFiltroStatusArte('')">?? Todos</button>
-                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('PENDENTE')">? Pendente</button>
-                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('APROVADA')">? Aprovada</button>
-                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('REPROVADA')">? Reprovada</button>
+                            <button class="filter-btn-pill active teal" onclick="setFiltroStatusArte('')">🌐 Todos</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('PENDENTE')">⏳ Pendente</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('APROVADA')">✅ Aprovada</button>
+                            <button class="filter-btn-pill" onclick="setFiltroStatusArte('REPROVADA')">❌ Reprovada</button>
                         </div>
                     </div>
                 </div>
@@ -1775,7 +1775,7 @@
                 <!-- Tabela de OS de Arte -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> Fila de Arte</span>
+                        <span class="card-title"><span class="icon">📋</span> Fila de Arte</span>
                         <span class="badge badge-yellow" id="os-arte-count-badge">0 Pedidos</span>
                     </div>
                     <div style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
@@ -1783,14 +1783,14 @@
                             <thead>
                                 <tr>
                                     <th style="width: 50px;"></th>
-                                    <th>N� Pedido</th>
+                                    <th>Nº Pedido</th>
                                     <th>Cliente / Evento</th>
                                     <th>Vendedor / Designer</th>
-                                    <th>Data Libera��o</th>
+                                    <th>Data Liberação</th>
                                     <th>Entrega/Faturam.</th>
                                     <th>Status</th>
                                     <th>Itens</th>
-                                    <th>A��es</th>
+                                    <th>Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-arte">
@@ -1799,7 +1799,7 @@
                         </table>
                     </div>
                     <div class="empty-state" id="empty-arte" style="display:none">
-                        <div class="empty-state-icon">??</div>
+                        <div class="empty-state-icon">🎨</div>
                         <p>Nenhum pedido em fase de arte encontrado.</p>
                     </div>
                 </div>
@@ -1807,7 +1807,7 @@
                 <!-- Detalhes da OS de Arte -->
                 <div class="card" id="os-detail-card-arte" style="display: none;">
                     <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
-                        <span class="card-title"><span class="icon">??</span> Itens do Pedido <span id="os-detail-numero-arte" style="color: var(--blue);"></span></span>
+                        <span class="card-title"><span class="icon">📄</span> Itens do Pedido <span id="os-detail-numero-arte" style="color: var(--blue);"></span></span>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <span class="badge" id="os-detail-status-badge-arte"></span>
                             <span id="os-detail-obs-arte" style="font-size: 0.8rem; color: var(--text-dim);"></span>
@@ -1822,13 +1822,13 @@
                                     <th>Modelo</th>
                                     <th>Formato</th>
                                     <th>Qtd</th>
-                                    <th>Numera��o</th>
+                                    <th>Numeração</th>
                                     <th>Cor</th>
                                     <th>Verso</th>
                                     <th>Blocos</th>
-                                    <th>Aprova��o</th>
-                                    <th>Impress�o</th>
-                                    <th>A��es</th>
+                                    <th>Aprovação</th>
+                                    <th>Impressão</th>
+                                    <th>Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-os-itens-arte">
@@ -1839,14 +1839,14 @@
                 </div>
             </section>
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: IMPRESSORAS                                             -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-impressoras" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>??? Impressoras</h1>
-                        <p>Gerencie impressoras instaladas, perfis PPD e impress�o direta via agente local.</p>
+                        <h1>🖨️ Impressoras</h1>
+                        <p>Gerencie impressoras instaladas, perfis PPD e impressão direta via agente local.</p>
                     </div>
                 </div>
 
@@ -1856,9 +1856,9 @@
                         <div id="printer-agent-indicator" style="width:12px;height:12px;border-radius:50%;background:#ef4444;flex-shrink:0;"></div>
                         <div>
                             <strong id="printer-agent-label">Agente Local Inativo</strong>
-                            <p style="margin:2px 0 0;font-size:0.8rem;color:var(--text-dim);" id="printer-agent-detail">Inicie o IdealImpositionAgent.exe para habilitar impress�o direta.</p>
+                            <p style="margin:2px 0 0;font-size:0.8rem;color:var(--text-dim);" id="printer-agent-detail">Inicie o IdealImpositionAgent.exe para habilitar impressão direta.</p>
                         </div>
-                        <button class="btn btn-sm btn-outline" onclick="checkPrinterAgent()" style="margin-left:auto;">? Verificar</button>
+                        <button class="btn btn-sm btn-outline" onclick="checkPrinterAgent()" style="margin-left:auto;">↻ Verificar</button>
                     </div>
                 </div>
 
@@ -1866,13 +1866,13 @@
                 <div class="card" id="printer-list-card" style="margin-bottom:20px;opacity:0.5;pointer-events:none;">
                     <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);">
                         <h3 style="margin:0;font-size:1rem;">Impressoras Instaladas</h3>
-                        <button class="btn btn-sm btn-outline" onclick="loadPrinters()" title="Recarregar">?</button>
+                        <button class="btn btn-sm btn-outline" onclick="loadPrinters()" title="Recarregar">↻</button>
                     </div>
                     <div id="printer-list-body" style="padding:12px 18px;">
                         <p style="color:var(--text-dim);font-size:0.85rem;">Carregando impressoras...</p>
                     </div>
                     <div style="padding:10px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">
-                        <button class="btn btn-sm btn-primary" onclick="savePrinterPPDMap()" id="btn-save-ppd-map" disabled>?? Salvar Mapeamento</button>
+                        <button class="btn btn-sm btn-primary" onclick="savePrinterPPDMap()" id="btn-save-ppd-map" disabled>💾 Salvar Mapeamento</button>
                     </div>
                 </div>
 
@@ -1886,7 +1886,7 @@
                     </div>
                     <div style="padding:10px 18px;border-top:1px solid var(--border);">
                         <label class="btn btn-sm btn-outline" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
-                            ?? Upload PPD
+                            📁 Upload PPD
                             <input type="file" accept=".ppd" id="ppd-upload-input" onchange="uploadPPD(this)" style="display:none;">
                         </label>
                     </div>
@@ -1897,8 +1897,8 @@
             <div class="modal-overlay" id="modal-print-direct" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:none;align-items:center;justify-content:center;">
                 <div class="card" style="width:480px;max-width:90vw;max-height:80vh;overflow-y:auto;animation:fadeIn 0.2s;">
                     <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-                        <h3 style="margin:0;">??? Impress�o Direta</h3>
-                        <button class="btn btn-sm btn-ghost" onclick="closePrintModal()">?</button>
+                        <h3 style="margin:0;">🖨️ Impressão Direta</h3>
+                        <button class="btn btn-sm btn-ghost" onclick="closePrintModal()">✕</button>
                     </div>
                     <div style="padding:18px 20px;">
                         <div class="form-group" style="margin-bottom:14px;">
@@ -1912,35 +1912,35 @@
                         </div>
                         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
                             <button class="btn btn-ghost" onclick="closePrintModal()">Cancelar</button>
-                            <button class="btn btn-primary" id="btn-send-print" onclick="sendPrintJob()" disabled>??? Enviar para Impressora</button>
+                            <button class="btn btn-primary" id="btn-send-print" onclick="sendPrintJob()" disabled>🖨️ Enviar para Impressora</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: ADMIN                                                    -->
-            <!-- -------------------------------------------------------------- -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
             <section id="view-admin" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
-                        <h1>??? Gerenciamento de Usu�rios</h1>
-                        <p>Controle permiss�es de acesso da equipe e defina administradores/editores.</p>
+                        <h1>🛡️ Gerenciamento de Usuários</h1>
+                        <p>Controle permissões de acesso da equipe e defina administradores/editores.</p>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">??</span> Usu�rios Cadastrados</span>
-                        <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">?? Atualizar Lista</button>
+                        <span class="card-title"><span class="icon">👥</span> Usuários Cadastrados</span>
+                        <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">🔄 Atualizar Lista</button>
                     </div>
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Nome / Email</th>
                                 <th>UID</th>
-                                <th>Cargo/Fun��o</th>
-                                <th>A��es</th>
+                                <th>Cargo/Função</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-admin-users">
@@ -1954,20 +1954,20 @@
             <div id="modal-artes" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
                 <div class="modal-content" style="background: var(--bg-card); width: 90%; max-width: 800px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh;">
                     <div class="modal-header" style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0;">?? Gerenciamento de Artes - Modelo <span id="modal-artes-modelo-nome" style="color: var(--blue);"></span></h3>
-                        <button class="btn btn-ghost" onclick="closeArtesModal()" style="border: none; background: transparent; cursor: pointer; font-size: 1.2rem;">?</button>
+                        <h3 style="margin: 0;">🎨 Gerenciamento de Artes - Modelo <span id="modal-artes-modelo-nome" style="color: var(--blue);"></span></h3>
+                        <button class="btn btn-ghost" onclick="closeArtesModal()" style="border: none; background: transparent; cursor: pointer; font-size: 1.2rem;">✖</button>
                     </div>
                     
                     <div class="modal-body" style="padding: 16px; overflow-y: auto; flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <!-- Esquerda: Hist�rico -->
+                        <!-- Esquerda: Histórico -->
                         <div>
-                            <h4 style="margin-top: 0;">Hist�rico de Vers�es</h4>
+                            <h4 style="margin-top: 0;">Histórico de Versões</h4>
                             <div id="modal-artes-timeline" style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
-                                <!-- Vers�es din�micas inseridas via JS -->
+                                <!-- Versões dinâmicas inseridas via JS -->
                             </div>
                         </div>
 
-                        <!-- Direita: Envio e A��es -->
+                        <!-- Direita: Envio e Ações -->
                         <div class="modal-artes-right" style="border-left: 1px solid var(--border); padding-left: 20px;">
                             <h4 style="margin-top: 0;">Enviar Nova Arte</h4>
                             <div class="form-group">
@@ -1979,18 +1979,18 @@
                                 <input type="file" id="modal-artes-file-verso" class="form-control" accept=".pdf,image/*">
                             </div>
                             <div class="form-group" style="margin-top: 12px;">
-                                <label>Coment�rio / Observa��o</label>
+                                <label>Comentário / Observação</label>
                                 <textarea id="modal-artes-comment" class="form-control" rows="2" placeholder="Ex: Ajustado conforme solicitado..."></textarea>
                             </div>
-                            <button class="btn btn-primary btn-full" style="margin-top: 12px;" id="btn-submit-arte" onclick="submitNovaArte()">?? Enviar Nova Vers�o</button>
+                            <button class="btn btn-primary btn-full" style="margin-top: 12px;" id="btn-submit-arte" onclick="submitNovaArte()">📤 Enviar Nova Versão</button>
                             
                             <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
                             
-                            <h4 style="margin-top: 0;">A��es na Vers�o Atual</h4>
+                            <h4 style="margin-top: 0;">Ações na Versão Atual</h4>
                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button class="btn btn-success btn-sm" onclick="aprovarArteAtual()">? Aprovar (Cliente)</button>
-                                <button class="btn btn-teal btn-sm" onclick="liberarArteAtual()">? Liberar Impress�o</button>
-                                <button class="btn btn-danger btn-sm" onclick="reprovarArteAtual()">? Reprovar</button>
+                                <button class="btn btn-success btn-sm" onclick="aprovarArteAtual()">✅ Aprovar (Cliente)</button>
+                                <button class="btn btn-teal btn-sm" onclick="liberarArteAtual()">✅ Liberar Impressão</button>
+                                <button class="btn btn-danger btn-sm" onclick="reprovarArteAtual()">❌ Reprovar</button>
                             </div>
                         </div>
                     </div>
@@ -2004,8 +2004,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=333"></script>
-    <script src="/pedido.js?v=333"></script>
+    <script src="script.js?v=331"></script>
+    <script src="/pedido.js?v=331"></script>
 
 
 
@@ -2013,7 +2013,7 @@
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid var(--border); background:var(--card-bg);">
                         <h2 style="margin:0; font-size:1.2rem; display:flex; align-items:center; gap:8px;">
-                            <span class="icon">???</span> Editor de Mapa de Teatro
+                            <span class="icon">🗺️</span> Editor de Mapa de Teatro
                         </h2>
                         <div style="display:flex; gap:12px;">
                             <button class="btn btn-secondary" onclick="fecharModalMapaTeatro()">Cancelar</button>
@@ -2037,7 +2037,7 @@
                             </div>
                             
                             <div id="mapa-setores-list" style="display:flex; flex-direction:column; gap:8px;">
-                                <!-- Lista de setores din�micos -->
+                                <!-- Lista de setores dinâmicos -->
                             </div>
                             
                             
@@ -2053,7 +2053,7 @@
                                         <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A" style="min-width:0; width:100%;">
                                     </div>
                                     <div class="form-group" style="flex:1; min-width:0;">
-                                        <label>In�cio</label>
+                                        <label>Início</label>
                                         <input type="number" id="mapa-fileira-inicio" class="form-control" value="1" style="min-width:0; width:100%;">
                                     </div>
                                     <div class="form-group" style="flex:1; min-width:0;">
@@ -2062,10 +2062,10 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label>Padr�o Numera��o</label>
+                                    <label>Padrão Numeração</label>
                                     <select id="mapa-fileira-padrao" class="form-control">
                                         <option value="sequencial">Sequencial (1,2,3)</option>
-                                        <option value="impar">�mpar (1,3,5)</option>
+                                        <option value="impar">Ímpar (1,3,5)</option>
                                         <option value="par">Par (2,4,6)</option>
                                     </select>
                                 </div>
@@ -2080,16 +2080,16 @@
                             </div>
 
                             <div id="mapa-tipos-assento-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
-                                <!-- Lista de tipos din�micos -->
+                                <!-- Lista de tipos dinâmicos -->
                             </div>
                         </div>
 
-                        <!-- Canvas �rea Principal -->
+                        <!-- Canvas Área Principal -->
                         <div style="flex:1; display:flex; flex-direction:column; background:#1e1e24; position:relative; overflow:hidden;" id="mapa-canvas-container">
 
                             <!-- Header: nome do mapa + setor ativo -->
                             <div style="display:flex; align-items:center; gap:6px; padding:8px 16px; background:rgba(0,0,0,0.45); border-bottom:1px solid var(--border); z-index:11; flex-shrink:0;">
-                                <span style="font-size:0.8rem; color:var(--text-dim);" id="mapa-header-nome-label">??</span>
+                                <span style="font-size:0.8rem; color:var(--text-dim);" id="mapa-header-nome-label">📋</span>
                                 <span style="font-size:0.82rem; font-weight:600; color:#fff;" id="mapa-header-nome-val"></span>
                                 <span style="font-size:0.82rem; color:var(--blue); font-weight:700; transition:all 0.3s;" id="mapa-header-setor"></span>
                                 <div style="flex:1;"></div>
@@ -2098,11 +2098,11 @@
 
                             <!-- Toolbar de ferramentas -->
                             <div style="position:absolute; top:54px; left:16px; display:flex; gap:8px; z-index:10; background:rgba(0,0,0,0.5); padding:8px; border-radius:8px;">
-                                <button class="btn btn-sm" id="tool-select" onclick="setMapTool('select')" style="background:var(--blue); color:white;">??? Selecionar</button>
-                                <button class="btn btn-sm btn-secondary" id="tool-pan" onclick="setMapTool('pan')">?? Mover</button>
-                                <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">?? Borracha</button>
-                                <button class="btn btn-sm btn-secondary" id="tool-restore" onclick="setMapTool('restore')">? Voltar</button>
-                                <button class="btn btn-sm btn-secondary" onclick="window.deletarSelecionadas()" style="color:#ff4d4d; border-color:#ff4d4d;">? Excluir (X)</button>
+                                <button class="btn btn-sm" id="tool-select" onclick="setMapTool('select')" style="background:var(--blue); color:white;">🖱️ Selecionar</button>
+                                <button class="btn btn-sm btn-secondary" id="tool-pan" onclick="setMapTool('pan')">🖐 Mover</button>
+                                <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">🧹 Borracha</button>
+                                <button class="btn btn-sm btn-secondary" id="tool-restore" onclick="setMapTool('restore')">➕ Voltar</button>
+                                <button class="btn btn-sm btn-secondary" onclick="window.deletarSelecionadas()" style="color:#ff4d4d; border-color:#ff4d4d;">❌ Excluir (X)</button>
                                 <div style="width:1px; background:var(--border); margin:0 4px;"></div>
                                 <div id="mapa-toolbar-tipos" style="display:flex; gap:8px;"></div>
                             </div>
