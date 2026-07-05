@@ -1,4 +1,4 @@
-﻿// PEDIDO.JS - GERADO AUTOMATICAMENTE POR CLONAGEM DE SCRIPT.JS
+// PEDIDO.JS - GERADO AUTOMATICAMENTE POR CLONAGEM DE SCRIPT.JS
 
 function applyPedFormatoDefaults() {
     const fmtSel = document.getElementById('ped-formato');
@@ -100,6 +100,8 @@ function populatePedNumeracoes() {
             sel.value = '';
         }
     });
+
+    if (typeof window.togglePedNumEditButtons === 'function') window.togglePedNumEditButtons();
 }
 window.populatePedNumeracoes = populatePedNumeracoes;
 
@@ -1581,23 +1583,23 @@ function updatePedSummary() {
 
     const printMode = document.getElementById('ped-print-mode')?.value || 'front';
 
-    const lblNum1 = document.getElementById('lbl-ped-num-1');
+    const lblNum1Text = document.getElementById('lbl-ped-num-1-text');
 
-    const lblNum2 = document.getElementById('lbl-ped-num-2');
+    const lblNum2Text = document.getElementById('lbl-ped-num-2-text');
 
-    if (lblNum1 && lblNum2) {
+    if (lblNum1Text && lblNum2Text) {
 
         if (printMode === 'duplex') {
 
-            lblNum1.innerHTML = '2. Numeração <b style="color:var(--blue)">FRENTE</b> (opcional)';
+            lblNum1Text.innerHTML = '2. Numeração <b style="color:var(--blue)">FRENTE</b> (opcional)';
 
-            lblNum2.innerHTML = '3. Numeração <b style="color:var(--blue)">VERSO</b> (opcional)';
+            lblNum2Text.innerHTML = '3. Numeração <b style="color:var(--blue)">VERSO</b> (opcional)';
 
         } else {
 
-            lblNum1.innerHTML = '2. Numeração 1 (opcional)';
+            lblNum1Text.innerHTML = '2. Numeração 1 (opcional)';
 
-            lblNum2.innerHTML = '3. Numeração 2 (opcional)';
+            lblNum2Text.innerHTML = '3. Numeração 2 (opcional)';
 
         }
 
@@ -2048,6 +2050,8 @@ function updatePedSummary() {
     });
 
 
+
+    if (typeof window.togglePedNumEditButtons === 'function') window.togglePedNumEditButtons();
 
     drawPedPreview();
 
@@ -2967,11 +2971,19 @@ window.editPedidoCustomNumeracao = function(fieldId) {
     const baseNum = state.numeracoes.find(n => String(n.id) === String(numId));
     if (!baseNum) return;
     
+    const activeOSItem = state.activeOSItem;
+    let cliNum = null;
+    if (activeOSItem) {
+        const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
+        if (os) cliNum = os.id_cliente;
+    }
+
     // Configura o state para que no saveNumeracao volte para Imposição
     window.customNumeracaoEditState = {
         view: 'imposicao',
         fieldId: fieldId,
-        modeloName: impName
+        modeloName: impName,
+        cliNum: cliNum
     };
     
     // Abre a numeração

@@ -32,7 +32,7 @@ $producaoFile = "frontend\producao.html"
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."
 git add -A
-git commit -m "fix: correcao de encoding dos emojis nos botoes (v$nextV)"
+git commit -m "feat: associar numeracoes customizadas ao cliente (v$nextV)"
 git push origin main
 
 # 4. Vercel deploy

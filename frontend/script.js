@@ -1,4 +1,4 @@
-﻿// - VDP Engine -- Frontend Script -
+// - VDP Engine -- Frontend Script -
 
 'use strict';
 
@@ -2433,7 +2433,21 @@ function renderNumeracoes() {
 
     const filterType = document.getElementById('catalogo-filter-type')?.value || '';
 
+    const searchValClean = (document.getElementById('catalogo-search')?.value || '').trim().toLowerCase();
+    const isSearchNum = /^\d+$/.test(searchValClean);
+
     const filtradas = state.numeracoes.filter(n => {
+        // Se a busca for um número de cliente:
+        if (isSearchNum) {
+            // Mostra APENAS as numerações exclusivas desse cliente. Oculta todas as outras.
+            return String(n.Cli_Num || '') === searchValClean;
+        } else {
+            // Se NÃO for busca por número de cliente (busca de texto ou vazia):
+            // Oculta todas as numerações exclusivas de qualquer cliente.
+            if (n.Cli_Num) {
+                return false;
+            }
+        }
 
         if (filterFmt) {
             const ids = n.formato_ids || [n.formato_id];
@@ -2445,10 +2459,9 @@ function renderNumeracoes() {
             if (tipo !== filterType) return false;
         }
 
-        if (searchVal && !(n.name || '').toLowerCase().includes(searchVal)) return false;
+        if (searchValClean && !(n.name || '').toLowerCase().includes(searchValClean)) return false;
 
         return true;
-
     });
 
     filtradas.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
@@ -5591,8 +5604,9 @@ window.saveNumeracao = async function () {
             pdf_content: pdfUrl || state.numPdfContent || "",
 
             pdf_filename: state.numPdfFilename || "",
-is_custom: window.customNumeracaoEditState ? true : false,
-os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.itemId : null,
+            is_custom: window.customNumeracaoEditState ? true : false,
+            os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.itemId : null,
+            Cli_Num: window.customNumeracaoEditState ? window.customNumeracaoEditState.cliNum : (id ? (state.numeracoes.find(n => String(n.id) === String(id))?.Cli_Num || null) : null),
 
             elements: [
                 ...state.numElements.map(el => {
@@ -12369,7 +12383,7 @@ async function loadOrdens() {
             try {
                 const { data: propData, error: propError } = await supabaseClient
                     .from('propostas')
-                    .select('id_int, cliente, vendedor, status_interno')
+                    .select('id_int, cliente, vendedor, status_interno, id_cliente')
                     .order('id_int', { ascending: false })
                     .limit(2000);
                 if (!propError && propData) {
@@ -12428,6 +12442,7 @@ async function loadOrdens() {
                     status_interno: propReal?.status_interno || null,
                     cliente: clienteProposta,
                     vendedor: vendedorProposta,
+                    id_cliente: propReal?.id_cliente || null,
                     data_liberacao: os.data_liberacao || os.created_at,
                     prazo_entrega: os.prazo_entrega || getFallbackPrazo(os.created_at, os.numero || 0),
                     _itens_count: os.producao_os_itens ? os.producao_os_itens.length : 0
@@ -12452,6 +12467,7 @@ async function loadOrdens() {
                         ...os,
                         cliente: clienteProposta,
                         vendedor: vendedorProposta,
+                        id_cliente: propReal?.id_cliente || null,
                         status_arte: pedidoReal?.status_arte || null,
                         status_interno: propReal?.status_interno || null
                     };
@@ -12650,6 +12666,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                     status_interno: propReal?.status_interno || null,
                     cliente: cliente,
                     vendedor: vendedor,
+                    id_cliente: propReal?.id_cliente || null,
                     data_liberacao: dataLiberacao,
                     data_pedido: dataPedido,
                     valor_total: valorTotal,
@@ -15155,6 +15172,7 @@ function renderAmostrasOSItens(osId) {
     const osNum = os ? (os.numero || os.id_int || os.id) : osId;
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
+    const idCliente = os ? os.id_cliente : null;
     const banner = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-banner' : 'cliente-os-banner');
     const avulsa = document.getElementById('amostra-combinada-avulsa');
 
@@ -15309,7 +15327,12 @@ function renderAmostrasOSItens(osId) {
                             <div class="form-group" style="margin-bottom: 0;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                     <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
-                                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>`}
+                                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
+                                        <div style="display: flex; gap: 4px; align-items: center;">
+                                            <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
+                                            <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
+                                        </div>
+                                    `}
                                 </div>
                                 <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
                                     <option value="">-- Selecione uma Numeração --</option>
@@ -16653,6 +16676,9 @@ function editCustomNumeracao(idx, osId, itemId) {
     
     const modelName = `${item.produto} (Modelo ${idx + 1})`;
     
+    const os = (state.ordens || []).find(o => String(o.id) === String(osId) || String(o.id_int) === String(osId));
+    const cliNum = os ? os.id_cliente : null;
+
     // Set custom state
     window.customNumeracaoEditState = {
         active: true,
@@ -16660,7 +16686,8 @@ function editCustomNumeracao(idx, osId, itemId) {
         itemId,
         idx,
         modelName,
-        baseNumId
+        baseNumId,
+        cliNum
     };
     
     // Mudar view
@@ -16700,6 +16727,95 @@ window.toggleImpNumEditButtons = function() {
     }
 };
 
+window.togglePedNumEditButtons = function() {
+    const num1 = document.getElementById('ped-numeracao');
+    const btnEdit1 = document.getElementById('btn-edit-ped-num-1');
+    const btnSelect1 = document.getElementById('btn-select-ped-num-1');
+    const activeOSItem = state.activeOSItem;
+    const hasClient = activeOSItem ? true : false;
+
+    if (num1 && btnEdit1) {
+        btnEdit1.style.display = num1.value ? 'inline-flex' : 'none';
+    }
+    if (btnSelect1) {
+        btnSelect1.style.display = hasClient ? 'inline-flex' : 'none';
+    }
+    
+    const num2 = document.getElementById('ped-numeracao-2');
+    const btnEdit2 = document.getElementById('btn-edit-ped-num-2');
+    const btnSelect2 = document.getElementById('btn-select-ped-num-2');
+    if (num2 && btnEdit2) {
+        btnEdit2.style.display = num2.value ? 'inline-flex' : 'none';
+    }
+    if (btnSelect2) {
+        btnSelect2.style.display = hasClient ? 'inline-flex' : 'none';
+    }
+};
+
+window.showClienteNumeracoesModal = function(fieldId, forceIdCliente = null) {
+    let idCliente = forceIdCliente;
+    if (!idCliente) {
+        const activeOSItem = state.activeOSItem;
+        if (activeOSItem) {
+            const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
+            if (os) idCliente = os.id_cliente;
+        }
+    }
+    
+    if (!idCliente) {
+        toast('Este pedido não está associado a um cliente válido!', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('modal-cliente-numeracoes');
+    const list = document.getElementById('cliente-numeracoes-list');
+    if (!modal || !list) return;
+
+    // Filtrar numerações que tenham Cli_Num igual ao idCliente
+    const filtered = (state.numeracoes || []).filter(n => String(n.Cli_Num || '') === String(idCliente));
+
+    if (filtered.length === 0) {
+        list.innerHTML = `<p style="text-align: center; color: var(--text-dim); padding: 20px;">Nenhuma numeração customizada encontrada para este cliente.</p>`;
+    } else {
+        list.innerHTML = filtered.map(n => `
+            <div class="cliente-num-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px;">
+                <div style="flex: 1; padding-right: 12px;">
+                    <strong style="color: #fff; font-size: 0.9rem;">${n.name}</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 2px;">
+                        Tipo: ${n.tipo || 'SEQUENCIAL'} | Formatos: ${(n.formato_ids || [n.formato_id]).map(id => state.formatos.find(f => String(f.id) === String(id))?.name || id).join(', ')}
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="selectClienteNumeracaoForField('${fieldId}', '${n.id}')">Selecionar</button>
+            </div>
+        `).join('');
+    }
+
+    modal.style.display = 'flex';
+};
+
+window.closeClienteNumeracoesModal = function() {
+    const modal = document.getElementById('modal-cliente-numeracoes');
+    if (modal) modal.style.display = 'none';
+};
+
+window.selectClienteNumeracaoForField = function(fieldId, numId) {
+    const numSelect = document.getElementById(fieldId);
+    if (numSelect) {
+        const newNum = state.numeracoes.find(n => String(n.id) === String(numId));
+        if (newNum) {
+            if (!Array.from(numSelect.options).some(o => o.value === newNum.id)) {
+                const opt = document.createElement('option');
+                opt.value = newNum.id;
+                opt.textContent = newNum.name;
+                numSelect.appendChild(opt);
+            }
+            numSelect.value = newNum.id;
+            numSelect.dispatchEvent(new Event('change'));
+        }
+    }
+    window.closeClienteNumeracoesModal();
+};
+
 window.editImposicaoCustomNumeracao = function(fieldId) {
     const numSelect = document.getElementById(fieldId);
     if (!numSelect || !numSelect.value) {
@@ -16712,11 +16828,19 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
     const baseNum = state.numeracoes.find(n => String(n.id) === String(numId));
     if (!baseNum) return;
     
+    const activeOSItem = state.activeOSItem;
+    let cliNum = null;
+    if (activeOSItem) {
+        const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
+        if (os) cliNum = os.id_cliente;
+    }
+
     // Configura o state para que no saveNumeracao volte para Imposição
     window.customNumeracaoEditState = {
         view: 'imposicao',
         fieldId: fieldId,
-        modeloName: impName
+        modeloName: impName,
+        cliNum: cliNum
     };
     
     // Abre a numeração
