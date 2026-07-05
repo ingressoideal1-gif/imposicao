@@ -261,6 +261,25 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     let fmtId, numId, saiId, start, end, schema = 'sequential';
     const activeItem = state.activeOSItem;
+    
+    // Auto-preencher 'Folhas p/ Bloco' se disponivel na OS, para manter o Preview consistente
+    if (state.selectedOSItems && state.selectedOSItems.length > 0) {
+        const firstWithBloco = state.selectedOSItems.find(sel => {
+            const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
+            return sItem && ((sItem.bloco && parseInt(sItem.bloco) > 0) || (sItem.blocos && sItem.blocos !== 'N'));
+        });
+        if (firstWithBloco) {
+            const blocItem = state.osItens[firstWithBloco.osId]?.find(i => String(i.id) === String(firstWithBloco.itemId));
+            const sheetsInp = document.getElementById('ped-sheets-per-block');
+            if (sheetsInp && blocItem?.bloco) sheetsInp.value = parseInt(blocItem.bloco);
+        }
+    } else if (activeItem) {
+        const sItem = state.osItens[activeItem.osId]?.find(i => String(i.id) === String(activeItem.itemId));
+        if (sItem && sItem.bloco) {
+            const sheetsInp = document.getElementById('ped-sheets-per-block');
+            if (sheetsInp) sheetsInp.value = parseInt(sItem.bloco);
+        }
+    }
     if (activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
