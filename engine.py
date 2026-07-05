@@ -1101,6 +1101,8 @@ class ImpositionEngine:
             for doc in pdf_cache.values():
                 if doc:
                     doc.close()
+            
+            self._apply_refazer_filter()
             print(f"[engine] strict_assembly: Gerado com sucesso.")
             return
 
