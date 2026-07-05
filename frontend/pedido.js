@@ -489,7 +489,12 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     if (num && num.tipo === "TICKET") {
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
-    const raw_items = Math.max(1, end - start + 1);
+    let raw_items = Math.max(1, end - start + 1);
+    if (schema === "multi_artes" || isMultiSelected) {
+        const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+        raw_items = artesList.reduce((acc, a) => acc + (parseInt(a.qtd) || 0), 0);
+        if (raw_items < 1) raw_items = 1;
+    }
     const total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
 
     const poses_per_sheet = cols * rows;
@@ -497,18 +502,58 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     let is_strict_mode = false;
     let stack_size = 50;
-    if (schema === "cut_stack") {
+    let sets_needed = 1;
+    if (schema === "cut_stack" || schema === "multi_artes") {
         const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
         stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
-        if (cutstackMode === 'strict') {
+        if (schema === "multi_artes" || cutstackMode === 'strict' || cutstackMode === 'strict_assembly') {
             is_strict_mode = true;
             const itemsPerSet = stack_size * poses_per_sheet;
-            const sets_needed = Math.ceil(total_items / itemsPerSet);
+            sets_needed = Math.ceil(total_items / itemsPerSet);
             total_sheets = sets_needed * stack_size;
         }
     }
 
-    document.getElementById('ped-preview-sheet-num').textContent = `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
+    const setSelect = document.getElementById('ped-preview-set-input');
+    const refazerSetSelect = document.getElementById('ped-refazer-set');
+    if (setSelect && refazerSetSelect) {
+        if (sets_needed > 1) {
+            setSelect.style.display = 'inline-block';
+            refazerSetSelect.style.display = 'inline-block';
+            
+            if (setSelect.options.length !== sets_needed) {
+                const currentVal = setSelect.value;
+                const currentRefVal = refazerSetSelect.value;
+                setSelect.innerHTML = '';
+                refazerSetSelect.innerHTML = '';
+                for (let i = 1; i <= sets_needed; i++) {
+                    setSelect.add(new Option(`Set ${i}`, i));
+                    refazerSetSelect.add(new Option(`Set ${i}`, i));
+                }
+                setSelect.value = currentVal <= sets_needed ? currentVal : 1;
+                refazerSetSelect.value = currentRefVal <= sets_needed ? currentRefVal : 1;
+            }
+        } else {
+            setSelect.style.display = 'none';
+            refazerSetSelect.style.display = 'none';
+            setSelect.innerHTML = '<option value="1">Set 1</option>';
+            refazerSetSelect.innerHTML = '<option value="1">Set 1</option>';
+        }
+    }
+
+    const currentSet = setSelect && setSelect.style.display !== 'none' ? parseInt(setSelect.value) || 1 : 1;
+    
+    // Determinar o total de folhas visíveis neste set
+    let visible_sheets = total_sheets;
+    if (is_strict_mode) {
+        if (currentSet < sets_needed) {
+            visible_sheets = stack_size;
+        } else {
+            visible_sheets = total_sheets - ((sets_needed - 1) * stack_size);
+        }
+    }
+
+    document.getElementById('ped-preview-sheet-num').textContent = sets_needed > 1 ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}` : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
 
     const isBack = state.previewFace === 'back' || previewPart === 'miolo_verso';
 
@@ -516,9 +561,14 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         for (let col = 0; col < cols; col++) {
             const P = row * cols + col;
 
-            let S = (window.currentPreviewPage || 1) - 1;
-            if (S >= total_sheets) S = total_sheets - 1;
-            if (S < 0) S = 0;
+            let local_S = (window.currentPreviewPage || 1) - 1;
+            if (local_S >= visible_sheets) local_S = visible_sheets - 1;
+            if (local_S < 0) local_S = 0;
+            
+            let S = local_S;
+            if (is_strict_mode) {
+                S = ((currentSet - 1) * stack_size) + local_S;
+            }
 
             let item_index = (S * poses_per_sheet) + P;
             if (schema === "cut_stack") {
@@ -3131,13 +3181,14 @@ window.runPedImposition = async function (mode) {
 
         block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1,
 
-        // CAMAROTE: C_INI, Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden)
-        c_ini: parseInt(document.getElementById('ped-c-ini')?.value || 1) || 1,
-        q_cam: parseInt(document.getElementById('ped-q-cam')?.value || 0) || 0,
-        l_cam: parseInt(document.getElementById('ped-l-cam')?.value || 1) || 1,
+        // CAMAROTE: C_INI, Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden ou fallback do item ativo)
+        c_ini: (state.activeOSItem ? parseInt(state.activeOSItem.c_ini) : null) || parseInt(document.getElementById('ped-c-ini')?.value || 1) || 1,
+        q_cam: (state.activeOSItem ? parseInt(state.activeOSItem.q_cam) : null) || parseInt(document.getElementById('ped-q-cam')?.value || 0) || 0,
+        l_cam: (state.activeOSItem ? parseInt(state.activeOSItem.l_cam) : null) || parseInt(document.getElementById('ped-l-cam')?.value || 1) || 1,
 
         refazer_de: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-de')?.value) || 0) : 0,
-        refazer_ate: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-ate')?.value) || 0) : 0
+        refazer_ate: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-ate')?.value) || 0) : 0,
+        refazer_set: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-set')?.value) || 1) : 1
     };
 
 

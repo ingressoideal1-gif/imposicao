@@ -156,7 +156,8 @@ class ImpositionConfig:
                  q_cam: int = 0,
                  l_cam: int = 1,
                  refazer_de: int = 0,
-                 refazer_ate: int = 0):
+                 refazer_ate: int = 0,
+                 refazer_set: int = 1):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -201,6 +202,8 @@ class ImpositionConfig:
         self.csv_data = csv_data
         
         self.num_tipo = numeracao.get("tipo", "SEQUENCIAL") if numeracao else "SEQUENCIAL"
+        if numeracao and "CAMAROTE" in str(numeracao.get("svg_content", "")):
+            self.num_tipo = "CAMAROTE"
         self.ticket_qtd = numeracao.get("ticket_qtd", 1) if numeracao else 1
         self.ticket_logica = numeracao.get("ticket_logica", "PILHA") if numeracao else "PILHA"
         # CAMAROTE: inicio do local (c_ini), quantidade de locais e lotação por local
@@ -209,6 +212,7 @@ class ImpositionConfig:
         self.l_cam = max(1, int(l_cam) if l_cam else 1)
         self.refazer_de = int(refazer_de) if refazer_de else 0
         self.refazer_ate = int(refazer_ate) if refazer_ate else 0
+        self.refazer_set = int(refazer_set) if refazer_set else 1
         
         if layout_schema == "pdf_multiple":
             # Para Pdf Múltiplo, a quantidade total de itens é baseada na quantidade de páginas
@@ -231,9 +235,11 @@ class ImpositionConfig:
             if self.total_items < 1: self.total_items = 1
         elif csv_data:
             self.total_items = len(csv_data)
-        elif self.num_tipo == "CAMAROTE" and self.q_cam > 0:
-            # CAMAROTE: total = numero de locais × lotação por local
-            self.total_items = self.q_cam * self.l_cam
+        elif self.num_tipo == "CAMAROTE":
+            if self.q_cam > 0:
+                self.total_items = self.q_cam * self.l_cam
+            else:
+                raise ValueError("Numeração do tipo CAMAROTE requer que Q_CAM (Quantidade de Locais) seja informada e maior que zero.")
         else:
             total_expected = math.floor((seq_end - seq_start) / seq_increment) + 1
             if self.num_tipo == "TICKET":
@@ -2063,9 +2069,11 @@ class ImpositionEngine:
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 
     def _apply_refazer_filter(self):
-        """Filtra as folhas fisicas geradas de acordo com refazer_de e refazer_ate."""
+        """Filtra as folhas fisicas geradas de acordo com refazer_de, refazer_ate e refazer_set."""
         r_de = self.cfg.refazer_de
         r_ate = self.cfg.refazer_ate
+        r_set = getattr(self.cfg, "refazer_set", 1)
+        
         if r_de <= 0:
             return
             
@@ -2081,26 +2089,34 @@ class ImpositionEngine:
             req_end_sheet = req_start_sheet
             
         filtered_files = []
-        current_global_sheet = 0
+        
+        # Identificar se os arquivos foram gerados com divisão de conjuntos (SETS)
+        has_sets = any("_set" in gf["path"] for gf in self.generated_files)
         
         for gf in self.generated_files:
+            # Excluir capas se refazer > 0
             if gf["type"] in ["capa", "contracapa"]:
-                # Excluir capas se refazer > 0
                 if os.path.exists(gf["path"]):
                     os.remove(gf["path"])
                 continue
+                
+            # Se for um trabalho particionado em SETs, só processamos o arquivo que pertence ao SET solicitado
+            if has_sets:
+                set_marker = f"_set{r_set}_"
+                if set_marker not in gf["name"]:
+                    if os.path.exists(gf["path"]):
+                        os.remove(gf["path"])
+                    continue
                 
             try:
                 doc = fitz.open(gf["path"])
                 chunk_sheets = len(doc) // pages_per_sheet
                 
-                chunk_start_sheet = current_global_sheet
-                chunk_end_sheet = current_global_sheet + chunk_sheets - 1
-                
-                # Checar intersecção
-                if req_start_sheet <= chunk_end_sheet and req_end_sheet >= chunk_start_sheet:
-                    local_start = max(0, req_start_sheet - chunk_start_sheet)
-                    local_end = min(chunk_sheets - 1, req_end_sheet - chunk_start_sheet)
+                # O chunk inteiro representa o SET atual, ou o documento inteiro se não houver SETs.
+                # Como a paginação da interface agora é local por SET, não precisamos acumular current_global_sheet.
+                if req_start_sheet < chunk_sheets:
+                    local_start = req_start_sheet
+                    local_end = min(chunk_sheets - 1, req_end_sheet)
                     
                     start_page = local_start * pages_per_sheet
                     end_page = min(len(doc) - 1, (local_end + 1) * pages_per_sheet - 1)
@@ -2114,7 +2130,6 @@ class ImpositionEngine:
                         doc.save(temp_path, garbage=4, deflate=True)
                         doc.close()
                         
-                        # Garantir que o arquivo foi salvo antes de substituir
                         if os.path.exists(temp_path):
                             os.replace(temp_path, gf["path"])
                             filtered_files.append(gf)
@@ -2123,11 +2138,10 @@ class ImpositionEngine:
                     if os.path.exists(gf["path"]):
                         os.remove(gf["path"])
                 
-                current_global_sheet += chunk_sheets
             except Exception as e:
                 print(f"[Refazer] Erro processando {gf['path']}: {e}")
                 
         if not filtered_files:
-            raise ValueError(f"As páginas selecionadas para refazer (De: {r_de} Até: {r_ate}) estão fora do alcance do documento gerado (Total de Folhas: {current_global_sheet}). Verifique os números informados.")
+            raise ValueError(f"As páginas selecionadas para refazer (Set: {r_set}, De: {r_de} Até: {r_ate}) estão fora do alcance do documento.")
             
         self.generated_files = filtered_files

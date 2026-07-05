@@ -1351,6 +1351,9 @@
                                             Refazer Folhas
                                         </label>
                                         <div id="ped-refazer-inputs" style="display: none; align-items: center; gap: 6px;">
+                                            <select id="ped-refazer-set" class="form-control" style="width: auto; padding: 2px 4px; height: 24px; font-size: 0.8rem; display: none;">
+                                                <option value="1">Set 1</option>
+                                            </select>
                                             <span style="font-size:0.75rem; color:var(--text-muted);">De:</span>
                                             <input type="number" id="ped-refazer-de" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 5">
                                             <span style="font-size:0.75rem; color:var(--text-muted);">Até:</span>
@@ -1361,6 +1364,9 @@
                                     </div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
+                                    <select id="ped-preview-set-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto; display: none;" onchange="changePedPreviewPage()">
+                                        <option value="1">Set 1</option>
+                                    </select>
                                     <select id="ped-preview-part-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto;" onchange="changePedPreviewPage()">
                                         <option value="miolo">Miolo</option>
                                         <option value="capa">Capa</option>
@@ -1998,8 +2004,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=319"></script>
-    <script src="/pedido.js?v=319"></script>
+    <script src="script.js?v=320"></script>
+    <script src="/pedido.js?v=320"></script>
 
 
 

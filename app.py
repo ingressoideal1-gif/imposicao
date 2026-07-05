@@ -635,7 +635,8 @@ async def impose_file(
             q_cam=int(data.get("q_cam", 0) or 0),
             l_cam=int(data.get("l_cam", 1) or 1),
             refazer_de=int(data.get("refazer_de", 0) or 0),
-            refazer_ate=int(data.get("refazer_ate", 0) or 0)
+            refazer_ate=int(data.get("refazer_ate", 0) or 0),
+            refazer_set=int(data.get("refazer_set", 1) or 1)
         )
 
         engine = ImpositionEngine(config)
