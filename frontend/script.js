@@ -16338,7 +16338,21 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     label = `${el.prefix || ''}1/${_lCamB}`;
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
-                    label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
+                    let current_val = 1;
+                    if (num && num.tipo === "TICKET") {
+                        const pos = parseInt(el.ticket_pos) || 1;
+                        const start = parseInt(
+                            item?.numeracao_inicio || item?.num_inicial ||
+                            item?.NUMERACAO_INICIO || 1
+                        ) || 1;
+                        current_val = start + (pos - 1);
+                    } else {
+                        current_val = parseInt(
+                            item?.numeracao_inicio || item?.num_inicial ||
+                            item?.NUMERACAO_INICIO || 1
+                        ) || 1;
+                    }
+                    label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
                 }
                 numCtx.textAlign = 'center';
                 numCtx.textBaseline = 'middle';

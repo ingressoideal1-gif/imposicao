@@ -1921,7 +1921,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             numCtx.translate(x, y);
             numCtx.rotate(rot);
 
-            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_')) {
+            if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
                 const fs = (el.font_size || 12) * S / 2.8346;
                 numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
                 numCtx.fillStyle = color;
@@ -1937,13 +1937,42 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     label = `${el.prefix || ''}${_lVal}`;
                 } else if (el.type === 'TEATRO_COMBO') {
                     const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
-                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : 'A';
                     const fila = `${el.prefix_fila || ''}${_fVal}`;
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+                } else if (el.type === 'CAMAROTE_LOCAL') {
+                    const _inicio = parseInt(
+                        item?.numeracao_inicio || item?.num_inicial ||
+                        item?.NUMERACAO_INICIO || 1
+                    );
+                    label = `${el.prefix || ''}${_inicio}`;
+                } else if (el.type === 'CAMAROTE_PESSOA') {
+                    label = `${el.prefix || ''}1`;
+                } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                    const _lCamB = parseInt(
+                        item?.L_CAM || item?.l_cam ||
+                        item?.lotacao_cam || item?.LOTACAO_CAM ||
+                        item?.lotacao || 5
+                    );
+                    label = `${el.prefix || ''}1/${_lCamB}`;
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
-                    label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
+                    let current_val = 1;
+                    if (num && num.tipo === "TICKET") {
+                        const pos = parseInt(el.ticket_pos) || 1;
+                        const start = parseInt(
+                            item?.numeracao_inicio || item?.num_inicial ||
+                            item?.NUMERACAO_INICIO || 1
+                        ) || 1;
+                        current_val = start + (pos - 1);
+                    } else {
+                        current_val = parseInt(
+                            item?.numeracao_inicio || item?.num_inicial ||
+                            item?.NUMERACAO_INICIO || 1
+                        ) || 1;
+                    }
+                    label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
                 }
                 numCtx.textAlign = 'center';
                 numCtx.textBaseline = 'middle';
