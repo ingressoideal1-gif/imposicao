@@ -1398,6 +1398,8 @@
                                 <span id="amostras-os-itens-count" class="badge badge-yellow"></span>
                                 <button class="btn btn-secondary btn-sm" id="btn-export-pdf-gabarito" onclick="exportarPdfGabarito()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-pdf" style="color: #f472b6;"></i> PDF Gabarito</button>
                                 <button class="btn btn-secondary btn-sm" id="btn-export-pdf-arte" onclick="exportarPdfSomenteArte()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-pdf" style="color: #60a5fa;"></i> PDF Arte</button>
+                                <button class="btn btn-secondary btn-sm" id="btn-import-pdf-arte" onclick="document.getElementById('import-pdf-arte-input').click()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-import" style="color: #34d399;"></i> Importar PDF Artes</button>
+                                <input type="file" id="import-pdf-arte-input" accept=".pdf" style="display: none;" onchange="importarPdfMultipage(event)" />
                                 <button class="btn btn-secondary btn-sm" id="btn-export-pdf" onclick="exportarPdfModelos()" style="font-size: 0.78rem; font-weight: 600;"><i class="fa-solid fa-file-pdf"></i> PDF Prova</button>
                                 <button class="btn btn-primary btn-sm" onclick="voltarParaAtendimento()" style="font-size: 0.78rem; font-weight: 600;">↩️ Voltar para Atendimento</button>
                                 <button class="btn btn-danger btn-sm" onclick="voltarParaArte()" style="font-size: 0.78rem; font-weight: 600;">🎨 Voltar para Arte</button>
@@ -2016,8 +2018,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="/script.js?v=352"></script>
-    <script src="/pedido.js?v=352"></script>
+    <script src="/script.js?v=353"></script>
+    <script src="/pedido.js?v=353"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">

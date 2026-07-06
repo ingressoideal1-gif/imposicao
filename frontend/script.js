@@ -18770,6 +18770,154 @@ async function exportarPdfSomenteArte() {
     }
 }
 
+async function importarPdfMultipage(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Limpar o input para permitir re-upload do mesmo arquivo
+    event.target.value = '';
+    
+    const osId = state.amostrasOSAtivo;
+    if (!osId) {
+        toast('Nenhum pedido ativo.', 'warning');
+        return;
+    }
+    const os = state.ordens.find(o => o.id === osId);
+    const itens = state.osItens[osId] || [];
+    if (itens.length === 0) {
+        toast('Nenhum modelo cadastrado para este pedido.', 'warning');
+        return;
+    }
+
+    try {
+        if (typeof window.PDFLib === 'undefined') {
+            toast('Carregando biblioteca PDF...', 'info');
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        const { PDFDocument } = window.PDFLib;
+        const arrayBuffer = await file.arrayBuffer();
+        const uploadedDoc = await PDFDocument.load(arrayBuffer);
+        const totalPages = uploadedDoc.getPageCount();
+
+        // Calcular páginas necessárias
+        let requiredPages = 0;
+        itens.forEach(item => {
+            requiredPages++; // Frente
+            if (item.verso) requiredPages++; // Verso
+        });
+
+        if (totalPages !== requiredPages) {
+            if (!confirm(`Atenção: O PDF enviado possui ${totalPages} páginas, mas a soma de frentes e versos dos modelos do pedido requer exatamente ${requiredPages} páginas.\n\nDeseja continuar mesmo assim e fatiar apenas até onde for possível?`)) {
+                return;
+            }
+        } else {
+            if (!confirm(`Confirmar fatiamento de PDF de ${totalPages} páginas para os ${itens.length} modelos deste pedido?`)) {
+                return;
+            }
+        }
+
+        const btn = document.getElementById('btn-import-pdf-arte');
+        if (!btn) return;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processando...';
+        btn.disabled = true;
+
+        toast('Processando e fatiando PDF. Por favor, aguarde...', 'info');
+
+        let currentPageIndex = 0;
+        for (let idx = 0; idx < itens.length; idx++) {
+            const item = itens[idx];
+            
+            // FRENTE
+            if (currentPageIndex < totalPages) {
+                const singlePageDoc = await PDFDocument.create();
+                const [copiedPage] = await singlePageDoc.copyPages(uploadedDoc, [currentPageIndex]);
+                singlePageDoc.addPage(copiedPage);
+                const pdfBytes = await singlePageDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                
+                const fileName = `arte_frente_${osId}_${item.id}_${Date.now()}.pdf`;
+                const { data, error } = await supabaseClient
+                    .storage
+                    .from('artes')
+                    .upload(fileName, blob, { contentType: 'application/pdf', cacheControl: '3600', upsert: true });
+                
+                if (!error) {
+                    const { data: urlData } = supabaseClient.storage.from('artes').getPublicUrl(fileName);
+                    item.arte_url = urlData.publicUrl;
+                    
+                    // Limpar input de arquivo local na interface
+                    const input = document.getElementById(`amostra-item-arte-${idx}`);
+                    if (input) input.value = '';
+                    
+                    await saveAmostraToDB(item.id, osId, { arte_url: urlData.publicUrl });
+                } else {
+                    console.error('Erro ao subir frente:', error);
+                }
+                currentPageIndex++;
+            }
+
+            // VERSO
+            if (item.verso) {
+                if (currentPageIndex < totalPages) {
+                    const singlePageDoc = await PDFDocument.create();
+                    const [copiedPage] = await singlePageDoc.copyPages(uploadedDoc, [currentPageIndex]);
+                    singlePageDoc.addPage(copiedPage);
+                    const pdfBytes = await singlePageDoc.save();
+                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                    
+                    const fileName = `arte_verso_${osId}_${item.id}_${Date.now()}.pdf`;
+                    const { data, error } = await supabaseClient
+                        .storage
+                        .from('artes')
+                        .upload(fileName, blob, { contentType: 'application/pdf', cacheControl: '3600', upsert: true });
+                    
+                    if (!error) {
+                        const { data: urlData } = supabaseClient.storage.from('artes').getPublicUrl(fileName);
+                        item.verso_arte_url = urlData.publicUrl;
+                        
+                        // Limpar input de arquivo local na interface
+                        const input = document.getElementById(`amostra-item-arte-verso-${idx}`);
+                        if (input) input.value = '';
+                        
+                        await saveAmostraToDB(item.id, osId, { verso_arte_url: urlData.publicUrl });
+                    } else {
+                        console.error('Erro ao subir verso:', error);
+                    }
+                    currentPageIndex++;
+                }
+            }
+        }
+
+        // Forçar renderização de todas as amostras
+        renderAmostrasOSItens(osId);
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        toast('PDF fatiado e importado com sucesso!', 'success');
+
+    } catch (e) {
+        console.error('Erro ao processar PDF multi-páginas:', e);
+        toast('Erro ao fatiar o PDF: ' + e.message, 'error');
+        const btn = document.getElementById('btn-import-pdf-arte');
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-file-import" style="color: #34d399;"></i> Importar PDF Artes';
+            btn.disabled = false;
+        }
+    }
+}
+
+// Expor globalmente
+window.importarPdfMultipage = importarPdfMultipage;
+
+
+
 
 async function criarCanvasNumeracaoRasterizada(num, fmt) {
     if (!num || !num.elements || num.elements.length === 0) return null;
