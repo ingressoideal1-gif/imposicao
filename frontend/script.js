@@ -15439,6 +15439,8 @@ function renderAmostrasOSItens(osId) {
                                         <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                             onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
                                         <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
+                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                        <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
                                         <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.arte_url || item.amostra_arte_base64 ? '(Salva)' : ''}</span>
                                     </div>
                                     <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
@@ -15449,6 +15451,8 @@ function renderAmostrasOSItens(osId) {
                                         <input type="file" id="amostra-item-arte-verso-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                             onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'verso')">
                                         <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" style="${item.verso_arte_url || item.verso_amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')">✕ Remover</button>
+                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-verso-${idx}" style="${item.verso_arte_url || item.verso_amostra_arte_base64 ? '' : 'display:none;'}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="Copiar Link da Arte Verso"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                        <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="Colar Link da Arte Verso"><i class="fa-regular fa-paste"></i> Colar</button>
                                         <span id="amostra-item-arte-verso-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.verso_arte_url || item.verso_amostra_arte_base64 ? '(Salva)' : ''}</span>
                                     </div>
                                     <div style="display: flex; justify-content: flex-end;">
@@ -15466,6 +15470,8 @@ function renderAmostrasOSItens(osId) {
                                     <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                         onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
                                     <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
+                                    <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                    <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
                                     <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.arte_url || item.amostra_arte_base64 ? '(Arte Salva)' : ''}</span>
                                     <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 0.95rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
                                         <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
@@ -16057,6 +16063,86 @@ function onItemArteRemove(idx, osId, itemId, face = 'frente') {
         .catch(() => toast('Falha ao remover arte.', 'error'));
 }
 
+// Funções globais de Copiar/Colar links de arte entre modelos
+window.copiarArte = function(url, face) {
+    if (!url) {
+        toast('Nenhum link de arte para copiar.', 'warning');
+        return;
+    }
+    if (!state.copiedArte) state.copiedArte = {};
+    state.copiedArte = { url, face };
+    localStorage.setItem('imposicao_copied_arte', JSON.stringify({ url, face }));
+    
+    navigator.clipboard.writeText(url)
+        .then(() => {
+            toast(`Link da arte (${face.toUpperCase()}) copiado!`, 'success');
+        })
+        .catch(err => {
+            toast(`Link da arte (${face.toUpperCase()}) copiado na memória!`, 'success');
+        });
+};
+
+window.colarArte = async function(idx, osId, itemId, face = 'frente') {
+    let sourceUrl = state.copiedArte ? state.copiedArte.url : null;
+    
+    if (!sourceUrl) {
+        const stored = localStorage.getItem('imposicao_copied_arte');
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                if (parsed && parsed.url) {
+                    sourceUrl = parsed.url;
+                    state.copiedArte = parsed;
+                }
+            } catch(e) {}
+        }
+    }
+    
+    if (!sourceUrl) {
+        try {
+            const clipboardText = await navigator.clipboard.readText();
+            if (clipboardText && (clipboardText.startsWith('http://') || clipboardText.startsWith('https://'))) {
+                sourceUrl = clipboardText.trim();
+            }
+        } catch (err) {
+            console.log('Clipboard read blocked or empty:', err);
+        }
+    }
+    
+    if (!sourceUrl) {
+        toast('Nenhuma arte copiada na memória. Copie a arte de outro modelo primeiro!', 'warning');
+        return;
+    }
+    
+    try {
+        toast('Colando link da arte...', 'info');
+        
+        // Limpar inputs de arquivo locais correspondentes
+        const inputId = face === 'verso' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
+        const input = document.getElementById(inputId);
+        if (input) input.value = '';
+        
+        const osItems = state.osItens[osId];
+        const item = osItems.find(i => String(i.id) === String(itemId));
+        if (item) {
+            if (face === 'verso') {
+                item.verso_arte_url = sourceUrl;
+            } else {
+                item.arte_url = sourceUrl;
+            }
+        }
+        
+        renderItemAmostraCombinada(idx, osId);
+        
+        const dbField = face === 'verso' ? 'verso_arte_url' : 'arte_url';
+        await saveAmostraToDB(itemId, osId, { [dbField]: sourceUrl });
+        toast('Arte vinculada com sucesso!', 'success');
+    } catch (e) {
+        console.error('Falha ao colar arte:', e);
+        toast('Falha ao colar arte: ' + e.message, 'error');
+    }
+};
+
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
 
@@ -16631,6 +16717,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     const hasSavedFrontArte = !!item.arte_url;
     const frontNameSpan = container.querySelector(`#amostra-item-arte-name-${idx}`);
     const removeFrontBtn = container.querySelector(`#btn-remove-amostra-arte-${idx}`);
+    const copyFrontBtn = container.querySelector(`#btn-copy-amostra-arte-${idx}`);
 
     if (frontNameSpan) {
         if (hasFrontArte) frontNameSpan.textContent = container.querySelector(`#amostra-item-arte-${idx}`).files[0].name;
@@ -16638,12 +16725,19 @@ async function renderItemAmostraCombinada(idx, osId) {
         else frontNameSpan.textContent = '';
     }
     if (removeFrontBtn) removeFrontBtn.style.display = (hasFrontArte || hasSavedFrontArte) ? '' : 'none';
+    if (copyFrontBtn) {
+        copyFrontBtn.style.display = (hasFrontArte || hasSavedFrontArte) ? '' : 'none';
+        if (hasSavedFrontArte) {
+            copyFrontBtn.setAttribute('onclick', `copiarArte('${item.arte_url}', 'frente')`);
+        }
+    }
 
     if (item.verso) {
         const hasVersoArte = container.querySelector(`#amostra-item-arte-verso-${idx}`)?.files?.length > 0;
         const hasSavedVersoArte = !!item.verso_arte_url;
         const versoNameSpan = container.querySelector(`#amostra-item-arte-verso-name-${idx}`);
         const removeVersoBtn = container.querySelector(`#btn-remove-amostra-arte-verso-${idx}`);
+        const copyVersoBtn = container.querySelector(`#btn-copy-amostra-arte-verso-${idx}`);
 
         if (versoNameSpan) {
             if (hasVersoArte) versoNameSpan.textContent = container.querySelector(`#amostra-item-arte-verso-${idx}`).files[0].name;
@@ -16651,6 +16745,12 @@ async function renderItemAmostraCombinada(idx, osId) {
             else versoNameSpan.textContent = '';
         }
         if (removeVersoBtn) removeVersoBtn.style.display = (hasVersoArte || hasSavedVersoArte) ? '' : 'none';
+        if (copyVersoBtn) {
+            copyVersoBtn.style.display = (hasVersoArte || hasSavedVersoArte) ? '' : 'none';
+            if (hasSavedVersoArte) {
+                copyVersoBtn.setAttribute('onclick', `copiarArte('${item.verso_arte_url}', 'verso')`);
+            }
+        }
     }
 
     // Obter cor, formato e numeração
