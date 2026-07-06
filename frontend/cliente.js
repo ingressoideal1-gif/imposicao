@@ -165,8 +165,33 @@ function renderAmostrasOSItens(osId) {
             return na === nb || na.includes(nb) || nb.includes(na);
         };
 
-        // Determinar o formato ID do item da OS
-        const itemFormatoId = item.formato_id || (item.formato ? matchFormato(item.formato) : null);
+        // Determinar o formato ID do item da OS (via formato_id do banco, via produto ou via nome do formato)
+        let itemFormatoId = item.formato_id;
+        if (!itemFormatoId && state.produtosGlobais) {
+            const prodId = item.id_produto || item.produto_id;
+            let produtoObj = null;
+            if (prodId) {
+                produtoObj = state.produtosGlobais.find(p => String(p.id) === String(prodId) || String(p.id_produto) === String(prodId));
+            }
+            if (!produtoObj) {
+                const prodName = item.nome_produto_real || item.produto;
+                if (prodName) {
+                    const cleanProdName = prodName.toLowerCase().trim();
+                    produtoObj = state.produtosGlobais.find(p => {
+                        const nameMatch = (p.nomeReal || '').toLowerCase().trim() === cleanProdName || fuzzyMatch(p.nomeReal, prodName);
+                        if (nameMatch) return true;
+                        const apelidos = (p.apelidos || '').split(',').map(a => a.trim().toLowerCase());
+                        return apelidos.includes(cleanProdName) || apelidos.some(a => fuzzyMatch(a, prodName));
+                    });
+                }
+            }
+            if (produtoObj && produtoObj.id_formato) {
+                itemFormatoId = produtoObj.id_formato;
+            }
+        }
+        if (!itemFormatoId && item.formato) {
+            itemFormatoId = matchFormato(item.formato);
+        }
 
         // Filtrar cores com base no formato do produto
         const filteredCores = itemFormatoId
