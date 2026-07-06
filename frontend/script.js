@@ -15294,7 +15294,7 @@ function renderAmostrasOSItens(osId) {
 
         // Filtrar cores com base no formato do produto
         const filteredCores = itemFormatoId
-            ? (state.cores || []).filter(c => String(c.formato_id) === String(itemFormatoId))
+            ? (state.cores || []).filter(c => !c.formato_id || String(c.formato_id) === String(itemFormatoId))
             : (state.cores || []);
 
         // Tentar descobrir a cor selecionada (pelo banco, ou pelo padrao escrito)
@@ -15305,11 +15305,11 @@ function renderAmostrasOSItens(osId) {
         }
 
         const corsOpts = filteredCores.map(c =>
-            `<option value="${c.id}" ${c.id === resolvedCorId ? 'selected' : ''}>${c.name}</option>`
+            `<option value="${c.id}" ${String(c.id) === String(resolvedCorId) ? 'selected' : ''}>${c.name}</option>`
         ).join('');
 
         // Determinar o formato ID da cor selecionada
-        const selectedCor = resolvedCorId ? (state.cores || []).find(c => c.id === resolvedCorId) : null;
+        const selectedCor = resolvedCorId ? (state.cores || []).find(c => String(c.id) === String(resolvedCorId)) : null;
         const corFormatoId = selectedCor ? selectedCor.formato_id : null;
 
         // Tentar descobrir a numeracao selecionada
