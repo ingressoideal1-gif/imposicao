@@ -15226,6 +15226,9 @@ function renderAmostrasOSItens(osId) {
 
     if (!os || !container) return;
 
+    if (state.osItens[osId]) {
+        state.osItens[osId].sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0));
+    }
     const itens = state.osItens[osId] || [];
 
     // Mostrar banner, esconder card avulso se for painel interno
