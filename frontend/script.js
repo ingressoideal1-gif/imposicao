@@ -18524,6 +18524,12 @@ async function exportarPdfModelos() {
     }
 }
 
+function arrayBufferHeaderIsPdf(buffer) {
+    if (!buffer || buffer.byteLength < 4) return false;
+    const bytes = new Uint8Array(buffer.slice(0, 4));
+    return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
+}
+
 // --- Exportação de PDF Somente Arte ---
 async function exportarPdfSomenteArte() {
     const osId = state.amostrasOSAtivo;
@@ -18584,7 +18590,41 @@ async function exportarPdfSomenteArte() {
 
             let pageAdded = false;
 
-            if (item.amostra_arte_base64) {
+            // 1. Tentar carregar a arte original limpa da frente
+            if (item.arte_url) {
+                try {
+                    const response = await fetch(item.arte_url);
+                    if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const isPdf = arrayBufferHeaderIsPdf(arrayBuffer);
+                    
+                    if (isPdf) {
+                        const originalDoc = await PDFDocument.load(arrayBuffer);
+                        const pages = await pdfDoc.copyPages(originalDoc, [0]);
+                        if (pages.length > 0) {
+                            const copiedPage = pages[0];
+                            copiedPage.setSize(ptW, ptH);
+                            pdfDoc.addPage(copiedPage);
+                            pageAdded = true;
+                        }
+                    } else {
+                        const page = pdfDoc.addPage([ptW, ptH]);
+                        let image;
+                        if (item.arte_url.toLowerCase().endsWith('.png')) {
+                            image = await pdfDoc.embedPng(arrayBuffer);
+                        } else {
+                            image = await pdfDoc.embedJpg(arrayBuffer);
+                        }
+                        page.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
+                        pageAdded = true;
+                    }
+                } catch (e) {
+                    console.warn(`Falha ao carregar arte original frente para o modelo ${idx}, tentando fallback:`, e);
+                }
+            }
+
+            // Fallback para amostra_arte_base64 se falhar ou se não tiver arte_url
+            if (!pageAdded && item.amostra_arte_base64) {
                 try {
                     const isPdf = item.amostra_arte_base64.startsWith('data:application/pdf') || item.amostra_arte_base64.includes('JVBERi');
                     const base64Data = item.amostra_arte_base64.includes('base64,') ? item.amostra_arte_base64.split('base64,')[1] : item.amostra_arte_base64;
@@ -18592,6 +18632,7 @@ async function exportarPdfSomenteArte() {
                     if (isPdf) {
                         const originalDoc = await PDFDocument.load(base64Data);
                         const [copiedPage] = await pdfDoc.copyPages(originalDoc, [0]);
+                        copiedPage.setSize(ptW, ptH);
                         pdfDoc.addPage(copiedPage);
                         pageAdded = true;
                     } else {
@@ -18602,28 +18643,104 @@ async function exportarPdfSomenteArte() {
                         } else {
                             image = await pdfDoc.embedJpg(base64Data);
                         }
-                        
-                        // Scale image to fit exactly on page
                         page.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
                         pageAdded = true;
                     }
                 } catch (e) {
-                    console.warn(`Falha ao embutir arte do modelo ${idx}:`, e);
+                    console.warn(`Falha ao carregar fallback base64 do modelo ${idx}:`, e);
                 }
             }
 
+            // Se ainda não adicionou nenhuma página da frente, adiciona uma em branco
             if (!pageAdded) {
                 pdfDoc.addPage([ptW, ptH]);
+                pageAdded = true;
             }
 
+            // Mapear labels de página
             const numModelo = item.id ? String(item.id) : `Modelo ${idx + 1}`;
             nums.push(PDFNumber.of(addedPages));
             nums.push(pdfDoc.context.obj({
                 Type: 'PageLabel',
                 P: PDFString.of(numModelo)
             }));
-
             addedPages++;
+
+            // 2. Se for frente e verso, tratar arte do verso
+            if (item.verso) {
+                let versoPageAdded = false;
+                if (item.verso_arte_url) {
+                    try {
+                        const response = await fetch(item.verso_arte_url);
+                        if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+                        const arrayBuffer = await response.arrayBuffer();
+                        const isPdf = arrayBufferHeaderIsPdf(arrayBuffer);
+                        
+                        if (isPdf) {
+                            const originalDoc = await PDFDocument.load(arrayBuffer);
+                            const pages = await pdfDoc.copyPages(originalDoc, [0]);
+                            if (pages.length > 0) {
+                                const copiedPage = pages[0];
+                                copiedPage.setSize(ptW, ptH);
+                                pdfDoc.addPage(copiedPage);
+                                versoPageAdded = true;
+                            }
+                        } else {
+                            const page = pdfDoc.addPage([ptW, ptH]);
+                            let image;
+                            if (item.verso_arte_url.toLowerCase().endsWith('.png')) {
+                                image = await pdfDoc.embedPng(arrayBuffer);
+                            } else {
+                                image = await pdfDoc.embedJpg(arrayBuffer);
+                            }
+                            page.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
+                            versoPageAdded = true;
+                        }
+                    } catch (e) {
+                        console.warn(`Falha ao carregar arte original verso para o modelo ${idx}, tentando fallback:`, e);
+                    }
+                }
+
+                // Fallback para verso_amostra_arte_base64
+                if (!versoPageAdded && item.verso_amostra_arte_base64) {
+                    try {
+                        const isPdf = item.verso_amostra_arte_base64.startsWith('data:application/pdf') || item.verso_amostra_arte_base64.includes('JVBERi');
+                        const base64Data = item.verso_amostra_arte_base64.includes('base64,') ? item.verso_amostra_arte_base64.split('base64,')[1] : item.verso_amostra_arte_base64;
+
+                        if (isPdf) {
+                            const originalDoc = await PDFDocument.load(base64Data);
+                            const [copiedPage] = await pdfDoc.copyPages(originalDoc, [0]);
+                            copiedPage.setSize(ptW, ptH);
+                            pdfDoc.addPage(copiedPage);
+                            versoPageAdded = true;
+                        } else {
+                            const page = pdfDoc.addPage([ptW, ptH]);
+                            let image;
+                            if (item.verso_amostra_arte_base64.startsWith('data:image/png')) {
+                                image = await pdfDoc.embedPng(base64Data);
+                            } else {
+                                image = await pdfDoc.embedJpg(base64Data);
+                            }
+                            page.drawImage(image, { x: 0, y: 0, width: ptW, height: ptH });
+                            versoPageAdded = true;
+                        }
+                    } catch (e) {
+                        console.warn(`Falha ao carregar fallback verso base64 do modelo ${idx}:`, e);
+                    }
+                }
+
+                if (!versoPageAdded) {
+                    pdfDoc.addPage([ptW, ptH]);
+                    versoPageAdded = true;
+                }
+
+                nums.push(PDFNumber.of(addedPages));
+                nums.push(pdfDoc.context.obj({
+                    Type: 'PageLabel',
+                    P: PDFString.of(`${numModelo} Verso`)
+                }));
+                addedPages++;
+            }
         }
 
         if (addedPages > 0) {
