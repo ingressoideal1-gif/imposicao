@@ -15291,6 +15291,13 @@ function renderAmostrasOSItens(osId) {
         if (!itemFormatoId && item.formato) {
             itemFormatoId = matchFormato(item.formato);
         }
+        if (itemFormatoId) {
+            const formatObj = (state.formatos || []).find(f => String(f.id) === String(itemFormatoId) || String(f.id_formato_num) === String(itemFormatoId));
+            if (formatObj) {
+                itemFormatoId = formatObj.id;
+            }
+        }
+
 
         // Filtrar cores com base no formato do produto
         const filteredCores = itemFormatoId
