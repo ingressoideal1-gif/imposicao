@@ -66,18 +66,37 @@ function populatePedNumeracoes() {
 
     const selectedFmtId = fmtSel.value;
 
-    // Filtra numerações cujo formato_ids inclui o formato selecionado
-    let filteredNums;
-    if (selectedFmtId) {
-        filteredNums = state.numeracoes.filter(n => {
-            // formato_ids Ã© o array de formatos compatÃ­veis (novo campo)
-            // fallback: se não existir, usa [formato_id] (dados antigos)
+    const activeOSItem = state.activeOSItem;
+    let currentClientId = null;
+    let currentItemId = null;
+    if (activeOSItem) {
+        currentItemId = activeOSItem.itemId;
+        const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
+        if (os) {
+            currentClientId = os.id_cliente;
+        }
+    }
+
+    // Filtra numerações cujo formato_ids inclui o formato selecionado e respeita o Cli_Num
+    let filteredNums = state.numeracoes.filter(n => {
+        // Filtro de customizada por cliente / item
+        if (n.is_custom) {
+            if (n.Cli_Num) {
+                if (String(n.Cli_Num) !== String(currentClientId)) return false;
+            } else {
+                if (String(n.os_item_id) !== String(currentItemId)) return false;
+            }
+        } else {
+            // Se tiver Cli_Num, restringe ao cliente atual
+            if (n.Cli_Num && String(n.Cli_Num) !== String(currentClientId)) return false;
+        }
+
+        if (selectedFmtId) {
             const ids = n.formato_ids || [n.formato_id];
             return ids.some(id => String(id) === String(selectedFmtId));
-        });
-    } else {
-        filteredNums = [...state.numeracoes];
-    }
+        }
+        return true;
+    });
     filteredNums.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
 
     // Popula Numeração 1 e Numeração 2
@@ -2981,9 +3000,9 @@ window.editPedidoCustomNumeracao = function(fieldId) {
     }
     console.log('[editPedidoCustomNumeracao] resolved cliNum:', cliNum);
 
-    // Configura o state para que no saveNumeracao volte para Imposição
+    // Configura o state para que no saveNumeracao volte para Pedido
     window.customNumeracaoEditState = {
-        view: 'imposicao',
+        view: 'pedido',
         fieldId: fieldId,
         modeloName: impName,
         cliNum: cliNum

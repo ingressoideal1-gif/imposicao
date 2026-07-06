@@ -5705,6 +5705,26 @@ if (window.customNumeracaoEditState) {
             }
         }
         toast('Numeração customizada salva e aplicada ao modelo de imposição!', 'success');
+    } else if (customState.view === 'pedido') {
+        showView('view-pedido');
+        if (newNum) {
+            const numSelect = document.getElementById(customState.fieldId);
+            if (numSelect) {
+                // Atualizar as opções do select caso a numeração seja nova
+                if (!Array.from(numSelect.options).some(o => o.value === newNum.id)) {
+                    const opt = document.createElement('option');
+                    opt.value = newNum.id;
+                    opt.textContent = newNum.name;
+                    numSelect.appendChild(opt);
+                }
+                numSelect.value = newNum.id;
+                
+                if (typeof updatePedSummary === 'function') {
+                    updatePedSummary();
+                }
+            }
+        }
+        toast('Numeração customizada salva e aplicada ao pedido!', 'success');
     }
 } else {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -15252,8 +15272,16 @@ function renderAmostrasOSItens(osId) {
             // Se for a numeração salva neste item, sempre exibe
             if (String(n.id) === String(resolvedNumId)) return true;
 
-            // Se for customizada, só exibe se for vinculada a este item específico
-            if (n.is_custom && String(n.os_item_id) !== String(item.id)) return false;
+            // Se for customizada
+            if (n.is_custom) {
+                if (n.Cli_Num) {
+                    // Se for vinculada a um cliente, só exibe se for o cliente desta OS
+                    if (String(n.Cli_Num) !== String(idCliente)) return false;
+                } else {
+                    // Fallback legado: se não tiver Cli_Num, só exibe se for vinculada a este item específico
+                    if (String(n.os_item_id) !== String(item.id)) return false;
+                }
+            }
             
             // Se tivermos cor selecionada com formato_id, filtra por ele
             if (corFormatoId) {
@@ -15827,13 +15855,23 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
     const curNumVal = numSelect.value;
     const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
     const corFormatoId = cor ? cor.formato_id : null;
+    const os = state.ordens.find(o => o.id === osId);
+    const idCliente = os ? os.id_cliente : null;
 
     const filteredNums = (state.numeracoes || []).filter(n => {
         // Sempre exibe a numeração atualmente selecionada (para não sumir do select)
         if (curNumVal && n.id === curNumVal) return true;
 
-        // Se for customizada, só exibe se for vinculada a este item específico
-        if (n.is_custom && (!item || n.os_item_id !== item.id)) return false;
+        // Se for customizada
+        if (n.is_custom) {
+            if (n.Cli_Num) {
+                // Se for vinculada a um cliente, só exibe se for o cliente desta OS
+                if (String(n.Cli_Num) !== String(idCliente)) return false;
+            } else {
+                // Fallback legado: se não tiver Cli_Num, só exibe se for vinculada a este item específico
+                if (!item || String(n.os_item_id) !== String(item.id)) return false;
+            }
+        }
         
         // Se tivermos cor selecionada com formato_id, filtra por ele
         if (corFormatoId) {

@@ -201,8 +201,16 @@ function renderAmostrasOSItens(osId) {
             // Se for a numeração salva neste item, sempre exibe
             if (String(n.id) === String(resolvedNumId)) return true;
 
-            // Se for customizada, só exibe se for vinculada a este item específico
-            if (n.is_custom && String(n.os_item_id) !== String(item.id)) return false;
+            // Se for customizada
+            if (n.is_custom) {
+                if (n.Cli_Num) {
+                    // Se for vinculada a um cliente, só exibe se for o cliente atual
+                    if (String(n.Cli_Num) !== String(clienteState.idCliente)) return false;
+                } else {
+                    // Fallback legado: se não tiver Cli_Num, só exibe se for vinculada a este item específico
+                    if (String(n.os_item_id) !== String(item.id)) return false;
+                }
+            }
             
             // Se tivermos cor selecionada com formato_id, filtra por ele
             if (corFormatoId) {
