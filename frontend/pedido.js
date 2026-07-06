@@ -280,7 +280,7 @@ window.loadPedArtFile = loadPedArtFile;
 
 function drawPedPreview() { console.log('drawPedPreview CALLED');
 
-    let fmtId, numId, saiId, start, end, schema = 'sequential';
+    let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index;
     const activeItem = state.activeOSItem;
     
     // Auto-preencher 'Folhas p/ Bloco' se disponivel na OS, para manter o Preview consistente
@@ -582,12 +582,25 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
     let raw_items = Math.max(1, end - start + 1);
+    let total_items = raw_items;
     if (schema === "multi_artes" || isMultiSelected) {
         const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
-        raw_items = artesList.reduce((acc, a) => acc + (parseInt(a.qtd) || 0), 0);
-        if (raw_items < 1) raw_items = 1;
+        let sum_physical = 0;
+        for (let i = 0; i < artesList.length; i++) {
+            let q = parseInt(artesList[i].qtd) || 0;
+            let item_ticket_qtd = 1;
+            if (artesList[i].num1_id) {
+                const itemNum = state.numeracoes.find(n => String(n.id) === String(artesList[i].num1_id));
+                if (itemNum && itemNum.tipo === "TICKET") {
+                    item_ticket_qtd = parseInt(itemNum.ticket_qtd) || 1;
+                }
+            }
+            sum_physical += Math.ceil(q / item_ticket_qtd);
+        }
+        total_items = sum_physical;
+    } else {
+        total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
     }
-    const total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
 
     const poses_per_sheet = cols * rows;
     let total_sheets = Math.ceil(total_items / poses_per_sheet);
@@ -690,8 +703,10 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     if (set_def && set_def.cell_allocations[P] && set_def.cell_allocations[P][local_S]) {
                         let item_data = set_def.cell_allocations[P][local_S];
                         item_index = item_data.global_index;
+                        item_local_index = item_data.local_index;
                     } else {
                         item_index = total_items; // skip rendering this cell
+                        item_local_index = undefined;
                     }
                 } else if (schema === "multi_artes") {
                     const P_col_first = col * rows + row;
@@ -1137,7 +1152,17 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
             if (currentNum && currentNum.elements) {
 
-                const val = start + item_index;
+                let effectiveStart = start;
+                let val_index = item_index;
+                if (schema === "multi_artes" || isMultiSelected) {
+                    if (multiArteItem) {
+                        effectiveStart = multiArteItem.start !== undefined ? multiArteItem.start : start;
+                        if (typeof item_local_index !== 'undefined') {
+                            val_index = item_local_index;
+                        }
+                    }
+                }
+                const val = effectiveStart + val_index;
 
                 let numPrintMode = currentNum.print_mode;
                 if (!numPrintMode && currentNum.elements) {
@@ -1252,11 +1277,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         if (currentNum && currentNum.tipo === "TICKET" && source_id === 1) {
                             const pos = parseInt(el.ticket_pos) || 1;
                             const N = parseInt(currentNum.ticket_qtd) || 1;
-                            current_val = start + (item_index * N) + (pos - 1);
+                            current_val = effectiveStart + (val_index * N) + (pos - 1);
                         } else if (currentNum && currentNum.tipo === "TICKET" && source_id === 2) {
                             const pos = parseInt(el.ticket_pos) || 1;
                             const N = parseInt(currentNum.ticket_qtd) || 1;
-                            current_val = start + (item_index * N) + (pos - 1);
+                            current_val = effectiveStart + (val_index * N) + (pos - 1);
                         }
 
                         const raw = pad > 0 ? String(current_val).padStart(pad, '0') : String(current_val);
@@ -3889,10 +3914,21 @@ function buildStrictAssemblySets(artesList, isMulti, totItems, stackSize, posesP
     if (hasArtes) {
         for (let i = 0; i < artesList.length; i++) {
             let q = parseInt(artesList[i].qtd) || 0;
-            for (let j = 0; j < q; j++) {
+            
+            // Resolve ticket_qtd
+            let item_ticket_qtd = 1;
+            if (artesList[i].num1_id) {
+                const itemNum = state.numeracoes.find(n => String(n.id) === String(artesList[i].num1_id));
+                if (itemNum && itemNum.tipo === "TICKET") {
+                    item_ticket_qtd = parseInt(itemNum.ticket_qtd) || 1;
+                }
+            }
+            let physical_q = Math.ceil(q / item_ticket_qtd);
+            
+            for (let j = 0; j < physical_q; j++) {
                 multiMap.push({ global_index: curr_idx + j, arte_index: i, local_index: j });
             }
-            curr_idx += q;
+            curr_idx += physical_q;
         }
     } else {
         for (let j = 0; j < totItems; j++) {
@@ -3904,8 +3940,16 @@ function buildStrictAssemblySets(artesList, isMulti, totItems, stackSize, posesP
         let start = 0;
         for (let i = 0; i < artesList.length; i++) {
             let q = parseInt(artesList[i].qtd) || 0;
-            models_items.push(multiMap.slice(start, start + q));
-            start += q;
+            let item_ticket_qtd = 1;
+            if (artesList[i].num1_id) {
+                const itemNum = state.numeracoes.find(n => String(n.id) === String(artesList[i].num1_id));
+                if (itemNum && itemNum.tipo === "TICKET") {
+                    item_ticket_qtd = parseInt(itemNum.ticket_qtd) || 1;
+                }
+            }
+            let physical_q = Math.ceil(q / item_ticket_qtd);
+            models_items.push(multiMap.slice(start, start + physical_q));
+            start += physical_q;
         }
     } else {
         models_items.push(multiMap);

@@ -231,7 +231,18 @@ class ImpositionConfig:
                 print(f"Erro ao contar paginas do PDF: {ex}")
                 self.total_items = 1
         elif layout_schema == "multi_artes" or (self.multi_artes and len(self.multi_artes) > 0):
-            self.total_items = sum(int(a.get("qtd", 0)) for a in self.multi_artes)
+            self.total_items = 0
+            for a in self.multi_artes:
+                art_qtd = int(a.get("qtd", 0))
+                art_num = a.get("numeracao")
+                art_num_tipo = art_num.get("tipo", "SEQUENCIAL") if art_num else "SEQUENCIAL"
+                if art_num and "CAMAROTE" in str(art_num.get("svg_content", "")):
+                    art_num_tipo = "CAMAROTE"
+                if art_num_tipo == "TICKET":
+                    art_ticket_qtd = int(art_num.get("ticket_qtd", 1)) if art_num else 1
+                    self.total_items += math.ceil(art_qtd / art_ticket_qtd)
+                else:
+                    self.total_items += art_qtd
             if self.total_items < 1: self.total_items = 1
         elif csv_data:
             self.total_items = len(csv_data)
@@ -904,6 +915,17 @@ class ImpositionEngine:
                 num1_obj = art.get("numeracao")
                 num2_obj = art.get("numeracao_2")
                 
+                art_num_tipo = num1_obj.get("tipo", "SEQUENCIAL") if num1_obj else "SEQUENCIAL"
+                if num1_obj and "CAMAROTE" in str(num1_obj.get("svg_content", "")):
+                    art_num_tipo = "CAMAROTE"
+                
+                if art_num_tipo == "TICKET":
+                    art_ticket_qtd = int(num1_obj.get("ticket_qtd", 1)) if num1_obj else 1
+                    physical_qtd = math.ceil(qtd / art_ticket_qtd)
+                else:
+                    physical_qtd = qtd
+                    art_ticket_qtd = 1
+                
                 n1 = int(num1_obj.get("start", 1)) if num1_obj else 1
                 n2 = int(num2_obj.get("start", 1)) if num2_obj else 1
                 
@@ -931,7 +953,7 @@ class ImpositionEngine:
                 except Exception as ex:
                     print(f"[multi_artes] Erro ao preparar arte: {ex}")
 
-                for i in range(qtd):
+                for i in range(physical_qtd):
                     multi_map.append({
                         "doc_base": art_doc,
                         "elements": art_els,
@@ -946,7 +968,9 @@ class ImpositionEngine:
                         "model_idx": model_idx,
                         "start_base": n1,
                         "l_cam": int(art.get("l_cam", cfg.l_cam if hasattr(cfg, "l_cam") else 1)),
-                        "q_cam": int(art.get("q_cam", cfg.q_cam if hasattr(cfg, "q_cam") else 0))
+                        "q_cam": int(art.get("q_cam", cfg.q_cam if hasattr(cfg, "q_cam") else 0)),
+                        "num_tipo": art_num_tipo,
+                        "ticket_qtd": art_ticket_qtd
                     })
 
         if is_strict_assembly:
@@ -955,8 +979,17 @@ class ImpositionEngine:
             curr_idx = 0
             for art in sorted_artes:
                 qtd = int(art.get("qtd", 0))
-                models_items.append(multi_map[curr_idx : curr_idx + qtd])
-                curr_idx += qtd
+                art_num = art.get("numeracao")
+                art_num_tipo = art_num.get("tipo", "SEQUENCIAL") if art_num else "SEQUENCIAL"
+                if art_num and "CAMAROTE" in str(art_num.get("svg_content", "")):
+                    art_num_tipo = "CAMAROTE"
+                if art_num_tipo == "TICKET":
+                    art_ticket_qtd = int(art_num.get("ticket_qtd", 1)) if art_num else 1
+                    physical_qtd = math.ceil(qtd / art_ticket_qtd)
+                else:
+                    physical_qtd = qtd
+                models_items.append(multi_map[curr_idx : curr_idx + physical_qtd])
+                curr_idx += physical_qtd
                 
             stack_size = cfg.sheets_per_block  # Itens por bloco (ex: 50)
             
@@ -1721,6 +1754,13 @@ class ImpositionEngine:
                 if el.get("face", "both") == "back":
                     continue
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
+                
+                item_num_tipo = item_data.get("num_tipo", "SEQUENCIAL")
+                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1:
+                    pos = int(el.get("ticket_pos", 1))
+                    N = int(item_data.get("ticket_qtd", 1))
+                    current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
+                
                 rotated_el = dict(el)
                 rotated_el["rotation"] = el.get("rotation", 0)
                 if "size_mm" in el:
@@ -1757,6 +1797,13 @@ class ImpositionEngine:
                 if el.get("face", "both") == "back":
                     continue
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
+                
+                item_num_tipo = item_data.get("num_tipo", "SEQUENCIAL")
+                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1:
+                    pos = int(el.get("ticket_pos", 1))
+                    N = int(item_data.get("ticket_qtd", 1))
+                    current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
+                
                 rotated_el = dict(el)
                 if cell_rotation > 0:
                     rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
@@ -1862,6 +1909,13 @@ class ImpositionEngine:
                 if el.get("face", "both") == "front":
                     continue
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
+                
+                item_num_tipo = item_data.get("num_tipo", "SEQUENCIAL")
+                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1:
+                    pos = int(el.get("ticket_pos", 1))
+                    N = int(item_data.get("ticket_qtd", 1))
+                    current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
+                
                 rotated_el = dict(el)
                 rotated_el["rotation"] = el.get("rotation", 0)
                 if "size_mm" in el:
@@ -1898,6 +1952,13 @@ class ImpositionEngine:
                 if el.get("face", "both") == "front":
                     continue
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
+                
+                item_num_tipo = item_data.get("num_tipo", "SEQUENCIAL")
+                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1:
+                    pos = int(el.get("ticket_pos", 1))
+                    N = int(item_data.get("ticket_qtd", 1))
+                    current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
+                
                 rotated_el = dict(el)
                 if cell_rotation > 0:
                     rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
