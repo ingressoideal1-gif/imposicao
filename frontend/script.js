@@ -12849,6 +12849,8 @@ async function loadOSItens(osId) {
                         return {
                             ...item,
                             produto: item.nome_modelo || 'Modelo',
+                            nome_produto_real: prop ? prop.nome_produto : null,
+                            id_produto: prop ? prop.id_produto : (item.id_produto || null),
                             modelo: item.id ? item.id.toString() : '--',
                             cor: item.padrao || item.cor || 'STD',
                             numeracao: resolvedNumeracao,
@@ -14370,6 +14372,32 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
 
     // --- MATCHING AUTOMÁTICO DE FORMATO (VIA COR OU NOME) E SAÍDA ---
     let formatoId = item.formato_id;
+
+    // Tentar encontrar o formato atrelado ao produto no banco de dados (via ID ou Nome)
+    if (!formatoId && state.produtosGlobais) {
+        const prodId = item.id_produto || item.produto_id;
+        let produtoObj = null;
+        if (prodId) {
+            produtoObj = state.produtosGlobais.find(p => String(p.id) === String(prodId) || String(p.id_produto) === String(prodId));
+        }
+        if (!produtoObj) {
+            const prodName = item.nome_produto_real || item.produto;
+            if (prodName) {
+                const cleanProdName = prodName.toLowerCase().trim();
+                produtoObj = state.produtosGlobais.find(p => {
+                    const nameMatch = (p.nomeReal || '').toLowerCase().trim() === cleanProdName || globalFuzzyMatch(p.nomeReal, prodName);
+                    if (nameMatch) return true;
+                    const apelidos = (p.apelidos || '').split(',').map(a => a.trim().toLowerCase());
+                    return apelidos.includes(cleanProdName) || apelidos.some(a => globalFuzzyMatch(a, prodName));
+                });
+            }
+        }
+        if (produtoObj && produtoObj.id_formato) {
+            formatoId = produtoObj.id_formato;
+            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            console.log(`[OS→Imp] Formato matched via Produto "${produtoObj.nomeReal}" → ${formatoId}`);
+        }
+    }
     
     // Tentar match do formato via Cor
     if (!formatoId && item.cor) {
@@ -15297,7 +15325,7 @@ function renderAmostrasOSItens(osId) {
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <span class="card-title">🧪 <strong>Modelo: ${item.nome_produto_real || item.produto || '--'}</strong></span>
+                <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
                     <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} → NF: ${item.num_final || item.quantidade || 0}</span>

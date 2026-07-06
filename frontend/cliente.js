@@ -226,7 +226,7 @@ function renderAmostrasOSItens(osId) {
         return `
         <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <span class="card-title">🧪 <strong>Modelo: ${item.nome_produto_real || item.produto || '--'}</strong></span>
+                <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
                     <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} → NF: ${item.num_final || item.quantidade || 0}</span>
@@ -640,10 +640,11 @@ async function initClientePage(numero, token) {
 
         // Carregar formatos, cores e numerações para o state global do front
         try {
-            const [coresRes, numeracoesRes, formatosRes] = await Promise.all([
+            const [coresRes, numeracoesRes, formatosRes, produtosRes] = await Promise.all([
                 supabaseClient.from('producao_cores').select('*').order('name', { ascending: true }),
                 supabaseClient.from('producao_numeracoes').select('*').order('name', { ascending: true }),
-                supabaseClient.from('producao_formatos').select('*').order('name', { ascending: true })
+                supabaseClient.from('producao_formatos').select('*').order('name', { ascending: true }),
+                supabaseClient.from('produtos').select('*')
             ]);
             state.cores = coresRes.data || [];
             const allNums = numeracoesRes.data || [];
@@ -652,6 +653,7 @@ async function initClientePage(numero, token) {
                 return String(n.Cli_Num) === String(clienteState.idCliente);
             });
             state.formatos = formatosRes.data || [];
+            state.produtosGlobais = produtosRes.data || [];
         } catch (err) {
             console.error('Erro ao carregar dados auxiliares do Supabase:', err);
         }
@@ -668,10 +670,10 @@ async function initClientePage(numero, token) {
                 .eq('id_int', queryNum)
                 .order('ordem', { ascending: true });
             
-            // Buscar nome do produto original da proposta
+            // Buscar nome do produto original da proposta e id_produto
             const { data: propData } = await supabaseClient
                 .from('produtos_proposta')
-                .select('id, nome_produto')
+                .select('id, nome_produto, id_produto')
                 .eq('id_int', queryNum);
             
             if (prodItems && prodItems.length > 0) {
@@ -687,6 +689,7 @@ async function initClientePage(numero, token) {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',
                         nome_produto_real: prop ? prop.nome_produto : null,
+                        id_produto: prop ? prop.id_produto : (item.id_produto || null),
                         os_id: osId,
                         verso: !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE'),
                         amostra_obs: item.observacao_arte || item.amostra_obs || '',
