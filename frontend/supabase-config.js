@@ -5,18 +5,24 @@ const VIBECODE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supabaseClient = null;
 let vibeClient = null;
 
-if (typeof supabase !== 'undefined') {
+const urlParams = new URLSearchParams(window.location.search);
+const forceOffline = urlParams.get('offline') === 'true' || urlParams.get('local') === 'true';
+const offlineModeSaved = localStorage.getItem('offline_mode') === 'true';
+const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname === "0.0.0.0";
+
+if (typeof supabase !== 'undefined' && !forceOffline && !offlineModeSaved) {
     // Aponta o client padrão do Imposition e do Vibecode para o mesmo banco do parceiro
     supabaseClient = supabase.createClient(VIBECODE_SUPABASE_URL, VIBECODE_ANON_KEY);
     vibeClient = supabaseClient; // alias para manter compatibilidade com códigos novos
     console.log("Supabase Vibecode (Banco Único) inicializado com sucesso!");
 } else {
-    console.log("Supabase SDK não encontrado. Modo 100% local.");
+    console.log("Operando em modo 100% local/offline (sem Supabase).");
 }
 
 // URL base do backend FastAPI.
 // Deixe vazio ("") para desenvolvimento local (mesmo domínio).
 // Altere para a URL de produção quando publicar o backend online (ex: "https://imposicao.onrender.com").
-const API_BASE_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") && window.location.protocol !== 'file:'
+const isPort9000 = window.location.port === "9000";
+const API_BASE_URL = (isLocalhost || isPort9000) && window.location.protocol !== 'file:'
     ? ""
     : "https://imposicao.onrender.com";

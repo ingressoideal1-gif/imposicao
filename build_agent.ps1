@@ -24,6 +24,6 @@ if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 
 # 4. Executar o PyInstaller usando a especificação existente
 Write-Host "Compilando executável com PyInstaller..." -ForegroundColor Green
-pyinstaller --clean agent_tray.spec
+.\venv\Scripts\python.exe -m PyInstaller --clean agent_tray.spec
 
 Write-Host "`nSUCESSO! Binário compilado em dist/IdealImpositionAgent.exe" -ForegroundColor Green

@@ -85,18 +85,18 @@ def run_worker():
 def run_server():
     import asyncio
     import uvicorn
-    from local_print_agent import app
+    from app import app
     # Criar um event loop asyncio dedicado para o uvicorn neste thread
     # Evita conflito com o loop do pystray/Win32 no thread principal
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    config = uvicorn.Config(app, host="127.0.0.1", port=9000, log_level="warning", loop="none")
+    config = uvicorn.Config(app, host="0.0.0.0", port=9000, log_level="warning", loop="asyncio")
     server = uvicorn.Server(config)
     loop.run_until_complete(server.serve())
 
 def start_server_thread():
     global server_thread
-    server_thread = threading.Thread(target=run_server, daemon=True, name="IdealAgentServer")
+    server_thread = threading.Thread(target=run_server, daemon=False, name="IdealAgentServer")
     server_thread.start()
     
     worker_thread = threading.Thread(target=run_worker, daemon=True, name="IdealAgentWorker")
@@ -148,12 +148,39 @@ def remove_from_startup(icon=None, item=None):
 
 def quit_agent(icon, item):
     icon.stop()
+    os._exit(0)
 
 def setup_tray(icon):
     icon.visible = True
 
 
+def is_port_in_use(port=9000):
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.connect(("127.0.0.1", port))
+            return True
+        except socket.error:
+            return False
+
+def add_firewall_rule():
+    try:
+        import subprocess
+        # Adiciona regra para liberar a porta 9000 no Windows Defender Firewall
+        cmd = 'netsh advfirewall firewall add rule name="Ideal Imposition Agent" dir=in action=allow protocol=TCP localport=9000 profile=any enable=yes'
+        subprocess.run(cmd, shell=True, capture_output=True)
+    except Exception:
+        pass
+
 def main():
+    if is_port_in_use(9000):
+        print("[agent] Agente ja esta rodando na porta 9000. Abrindo painel no navegador e encerrando esta nova instancia.")
+        webbrowser.open("http://127.0.0.1:9000/app/index.html")
+        sys.exit(0)
+
+    # Tenta liberar a porta 9000 no Firewall para permitir que outros computadores da rede local acessem
+    add_firewall_rule()
+
     try:
         import pystray
         from PIL import Image

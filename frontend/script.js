@@ -8596,6 +8596,12 @@ window.runImposition = async function (mode, returnBlob = false) {
         if (!localApiActive) {
             // Testa / e /api/status para compatibilidade com todas as versoes do exe
             const agentBases = ["http://127.0.0.1:9000", "http://localhost:9000"];
+            if (window._activeAgentData && window._activeAgentData.printers_json && window._activeAgentData.printers_json.local_ip) {
+                const rip = `http://${window._activeAgentData.printers_json.local_ip}:9000`;
+                if (!agentBases.includes(rip)) {
+                    agentBases.push(rip);
+                }
+            }
             outerLoop:
             for (const base of agentBases) {
                 for (const path of ["/api/status", "/"]) {
@@ -12510,10 +12516,22 @@ async function loadOrdens() {
                         cliente: clienteProposta,
                         vendedor: vendedorProposta,
                         id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
-                        status_arte: pedidoReal?.status_arte || null,
-                        status_interno: propReal?.status_interno || null
+                        status_arte: pedidoReal?.status_arte || os.status_arte || null,
+                        status_interno: propReal?.status_interno || os.status_interno || null
                     };
                 });
+
+                // AUTO-SYNC local: popular state.todasArtes no modo local
+                if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+                    state.todasArtes = mappedLocalData.map(os => ({
+                        id_int: parseInt(os.numero),
+                        status: os.status_arte || 'Em Arte',
+                        nome_evento: 'Show Local',
+                        designer_nome: 'Designer Local',
+                        designer_uid: 'local-designer',
+                        entrega_dados: ''
+                    }));
+                }
 
                 if (!isDev || (pedidosComerciais && pedidosComerciais.length > 0)) {
                     state.ordens = mappedLocalData.filter(os => {

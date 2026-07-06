@@ -4,8 +4,15 @@ import uuid
 import urllib.request
 import urllib.parse
 
-# Caminho absoluto baseado na localização do script — independente do CWD
-DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "formats_db.json")
+import sys
+
+# Resolve o diretório correto para o banco de dados local persistente
+if getattr(sys, 'frozen', False):
+    DB_DIR = os.path.dirname(sys.executable)
+else:
+    DB_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DB_FILE = os.path.join(DB_DIR, "formats_db.json")
 
 DEFAULT_DB = {
     "formatos": [
@@ -30,7 +37,24 @@ DEFAULT_DB = {
             "gap_v_mm": 0
         }
     ],
-    "numeracoes": [],
+    "numeracoes": [
+        {
+            "id": "num_1",
+            "name": "Numeração Padrão",
+            "print_mode": "front",
+            "elements": [
+                {
+                    "type": "TEXT",
+                    "text": "Nº #NUM#",
+                    "x": 10,
+                    "y": 10,
+                    "font": "Helvetica-Bold",
+                    "size": 12,
+                    "color": "#ff0000"
+                }
+            ]
+        }
+    ],
     "saidas": [
         {
             "id": "sai_1",
@@ -54,8 +78,101 @@ DEFAULT_DB = {
             "file_format": "pdf"
         }
     ],
-    "cores": [],
-    "modelos_imposicao": []
+    "cores": [
+        {
+            "id": "cor_1",
+            "name": "Preto",
+            "hex": "#000000"
+        },
+        {
+            "id": "cor_2",
+            "name": "Azul",
+            "hex": "#0000ff"
+        }
+    ],
+    "modelos_imposicao": [],
+    "ordens_servico": [
+        {
+            "id": "os_1",
+            "numero": "2501",
+            "cliente": "Gráfica Ideal - Show Local",
+            "vendedor": "Junior",
+            "status": "ARTE_EM_ANDAMENTO",
+            "status_interno": "ARTE",
+            "status_arte": "Em Arte",
+            "created_at": "2026-07-06T12:00:00Z"
+        },
+        {
+            "id": "os_2",
+            "numero": "2502",
+            "cliente": "Teatro Central - Peça Infantil",
+            "vendedor": "Junior",
+            "status": "EM IMPRESSÃO",
+            "status_interno": "EM PRODUCAO",
+            "status_arte": "Aprovada",
+            "created_at": "2026-07-06T12:05:00Z"
+        }
+    ],
+    "os_itens": [
+        {
+            "id": "item_1",
+            "os_id": "os_1",
+            "produto_nome": "Ingresso VIP Camarote A",
+            "nome_modelo": "Ingresso VIP Camarote A",
+            "produto": "Ingresso VIP Camarote A",
+            "qtd": 500,
+            "quantidade": 500,
+            "cor": "Preto",
+            "padrao": "Preto",
+            "numeracao": "Numeração Padrão",
+            "num_inicial": 1,
+            "numeracao_inicio": 1,
+            "num_final": 500,
+            "numeracao_fim": 500,
+            "verso": False,
+            "verso_tipo": "SÓ FRENTE",
+            "impressao": "AGUARD.",
+            "status_producao": "AGUARD.",
+            "amostra_status": "PENDENTE",
+            "status_arte": "PENDENTE",
+            "formato_id": "fmt_1",
+            "cor_id": "cor_1",
+            "amostra_cor_id": "cor_1",
+            "numeracao_id": "num_1",
+            "amostra_num_id": "num_1",
+            "setor": "PVC",
+            "_dbLoaded": True
+        },
+        {
+            "id": "item_2",
+            "os_id": "os_2",
+            "produto_nome": "Bilhete Plateia Geral",
+            "nome_modelo": "Bilhete Plateia Geral",
+            "produto": "Bilhete Plateia Geral",
+            "qtd": 1000,
+            "quantidade": 1000,
+            "cor": "Azul",
+            "padrao": "Azul",
+            "numeracao": "Numeração Padrão",
+            "num_inicial": 1,
+            "numeracao_inicio": 1,
+            "num_final": 1000,
+            "numeracao_fim": 1000,
+            "verso": False,
+            "verso_tipo": "SÓ FRENTE",
+            "impressao": "AGUARD.",
+            "status_producao": "AGUARD.",
+            "amostra_status": "APROVADA",
+            "status_arte": "APROVADA",
+            "formato_id": "fmt_2",
+            "cor_id": "cor_2",
+            "amostra_cor_id": "cor_2",
+            "numeracao_id": "num_1",
+            "amostra_num_id": "num_1",
+            "setor": "PVC",
+            "_dbLoaded": True
+        }
+    ]
 }
 
 # ─── CARREGAR CREDENCIAIS SUPABASE DO PARCEIRO VIBECODE ────────────────────────
@@ -96,12 +213,17 @@ if not SUPABASE_URL:
 if not SUPABASE_KEY:
     SUPABASE_KEY = DEFAULT_SUPABASE_KEY
 
-IS_SUPABASE_ACTIVE = bool(SUPABASE_URL and SUPABASE_KEY)
+import sys
+# Forçar modo local no executável compilado (Windows Agent) para rodar 100% offline
+if getattr(sys, 'frozen', False):
+    IS_SUPABASE_ACTIVE = False
+else:
+    IS_SUPABASE_ACTIVE = bool(SUPABASE_URL and SUPABASE_KEY)
 
 if IS_SUPABASE_ACTIVE:
     print(f"[db.py] Supabase do Vibecode ativo: {SUPABASE_URL}")
 else:
-    print("[db.py] Supabase inativo, operando em modo local (formats_db.json)")
+    print("[db.py] Supabase inativo, operando em modo 100% local/offline (formats_db.json)")
 
 
 # ─── UTILITÁRIO SUPABASE REST REQUEST ──────────────────────────────────────────

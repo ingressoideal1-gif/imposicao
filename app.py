@@ -28,19 +28,62 @@ def log_diag(msg: str):
 from engine import ImpositionConfig, ImpositionEngine
 import db
 import print_service
-# ─── Inicialização de Firebase Removida ───
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Ideal Imposition API", description="Sistema de Imposição Gráfica com Dados Variáveis")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Iniciar o worker de impressão local em uma thread paralela de forma robusta
+    import threading
+    try:
+        import agent_worker
+        worker_thread = threading.Thread(target=agent_worker.run_loop, daemon=True, name="IdealAgentWorker")
+        worker_thread.start()
+        print("[app] Print worker thread (Cloud Relay) iniciada com sucesso.")
+    except Exception as e:
+        print(f"[app] Erro ao inicializar worker de impressão: {e}")
+    yield
 
+app = FastAPI(title="Ideal Imposition API", description="Sistema de Imposição Gráfica com Dados Variáveis", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_private_network=True,
 )
 
-app.mount("/app", StaticFiles(directory="frontend", html=True), name="frontend")
+@app.middleware("http")
+async def add_pna_header(request: Request, call_next):
+    response = await call_next(request)
+    if request.headers.get("access-control-request-private-network") == "true" or request.headers.get("Access-Control-Request-Private-Network") == "true":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
+import sys
+_FRONTEND_DIR = None
+if getattr(sys, 'frozen', False):
+    # Pasta do PyInstaller onde os recursos compilados são extraídos
+    _FRONTEND_DIR = os.path.join(getattr(sys, '_MEIPASS', ''), "frontend")
+else:
+    # Pasta local em desenvolvimento
+    _FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+
+if not _FRONTEND_DIR or not os.path.isdir(_FRONTEND_DIR):
+    for _candidate in [
+        os.path.join(os.path.dirname(sys.executable), "frontend"),
+        "frontend"
+    ]:
+        if os.path.isdir(_candidate):
+            _FRONTEND_DIR = _candidate
+            break
+
+if not _FRONTEND_DIR or not os.path.isdir(_FRONTEND_DIR):
+    _FRONTEND_DIR = "frontend"
+    os.makedirs(_FRONTEND_DIR, exist_ok=True)
+
+app.mount("/app", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
 
 # ─── ROTAS UTILITÁRIAS ────────────────────────────────────────────────────────
 
@@ -54,10 +97,76 @@ def health_check():
     """Endpoint de health check — usado pelo frontend para pré-aquecer o servidor."""
     return {"status": "ok"}
 
+LOCAL_AGENT_VERSION = "v358"
+
+@app.get("/api/status")
+def read_root():
+    return {"status": "running", "message": "Ideal Imposition Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
+
 @app.get("/api/version")
 def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
-    return {"version": "v355", "commit": "strict_assembly_v2", "desc": "fast path universal + save sem clean", "engine": "fastpath+garbage4"}
+    return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4"}
+
+@app.post("/api/update")
+async def trigger_update(request: Request):
+    try:
+        data = await request.json()
+        download_url = data.get("download_url")
+        if not download_url:
+            raise HTTPException(status_code=400, detail="download_url não informado")
+            
+        import urllib.request
+        import subprocess
+        import sys
+        
+        is_compiled = getattr(sys, 'frozen', False)
+        exe_path = sys.executable
+        
+        # Pasta do executável
+        target_dir = os.path.dirname(exe_path)
+        temp_exe = os.path.join(target_dir, "ideal-imposition-agent.new")
+        
+        # Baixar o novo executável
+        print(f"[Update] Baixando atualização de {download_url}...")
+        req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=60) as response:
+            with open(temp_exe, "wb") as f_out:
+                f_out.write(response.read())
+        print(f"[Update] Download concluído. Salvo em {temp_exe}")
+        
+        if not is_compiled:
+            # Em modo de desenvolvimento, apenas removemos o temp e simulamos
+            if os.path.exists(temp_exe):
+                os.remove(temp_exe)
+            return {"status": "success", "message": "[DEV MODE] Simulação de atualização realizada com sucesso."}
+            
+        # Escrever script batch de atualização
+        bat_path = os.path.join(target_dir, "update.bat")
+        with open(bat_path, "w", encoding="utf-8") as f_bat:
+            f_bat.write(f"""@echo off
+chcp 65001 > nul
+echo Aguardando o encerramento do agente...
+timeout /t 2 /nobreak > nul
+echo Substituindo executável antigo...
+move /y "{temp_exe}" "{exe_path}"
+echo Inicializando nova versão...
+start "" "{exe_path}"
+echo Atualização concluída.
+del "%~f0"
+""")
+            
+        # Executar bat de forma assíncrona desanexada
+        print(f"[Update] Executando script de atualização {bat_path}...")
+        subprocess.Popen([bat_path], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        
+        # Forçar o encerramento imediato do processo atual
+        print("[Update] Encerrando processo atual...")
+        os._exit(0)
+        
+    except Exception as e:
+        print(f"[Update] Falha na atualização: {e}")
+        raise HTTPException(status_code=500, detail=f"Falha na atualização: {str(e)}")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -804,12 +913,12 @@ async def update_os_item(item_id: str, request: Request, user: dict = Depends(ge
 if __name__ == "__main__":
     import uvicorn
     db.init_db()
-    uvicorn.run("app:app", host="0.0.0.0", port=8080, reload=True, reload_excludes=["venv/*"])
+    uvicorn.run("app:app", host="0.0.0.0", port=9000, reload=True, reload_excludes=["venv/*"])
 
 @app.get("/api/diag")
 def get_diag():
     return {"logs": DIAG_LOGS}
 
 # Fallback mount to serve static files from root (resolves absolute links like /style.css, /script.js, /supabase-config.js in frontend)
-app.mount("/", StaticFiles(directory="frontend", html=True), name="root_frontend")
+app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="root_frontend")
 

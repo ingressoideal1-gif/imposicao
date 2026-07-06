@@ -54,6 +54,13 @@ app.add_middleware(
     allow_private_network=True,
 )
 
+@app.middleware("http")
+async def add_pna_header(request: Request, call_next):
+    response = await call_next(request)
+    if request.headers.get("access-control-request-private-network") == "true" or request.headers.get("Access-Control-Request-Private-Network") == "true":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
 # Montar frontend estático (mesma pasta que o exe ou repositório)
 _FRONTEND_DIR = None
 for _candidate in [
@@ -364,4 +371,4 @@ del "%~f0"
 
 if __name__ == "__main__":
     print("Iniciando Local Print Agent na porta 9000...")
-    uvicorn.run("local_print_agent:app", host="127.0.0.1", port=9000, reload=True, reload_excludes=["venv/*"])
+    uvicorn.run("local_print_agent:app", host="0.0.0.0", port=9000, reload=True, reload_excludes=["venv/*"])

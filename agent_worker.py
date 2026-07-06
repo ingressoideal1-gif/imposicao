@@ -73,6 +73,17 @@ def download_file(file_url: str, dest_path: str):
         print(f"[agent_worker] Erro ao baixar PDF: {e}")
         return False
 
+def get_local_ip():
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
 def sync_heartbeat():
     try:
         printers = print_service.get_printers()
@@ -82,7 +93,8 @@ def sync_heartbeat():
         printers_json = {
             "printers": printers,
             "ppds": ppds,
-            "ppd_map": ppd_map
+            "ppd_map": ppd_map,
+            "local_ip": get_local_ip()
         }
         
         # Formato UTC explícito com timezone, exigido pelo Supabase
