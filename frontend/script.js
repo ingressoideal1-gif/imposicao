@@ -5295,12 +5295,15 @@ window.groupSelectedElements = function () {
         toast('Selecione pelo menos 2 elementos para agrupar.', 'warning');
         return;
     }
+    const groupId = 'g_' + Math.random().toString(36).substr(2, 9);
     state.selectedElIds.forEach(id => {
         const el = state.numElements.find(e => e.id === id);
         if (el) el.group_id = groupId;
     });
     
     saveNumHistory();
+    renderElementsList();
+    drawCanvas();
     
     toast('Elementos agrupados!', 'success');
 };
@@ -5352,6 +5355,8 @@ window.ungroupSelectedElements = function () {
     });
     
     saveNumHistory();
+    renderElementsList();
+    drawCanvas();
     
     toast('Elementos desagrupados!', 'info');
 };
