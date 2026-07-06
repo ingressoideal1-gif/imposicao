@@ -280,7 +280,7 @@ window.loadPedArtFile = loadPedArtFile;
 
 function drawPedPreview() { console.log('drawPedPreview CALLED');
 
-    let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index;
+    let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index, item_arte_index;
     const activeItem = state.activeOSItem;
     
     // Auto-preencher 'Folhas p/ Bloco' se disponivel na OS, para manter o Preview consistente
@@ -387,7 +387,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
             return {
                 qtd: qt,
-                nome: sItem ? sItem.modelo : '',
+                nome: sItem ? sItem.produto : '',
                 num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
                 start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
                 has_raw_file: false,
@@ -633,7 +633,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     const setSelect = document.getElementById('ped-preview-set-input');
     const refazerSetSelect = document.getElementById('ped-refazer-set');
     if (setSelect && refazerSetSelect) {
-        if (sets_needed > 1) {
+        if (sets_needed >= 1 && (schema === "cut_stack" || schema === "multi_artes")) {
             setSelect.style.display = 'inline-block';
             refazerSetSelect.style.display = 'inline-block';
             
@@ -704,9 +704,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         let item_data = set_def.cell_allocations[P][local_S];
                         item_index = item_data.global_index;
                         item_local_index = item_data.local_index;
+                        item_arte_index = item_data.arte_index;
                     } else {
                         item_index = total_items; // skip rendering this cell
                         item_local_index = undefined;
+                        item_arte_index = undefined;
                     }
                 } else if (schema === "multi_artes") {
                     const P_col_first = col * rows + row;
@@ -799,24 +801,19 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
 
             if (schema === "multi_artes" || (artesList && artesList.length > 0)) {
-                let accumulated = 0;
-
-                for (let i = 0; i < artesList.length; i++) {
-
-                    let q = parseInt(artesList[i].qtd) || 0;
-
-                    if (item_index >= accumulated && item_index < accumulated + q) {
-
-                        multiArteItem = artesList[i];
-
-                        break;
-
+                if (typeof item_arte_index !== 'undefined' && item_arte_index !== null) {
+                    multiArteItem = artesList[item_arte_index];
+                } else {
+                    let accumulated = 0;
+                    for (let i = 0; i < artesList.length; i++) {
+                        let q = parseInt(artesList[i].qtd) || 0;
+                        if (item_index >= accumulated && item_index < accumulated + q) {
+                            multiArteItem = artesList[i];
+                            break;
+                        }
+                        accumulated += q;
                     }
-
-                    accumulated += q;
-
                 }
-
             }
 
 
@@ -2300,6 +2297,11 @@ async function enviarParaPedido(itemId, osId) {
             if (schemaSelect) {
                 schemaSelect.value = 'cut_stack';
                 schemaSelect.dispatchEvent(new Event('change'));
+            }
+            const modeSelect = document.getElementById('ped-cutstack-mode');
+            if (modeSelect) {
+                modeSelect.value = 'strict_assembly';
+                modeSelect.dispatchEvent(new Event('change'));
             }
         }
         updatePedSummary();
