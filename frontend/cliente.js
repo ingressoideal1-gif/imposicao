@@ -1,4 +1,4 @@
-﻿// --- ARQUIVO DO CLIENTE ISOLADO ---
+// --- ARQUIVO DO CLIENTE ISOLADO ---
 let state = {
     osItens: {},
     ordens: [],
@@ -620,7 +620,10 @@ async function initClientePage(numero, token) {
                 .eq('id_int', numero)
                 .maybeSingle();
             propData = data;
-            if (propData) osCliente = propData.cliente_nome || '';
+            if (propData) {
+                osCliente = propData.cliente_nome || '';
+                clienteState.idCliente = propData.id_faturado || propData.id_cliente || null;
+            }
         } catch (e) { /* silencioso */ }
 
         if (clienteEl) clienteEl.textContent = osCliente;
@@ -635,7 +638,11 @@ async function initClientePage(numero, token) {
                 supabaseClient.from('producao_formatos').select('*').order('name', { ascending: true })
             ]);
             state.cores = coresRes.data || [];
-            state.numeracoes = numeracoesRes.data || [];
+            const allNums = numeracoesRes.data || [];
+            state.numeracoes = allNums.filter(n => {
+                if (!n.Cli_Num) return true;
+                return String(n.Cli_Num) === String(clienteState.idCliente);
+            });
             state.formatos = formatosRes.data || [];
         } catch (err) {
             console.error('Erro ao carregar dados auxiliares do Supabase:', err);
