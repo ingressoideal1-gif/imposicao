@@ -3011,9 +3011,8 @@ window.editPedidoCustomNumeracao = function(fieldId) {
     // Abre a numeração
     editNumeracao(numId);
     
-    // ForÃ§a o nome no editor da numeração
-    const suffix = fieldId === 'ped-numeracao' ? ' Num1' : ' Num2';
-    document.getElementById('num-name').value = impName + suffix;
+    // Força o nome no editor da numeração a ser o ID do modelo atual
+    document.getElementById('num-name').value = String(activeOSItem.itemId);
     
     // Marca como um novo cadastro (clone)
     document.getElementById('num-id').value = '';

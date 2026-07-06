@@ -16738,9 +16738,9 @@ function editCustomNumeracao(idx, osId, itemId) {
         setTimeout(() => {
             // Limpa ID para forcar INSERT e altera o nome
             document.getElementById('num-id').value = '';
-            document.getElementById('num-name').value = modelName;
+            document.getElementById('num-name').value = String(itemId);
             
-            toast(`Editando numeração exclusivamente para o modelo: ${modelName}`, 'info');
+            toast(`Editando numeração para o modelo: ${itemId}`, 'info');
         }, 150);
     }, 100);
 }
@@ -16888,9 +16888,8 @@ window.editImposicaoCustomNumeracao = function(fieldId) {
     // Abre a numeração
     editNumeracao(numId);
     
-    // Força o nome no editor da numeração
-    const suffix = fieldId === 'imp-numeracao' ? ' Num1' : ' Num2';
-    document.getElementById('num-name').value = impName + suffix;
+    // Força o nome no editor da numeração a ser o ID do modelo atual
+    document.getElementById('num-name').value = String(activeOSItem.itemId);
     
     // Marca como um novo cadastro (clone)
     document.getElementById('num-id').value = '';
