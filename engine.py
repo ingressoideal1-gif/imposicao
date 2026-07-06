@@ -841,13 +841,30 @@ class ImpositionEngine:
 
             def _load_art_as_pdf(file_path: str, is_url: bool = False) -> fitz.Document:
                 import urllib.request
+                import time
                 try:
                     if is_url:
                         if file_path in pdf_cache:
                             return pdf_cache[file_path]
+                        
+                        pdf_bytes = None
+                        retries = 3
+                        delay = 1.0
                         req = urllib.request.Request(file_path, headers={'User-Agent': 'Mozilla/5.0'})
-                        with urllib.request.urlopen(req) as response:
-                            pdf_bytes = response.read()
+                        for attempt in range(retries):
+                            try:
+                                with urllib.request.urlopen(req, timeout=15) as response:
+                                    pdf_bytes = response.read()
+                                    break
+                            except Exception as download_err:
+                                if attempt == retries - 1:
+                                    raise download_err
+                                print(f"[engine] Falha ao baixar arte (tentativa {attempt+1}/{retries}), aguardando {delay}s: {download_err}")
+                                time.sleep(delay)
+                                delay *= 2.0
+                        
+                        if not pdf_bytes:
+                            raise Exception("Conteúdo do download vazio")
                             
                         # Tentar abrir como PDF diretamente
                         try:

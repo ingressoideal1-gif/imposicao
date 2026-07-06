@@ -67,14 +67,20 @@ for _candidate in [
 if _FRONTEND_DIR:
     app.mount("/app", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
 
+LOCAL_AGENT_VERSION = "v355"
+
 @app.get("/", include_in_schema=False)
 def root_redirect():
     """Retorna status JSON (compatibilidade) e serve como health check."""
-    return {"status": "running", "message": "Ideal Imposition Agent ativo", "capabilities": ["impose", "print"]}
+    return {"status": "running", "message": "Ideal Imposition Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
 
 @app.get("/api/status")
 def read_root():
-    return {"status": "running", "message": "Ideal Imposition Agent ativo", "capabilities": ["impose", "print"]}
+    return {"status": "running", "message": "Ideal Imposition Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
+
+@app.get("/api/version")
+def version_info():
+    return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION}
 
 @app.get("/api/printers")
 def list_printers():
@@ -294,6 +300,67 @@ async def impose_file(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/update")
+async def trigger_update(request: Request):
+    try:
+        data = await request.json()
+        download_url = data.get("download_url")
+        if not download_url:
+            raise HTTPException(status_code=400, detail="download_url não informado")
+            
+        import urllib.request
+        import subprocess
+        import sys
+        import os
+        
+        is_compiled = getattr(sys, 'frozen', False)
+        exe_path = sys.executable
+        
+        # Pasta do executável
+        target_dir = os.path.dirname(exe_path)
+        temp_exe = os.path.join(target_dir, "ideal-imposition-agent.new")
+        
+        # Baixar o novo executável
+        print(f"[Update] Baixando atualização de {download_url}...")
+        req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=60) as response:
+            with open(temp_exe, "wb") as f_out:
+                f_out.write(response.read())
+        print(f"[Update] Download concluído. Salvo em {temp_exe}")
+        
+        if not is_compiled:
+            # Em modo de desenvolvimento, apenas removemos o temp e simulamos
+            if os.path.exists(temp_exe):
+                os.remove(temp_exe)
+            return {"status": "success", "message": "[DEV MODE] Simulação de atualização realizada com sucesso."}
+            
+        # Escrever script batch de atualização
+        bat_path = os.path.join(target_dir, "update.bat")
+        with open(bat_path, "w", encoding="utf-8") as f_bat:
+            f_bat.write(f"""@echo off
+chcp 65001 > nul
+echo Aguardando o encerramento do agente...
+timeout /t 2 /nobreak > nul
+echo Substituindo executável antigo...
+move /y "{temp_exe}" "{exe_path}"
+echo Inicializando nova versão...
+start "" "{exe_path}"
+echo Atualização concluída.
+del "%~f0"
+""")
+            
+        # Executar bat de forma assíncrona desanexada
+        print(f"[Update] Executando script de atualização {bat_path}...")
+        subprocess.Popen([bat_path], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        
+        # Forçar o encerramento imediato do processo atual
+        print("[Update] Encerrando processo atual...")
+        os._exit(0)
+        
+    except Exception as e:
+        print(f"[Update] Falha na atualização: {e}")
+        raise HTTPException(status_code=500, detail=f"Falha na atualização: {str(e)}")
 
 if __name__ == "__main__":
     print("Iniciando Local Print Agent na porta 9000...")

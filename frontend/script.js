@@ -8615,6 +8615,23 @@ window.runImposition = async function (mode, returnBlob = false) {
                                 if (checkData.status === "running") {
                                     localActive = true;
                                     agentBaseUrl = base;
+                                    
+                                    // Verificar se o agente está desatualizado em relação à nuvem
+                                    const localVer = checkData.version;
+                                    if (localVer) {
+                                        fetch('/api/version')
+                                            .then(r => r.ok ? r.json() : null)
+                                            .then(cloudData => {
+                                                if (cloudData && cloudData.version && cloudData.version !== localVer) {
+                                                    console.warn(`[Agent Update] Agente Local desatualizado: ${localVer} -> ${cloudData.version}`);
+                                                    if (typeof showAgentUpdateWarning === 'function') {
+                                                        showAgentUpdateWarning(base, cloudData.version);
+                                                    }
+                                                }
+                                            })
+                                            .catch(err => console.warn('Erro ao verificar versão cloud:', err));
+                                    }
+                                    
                                     break outerLoop;
                                 }
                             }
@@ -19297,3 +19314,75 @@ window.updateBoxSaida = async function(osId, prodId, saidaId) {
     if (window.updatePedSummary) window.updatePedSummary();
     if (window.updateImpSummary) window.updateImpSummary();
 };
+
+function showAgentUpdateWarning(baseUrl, latestVersion) {
+    // Evitar múltiplos banners
+    if (document.getElementById('agent-update-banner')) return;
+    
+    const banner = document.createElement('div');
+    banner.id = 'agent-update-banner';
+    banner.style.position = 'fixed';
+    banner.style.top = '0';
+    banner.style.left = '0';
+    banner.style.width = '100%';
+    banner.style.backgroundColor = '#f59e0b'; // Amber yellow
+    banner.style.color = '#000000';
+    banner.style.textAlign = 'center';
+    banner.style.padding = '8px 16px';
+    banner.style.fontWeight = '700';
+    banner.style.fontSize = '0.85rem';
+    banner.style.zIndex = '99999';
+    banner.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
+    banner.style.display = 'flex';
+    banner.style.justifyContent = 'center';
+    banner.style.alignItems = 'center';
+    banner.style.gap = '12px';
+    
+    banner.innerHTML = `
+        <span>⚡ Uma nova versão do Agente Local está disponível (${latestVersion}).</span>
+        <button id="btn-update-agent-now" style="background-color: #000000; color: #ffffff; border: none; padding: 4px 12px; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 0.78rem;">Atualizar Agora</button>
+        <span id="btn-close-update-banner" style="cursor: pointer; opacity: 0.7; font-weight: 800; font-size: 0.95rem; margin-left: 10px;">✕</span>
+    `;
+    
+    document.body.appendChild(banner);
+    // Empurrar o body para baixo
+    document.body.style.marginTop = '36px';
+    
+    document.getElementById('btn-close-update-banner').onclick = () => {
+        banner.remove();
+        document.body.style.marginTop = '0';
+    };
+    
+    document.getElementById('btn-update-agent-now').onclick = async () => {
+        const btn = document.getElementById('btn-update-agent-now');
+        btn.disabled = true;
+        btn.textContent = 'Atualizando...';
+        
+        try {
+            const updateUrl = `https://ideal-imposition.vercel.app/app/ideal-imposition-agent.exe`;
+            const response = await fetch(`${baseUrl}/api/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ download_url: updateUrl })
+            });
+            
+            if (response.ok) {
+                toast('Atualização iniciada! O Agente Local irá reiniciar.', 'success');
+                setTimeout(() => {
+                    banner.remove();
+                    document.body.style.marginTop = '0';
+                }, 3000);
+            } else {
+                const errData = await response.json().catch(() => ({ detail: 'Erro desconhecido' }));
+                throw new Error(errData.detail || 'Erro na requisição');
+            }
+        } catch (err) {
+            console.error('Falha ao atualizar agente local:', err);
+            toast('Erro ao atualizar agente: ' + err.message, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Atualizar Agora';
+        }
+    };
+}
+
+window.showAgentUpdateWarning = showAgentUpdateWarning;
