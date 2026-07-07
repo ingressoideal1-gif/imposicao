@@ -3377,11 +3377,29 @@ window.runPedImposition = async function (mode) {
 
 
     const formData = new FormData();
-
-    if (impFile.files && impFile.files.length > 0) {
-
-        formData.append('file', impFile.files[0]);
-
+    const isPedTab = document.getElementById('view-pedido')?.classList.contains('active');
+    let selectedFile = null;
+    if (isPedTab) {
+        if (state.pedArtFile) {
+            selectedFile = state.pedArtFile;
+        } else {
+            const pedFile = document.getElementById('ped-file');
+            if (pedFile && pedFile.files.length > 0) {
+                selectedFile = pedFile.files[0];
+            }
+        }
+    } else {
+        if (state.impArtFile) {
+            selectedFile = state.impArtFile;
+        } else {
+            const impFile = document.getElementById('imp-file');
+            if (impFile && impFile.files.length > 0) {
+                selectedFile = impFile.files[0];
+            }
+        }
+    }
+    if (selectedFile) {
+        formData.append('file', selectedFile);
     }
 
     if (state.csvFile) {
