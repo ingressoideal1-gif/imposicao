@@ -759,7 +759,6 @@ async def impose_file(
 
         if wants_stream:
             import asyncio
-            import json
             loop = asyncio.get_running_loop()
             queue = asyncio.Queue()
 
