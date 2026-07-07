@@ -318,10 +318,25 @@ class ImpositionConfig:
                 e["_num_source"] = 2
                 self.elements.append(e)
 
+class TriggerList(list):
+    def __init__(self, callback=None):
+        super().__init__()
+        self.callback = callback
+
+    def append(self, item):
+        super().append(item)
+        if self.callback:
+            try:
+                self.callback(item)
+            except Exception as e:
+                print(f"[TriggerList] Erro no callback: {e}")
+
 class ImpositionEngine:
-    def __init__(self, config: ImpositionConfig):
+    def __init__(self, config: ImpositionConfig, on_file_generated=None):
         self.cfg = config
         self._url_cache = {}
+        self.on_file_generated = on_file_generated
+        self.generated_files = TriggerList(on_file_generated)
 
     def _get_url_bytes(self, url: str) -> bytes:
         if url in self._url_cache:
@@ -762,7 +777,7 @@ class ImpositionEngine:
         print(f"[engine] total_sheets={total_sheets} items={cfg.total_items} poses={poses_per_sheet}")
 
         doc_out = fitz.open()
-        self.generated_files = []
+        self.generated_files = TriggerList(getattr(self, "on_file_generated", None))
         doc_base = self._load_base_as_pdf()
         
         if cfg.has_cover:

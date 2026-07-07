@@ -3326,6 +3326,8 @@ window.runPedImposition = async function (mode) {
 
         suggested_filename: defaultFilename,
 
+        stream: true,
+
         numeracao_id: numId || null,
 
         numeracao_2_id: num2Id || null,
@@ -3652,6 +3654,81 @@ window.runPedImposition = async function (mode) {
         }
 
         const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("text/event-stream")) {
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                const lines = buffer.split("\n");
+                // Manter a última linha (incompleta) no buffer
+                buffer = lines.pop();
+
+                let currentEvent = null;
+                for (const line of lines) {
+                    const cleanLine = line.trim();
+                    if (!cleanLine) continue;
+
+                    if (cleanLine.startsWith("event:")) {
+                        currentEvent = cleanLine.substring(6).trim();
+                    } else if (cleanLine.startsWith("data:")) {
+                        const dataStr = cleanLine.substring(5).trim();
+                        if (currentEvent === "file" && dataStr) {
+                            try {
+                                const fileObj = JSON.parse(dataStr);
+                                toast(`Salvando: ${fileObj.name}...`, 'info');
+                                
+                                const binStr = atob(fileObj.data);
+                                const bytes = new Uint8Array(binStr.length);
+                                for (let i = 0; i < binStr.length; i++) {
+                                    bytes[i] = binStr.charCodeAt(i);
+                                }
+                                const fBlob = new Blob([bytes], {type: "application/pdf"});
+
+                                if (directoryHandle) {
+                                    const fh = await directoryHandle.getFileHandle(fileObj.name, { create: true });
+                                    const writable = await fh.createWritable();
+                                    await writable.write(fBlob);
+                                    await writable.close();
+                                } else {
+                                    const url = window.URL.createObjectURL(fBlob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = fileObj.name;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    a.remove();
+                                    window.URL.revokeObjectURL(url);
+                                    await new Promise(r => setTimeout(r, 200));
+                                }
+                            } catch (e) {
+                                console.error("Erro ao processar arquivo do stream:", e);
+                            }
+                        } else if (currentEvent === "error" && dataStr) {
+                            try {
+                                const errObj = JSON.parse(dataStr);
+                                throw new Error(errObj.message || "Erro desconhecido no processamento");
+                            } catch (e) {
+                                throw e;
+                            }
+                        }
+                    }
+                }
+            }
+
+            toast('Processo de imposição concluído e arquivos salvos!', 'success');
+            if (state.activeOSItem && state.activeOSItem.itemId) {
+                await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
+                if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
+            }
+            return;
+        }
+
+        // Fallbacks caso não venha como stream (JSON ou blob de arquivo único direto)
         if (contentType && contentType.includes("application/json")) {
             const data = await res.json();
             if (data.type === "multi_file") {

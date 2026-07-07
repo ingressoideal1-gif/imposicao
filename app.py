@@ -755,6 +755,87 @@ async def impose_file(
             refazer_set=int(data.get("refazer_set", 1) or 1)
         )
 
+        wants_stream = data.get("stream", False)
+
+        if wants_stream:
+            import asyncio
+            import json
+            loop = asyncio.get_running_loop()
+            queue = asyncio.Queue()
+
+            # Callback para enviar arquivo na fila assim que gerado
+            def on_file_gen(file_info):
+                path = file_info["path"]
+                name = file_info["name"]
+                ftype = file_info["type"]
+                # Não enviar capas se refazer > 0 e o tipo for capa/contracapa
+                refazer_de = int(data.get("refazer_de", 0) or 0)
+                if refazer_de > 0 and ftype in ["capa", "contracapa"]:
+                    return
+                if os.path.exists(path):
+                    with open(path, "rb") as f_pdf:
+                        b64_data = base64.b64encode(f_pdf.read()).decode("utf-8")
+                    loop.call_soon_threadsafe(queue.put_nowait, {
+                        "type": "file",
+                        "name": name,
+                        "file_type": ftype,
+                        "data": b64_data
+                    })
+
+            engine = ImpositionEngine(config, on_file_generated=on_file_gen)
+            print(f"[DIAG impose stream] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r}")
+
+            async def run_engine_task():
+                try:
+                    await asyncio.to_thread(engine.process)
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    await queue.put({"type": "error", "message": str(e)})
+                finally:
+                    await asyncio.sleep(0.5)
+                    await queue.put("DONE")
+
+            asyncio.create_task(run_engine_task())
+
+            def cleanup_temp_files():
+                try:
+                    if base_file_path and os.path.exists(base_file_path):
+                        os.remove(base_file_path)
+                    for temp_path in ma_files_map.values():
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
+                    for gf in getattr(engine, "generated_files", []):
+                        if os.path.exists(gf["path"]):
+                            os.remove(gf["path"])
+                    if os.path.exists(out_pdf_path):
+                        os.remove(out_pdf_path)
+                except Exception as ex:
+                    print(f"[impose stream cleanup] Erro: {ex}")
+
+            async def event_generator():
+                try:
+                    while True:
+                        item = await queue.get()
+                        if item == "DONE":
+                            yield "event: done\ndata: {}\n\n"
+                            break
+                        if isinstance(item, dict) and item.get("type") == "error":
+                            yield f"event: error\ndata: {json.dumps(item)}\n\n"
+                            break
+                        yield f"event: file\ndata: {json.dumps(item)}\n\n"
+                finally:
+                    if background_tasks:
+                        background_tasks.add_task(cleanup_temp_files)
+                    else:
+                        cleanup_temp_files()
+
+            return StreamingResponse(
+                event_generator(),
+                media_type="text/event-stream"
+            )
+
+        # Fluxo síncrono original (fallback)
         engine = ImpositionEngine(config)
         print(f"[DIAG impose] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r} sheets_per_block={data.get('sheets_per_block')!r} multi_artes_count={len(multi_artes_list)} has_cover={formato.get('has_cover')}")
         engine.process()
