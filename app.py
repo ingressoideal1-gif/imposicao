@@ -763,8 +763,8 @@ async def impose_file(
             loop = asyncio.get_running_loop()
             queue = asyncio.Queue()
 
-            # Callback para enviar arquivo na fila assim que gerado
             def on_file_gen(file_info):
+                import base64
                 path = file_info["path"]
                 name = file_info["name"]
                 ftype = file_info["type"]
