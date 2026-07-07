@@ -754,6 +754,15 @@ class ImpositionEngine:
         r_set = int(getattr(cfg, "refazer_set", 1) or 1)
         if r_de > 0 and r_ate <= 0:
             r_ate = r_de
+        # Normalizar rotate_page para ângulo de rotação (0, 90, 180, 270)
+        rot_val = getattr(cfg, "rotate_page", 0)
+        if isinstance(rot_val, bool):
+            self.rotate_angle = 90 if rot_val else 0
+        else:
+            try:
+                self.rotate_angle = int(rot_val or 0)
+            except Exception:
+                self.rotate_angle = 0
         cols = cfg.cols
         rows = cfg.rows
         poses_per_sheet = cols * rows
@@ -1148,8 +1157,8 @@ class ImpositionEngine:
                             
                         # Frente
                         out_page_front = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-                        if cfg.rotate_page:
-                            out_page_front.set_rotation(90)
+                        if self.rotate_angle > 0:
+                            out_page_front.set_rotation(self.rotate_angle)
                             
                         for row in range(rows):
                             for col in range(cols):
@@ -1161,8 +1170,8 @@ class ImpositionEngine:
                         # Verso (se for duplex)
                         if is_duplex:
                             out_page_back = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-                            if cfg.rotate_page:
-                                out_page_back.set_rotation(90)
+                            if self.rotate_angle > 0:
+                                out_page_back.set_rotation(self.rotate_angle)
                                 
                             for row in range(rows):
                                 for col in range(cols):
@@ -1227,8 +1236,8 @@ class ImpositionEngine:
                 print(f"[engine] sheet {S}/{total_sheets} elapsed={_time.monotonic()-_t0:.1f}s")
             # 1. RENDERIZAR FRENTE DA FOLHA
             out_page_front = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-            if cfg.rotate_page:
-                out_page_front.set_rotation(90)
+            if self.rotate_angle > 0:
+                out_page_front.set_rotation(self.rotate_angle)
 
             for row in range(rows):
                 for col in range(cols):
@@ -1466,8 +1475,8 @@ class ImpositionEngine:
             # 2. RENDERIZAR VERSO DA FOLHA (SE DUPLEX)
             if is_duplex:
                 out_page_back = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-                if cfg.rotate_page:
-                    out_page_back.set_rotation(90)
+                if self.rotate_angle > 0:
+                    out_page_back.set_rotation(self.rotate_angle)
 
                 for row in range(rows):
                     for col in range(cols):
@@ -1650,7 +1659,7 @@ class ImpositionEngine:
 
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-        if cfg.rotate_page: p.set_rotation(90)
+        if self.rotate_angle > 0: p.set_rotation(self.rotate_angle)
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_03_contracapa.pdf")
         doc_c.save(out_name, garbage=4, deflate=True)
         doc_c.close()
@@ -1660,7 +1669,7 @@ class ImpositionEngine:
 
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-        if cfg.rotate_page: p.set_rotation(90)
+        if self.rotate_angle > 0: p.set_rotation(self.rotate_angle)
         
         # Desenha a base dimensionada em cada célula
         start_x = (cfg.sheet_w - (cfg.cols * cfg.item_w + (cfg.cols - 1) * cfg.gap_h)) / 2
@@ -2097,8 +2106,8 @@ class ImpositionEngine:
     def _generate_contracapa_for_chunk(self, set_idx, layer_idx, set_def, cfg):
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-        if cfg.rotate_page:
-            p.set_rotation(90)
+        if self.rotate_angle > 0:
+            p.set_rotation(self.rotate_angle)
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_03_contracapa.pdf")
         doc_c.save(out_name, garbage=4, deflate=True)
         doc_c.close()
@@ -2107,8 +2116,8 @@ class ImpositionEngine:
     def _generate_capa_for_chunk(self, set_idx, layer_idx, set_def, cfg, multi_map):
         doc_c = fitz.open()
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-        if cfg.rotate_page:
-            p.set_rotation(90)
+        if self.rotate_angle > 0:
+            p.set_rotation(self.rotate_angle)
 
         start_x = (cfg.sheet_w - (cfg.cols * cfg.item_w + (cfg.cols - 1) * cfg.gap_h)) / 2
         start_y = (cfg.sheet_h - (cfg.rows * cfg.item_h + (cfg.rows - 1) * cfg.gap_v)) / 2

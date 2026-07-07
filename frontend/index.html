@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
@@ -262,9 +262,14 @@
                         </div>
                     </div>
                     
-                    <div class="form-group" style="margin-top: 12px; display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" id="fmt-def-rotate" style="width:18px; height:18px;">
-                        <label for="fmt-def-rotate" style="margin:0; cursor:pointer;">Rotacionar Páginas Pares (Duplex Flip)</label>
+                    <div class="form-group" style="margin-top: 12px; width: 100%;">
+                        <label for="fmt-def-rotate" style="color: var(--blue); display: block; margin-bottom: 5px;">Rotaciona Formato</label>
+                        <select class="form-control" id="fmt-def-rotate" style="width: 100%;">
+                            <option value="0" selected>0° (Sem Rotação)</option>
+                            <option value="90">90°</option>
+                            <option value="180">180°</option>
+                            <option value="270">270°</option>
+                        </select>
                     </div>
 
                     <!-- Sessão de Capas -->
@@ -992,8 +997,10 @@
                                 <div class="form-group">
                                     <label>Rotacionar Página</label>
                                     <select class="form-control" id="imp-rotate-page" onchange="updateImpSummary()">
-                                        <option value="false" selected>Sem Rotação</option>
-                                        <option value="true">Rotacionar 90°</option>
+                                        <option value="0" selected>Sem Rotação (0°)</option>
+                                        <option value="90">Rotacionar 90°</option>
+                                        <option value="180">Rotacionar 180°</option>
+                                        <option value="270">Rotacionar 270°</option>
                                     </select>
                                 </div>
                             </div>
@@ -1227,8 +1234,10 @@
                                 <div class="form-group">
                                     <label>Rotacionar Página</label>
                                     <select class="form-control" id="ped-rotate-page" onchange="updatePedSummary()">
-                                        <option value="false" selected>Sem Rotação</option>
-                                        <option value="true">Rotacionar 90°</option>
+                                        <option value="0" selected>Sem Rotação (0°)</option>
+                                        <option value="90">Rotacionar 90°</option>
+                                        <option value="180">Rotacionar 180°</option>
+                                        <option value="270">Rotacionar 270°</option>
                                     </select>
                                 </div>
                             </div>

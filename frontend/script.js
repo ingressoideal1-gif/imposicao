@@ -951,7 +951,11 @@ async function saveFmt() {
 
         offset_v_mm: offV,
 
-        rotations: state.fmtRotations,
+        rotations: (() => {
+            const r = { ...(state.fmtRotations || {}) };
+            r.page_rotate = parseInt(document.getElementById('fmt-def-rotate').value) || 0;
+            return r;
+        })(),
 
         default_schema: document.getElementById('fmt-def-schema').value,
 
@@ -963,7 +967,7 @@ async function saveFmt() {
 
         default_block_depth: parseInt(document.getElementById('fmt-def-depth').value) || 1,
 
-        default_rotate_page: document.getElementById('fmt-def-rotate').checked,
+        default_rotate_page: (parseInt(document.getElementById('fmt-def-rotate').value) || 0) > 0,
 
         has_cover: document.getElementById('fmt-has-cover').checked,
 
@@ -1071,7 +1075,16 @@ function editFmt(id) {
     
     document.getElementById('fmt-def-depth').value = f.default_block_depth || 1;
     
-    document.getElementById('fmt-def-rotate').checked = !!f.default_rotate_page;
+    (() => {
+        const fRot = f.rotations || {};
+        let rotVal = 0;
+        if (fRot.page_rotate !== undefined) {
+            rotVal = parseInt(fRot.page_rotate) || 0;
+        } else {
+            rotVal = f.default_rotate_page ? 90 : 0;
+        }
+        document.getElementById('fmt-def-rotate').value = String(rotVal);
+    })();
 
     document.getElementById('fmt-has-cover').checked = !!f.has_cover;
     document.getElementById('fmt-cover-scale').value = f.cover_scale !== undefined ? f.cover_scale : 80;
@@ -1133,7 +1146,7 @@ function cancelFmtEdit() {
     document.getElementById('fmt-def-cut-stack-mode').value = 'independent';
     document.getElementById('fmt-def-sheets').value = '50';
     document.getElementById('fmt-def-depth').value = '1';
-    document.getElementById('fmt-def-rotate').checked = false;
+    document.getElementById('fmt-def-rotate').value = '0';
     const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
     if (cutStackOpts) cutStackOpts.style.display = 'none';
     
@@ -2357,13 +2370,17 @@ function applyFormatoDefaults() {
     }
     
     // Rotate
-    if (fmt.default_rotate_page !== undefined) {
-        const rotateCb = document.getElementById('imp-rotate-page');
-        if (rotateCb) {
-            rotateCb.checked = !!fmt.default_rotate_page;
-            // update local state
-            state.rotatePage = rotateCb.checked;
-        }
+    const fRot = fmt.rotations || {};
+    let rotVal = 0;
+    if (fRot.page_rotate !== undefined) {
+        rotVal = parseInt(fRot.page_rotate) || 0;
+    } else {
+        rotVal = fmt.default_rotate_page ? 90 : 0;
+    }
+    const rotateCb = document.getElementById('imp-rotate-page');
+    if (rotateCb) {
+        rotateCb.value = String(rotVal);
+        state.rotatePage = rotVal;
     }
 }
 
@@ -8141,9 +8158,9 @@ window.runImposition = async function (mode, returnBlob = false) {
         schema = document.getElementById('imp-schema')?.value || 'sequential';
     }
 
-    const rotateEl = document.getElementById('imp-rotate-page');
-
-    const rotatePage = rotateEl ? (rotateEl.value === 'true') : false;
+    const isPedTab = document.getElementById('view-pedido')?.classList.contains('active');
+    const rotateEl = isPedTab ? document.getElementById('ped-rotate-page') : document.getElementById('imp-rotate-page');
+    const rotatePage = rotateEl ? (parseInt(rotateEl.value) || 0) : 0;
 
     if (!fmtId) return toast('Selecione um Formato.', 'error');
 
@@ -8410,7 +8427,6 @@ window.runImposition = async function (mode, returnBlob = false) {
     console.log('[DIAG runImposition] schema=', payload.schema, 'cut_stack_mode=', payload.cut_stack_mode, 'sheets_per_block=', payload.sheets_per_block, 'multi_artes_count=', payload.multi_artes?.length, 'isMultiSelected=', isMultiSelected);
 
     const formData = new FormData();
-    const isPedTab = document.getElementById('view-pedido')?.classList.contains('active');
     let selectedFile = null;
     if (isPedTab) {
         if (state.pedArtFile) {
@@ -12015,7 +12031,7 @@ function getImposicaoConfigData() {
 
         print_mode: document.getElementById('imp-print-mode')?.value || 'front',
 
-        rotate_page: document.getElementById('imp-rotate-page')?.value === 'true',
+        rotate_page: parseInt(document.getElementById('imp-rotate-page')?.value || 0) || 0,
 
         multi_artes: (document.getElementById('imp-schema')?.value === 'multi_artes') ? state.impMultiArtes : [],
 

@@ -49,13 +49,17 @@ function applyPedFormatoDefaults() {
     }
     
     // Rotate
-    if (fmt.default_rotate_page !== undefined) {
-        const rotateCb = document.getElementById('ped-rotate-page');
-        if (rotateCb) {
-            rotateCb.checked = !!fmt.default_rotate_page;
-            // update local state
-            state.rotatePage = rotateCb.checked;
-        }
+    const fRot = fmt.rotations || {};
+    let rotVal = 0;
+    if (fRot.page_rotate !== undefined) {
+        rotVal = parseInt(fRot.page_rotate) || 0;
+    } else {
+        rotVal = fmt.default_rotate_page ? 90 : 0;
+    }
+    const rotateCb = document.getElementById('ped-rotate-page');
+    if (rotateCb) {
+        rotateCb.value = String(rotVal);
+        state.rotatePage = rotVal;
     }
 }
 window.applyPedFormatoDefaults = applyPedFormatoDefaults;
@@ -3147,8 +3151,7 @@ window.runPedImposition = async function (mode) {
     }
 
     const rotateEl = document.getElementById('ped-rotate-page');
-
-    const rotatePage = rotateEl ? (rotateEl.value === 'true') : false;
+    const rotatePage = rotateEl ? (parseInt(rotateEl.value) || 0) : 0;
 
 
 
