@@ -253,7 +253,11 @@ class ImpositionConfig:
                 raise ValueError("Numeração do tipo CAMAROTE requer que Q_CAM (Quantidade de Locais) seja informada e maior que zero.")
         else:
             total_expected = math.floor((seq_end - seq_start) / seq_increment) + 1
-            self.total_items = total_expected
+            if self.num_tipo == "TICKET":
+                ticket_qtd = int(numeracao.get("ticket_qtd", 1)) if numeracao else 1
+                self.total_items = math.ceil(total_expected / ticket_qtd)
+            else:
+                self.total_items = total_expected
 
         # Elementos VDP da numeração
         self.elements = []
