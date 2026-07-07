@@ -240,7 +240,7 @@ class ImpositionConfig:
                     art_num_tipo = "CAMAROTE"
                 if art_num_tipo == "TICKET":
                     art_ticket_qtd = int(art_num.get("ticket_qtd", 1)) if art_num else 1
-                    self.total_items += math.ceil(art_qtd / art_ticket_qtd)
+                    self.total_items += art_qtd
                 else:
                     self.total_items += art_qtd
             if self.total_items < 1: self.total_items = 1
@@ -253,10 +253,7 @@ class ImpositionConfig:
                 raise ValueError("Numeração do tipo CAMAROTE requer que Q_CAM (Quantidade de Locais) seja informada e maior que zero.")
         else:
             total_expected = math.floor((seq_end - seq_start) / seq_increment) + 1
-            if self.num_tipo == "TICKET":
-                self.total_items = math.ceil(total_expected / self.ticket_qtd)
-            else:
-                self.total_items = total_expected
+            self.total_items = total_expected
 
         # Elementos VDP da numeração
         self.elements = []
@@ -798,7 +795,10 @@ class ImpositionEngine:
                     "numeracao": {
                         "start": cfg.seq_start,
                         "elements": cfg.elements,
-                        "print_mode": cfg.print_mode
+                        "print_mode": cfg.print_mode,
+                        "tipo": cfg.num_tipo,
+                        "ticket_qtd": cfg.ticket_qtd,
+                        "ticket_logica": cfg.ticket_logica
                     },
                     "numeracao_2": cfg.numeracao_2,
                     "pdf_url": None,
@@ -938,7 +938,7 @@ class ImpositionEngine:
                 
                 if art_num_tipo == "TICKET":
                     art_ticket_qtd = int(num1_obj.get("ticket_qtd", 1)) if num1_obj else 1
-                    physical_qtd = math.ceil(qtd / art_ticket_qtd)
+                    physical_qtd = qtd
                 else:
                     physical_qtd = qtd
                     art_ticket_qtd = 1
@@ -1002,7 +1002,7 @@ class ImpositionEngine:
                     art_num_tipo = "CAMAROTE"
                 if art_num_tipo == "TICKET":
                     art_ticket_qtd = int(art_num.get("ticket_qtd", 1)) if art_num else 1
-                    physical_qtd = math.ceil(qtd / art_ticket_qtd)
+                    physical_qtd = qtd
                 else:
                     physical_qtd = qtd
                 models_items.append(multi_map[curr_idx : curr_idx + physical_qtd])
@@ -1025,6 +1025,7 @@ class ImpositionEngine:
             print(f"[engine] strict_assembly: total_blocks={total_blocks} poses_per_sheet={poses_per_sheet} stack_size={stack_size}")
             
             set_definitions = []
+            blocks_used = 0
             
             # 3. Empacotar blocos em sets com profundidade de corte
             # Cada set tem poses_per_sheet células, cada célula empilha 'depth' blocos
@@ -1032,7 +1033,6 @@ class ImpositionEngine:
             if total_blocks >= poses_per_sheet:
                 # Calcular a profundidade máxima possível para sets estritos
                 # Usar todos os blocos completos distribuídos em sets
-                blocks_used = 0
                 while blocks_used + poses_per_sheet <= total_blocks:
                     # Quantos blocos restam
                     blocks_remaining = total_blocks - blocks_used
@@ -1067,11 +1067,11 @@ class ImpositionEngine:
                     })
                     blocks_used += num_blocks_in_set
                     break  # Um set estrito consome todos os blocos possíveis
-                    
-                # Devolver blocos restantes para leftovers
-                remaining_blocks = complete_blocks[blocks_used:]
-                for model_idx, block_items in remaining_blocks:
-                    leftovers_by_model[model_idx].extend(block_items)
+            
+            # Devolver blocos restantes para leftovers (garantido fora do bloco IF principal)
+            remaining_blocks = complete_blocks[blocks_used:]
+            for model_idx, block_items in remaining_blocks:
+                leftovers_by_model[model_idx].extend(block_items)
             
             # Ordenar as sobras de cada modelo pelo local_idx para manter a numeração sequencial
             for j in range(len(leftovers_by_model)):
@@ -1240,6 +1240,16 @@ class ImpositionEngine:
                         current_elements = arte_data["elements"]
                         val = arte_data["val1"]
                         val2 = arte_data["val2"]
+                        
+                        item_num_tipo = arte_data.get("num_tipo", "SEQUENCIAL")
+                        item_ticket_qtd = int(arte_data.get("ticket_qtd", 1))
+                        item_start_base = int(arte_data.get("start_base", 1))
+                        item_local_idx = int(arte_data.get("local_idx", 0))
+                    else:
+                        item_num_tipo = cfg.num_tipo
+                        item_ticket_qtd = int(cfg.ticket_qtd)
+                        item_start_base = int(cfg.seq_start)
+                        item_local_idx = int(item_index)
                         # arte_nome = arte_data.get("nome", "") # Nome was removed from multi_artes!
 
                     if cfg.layout_schema == "pdf_multiple":
@@ -1304,10 +1314,10 @@ class ImpositionEngine:
                                 rotated_el["font_size"] = el.get("font_size", 12)
                                 rotated_el["font_name"] = el.get("font_name", "helv")
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
-                            if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
                                 pos = int(rotated_el.get("ticket_pos", 1))
-                                N = int(cfg.ticket_qtd)
-                                current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+                                N = item_ticket_qtd
+                                current_val = item_start_base + (item_local_idx * N) + (pos - 1)
                             if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
                                 c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
                                 current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
@@ -1350,12 +1360,10 @@ class ImpositionEngine:
                                 rotated_el["font_size"] = el.get("font_size", 12)
                                 rotated_el["font_name"] = el.get("font_name", "helv")
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
-                            if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
                                 pos = int(rotated_el.get("ticket_pos", 1))
-                                N = int(cfg.ticket_qtd)
-                                logic = str(cfg.ticket_logica).strip().upper()
-                                Q = int(cfg.total_items)
-                                current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+                                N = item_ticket_qtd
+                                current_val = item_start_base + (item_local_idx * N) + (pos - 1)
                             if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
                                 c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
                                 current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
@@ -1461,6 +1469,16 @@ class ImpositionEngine:
                             val = arte_data["val1"]
                             val2 = arte_data["val2"]
                             # arte_nome = arte_data.get("nome", "")
+                            
+                            item_num_tipo = arte_data.get("num_tipo", "SEQUENCIAL")
+                            item_ticket_qtd = int(arte_data.get("ticket_qtd", 1))
+                            item_start_base = int(arte_data.get("start_base", 1))
+                            item_local_idx = int(arte_data.get("local_idx", 0))
+                        else:
+                            item_num_tipo = cfg.num_tipo
+                            item_ticket_qtd = int(cfg.ticket_qtd)
+                            item_start_base = int(cfg.seq_start)
+                            item_local_idx = int(item_index)
 
                         # Determinar a página base de verso no PDF de entrada
                         if cfg.layout_schema == "pdf_multiple":
@@ -1538,14 +1556,10 @@ class ImpositionEngine:
 
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
 
-                            if cfg.num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
                                 pos = int(rotated_el.get("ticket_pos", 1))
-                                N = int(cfg.ticket_qtd)
-                                logic = str(cfg.ticket_logica).strip().upper()
-                                Q = int(cfg.total_items)
-                                # A regra de negócios determinou que TICKET sempre incrementa sequencialmente
-                                # dentro da mesma folha, independentemente do número de folhas geradas.
-                                current_val = cfg.seq_start + (item_index * N) + (pos - 1)
+                                N = item_ticket_qtd
+                                current_val = item_start_base + (item_local_idx * N) + (pos - 1)
 
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 

@@ -595,11 +595,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     item_ticket_qtd = parseInt(itemNum.ticket_qtd) || 1;
                 }
             }
-            sum_physical += Math.ceil(q / item_ticket_qtd);
+            sum_physical += q;
         }
         total_items = sum_physical;
     } else {
-        total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
+        total_items = raw_items;
     }
 
     const poses_per_sheet = cols * rows;
@@ -2052,7 +2052,7 @@ function updatePedSummary() {
     }
 
     const perSheet = fmt.cols * fmt.rows;
-    const total_impressions = Math.ceil(total / ticket_qtd);
+    const total_impressions = total;
     let sheets = Math.ceil(total_impressions / perSheet);
 
     const cutstackMode = document.getElementById('ped-cutstack-mode')?.value;
@@ -2763,10 +2763,20 @@ function renderPedOSQueue() {
             }).join('');
 
             const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
-            const nfVal = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
             const blocoVal = item.bloco !== undefined && item.bloco !== null ? item.bloco : '';
             const nomeDoModelo = item.produto || '--';
+
+            // Obter a numeração selecionada e resolver se é TICKET
+            const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(selectedNumId));
+            let ticket_qtd = 1;
+            if (selectedNum && selectedNum.tipo === 'TICKET') {
+                ticket_qtd = parseInt(selectedNum.ticket_qtd) || 1;
+            }
+
+            const niValNum = parseInt(niVal) || 1;
+            const qtdValNum = parseInt(qtdVal) || 0;
+            const nfCalculado = qtdValNum > 0 ? (niValNum + (qtdValNum * ticket_qtd) - 1) : '';
 
             const jsItemId = item.id;
             const jsOsId = osId;
@@ -2802,11 +2812,11 @@ function renderPedOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
-                                        <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Final">
+                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Final">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NF</span>
-                            <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
-                                onchange="pedQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                            <input type="number" value="${nfCalculado}" style="${inputStyle}; opacity: 0.85;" placeholder="NF"
+                                readonly
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -3859,6 +3869,35 @@ async function pedQueueUpdateNum(itemId, osId, numId) {
         item.numeracao = num.name || num.tipo;
         item.numeracao_id = num.id;
         autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
+
+        // Recalcular num_final
+        let ticket_qtd = 1;
+        if (num.tipo === 'TICKET') {
+            ticket_qtd = parseInt(num.ticket_qtd) || 1;
+        }
+        const ni = parseInt(item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || 1)) || 1;
+        const qtd = parseInt(item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || 0)) || 0;
+        const nf = qtd > 0 ? (ni + (qtd * ticket_qtd) - 1) : '';
+
+        item.num_final = nf;
+        item.numeracao_fim = nf;
+        autoSaveOSItemField(itemId, osId, 'num_final', nf);
+
+        // Atualizar input de NF no DOM
+        const row = document.getElementById(`ped-queue-row-${itemId}`);
+        if (row) {
+            const nfInput = row.querySelector('td[title="Num. Final"] input');
+            if (nfInput) {
+                nfInput.value = nf;
+            }
+        }
+
+        // Atualizar campo de numeração na imposição principal se for o item ativo
+        if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
+            const el = document.getElementById('ped-end');
+            if (el) { el.value = nf; el.dispatchEvent(new Event('change')); }
+        }
+
         const numSelect = document.getElementById('ped-numeracao');
         if (numSelect) {
             numSelect.value = numId;
@@ -3874,6 +3913,45 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
     if (!item) return;
     item[field] = value;
     autoSaveOSItemField(itemId, osId, field, value);
+
+    // Recalcular num_final se qtd ou num_inicial mudar
+    if (field === 'qtd' || field === 'num_inicial') {
+        let ticket_qtd = 1;
+        const numId = item.numeracao_id || item.amostra_num_id;
+        if (numId) {
+            const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+            if (selectedNum && selectedNum.tipo === 'TICKET') {
+                ticket_qtd = parseInt(selectedNum.ticket_qtd) || 1;
+            }
+        }
+        
+        // Obter valores atualizados do item
+        const ni = parseInt(item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || 1)) || 1;
+        const qtd = parseInt(item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || 0)) || 0;
+        const nf = qtd > 0 ? (ni + (qtd * ticket_qtd) - 1) : '';
+        
+        // Atualizar no estado local
+        item.num_final = nf;
+        item.numeracao_fim = nf;
+        
+        // Salvar no Supabase
+        autoSaveOSItemField(itemId, osId, 'num_final', nf);
+        
+        // Atualizar input de NF no DOM
+        const row = document.getElementById(`ped-queue-row-${itemId}`);
+        if (row) {
+            const nfInput = row.querySelector('td[title="Num. Final"] input');
+            if (nfInput) {
+                nfInput.value = nf;
+            }
+        }
+        
+        // Atualizar campo de numeração na imposição principal se for o item ativo
+        if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
+            const el = document.getElementById('ped-end');
+            if (el) { el.value = nf; el.dispatchEvent(new Event('change')); }
+        }
+    }
 
     if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
         if (field === 'num_inicial') {
@@ -3925,7 +4003,7 @@ function buildStrictAssemblySets(artesList, isMulti, totItems, stackSize, posesP
                     item_ticket_qtd = parseInt(itemNum.ticket_qtd) || 1;
                 }
             }
-            let physical_q = Math.ceil(q / item_ticket_qtd);
+            let physical_q = q;
             
             for (let j = 0; j < physical_q; j++) {
                 multiMap.push({ global_index: curr_idx + j, arte_index: i, local_index: j });
@@ -3949,7 +4027,7 @@ function buildStrictAssemblySets(artesList, isMulti, totItems, stackSize, posesP
                     item_ticket_qtd = parseInt(itemNum.ticket_qtd) || 1;
                 }
             }
-            let physical_q = Math.ceil(q / item_ticket_qtd);
+            let physical_q = q;
             models_items.push(multiMap.slice(start, start + physical_q));
             start += physical_q;
         }

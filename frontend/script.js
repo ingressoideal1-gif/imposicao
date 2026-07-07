@@ -6214,8 +6214,7 @@ function drawPreview() {
     if (num && num.tipo === "TICKET") {
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
-    const raw_items = Math.max(1, end - start + 1);
-    const total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
+    const total_items = Math.max(1, end - start + 1);
 
     const poses_per_sheet = cols * rows;
     let total_sheets = Math.ceil(total_items / poses_per_sheet);
@@ -7914,8 +7913,7 @@ function updateImpSummary() {
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
 
-    const perSheet = fmt.cols * fmt.rows;
-    const total_impressions = Math.ceil(total / ticket_qtd);
+    const total_impressions = total;
     let sheets = Math.ceil(total_impressions / perSheet);
 
     const cutstackMode = document.getElementById('imp-cutstack-mode')?.value;
@@ -14876,9 +14874,19 @@ function renderImpOSQueue() {
             }).join('');
 
             const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
-            const nfVal = item.num_final !== undefined && item.num_final !== null ? item.num_final : (item.numeracao_fim || '');
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
             const nomeDoModelo = item.produto || '--';
+
+            // Obter a numeração selecionada e resolver se é TICKET
+            const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(selectedNumId));
+            let ticket_qtd = 1;
+            if (selectedNum && selectedNum.tipo === 'TICKET') {
+                ticket_qtd = parseInt(selectedNum.ticket_qtd) || 1;
+            }
+
+            const niValNum = parseInt(niVal) || 1;
+            const qtdValNum = parseInt(qtdVal) || 0;
+            const nfCalculado = qtdValNum > 0 ? (niValNum + (qtdValNum * ticket_qtd) - 1) : '';
 
             const jsItemId = item.id;
             const jsOsId = osId;
@@ -14912,8 +14920,8 @@ function renderImpOSQueue() {
                     <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Num. Final">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">NF</span>
-                            <input type="number" value="${nfVal}" style="${inputStyle}" placeholder="NF"
-                                onchange="impQueueUpdateField('${item.id}', '${osId}', 'num_final', this.value)"
+                            <input type="number" value="${nfCalculado}" style="${inputStyle}; opacity: 0.85;" placeholder="NF"
+                                readonly
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
@@ -15041,6 +15049,35 @@ function impQueueUpdateNum(itemId, osId, numId) {
         item.numeracao = num.name || num.tipo;
         item.numeracao_id = num.id;
         autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
+
+        // Recalcular num_final
+        let ticket_qtd = 1;
+        if (num.tipo === 'TICKET') {
+            ticket_qtd = parseInt(num.ticket_qtd) || 1;
+        }
+        const ni = parseInt(item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || 1)) || 1;
+        const qtd = parseInt(item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || 0)) || 0;
+        const nf = qtd > 0 ? (ni + (qtd * ticket_qtd) - 1) : '';
+
+        item.num_final = nf;
+        item.numeracao_fim = nf;
+        autoSaveOSItemField(itemId, osId, 'numeracao_fim', nf);
+
+        // Atualizar input de NF no DOM
+        const row = document.getElementById(`imp-queue-row-${itemId}`);
+        if (row) {
+            const nfInput = row.querySelector('td[title="Num. Final"] input');
+            if (nfInput) {
+                nfInput.value = nf;
+            }
+        }
+
+        // Atualizar campo de numeração na imposição principal se for o item ativo
+        if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
+            const el = document.getElementById('imp-end');
+            if (el) { el.value = nf; el.dispatchEvent(new Event('change')); }
+        }
+
         // Aplicar ao select de numeração na Imposição
         const numSelect = document.getElementById('imp-numeracao');
         if (numSelect) {
@@ -15056,6 +15093,45 @@ function impQueueUpdateField(itemId, osId, field, value) {
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;
     item[field] = value;
+
+    // Recalcular num_final se qtd ou num_inicial mudar
+    if (field === 'qtd' || field === 'num_inicial') {
+        let ticket_qtd = 1;
+        const numId = item.numeracao_id || item.amostra_num_id;
+        if (numId) {
+            const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+            if (selectedNum && selectedNum.tipo === 'TICKET') {
+                ticket_qtd = parseInt(selectedNum.ticket_qtd) || 1;
+            }
+        }
+        
+        // Obter valores atualizados do item
+        const ni = parseInt(item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || 1)) || 1;
+        const qtd = parseInt(item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || 0)) || 0;
+        const nf = qtd > 0 ? (ni + (qtd * ticket_qtd) - 1) : '';
+        
+        // Atualizar no estado local
+        item.num_final = nf;
+        item.numeracao_fim = nf;
+        
+        // Salvar no Supabase
+        autoSaveOSItemField(itemId, osId, 'numeracao_fim', nf);
+        
+        // Atualizar input de NF no DOM
+        const row = document.getElementById(`imp-queue-row-${itemId}`);
+        if (row) {
+            const nfInput = row.querySelector('td[title="Num. Final"] input');
+            if (nfInput) {
+                nfInput.value = nf;
+            }
+        }
+        
+        // Atualizar campo de numeração na imposição principal se for o item ativo
+        if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
+            const el = document.getElementById('imp-end');
+            if (el) { el.value = nf; el.dispatchEvent(new Event('change')); }
+        }
+    }
 
     // Espelhar nos campos da Imposição se for o item ativo
     if (state.activeOSItem && String(state.activeOSItem.itemId) === String(itemId)) {
