@@ -749,6 +749,11 @@ class ImpositionEngine:
 
     def process(self):
         cfg = self.cfg
+        r_de = int(getattr(cfg, "refazer_de", 0) or 0)
+        r_ate = int(getattr(cfg, "refazer_ate", 0) or 0)
+        r_set = int(getattr(cfg, "refazer_set", 1) or 1)
+        if r_de > 0 and r_ate <= 0:
+            r_ate = r_de
         cols = cfg.cols
         rows = cfg.rows
         poses_per_sheet = cols * rows
@@ -1119,6 +1124,8 @@ class ImpositionEngine:
             print(f"[engine] strict_assembly: total_sheets={total_sheets} partitioned into {len(set_definitions)} sets")
             
             for set_idx, set_def in enumerate(set_definitions):
+                if r_de > 0 and (set_idx + 1) != r_set:
+                    continue
                 depth = set_def.get("depth", 1)
                 stack_size = cfg.sheets_per_block
                 
@@ -1126,7 +1133,7 @@ class ImpositionEngine:
                     doc_out = fitz.open()
                     
                     # 1. Gerar capa para o layer (chunk)
-                    if cfg.has_cover:
+                    if cfg.has_cover and r_de <= 0:
                         self._generate_capa_for_chunk(set_idx, layer_idx, set_def, cfg, multi_map)
                     
                     # 2. Gerar miolo para o layer
@@ -1134,6 +1141,11 @@ class ImpositionEngine:
                     end_sheet = min((layer_idx + 1) * stack_size, set_def["num_sheets"])
                     
                     for sheet_within_set in range(start_sheet, end_sheet):
+                        # Se for refazer, filtrar ativamente por faixa de folhas do set
+                        sheet_num_in_set = sheet_within_set + 1
+                        if r_de > 0 and (sheet_num_in_set < r_de or sheet_num_in_set > r_ate):
+                            continue
+                            
                         # Frente
                         out_page_front = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
                         if cfg.rotate_page:
@@ -1160,14 +1172,17 @@ class ImpositionEngine:
                                     if item_data is not None:
                                         self._render_item_back(out_page_back, item_data, row, col, cfg, start_x, start_y)
                                         
-                    # 3. Salvar miolo para o layer
-                    out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_02_miolo.pdf")
-                    doc_out.save(out_name, garbage=4, deflate=True)
-                    doc_out.close()
-                    self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
-                    
+                    # 3. Salvar miolo para o layer (apenas se gerou alguma folha)
+                    if len(doc_out) > 0:
+                        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_02_miolo.pdf")
+                        doc_out.save(out_name, garbage=4, deflate=True)
+                        doc_out.close()
+                        self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
+                    else:
+                        doc_out.close()
+                        
                     # 4. Gerar contracapa para o layer
-                    if cfg.has_cover:
+                    if cfg.has_cover and r_de <= 0:
                         self._generate_contracapa_for_chunk(set_idx, layer_idx, set_def, cfg)
                     
             # Fechar recursos
@@ -1183,17 +1198,27 @@ class ImpositionEngine:
 
         for S in range(total_sheets):
             set_idx = S // stack_size
+            
+            # Se for refazer, filtrar ativamente por set e por faixa de folhas do set
+            if r_de > 0:
+                if (set_idx + 1) != r_set:
+                    continue
+                sheet_num_in_set = (S % stack_size) + 1
+                if sheet_num_in_set < r_de or sheet_num_in_set > r_ate:
+                    continue
+            
             if set_idx != set_idx_current:
                 if set_idx_current != -1 and doc_out:
-                    if cfg.has_cover:
-                        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
-                        doc_out.save(out_name, garbage=4, deflate=True)
-                        self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
-                        self._generate_contracapa(set_idx_current, cfg, doc_base)
+                    if len(doc_out) > 0:
+                        if cfg.has_cover and r_de <= 0:
+                            out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
+                            doc_out.save(out_name, garbage=4, deflate=True)
+                            self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
+                            self._generate_contracapa(set_idx_current, cfg, doc_base)
                     doc_out.close()
                     doc_out = fitz.open()
                 
-                if cfg.has_cover:
+                if cfg.has_cover and r_de <= 0:
                     self._generate_capa(set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets, multi_map)
                 
                 set_idx_current = set_idx
@@ -1600,14 +1625,16 @@ class ImpositionEngine:
         print(f"[engine] loop done elapsed={_time.monotonic()-_t0:.1f}s, saving...")
         if cfg.has_cover:
             if set_idx_current != -1 and doc_out:
-                out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
-                doc_out.save(out_name, garbage=4, deflate=True)
-                self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
-                self._generate_contracapa(set_idx_current, cfg, doc_base)
-
+                if len(doc_out) > 0:
+                    out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
+                    doc_out.save(out_name, garbage=4, deflate=True)
+                    self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
+                    if r_de <= 0:
+                        self._generate_contracapa(set_idx_current, cfg, doc_base)
         else:
-            doc_out.save(cfg.out_pdf, garbage=4, deflate=True)
-            self.generated_files.append({"type": "single", "path": cfg.out_pdf, "name": os.path.basename(cfg.out_pdf)})
+            if len(doc_out) > 0:
+                doc_out.save(cfg.out_pdf, garbage=4, deflate=True)
+                self.generated_files.append({"type": "single", "path": cfg.out_pdf, "name": os.path.basename(cfg.out_pdf)})
         
         self._apply_refazer_filter()
         print(f"[engine] save done elapsed={_time.monotonic()-_t0:.1f}s")
@@ -2180,79 +2207,5 @@ class ImpositionEngine:
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 
     def _apply_refazer_filter(self):
-        """Filtra as folhas fisicas geradas de acordo com refazer_de, refazer_ate e refazer_set."""
-        r_de = self.cfg.refazer_de
-        r_ate = self.cfg.refazer_ate
-        r_set = getattr(self.cfg, "refazer_set", 1)
-        
-        if r_de <= 0:
-            return
-            
-        if r_ate <= 0:
-            r_ate = r_de
-            
-        is_duplex = (self.cfg.print_mode == "duplex")
-        pages_per_sheet = 2 if is_duplex else 1
-        
-        req_start_sheet = r_de - 1
-        req_end_sheet = r_ate - 1
-        if req_end_sheet < req_start_sheet:
-            req_end_sheet = req_start_sheet
-            
-        filtered_files = []
-        
-        # Identificar se os arquivos foram gerados com divisão de conjuntos (SETS)
-        has_sets = any("_set" in gf["path"] for gf in self.generated_files)
-        
-        for gf in self.generated_files:
-            # Excluir capas se refazer > 0
-            if gf["type"] in ["capa", "contracapa"]:
-                if os.path.exists(gf["path"]):
-                    os.remove(gf["path"])
-                continue
-                
-            # Se for um trabalho particionado em SETs, só processamos o arquivo que pertence ao SET solicitado
-            if has_sets:
-                set_marker = f"_set{r_set}_"
-                if set_marker not in gf["name"]:
-                    if os.path.exists(gf["path"]):
-                        os.remove(gf["path"])
-                    continue
-                
-            try:
-                doc = fitz.open(gf["path"])
-                chunk_sheets = len(doc) // pages_per_sheet
-                
-                # O chunk inteiro representa o SET atual, ou o documento inteiro se não houver SETs.
-                # Como a paginação da interface agora é local por SET, não precisamos acumular current_global_sheet.
-                if req_start_sheet < chunk_sheets:
-                    local_start = req_start_sheet
-                    local_end = min(chunk_sheets - 1, req_end_sheet)
-                    
-                    start_page = local_start * pages_per_sheet
-                    end_page = min(len(doc) - 1, (local_end + 1) * pages_per_sheet - 1)
-                    
-                    if start_page == 0 and end_page == len(doc) - 1:
-                        doc.close()
-                        filtered_files.append(gf)
-                    else:
-                        doc.select(list(range(start_page, end_page + 1)))
-                        temp_path = gf["path"] + ".tmp.pdf"
-                        doc.save(temp_path, garbage=4, deflate=True)
-                        doc.close()
-                        
-                        if os.path.exists(temp_path):
-                            os.replace(temp_path, gf["path"])
-                            filtered_files.append(gf)
-                else:
-                    doc.close()
-                    if os.path.exists(gf["path"]):
-                        os.remove(gf["path"])
-                
-            except Exception as e:
-                print(f"[Refazer] Erro processando {gf['path']}: {e}")
-                
-        if not filtered_files:
-            raise ValueError(f"As páginas selecionadas para refazer (Set: {r_set}, De: {r_de} Até: {r_ate}) estão fora do alcance do documento.")
-            
-        self.generated_files = filtered_files
+        """Filtro de refazer aplicado ativamente na geração de páginas para otimização."""
+        return
