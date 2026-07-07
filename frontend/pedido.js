@@ -3707,6 +3707,7 @@ window.runPedImposition = async function (mode) {
                                 }
                             } catch (e) {
                                 console.error("Erro ao processar arquivo do stream:", e);
+                                toast(`Erro ao salvar arquivo do lote: ${e.message}`, 'error');
                             }
                         } else if (currentEvent === "error" && dataStr) {
                             try {

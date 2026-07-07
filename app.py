@@ -1,4 +1,5 @@
 import json
+import base64
 import shutil
 import tempfile
 import os
