@@ -781,6 +781,10 @@ async def impose_file(
                         "file_type": ftype,
                         "data": b64_data
                     })
+                    # Pausa na thread do motor para liberar o GIL, permitindo que o event loop
+                    # envie o arquivo atual antes que o motor comece a gerar o próximo
+                    import time
+                    time.sleep(1.2)
 
             engine = ImpositionEngine(config, on_file_generated=on_file_gen)
             print(f"[DIAG impose stream] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r}")
@@ -824,6 +828,8 @@ async def impose_file(
                             yield f"event: error\ndata: {json.dumps(item)}\n\n"
                             break
                         yield f"event: file\ndata: {json.dumps(item)}\n\n"
+                        # Pequena pausa assíncrona no event loop para forçar o flush de pacotes de rede
+                        await asyncio.sleep(0.1)
                 finally:
                     if background_tasks:
                         background_tasks.add_task(cleanup_temp_files)
