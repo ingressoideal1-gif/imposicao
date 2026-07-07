@@ -661,8 +661,15 @@ async def impose_file(
             # Se não resolveu acima, base_file_path continua vazio (engine gera apenas numeração)
             pass
 
+        suggested_name = data.get("suggested_filename")
         if base_file_path:
             out_pdf_path = base_file_path.rsplit(".", 1)[0] + "_imposed.pdf"
+        elif suggested_name:
+            clean_name = os.path.basename(suggested_name)
+            if not clean_name.lower().endswith(".pdf"):
+                clean_name += ".pdf"
+            clean_name = clean_name.replace(" ", "_")
+            out_pdf_path = os.path.join(tempfile.gettempdir(), clean_name)
         else:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_out:
                 out_pdf_path = tmp_out.name

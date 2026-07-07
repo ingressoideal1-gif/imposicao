@@ -8221,52 +8221,60 @@ window.runImposition = async function (mode, returnBlob = false) {
 
     // 1. SOLICITAR DESTINO DO ARQUIVO IMEDIATAMENTE (dentro do clique do usuário para manter o gesto ativo)
 
+    let directoryHandle = null;
     let fileHandle = null;
 
-    const suffix = schema === "pdf_multiple" ? "Paginado" : `${start}-${end}`;
-
-    const defaultFilename = `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}.pdf`;
-
-
-
-    if (window.showSaveFilePicker && mode !== 'print' && !returnBlob) {
-
-        try {
-
-            const options = {
-
-                suggestedName: defaultFilename,
-
-                types: [{
-
-                    description: 'PDF Document',
-
-                    accept: {
-
-                        'application/pdf': ['.pdf'],
-
-                    },
-
-                }],
-
-            };
-
-            fileHandle = await window.showSaveFilePicker(options);
-
-        } catch (err) {
-
-            // Se o usuário cancelou o diálogo de salvamento, interrompe o processo antes de chamar o servidor
-
-            if (err.name === 'AbortError') {
-
-                return;
-
-            }
-
-            console.error("Erro ao abrir showSaveFilePicker no início:", err);
-
+    // Obter o código do modelo para usar no nome do arquivo
+    let modeloNum = '';
+    if (isMultiSelected && state.selectedOSItems && state.selectedOSItems.length > 0) {
+        const firstSel = state.selectedOSItems[0];
+        const firstItem = state.osItens[firstSel.osId]?.find(i => String(i.id) === String(firstSel.itemId));
+        if (firstItem && firstItem.modelo) {
+            modeloNum = firstItem.modelo;
         }
+    } else if (state.activeOSItem) {
+        const itens = state.osItens[state.activeOSItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(state.activeOSItem.itemId));
+        if (item && item.modelo) {
+            modeloNum = item.modelo;
+        }
+    }
 
+    const suffix = schema === "pdf_multiple" ? "Paginado" : `${start}-${end}`;
+    const defaultFilename = modeloNum ? `${modeloNum}.pdf` : `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}.pdf`;
+
+    if (window.showDirectoryPicker && mode !== 'print' && !returnBlob) {
+        try {
+            directoryHandle = await window.showDirectoryPicker({
+                mode: 'readwrite'
+            });
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                return;
+            }
+            console.error("Erro ao abrir showDirectoryPicker:", err);
+        }
+    }
+
+    // Fallback se showDirectoryPicker não estiver disponível
+    if (!directoryHandle && window.showSaveFilePicker && mode !== 'print' && !returnBlob) {
+        try {
+            const options = {
+                suggestedName: defaultFilename,
+                types: [{
+                    description: 'PDF Document',
+                    accept: {
+                        'application/pdf': ['.pdf'],
+                    },
+                }],
+            };
+            fileHandle = await window.showSaveFilePicker(options);
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                return;
+            }
+            console.error("Erro ao abrir showSaveFilePicker no início:", err);
+        }
     }
 
 
@@ -8329,6 +8337,8 @@ window.runImposition = async function (mode, returnBlob = false) {
     const payload = {
 
         formato_id: fmtId,
+
+        suggested_filename: defaultFilename,
 
         numeracao_id: numId || null,
 
@@ -8717,7 +8727,7 @@ window.runImposition = async function (mode, returnBlob = false) {
         if (contentType && contentType.includes("application/json")) {
             const data = await res.json();
             if (data.type === "multi_file") {
-                toast(`Baixando ${data.files.length} arquivos...`, 'info');
+                toast(`Salvando ${data.files.length} arquivos...`, 'info');
                 for (const f of data.files) {
                     const binStr = atob(f.data);
                     const bytes = new Uint8Array(binStr.length);
@@ -8725,16 +8735,30 @@ window.runImposition = async function (mode, returnBlob = false) {
                         bytes[i] = binStr.charCodeAt(i);
                     }
                     const fBlob = new Blob([bytes], {type: "application/pdf"});
-                    const url = window.URL.createObjectURL(fBlob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = f.name;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(url);
-                    await new Promise(r => setTimeout(r, 500));
+                    
+                    if (directoryHandle) {
+                        try {
+                            const fh = await directoryHandle.getFileHandle(f.name, { create: true });
+                            const writable = await fh.createWritable();
+                            await writable.write(fBlob);
+                            await writable.close();
+                        } catch (errSave) {
+                            console.error(`Erro ao salvar ${f.name} na pasta:`, errSave);
+                        }
+                    } else {
+                        const url = window.URL.createObjectURL(fBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = f.name;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                        await new Promise(r => setTimeout(r, 500));
+                    }
                 }
+                
+                toast('Arquivos de imposição salvos na pasta com sucesso!', 'success');
                 
                 if (state.activeOSItem && state.activeOSItem.itemId) {
                     await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
@@ -8746,36 +8770,41 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         const blob = await res.blob();
 
-        
-
-        // Salvar os dados na pasta e arquivo já escolhidos pelo usuário
-
-        if (fileHandle) {
-
+        if (directoryHandle) {
             try {
-
-                const writable = await fileHandle.createWritable();
-
+                const finalFilename = defaultFilename;
+                const fh = await directoryHandle.getFileHandle(finalFilename, { create: true });
+                const writable = await fh.createWritable();
                 await writable.write(blob);
-
                 await writable.close();
 
                 toast('PDF salvo com sucesso!', 'success');
 
-                // Auto-atualizar status de impressão do item ativo da OS
                 if (state.activeOSItem && state.activeOSItem.itemId) {
                     await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
                     if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
                 }
-
                 return;
-
-            } catch (err) {
-
-                console.error("Falha ao salvar no arquivo escolhido previamente, usando fallback:", err);
-
+            } catch (errSave) {
+                console.error("Falha ao salvar PDF na pasta escolhida, usando fallback:", errSave);
             }
+        }
 
+        // Salvar os dados no fileHandle já escolhido pelo usuário
+        if (fileHandle) {
+            try {
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                toast('PDF salvo com sucesso!', 'success');
+                if (state.activeOSItem && state.activeOSItem.itemId) {
+                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
+                    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+                }
+                return;
+            } catch (err) {
+                console.error("Falha ao salvar no arquivo escolhido previamente, usando fallback:", err);
+            }
         }
 
 
