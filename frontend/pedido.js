@@ -3659,6 +3659,7 @@ window.runPedImposition = async function (mode) {
             const decoder = new TextDecoder("utf-8");
             let buffer = "";
 
+            let currentEvent = null;
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
@@ -3668,7 +3669,6 @@ window.runPedImposition = async function (mode) {
                 // Manter a última linha (incompleta) no buffer
                 buffer = lines.pop();
 
-                let currentEvent = null;
                 for (const line of lines) {
                     const cleanLine = line.trim();
                     if (!cleanLine) continue;
