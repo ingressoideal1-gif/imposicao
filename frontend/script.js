@@ -10123,29 +10123,163 @@ window._currentPerms = null;
 
 const PARTNER_LOGIN_URL = 'https://vibe.ai-ideal.com.br/login';
 
-// ──── Permissões padrão por role ────────────────────────────────────────────
+// ──── Permissões padrão por perfil ──────────────────────────────────────────
+// Cada módulo tem _view (visualizar) e _edit (editar/criar/excluir)
+// Ações especiais: perm_gerar_pdf, perm_imprimir
 const ROLE_DEFAULTS = {
-    admin:        { perm_imposicao:true, perm_pedidos:true, perm_formatos:true, perm_numeracao:true, perm_saidas:true, perm_cores:true, perm_mapas:true, perm_amostras:true, perm_impressoras:true, perm_producao:true, perm_lista_arte:true, perm_admin:true },
-    editor:       { perm_imposicao:true, perm_pedidos:true, perm_formatos:true, perm_numeracao:true, perm_saidas:true, perm_cores:true, perm_mapas:true, perm_amostras:true, perm_impressoras:false, perm_producao:true, perm_lista_arte:true, perm_admin:false },
-    operador:     { perm_imposicao:true, perm_pedidos:true, perm_formatos:false, perm_numeracao:false, perm_saidas:false, perm_cores:false, perm_mapas:false, perm_amostras:false, perm_impressoras:false, perm_producao:true, perm_lista_arte:true, perm_admin:false },
-    visualizador: { perm_imposicao:false, perm_pedidos:false, perm_formatos:false, perm_numeracao:false, perm_saidas:false, perm_cores:false, perm_mapas:false, perm_amostras:false, perm_impressoras:false, perm_producao:true, perm_lista_arte:false, perm_admin:false },
+    admin: {
+        perm_imposicao_view:true, perm_imposicao_edit:true,
+        perm_pedidos_view:true, perm_pedidos_edit:true,
+        perm_formatos_view:true, perm_formatos_edit:true,
+        perm_numeracao_view:true, perm_numeracao_edit:true,
+        perm_saidas_view:true, perm_saidas_edit:true,
+        perm_cores_view:true, perm_cores_edit:true,
+        perm_mapas_view:true, perm_mapas_edit:true,
+        perm_amostras_view:true, perm_amostras_edit:true,
+        perm_impressoras_view:true, perm_impressoras_edit:true,
+        perm_producao_view:true, perm_producao_edit:true,
+        perm_lista_arte_view:true, perm_lista_arte_edit:true,
+        perm_gerar_pdf:true, perm_imprimir:true,
+        perm_admin_view:true, perm_admin_edit:true,
+    },
+    atendimento: {
+        perm_imposicao_view:false, perm_imposicao_edit:false,
+        perm_pedidos_view:true, perm_pedidos_edit:true,
+        perm_formatos_view:true, perm_formatos_edit:false,
+        perm_numeracao_view:true, perm_numeracao_edit:false,
+        perm_saidas_view:false, perm_saidas_edit:false,
+        perm_cores_view:true, perm_cores_edit:false,
+        perm_mapas_view:false, perm_mapas_edit:false,
+        perm_amostras_view:true, perm_amostras_edit:false,
+        perm_impressoras_view:false, perm_impressoras_edit:false,
+        perm_producao_view:true, perm_producao_edit:false,
+        perm_lista_arte_view:true, perm_lista_arte_edit:false,
+        perm_gerar_pdf:false, perm_imprimir:false,
+        perm_admin_view:false, perm_admin_edit:false,
+    },
+    designer: {
+        perm_imposicao_view:true, perm_imposicao_edit:false,
+        perm_pedidos_view:true, perm_pedidos_edit:false,
+        perm_formatos_view:true, perm_formatos_edit:true,
+        perm_numeracao_view:true, perm_numeracao_edit:true,
+        perm_saidas_view:true, perm_saidas_edit:true,
+        perm_cores_view:true, perm_cores_edit:true,
+        perm_mapas_view:true, perm_mapas_edit:true,
+        perm_amostras_view:true, perm_amostras_edit:true,
+        perm_impressoras_view:false, perm_impressoras_edit:false,
+        perm_producao_view:true, perm_producao_edit:false,
+        perm_lista_arte_view:true, perm_lista_arte_edit:true,
+        perm_gerar_pdf:false, perm_imprimir:false,
+        perm_admin_view:false, perm_admin_edit:false,
+    },
+    impressor: {
+        perm_imposicao_view:true, perm_imposicao_edit:true,
+        perm_pedidos_view:true, perm_pedidos_edit:false,
+        perm_formatos_view:true, perm_formatos_edit:false,
+        perm_numeracao_view:true, perm_numeracao_edit:false,
+        perm_saidas_view:true, perm_saidas_edit:false,
+        perm_cores_view:true, perm_cores_edit:false,
+        perm_mapas_view:false, perm_mapas_edit:false,
+        perm_amostras_view:true, perm_amostras_edit:false,
+        perm_impressoras_view:true, perm_impressoras_edit:true,
+        perm_producao_view:true, perm_producao_edit:true,
+        perm_lista_arte_view:false, perm_lista_arte_edit:false,
+        perm_gerar_pdf:true, perm_imprimir:true,
+        perm_admin_view:false, perm_admin_edit:false,
+    },
+    financeiro: {
+        perm_imposicao_view:false, perm_imposicao_edit:false,
+        perm_pedidos_view:true, perm_pedidos_edit:false,
+        perm_formatos_view:false, perm_formatos_edit:false,
+        perm_numeracao_view:false, perm_numeracao_edit:false,
+        perm_saidas_view:false, perm_saidas_edit:false,
+        perm_cores_view:false, perm_cores_edit:false,
+        perm_mapas_view:false, perm_mapas_edit:false,
+        perm_amostras_view:false, perm_amostras_edit:false,
+        perm_impressoras_view:false, perm_impressoras_edit:false,
+        perm_producao_view:true, perm_producao_edit:false,
+        perm_lista_arte_view:false, perm_lista_arte_edit:false,
+        perm_gerar_pdf:false, perm_imprimir:false,
+        perm_admin_view:false, perm_admin_edit:false,
+    },
+    gerente: {
+        perm_imposicao_view:true, perm_imposicao_edit:true,
+        perm_pedidos_view:true, perm_pedidos_edit:true,
+        perm_formatos_view:true, perm_formatos_edit:true,
+        perm_numeracao_view:true, perm_numeracao_edit:true,
+        perm_saidas_view:true, perm_saidas_edit:true,
+        perm_cores_view:true, perm_cores_edit:true,
+        perm_mapas_view:true, perm_mapas_edit:true,
+        perm_amostras_view:true, perm_amostras_edit:true,
+        perm_impressoras_view:true, perm_impressoras_edit:false,
+        perm_producao_view:true, perm_producao_edit:true,
+        perm_lista_arte_view:true, perm_lista_arte_edit:true,
+        perm_gerar_pdf:true, perm_imprimir:true,
+        perm_admin_view:true, perm_admin_edit:false,
+    },
+    visualizador: {
+        perm_imposicao_view:true, perm_imposicao_edit:false,
+        perm_pedidos_view:true, perm_pedidos_edit:false,
+        perm_formatos_view:true, perm_formatos_edit:false,
+        perm_numeracao_view:true, perm_numeracao_edit:false,
+        perm_saidas_view:true, perm_saidas_edit:false,
+        perm_cores_view:true, perm_cores_edit:false,
+        perm_mapas_view:true, perm_mapas_edit:false,
+        perm_amostras_view:true, perm_amostras_edit:false,
+        perm_impressoras_view:false, perm_impressoras_edit:false,
+        perm_producao_view:true, perm_producao_edit:false,
+        perm_lista_arte_view:true, perm_lista_arte_edit:false,
+        perm_gerar_pdf:false, perm_imprimir:false,
+        perm_admin_view:false, perm_admin_edit:false,
+    },
 };
 
-// Mapeamento: permissão → IDs de nav-btn na sidebar
-const PERM_NAV_MAP = {
-    perm_formatos:    ['nav-formatos', 'nav-lista-formatos'],
-    perm_numeracao:   ['nav-numeracao', 'nav-catalogo'],
-    perm_mapas:       ['nav-mapas'],
-    perm_saidas:      ['nav-saidas'],
-    perm_cores:       ['nav-cores', 'nav-lista-cores'],
-    perm_imposicao:   ['nav-imposicao'],
-    perm_pedidos:     ['nav-pedido'],
-    perm_amostras:    ['nav-amostras'],
-    perm_producao:    ['nav-lista-impressao'],
-    perm_lista_arte:  ['nav-lista-arte'],
-    perm_impressoras: ['nav-impressoras'],
-    perm_admin:       ['nav-admin'],
+// Nomes dos perfis para UI
+const ROLE_LABELS = {
+    admin: { label: 'Administrador', icon: '👑', color: '#ef4444' },
+    atendimento: { label: 'Atendimento', icon: '🎧', color: '#3b82f6' },
+    designer: { label: 'Designer', icon: '🎨', color: '#a855f7' },
+    impressor: { label: 'Impressor', icon: '🖨️', color: '#10b981' },
+    financeiro: { label: 'Financeiro', icon: '💰', color: '#f59e0b' },
+    gerente: { label: 'Gerente', icon: '📊', color: '#06b6d4' },
+    visualizador: { label: 'Visualizador', icon: '👁️', color: '#6b7280' },
 };
+
+// Mapeamento: permissão _view → IDs de nav-btn na sidebar
+const PERM_NAV_MAP = {
+    perm_formatos_view:    ['nav-formatos', 'nav-lista-formatos'],
+    perm_numeracao_view:   ['nav-numeracao', 'nav-catalogo'],
+    perm_mapas_view:       ['nav-mapas'],
+    perm_saidas_view:      ['nav-saidas'],
+    perm_cores_view:       ['nav-cores', 'nav-lista-cores'],
+    perm_imposicao_view:   ['nav-imposicao'],
+    perm_pedidos_view:     ['nav-pedido'],
+    perm_amostras_view:    ['nav-amostras'],
+    perm_producao_view:    ['nav-lista-impressao'],
+    perm_lista_arte_view:  ['nav-lista-arte'],
+    perm_impressoras_view: ['nav-impressoras'],
+    perm_admin_view:       ['nav-admin'],
+};
+
+// Definição dos módulos para renderizar permissões no painel admin
+const PERM_MODULES = [
+    { key: 'imposicao',   icon: '🖨️', label: 'Imposição' },
+    { key: 'pedidos',     icon: '📦', label: 'Pedidos' },
+    { key: 'formatos',    icon: '📐', label: 'Formatos' },
+    { key: 'numeracao',   icon: '🔢', label: 'Numeração' },
+    { key: 'saidas',      icon: '📄', label: 'Saídas' },
+    { key: 'cores',       icon: '🎨', label: 'Cores' },
+    { key: 'mapas',       icon: '🗺️', label: 'Mapas' },
+    { key: 'amostras',    icon: '🧪', label: 'Amostras' },
+    { key: 'impressoras', icon: '🖨️', label: 'Impressoras' },
+    { key: 'producao',    icon: '📋', label: 'Produção' },
+    { key: 'lista_arte',  icon: '🎨', label: 'Lista Arte' },
+    { key: 'admin',       icon: '🛡️', label: 'Admin' },
+];
+const PERM_ACTIONS = [
+    { key: 'gerar_pdf', icon: '📥', label: 'Gerar PDF' },
+    { key: 'imprimir',  icon: '🖨️', label: 'Imprimir' },
+];
 
 // ──── Aplicar permissões na sidebar ────────────────────────────────────────
 function applyPermissions(perms) {
@@ -10161,17 +10295,18 @@ function applyPermissions(perms) {
     }
 
     // Labels de grupo: esconder "Configuração" se nenhum módulo config visível
-    const configPerms = ['perm_formatos', 'perm_numeracao', 'perm_mapas', 'perm_saidas', 'perm_cores'];
+    const configPerms = ['perm_formatos_view', 'perm_numeracao_view', 'perm_mapas_view', 'perm_saidas_view', 'perm_cores_view'];
     const hasConfig = configPerms.some(p => perms[p] === true);
     const configLabels = document.querySelectorAll('.nav-group-label');
     if (configLabels[0]) configLabels[0].style.display = hasConfig ? '' : 'none';
 
     // Admin label + button
     const adminLabel = document.querySelector('.nav-group-label.admin-only');
-    if (adminLabel) adminLabel.style.display = perms.perm_admin ? '' : 'none';
+    if (adminLabel) adminLabel.style.display = perms.perm_admin_view ? '' : 'none';
     const adminBtn = document.querySelector('.nav-btn.admin-only');
-    if (adminBtn) adminBtn.style.display = perms.perm_admin ? '' : 'none';
+    if (adminBtn) adminBtn.style.display = perms.perm_admin_view ? '' : 'none';
 }
+
 
 // ──── Carregar permissões do backend ───────────────────────────────────────
 async function loadUserPermissions(userId) {
@@ -10412,23 +10547,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 // ──────────────────────────────────────────────────────────────────────────
-// PAINEL DE ADMINISTRAÇÃO — Gerenciamento de Permissões do Imposition
-// ──────────────────────────────────────────────────────────────────────────
-
-const PERM_LABELS = {
-    perm_imposicao:   '🖨️ Imposição',
-    perm_pedidos:     '📦 Pedidos',
-    perm_formatos:    '📐 Formatos',
-    perm_numeracao:   '🔢 Numeração',
-    perm_saidas:      '📄 Saídas',
-    perm_cores:       '🎨 Cores',
-    perm_mapas:       '🗺️ Mapas',
-    perm_amostras:    '🧪 Amostras',
-    perm_impressoras: '🖨️ Impressoras',
-    perm_producao:    '📋 Produção',
-    perm_lista_arte:  '🎨 Lista de Arte',
-    perm_admin:       '🛡️ Admin',
-};
 
 window.loadAdminUsers = async function() {
     const tbody = document.getElementById('tbody-admin-users');
@@ -10475,48 +10593,75 @@ window.loadAdminUsers = async function() {
             const perms = permsMap[userId];
             const hasAccess = !!perms;
             const role = perms ? perms.role : null;
-            const roleColor = role === 'admin' ? 'badge-red' : (role === 'editor' ? 'badge-blue' : (role === 'operador' ? 'badge-teal' : 'badge-gray'));
+            const rl = ROLE_LABELS[role] || {};
 
-            // Status badge
+            // Status badge com cor do perfil
             const statusBadge = hasAccess
-                ? `<span class="badge ${roleColor}" style="font-size:0.68rem;">${(role || '').toUpperCase()}</span>`
-                : `<span class="badge" style="font-size:0.68rem;background:rgba(255,255,255,0.06);color:var(--text-dim);">SEM ACESSO</span>`;
+                ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;padding:2px 8px;border-radius:12px;background:${rl.color || '#6b7280'}22;color:${rl.color || '#6b7280'};font-weight:600;">${rl.icon || ''} ${rl.label || role}</span>`
+                : `<span style="font-size:0.72rem;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,0.05);color:var(--text-dim);">SEM ACESSO</span>`;
 
-            // Role select (só aparece se tem acesso)
+            // Role select com os 7 perfis
+            const roleOptions = Object.entries(ROLE_LABELS).map(([k, v]) =>
+                `<option value="${k}" ${role === k ? 'selected' : ''}>${v.icon} ${v.label}</option>`
+            ).join('');
+
             const roleSelect = hasAccess ? `
-                <select class="form-control" style="width:auto;display:inline-block;padding:3px 6px;font-size:0.78rem;height:28px;" onchange="changeUserRole('${userId}', this.value)">
-                    <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
-                    <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
-                    <option value="operador" ${role === 'operador' ? 'selected' : ''}>Operador</option>
-                    <option value="visualizador" ${role === 'visualizador' ? 'selected' : ''}>Visualizador</option>
+                <select class="form-control" style="width:auto;display:inline-block;padding:3px 6px;font-size:0.78rem;height:28px;margin-top:4px;" onchange="changeUserRole('${userId}', this.value)">
+                    ${roleOptions}
                 </select>` : `
-                <button class="btn btn-sm btn-secondary" onclick="grantUserAccess('${userId}', '${email}')" style="font-size:0.75rem;padding:3px 10px;">
+                <button class="btn btn-sm btn-secondary" onclick="grantUserAccess('${userId}', '${email}')" style="font-size:0.75rem;padding:3px 10px;margin-top:4px;">
                     ➕ Conceder Acesso
                 </button>`;
 
-            // Permissões checkboxes (só se tem acesso)
-            const permChecks = hasAccess ? Object.keys(PERM_LABELS).map(pk => {
-                const checked = perms[pk] === true ? 'checked' : '';
-                return `<label style="display:inline-flex;align-items:center;gap:3px;font-size:0.7rem;margin-right:6px;white-space:nowrap;cursor:pointer;">
-                    <input type="checkbox" ${checked} onchange="toggleUserPerm('${userId}', '${pk}', this.checked)" style="cursor:pointer;width:13px;height:13px;">
-                    ${PERM_LABELS[pk]}
-                </label>`;
-            }).join('') : '<span style="color:var(--text-dim);font-size:0.75rem;">—</span>';
+            // Grid de permissões View/Edit por módulo
+            let permGrid = '—';
+            if (hasAccess) {
+                const moduleRows = PERM_MODULES.map(m => {
+                    const vKey = `perm_${m.key}_view`;
+                    const eKey = `perm_${m.key}_edit`;
+                    const vChecked = perms[vKey] === true ? 'checked' : '';
+                    const eChecked = perms[eKey] === true ? 'checked' : '';
+                    return `<div style="display:contents;">
+                        <span style="font-size:0.7rem;white-space:nowrap;color:var(--text-dim);">${m.icon} ${m.label}</span>
+                        <label style="text-align:center;cursor:pointer;"><input type="checkbox" ${vChecked} onchange="toggleUserPerm('${userId}','${vKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"></label>
+                        <label style="text-align:center;cursor:pointer;"><input type="checkbox" ${eChecked} onchange="toggleUserPerm('${userId}','${eKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"></label>
+                    </div>`;
+                }).join('');
+
+                const actionRows = PERM_ACTIONS.map(a => {
+                    const aKey = `perm_${a.key}`;
+                    const aChecked = perms[aKey] === true ? 'checked' : '';
+                    return `<div style="display:contents;">
+                        <span style="font-size:0.7rem;white-space:nowrap;color:var(--text-dim);">${a.icon} ${a.label}</span>
+                        <label style="text-align:center;cursor:pointer;grid-column:span 2;"><input type="checkbox" ${aChecked} onchange="toggleUserPerm('${userId}','${aKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"> Sim</label>
+                    </div>`;
+                }).join('');
+
+                permGrid = `
+                    <div style="display:grid;grid-template-columns:auto 30px 30px;gap:2px 6px;align-items:center;">
+                        <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-transform:uppercase;">Módulo</span>
+                        <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-align:center;" title="Visualizar">👁️</span>
+                        <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-align:center;" title="Editar">✏️</span>
+                        ${moduleRows}
+                    </div>
+                    <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 6px;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">
+                        <span style="font-size:0.62rem;font-weight:700;color:#f59e0b;text-transform:uppercase;grid-column:span 2;">Ações</span>
+                        ${actionRows}
+                    </div>`;
+            }
 
             return `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);${!hasAccess ? 'opacity:0.6;' : ''}">
-                    <td style="padding:10px 12px;">
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);${!hasAccess ? 'opacity:0.55;' : ''}">
+                    <td style="padding:10px 12px;vertical-align:top;">
                         <strong style="color:#fff;font-size:0.85rem;">${email}</strong>
                         ${setor ? `<br><small style="color:var(--text-dim);font-size:0.72rem;">${setor}</small>` : ''}
                     </td>
-                    <td style="padding:10px 12px;">
-                        ${statusBadge}<br style="margin-bottom:4px;">
+                    <td style="padding:10px 12px;vertical-align:top;">
+                        ${statusBadge}<br>
                         ${roleSelect}
                     </td>
-                    <td style="padding:10px 12px;">
-                        <div style="display:flex;flex-wrap:wrap;gap:1px 0;">
-                            ${permChecks}
-                        </div>
+                    <td style="padding:10px 12px;vertical-align:top;">
+                        ${permGrid}
                     </td>
                 </tr>`;
         }).join('');
@@ -10525,14 +10670,14 @@ window.loadAdminUsers = async function() {
     }
 };
 
-// Conceder acesso a um usuário (cria com role operador)
+// Conceder acesso a um usuário (cria com role visualizador)
 window.grantUserAccess = async function(userId, email) {
     try {
-        const defaults = ROLE_DEFAULTS.operador;
+        const defaults = ROLE_DEFAULTS.visualizador;
         await fetch(`${API_BASE_URL}/api/user/permissions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId, role: 'operador', ...defaults })
+            body: JSON.stringify({ user_id: userId, role: 'visualizador', ...defaults })
         });
         toast(`Acesso concedido para ${email}!`, 'success');
         loadAdminUsers();
@@ -10541,20 +10686,20 @@ window.grantUserAccess = async function(userId, email) {
     }
 };
 
-
 window.changeUserRole = async function(userId, newRole) {
-    if (!confirm(`Alterar role para ${newRole.toUpperCase()}?`)) {
+    const rl = ROLE_LABELS[newRole] || {};
+    if (!confirm(`Alterar perfil para ${rl.icon || ''} ${rl.label || newRole}?`)) {
         loadAdminUsers();
         return;
     }
     try {
-        const defaults = ROLE_DEFAULTS[newRole] || ROLE_DEFAULTS.operador;
+        const defaults = ROLE_DEFAULTS[newRole] || ROLE_DEFAULTS.visualizador;
         await fetch(`${API_BASE_URL}/api/user/permissions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: userId, role: newRole, ...defaults })
         });
-        toast(`Role alterada para ${newRole.toUpperCase()}!`, 'success');
+        toast(`Perfil alterado para ${rl.icon || ''} ${rl.label || newRole}!`, 'success');
         loadAdminUsers();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
@@ -10569,7 +10714,8 @@ window.toggleUserPerm = async function(userId, permKey, value) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: userId, [permKey]: value })
         });
-        toast(`Permissão ${PERM_LABELS[permKey] || permKey} ${value ? 'ativada' : 'desativada'}`, 'success');
+        const label = permKey.replace('perm_', '').replace(/_/g, ' ');
+        toast(`${label} ${value ? '✅ ativada' : '❌ desativada'}`, 'success');
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
     }
@@ -10578,6 +10724,7 @@ window.toggleUserPerm = async function(userId, permKey, value) {
 // Carregar admin ao clicar na aba
 document.getElementById('nav-admin')?.addEventListener('click', () => {
     loadAdminUsers();
+
 });
 
 
