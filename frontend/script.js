@@ -16333,7 +16333,7 @@ function renderAmostrasOSItens(osId) {
 
                     <!-- Anexos do Pedido -->
                     <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
-                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                             <div>
                                 <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
                                     📎 Anexos do Pedido
@@ -16342,14 +16342,20 @@ function renderAmostrasOSItens(osId) {
                                     Arquivos e anexos vinculados a este pedido.
                                 </div>
                             </div>
-                            <button class="btn btn-sm btn-secondary" onclick="uploadAnexoPedido('${osId}', '${osNum}')" style="font-size: 0.78rem; font-weight: 700; padding: 4px 10px; display: flex; align-items: center; gap: 6px;">
-                                📤 Upload Anexo
-                            </button>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn btn-sm btn-primary" onclick="downloadTodosAnexosZip('${osNum}')" style="font-size: 0.78rem; font-weight: 700; padding: 4px 10px; display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3);" title="Baixar todos os anexos em um arquivo ZIP">
+                                    📦 Baixar Todos (ZIP)
+                                </button>
+                                <button class="btn btn-sm btn-secondary" onclick="uploadAnexoPedido('${osId}', '${osNum}')" style="font-size: 0.78rem; font-weight: 700; padding: 4px 10px; display: flex; align-items: center; gap: 6px;">
+                                    📤 Upload Anexo
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;" id="anexos-pedido-container-${osId}">
                             <div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;"><i class="fa-solid fa-spinner fa-spin"></i> Buscando anexos...</div>
                         </div>
                     </div>
+
 
                     <!-- Designers Ideal -->
 
@@ -18145,6 +18151,124 @@ async function loadBriefingBase(osId, osIntId) {
 }
 
 /**
+ * Lightbox para pré-visualização de imagem/PDF do anexo
+ */
+function openAnexoLightbox(url, name) {
+    let modal = document.getElementById('anexo-lightbox-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'anexo-lightbox-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;backdrop-filter:blur(5px);';
+        document.body.appendChild(modal);
+    }
+
+    const isPdf = url.toLowerCase().includes('.pdf');
+
+    modal.innerHTML = `
+        <div style="position:absolute;top:20px;right:25px;display:flex;gap:12px;align-items:center;z-index:100000;">
+            <a href="${url}" download="${name}" target="_blank" class="btn btn-primary btn-sm" style="font-weight:700;padding:6px 14px;background:#3b82f6;color:white;border-radius:6px;text-decoration:none;">📥 Download</a>
+            <button onclick="document.getElementById('anexo-lightbox-modal').style.display='none'" class="btn btn-secondary btn-sm" style="font-size:1.2rem;padding:4px 12px;cursor:pointer;color:white;background:rgba(255,255,255,0.2);border:none;border-radius:6px;">✕ Fechar</button>
+        </div>
+        <div style="max-width:90vw;max-height:82vh;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+            ${isPdf 
+                ? `<iframe src="${url}" style="width:85vw;height:80vh;border:none;border-radius:8px;background:white;"></iframe>`
+                : `<img src="${url}" alt="${name}" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.5);" />`
+            }
+        </div>
+        <div style="color:white;font-weight:600;margin-top:14px;font-size:0.95rem;text-shadow:0 1px 3px rgba(0,0,0,0.8);">${name}</div>
+    `;
+    modal.style.display = 'flex';
+}
+
+/**
+ * Baixa todos os anexos do pedido em lote compactados num arquivo ZIP
+ */
+async function downloadTodosAnexosZip(osNum) {
+    const numInt = parseInt(osNum);
+    if (isNaN(numInt)) return;
+
+    if (typeof JSZip === 'undefined') {
+        toast('Carregando biblioteca de ZIP...', 'info');
+        await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
+    try {
+        toast(`Buscando anexos do Pedido #${numInt}...`, 'info');
+
+        const { data: artesData } = await supabaseClient
+            .from('pedidos_artes')
+            .select('arquivos, storage_path, nome_arquivo, storage_bucket')
+            .eq('id_int', numInt);
+
+        let filesToDownload = [];
+        if (artesData && artesData.length > 0) {
+            artesData.forEach(pa => {
+                let arqs = pa.arquivos;
+                if (typeof arqs === 'string') {
+                    try { arqs = JSON.parse(arqs); } catch(e) {}
+                }
+                if (arqs && Array.isArray(arqs)) {
+                    arqs.forEach((arq, idx) => {
+                        let fileUrl = arq.url || arq.public_url || arq.publicUrl;
+                        const bucket = arq.storage_bucket || pa.storage_bucket || 'chat-ideal';
+                        if (!fileUrl && arq.storage_path) {
+                            const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(arq.storage_path);
+                            fileUrl = pUrl?.publicUrl;
+                        }
+                        if (fileUrl) {
+                            filesToDownload.push({
+                                name: arq.nome_arquivo || arq.nome || arq.name || `anexo_${idx + 1}`,
+                                url: fileUrl
+                            });
+                        }
+                    });
+                }
+            });
+        }
+
+        if (filesToDownload.length === 0) {
+            toast('Nenhum anexo encontrado para download.', 'warning');
+            return;
+        }
+
+        toast(`Compactando ${filesToDownload.length} arquivo(s) em ZIP...`, 'info');
+        const zip = new JSZip();
+
+        for (let i = 0; i < filesToDownload.length; i++) {
+            const item = filesToDownload[i];
+            try {
+                const resp = await fetch(item.url);
+                const blob = await resp.blob();
+                zip.file(item.name, blob);
+            } catch (err) {
+                console.warn(`Erro ao baixar ${item.name} para o ZIP:`, err);
+            }
+        }
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const downloadUrl = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `Anexos_Pedido_${numInt}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+
+        toast(`Download do ZIP do Pedido #${numInt} concluído com sucesso!`, 'success');
+    } catch (e) {
+        console.error('Erro ao gerar ZIP dos anexos:', e);
+        toast('Erro ao gerar ZIP: ' + e.message, 'error');
+    }
+}
+
+/**
  * Carrega e exibe os anexos vinculados ao pedido da coluna 'arquivos' (jsonb) na tabela 'pedidos_artes'
  */
 async function loadAnexosPedido(osId, osNum) {
@@ -18161,7 +18285,7 @@ async function loadAnexosPedido(osId, osNum) {
             // Buscar exclusivamente da coluna 'arquivos' (jsonb) na tabela 'pedidos_artes'
             const { data: artesData } = await supabaseClient
                 .from('pedidos_artes')
-                .select('arquivos, storage_path, nome_arquivo, storage_bucket, mime_type')
+                .select('arquivos, storage_path, nome_arquivo, storage_bucket, mime_type, created_at, updated_at')
                 .eq('id_int', numInt);
 
             if (artesData && artesData.length > 0) {
@@ -18191,7 +18315,8 @@ async function loadAnexosPedido(osId, osNum) {
                                     url: fileUrl,
                                     tamanho: arq.tamanho_bytes || arq.tamanho || arq.size || 0,
                                     tipo: arq.mime_type || arq.tipo || arq.type || '',
-                                    origem: arq.enviado_por || 'Arte/Comercial'
+                                    origem: arq.enviado_por || 'Arte/Comercial',
+                                    data: arq.created_at || arq.uploaded_at || arq.data || pa.created_at
                                 });
                             }
                         });
@@ -18207,7 +18332,8 @@ async function loadAnexosPedido(osId, osNum) {
                                 url: pUrl.publicUrl,
                                 tamanho: 0,
                                 tipo: pa.mime_type || '',
-                                origem: 'Arte Principal'
+                                origem: 'Arte Principal',
+                                data: pa.created_at
                             });
                         }
                     }
@@ -18226,43 +18352,56 @@ async function loadAnexosPedido(osId, osNum) {
 
         container.innerHTML = anexosList.map(anx => {
             const ext = (anx.nome.split('.').pop() || '').toLowerCase();
-            let icon = '📄';
-            let iconBg = 'rgba(59,130,246,0.15)';
-            let iconColor = '#3b82f6';
+            const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
+            const isPdf = ['pdf'].includes(ext);
 
-            if (['pdf'].includes(ext)) {
-                icon = '📕';
-                iconBg = 'rgba(239,68,68,0.15)';
-                iconColor = '#ef4444';
-            } else if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'ai', 'psd', 'cdr'].includes(ext)) {
-                icon = '🖼️';
-                iconBg = 'rgba(16,185,129,0.15)';
-                iconColor = '#10b981';
-            } else if (['zip', 'rar', '7z', 'gz'].includes(ext)) {
-                icon = '📦';
-                iconBg = 'rgba(245,158,11,0.15)';
-                iconColor = '#f59e0b';
+            let thumbHtml = '';
+            if (isImage) {
+                thumbHtml = `
+                    <img src="${anx.url}" alt="${anx.nome}" onclick="openAnexoLightbox('${anx.url}', '${anx.nome}')" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover; cursor: zoom-in; border: 1px solid var(--border); flex-shrink: 0; background: #000;" title="Clique para ampliar preview" />
+                `;
+            } else {
+                let icon = '📄';
+                let iconBg = 'rgba(59,130,246,0.15)';
+                let iconColor = '#3b82f6';
+                if (isPdf) {
+                    icon = '📕';
+                    iconBg = 'rgba(239,68,68,0.15)';
+                    iconColor = '#ef4444';
+                } else if (['zip', 'rar', '7z', 'gz'].includes(ext)) {
+                    icon = '📦';
+                    iconBg = 'rgba(245,158,11,0.15)';
+                    iconColor = '#f59e0b';
+                }
+                thumbHtml = `
+                    <div onclick="${isPdf ? `openAnexoLightbox('${anx.url}', '${anx.nome}')` : ''}" style="width: 44px; height: 44px; border-radius: 8px; background: ${iconBg}; color: ${iconColor}; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; ${isPdf ? 'cursor: pointer;' : ''}">
+                        ${icon}
+                    </div>
+                `;
             }
 
             const sizeMb = anx.tamanho > 0 ? (anx.tamanho > 1048576 ? `${(anx.tamanho / 1048576).toFixed(1)} MB` : `${Math.round(anx.tamanho / 1024)} KB`) : '';
+            const dataFmt = anx.data ? formatDateTime(anx.data) : '';
 
             return `
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); gap: 10px; transition: all 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                        <div style="width: 34px; height: 34px; border-radius: 8px; background: ${iconBg}; color: ${iconColor}; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">
-                            ${icon}
-                        </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); gap: 12px; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+                        ${thumbHtml}
                         <div style="min-width: 0;">
-                            <div style="font-weight: 700; color: var(--text); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${anx.nome}">
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" onclick="openAnexoLightbox('${anx.url}', '${anx.nome}')" title="Clique para abrir preview de ${anx.nome}">
                                 ${anx.nome}
                             </div>
-                            <div style="font-size: 0.72rem; color: var(--text-dim); display: flex; gap: 8px;">
+                            <div style="font-size: 0.72rem; color: var(--text-dim); display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px;">
                                 ${sizeMb ? `<span>${sizeMb}</span>` : ''}
+                                ${dataFmt ? `<span title="Data de Upload">📅 ${dataFmt}</span>` : ''}
                                 ${anx.origem ? `<span>Por: ${anx.origem}</span>` : ''}
                             </div>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                    <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
+                        <button onclick="openAnexoLightbox('${anx.url}', '${anx.nome}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); border-radius: 6px;" title="Visualizar Preview">
+                            👁️ Preview
+                        </button>
                         <a href="${anx.url}" target="_blank" download="${anx.nome}" rel="noopener" class="btn btn-sm" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 700; background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
                             📥 Download
                         </a>
@@ -18276,6 +18415,7 @@ async function loadAnexosPedido(osId, osNum) {
         container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;">Erro ao carregar anexos.</div>`;
     }
 }
+
 
 
 async function uploadAnexoPedido(osId, osNum) {
@@ -18346,8 +18486,11 @@ async function uploadAnexoPedido(osId, osNum) {
     input.click();
 }
 
+window.openAnexoLightbox = openAnexoLightbox;
+window.downloadTodosAnexosZip = downloadTodosAnexosZip;
 window.loadAnexosPedido = loadAnexosPedido;
 window.uploadAnexoPedido = uploadAnexoPedido;
+
 
 async function loadUltimosPedidos(osId, clienteNome) {
 
