@@ -10434,75 +10434,113 @@ window.loadAdminUsers = async function() {
     const tbody = document.getElementById('tbody-admin-users');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando...</td></tr>';
 
     try {
-        // Buscar todos os usuários com permissões no Imposition
-        const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
-        const data = await resp.json();
-        const users = (data.ok && data.permissions) ? data.permissions : [];
+        // 1) Buscar TODOS os usuários do sistema parceiro
+        let allUsers = [];
+        try {
+            if (supabaseClient) {
+                const { data: profiles, error } = await supabaseClient
+                    .from('usuarios')
+                    .select('user_id, email, setor, avatar, is_admin, telefone')
+                    .order('email', { ascending: true });
+                if (!error && profiles) allUsers = profiles;
+            }
+        } catch (e) {
+            console.warn('[admin] Erro ao buscar usuarios:', e);
+        }
 
-        if (!users.length) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-dim);">Nenhum usuário com permissões configuradas.</td></tr>';
+        // 2) Buscar permissões do Imposition
+        let permsMap = {};
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
+            const data = await resp.json();
+            if (data.ok && data.permissions) {
+                data.permissions.forEach(p => permsMap[p.user_id] = p);
+            }
+        } catch (e) {
+            console.warn('[admin] Erro ao buscar permissões:', e);
+        }
+
+        if (!allUsers.length) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-dim);">Nenhum usuário encontrado no sistema.</td></tr>';
             return;
         }
 
-        // Buscar dados de email/nome de cada user_id na tabela usuarios do Supabase
-        let userProfiles = {};
-        try {
-            if (supabaseClient) {
-                const { data: profiles } = await supabaseClient
-                    .from('usuarios')
-                    .select('user_id, email, setor, avatar, is_admin')
-                    .in('user_id', users.map(u => u.user_id));
-                if (profiles) {
-                    profiles.forEach(p => userProfiles[p.user_id] = p);
-                }
-            }
-        } catch (e) {
-            console.warn('[admin] Erro ao buscar perfis:', e);
-        }
+        tbody.innerHTML = allUsers.map(u => {
+            const userId = u.user_id;
+            const email = u.email || '—';
+            const setor = u.setor || '';
+            const perms = permsMap[userId];
+            const hasAccess = !!perms;
+            const role = perms ? perms.role : null;
+            const roleColor = role === 'admin' ? 'badge-red' : (role === 'editor' ? 'badge-blue' : (role === 'operador' ? 'badge-teal' : 'badge-gray'));
 
-        tbody.innerHTML = users.map(u => {
-            const profile = userProfiles[u.user_id] || {};
-            const email = profile.email || u.user_id.substring(0, 12) + '...';
-            const setor = profile.setor || '';
-            const roleColor = u.role === 'admin' ? 'badge-red' : (u.role === 'editor' ? 'badge-blue' : 'badge-teal');
+            // Status badge
+            const statusBadge = hasAccess
+                ? `<span class="badge ${roleColor}" style="font-size:0.68rem;">${(role || '').toUpperCase()}</span>`
+                : `<span class="badge" style="font-size:0.68rem;background:rgba(255,255,255,0.06);color:var(--text-dim);">SEM ACESSO</span>`;
 
-            const permChecks = Object.keys(PERM_LABELS).map(pk => {
-                const checked = u[pk] === true ? 'checked' : '';
-                return `<label style="display:inline-flex;align-items:center;gap:3px;font-size:0.72rem;margin-right:8px;white-space:nowrap;cursor:pointer;">
-                    <input type="checkbox" ${checked} onchange="toggleUserPerm('${u.user_id}', '${pk}', this.checked)" style="cursor:pointer;">
+            // Role select (só aparece se tem acesso)
+            const roleSelect = hasAccess ? `
+                <select class="form-control" style="width:auto;display:inline-block;padding:3px 6px;font-size:0.78rem;height:28px;" onchange="changeUserRole('${userId}', this.value)">
+                    <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                    <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
+                    <option value="operador" ${role === 'operador' ? 'selected' : ''}>Operador</option>
+                    <option value="visualizador" ${role === 'visualizador' ? 'selected' : ''}>Visualizador</option>
+                </select>` : `
+                <button class="btn btn-sm btn-secondary" onclick="grantUserAccess('${userId}', '${email}')" style="font-size:0.75rem;padding:3px 10px;">
+                    ➕ Conceder Acesso
+                </button>`;
+
+            // Permissões checkboxes (só se tem acesso)
+            const permChecks = hasAccess ? Object.keys(PERM_LABELS).map(pk => {
+                const checked = perms[pk] === true ? 'checked' : '';
+                return `<label style="display:inline-flex;align-items:center;gap:3px;font-size:0.7rem;margin-right:6px;white-space:nowrap;cursor:pointer;">
+                    <input type="checkbox" ${checked} onchange="toggleUserPerm('${userId}', '${pk}', this.checked)" style="cursor:pointer;width:13px;height:13px;">
                     ${PERM_LABELS[pk]}
                 </label>`;
-            }).join('');
+            }).join('') : '<span style="color:var(--text-dim);font-size:0.75rem;">—</span>';
 
             return `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:12px;">
-                        <strong style="color:#fff;">${email}</strong>
-                        ${setor ? `<br><small style="color:var(--text-dim);">${setor}</small>` : ''}
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);${!hasAccess ? 'opacity:0.6;' : ''}">
+                    <td style="padding:10px 12px;">
+                        <strong style="color:#fff;font-size:0.85rem;">${email}</strong>
+                        ${setor ? `<br><small style="color:var(--text-dim);font-size:0.72rem;">${setor}</small>` : ''}
                     </td>
-                    <td style="padding:12px;">
-                        <select class="form-control" style="width:auto;display:inline-block;padding:4px 8px;font-size:0.8rem;height:30px;" onchange="changeUserRole('${u.user_id}', this.value)">
-                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
-                            <option value="editor" ${u.role === 'editor' ? 'selected' : ''}>Editor</option>
-                            <option value="operador" ${u.role === 'operador' ? 'selected' : ''}>Operador</option>
-                            <option value="visualizador" ${u.role === 'visualizador' ? 'selected' : ''}>Visualizador</option>
-                        </select>
-                        <span class="badge ${roleColor}" style="margin-left:6px;">${(u.role || '').toUpperCase()}</span>
+                    <td style="padding:10px 12px;">
+                        ${statusBadge}<br style="margin-bottom:4px;">
+                        ${roleSelect}
                     </td>
-                    <td style="padding:12px;">
-                        <div style="display:flex;flex-wrap:wrap;gap:2px 0;">
+                    <td style="padding:10px 12px;">
+                        <div style="display:flex;flex-wrap:wrap;gap:1px 0;">
                             ${permChecks}
                         </div>
                     </td>
                 </tr>`;
         }).join('');
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red);">Erro: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--red);">Erro: ${e.message}</td></tr>`;
     }
 };
+
+// Conceder acesso a um usuário (cria com role operador)
+window.grantUserAccess = async function(userId, email) {
+    try {
+        const defaults = ROLE_DEFAULTS.operador;
+        await fetch(`${API_BASE_URL}/api/user/permissions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, role: 'operador', ...defaults })
+        });
+        toast(`Acesso concedido para ${email}!`, 'success');
+        loadAdminUsers();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+};
+
 
 window.changeUserRole = async function(userId, newRole) {
     if (!confirm(`Alterar role para ${newRole.toUpperCase()}?`)) {
