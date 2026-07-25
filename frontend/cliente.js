@@ -1306,13 +1306,34 @@ window.finalizarConfirmacaoCliente = async function() {
 
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const numPedInt = parseInt(clienteState.numero);
+            const { data: existing } = await supabaseClient
+                .from('pedidos_artes')
+                .select('observacoes')
+                .eq('id_int', numPedInt)
+                .maybeSingle();
+
+            let obsObj = (existing && existing.observacoes) ? existing.observacoes : {};
+            if (typeof obsObj === 'string') {
+                try { obsObj = JSON.parse(obsObj); } catch(e) {}
+            }
+            if (typeof obsObj !== 'object' || !obsObj) obsObj = {};
+
+            if (precisaAtencao) {
+                obsObj['correcao_entrega_faturamento'] = mensagemLog;
+            }
+
             await supabaseClient.from('pedidos_artes')
-                .update({ entrega_dados: precisaAtencao ? 'CORRIGIR' : 'APROVADO' })
-                .eq('id_int', parseInt(clienteState.numero));
+                .update({
+                    entrega_dados: precisaAtencao ? 'CORRIGIR' : 'APROVADO',
+                    observacoes: obsObj
+                })
+                .eq('id_int', numPedInt);
         }
     } catch(e) {
         console.warn('Erro ao atualizar entrega_dados em pedidos_artes:', e);
     }
+
 
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {

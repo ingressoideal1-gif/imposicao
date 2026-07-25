@@ -15979,7 +15979,19 @@ async function clienteSolicitarCorrecaoEntregaDados(osId, osNum) {
             if (typeof obsObj !== 'object' || !obsObj) obsObj = {};
 
             if (obsText) {
-                obsObj['correcao_entrega_faturamento'] = `${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}: ${obsText}`;
+                const obsMsg = `${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}: ${obsText}`;
+                obsObj['correcao_entrega_faturamento'] = obsMsg;
+
+                try {
+                    await supabaseClient.from('propostas_chat').insert({
+                        id_int: numInt,
+                        tipo: 'PRODUCAO',
+                        setor: 'Cliente',
+                        visivel_externo: true,
+                        mensagem: `⚠️ SOLICITAÇÃO DE ALTERAÇÃO PELO CLIENTE:\n${obsText}`,
+                        remetente_nome: 'Cliente (aprovação online)'
+                    });
+                } catch (cErr) {}
             }
 
             await supabaseClient
@@ -16084,7 +16096,6 @@ async function loadDadosEntregaInterno(osId, osNum) {
             }
             if (typeof obs === 'object' && obs) {
                 correcaoTexto = obs.correcao_entrega_faturamento || obs.correcao_endereco || obs.correcao_nf || obs.correcao || '';
-                // Se for um objeto com chaves (ex: mensagens), concatenar valores relevantes
                 if (!correcaoTexto && Object.keys(obs).length > 0) {
                     const vals = Object.entries(obs)
                         .filter(([k, v]) => k.includes('entrega') || k.includes('faturam') || k.includes('correcao'))
@@ -16094,21 +16105,35 @@ async function loadDadosEntregaInterno(osId, osNum) {
             }
         }
 
-        // Se ainda não achou o texto na tabela pedidos_artes, verificar mensagens recentes no chat da proposta
+        // Se ainda não achou o texto na tabela pedidos_artes, verificar no chat da proposta
         if (!correcaoTexto) {
             try {
                 const { data: chatData } = await supabaseClient
                     .from('propostas_chat')
                     .select('mensagem')
                     .eq('id_int', numInt)
-                    .ilike('remetente_nome', '%cliente%')
-                    .order('created_at', { ascending: false })
-                    .limit(1);
-                if (chatData && chatData.length > 0 && chatData[0].mensagem) {
-                    correcaoTexto = chatData[0].mensagem;
+                    .order('id', { ascending: false })
+                    .limit(5);
+
+                if (chatData && chatData.length > 0) {
+                    const msgCliente = chatData.find(c =>
+                        c.mensagem && (
+                            c.mensagem.includes('⚠️') ||
+                            c.mensagem.includes('REPORTOU') ||
+                            c.mensagem.includes('ALTERAÇÃO') ||
+                            c.mensagem.includes('CORREÇÃO') ||
+                            c.mensagem.includes('Endereço')
+                        )
+                    ) || chatData[0];
+                    if (msgCliente && msgCliente.mensagem) {
+                        correcaoTexto = msgCliente.mensagem;
+                    }
                 }
-            } catch (chatErr) {}
+            } catch (chatErr) {
+                console.warn('[loadDadosEntregaInterno] Erro ao buscar propostas_chat:', chatErr);
+            }
         }
+
 
 
         // 3. Renderizar Dados de Faturamento e Entrega
