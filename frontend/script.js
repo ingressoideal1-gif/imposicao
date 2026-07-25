@@ -14212,6 +14212,8 @@ function renderOrdens() {
                     entregaHtml = '<span class="badge badge-teal" style="font-size: 0.72rem;">✅ APROVADO</span>';
                 } else if (entregaStatus === 'CORRIGIR') {
                     entregaHtml = '<span class="badge badge-red" style="font-size: 0.72rem;">❌ CORRIGIR</span>';
+                } else if (entregaStatus === 'ALTERADO') {
+                    entregaHtml = '<span class="badge" style="font-size: 0.72rem; background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); font-weight: 700;">⚠️ ALTERADO</span>';
                 }
 
                 const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
@@ -14273,6 +14275,8 @@ function renderOrdens() {
                 let badgeBoxBg = '#3b82f6';
 
                 if (entregaStatus === 'CORRIGIR') {
+                    badgeBoxBg = '#ef4444';
+                } else if (entregaStatus === 'ALTERADO') {
                     badgeBoxBg = '#f97316';
                 } else if (isAllApproved && entregaStatus === 'APROVADO') {
                     badgeBoxBg = '#22c55e';
@@ -14310,20 +14314,23 @@ function renderOrdens() {
                                 const stUp = st.toUpperCase();
                                 let btns = [];
 
+                                const isEntregaAlterada = entregaStatus === 'ALTERADO' || entregaStatus === 'CORRIGIR';
+
                                 // ── Botões por status ──
                                 const isReprovada = stUp === 'REPROVADA' || stUp === 'REPROVADO' || stUp === 'REPROVADA_CLIENTE';
                                 const isAprovada = stUp === 'APROVADA' || stUp === 'APROVADO' || stUp === 'APROVADA_CLIENTE' || stUp === 'LIBERADA' || stUp === 'ARTE_APROVADA' || stUp === 'ARTE APROVADA';
                                 const isArtePronta = st === 'Arte Pronta' || st === 'Enviar Arte' || st === 'Enviar ARTE';
                                 const isAguardando = st === 'Aguard. Aprovação' || stUp === 'AGUARDANDO_APROVACAO';
 
-                                // 1) Link de aprovação (Arte Pronta, Enviar Arte, Aguard. Aprovação)
+                                // 1) Link de aprovação (Arte Pronta, Enviar Arte, Aguard. Aprovação, ou quando Entrega foi Alterada/Corrigir)
                                 if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
                                         <a href="${linkSalvo}" target="_blank" rel="noopener" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;text-decoration:none;" title="Abrir Link">🔗</a>
                                         <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar Link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;">📋</button>
                                     </div>`);
-                                } else if (isArtePronta || isAguardando) {
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:4px 8px;font-size:0.73rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🔗 Gerar Link</button>`);
+                                } else if (isArtePronta || isAguardando || isEntregaAlterada) {
+                                    const btnColor = isEntregaAlterada ? 'background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);' : 'background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);';
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:4px 8px;font-size:0.73rem;${btnColor}border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🔗 Gerar Link</button>`);
                                 }
 
                                 // 2) Reprovar (quando status permite e usuário tem edit)
@@ -14331,19 +14338,20 @@ function renderOrdens() {
                                     btns.push(`<button class="btn btn-sm" onclick="reprovarArteAdmin('${os.id}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:3px 7px;font-size:0.73rem;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}" title="Reprovar Arte">❌</button>`);
                                 }
 
-                                // 3) Voltar p/ Arte (quando reprovada)
-                                if (isReprovada) {
+                                // 3) Voltar p/ Arte (quando reprovada ou entrega alterada)
+                                if (isReprovada || isEntregaAlterada) {
                                     btns.push(`<button class="btn btn-sm" onclick="voltarParaArteFromLista('${os.id}')" ${canEdit ? '' : 'disabled'} style="padding:4px 8px;font-size:0.73rem;background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">↩️ Voltar p/ Arte</button>`);
                                 }
 
-                                // 4) Liberar p/ Produção (quando aprovada)
-                                if (isAprovada) {
+                                // 4) Liberar p/ Produção (quando aprovada e entrega não está alterada/corrigir)
+                                if (isAprovada && !isEntregaAlterada) {
                                     btns.push(`<button class="btn btn-sm" onclick="liberarParaProducao('${os.id}')" ${canEdit ? '' : 'disabled'} style="padding:4px 8px;font-size:0.73rem;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🖨️ Produção</button>`);
                                 }
 
                                 return btns.length > 0 ? `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">${btns.join('')}</div>` : '<span style="color:var(--text-dim);font-size:0.75rem;">—</span>';
                             })()}
                         </td>
+
                     </tr>
 
                 `;
@@ -17048,7 +17056,21 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
 
         Object.assign(itemLocal, dataToUpdate);
+
+        // Se o pedido estava com entrega_dados === 'APROVADO' e houve alteração no modelo/arte, muda para 'ALTERADO'
+        const numInt = parseInt(String(osId).replace('vibe_', ''));
+        if (!isNaN(numInt)) {
+            const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
+            if (arteGlobal && (arteGlobal.entrega_dados || '').toUpperCase() === 'APROVADO') {
+                arteGlobal.entrega_dados = 'ALTERADO';
+                await supabaseClient.from('pedidos_artes')
+                    .update({ entrega_dados: 'ALTERADO' })
+                    .eq('id_int', numInt);
+                if (typeof renderOrdens === 'function') renderOrdens();
+            }
+        }
     } catch (e) {
+
         console.error('[SAVE] Erro:', e);
         throw e;
     }
@@ -18225,6 +18247,15 @@ async function saveBriefingField(osIntId, field, value, isObs = false, itemId = 
     briefingSaveTimeout = setTimeout(async () => {
         try {
             const current = state.pedidosArtesData[osIntId] || {};
+
+            // Se a aprovação de entrega/faturamento era APROVADO e algum campo do briefing mudou, altera para ALTERADO
+            const arteGlobal = state.todasArtes?.find(a => String(a.id_int) === String(osIntId));
+            if (arteGlobal && (arteGlobal.entrega_dados || '').toUpperCase() === 'APROVADO') {
+                arteGlobal.entrega_dados = 'ALTERADO';
+                current.entrega_dados = 'ALTERADO';
+                if (typeof renderOrdens === 'function') renderOrdens();
+            }
+
             const payload = {
                 id_int: osIntId,
                 nome_evento: current.nome_evento || null,
@@ -18232,8 +18263,10 @@ async function saveBriefingField(osIntId, field, value, isObs = false, itemId = 
                 local_evento: current.local_evento || null,
                 observacoes: current.observacoes || {},
                 designer_uid: current.designer_uid || null,
-                designer_nome: current.designer_nome || null
+                designer_nome: current.designer_nome || null,
+                ...(current.entrega_dados ? { entrega_dados: current.entrega_dados } : {})
             };
+
 
             const { data: existingData } = await supabaseClient
                 .from('pedidos_artes')
