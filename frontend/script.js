@@ -15896,9 +15896,14 @@ window.showView = function(viewId) {
     if (navBtn) navBtn.classList.add('active');
 
     // Hooks: carregar dados ao abrir certas views
-    if (viewId === 'view-lista-impressao' || viewId === 'view-lista-arte') {
+    if (viewId === 'view-lista-arte') {
+        state.todasArtes = null;
+        state.modelosGlobais = null;
+        loadOrdens();
+    } else if (viewId === 'view-lista-impressao') {
         loadOrdens();
     }
+
     if (viewId === 'view-imposicao') {
         renderImpOSQueue();
         const impPreview = document.getElementById('imp-preview-card-container');
