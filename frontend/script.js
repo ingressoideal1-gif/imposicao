@@ -13954,17 +13954,18 @@ function renderOrdens() {
             return validReprovadoList.includes(sAm) || validReprovadoList.includes(sArt);
         });
 
-        const isEmAlteracaoCalculado = validReprovadoList.includes(osStatus) || validReprovadoList.includes(globalStatus) || temItemReprovado;
+        const temLinkGerado = !!(state.linksCliente && state.linksCliente[os.id]);
 
         if (isEmAlteracaoCalculado) {
             os.status_calculado = 'Em Alteração';
         } else if (validApprovedList.includes(osStatus) || validApprovedList.includes(globalStatus)) {
             os.status_calculado = 'Aprovada';
-        } else if (validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus)) {
-            os.status_calculado = 'Enviar Arte';
+        } else if (temLinkGerado || validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus)) {
+            os.status_calculado = temLinkGerado ? 'Aguard. Aprovação' : ((osStatus === 'ENVIAR ARTE' || globalStatus === 'ENVIAR ARTE') ? 'Enviar Arte' : 'Aguard. Aprovação');
         } else {
             os.status_calculado = os.status || 'Em Arte';
         }
+
 
         // Status dos Dados de Entrega / Faturamento
         const entregaStatus = (arteGlobal.entrega_dados || '').trim().toUpperCase();
