@@ -13245,8 +13245,15 @@ function mapVibecodeProdutoToOSItem(p, osId) {
  */
 async function loadOSItens(osId) {
     try {
+        if (!state._loadingOSItens) state._loadingOSItens = {};
+        if (state._loadingOSItens[osId]) return;
+        state._loadingOSItens[osId] = true;
+
         const os = state.ordens.find(o => o.id === osId);
-        if (!os) return;
+        if (!os) {
+            state._loadingOSItens[osId] = false;
+            return;
+        }
 
         // Se não carregado ainda, ou se tem apenas o cache básico do Vibecode, busca a fonte de dados principal
         const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
@@ -13471,8 +13478,11 @@ async function loadOSItens(osId) {
     } catch (e) {
         console.error('Erro ao carregar itens da OS:', e);
         toast('Erro ao carregar itens: ' + e.message, 'error');
+    } finally {
+        if (state._loadingOSItens) state._loadingOSItens[osId] = false;
     }
 }
+
 
 /**
  * Formata data para exibição
@@ -16399,19 +16409,23 @@ function renderAmostrasOSItens(osId) {
         loadUltimosPedidos(osId, os.cliente);
     }
 
-    setTimeout(() => {
-        itens.forEach((item, idx) => {
+    setTimeout(async () => {
+        for (let idx = 0; idx < itens.length; idx++) {
+            const item = itens[idx];
             const corSelect = document.getElementById(`amostra-item-cor-${idx}`);
             const numSelect = document.getElementById(`amostra-item-num-${idx}`);
             const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
             
-            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || hasSelectValue) {
-                renderItemAmostraCombinada(idx, osId);
+            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.arte_url || hasSelectValue) {
+                await renderItemAmostraCombinada(idx, osId);
+                // Pequena pausa para permitir renderização fluida da UI sem travar o browser
+                await new Promise(r => setTimeout(r, 20));
             }
-        });
+        }
         // Atualizar a barra final de ações do cliente dinamicamente
         atualizarBarraFinalCliente(osId);
     }, 50);
+
 }
 
 /**
@@ -16724,12 +16738,12 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
 
     // Se no for carga inicial, salva no banco
     if (!isInitialLoad) {
+        if (item) item._needsSnapshot = true;
         saveAmostraToDB(itemId, osId, { amostra_cor_id: corId || null });
     }
 
     // Filtrar numerações pelo formato da COR selecionada
     const curNumVal = numSelect.value;
-    const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
     const corFormatoId = cor ? cor.formato_id : null;
     const os = state.ordens.find(o => o.id === osId);
     const idCliente = os ? os.id_cliente : null;
@@ -16778,6 +16792,8 @@ function onItemNumSelect(idx, osId, itemId) {
     const numId = numSelect.value;
     const numObj = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
     const numNome = numObj ? numObj.name : null;
+    const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    if (item) item._needsSnapshot = true;
     
     saveAmostraToDB(itemId, osId, { 
         amostra_num_id: numId || null,
@@ -16821,14 +16837,16 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
 
             // Atualizar o state PRIMEIRO
             const osItems = state.osItens[osId];
-            const item = osItems.find(i => String(i.id) === String(itemId));
+            const item = osItems?.find(i => String(i.id) === String(itemId));
             if (item) {
+                item._needsSnapshot = true;
                 if (face === 'verso') {
                     item.verso_arte_url = publicUrl;
                 } else {
                     item.arte_url = publicUrl;
                 }
             }
+
             
             // Renderizar IMEDIATAMENTE a arte
             renderItemAmostraCombinada(idx, osId);
@@ -17596,8 +17614,9 @@ async function renderItemAmostraCombinada(idx, osId) {
         await drawAmostraFace(item, 'front', canvasFront, emptyFront, fmt, cor, num, idx, osId, S);
         await drawAmostraFace(item, 'back', canvasBack, emptyBack, fmt, cor, num, idx, osId, S);
         
-        // Snapshot para link do cliente (Frente e Verso)
-        if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+        // Snapshot para link do cliente (Frente e Verso) - somente se editado
+        if (state.amostrasContainerId !== 'cliente-amostras-itens-container' && item._needsSnapshot) {
+            delete item._needsSnapshot;
             if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
             item._snapshotTimer = setTimeout(() => {
                 snapshotAmostraAndUpload(idx, osId, item, canvasFront, 'frente');
@@ -17610,12 +17629,14 @@ async function renderItemAmostraCombinada(idx, osId) {
         
         await drawAmostraFace(item, 'front', canvas, empty, fmt, cor, num, idx, osId, S);
         
-        if (state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+        if (state.amostrasContainerId !== 'cliente-amostras-itens-container' && item._needsSnapshot) {
+            delete item._needsSnapshot;
             if (item._snapshotTimer) clearTimeout(item._snapshotTimer);
             item._snapshotTimer = setTimeout(() => {
                 snapshotAmostraAndUpload(idx, osId, item, canvas);
             }, 2000);
         }
+
     }
 }
 
