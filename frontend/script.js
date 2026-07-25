@@ -13026,6 +13026,7 @@ async function carregarModelosGlobais() {
             if (!state.modelosGlobais[m.id_int]) state.modelosGlobais[m.id_int] = [];
             m.impressao = normalizarStatusImpressao(m.status_impressao || m.status_producao);
             m.quantidade = parseInt(m.quantidade || 0);
+            m.amostra_status = m.status_arte || m.amostra_status || '';
             state.modelosGlobais[m.id_int].push(m);
         });
         console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
@@ -13033,6 +13034,7 @@ async function carregarModelosGlobais() {
         console.warn('[Modelos] Erro ao carregar modelos globais:', e.message);
     }
 }
+
 
 
 /**
@@ -13927,18 +13929,40 @@ function renderOrdens() {
     let ordensFilaArte = [];
     let ordensAprovados = [];
 
+    const validReprovadoList = ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'];
+    const validApprovedList = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
+
     state.ordens.forEach(os => {
         const osNumeroInt = parseInt(os.numero);
         const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
+        const modelosGlobaisOS = (state.modelosGlobais && state.modelosGlobais[osNumeroInt]) ? state.modelosGlobais[osNumeroInt] : (state.osItens[os.id] || []);
         
-        // Status da Arte
+        // Status da OS / Registro Global de Artes
         const osStatus = (os.status || '').trim().toUpperCase();
-        const isArteAprovada = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA'].includes(osStatus);
+        const arteGlobal = artesDaOS[0] || {};
+        const globalStatus = (arteGlobal.status || '').trim().toUpperCase();
+
+        // Checar se a OS, a tabela global de artes ou QUALQUER modelo/item tem alteração/reprovação
+        let temItemReprovado = modelosGlobaisOS.some(m => {
+            const sAm = (m.amostra_status || '').trim().toUpperCase();
+            const sArt = (m.status_arte || '').trim().toUpperCase();
+            return validReprovadoList.includes(sAm) || validReprovadoList.includes(sArt);
+        });
+
+        const isEmAlteracaoCalculado = validReprovadoList.includes(osStatus) || validReprovadoList.includes(globalStatus) || temItemReprovado;
+
+        if (isEmAlteracaoCalculado) {
+            os.status_calculado = 'Em Alteração';
+        } else if (validApprovedList.includes(osStatus) || validApprovedList.includes(globalStatus)) {
+            os.status_calculado = 'Aprovada';
+        } else {
+            os.status_calculado = os.status || 'Em Arte';
+        }
 
         // Status dos Dados de Entrega / Faturamento
-        const arteGlobal = artesDaOS[0] || {};
         const entregaStatus = (arteGlobal.entrega_dados || '').trim().toUpperCase();
         const isEntregaAprovada = (entregaStatus === 'APROVADO');
+        const isArteAprovada = (os.status_calculado === 'Aprovada');
 
         const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
 
@@ -14037,20 +14061,20 @@ function renderOrdens() {
             if (!matchSetor) return false;
         }
 
-        // 4. Filtro de Status de Arte (compara pelo status da OS, não do item)
+        // 4. Filtro de Status de Arte (compara pelo status calculado da OS)
         if (state.filtroStatusArte) {
-            const osStatus = (os.status || '').trim().toUpperCase();
+            const osStatusCalculado = (os.status_calculado || os.status || '').trim().toUpperCase();
             const filtro = state.filtroStatusArte.trim();
             const statusNorm = {
                 'APROVADO': 'Aprovada', 'APROVADA_CLIENTE': 'Aprovada', 'LIBERADA': 'Aprovada',
                 'ARTE_APROVADA': 'Aprovada', 'Arte APROVADA': 'Aprovada',
                 'REPROVADO': 'Em Alteração', 'REPROVADA': 'Em Alteração', 'REPROVADA_CLIENTE': 'Em Alteração',
-                'ARTE_EM_CORRECAO': 'Em Alteração', 'Em Alteração': 'Em Alteração', 'Em Correção': 'Em Alteração',
+                'ARTE_EM_CORRECAO': 'Em Alteração', 'Em Alteração': 'Em Alteração', 'EM ALTERAÇÃO': 'Em Alteração', 'Em Correção': 'Em Alteração',
                 'NOVO': 'Em Arte', 'EM FILA': 'Em Arte', 'Em Fila': 'Em Arte', 'ARTE_EM_ANDAMENTO': 'Em Arte',
                 'Enviar ARTE': 'Enviar Arte', 'Arte Pronta': 'Enviar Arte',
                 'AGUARDANDO_APROVACAO': 'Aguard. Aprovação',
             };
-            const osNorm = statusNorm[osStatus] || osStatus;
+            const osNorm = statusNorm[osStatusCalculado] || osStatusCalculado;
             if (osNorm !== filtro) return false;
         }
 
@@ -14253,7 +14277,7 @@ function renderOrdens() {
                 let isAllApproved = false;
                 const validApproved = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
                 
-                if (validApproved.includes((os.status || '').trim().toUpperCase())) {
+                if (validApproved.includes((os.status_calculado || '').trim().toUpperCase())) {
                     isAllApproved = true;
                 } else if (artesDaOS.length > 0) {
                     if (validApproved.includes((artesDaOS[0].status || '').trim().toUpperCase())) {
@@ -14299,7 +14323,7 @@ function renderOrdens() {
                     nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #3b82f6;">${arteComDesigner.designer_nome}</span>`;
                 }
 
-                const osStUp = (os.status || '').trim().toUpperCase();
+                const osStUp = (os.status_calculado || os.status || '').trim().toUpperCase();
                 const isEmAlteracao = (osStUp === 'EM ALTERAÇÃO' || osStUp === 'EM ALTERACAO' || osStUp === 'REPROVADA' || osStUp === 'REPROVADO' || osStUp === 'REPROVADA_CLIENTE' || osStUp === 'ARTE_EM_CORRECAO');
 
                 let badgeBoxBg = '#3b82f6'; // Azul por padrão para "Em Arte"
