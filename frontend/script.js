@@ -13987,6 +13987,11 @@ function renderOrdens() {
     });
 
     // --- Calcular Estatísticas dos Cards KPI ---
+    const ordensTodos = [...ordensFilaArte, ...ordensAprovacao];
+
+    const statPedidosTodosArteEl = document.getElementById('stat-pedidos-todos-arte');
+    if (statPedidosTodosArteEl) statPedidosTodosArteEl.textContent = ordensTodos.length;
+
     const statPedidosFilaArteEl = document.getElementById('stat-pedidos-fila-arte');
     if (statPedidosFilaArteEl) statPedidosFilaArteEl.textContent = ordensFilaArte.length;
 
@@ -13999,13 +14004,15 @@ function renderOrdens() {
     const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
     if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = ordensAprovados.length;
 
-    // Seleção da fila ativa ('fila', 'aprovacao' ou 'aprovados')
-    const activeFilaTipo = state.filtroFilaTipo || 'fila';
-    let baseOrdensArte = ordensFilaArte;
+    // Seleção da fila ativa ('todos', 'fila', 'aprovacao' ou 'aprovados')
+    const activeFilaTipo = state.filtroFilaTipo || 'todos';
+    let baseOrdensArte = ordensTodos;
     if (activeFilaTipo === 'aprovados') {
         baseOrdensArte = ordensAprovados;
     } else if (activeFilaTipo === 'aprovacao') {
         baseOrdensArte = ordensAprovacao;
+    } else if (activeFilaTipo === 'fila') {
+        baseOrdensArte = ordensFilaArte;
     }
 
     // Atualizar título da tabela e destaque nos cards
@@ -14015,16 +14022,19 @@ function renderOrdens() {
             tituloTabelaArteEl.innerHTML = `<span class="icon">✅</span> Fila de Aprovados`;
         } else if (activeFilaTipo === 'aprovacao') {
             tituloTabelaArteEl.innerHTML = `<span class="icon">⏳</span> Fila de Aprovação`;
+        } else if (activeFilaTipo === 'fila') {
+            tituloTabelaArteEl.innerHTML = `<span class="icon">🎨</span> Em Arte`;
         } else {
-            tituloTabelaArteEl.innerHTML = `<span class="icon">📋</span> Fila de Arte`;
+            tituloTabelaArteEl.innerHTML = `<span class="icon">🌐</span> Todos os Pedidos Pendentes`;
         }
     }
 
+    const cardTodosEl = document.getElementById('card-stat-pedidos-todos');
     const cardFilaEl = document.getElementById('card-stat-pedidos-fila');
     const cardAprovacaoEl = document.getElementById('card-stat-pedidos-aprovacao');
     const cardAprovadosEl = document.getElementById('card-stat-pedidos-aprovados');
 
-    [cardFilaEl, cardAprovacaoEl, cardAprovadosEl].forEach(c => {
+    [cardTodosEl, cardFilaEl, cardAprovacaoEl, cardAprovadosEl].forEach(c => {
         if (c) {
             c.style.border = '1px solid var(--border)';
             c.style.boxShadow = 'none';
@@ -14037,10 +14047,14 @@ function renderOrdens() {
     } else if (activeFilaTipo === 'aprovacao' && cardAprovacaoEl) {
         cardAprovacaoEl.style.border = '2px solid #8b5cf6';
         cardAprovacaoEl.style.boxShadow = '0 0 12px rgba(139, 92, 246, 0.3)';
-    } else if (cardFilaEl) {
+    } else if (activeFilaTipo === 'fila' && cardFilaEl) {
         cardFilaEl.style.border = '2px solid var(--blue)';
         cardFilaEl.style.boxShadow = '0 0 12px rgba(59, 130, 246, 0.3)';
+    } else if (cardTodosEl) {
+        cardTodosEl.style.border = '2px solid #06b6d4';
+        cardTodosEl.style.boxShadow = '0 0 12px rgba(6, 182, 212, 0.3)';
     }
+
 
 
     // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---

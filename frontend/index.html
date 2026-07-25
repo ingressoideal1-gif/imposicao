@@ -1880,10 +1880,15 @@
 
                 <!-- CARDS DE ESTATÍSTICA (Dinâmicos) -->
                 <div class="stats-grid">
-                    <div class="stat-card clickable-card" id="card-stat-pedidos-fila" onclick="setFiltroFilaArte('fila')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Arte">
-                        <div class="stat-card-title">Pedidos em Fila</div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-todos" onclick="setFiltroFilaArte('todos')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir todos os pedidos pendentes (exceto Aprovados)">
+                        <div class="stat-card-title">TODOS</div>
+                        <div class="stat-card-value cyan" id="stat-pedidos-todos-arte" style="color: #06b6d4;">0</div>
+                        <div class="stat-card-icon">🌐</div>
+                    </div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-fila" onclick="setFiltroFilaArte('fila')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos Em Arte">
+                        <div class="stat-card-title">Em Arte</div>
                         <div class="stat-card-value blue" id="stat-pedidos-fila-arte">0</div>
-                        <div class="stat-card-icon">📋</div>
+                        <div class="stat-card-icon">🎨</div>
                     </div>
                     <div class="stat-card clickable-card" id="card-stat-pedidos-aprovacao" onclick="setFiltroFilaArte('aprovacao')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Aprovação">
                         <div class="stat-card-title">Em Aprovação</div>
@@ -1901,6 +1906,7 @@
                         <div class="stat-card-icon">🏆</div>
                     </div>
                 </div>
+
 
 
                 <!-- FILTROS (Setores e Status de Aprovação) -->
