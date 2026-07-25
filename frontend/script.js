@@ -16040,7 +16040,7 @@ async function marcarEntregaDadosCorrigido(osId, osNum) {
 async function loadDadosEntregaInterno(osId, osNum) {
     const container = document.getElementById(`detalhes-entrega-faturamento-${osId}`);
     const obsContainer = document.getElementById(`solicitacao-cliente-texto-${osId}`);
-    const numInt = parseInt(osNum);
+    const numInt = parseInt(String(osNum || osId).replace(/\D/g, ''));
     if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return;
 
     try {
@@ -16083,9 +16083,33 @@ async function loadDadosEntregaInterno(osId, osNum) {
                 try { obs = JSON.parse(obs); } catch(e) {}
             }
             if (typeof obs === 'object' && obs) {
-                correcaoTexto = obs.correcao_entrega_faturamento || obs.correcao_endereco || obs.correcao_nf || '';
+                correcaoTexto = obs.correcao_entrega_faturamento || obs.correcao_endereco || obs.correcao_nf || obs.correcao || '';
+                // Se for um objeto com chaves (ex: mensagens), concatenar valores relevantes
+                if (!correcaoTexto && Object.keys(obs).length > 0) {
+                    const vals = Object.entries(obs)
+                        .filter(([k, v]) => k.includes('entrega') || k.includes('faturam') || k.includes('correcao'))
+                        .map(([k, v]) => String(v));
+                    if (vals.length > 0) correcaoTexto = vals.join('\n');
+                }
             }
         }
+
+        // Se ainda não achou o texto na tabela pedidos_artes, verificar mensagens recentes no chat da proposta
+        if (!correcaoTexto) {
+            try {
+                const { data: chatData } = await supabaseClient
+                    .from('propostas_chat')
+                    .select('mensagem')
+                    .eq('id_int', numInt)
+                    .ilike('remetente_nome', '%cliente%')
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+                if (chatData && chatData.length > 0 && chatData[0].mensagem) {
+                    correcaoTexto = chatData[0].mensagem;
+                }
+            } catch (chatErr) {}
+        }
+
 
         // 3. Renderizar Dados de Faturamento e Entrega
         if (container) {
@@ -16721,7 +16745,7 @@ function renderAmostrasOSItens(osId) {
                     ${badgeTag}
                 </div>
                 <div class="card-body" style="padding: 18px; display: flex; flex-direction: column; gap: 14px;">
-                    <!-- Dados Atuais do Pedido -->
+                    <!-- Dados Básicos da OS -->
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; background: rgba(0,0,0,0.03); padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;">
                         <div>
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Cliente / Razão Social:</span>
@@ -16737,15 +16761,13 @@ function renderAmostrasOSItens(osId) {
                         </div>
                     </div>
 
-                    ${correcaoTexto ? `
-                    <!-- Detalhes da Solicitação do Cliente -->
-                    <div>
-                        <div style="font-size: 0.85rem; font-weight: 700; color: ${titleColor}; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                            <i class="fa-solid fa-comment-dots"></i> Solicitado pelo Cliente:
-                        </div>
-                        <div style="background: rgba(0, 0, 0, 0.4); border: 1px solid ${titleColor}; border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 0.9rem; font-family: monospace; white-space: pre-wrap; line-height: 1.5;">${correcaoTexto}</div>
+                    <!-- Container Dinâmico: Dados Atuais de Faturamento e Entrega (Supabase) -->
+                    <div id="detalhes-entrega-faturamento-${osId}">
+                        <div style="font-size: 0.8rem; color: var(--text-dim); padding: 8px 0;"><i class="fa-solid fa-spinner fa-spin"></i> Carregando dados cadastrais de faturamento e entrega...</div>
                     </div>
-                    ` : ''}
+
+                    <!-- Container Dinâmico: Texto da Solicitação do Cliente -->
+                    <div id="solicitacao-cliente-texto-${osId}"></div>
 
                     <!-- Ação para Concluir/Aprovar -->
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; justify-content: flex-end;">
@@ -16756,6 +16778,7 @@ function renderAmostrasOSItens(osId) {
                 </div>
             </div>
         `;
+
     }
 
     if (isClienteView && (entregaStatus === 'ALTERADO' || entregaStatus !== 'APROVADO')) {
