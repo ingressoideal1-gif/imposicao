@@ -13954,7 +13954,9 @@ function renderOrdens() {
             return validReprovadoList.includes(sAm) || validReprovadoList.includes(sArt);
         });
 
+        const isEmAlteracaoCalculado = validReprovadoList.includes(osStatus) || validReprovadoList.includes(globalStatus) || temItemReprovado;
         const temLinkGerado = !!(state.linksCliente && state.linksCliente[os.id]);
+
 
         if (isEmAlteracaoCalculado) {
             os.status_calculado = 'Em Alteração';
