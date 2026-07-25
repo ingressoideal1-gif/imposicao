@@ -1885,10 +1885,10 @@
                         <div class="stat-card-value blue" id="stat-pedidos-fila-arte">0</div>
                         <div class="stat-card-icon">📋</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-card-title">Aguardando Arte</div>
-                        <div class="stat-card-value purple" id="stat-itens-pendentes-arte">0</div>
-                        <div class="stat-card-icon">🎨</div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-aprovacao" onclick="setFiltroFilaArte('aprovacao')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Aprovação">
+                        <div class="stat-card-title">Em Aprovação</div>
+                        <div class="stat-card-value purple" id="stat-pedidos-aprovacao-arte">0</div>
+                        <div class="stat-card-icon">⏳</div>
                     </div>
                     <div class="stat-card clickable-card" id="card-stat-pedidos-aprovados" onclick="setFiltroFilaArte('aprovados')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Aprovados">
                         <div class="stat-card-title">Pedidos Aprovados</div>
@@ -1901,6 +1901,7 @@
                         <div class="stat-card-icon">🏆</div>
                     </div>
                 </div>
+
 
                 <!-- FILTROS (Setores e Status de Aprovação) -->
                 <div class="filter-section-wrapper">

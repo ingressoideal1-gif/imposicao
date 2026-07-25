@@ -13925,12 +13925,14 @@ function renderOrdens() {
         return true;
     });
 
-    // Fila 2: Arte vs Fila de Aprovados
+    // Fila 2: Arte vs Fila de Aprovação vs Fila de Aprovados
     let ordensFilaArte = [];
+    let ordensAprovacao = [];
     let ordensAprovados = [];
 
     const validReprovadoList = ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'];
     const validApprovedList = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
+    const validAprovacaoList = ['ENVIAR ARTE', 'ARTE PRONTA', 'ENVIAR ARTE', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO'];
 
     state.ordens.forEach(os => {
         const osNumeroInt = parseInt(os.numero);
@@ -13955,6 +13957,8 @@ function renderOrdens() {
             os.status_calculado = 'Em Alteração';
         } else if (validApprovedList.includes(osStatus) || validApprovedList.includes(globalStatus)) {
             os.status_calculado = 'Aprovada';
+        } else if (validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus)) {
+            os.status_calculado = 'Enviar Arte';
         } else {
             os.status_calculado = os.status || 'Em Arte';
         }
@@ -13965,65 +13969,73 @@ function renderOrdens() {
         const isArteAprovada = (os.status_calculado === 'Aprovada');
 
         const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
+        const isEmAprovação = (os.status_calculado === 'Enviar Arte') || validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus);
 
         if (isTotalmenteAprovado) {
             ordensAprovados.push(os);
+        } else if (isEmAprovação) {
+            ordensAprovacao.push(os);
         } else {
             ordensFilaArte.push(os);
         }
     });
 
-    // --- Calcular Estatísticas de Arte com pedidos_artes ---
-    let totalItensPendentesArte = 0;
-    let totalItensAprovadosArte = ordensAprovados.length;
-    let totalPedidosConcluidosArte = ordensAprovados.length;
-
-    ordensFilaArte.forEach(os => {
-        const itens = state.osItens[os.id] || [];
-        totalItensPendentesArte += itens.length || 1;
-    });
-
+    // --- Calcular Estatísticas dos Cards KPI ---
     const statPedidosFilaArteEl = document.getElementById('stat-pedidos-fila-arte');
     if (statPedidosFilaArteEl) statPedidosFilaArteEl.textContent = ordensFilaArte.length;
 
-    const statItensPendentesArteEl = document.getElementById('stat-itens-pendentes-arte');
-    if (statItensPendentesArteEl) statItensPendentesArteEl.textContent = totalItensPendentesArte;
+    const statPedidosAprovacaoArteEl = document.getElementById('stat-pedidos-aprovacao-arte');
+    if (statPedidosAprovacaoArteEl) statPedidosAprovacaoArteEl.textContent = ordensAprovacao.length;
 
     const statItensAprovadosArteEl = document.getElementById('stat-itens-aprovados-arte');
-    if (statItensAprovadosArteEl) statItensAprovadosArteEl.textContent = totalItensAprovadosArte;
+    if (statItensAprovadosArteEl) statItensAprovadosArteEl.textContent = ordensAprovados.length;
 
     const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
-    if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = totalPedidosConcluidosArte;
+    if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = ordensAprovados.length;
 
-    // Seleção da fila ativa ('fila' ou 'aprovados')
+    // Seleção da fila ativa ('fila', 'aprovacao' ou 'aprovados')
     const activeFilaTipo = state.filtroFilaTipo || 'fila';
-    let baseOrdensArte = (activeFilaTipo === 'aprovados') ? ordensAprovados : ordensFilaArte;
+    let baseOrdensArte = ordensFilaArte;
+    if (activeFilaTipo === 'aprovados') {
+        baseOrdensArte = ordensAprovados;
+    } else if (activeFilaTipo === 'aprovacao') {
+        baseOrdensArte = ordensAprovacao;
+    }
 
     // Atualizar título da tabela e destaque nos cards
     const tituloTabelaArteEl = document.getElementById('titulo-tabela-arte');
     if (tituloTabelaArteEl) {
         if (activeFilaTipo === 'aprovados') {
             tituloTabelaArteEl.innerHTML = `<span class="icon">✅</span> Fila de Aprovados`;
+        } else if (activeFilaTipo === 'aprovacao') {
+            tituloTabelaArteEl.innerHTML = `<span class="icon">⏳</span> Fila de Aprovação`;
         } else {
             tituloTabelaArteEl.innerHTML = `<span class="icon">📋</span> Fila de Arte`;
         }
     }
 
     const cardFilaEl = document.getElementById('card-stat-pedidos-fila');
+    const cardAprovacaoEl = document.getElementById('card-stat-pedidos-aprovacao');
     const cardAprovadosEl = document.getElementById('card-stat-pedidos-aprovados');
-    if (cardFilaEl && cardAprovadosEl) {
-        if (activeFilaTipo === 'aprovados') {
-            cardAprovadosEl.style.border = '2px solid var(--teal)';
-            cardAprovadosEl.style.boxShadow = '0 0 12px rgba(20, 184, 166, 0.3)';
-            cardFilaEl.style.border = '1px solid var(--border)';
-            cardFilaEl.style.boxShadow = 'none';
-        } else {
-            cardFilaEl.style.border = '2px solid var(--blue)';
-            cardFilaEl.style.boxShadow = '0 0 12px rgba(59, 130, 246, 0.3)';
-            cardAprovadosEl.style.border = '1px solid var(--border)';
-            cardAprovadosEl.style.boxShadow = 'none';
+
+    [cardFilaEl, cardAprovacaoEl, cardAprovadosEl].forEach(c => {
+        if (c) {
+            c.style.border = '1px solid var(--border)';
+            c.style.boxShadow = 'none';
         }
+    });
+
+    if (activeFilaTipo === 'aprovados' && cardAprovadosEl) {
+        cardAprovadosEl.style.border = '2px solid var(--teal)';
+        cardAprovadosEl.style.boxShadow = '0 0 12px rgba(20, 184, 166, 0.3)';
+    } else if (activeFilaTipo === 'aprovacao' && cardAprovacaoEl) {
+        cardAprovacaoEl.style.border = '2px solid #8b5cf6';
+        cardAprovacaoEl.style.boxShadow = '0 0 12px rgba(139, 92, 246, 0.3)';
+    } else if (cardFilaEl) {
+        cardFilaEl.style.border = '2px solid var(--blue)';
+        cardFilaEl.style.boxShadow = '0 0 12px rgba(59, 130, 246, 0.3)';
     }
+
 
     // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---
     let filteredArte = baseOrdensArte.filter(os => {
