@@ -13920,53 +13920,44 @@ function renderOrdens() {
         return true;
     });
 
-    // Fila 2: Arte
-    // Somente pedidos que possuem registros na tabela pedidos_artes com status "Em Arte" (agrupados por id_int)
-    let ordensArte = state.ordens.filter(os => {
+    // Fila 2: Arte vs Fila de Aprovados
+    let ordensFilaArte = [];
+    let ordensAprovados = [];
+
+    state.ordens.forEach(os => {
         const osNumeroInt = parseInt(os.numero);
-        
-        // Pega as artes associadas a esta OS
         const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
         
-        // Verifica se existe alguma arte (qualquer status) na tabela pedidos_artes
-        const temArteEmAndamento = artesDaOS.length > 0;
-        
-        return temArteEmAndamento;
+        // Status da Arte
+        const osStatus = (os.status || '').trim().toUpperCase();
+        const isArteAprovada = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA'].includes(osStatus);
+
+        // Status dos Dados de Entrega / Faturamento
+        const arteGlobal = artesDaOS[0] || {};
+        const entregaStatus = (arteGlobal.entrega_dados || '').trim().toUpperCase();
+        const isEntregaAprovada = (entregaStatus === 'APROVADO');
+
+        const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
+
+        if (isTotalmenteAprovado) {
+            ordensAprovados.push(os);
+        } else {
+            ordensFilaArte.push(os);
+        }
     });
 
     // --- Calcular Estatísticas de Arte com pedidos_artes ---
     let totalItensPendentesArte = 0;
-    let totalItensAprovadosArte = 0;
-    let totalPedidosConcluidosArte = 0;
+    let totalItensAprovadosArte = ordensAprovados.length;
+    let totalPedidosConcluidosArte = ordensAprovados.length;
 
-    ordensArte.forEach(os => {
+    ordensFilaArte.forEach(os => {
         const itens = state.osItens[os.id] || [];
-        const osNumeroInt = parseInt(os.numero);
-        const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
-        
-        let pedidoAprovado = false;
-        
-        // Como pedidos_artes tem 1 linha por OS e não por item, o status é global da OS.
-        let statusDaOS = 'PENDENTE';
-        if (artesDaOS.length > 0) {
-            statusDaOS = (artesDaOS[0].status || 'PENDENTE').toUpperCase();
-        }
-        
-        if (statusDaOS === 'APROVADA' || statusDaOS === 'APROVADA_CLIENTE' || statusDaOS === 'LIBERADA') {
-            pedidoAprovado = true;
-            // Se aprovado, considera que todos os itens estão aprovados (para fins estatísticos)
-            totalItensAprovadosArte += itens.length || 1;
-        } else {
-            totalItensPendentesArte += itens.length || 1;
-        }
-
-        if ((itens.length > 0 || artesDaOS.length > 0) && pedidoAprovado) {
-            totalPedidosConcluidosArte++;
-        }
+        totalItensPendentesArte += itens.length || 1;
     });
 
     const statPedidosFilaArteEl = document.getElementById('stat-pedidos-fila-arte');
-    if (statPedidosFilaArteEl) statPedidosFilaArteEl.textContent = ordensArte.length;
+    if (statPedidosFilaArteEl) statPedidosFilaArteEl.textContent = ordensFilaArte.length;
 
     const statItensPendentesArteEl = document.getElementById('stat-itens-pendentes-arte');
     if (statItensPendentesArteEl) statItensPendentesArteEl.textContent = totalItensPendentesArte;
@@ -13977,8 +13968,38 @@ function renderOrdens() {
     const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
     if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = totalPedidosConcluidosArte;
 
+    // Seleção da fila ativa ('fila' ou 'aprovados')
+    const activeFilaTipo = state.filtroFilaTipo || 'fila';
+    let baseOrdensArte = (activeFilaTipo === 'aprovados') ? ordensAprovados : ordensFilaArte;
+
+    // Atualizar título da tabela e destaque nos cards
+    const tituloTabelaArteEl = document.getElementById('titulo-tabela-arte');
+    if (tituloTabelaArteEl) {
+        if (activeFilaTipo === 'aprovados') {
+            tituloTabelaArteEl.innerHTML = `<span class="icon">✅</span> Fila de Aprovados`;
+        } else {
+            tituloTabelaArteEl.innerHTML = `<span class="icon">📋</span> Fila de Arte`;
+        }
+    }
+
+    const cardFilaEl = document.getElementById('card-stat-pedidos-fila');
+    const cardAprovadosEl = document.getElementById('card-stat-pedidos-aprovados');
+    if (cardFilaEl && cardAprovadosEl) {
+        if (activeFilaTipo === 'aprovados') {
+            cardAprovadosEl.style.border = '2px solid var(--teal)';
+            cardAprovadosEl.style.boxShadow = '0 0 12px rgba(20, 184, 166, 0.3)';
+            cardFilaEl.style.border = '1px solid var(--border)';
+            cardFilaEl.style.boxShadow = 'none';
+        } else {
+            cardFilaEl.style.border = '2px solid var(--blue)';
+            cardFilaEl.style.boxShadow = '0 0 12px rgba(59, 130, 246, 0.3)';
+            cardAprovadosEl.style.border = '1px solid var(--border)';
+            cardAprovadosEl.style.boxShadow = 'none';
+        }
+    }
+
     // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---
-    let filteredArte = ordensArte.filter(os => {
+    let filteredArte = baseOrdensArte.filter(os => {
         const itens = state.osItens[os.id] || [];
 
         // 1. Busca textual
@@ -14037,7 +14058,7 @@ function renderOrdens() {
     if (badgeImpressao) badgeImpressao.textContent = ordensImpressao.length;
 
     const badgeArte = document.getElementById('badge-arte');
-    if (badgeArte) badgeArte.textContent = ordensArte.length;
+    if (badgeArte) badgeArte.textContent = ordensFilaArte.length;
 
     // Atualizar badges das tabelas
     const countImpressao = document.getElementById('os-impressao-count-badge');
@@ -14048,6 +14069,7 @@ function renderOrdens() {
 
     // Popular filtro de designers
     populateDesignerFilter();
+
 
     // Renderizar Fila de Impressão
     if (tbodyImpressao) {
@@ -19796,7 +19818,17 @@ function setFiltroSetor(setor) {
     renderOrdens();
 }
 
+
+function setFiltroFilaArte(tipo) {
+    state.filtroFilaTipo = tipo; // 'fila' ou 'aprovados'
+    renderOrdens();
+}
+
+window.setFiltroFilaArte = setFiltroFilaArte;
+
 function setFiltroStatus(status) {
+
+
     state.filtroStatus = status;
     
     // Atualizar botões de status no HTML

@@ -1880,7 +1880,7 @@
 
                 <!-- CARDS DE ESTATÍSTICA (Dinâmicos) -->
                 <div class="stats-grid">
-                    <div class="stat-card">
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-fila" onclick="setFiltroFilaArte('fila')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Arte">
                         <div class="stat-card-title">Pedidos em Fila</div>
                         <div class="stat-card-value blue" id="stat-pedidos-fila-arte">0</div>
                         <div class="stat-card-icon">📋</div>
@@ -1890,8 +1890,8 @@
                         <div class="stat-card-value purple" id="stat-itens-pendentes-arte">0</div>
                         <div class="stat-card-icon">🎨</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-card-title">Artes Aprovadas</div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-aprovados" onclick="setFiltroFilaArte('aprovados')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Aprovados">
+                        <div class="stat-card-title">Pedidos Aprovados</div>
                         <div class="stat-card-value teal" id="stat-itens-aprovados-arte">0</div>
                         <div class="stat-card-icon">✅</div>
                     </div>
@@ -1931,9 +1931,10 @@
                 <!-- Tabela de OS de Arte -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">📋</span> Fila de Arte</span>
+                        <span class="card-title" id="titulo-tabela-arte"><span class="icon">📋</span> Fila de Arte</span>
                         <span class="badge badge-yellow" id="os-arte-count-badge">0 Pedidos</span>
                     </div>
+
                     <div style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
                         <table class="data-table" id="table-arte" style="min-width: 800px;">
                             <thead>
