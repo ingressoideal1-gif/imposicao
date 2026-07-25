@@ -16004,8 +16004,40 @@ async function clienteSolicitarCorrecaoEntregaDados(osId, osNum) {
     }
 }
 
+/**
+ * Conclui a correção de entrega/faturamento internamente e define status como APROVADO
+ */
+async function marcarEntregaDadosCorrigido(osId, osNum) {
+    const numInt = parseInt(osNum);
+    if (isNaN(numInt)) return;
+
+    try {
+        toast('Atualizando status de entrega e faturamento para APROVADO...', 'info');
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            await supabaseClient
+                .from('pedidos_artes')
+                .update({ entrega_dados: 'APROVADO' })
+                .eq('id_int', numInt);
+        }
+
+        const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
+        if (arteGlobal) arteGlobal.entrega_dados = 'APROVADO';
+
+        toast('✅ Correção dos dados concluída! Status de entrega atualizado para APROVADO.', 'success');
+
+        if (typeof renderOrdens === 'function') renderOrdens();
+        renderAmostrasOSItens(osId);
+    } catch (e) {
+        console.error('Erro ao marcar entrega_dados como corrigido:', e);
+        toast('Erro ao concluir correção: ' + e.message, 'error');
+    }
+}
+
+window.marcarEntregaDadosCorrigido = marcarEntregaDadosCorrigido;
 window.clienteAprovarEntregaDados = clienteAprovarEntregaDados;
 window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDados;
+
 
 /**
  * Renderiza os cards de itens do pedido na página de Amostras
@@ -16534,13 +16566,78 @@ function renderAmostrasOSItens(osId) {
     // Media query hack for responsiveness inline if needed, but flex-wrap handles smaller screens if we used flex. 
     // Com display grid, podemos precisar de css. Para o painel principal, vamos assumir que o CSS do painel é robusto.
 
-    // Card de Conferência de Dados de Entrega e Faturamento (Exibido no Link do Cliente ou quando status estiver ALTERADO)
+    // Card de Conferência e Alerta de Dados de Entrega e Faturamento
     const arteGlobal = state.todasArtes?.find(a => String(a.id_int) === String(os.numero));
     const entregaStatus = (arteGlobal && arteGlobal.entrega_dados) ? arteGlobal.entrega_dados.toUpperCase() : '----';
     const isClienteView = (containerId === 'cliente-amostras-itens-container');
+    const isInternal = !isClienteView;
 
     let entregaCardHtml = '';
-    if (entregaStatus === 'ALTERADO' || (isClienteView && entregaStatus !== 'APROVADO')) {
+
+    // No painel interno (isInternal), se entregaStatus for CORRIGIR ou ALTERADO, exibir box em destaque no topo com os dados e solicitacao do cliente
+    if (isInternal && (entregaStatus === 'CORRIGIR' || entregaStatus === 'ALTERADO')) {
+        const paData = (state.pedidosArtesData && state.pedidosArtesData[os.numero]) || {};
+        let obsObj = paData.observacoes || {};
+        if (typeof obsObj === 'string') {
+            try { obsObj = JSON.parse(obsObj); } catch(e) {}
+        }
+        const correcaoTexto = (typeof obsObj === 'object' && obsObj) ? obsObj.correcao_entrega_faturamento || '' : '';
+
+        const isCorrigir = (entregaStatus === 'CORRIGIR');
+        const alertBorder = isCorrigir ? '2px solid #ef4444' : '2px solid #f97316';
+        const alertBg = isCorrigir ? 'rgba(239,68,68,0.05)' : 'rgba(249,115,22,0.05)';
+        const headerBg = isCorrigir ? 'rgba(239,68,68,0.15)' : 'rgba(249,115,22,0.15)';
+        const titleColor = isCorrigir ? '#ef4444' : '#f97316';
+        const badgeTag = isCorrigir ? '<span class="badge badge-red" style="font-size:0.8rem;font-weight:700;padding:4px 10px;">❌ CORRIGIR</span>' : '<span class="badge" style="background:#f97316;color:white;font-weight:700;font-size:0.8rem;padding:4px 10px;">⚠️ ALTERADO</span>';
+        const titleLabel = isCorrigir ? '🚨 Solicitação de Alteração de Entrega / Faturamento pelo Cliente' : '⚠️ Dados de Entrega / Faturamento Alterados';
+
+        entregaCardHtml += `
+            <div class="card" id="box-correcao-entrega-interno-${osId}" style="border: ${alertBorder}; background: ${alertBg}; margin-bottom: 20px; box-shadow: var(--shadow);">
+                <div class="card-header" style="background: ${headerBg}; border-bottom: 1px solid var(--border); padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <div style="font-weight: 800; color: ${titleColor}; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                        ${titleLabel}
+                    </div>
+                    ${badgeTag}
+                </div>
+                <div class="card-body" style="padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+                    <!-- Dados Atuais do Pedido -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; background: rgba(0,0,0,0.03); padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;">
+                        <div>
+                            <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Cliente / Razão Social:</span>
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem;">${os.cliente || '--'}</div>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Pedido Nº:</span>
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem;">#${os.numero || '--'}</div>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Status de Entrega/Faturam.:</span>
+                            <div style="font-weight: 700; color: ${titleColor}; font-size: 0.95rem;">${entregaStatus}</div>
+                        </div>
+                    </div>
+
+                    ${correcaoTexto ? `
+                    <!-- Detalhes da Solicitação do Cliente -->
+                    <div>
+                        <div style="font-size: 0.85rem; font-weight: 700; color: ${titleColor}; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-comment-dots"></i> Solicitado pelo Cliente:
+                        </div>
+                        <div style="background: rgba(0, 0, 0, 0.4); border: 1px solid ${titleColor}; border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 0.9rem; font-family: monospace; white-space: pre-wrap; line-height: 1.5;">${correcaoTexto}</div>
+                    </div>
+                    ` : ''}
+
+                    <!-- Ação para Concluir/Aprovar -->
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; justify-content: flex-end;">
+                        <button class="btn btn-sm btn-teal" onclick="marcarEntregaDadosCorrigido('${osId}', '${osNum}')" style="font-weight: 700; padding: 8px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.4);">
+                            ✅ Marcar Correção/Alteração como Concluída (Aprovado)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (isClienteView && (entregaStatus === 'ALTERADO' || entregaStatus !== 'APROVADO')) {
         let badgeHeader = '<span class="badge" style="background: #f97316; color: white; font-weight: 700;">⚠️ REVISÃO SOLICITADA</span>';
         let descText = 'Os dados de <strong>Entrega e Faturamento</strong> deste pedido sofreram alterações. Por favor, confira as informações abaixo e confirme a sua aprovação ou solicite as correções necessárias:';
         let cardBg = 'rgba(249,115,22,0.03)';
@@ -16561,7 +16658,7 @@ function renderAmostrasOSItens(osId) {
             headerBg = 'rgba(239,68,68,0.1)';
         }
 
-        entregaCardHtml = `
+        entregaCardHtml += `
             <div class="card" style="border: ${cardBorder}; background: ${cardBg}; margin-bottom: 20px; box-shadow: var(--shadow);">
                 <div class="card-header" style="background: ${headerBg}; border-bottom: 1px solid var(--border); padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
@@ -16613,6 +16710,7 @@ function renderAmostrasOSItens(osId) {
     }
 
     container.innerHTML = entregaCardHtml + finalHtml;
+
 
     
     if (isInternal) {
