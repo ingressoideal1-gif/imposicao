@@ -14207,14 +14207,15 @@ function renderOrdens() {
                 // Entrega / Faturamento
                 const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(os.numero));
                 const entregaStatus = (arteGlobal && arteGlobal.entrega_dados) ? arteGlobal.entrega_dados.toUpperCase() : '----';
-                let entregaHtml = '<span style="color: var(--text-dim);">----</span>';
+                let entregaHtml = `<span onclick="event.stopPropagation(); alterarEntregaDadosStatus('${os.numero}', '${entregaStatus}')" style="cursor: pointer; color: var(--text-dim);" title="Clique para alternar status">----</span>`;
                 if (entregaStatus === 'APROVADO') {
-                    entregaHtml = '<span class="badge badge-teal" style="font-size: 0.72rem;">✅ APROVADO</span>';
+                    entregaHtml = `<span class="badge badge-teal" onclick="event.stopPropagation(); alterarEntregaDadosStatus('${os.numero}', '${entregaStatus}')" style="font-size: 0.72rem; cursor: pointer;" title="Clique para alternar status">✅ APROVADO</span>`;
                 } else if (entregaStatus === 'CORRIGIR') {
-                    entregaHtml = '<span class="badge badge-red" style="font-size: 0.72rem;">❌ CORRIGIR</span>';
+                    entregaHtml = `<span class="badge badge-red" onclick="event.stopPropagation(); alterarEntregaDadosStatus('${os.numero}', '${entregaStatus}')" style="font-size: 0.72rem; cursor: pointer;" title="Clique para alternar status">❌ CORRIGIR</span>`;
                 } else if (entregaStatus === 'ALTERADO') {
-                    entregaHtml = '<span class="badge" style="font-size: 0.72rem; background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); font-weight: 700;">⚠️ ALTERADO</span>';
+                    entregaHtml = `<span class="badge" onclick="event.stopPropagation(); alterarEntregaDadosStatus('${os.numero}', '${entregaStatus}')" style="font-size: 0.72rem; background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); font-weight: 700; cursor: pointer;" title="Clique para alternar status">⚠️ ALTERADO</span>`;
                 }
+
 
                 const dataPedFormatada = os.data_pedido ? `<br><span style="font-size: 0.72rem; color: var(--text-dim);" title="Data de Criação do Pedido">Ped: ${formatDateTime(os.data_pedido)}</span>` : '';
                 
@@ -16682,7 +16683,45 @@ window.voltarParaArteFromLista = async function(osId) {
 };
 
 /**
+ * Alterna manualmente o status de Entrega/Faturamento (APROVADO -> ALTERADO -> CORRIGIR -> ----)
+ */
+window.alterarEntregaDadosStatus = async function(osIntNum, currentStatus) {
+    const perms = window._currentPerms || {};
+    if (perms.perm_lista_arte_edit !== true) {
+        toast('Você não tem permissão para alterar o status de Entrega/Faturamento.', 'warning');
+        return;
+    }
+
+    const numInt = parseInt(osIntNum);
+    if (isNaN(numInt)) return;
+
+    const statusOptions = ['APROVADO', 'ALTERADO', 'CORRIGIR', '----'];
+    const currUpper = (currentStatus || '----').toUpperCase();
+    const currIdx = statusOptions.indexOf(currUpper);
+    const nextStatus = statusOptions[(currIdx + 1) % statusOptions.length];
+    const valToSave = nextStatus === '----' ? null : nextStatus;
+
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            await supabaseClient.from('pedidos_artes')
+                .update({ entrega_dados: valToSave })
+                .eq('id_int', numInt);
+        }
+
+        const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
+        if (arteGlobal) arteGlobal.entrega_dados = valToSave;
+
+        toast(`Status Entrega/Faturam. do Pedido #${numInt} alterado para "${nextStatus}"`, 'info');
+        renderOrdens();
+    } catch (e) {
+        console.error('Erro ao alterar entrega_dados:', e);
+        toast('Erro ao alterar status: ' + e.message, 'error');
+    }
+};
+
+/**
  * Liberar pedido para Produção (muda status_interno para 'EM PRODUCAO').
+
  * Usado quando a arte foi aprovada e o pedido pode ir para impressão.
  */
 window.liberarParaProducao = async function(osId) {
