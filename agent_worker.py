@@ -87,13 +87,13 @@ def get_local_ip():
 def sync_heartbeat():
     try:
         printers = print_service.get_printers()
-        ppds = print_service.get_ppd_list()
-        ppd_map = print_service.load_printer_ppd_map()
-        
+        capabilities = {}
+        for p in printers:
+            capabilities[p] = print_service.get_printer_capabilities(p)
+            
         printers_json = {
             "printers": printers,
-            "ppds": ppds,
-            "ppd_map": ppd_map,
+            "capabilities": capabilities,
             "local_ip": get_local_ip()
         }
         
@@ -151,24 +151,11 @@ def process_queue():
                 _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
                 continue
 
-            selected_codes = {}
-            mapping = print_service.load_printer_ppd_map()
-            ppd_file = mapping.get(printer_name)
-            if ppd_file:
-                ppd_path = os.path.join(print_service.PPD_DIR, ppd_file)
-                if os.path.exists(ppd_path):
-                    try:
-                        parser = ppd_parser.PPDParser(ppd_path)
-                        for opt_key, choice_key in ppd_options.items():
-                            if opt_key in parser.options and choice_key in parser.options[opt_key]["choices"]:
-                                selected_codes[opt_key] = parser.options[opt_key]["choices"][choice_key]["code"]
-                    except Exception as e:
-                        print(f"[agent_worker] Erro ao ler PPD: {e}")
-
-            success, msg = print_service.send_print_job(
+            # Chamar diretamente a impressão via Windows GDI com as opções enviadas
+            success, msg = print_service.send_print_job_windows(
                 printer_name=printer_name,
                 pdf_path=temp_pdf.name,
-                selected_options_codes=selected_codes,
+                options=ppd_options,
                 job_title=f"Cloud Print Job {job_id[:8]}"
             )
             

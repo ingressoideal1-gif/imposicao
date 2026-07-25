@@ -946,6 +946,10 @@ async def save_ppd_map(request: Request):
     print_service.save_printer_ppd_map(mapping)
     return {"status": "success"}
 
+@app.get("/api/printers/{printer_name}/capabilities")
+def get_printer_capabilities_endpoint(printer_name: str):
+    return print_service.get_printer_capabilities(printer_name)
+
 @app.post("/api/print/submit")
 async def submit_print_job(
     file: UploadFile = File(...),
@@ -957,23 +961,11 @@ async def submit_print_job(
         pdf_path = tmp.name
 
     try:
-        mapping = print_service.load_printer_ppd_map()
-        ppd_file = mapping.get(printer_name)
-        
-        selected_codes = {}
-        if ppd_file:
-            ppd_path = os.path.join(print_service.PPD_DIR, ppd_file)
-            if os.path.exists(ppd_path):
-                parser = ppd_parser.PPDParser(ppd_path)
-                selected_options = json.loads(options)
-                for opt_key, choice_key in selected_options.items():
-                    if opt_key in parser.options and choice_key in parser.options[opt_key]["choices"]:
-                        selected_codes[opt_key] = parser.options[opt_key]["choices"][choice_key]["code"]
-        
-        success, msg = print_service.send_print_job(
+        selected_options = json.loads(options)
+        success, msg = print_service.send_print_job_windows(
             printer_name=printer_name,
             pdf_path=pdf_path,
-            selected_options_codes=selected_codes,
+            options=selected_options,
             job_title=f"Ideal Imposition - {os.path.basename(file.filename or 'print')}"
         )
         if not success:
@@ -1012,6 +1004,19 @@ if __name__ == "__main__":
 @app.get("/api/diag")
 def get_diag():
     return {"logs": DIAG_LOGS}
+
+@app.get("/api/print-config/{produto_id}")
+async def get_print_config_endpoint(produto_id: str):
+    """Busca config de impressora salva para um produto."""
+    config = db.get_print_config(produto_id)
+    return {"ok": True, "config": config}
+
+@app.post("/api/print-config")
+async def save_print_config_endpoint(request: Request):
+    """Salva config de impressora para um produto."""
+    data = await request.json()
+    ok = db.upsert_print_config(data)
+    return {"ok": ok}
 
 # Fallback mount to serve static files from root (resolves absolute links like /style.css, /script.js, /supabase-config.js in frontend)
 app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="root_frontend")

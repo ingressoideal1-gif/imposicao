@@ -6231,7 +6231,8 @@ function drawPreview() {
     if (num && num.tipo === "TICKET") {
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
-    const total_items = Math.max(1, end - start + 1);
+    const raw_items = Math.max(1, end - start + 1);
+    const total_items = (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
 
     const poses_per_sheet = cols * rows;
     let total_sheets = Math.ceil(total_items / poses_per_sheet);
@@ -6661,7 +6662,15 @@ function drawPreview() {
                     ctx.textBaseline = 'top';
                     ctx.textAlign = 'left';
                     
-                    const blocoNum = String(P + 1).padStart(2, '0');
+                    const sheetsInput = document.getElementById('imp-sheets-per-block');
+                    const sheetsPerBlock = (sheetsInput && sheetsInput.value) 
+                        ? parseInt(sheetsInput.value) 
+                        : (parseInt(fmt.default_sheets_per_block) || 50);
+                        
+                    const local_idx = (typeof item_local_index !== 'undefined') ? item_local_index : item_index;
+                    const cell_stack_size = sheetsPerBlock;
+                    const bloco_num = Math.floor(local_idx / cell_stack_size) + 1;
+                    const blocoNum = String(bloco_num).padStart(2, '0');
                     const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
                     
                     const textX = -cw/2 + (xPdf * MM2PT * scale);
@@ -6672,15 +6681,14 @@ function drawPreview() {
                     
                     const seqStartInput = document.getElementById('imp-start');
                     const seqStart = (seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1;
-                    const sheetsInput = document.getElementById('imp-sheets-per-block');
-                    const sheetsPerBlock = (sheetsInput && sheetsInput.value && sheetsInput.offsetParent !== null) 
-                        ? parseInt(sheetsInput.value) 
-                        : (parseInt(fmt.default_sheets_per_block) || 50);
-                        
-                    const iStart = P * sheetsPerBlock;
-                    const iEnd = iStart + sheetsPerBlock - 1;
-                    const vStartStr = String(seqStart + iStart).padStart(4, '0');
-                    const vEndStr = String(seqStart + iEnd).padStart(4, '0');
+                    
+                    const start_idx = (bloco_num - 1) * cell_stack_size;
+                    const end_idx = start_idx + cell_stack_size - 1;
+                    const v_start = seqStart + start_idx * ticket_qtd;
+                    const v_end = seqStart + end_idx * ticket_qtd;
+                    
+                    const vStartStr = String(v_start).padStart(4, '0');
+                    const vEndStr = String(v_end).padStart(4, '0');
                     
                     ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
                 }
@@ -7930,7 +7938,7 @@ function updateImpSummary() {
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
 
-    const total_impressions = total;
+    const total_impressions = (num && num.tipo === "TICKET") ? Math.ceil(total / ticket_qtd) : total;
     let sheets = Math.ceil(total_impressions / perSheet);
 
     const cutstackMode = document.getElementById('imp-cutstack-mode')?.value;
@@ -12741,7 +12749,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte')
+                .select('id, id_int, status_arte, status_impressao, status_producao, quantidade')
                 .in('id_int', chunk);
                 
             if (error) throw error;
@@ -12751,6 +12759,8 @@ async function carregarModelosGlobais() {
         state.modelosGlobais = {};
         todosModelos.forEach(m => {
             if (!state.modelosGlobais[m.id_int]) state.modelosGlobais[m.id_int] = [];
+            m.impressao = normalizarStatusImpressao(m.status_impressao || m.status_producao);
+            m.quantidade = parseInt(m.quantidade || 0);
             state.modelosGlobais[m.id_int].push(m);
         });
         console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
@@ -13022,7 +13032,7 @@ async function loadOSItens(osId) {
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
                             verso: !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE'),
-                            impressao: item.status_producao || item.impressao || 'AGUARD.',
+                            impressao: normalizarStatusImpressao(item.status_impressao || item.status_producao || item.impressao),
                             nome_produto_real: prop ? prop.nome_produto : null,
                             amostra_cor_id: item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
                             amostra_num_id: resolvedNumId || null,
@@ -13237,6 +13247,73 @@ function getStatusBadge(status) {
     const s = map[status] || { icon: '❓', cls: '', label: status };
     const label = s.label || status;
     return `<span class="badge ${s.cls}">${s.icon} ${label}</span>`;
+}
+
+/**
+ * Normaliza o status de impressão para as novas opções: Aguardando, Impresso, Parcial, Revisão
+ */
+function normalizarStatusImpressao(status) {
+    if (!status) return 'Aguardando';
+    const s = status.toString().trim().toUpperCase();
+    if (s === 'AGUARD.' || s === 'AGUARDANDO') return 'Aguardando';
+    if (s === 'PARCIAL') return 'Parcial';
+    if (s === 'IMPRESSO') return 'Impresso';
+    if (s === 'ERRO' || s === 'REVISAO' || s === 'REVISÃO') return 'Revisão';
+    
+    const lower = status.toString().trim().toLowerCase();
+    if (lower === 'impresso') return 'Impresso';
+    if (lower === 'parcial') return 'Parcial';
+    if (lower === 'aguardando') return 'Aguardando';
+    if (lower === 'revisao' || lower === 'revisão') return 'Revisão';
+    
+    return status;
+}
+
+/**
+ * Calcula o status de impressão do pedido a partir de seus modelos
+ */
+function calcularStatusImpressaoPedido(modelos) {
+    if (!modelos || modelos.length === 0) return 'Aguardando';
+
+    // 1. Se qualquer modelo for 'Revisão', o status do pedido é 'Revisão'
+    const temRevisao = modelos.some(m => {
+        const st = normalizarStatusImpressao(m.impressao || m.status_impressao);
+        return st === 'Revisão';
+    });
+    if (temRevisao) return 'Revisão';
+
+    // Contar modelos impressos
+    const impressosCount = modelos.filter(m => {
+        const st = normalizarStatusImpressao(m.impressao || m.status_impressao);
+        return st === 'Impresso';
+    }).length;
+
+    // 2. Se todos os modelos estão impressos
+    if (impressosCount === modelos.length) {
+        return 'Impresso';
+    }
+
+    // 3. Se ao menos um está impresso (e nem todos, pois a condição acima falhou)
+    if (impressosCount > 0) {
+        return 'Parcial';
+    }
+
+    // 4. Se nenhum está impresso
+    return 'Aguardando';
+}
+
+/**
+ * Retorna badge HTML para o status da impressão do pedido
+ */
+function getStatusImpressaoBadge(status) {
+    const map = {
+        'Aguardando': { icon: '⏳', cls: 'badge-blue', label: 'Aguardando' },
+        'Impresso': { icon: '✅', cls: 'badge-green', label: 'Impresso' },
+        'Parcial': { icon: '🔄', cls: 'badge-amber', label: 'Parcial' },
+        'Revisão': { icon: '⚠️', cls: 'badge-red', label: 'Revisão' }
+    };
+    const s = map[status] || { icon: '❓', cls: '', label: status };
+    return `<span class="badge ${s.cls}">${s.icon} ${s.label}</span>`;
 }
 
 /**
@@ -13476,8 +13553,11 @@ function renderOrdens() {
     const searchArte = (document.getElementById('os-search-arte')?.value || '').trim().toLowerCase();
     const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
 
-    // Fila 1: Impressão (status_interno === 'EM PRODUCAO')
-    let ordensImpressao = state.ordens.filter(os => (os.status_interno || '').toUpperCase() === 'EM PRODUCAO' || (os.status_interno || '').toUpperCase() === 'EM PRODUÇÃO');
+    // Fila 1: Impressão (status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO')
+    let ordensImpressao = state.ordens.filter(os => {
+        const st = (os.status_interno || '').toUpperCase();
+        return st === 'EM PRODUCAO' || st === 'EM PRODUÇÃO' || st === 'EM IMPRESSAO' || st === 'EM IMPRESSÃO';
+    });
 
     // --- Calcular Estatísticas Dinâmicas ---
     let totalItensImpressao = 0;
@@ -13696,11 +13776,15 @@ function renderOrdens() {
                 
                 // Na view de impressão, queremos contar os impressos
                 const impressosCount = modelosGlobais.length > 0 
-                    ? modelosGlobais.filter(m => m.impressao === 'IMPRESSO').length 
-                    : osItensList.filter(item => item.impressao === 'IMPRESSO').length;
+                    ? modelosGlobais.filter(m => normalizarStatusImpressao(m.impressao) === 'Impresso').length 
+                    : osItensList.filter(item => normalizarStatusImpressao(item.impressao) === 'Impresso').length;
                     
                 const pct = totalItens > 0 ? Math.round((impressosCount / totalItens) * 100) : 0;
                 
+                // Calcular status de impressão do pedido de acordo com os modelos
+                const modelosParaStatus = modelosGlobais.length > 0 ? modelosGlobais : osItensList;
+                const statusImpressaoPedido = calcularStatusImpressaoPedido(modelosParaStatus);
+
                 // Barra de progresso do status de impressão
                 const progressBarHtml = `
                     <div style="width: 100%; min-width: 110px;">
@@ -13709,7 +13793,7 @@ function renderOrdens() {
                             <strong>${pct}%</strong>
                         </div>
                         <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
-                            <div style="width: ${pct}%; height: 100%; background: ${pct === 100 ? 'var(--green)' : 'var(--blue)'}; border-radius: 3px; transition: width 0.3s ease;"></div>
+                            <div style="width: ${pct}%; height: 100%; background: var(--green); border-radius: 3px; transition: width 0.3s ease;"></div>
                         </div>
                     </div>
                 `;
@@ -13740,7 +13824,9 @@ function renderOrdens() {
                 }
 
                 // Soma das quantidades de todos os modelos
-                const totalQtd = osItensList.reduce((acc, item) => acc + (item.quantidade || 0), 0);
+                const totalQtd = modelosGlobais.length > 0 
+                    ? modelosGlobais.reduce((acc, m) => acc + (m.quantidade || 0), 0)
+                    : osItensList.reduce((acc, item) => acc + (parseInt(item.quantidade || item.qtd || 0)), 0);
 
                 // Frete (forma de envio)
                 const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
@@ -13770,7 +13856,7 @@ function renderOrdens() {
                         <td><span class="badge">${totalItens} ${totalItens === 1 ? 'modelo' : 'modelos'}</span></td>
                         <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
                         <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1);">${frete}</span></td>
-                        <td>${getStatusBadge(os.status)}</td>
+                        <td>${getStatusImpressaoBadge(statusImpressaoPedido)}</td>
                     </tr>
                 `;
 
@@ -13950,9 +14036,9 @@ async function toggleOSDetail(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) return;
 
-    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' (vindo do Vibecode)
+    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO' (vindo do Vibecode)
     const siUpper = (os.status_interno || '').toUpperCase();
-    const isImpressao = siUpper === 'EM PRODUCAO' || siUpper === 'EM PRODUÇÃO' || os.status === 'EM IMPRESSÃO';
+    const isImpressao = siUpper === 'EM PRODUCAO' || siUpper === 'EM PRODUÇÃO' || siUpper === 'EM IMPRESSAO' || siUpper === 'EM IMPRESSÃO' || os.status === 'EM IMPRESSÃO';
     const activeCard = document.getElementById(isImpressao ? 'os-detail-card-impressao' : 'os-detail-card-arte');
     const inactiveCard = document.getElementById(isImpressao ? 'os-detail-card-arte' : 'os-detail-card-impressao');
 
@@ -13994,9 +14080,9 @@ function renderOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) return;
 
-    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' (vindo do Vibecode)
+    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO' (vindo do Vibecode)
     const siUpperR = (os.status_interno || '').toUpperCase();
-    const isImpressao = siUpperR === 'EM PRODUCAO' || siUpperR === 'EM PRODUÇÃO' || os.status === 'EM IMPRESSÃO';
+    const isImpressao = siUpperR === 'EM PRODUCAO' || siUpperR === 'EM PRODUÇÃO' || siUpperR === 'EM IMPRESSAO' || siUpperR === 'EM IMPRESSÃO' || os.status === 'EM IMPRESSÃO';
     const tbody = document.getElementById(isImpressao ? 'tbody-os-itens-impressao' : 'tbody-os-itens-arte');
     if (!tbody) return;
 
@@ -14023,10 +14109,10 @@ function renderOSItens(osId) {
                 <td style="text-align: center;">${item.verso ? '✅' : '--'}</td>
                 <td style="text-align: center;" onclick="event.stopPropagation()">
                     <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
-                        <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
-                        <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
-                        <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
-                        <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>❌ Erro</option>
+                        <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
+                        <option value="Parcial" ${normalizarStatusImpressao(item.impressao) === 'Parcial' ? 'selected' : ''}>🔄 Parcial</option>
+                        <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
+                        <option value="Revisão" ${normalizarStatusImpressao(item.impressao) === 'Revisão' ? 'selected' : ''}>⚠️ Revisão</option>
                     </select>
                 </td>
             </tr>
@@ -14059,10 +14145,10 @@ function renderOSItens(osId) {
             </td>
             <td>
                 <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
-                    <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
-                    <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
-                    <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
-                    <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>❌ Erro</option>
+                    <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
+                    <option value="Parcial" ${normalizarStatusImpressao(item.impressao) === 'Parcial' ? 'selected' : ''}>🔄 Parcial</option>
+                    <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
+                    <option value="Revisão" ${normalizarStatusImpressao(item.impressao) === 'Revisão' ? 'selected' : ''}>⚠️ Revisão</option>
                 </select>
             </td>
             <td style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -14236,6 +14322,16 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             if (item) {
                 item.impressao = novoStatus;
                 item.status_impressao = novoStatus;
+            }
+        }
+
+        // Atualizar também no state.modelosGlobais
+        const numOs = parseInt(osId.toString().replace('vibe_', ''));
+        if (state.modelosGlobais && state.modelosGlobais[numOs]) {
+            const mod = state.modelosGlobais[numOs].find(m => String(m.id) === String(itemId));
+            if (mod) {
+                mod.impressao = novoStatus;
+                mod.status_impressao = novoStatus;
             }
         }
 
@@ -15091,8 +15187,10 @@ function renderImpOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
-                                <option value="Aguardando" ${item.status_impressao === 'Aguardando' || !item.status_impressao ? 'selected' : ''}>Aguardando</option>
-                                <option value="IMPRESSO" ${item.status_impressao === 'IMPRESSO' ? 'selected' : ''}>IMPRESSO</option>
+                                <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
+                                <option value="Parcial" ${normalizarStatusImpressao(item.status_impressao) === 'Parcial' ? 'selected' : ''}>Parcial</option>
+                                <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
+                                <option value="Revisão" ${normalizarStatusImpressao(item.status_impressao) === 'Revisão' ? 'selected' : ''}>Revisão</option>
                             </select>
                         </div>
                     </td>
@@ -15294,6 +15392,16 @@ function impQueueUpdateField(itemId, osId, field, value) {
     autoSaveOSItemField(itemId, osId, dbField, dbValue);
 
     if (field === 'status_impressao') {
+        item.impressao = value;
+        // Atualizar também no state.modelosGlobais
+        const numOs = parseInt(osId.toString().replace('vibe_', ''));
+        if (state.modelosGlobais && state.modelosGlobais[numOs]) {
+            const mod = state.modelosGlobais[numOs].find(m => String(m.id) === String(itemId));
+            if (mod) {
+                mod.impressao = value;
+                mod.status_impressao = value;
+            }
+        }
         renderImpOSQueue();
     }
 }
@@ -15352,8 +15460,30 @@ function toggleImpOSQueue() {
     }
 }
 
+// Controla abertura e fechamento do Drawer Menu (menu lateral deslizante)
+window.toggleDrawer = function(show) {
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = document.getElementById('drawer-backdrop');
+    if (!sidebar || !backdrop) return;
+    
+    const shouldShow = show !== undefined ? !!show : !sidebar.classList.contains('active');
+    
+    if (shouldShow) {
+        sidebar.classList.add('active');
+        backdrop.classList.add('active');
+    } else {
+        sidebar.classList.remove('active');
+        backdrop.classList.remove('active');
+    }
+};
+
 // Função global de navegação entre views
 window.showView = function(viewId) {
+    // Fechar o Drawer Menu ao mudar de tela
+    if (typeof window.toggleDrawer === 'function') {
+        window.toggleDrawer(false);
+    }
+
     // Salvar no localStorage para persistir após F5
     localStorage.setItem('activeView', viewId);
 
@@ -18359,26 +18489,33 @@ async function checkPrinterAgent() {
         if (label) label.textContent = 'Agente Local Ativo';
         if (detail) detail.textContent = `Conectado via Nuvem (${window._activeAgentData.name})`;
         if (printerCard) { printerCard.style.opacity = '1'; printerCard.style.pointerEvents = 'auto'; }
-        if (ppdCard) { ppdCard.style.opacity = '1'; ppdCard.style.pointerEvents = 'auto'; }
+        if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; ppdCard.style.display = 'none'; }
         if (navBtn) navBtn.style.display = '';
         if (badge) { badge.style.display = 'inline-block'; }
         
         const btnPrint = document.getElementById('btn-impose-print');
         if (btnPrint) { btnPrint.disabled = false; btnPrint.style.opacity = '1'; }
         
+        // Habilitar botão de imprimir da aba Pedido também
+        const pedBtnPrint = document.getElementById('ped-btn-impose-print');
+        if (pedBtnPrint) { pedBtnPrint.disabled = false; pedBtnPrint.style.opacity = '1'; }
+        
         await loadPrinters();
-        await loadPPDs();
-        await loadPPDMap();
     } else {
         if (indicator) indicator.style.background = '#ef4444';
         if (label) label.textContent = 'Agente Local Inativo';
         if (detail) detail.textContent = 'Inicie o IdealImpositionAgent.exe no computador da impressora.';
         if (printerCard) { printerCard.style.opacity = '0.5'; printerCard.style.pointerEvents = 'none'; }
-        if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; }
+        if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; ppdCard.style.display = 'none'; }
         if (badge) badge.style.display = 'none';
         
         const btnPrint = document.getElementById('btn-impose-print');
         if (btnPrint) { btnPrint.disabled = true; btnPrint.style.opacity = '0.5'; }
+        
+        // Botão de imprimir do Pedido permanece ativo mesmo sem agente cloud
+        // pois pode usar impressão local direta
+        const pedBtnPrint = document.getElementById('ped-btn-impose-print');
+        if (pedBtnPrint) { pedBtnPrint.disabled = false; pedBtnPrint.style.opacity = '1'; }
     }
     return _printerAgentActive;
 }
@@ -18389,14 +18526,14 @@ async function loadPrinters() {
     try {
         const json = window._activeAgentData.printers_json || {};
         const printers = json.printers || [];
-        _printerList = printers.map(p => p.name);
+        _printerList = printers.map(p => typeof p === 'object' ? p.name : p);
         renderPrinterList();
     } catch (e) {
         if (body) body.innerHTML = `<p style="color:#ef4444;font-size:0.85rem;">Erro ao carregar impressoras: ${e.message}</p>`;
     }
 }
 
-// Renderizar lista de impressoras com seletor de PPD
+// Renderizar lista de impressoras e suas capacidades nativas
 function renderPrinterList() {
     const body = document.getElementById('printer-list-body');
     if (!body) return;
@@ -18404,207 +18541,389 @@ function renderPrinterList() {
         body.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">Nenhuma impressora encontrada.</p>';
         return;
     }
-    const ppdOpts = _ppdList.map(p => `<option value="${p.filename}">${p.nick_name || p.model_name || p.filename}</option>`).join('');
+    
+    const capabilities = window._activeAgentData?.printers_json?.capabilities || {};
 
     body.innerHTML = _printerList.map(name => {
-        const mapped = _ppdMap[name] || '';
+        const caps = capabilities[name] || {};
+        const papersCount = caps.papers ? caps.papers.length : 0;
+        const traysCount = caps.trays ? caps.trays.length : 0;
+        const duplexSupport = caps.duplex_supported ? 'Sim' : 'Não';
         return `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
-            <span style="flex:1;font-size:0.9rem;font-weight:500;">${name}</span>
-            <select class="form-control" style="max-width:220px;font-size:0.8rem;" data-printer="${name}" onchange="onPPDMapChange()">
-                <option value="">Sem PPD</option>
-                ${ppdOpts}
-            </select>
+        <div style="display:flex;flex-direction:column;gap:4px;padding:12px 0;border-bottom:1px solid var(--border);">
+            <span style="font-size:0.95rem;font-weight:600;color:var(--text-primary);">${name}</span>
+            <span style="font-size:0.75rem;color:var(--text-dim);">
+                Gavetas/Bandejas: <strong>${traysCount}</strong> | 
+                Formatos de Papel: <strong>${papersCount}</strong> | 
+                Frente e Verso: <strong>${duplexSupport}</strong>
+            </span>
         </div>`;
     }).join('');
-
-    // Marcar PPDs ja mapeados
-    body.querySelectorAll('select[data-printer]').forEach(sel => {
-        const printerName = sel.getAttribute('data-printer');
-        if (_ppdMap[printerName]) sel.value = _ppdMap[printerName];
-    });
 }
 
-// Detectar mudanca no mapeamento
-function onPPDMapChange() {
-    const btn = document.getElementById('btn-save-ppd-map');
-    if (btn) btn.disabled = false;
-}
+// Stubs para compatibilidade legado
+function onPPDMapChange() {}
+async function loadPPDs() {}
+function renderPPDList() {}
+async function uploadPPD(input) { input.value = ''; }
+async function loadPPDMap() {}
+async function savePrinterPPDMap() {}
 
-async function loadPPDs() {
-    if (!_printerAgentActive || !window._activeAgentData) return;
-    const body = document.getElementById('ppd-list-body');
+// ═══════════════════════════════════════════════════════════
+// MÓDULO: IMPRESSÃO DIRETA COM DRIVER WINDOWS
+// ═══════════════════════════════════════════════════════════
+
+// Estado da fila de impressão
+let _printBlobQueue = [];   // [{name, blob}]
+let _printQueueIndex = 0;   // índice atual na fila
+
+// Carrega impressoras do servidor local ou do agente cloud
+async function _loadPrinterListIfEmpty() {
+    if (_printerList && _printerList.length > 0) return;
     try {
-        const json = window._activeAgentData.printers_json || {};
-        const ppds = json.ppds || [];
-        // agent sends list of strings, make it array of objects to keep compatibility
-        _ppdList = ppds.map(p => ({ filename: p, options: {} }));
-        renderPPDList();
-        renderPrinterList(); // atualizar selects
+        // Sempre usar o hostname atual na porta 9000 (servidor local)
+        const apiBase = `http://${window.location.hostname}:9000`;
+        const res = await fetch(`${apiBase}/api/printers`);
+        if (res.ok) {
+            const data = await res.json();
+            _printerList = (data.printers || data || []).map(p => typeof p === 'object' ? p.name : p);
+        }
     } catch (e) {
-        if (body) body.innerHTML = `<p style="color:#ef4444;font-size:0.85rem;">Erro ao carregar PPDs: ${e.message}</p>`;
+        console.warn('[PrintModal] Servidor local não disponível.');
     }
 }
 
-function renderPPDList() {
-    const body = document.getElementById('ppd-list-body');
-    if (!body) return;
-    if (!_ppdList.length) {
-        body.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">Nenhum PPD carregado. Faca upload de um arquivo .ppd para configurar opcoes de impressao.</p>';
-        return;
-    }
-    body.innerHTML = _ppdList.map(p => {
-        const optCount = Object.keys(p.options || {}).length;
-        return `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
-            <div style="flex:1;">
-                <div style="font-size:0.9rem;font-weight:500;">${p.nick_name || p.model_name}</div>
-                <div style="font-size:0.75rem;color:var(--text-dim);">${p.filename} - ${optCount} opcoes</div>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-// Upload de PPD
-async function uploadPPD(input) {
-    toast('No modo Cloud Relay, copie os arquivos PPD diretamente para a pasta "ppds" na maquina do Agente Local.', 'warning');
-    input.value = '';
-}
-
-// Carregar mapeamento salvo
-async function loadPPDMap() {
-    if (!_printerAgentActive || !window._activeAgentData) return;
-    try {
-        const json = window._activeAgentData.printers_json || {};
-        _ppdMap = json.ppd_map || {};
-        renderPrinterList();
-    } catch (_) {}
-}
-
-// Salvar mapeamento
-async function savePrinterPPDMap() {
-    toast('No modo Cloud Relay, os mapeamentos e uploads de PPD devem ser feitos na maquina do Agente Local (pasta ppds e printer_ppd_map.json).', 'warning');
-    const btn = document.getElementById('btn-save-ppd-map');
-    if (btn) btn.disabled = true;
-}
-
-// ---- Modal de Impressao Direta ----
-
-function openPrintModal(blob) {
-    _lastImposedBlob = blob;
-    const modal = document.getElementById('modal-print-direct');
-    if (!modal) return;
-    modal.style.display = 'flex';
-
-    // Popular select de impressoras
+// Popula o select de impressoras no modal
+function _populatePrinterSelect() {
     const sel = document.getElementById('print-direct-printer');
-    if (sel) {
-        sel.innerHTML = '<option value="">Selecione a impressora...</option>';
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Selecione a impressora...</option>';
+    if (_printerList && _printerList.length > 0) {
         _printerList.forEach(name => {
             const opt = document.createElement('option');
             opt.value = name;
             opt.textContent = name;
+            if (name === current) opt.selected = true;
             sel.appendChild(opt);
         });
+    } else {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.disabled = true;
+        opt.textContent = '— Nenhuma impressora detectada —';
+        sel.appendChild(opt);
     }
-    document.getElementById('print-direct-options').innerHTML = '';
-    document.getElementById('btn-send-print').disabled = true;
+}
+
+// Abre o modal para um único blob
+async function openPrintModal(blob) {
+    _printBlobQueue = [{ name: 'imposicao.pdf', blob }];
+    _printQueueIndex = 0;
+    _lastImposedBlob = blob;
+    await _openModalUI();
+}
+
+// Abre o modal para uma fila de blobs (impressão sequencial)
+async function openPrintModalQueue(queue) {
+    _printBlobQueue = queue || [];
+    _printQueueIndex = 0;
+    _lastImposedBlob = _printBlobQueue.length > 0 ? _printBlobQueue[0].blob : null;
+    await _openModalUI();
+}
+
+// Exibe a UI do modal
+async function _openModalUI() {
+    const modal = document.getElementById('modal-print-direct');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    // Resetar estado
+    const optDiv = document.getElementById('print-direct-options');
+    const loadDiv = document.getElementById('print-options-loading');
+    const statusDiv = document.getElementById('print-send-status');
+    const btnSend = document.getElementById('btn-send-print');
+    const driverStatus = document.getElementById('print-driver-status');
+
+    if (optDiv) optDiv.style.display = 'none';
+    if (loadDiv) loadDiv.style.display = 'none';
+    if (statusDiv) statusDiv.style.display = 'none';
+    if (driverStatus) driverStatus.style.display = 'none';
+    if (btnSend) { btnSend.disabled = true; btnSend.style.opacity = '0.5'; }
+
+    // Exibir indicador de fila se múltiplos arquivos
+    const queueIndicator = document.getElementById('print-queue-indicator');
+    const queueList = document.getElementById('print-queue-list');
+    const queueCounter = document.getElementById('print-queue-counter');
+    if (queueIndicator && _printBlobQueue.length > 1) {
+        queueIndicator.style.display = 'block';
+        if (queueCounter) queueCounter.textContent = `${_printBlobQueue.length} arquivo(s)`;
+        if (queueList) {
+            queueList.innerHTML = _printBlobQueue.map((item, i) =>
+                `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;background:rgba(255,255,255,0.04);border-radius:6px;" id="print-queue-item-${i}">
+                    <span style="width:20px;height:20px;background:rgba(99,102,241,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:#a5b4fc;flex-shrink:0;">${i+1}</span>
+                    <span style="font-size:0.78rem;color:${i === 0 ? '#f1f5f9' : 'var(--text-dim)'};">${item.name}</span>
+                    <span id="print-queue-status-${i}" style="margin-left:auto;font-size:0.72rem;color:${i === 0 ? '#fbbf24' : 'var(--text-dim)'};">${i === 0 ? '⏳ Atual' : '⌛ Aguardando'}</span>
+                </div>`
+            ).join('');
+        }
+    } else if (queueIndicator) {
+        queueIndicator.style.display = 'none';
+    }
+
+    // Atualizar subtítulo
+    const subtitle = document.getElementById('print-modal-subtitle');
+    if (subtitle) {
+        if (_printBlobQueue.length > 1) {
+            subtitle.textContent = `${_printBlobQueue.length} arquivo(s) — impressão sequencial`;
+        } else {
+            subtitle.textContent = _printBlobQueue[0]?.name || 'Configurar opções do driver';
+        }
+    }
+
+    // Carregar impressoras
+    await _loadPrinterListIfEmpty();
+    _populatePrinterSelect();
 }
 
 function closePrintModal() {
     const modal = document.getElementById('modal-print-direct');
     if (modal) modal.style.display = 'none';
+    _printBlobQueue = [];
+    _printQueueIndex = 0;
 }
 
-// Ao mudar impressora no modal, mostrar opcoes PPD
-function onPrintPrinterChange() {
+// Recarregar lista de impressoras manualmente
+async function reloadPrinterList() {
+    _printerList = [];
+    const btn = event?.currentTarget;
+    if (btn) btn.style.animation = 'spin 0.6s linear';
+    await _loadPrinterListIfEmpty();
+    _populatePrinterSelect();
+    if (btn) btn.style.animation = '';
+    
+    const driverStatus = document.getElementById('print-driver-status');
+    const driverStatusText = document.getElementById('print-driver-status-text');
+    if (driverStatus && driverStatusText) {
+        driverStatusText.textContent = `✓ ${_printerList.length} impressora(s) detectada(s) no sistema`;
+        driverStatus.style.display = 'block';
+        setTimeout(() => { if (driverStatus) driverStatus.style.display = 'none'; }, 3000);
+    }
+}
+
+// Ao mudar impressora no modal, carregar opções do driver
+async function onPrintPrinterChange() {
     const sel = document.getElementById('print-direct-printer');
     const optDiv = document.getElementById('print-direct-options');
+    const loadDiv = document.getElementById('print-options-loading');
     const btnSend = document.getElementById('btn-send-print');
 
     const printerName = sel ? sel.value : '';
-    btnSend.disabled = !printerName;
+    if (btnSend) { btnSend.disabled = !printerName; btnSend.style.opacity = printerName ? '1' : '0.5'; }
 
     if (!optDiv) return;
-    optDiv.innerHTML = '';
-
-    if (!printerName) return;
-
-    const ppdFile = _ppdMap[printerName];
-    if (!ppdFile) {
-        optDiv.innerHTML = '<p style="font-size:0.8rem;color:var(--text-dim);">Nenhum PPD mapeado para esta impressora. Opcoes padrao serao usadas.</p>';
+    if (!printerName) {
+        optDiv.style.display = 'none';
         return;
     }
 
-    const ppd = _ppdList.find(p => p.filename === ppdFile);
-    if (!ppd || !ppd.options || !Object.keys(ppd.options).length) {
-        optDiv.innerHTML = '<p style="font-size:0.8rem;color:var(--text-dim);">PPD sem opcoes configuraveis.</p>';
-        return;
+    // Mostrar loading
+    if (loadDiv) loadDiv.style.display = 'block';
+    if (optDiv) optDiv.style.display = 'none';
+
+    // Buscar capacidades do driver
+    let caps = null;
+
+    // 1. Tentar via agente cloud (já carregado no heartbeat)
+    if (window._activeAgentData?.printers_json?.capabilities) {
+        caps = window._activeAgentData.printers_json.capabilities[printerName];
     }
 
-    Object.entries(ppd.options).forEach(([key, opt]) => {
-        const choices = Object.entries(opt.choices || {});
-        if (!choices.length) return;
-        const choiceHtml = choices.map(([ck, cv]) =>
-            `<option value="${ck}" ${ck === opt.default ? 'selected' : ''}>${cv.translation || ck}</option>`
+    // 2. Tentar via API local (porta 9000 no mesmo servidor)
+    if (!caps) {
+        try {
+            const apiBase = `http://${window.location.hostname}:9000`;
+            const res = await fetch(`${apiBase}/api/printers/${encodeURIComponent(printerName)}/capabilities`);
+            if (res.ok) caps = await res.json();
+        } catch (e) {
+            console.warn('[PrintModal] Não foi possível ler capacidades do driver:', e.message);
+        }
+    }
+
+    // 3. Fallback padrão
+    if (!caps) {
+        caps = {
+            duplex_supported: true,
+            papers: [{id: 9, name: 'A4'}, {id: 8, name: 'A3'}],
+            trays: [{id: 7, name: 'Auto'}],
+            defaults: { duplex: 1, paper_size: 9, tray: 7, color: 2, copies: 1 }
+        };
+    }
+
+    // Esconder loading
+    if (loadDiv) loadDiv.style.display = 'none';
+    if (optDiv) optDiv.style.display = 'block';
+
+    // Preencher selects com os dados do driver
+    const defaultTray = caps.defaults?.tray ?? 7;
+    const defaultPaper = caps.defaults?.paper_size ?? 9;
+    const defaultDuplex = caps.defaults?.duplex ?? 1;
+    const defaultColor = caps.defaults?.color ?? 2;
+    const defaultCopies = caps.defaults?.copies ?? 1;
+
+    const traySel = document.getElementById('print-option-tray');
+    if (traySel) {
+        traySel.innerHTML = (caps.trays?.length
+            ? caps.trays.map(t => `<option value="${t.id}" ${t.id === defaultTray ? 'selected' : ''}>${t.name}</option>`)
+            : [`<option value="7" selected>Auto</option>`]
         ).join('');
-        optDiv.innerHTML += `
-        <div class="form-group" style="margin-bottom:10px;">
-            <label class="form-label" style="font-size:0.8rem;">${opt.translation || key}</label>
-            <select class="form-control" style="font-size:0.8rem;" data-ppd-option="${key}">
-                ${choiceHtml}
-            </select>
-        </div>`;
-    });
+    }
+
+    const paperSel = document.getElementById('print-option-paper-size');
+    if (paperSel) {
+        paperSel.innerHTML = (caps.papers?.length
+            ? caps.papers.map(p => `<option value="${p.id}" ${p.id === defaultPaper ? 'selected' : ''}>${p.name}</option>`)
+            : [`<option value="9" selected>A4</option>`, `<option value="8">A3</option>`]
+        ).join('');
+    }
+
+    const duplexSel = document.getElementById('print-option-duplex');
+    if (duplexSel) {
+        duplexSel.disabled = !caps.duplex_supported;
+        duplexSel.querySelectorAll('option').forEach(opt => {
+            opt.selected = parseInt(opt.value) === defaultDuplex;
+        });
+    }
+
+    const colorSel = document.getElementById('print-option-color');
+    if (colorSel) {
+        colorSel.querySelectorAll('option').forEach(opt => {
+            opt.selected = parseInt(opt.value) === defaultColor;
+        });
+    }
+
+    const copiesInput = document.getElementById('print-option-copies');
+    if (copiesInput) copiesInput.value = defaultCopies;
+
+    // Exibir status do driver
+    const driverStatus = document.getElementById('print-driver-status');
+    const driverStatusText = document.getElementById('print-driver-status-text');
+    if (driverStatus && driverStatusText) {
+        const hasRealData = caps.papers?.length > 0 || caps.trays?.length > 0;
+        if (hasRealData) {
+            driverStatusText.textContent = `✓ Driver detectado — ${caps.papers?.length || 0} papel(is), ${caps.trays?.length || 0} bandeja(s)`;
+            driverStatus.style.background = 'rgba(34,197,94,0.1)';
+            driverStatus.style.borderColor = 'rgba(34,197,94,0.2)';
+            driverStatusText.style.color = '#4ade80';
+        } else {
+            driverStatusText.textContent = '⚠ Capacidades padrão (driver não respondeu)';
+            driverStatus.style.background = 'rgba(251,191,36,0.1)';
+            driverStatus.style.borderColor = 'rgba(251,191,36,0.2)';
+            driverStatusText.style.color = '#fbbf24';
+        }
+        driverStatus.style.display = 'block';
+    }
 }
 
-// Enviar job de impressao via Supabase Queue
+// Enviar job de impressão (suporta modo Local direto e Cloud Relay)
+// Quando há fila, processa sequencialmente
 async function sendPrintJob() {
-    if (!_lastImposedBlob || !_printerAgentActive || !window._activeAgentData) return;
     const sel = document.getElementById('print-direct-printer');
     const printerName = sel ? sel.value : '';
     if (!printerName) { toast('Selecione uma impressora.', 'error'); return; }
 
-    const options = {};
-    document.querySelectorAll('#print-direct-options select[data-ppd-option]').forEach(s => {
-        options[s.getAttribute('data-ppd-option')] = s.value;
-    });
+    const orientation = document.querySelector('input[name="print-orientation"]:checked')?.value || '1';
+    const options = {
+        paper_size: parseInt(document.getElementById('print-option-paper-size')?.value) || 9,
+        tray: parseInt(document.getElementById('print-option-tray')?.value) || 7,
+        duplex: parseInt(document.getElementById('print-option-duplex')?.value) || 1,
+        color: parseInt(document.getElementById('print-option-color')?.value) || 2,
+        copies: parseInt(document.getElementById('print-option-copies')?.value) || 1,
+        orientation: parseInt(orientation)
+    };
 
     const btnSend = document.getElementById('btn-send-print');
-    if (btnSend) { btnSend.disabled = true; btnSend.textContent = 'Enviando para Nuvem...'; }
+    const statusDiv = document.getElementById('print-send-status');
+    const statusText = document.getElementById('print-status-text');
+    const statusBar = document.getElementById('print-status-bar');
 
-    try {
-        const fileExt = 'pdf';
-        const fileName = `print_job_${Date.now()}_${Math.floor(Math.random()*1000)}.${fileExt}`;
-        const filePath = `${window._activeAgentData.id}/${fileName}`;
-        
-        const { data: uploadData, error: uploadError } = await supabaseClient
-            .storage
-            .from('print_jobs')
-            .upload(filePath, _lastImposedBlob, { contentType: 'application/pdf', upsert: false });
-            
-        if (uploadError) throw new Error(`Falha no upload do arquivo: ${uploadError.message}`);
-        
-        const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
-        
-        const { error: dbError } = await supabaseClient
-            .from('print_queue')
-            .insert({
-                agent_id: window._activeAgentData.id,
-                file_url: urlData.publicUrl,
-                printer_name: printerName,
-                ppd_options: options,
-                status: 'pending'
-            });
-            
-        if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
+    if (btnSend) { btnSend.disabled = true; btnSend.style.opacity = '0.5'; }
+    if (statusDiv) statusDiv.style.display = 'block';
 
-        toast(`Enviado para "${printerName}" com sucesso! O Agente Local iniciara a impressao em breve.`, 'success');
-        closePrintModal();
-    } catch (e) {
-        toast(`Erro na impressao: ${e.message}`, 'error');
-    } finally {
-        if (btnSend) { btnSend.disabled = false; btnSend.textContent = '🖨️ Enviar para Impressora'; }
+    const isLocalMode = !window._activeAgentData ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+    const queue = _printBlobQueue.length > 0 ? _printBlobQueue : [{ name: 'imposicao.pdf', blob: _lastImposedBlob }];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
+        const progress = Math.round((i / queue.length) * 100);
+
+        if (statusText) statusText.textContent = `Enviando ${i + 1}/${queue.length}: ${item.name}...`;
+        if (statusBar) statusBar.style.width = `${progress}%`;
+
+        // Atualizar indicador de fila
+        const queueStatusEl = document.getElementById(`print-queue-status-${i}`);
+        if (queueStatusEl) { queueStatusEl.textContent = '⏳ Enviando...'; queueStatusEl.style.color = '#fbbf24'; }
+
+        try {
+            if (isLocalMode) {
+                const formData = new FormData();
+                formData.append('file', item.blob, item.name);
+                formData.append('printer_name', printerName);
+                formData.append('options', JSON.stringify(options));
+
+                const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText || 'Falha ao enviar para impressora local.');
+                }
+            } else {
+                // Cloud Relay via Supabase
+                if (!_printerAgentActive || !window._activeAgentData) {
+                    throw new Error('Agente de Impressão inativo. Inicie o IdealImpositionAgent.exe.');
+                }
+                const fileName = `print_job_${Date.now()}_${i}.pdf`;
+                const filePath = `${window._activeAgentData.id}/${fileName}`;
+
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('print_jobs')
+                    .upload(filePath, item.blob, { contentType: 'application/pdf', upsert: false });
+                if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
+
+                const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
+                const { error: dbError } = await supabaseClient.from('print_queue').insert({
+                    agent_id: window._activeAgentData.id,
+                    file_url: urlData.publicUrl,
+                    printer_name: printerName,
+                    ppd_options: options,
+                    status: 'pending'
+                });
+                if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
+            }
+
+            successCount++;
+            if (queueStatusEl) { queueStatusEl.textContent = '✓ Enviado'; queueStatusEl.style.color = '#4ade80'; }
+        } catch (e) {
+            failCount++;
+            if (queueStatusEl) { queueStatusEl.textContent = '✗ Erro'; queueStatusEl.style.color = '#ef4444'; }
+            console.error(`[PrintModal] Erro ao enviar ${item.name}:`, e);
+            toast(`Erro ao imprimir "${item.name}": ${e.message}`, 'error');
+        }
+    }
+
+    if (statusBar) statusBar.style.width = '100%';
+
+    if (failCount === 0) {
+        if (statusText) statusText.textContent = `✓ Todos os ${successCount} arquivo(s) enviados para "${printerName}"!`;
+        toast(`${successCount} arquivo(s) enviado(s) para "${printerName}" com sucesso!`, 'success');
+        setTimeout(() => closePrintModal(), 1500);
+    } else {
+        if (statusText) statusText.textContent = `${successCount} enviado(s), ${failCount} com erro.`;
+        if (btnSend) { btnSend.disabled = false; btnSend.style.opacity = '1'; }
     }
 }
 
@@ -18622,17 +18941,500 @@ function switchViewWithPrinterCheck(viewId) {
     } catch (_) {}
 })();
 
-// Exportar funcoes globais
+// Exportar funções globais
 window.checkPrinterAgent = checkPrinterAgent;
 window.loadPrinters = loadPrinters;
 window.loadPPDs = loadPPDs;
 window.uploadPPD = uploadPPD;
 window.savePrinterPPDMap = savePrinterPPDMap;
 window.openPrintModal = openPrintModal;
+window.openPrintModalQueue = openPrintModalQueue;
 window.closePrintModal = closePrintModal;
+window.reloadPrinterList = reloadPrinterList;
 window.onPrintPrinterChange = onPrintPrinterChange;
 window.sendPrintJob = sendPrintJob;
 window.onPPDMapChange = onPPDMapChange;
+
+// ═══════════════════════════════════════════════════════════
+// PAINEL LATERAL DE DRIVER — na área de preview do pedido
+// ═══════════════════════════════════════════════════════════
+
+// Inicializa o painel de impressão lateral quando um item é selecionado
+async function initPedPrintPanel() {
+    const panel = document.getElementById('ped-print-driver-panel');
+    if (!panel) return;
+
+    // Popular select de impressoras
+    await _loadPrinterListIfEmpty();
+    const sel = document.getElementById('ped-print-printer');
+    if (!sel) return;
+
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Selecione...</option>';
+    if (_printerList && _printerList.length > 0) {
+        _printerList.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === current) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        // Se só há uma impressora, selecionar automaticamente
+        if (_printerList.length === 1 && !current) {
+            sel.value = _printerList[0];
+            await onPedPrinterChange();
+        }
+        // Se havia uma seleção anterior, manter e recarregar opções
+        else if (current && _printerList.includes(current)) {
+            await onPedPrinterChange();
+        }
+    }
+}
+
+// Recarregar lista de impressoras no painel lateral
+async function reloadPedPrinterList() {
+    _printerList = [];
+    const btn = document.getElementById('ped-print-reload-btn');
+    if (btn) btn.style.animation = 'spin 0.6s linear';
+    await _loadPrinterListIfEmpty();
+    await initPedPrintPanel();
+    if (btn) btn.style.animation = '';
+
+    const statusEl = document.getElementById('ped-driver-status');
+    if (statusEl) {
+        statusEl.textContent = `✓ ${_printerList.length} impressora(s) detectada(s)`;
+        statusEl.style.display = 'block';
+        statusEl.style.background = 'rgba(34,197,94,0.1)';
+        statusEl.style.border = '1px solid rgba(34,197,94,0.2)';
+        statusEl.style.color = '#4ade80';
+        setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+    }
+}
+
+// Ao mudar impressora no painel lateral → carregar opções do driver
+async function onPedPrinterChange() {
+    const sel = document.getElementById('ped-print-printer');
+    const optDiv = document.getElementById('ped-driver-options');
+    const loadDiv = document.getElementById('ped-driver-loading');
+    const hintDiv = document.getElementById('ped-driver-hint');
+    const statusEl = document.getElementById('ped-driver-status');
+
+    const printerName = sel ? sel.value : '';
+
+    if (!printerName) {
+        if (optDiv) optDiv.style.display = 'none';
+        if (hintDiv) hintDiv.style.display = 'flex';
+        if (statusEl) statusEl.style.display = 'none';
+        return;
+    }
+
+    if (hintDiv) hintDiv.style.display = 'none';
+    if (loadDiv) loadDiv.style.display = 'block';
+    if (optDiv) optDiv.style.display = 'none';
+
+    // Buscar capacidades
+    let caps = null;
+    if (window._activeAgentData?.printers_json?.capabilities) {
+        caps = window._activeAgentData.printers_json.capabilities[printerName];
+    }
+    if (!caps) {
+        try {
+            // Sempre usar o hostname atual na porta 9000
+            const apiBase = `http://${window.location.hostname}:9000`;
+            const url = `${apiBase}/api/printers/${encodeURIComponent(printerName)}/capabilities`;
+            console.log('[PedDriverPanel] Buscando capacidades:', url);
+            const res = await fetch(url);
+            if (res.ok) {
+                caps = await res.json();
+                console.log('[PedDriverPanel] Capacidades recebidas:', caps);
+            } else {
+                console.warn('[PedDriverPanel] Resposta não-OK:', res.status, res.statusText);
+            }
+        } catch (e) {
+            console.warn('[PedDriverPanel] Erro ao buscar capacidades do driver:', e.message);
+        }
+    }
+    if (!caps) {
+        caps = {
+            duplex_supported: true,
+            papers: [{id: 9, name: 'A4'}, {id: 8, name: 'A3'}],
+            trays: [{id: 7, name: 'Auto'}],
+            defaults: { duplex: 1, paper_size: 9, tray: 7, color: 2, copies: 1 }
+        };
+    }
+
+    if (loadDiv) loadDiv.style.display = 'none';
+    if (optDiv) optDiv.style.display = 'flex';
+
+    const defaultTray = caps.defaults?.tray ?? 7;
+    const defaultPaper = caps.defaults?.paper_size ?? 9;
+    const defaultDuplex = caps.defaults?.duplex ?? 1;
+    const defaultColor = caps.defaults?.color ?? 2;
+    const defaultCopies = caps.defaults?.copies ?? 1;
+
+    // Detectar se o formato ativo tem "Gerar Capa e Contracapa"
+    const fmtId = document.getElementById('ped-formato')?.value;
+    const fmtObj = fmtId ? (state.formatos || []).find(f => String(f.id) === String(fmtId)) : null;
+    const hasCover = fmtObj?.has_cover === true;
+
+    const traySingle = document.getElementById('ped-tray-single');
+    const trayDual = document.getElementById('ped-tray-dual');
+    if (traySingle) traySingle.style.display = hasCover ? 'none' : 'block';
+    if (trayDual) trayDual.style.display = hasCover ? 'block' : 'none';
+
+    const trayOptionsHtml = (caps.trays?.length
+        ? caps.trays.map(t => `<option value="${t.id}" ${t.id === defaultTray ? 'selected' : ''}>${t.name}</option>`)
+        : ['<option value="7" selected>Auto</option>']
+    ).join('');
+
+    const traySel = document.getElementById('ped-print-tray');
+    if (traySel) traySel.innerHTML = trayOptionsHtml;
+
+    // Popular bandejas duplas com as mesmas opções
+    const trayCapaSel = document.getElementById('ped-print-tray-capa');
+    const trayMioloSel = document.getElementById('ped-print-tray-miolo');
+    if (trayCapaSel) trayCapaSel.innerHTML = trayOptionsHtml;
+    if (trayMioloSel) trayMioloSel.innerHTML = trayOptionsHtml;
+
+    const paperSel = document.getElementById('ped-print-paper');
+    if (paperSel) {
+        paperSel.innerHTML = (caps.papers?.length
+            ? caps.papers.map(p => `<option value="${p.id}" ${p.id === defaultPaper ? 'selected' : ''}>${p.name}</option>`)
+            : ['<option value="9" selected>A4</option>', '<option value="8">A3</option>']
+        ).join('');
+    }
+
+    const duplexSel = document.getElementById('ped-print-duplex');
+    if (duplexSel) {
+        duplexSel.disabled = !caps.duplex_supported;
+        duplexSel.querySelectorAll('option').forEach(opt => {
+            opt.selected = parseInt(opt.value) === defaultDuplex;
+        });
+    }
+
+    const colorSel = document.getElementById('ped-print-color');
+    if (colorSel) {
+        colorSel.querySelectorAll('option').forEach(opt => {
+            opt.selected = parseInt(opt.value) === defaultColor;
+        });
+    }
+
+    const copiesInput = document.getElementById('ped-print-copies');
+    if (copiesInput) copiesInput.value = defaultCopies;
+
+    // Status do driver
+    if (statusEl) {
+        const hasRealData = caps.papers?.length > 0 || caps.trays?.length > 0;
+        if (hasRealData) {
+            statusEl.textContent = `✓ ${caps.papers?.length || 0} papel(is), ${caps.trays?.length || 0} bandeja(s)`;
+            statusEl.style.background = 'rgba(34,197,94,0.1)';
+            statusEl.style.border = '1px solid rgba(34,197,94,0.2)';
+            statusEl.style.color = '#4ade80';
+        } else {
+            statusEl.textContent = '⚠ Opções padrão';
+            statusEl.style.background = 'rgba(251,191,36,0.1)';
+            statusEl.style.border = '1px solid rgba(251,191,36,0.2)';
+            statusEl.style.color = '#fbbf24';
+        }
+        statusEl.style.display = 'block';
+    }
+}
+
+// Retorna as opções configuradas no painel lateral para uso direto no sendPrintJob
+function getPedPrintOptions() {
+    const printerName = document.getElementById('ped-print-printer')?.value || '';
+    const trayDual = document.getElementById('ped-tray-dual');
+    const isDualTray = trayDual && trayDual.style.display !== 'none';
+    const options = {
+        paper_size: parseInt(document.getElementById('ped-print-paper')?.value) || 9,
+        tray: parseInt(document.getElementById('ped-print-tray')?.value) || 7,
+        duplex: parseInt(document.getElementById('ped-print-duplex')?.value) || 1,
+        color: parseInt(document.getElementById('ped-print-color')?.value) || 2,
+        copies: parseInt(document.getElementById('ped-print-copies')?.value) || 1,
+        orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1
+    };
+    if (isDualTray) {
+        options.tray_capa = parseInt(document.getElementById('ped-print-tray-capa')?.value) || options.tray;
+        options.tray_miolo = parseInt(document.getElementById('ped-print-tray-miolo')?.value) || options.tray;
+    }
+    return { printerName, options };
+}
+
+// Envia os blobs gerados diretamente para a impressora configurada no painel lateral
+// sem abrir o modal (modo "print sem modal")
+async function sendPrintJobDirect(queue) {
+    const { printerName, options } = getPedPrintOptions();
+
+    if (!printerName) {
+        toast('Selecione uma impressora no painel de configuração de impressão.', 'error');
+        return false;
+    }
+
+    const isLocalMode = !window._activeAgentData ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
+        toast(`Enviando ${i + 1}/${queue.length}: ${item.name}...`, 'info');
+
+        // Determinar bandeja correta baseado no tipo de arquivo (capa/miolo)
+        let itemOptions = { ...options };
+        if (options.tray_capa && options.tray_miolo) {
+            const nameLower = (item.name || '').toLowerCase();
+            if (nameLower.includes('_capa') || nameLower.includes('_contracapa')) {
+                itemOptions.tray = options.tray_capa;
+            } else {
+                itemOptions.tray = options.tray_miolo;
+            }
+        }
+
+        try {
+            if (isLocalMode) {
+                const formData = new FormData();
+                formData.append('file', item.blob, item.name);
+                formData.append('printer_name', printerName);
+                formData.append('options', JSON.stringify(itemOptions));
+                const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText || 'Falha ao enviar para impressora local.');
+                }
+            } else {
+                if (!_printerAgentActive || !window._activeAgentData) {
+                    throw new Error('Agente de Impressão inativo. Inicie o IdealImpositionAgent.exe.');
+                }
+                const fileName = `print_job_${Date.now()}_${i}.pdf`;
+                const filePath = `${window._activeAgentData.id}/${fileName}`;
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('print_jobs')
+                    .upload(filePath, item.blob, { contentType: 'application/pdf', upsert: false });
+                if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
+                const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
+                const { error: dbError } = await supabaseClient.from('print_queue').insert({
+                    agent_id: window._activeAgentData.id,
+                    file_url: urlData.publicUrl,
+                    printer_name: printerName,
+                    ppd_options: options,
+                    status: 'pending'
+                });
+                if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
+            }
+            successCount++;
+        } catch (e) {
+            failCount++;
+            console.error(`[PrintDirect] Erro ao enviar ${item.name}:`, e);
+            toast(`Erro ao imprimir "${item.name}": ${e.message}`, 'error');
+        }
+    }
+
+    if (failCount === 0) {
+        toast(`✓ ${successCount} arquivo(s) enviado(s) para "${printerName}"!`, 'success');
+        return true;
+    }
+    return false;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// MEMÓRIA DE CONFIGURAÇÃO DE IMPRESSORA POR PRODUTO
+// ═══════════════════════════════════════════════════════════════════════
+
+// Cache local para evitar requisicoes repetidas
+const _printConfigCache = {};
+
+function _getActiveProductInfo() {
+    const activeItem = state.activeOSItem;
+    if (!activeItem) return null;
+    const itens = state.osItens[activeItem.osId] || [];
+    const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+    if (!item) return null;
+    const prodId = item._vibe_id_produto || null;
+    if (!prodId) return null;
+    const prodObj = (state.produtosGlobais || []).find(p => String(p.id_produto) === String(prodId));
+    const prodNome = prodObj ? (prodObj.nomeReal || `Produto #${prodId}`) : (item.nome_produto_real || 'Produto');
+    return { prodId, prodNome };
+}
+
+function _updateSaveButtonLabel() {
+    const info = _getActiveProductInfo();
+    const label = document.getElementById('ped-print-save-label');
+    const section = document.getElementById('ped-print-save-section');
+    if (!info || !label) {
+        if (section) section.style.display = 'none';
+        return;
+    }
+    // Truncar nome do produto se muito longo
+    const shortName = info.prodNome.length > 25 ? info.prodNome.substring(0, 22) + '...' : info.prodNome;
+    label.textContent = `Salvar para "${shortName}"`;
+    if (section) section.style.display = 'block';
+}
+
+async function savePrintConfigForProduct() {
+    const info = _getActiveProductInfo();
+    if (!info) return toast('Nenhum produto ativo para salvar.', 'warning');
+
+    const printerSel = document.getElementById('ped-print-printer');
+    if (!printerSel || !printerSel.value) return toast('Selecione uma impressora primeiro.', 'warning');
+
+    const config = {
+        produto_id: String(info.prodId),
+        produto_nome: info.prodNome,
+        printer_name: printerSel.value,
+        tray: parseInt(document.getElementById('ped-print-tray')?.value) || null,
+        tray_capa: parseInt(document.getElementById('ped-print-tray-capa')?.value) || null,
+        tray_miolo: parseInt(document.getElementById('ped-print-tray-miolo')?.value) || null,
+        paper_size: parseInt(document.getElementById('ped-print-paper')?.value) || null,
+        duplex: parseInt(document.getElementById('ped-print-duplex')?.value) || 1,
+        color: parseInt(document.getElementById('ped-print-color')?.value) || 2,
+        copies: parseInt(document.getElementById('ped-print-copies')?.value) || 1,
+        orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1
+    };
+
+    // Salvar no cache local
+    _printConfigCache[info.prodId] = config;
+
+    // Salvar no localStorage (fallback offline)
+    try { localStorage.setItem(`printConfig_${info.prodId}`, JSON.stringify(config)); } catch(e) {}
+
+    // Salvar no backend/Supabase
+    const btn = document.getElementById('ped-print-save-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/print-config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            toast(`✅ Config salva para "${info.prodNome}"`, 'success');
+        } else {
+            // Fallback: ja esta salvo no localStorage
+            toast(`Config salva localmente para "${info.prodNome}"`, 'info');
+        }
+    } catch (e) {
+        console.warn('[printConfig] save error (usando localStorage):', e);
+        toast(`Config salva localmente para "${info.prodNome}"`, 'info');
+    } finally {
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    }
+}
+
+async function loadPrintConfigForProduct(produtoId) {
+    if (!produtoId) return;
+    const prodId = String(produtoId);
+
+    // 1. Verificar cache em memoria
+    if (_printConfigCache[prodId]) {
+        _applyPrintConfig(_printConfigCache[prodId]);
+        return;
+    }
+
+    // 2. Tentar backend/Supabase
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/print-config/${encodeURIComponent(prodId)}`);
+        const data = await resp.json();
+        if (data.ok && data.config) {
+            _printConfigCache[prodId] = data.config;
+            _applyPrintConfig(data.config);
+            return;
+        }
+    } catch (e) {
+        console.warn('[printConfig] load from backend error:', e);
+    }
+
+    // 3. Fallback localStorage
+    try {
+        const stored = localStorage.getItem(`printConfig_${prodId}`);
+        if (stored) {
+            const config = JSON.parse(stored);
+            _printConfigCache[prodId] = config;
+            _applyPrintConfig(config);
+            return;
+        }
+    } catch (e) {}
+
+    // Sem config salva — esconder indicador
+    const indicator = document.getElementById('ped-print-saved-indicator');
+    if (indicator) indicator.style.display = 'none';
+}
+
+async function _applyPrintConfig(config) {
+    if (!config) return;
+
+    // Selecionar impressora
+    const printerSel = document.getElementById('ped-print-printer');
+    if (printerSel && config.printer_name) {
+        // Verificar se a impressora esta na lista
+        const exists = Array.from(printerSel.options).some(o => o.value === config.printer_name);
+        if (exists) {
+            printerSel.value = config.printer_name;
+            // Trigger change para carregar capabilities do driver
+            if (typeof onPedPrinterChange === 'function') {
+                await onPedPrinterChange();
+            }
+
+            // Aguardar driver options carregarem e depois aplicar os valores
+            setTimeout(() => {
+                if (config.tray != null) {
+                    const traySel = document.getElementById('ped-print-tray');
+                    if (traySel) traySel.value = String(config.tray);
+                }
+                if (config.tray_capa != null) {
+                    const trayCapaSel = document.getElementById('ped-print-tray-capa');
+                    if (trayCapaSel) trayCapaSel.value = String(config.tray_capa);
+                }
+                if (config.tray_miolo != null) {
+                    const trayMioloSel = document.getElementById('ped-print-tray-miolo');
+                    if (trayMioloSel) trayMioloSel.value = String(config.tray_miolo);
+                }
+                if (config.paper_size != null) {
+                    const paperSel = document.getElementById('ped-print-paper');
+                    if (paperSel) paperSel.value = String(config.paper_size);
+                }
+                if (config.duplex != null) {
+                    const duplexSel = document.getElementById('ped-print-duplex');
+                    if (duplexSel) duplexSel.value = String(config.duplex);
+                }
+                if (config.color != null) {
+                    const colorSel = document.getElementById('ped-print-color');
+                    if (colorSel) colorSel.value = String(config.color);
+                }
+                if (config.copies != null) {
+                    const copiesInput = document.getElementById('ped-print-copies');
+                    if (copiesInput) copiesInput.value = String(config.copies);
+                }
+                if (config.orientation != null) {
+                    const orientSel = document.getElementById('ped-print-orientation');
+                    if (orientSel) orientSel.value = String(config.orientation);
+                }
+
+                // Mostrar indicador visual
+                const indicator = document.getElementById('ped-print-saved-indicator');
+                if (indicator) {
+                    indicator.style.display = 'block';
+                    // Auto-esconder após 5 segundos
+                    setTimeout(() => { if (indicator) indicator.style.display = 'none'; }, 5000);
+                }
+            }, 800);
+        }
+    }
+}
+
+window.savePrintConfigForProduct = savePrintConfigForProduct;
+window.loadPrintConfigForProduct = loadPrintConfigForProduct;
+window._updateSaveButtonLabel = _updateSaveButtonLabel;
+
+window.initPedPrintPanel = initPedPrintPanel;
+window.reloadPedPrinterList = reloadPedPrinterList;
+window.onPedPrinterChange = onPedPrinterChange;
+window.getPedPrintOptions = getPedPrintOptions;
+window.sendPrintJobDirect = sendPrintJobDirect;
+
 
 // Exportar funcoes globais (existentes)
 window.gerarLinkCliente = gerarLinkCliente;

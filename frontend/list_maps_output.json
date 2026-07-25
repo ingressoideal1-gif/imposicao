@@ -1,0 +1,1766 @@
+[
+  {
+    "id": "5113208c-da9c-48be-a8c2-591c969f1cfd",
+    "name": "Everton Show",
+    "config": {
+      "setores": [
+        {
+          "id": "setor_0_1782850363139",
+          "nome": "Plateia",
+          "cadeiras": {
+            "0,0": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "0,2": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "0,4": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "0,6": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "0,8": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "1,0": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "1,2": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "1,4": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "1,6": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "1,8": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "2,0": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "2,2": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "2,4": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "2,6": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "2,8": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "3,0": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "3,2": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "3,4": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "3,6": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "3,8": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "4,0": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "4,2": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "4,4": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "4,6": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "4,8": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "5,0": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "5,2": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "5,4": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "5,6": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "5,8": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "6,0": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "6,2": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "6,4": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "6,6": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "6,8": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "7,0": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "7,2": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "7,4": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "7,6": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "7,8": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "8,0": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "8,2": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "8,4": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "8,6": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "8,8": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "9,0": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "9,2": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "9,4": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "9,6": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "9,8": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-1,0": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-1,2": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-1,4": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-1,6": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-1,8": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-2,0": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-2,2": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-2,4": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-2,6": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-2,8": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-3,0": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-3,2": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-3,4": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-3,6": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-3,8": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-4,0": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-4,2": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-4,4": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-4,6": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-4,8": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-5,0": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-5,2": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-5,4": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-5,6": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-5,8": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-6,0": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-6,2": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-6,4": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-6,6": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-6,8": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-7,0": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-7,2": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-7,4": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-7,6": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-7,8": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-8,0": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-8,2": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-8,4": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-8,6": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-8,8": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-9,0": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-9,2": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-9,4": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-9,6": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-9,8": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "0,10": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "0,12": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "0,14": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "0,16": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "0,18": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "0,20": {
+              "num": 16,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "1,10": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "1,12": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "1,14": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "1,16": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "1,18": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "1,20": {
+              "num": 17,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "10,0": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "10,2": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "10,4": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "10,6": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "10,8": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "11,0": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "11,2": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "11,4": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "11,6": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "11,8": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "12,0": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "12,2": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "12,4": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "12,6": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "12,8": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "13,0": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "13,2": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "13,4": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "13,6": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "13,8": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "14,0": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "14,2": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "14,4": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "14,6": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "14,8": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "2,10": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "2,12": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "2,14": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "2,16": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "2,18": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "2,20": {
+              "num": 18,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "3,10": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "3,12": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "3,14": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "3,16": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "3,18": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "3,20": {
+              "num": 19,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "4,10": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "4,12": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "4,14": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "4,16": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "4,18": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "4,20": {
+              "num": 20,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "5,10": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "5,12": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "5,14": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "5,16": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "5,18": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "5,20": {
+              "num": 21,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "6,10": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "6,12": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "6,14": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "6,16": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "6,18": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "6,20": {
+              "num": 22,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "7,10": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "7,12": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "7,14": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "7,16": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "7,18": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "7,20": {
+              "num": 23,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "8,10": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "8,12": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "8,14": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "8,16": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "8,18": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "8,20": {
+              "num": 24,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "9,10": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "9,12": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "9,14": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "9,16": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "9,18": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "9,20": {
+              "num": 25,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-1,10": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-1,12": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-1,14": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-1,16": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-1,18": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-1,20": {
+              "num": 15,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-10,0": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-10,2": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-10,4": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-10,6": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-10,8": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-11,0": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-11,2": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-11,4": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-11,6": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-11,8": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-12,0": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-12,2": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-12,4": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-12,6": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-12,8": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-13,0": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-13,2": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-13,4": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-13,6": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-13,8": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-14,0": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-14,2": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-14,4": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-14,6": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-14,8": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-15,0": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "A"
+            },
+            "-15,2": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "B"
+            },
+            "-15,4": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "C"
+            },
+            "-15,6": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "D"
+            },
+            "-15,8": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "E"
+            },
+            "-2,10": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-2,12": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-2,14": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-2,16": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-2,18": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-2,20": {
+              "num": 14,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-3,10": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-3,12": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-3,14": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-3,16": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-3,18": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-3,20": {
+              "num": 13,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-4,10": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-4,12": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-4,14": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-4,16": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-4,18": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-4,20": {
+              "num": 12,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-5,10": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-5,12": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-5,14": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-5,16": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-5,18": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-5,20": {
+              "num": 11,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-6,10": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-6,12": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-6,14": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-6,16": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-6,18": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-6,20": {
+              "num": 10,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-7,10": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-7,12": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-7,14": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-7,16": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-7,18": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-7,20": {
+              "num": 9,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-8,10": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-8,12": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-8,14": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-8,16": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-8,18": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-8,20": {
+              "num": 8,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-9,10": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-9,12": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-9,14": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-9,16": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-9,18": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-9,20": {
+              "num": 7,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "10,10": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "10,12": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "10,14": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "10,16": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "10,18": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "10,20": {
+              "num": 26,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "11,10": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "11,12": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "11,14": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "11,16": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "11,18": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "11,20": {
+              "num": 27,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "12,10": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "12,12": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "12,14": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "12,16": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "12,18": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "12,20": {
+              "num": 28,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "13,10": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "13,12": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "13,14": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "13,16": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "13,18": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "13,20": {
+              "num": 29,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "14,10": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "14,12": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "14,14": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "14,16": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "14,18": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "14,20": {
+              "num": 30,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-10,10": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-10,12": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-10,14": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-10,16": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-10,18": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-10,20": {
+              "num": 6,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-11,10": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-11,12": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-11,14": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-11,16": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-11,18": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-11,20": {
+              "num": 5,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-12,10": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-12,12": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-12,14": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-12,16": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-12,18": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-12,20": {
+              "num": 4,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-13,10": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-13,12": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-13,14": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-13,16": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-13,18": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-13,20": {
+              "num": 3,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-14,10": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-14,12": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-14,14": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-14,16": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-14,18": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-14,20": {
+              "num": 2,
+              "tipo": "Normal",
+              "prefixo": "K"
+            },
+            "-15,10": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "F"
+            },
+            "-15,12": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "G"
+            },
+            "-15,14": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "H"
+            },
+            "-15,16": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "I"
+            },
+            "-15,18": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "J"
+            },
+            "-15,20": {
+              "num": 1,
+              "tipo": "Normal",
+              "prefixo": "K"
+            }
+          },
+          "fileiras": [
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "A"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "B"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "C"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "D"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "E"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "F"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "G"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "H"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "I"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "J"
+            },
+            {
+              "fim": 30,
+              "inicio": 1,
+              "padrao": "",
+              "prefixo": "K"
+            }
+          ]
+        }
+      ],
+      "cadeiras": {},
+      "tiposAssento": [
+        {
+          "id": "Normal",
+          "cor": "#3498db",
+          "nome": "Normal",
+          "icone": "💺",
+          "sufixo": ""
+        },
+        {
+          "id": "PCD",
+          "cor": "#f1c40f",
+          "nome": "Cadeirante",
+          "icone": "♿",
+          "sufixo": "Cad"
+        },
+        {
+          "id": "Obeso",
+          "cor": "#e67e22",
+          "nome": "Obeso",
+          "icone": "💺",
+          "sufixo": "PNE"
+        },
+        {
+          "id": "Acompanhante",
+          "cor": "#2ecc71",
+          "nome": "Acompanhante",
+          "icone": "👥",
+          "sufixo": "Acc"
+        }
+      ]
+    },
+    "created_at": "2026-06-30T20:12:57.918823+00:00"
+  }
+]

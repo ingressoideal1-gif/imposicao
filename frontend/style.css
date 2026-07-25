@@ -23,6 +23,7 @@
     --text-faint:  #475569;
 
     --sidebar-w:   240px;
+    --sidebar-w-collapsed: 56px;
     --radius:      14px;
     --radius-sm:   8px;
     --transition:  0.2s ease;
@@ -51,15 +52,81 @@ body {
 /* ─── Sidebar ───────────────────────────────────────────────────────────────── */
 .sidebar {
     width: var(--sidebar-w);
-    flex-shrink: 0;
-    background: rgba(10, 15, 30, 0.9);
-    backdrop-filter: blur(20px);
-    border-right: 1px solid var(--border);
+    background: rgba(8, 11, 24, 0.94);
+    backdrop-filter: blur(25px);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     flex-direction: column;
     padding: 24px 14px;
     gap: 6px;
     overflow-y: auto;
+    z-index: 1000;
+    
+    /* Configuração responsiva: Drawer por padrão (telas pequenas) */
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+}
+
+.sidebar.active {
+    transform: translateX(0);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(37, 99, 235, 0.15);
+}
+
+.sidebar-close-btn {
+    display: block;
+}
+
+/* ─── Drawer Trigger & Backdrop ─────────────────────────────────────────────── */
+.drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(8, 10, 18, 0.65);
+    backdrop-filter: blur(6px);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.drawer-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.drawer-trigger {
+    position: fixed;
+    left: 24px;
+    top: 24px;
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    cursor: pointer;
+    z-index: 990;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.drawer-trigger:hover {
+    background: rgba(37, 99, 235, 0.2);
+    border-color: var(--blue);
+    color: var(--blue);
+    box-shadow: 0 0 15px rgba(37, 99, 235, 0.4);
+    transform: scale(1.05);
 }
 
 .sidebar-logo {
@@ -161,7 +228,7 @@ body {
 
 .view-section {
     display: none;
-    padding: 36px 60px; /* 60px spacing from sidebar */
+    padding: 36px 60px 36px 90px; /* Spacing for the floating drawer trigger button */
     max-width: 100%;
     margin: 0; /* Align left instead of center */
     animation: fadeIn 0.25s ease;
@@ -851,6 +918,30 @@ input[type="color"].element-card-fields .form-control,
     border: 1px solid var(--border-glow);
     display: block;
 }
+/* Preview do Pedido: container estritamente contido nos 70% do flex */
+.ped-preview-canvas-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 16px;
+    overflow: auto;
+    min-height: 500px;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+/* Canvas do pedido: pode ser maior que o container (scroll interno), nunca expande o container */
+#ped-preview-canvas {
+    background: #ffffff;
+    max-width: none;
+    flex-shrink: 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-glow);
+    display: block;
+}
+
+
 
 /* ─── Formatos View Form Groups ─── */
 .form-row-group {
@@ -1846,6 +1937,111 @@ input[type=number]::-webkit-inner-spin-button {
 input[type=number] {
     -moz-appearance: textfield;
     appearance: textfield;
+}
+
+/* ─── Responsividade para Desktops (Largura >= 1024px) ───────────────────────── */
+@media (min-width: 1024px) {
+    .sidebar {
+        position: static !important;
+        transform: translateX(0) !important;
+        box-shadow: none !important;
+        flex-shrink: 0;
+        width: var(--sidebar-w-collapsed);
+        padding: 24px 6px;
+        overflow: hidden;
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sidebar:hover {
+        width: var(--sidebar-w);
+        padding: 24px 14px;
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5) !important;
+        z-index: 1001;
+    }
+
+    /* Logo: esconder texto quando colapsado */
+    .sidebar .sidebar-logo-text {
+        opacity: 0;
+        white-space: nowrap;
+        transition: opacity 0.2s ease;
+    }
+    .sidebar:hover .sidebar-logo-text {
+        opacity: 1;
+    }
+
+    .sidebar .sidebar-logo img {
+        min-width: 28px;
+        max-width: 28px;
+        transition: all 0.3s ease;
+    }
+    .sidebar:hover .sidebar-logo img {
+        min-width: unset;
+        max-width: unset;
+    }
+
+    /* Labels de grupo: esconder quando colapsado */
+    .sidebar .nav-group-label {
+        opacity: 0;
+        height: 0;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        transition: opacity 0.2s ease, height 0.2s ease, padding 0.2s ease;
+    }
+    .sidebar:hover .nav-group-label {
+        opacity: 1;
+        height: auto;
+        padding: 14px 10px 6px;
+    }
+
+    /* Nav buttons: centralizar ícone quando colapsado */
+    .sidebar .nav-btn {
+        justify-content: center;
+        padding: 11px 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        font-size: 0;
+    }
+    .sidebar .nav-btn .nav-icon {
+        font-size: 1.1rem;
+    }
+    .sidebar:hover .nav-btn {
+        justify-content: flex-start;
+        padding: 11px 14px;
+        font-size: 0.9rem;
+    }
+
+    /* Esconder texto e badge dos nav-btn quando colapsado */
+    .sidebar .nav-btn .nav-badge {
+        opacity: 0;
+        width: 0;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        transition: opacity 0.2s ease;
+    }
+    .sidebar:hover .nav-btn .nav-badge {
+        opacity: 1;
+        width: auto;
+        padding: 1px 7px;
+        margin-left: auto;
+    }
+
+    .sidebar-close-btn {
+        display: none !important;
+    }
+
+    .drawer-trigger {
+        display: none !important;
+    }
+
+    .drawer-backdrop {
+        display: none !important;
+    }
+
+    .view-section {
+        padding: 36px 60px !important;
+    }
 }
 
 

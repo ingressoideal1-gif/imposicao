@@ -398,7 +398,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 is_selected: true,
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
                 pdfDoc: pdfDoc,
-                pdfVersoDoc: pdfVersoDoc
+                pdfVersoDoc: pdfVersoDoc,
+                bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null
             };
         });
     }
@@ -542,21 +543,29 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-    const MAX_W = 1920;
+    // Calcular escala baseada no tamanho real do container (70% da área, sem invadir o painel)
+    // Usar clientWidth do container pai para limitar dinamicamente
+    const canvasContainer = canvas.closest('.ped-preview-canvas-container') || canvas.parentElement;
+    // Subtrair padding do container (32px = 16px cada lado)
+    const availW = canvasContainer ? Math.max(200, canvasContainer.clientWidth - 32) : 800;
+    const availH = canvasContainer ? Math.max(200, canvasContainer.clientHeight - 32) : 600;
 
-    const MAX_H = 1360;
+    // Escala interna alta (resolução do canvas) — limitada por 1920x1360
+    const MAX_W = Math.min(1920, availW * 2);
+    const MAX_H = Math.min(1360, availH * 2);
 
     const scale = Math.min(MAX_W / sheet_w, MAX_H / sheet_h);
 
-
-
     canvas.width = Math.round(sheet_w * scale);
-
     canvas.height = Math.round(sheet_h * scale);
 
-    canvas.style.width = `${canvas.width}px`;
+    // CSS: redimensionar para caber visivelmente no container disponível
+    const displayScale = Math.min(availW / (sheet_w * scale), availH / (sheet_h * scale));
+    const displayW = Math.round(canvas.width * displayScale);
+    const displayH = Math.round(canvas.height * displayScale);
 
-    canvas.style.height = `${canvas.height}px`;
+    canvas.style.width = `${displayW}px`;
+    canvas.style.height = `${displayH}px`;
 
 
 
@@ -586,6 +595,13 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
     let raw_items = Math.max(1, end - start + 1);
+    if (state.csvData) {
+        raw_items = state.csvData.length;
+    } else if (schema === 'pdf_multiple') {
+        const totalPages = state.pedArtPdfDoc ? state.pedArtPdfDoc.numPages : 1;
+        raw_items = state.printMode === 'duplex' ? Math.ceil(totalPages / 2) : totalPages;
+    }
+
     let total_items = raw_items;
     if (schema === "multi_artes" || isMultiSelected) {
         const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
@@ -603,7 +619,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         }
         total_items = sum_physical;
     } else {
-        total_items = raw_items;
+        if (num && num.tipo === "TICKET") {
+            total_items = Math.ceil(raw_items / ticket_qtd);
+        } else {
+            total_items = raw_items;
+        }
     }
 
     const poses_per_sheet = cols * rows;
@@ -1098,8 +1118,30 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     ctx.textBaseline = 'top';
                     ctx.textAlign = 'left';
                     
-                    const absBlocoNum = Math.floor(item_index / stack_size) + 1;
-                    const blocoNum = String(absBlocoNum).padStart(2, '0');
+                    // Obter bloco e ticket_qtd do modelo ativo nesta pose
+                    const item_bloco = (multiArteItem && multiArteItem.bloco) ? parseInt(multiArteItem.bloco) : null;
+                    
+                    const sheetsInput = document.getElementById('ped-sheets-per-block');
+                    const sheetsPerBlock = item_bloco || ((sheetsInput && sheetsInput.value) 
+                        ? parseInt(sheetsInput.value) 
+                        : (parseInt(fmt.default_sheets_per_block) || 50));
+                        
+                    let item_ticket_qtd = 1;
+                    if (multiArteItem) {
+                        if (multiArteItem.num1_id) {
+                            const itemNum = state.numeracoes.find(n => String(n.id) === String(multiArteItem.num1_id));
+                            if (itemNum && itemNum.tipo === "TICKET") {
+                                item_ticket_qtd = parseInt(itemNum.ticket_qtd) || 1;
+                            }
+                        }
+                    } else {
+                        item_ticket_qtd = ticket_qtd;
+                    }
+
+                    const local_idx = (typeof item_local_index !== 'undefined') ? item_local_index : item_index;
+                    const cell_stack_size = sheetsPerBlock;
+                    const bloco_num = Math.floor(local_idx / cell_stack_size) + 1;
+                    const blocoNum = String(bloco_num).padStart(2, '0');
                     const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
                     
                     const textX = -cw/2 + (xPdf * MM2PT * scale);
@@ -1110,15 +1152,14 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     
                     const seqStartInput = document.getElementById('ped-start');
                     const seqStart = multiArteItem ? multiArteItem.start : ((seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1);
-                    const sheetsInput = document.getElementById('ped-sheets-per-block');
-                    const sheetsPerBlock = (sheetsInput && sheetsInput.value && sheetsInput.offsetParent !== null) 
-                        ? parseInt(sheetsInput.value) 
-                        : (parseInt(fmt.default_sheets_per_block) || 50);
-                        
-                    const iStart = P * sheetsPerBlock;
-                    const iEnd = iStart + sheetsPerBlock - 1;
-                    const vStartStr = String(seqStart + iStart).padStart(4, '0');
-                    const vEndStr = String(seqStart + iEnd).padStart(4, '0');
+                    
+                    const start_idx = (bloco_num - 1) * cell_stack_size;
+                    const end_idx = start_idx + cell_stack_size - 1;
+                    const v_start = seqStart + start_idx * item_ticket_qtd;
+                    const v_end = seqStart + end_idx * item_ticket_qtd;
+                    
+                    const vStartStr = String(v_start).padStart(4, '0');
+                    const vEndStr = String(v_end).padStart(4, '0');
                     
                     ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
                 }
@@ -2056,13 +2097,23 @@ function updatePedSummary() {
     }
 
     const perSheet = fmt.cols * fmt.rows;
-    const total_impressions = total;
+    const total_impressions = (num && num.tipo === "TICKET") ? Math.ceil(total / ticket_qtd) : total;
     let sheets = Math.ceil(total_impressions / perSheet);
 
     const cutstackMode = document.getElementById('ped-cutstack-mode')?.value;
-    if (schema === 'cut_stack') {
+    if (schema === 'cut_stack' || schema === 'multi_artes') {
         const stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
-        if (cutstackMode === 'strict') {
+        if (schema === 'multi_artes' || cutstackMode === 'strict_assembly') {
+            if (typeof buildStrictAssemblySets === 'function') {
+                const artesList = schema === 'multi_artes' ? state.impMultiArtes : [];
+                const assSets = buildStrictAssemblySets(artesList, schema === 'multi_artes', total_impressions, stack_size, perSheet);
+                sheets = assSets.reduce((sum, s) => sum + s.num_sheets, 0);
+            } else {
+                const itemsPerSet = stack_size * perSheet;
+                const sets_needed = Math.ceil(total_impressions / itemsPerSet);
+                sheets = sets_needed * stack_size;
+            }
+        } else if (cutstackMode === 'strict') {
             const itemsPerSet = stack_size * perSheet;
             const sets_needed = Math.ceil(total_impressions / itemsPerSet);
             sheets = sets_needed * stack_size;
@@ -2183,6 +2234,19 @@ async function enviarParaPedido(itemId, osId) {
     const previewContainer = document.getElementById('ped-preview-card-container');
     if (previewContainer) {
         previewContainer.style.display = 'block';
+        // Inicializar painel lateral de driver de impressão
+        if (typeof initPedPrintPanel === 'function') {
+            initPedPrintPanel().then(() => {
+                // Carregar config de impressora salva para o produto deste modelo
+                const prodId = item._vibe_id_produto;
+                if (prodId && typeof loadPrintConfigForProduct === 'function') {
+                    loadPrintConfigForProduct(prodId);
+                }
+                if (typeof _updateSaveButtonLabel === 'function') {
+                    _updateSaveButtonLabel();
+                }
+            }).catch(e => console.warn('[PedPrintPanel] init error:', e));
+        }
     }
 
     // Navegar para a view de Imposição
@@ -2508,22 +2572,32 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
             }
 
             if (isPrint) {
-                if (sub) sub.textContent = "Enviando para impressão local...";
-                const formData = new FormData();
-                formData.append('file', finalBlob, 'impressao_multipla.pdf');
-                
-                try {
-                    const res = await fetch("http://localhost:8080/api/print", {
-                        method: "POST",
-                        body: formData
-                    });
-                    if (res.ok) {
-                        toast('Enviado para a fila de impressão local!', 'success');
-                    } else {
-                        throw new Error('Falha na API local');
+                if (sub) sub.textContent = "Enviando para impressão...";
+                // Abrir o modal de impressão com o blob final
+                if (typeof openPrintModal === 'function') {
+                    if (overlay) overlay.classList.remove('active');
+                    openPrintModal(finalBlob);
+                    toast('PDFs gerados! Configure e envie para a impressora.', 'success');
+                } else {
+                    // Fallback: enviar para API local diretamente
+                    const formData = new FormData();
+                    formData.append('file', finalBlob, 'impressao_multipla.pdf');
+                    const sel = document.getElementById('print-direct-printer');
+                    const printerName = sel ? sel.value : '';
+                    const options = {};
+                    try {
+                        const res = await fetch(`http://localhost:9000/api/print/submit`, {
+                            method: "POST",
+                            body: formData
+                        });
+                        if (res.ok) {
+                            toast('Enviado para a impressora local!', 'success');
+                        } else {
+                            throw new Error('Falha na API local');
+                        }
+                    } catch (err) {
+                        toast('Erro na impressão local. Verifique se o Ideal Imposition Agent está rodando.', 'error');
                     }
-                } catch (err) {
-                    toast('Erro na impressão local. Verifique se o Ideal Imposition agent está rodando.', 'error');
                 }
             } else {
                 let fileHandle = null;
@@ -2856,26 +2930,18 @@ function renderPedOSQueue() {
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
                                 <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
                                 <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
-                                <option value="VERSO VARIÃVEL" ${item.verso_tipo === 'VERSO VARIÃVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÃVEL</option>
+                                <option value="VERSO VARIÃ VEL" ${item.verso_tipo === 'VERSO VARIÃ VEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÃ VEL</option>
                             </select>
                         </div>
                     </td>
-                    <td style="padding: 12px 12px 12px 100px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
-                        <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff;" title="Gerar PDF para este modelo"
-                            onclick="event.stopPropagation(); pedQueueGerarPDF('${jsItemId}', '${jsOsId}')">
-                            📄 PDF
-                        </button>
-                        <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff;" title="Imprimir este modelo"
-                            onclick="event.stopPropagation(); pedQueueImprimir('${jsItemId}', '${jsOsId}')">
-                            🖨️ Imp.
-                        </button>
-                    </td>
-                    <td style="padding: 12px; width: 270px; min-width: 270px; max-width: 270px;" title="Status de ProduÃ§Ã£o">
+                    <td style="padding: 12px; width: 270px; min-width: 270px; max-width: 270px;" title="Status de Produção">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
-                                <option value="Aguardando" ${item.status_impressao === 'Aguardando' || !item.status_impressao ? 'selected' : ''}>Aguardando</option>
-                                <option value="IMPRESSO" ${item.status_impressao === 'IMPRESSO' ? 'selected' : ''}>IMPRESSO</option>
+                                <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
+                                <option value="Parcial" ${normalizarStatusImpressao(item.status_impressao) === 'Parcial' ? 'selected' : ''}>Parcial</option>
+                                <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
+                                <option value="Revisão" ${normalizarStatusImpressao(item.status_impressao) === 'Revisão' ? 'selected' : ''}>Revisão</option>
                             </select>
                         </div>
                     </td>
@@ -3145,7 +3211,8 @@ window.runPedImposition = async function (mode) {
                 is_selected: true,
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
                 pdfDoc: pdfDoc,
-                pdfVersoDoc: pdfVersoDoc
+                pdfVersoDoc: pdfVersoDoc,
+                bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null
             };
         });
     }
@@ -3679,15 +3746,16 @@ window.runPedImposition = async function (mode) {
             const reader = res.body.getReader();
             const decoder = new TextDecoder("utf-8");
             let buffer = "";
-
             let currentEvent = null;
+            // Acumular blobs no modo print para envio sequencial à impressora
+            const printBlobQueue = [];
+
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
                 buffer += decoder.decode(value, { stream: true });
 
                 const lines = buffer.split("\n");
-                // Manter a última linha (incompleta) no buffer
                 buffer = lines.pop();
 
                 for (const line of lines) {
@@ -3701,21 +3769,22 @@ window.runPedImposition = async function (mode) {
                         if (currentEvent === "file" && dataStr) {
                             try {
                                 const fileObj = JSON.parse(dataStr);
-                                toast(`Salvando: ${fileObj.name}...`, 'info');
-                                
                                 const binStr = atob(fileObj.data);
                                 const bytes = new Uint8Array(binStr.length);
-                                for (let i = 0; i < binStr.length; i++) {
-                                    bytes[i] = binStr.charCodeAt(i);
-                                }
+                                for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
                                 const fBlob = new Blob([bytes], {type: "application/pdf"});
 
-                                if (directoryHandle) {
+                                if (mode === 'print') {
+                                    printBlobQueue.push({ name: fileObj.name, blob: fBlob });
+                                    toast(`Arquivo gerado: ${fileObj.name}`, 'info');
+                                } else if (directoryHandle) {
+                                    toast(`Salvando: ${fileObj.name}...`, 'info');
                                     const fh = await directoryHandle.getFileHandle(fileObj.name, { create: true });
                                     const writable = await fh.createWritable();
                                     await writable.write(fBlob);
                                     await writable.close();
                                 } else {
+                                    toast(`Salvando: ${fileObj.name}...`, 'info');
                                     const url = window.URL.createObjectURL(fBlob);
                                     const a = document.createElement('a');
                                     a.href = url;
@@ -3734,12 +3803,25 @@ window.runPedImposition = async function (mode) {
                             try {
                                 const errObj = JSON.parse(dataStr);
                                 throw new Error(errObj.message || "Erro desconhecido no processamento");
-                            } catch (e) {
-                                throw e;
-                            }
+                            } catch (e) { throw e; }
                         }
                     }
                 }
+            }
+
+            if (mode === 'print' && printBlobQueue.length > 0) {
+                if (overlay) overlay.classList.remove('active');
+                toast(`Imposição concluída. Enviando ${printBlobQueue.length} arquivo(s) para a impressora...`, 'info');
+                if (typeof sendPrintJobDirect === 'function') {
+                    const ok = await sendPrintJobDirect(printBlobQueue);
+                    if (ok && state.activeOSItem && state.activeOSItem.itemId) {
+                        await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
+                        if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+                    }
+                } else {
+                    await openPrintModalQueue(printBlobQueue);
+                }
+                return;
             }
 
             toast('Processo de imposição concluído e arquivos salvos!', 'success');
@@ -3754,29 +3836,45 @@ window.runPedImposition = async function (mode) {
         if (contentType && contentType.includes("application/json")) {
             const data = await res.json();
             if (data.type === "multi_file") {
-                toast(`Salvando ${data.files.length} arquivos...`, 'info');
-                for (const f of data.files) {
+                // Converter todos em blobs
+                const multiBlobs = data.files.map(f => {
                     const binStr = atob(f.data);
                     const bytes = new Uint8Array(binStr.length);
-                    for (let i = 0; i < binStr.length; i++) {
-                        bytes[i] = binStr.charCodeAt(i);
-                    }
-                    const fBlob = new Blob([bytes], {type: "application/pdf"});
-                    
-                    if (directoryHandle) {
-                        try {
-                            const fh = await directoryHandle.getFileHandle(f.name, { create: true });
-                            const writable = await fh.createWritable();
-                            await writable.write(fBlob);
-                            await writable.close();
-                        } catch (errSave) {
-                            console.error(`Erro ao salvar ${f.name} na pasta:`, errSave);
+                    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    return { name: f.name, blob: new Blob([bytes], {type: "application/pdf"}) };
+                });
+
+                if (mode === 'print') {
+                    if (overlay) overlay.classList.remove('active');
+                    toast(`Imposição concluída. Enviando ${multiBlobs.length} arquivo(s) para a impressora...`, 'info');
+                    if (typeof sendPrintJobDirect === 'function') {
+                        const ok = await sendPrintJobDirect(multiBlobs);
+                        if (ok && state.activeOSItem && state.activeOSItem.itemId) {
+                            await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
+                            if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
                         }
                     } else {
-                        const url = window.URL.createObjectURL(fBlob);
+                        await openPrintModalQueue(multiBlobs);
+                    }
+                    return;
+                }
+
+                toast(`Salvando ${multiBlobs.length} arquivos...`, 'info');
+                for (const item of multiBlobs) {
+                    if (directoryHandle) {
+                        try {
+                            const fh = await directoryHandle.getFileHandle(item.name, { create: true });
+                            const writable = await fh.createWritable();
+                            await writable.write(item.blob);
+                            await writable.close();
+                        } catch (errSave) {
+                            console.error(`Erro ao salvar ${item.name} na pasta:`, errSave);
+                        }
+                    } else {
+                        const url = window.URL.createObjectURL(item.blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = f.name;
+                        a.download = item.name;
                         document.body.appendChild(a);
                         a.click();
                         a.remove();
@@ -3784,9 +3882,7 @@ window.runPedImposition = async function (mode) {
                         await new Promise(r => setTimeout(r, 500));
                     }
                 }
-                
-                toast('Arquivos de imposição salvos na pasta com sucesso!', 'success');
-                
+                toast('Arquivos de imposição salvos com sucesso!', 'success');
                 if (state.activeOSItem && state.activeOSItem.itemId) {
                     await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
                     if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
@@ -3796,6 +3892,22 @@ window.runPedImposition = async function (mode) {
         }
 
         const blob = await res.blob();
+
+        // Modo impressão direta: usar painel lateral sem abrir modal
+        if (mode === 'print') {
+            if (overlay) overlay.classList.remove('active');
+            if (typeof sendPrintJobDirect === 'function') {
+                const queue = [{ name: defaultFilename, blob }];
+                const ok = await sendPrintJobDirect(queue);
+                if (ok && state.activeOSItem && state.activeOSItem.itemId) {
+                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
+                    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+                }
+            } else {
+                await openPrintModal(blob);
+            }
+            return;
+        }
 
         if (directoryHandle) {
             try {
@@ -3837,10 +3949,17 @@ window.runPedImposition = async function (mode) {
 
 
 
-        // Modo impressao direta: abrir modal em vez de download
-        if (mode === 'print' && _printerAgentActive) {
-            openPrintModal(blob);
-            toast('PDF gerado! Selecione a impressora.', 'success');
+        // Modo impressao direta: abrir modal de seleção de impressora
+        if (mode === 'print') {
+            if (_printerAgentActive) {
+                // Modo Cloud Relay: abrir modal do agente
+                openPrintModal(blob);
+                toast('PDF gerado! Selecione a impressora.', 'success');
+            } else {
+                // Modo Local Direto: abrir modal nativo de impressão
+                openPrintModal(blob);
+                toast('PDF gerado! Configure e envie para a impressora local.', 'success');
+            }
             return;
         }
 
@@ -3942,11 +4061,12 @@ async function pedQueueGerarPDF(itemId, osId) {
     // Definir status como IMPRESSO
     pedQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
     setTimeout(() => {
-        const btnGerar = document.getElementById('btn-impose');
+        // Clicar no botão da aba Pedido (ped-btn-impose)
+        const btnGerar = document.getElementById('ped-btn-impose');
         if (btnGerar) {
             btnGerar.click();
-        } else if (typeof runImposition === 'function') {
-            runImposition();
+        } else if (typeof runPedImposition === 'function') {
+            runPedImposition();
         }
     }, 1200);
 }
@@ -3956,13 +4076,14 @@ async function pedQueueImprimir(itemId, osId) {
     // Definir status como IMPRESSO
     pedQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
     setTimeout(() => {
-        const btnImprimir = document.getElementById('btn-impose-print');
+        // Clicar no botão de Imprimir da aba Pedido (ped-btn-impose-print)
+        const btnImprimir = document.getElementById('ped-btn-impose-print');
         if (btnImprimir) {
             btnImprimir.removeAttribute('disabled');
             btnImprimir.style.opacity = '1';
             btnImprimir.click();
-        } else if (typeof runImposition === 'function') {
-            runImposition('print');
+        } else if (typeof runPedImposition === 'function') {
+            runPedImposition('print');
         }
     }, 1200);
 }
@@ -4106,12 +4227,44 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
     enviarParaPedido(itemId, osId);
 
     if (field === 'status_impressao') {
+        item.impressao = value;
+        // Atualizar também no state.modelosGlobais
+        const numOs = parseInt(osId.toString().replace('vibe_', ''));
+        if (state.modelosGlobais && state.modelosGlobais[numOs]) {
+            const mod = state.modelosGlobais[numOs].find(m => String(m.id) === String(itemId));
+            if (mod) {
+                mod.impressao = value;
+                mod.status_impressao = value;
+            }
+        }
         renderPedOSQueue();
     }
 }
 
 window.pedQueueGerarPDF = pedQueueGerarPDF;
 window.pedQueueImprimir = pedQueueImprimir;
+
+// Botões do preview — atuam sobre o modelo em visualização
+window.pedPreviewGerarPDF = function() {
+    if (!state.activeOSItem) {
+        toast('Nenhum modelo selecionado para gerar PDF.', 'warning');
+        return;
+    }
+    if (typeof runPedImposition === 'function') {
+        runPedImposition('pdf');
+    }
+};
+
+window.pedPreviewImprimir = function() {
+    if (!state.activeOSItem) {
+        toast('Nenhum modelo selecionado para imprimir.', 'warning');
+        return;
+    }
+    if (typeof runPedImposition === 'function') {
+        runPedImposition('print');
+    }
+};
+
 window.pedQueueUpdateCor = pedQueueUpdateCor;
 window.pedQueueUpdateNum = pedQueueUpdateNum;
 window.pedQueueUpdateField = pedQueueUpdateField;

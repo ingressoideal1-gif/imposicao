@@ -7,6 +7,9 @@ from PIL import Image
 
 MM2PT = 2.8346   # 1mm em pontos PDF
 
+# Cache para evitar log repetido de resolução de fontes do sistema
+_font_log_cache: set = set()
+
 # Fração do ascender por família de fonte (ascender / em-size).
 # Usado para converter ancoragem CENTRAL (canvas textBaseline='middle')
 # para a BASELINE exigida pelo PyMuPDF insert_text.
@@ -341,6 +344,17 @@ class ImpositionEngine:
         self._url_cache = {}
         self.on_file_generated = on_file_generated
         self.generated_files = TriggerList(on_file_generated)
+        # Cache de bytes de fontes TTF: {font_file_path -> bytes}
+        # Evita re-leitura do disco a cada chamada, mas PyMuPDF ainda
+        # faz deduplicacao interna de streams identicos no PDF.
+        self._font_buffer_cache: dict = {}
+
+    def _get_font_buffer(self, font_file: str) -> bytes:
+        """Le o arquivo TTF do disco uma unica vez e cacheia os bytes em memoria."""
+        if font_file not in self._font_buffer_cache:
+            with open(font_file, 'rb') as f:
+                self._font_buffer_cache[font_file] = f.read()
+        return self._font_buffer_cache[font_file]
 
     def _get_url_bytes(self, url: str) -> bytes:
         if url in self._url_cache:
@@ -560,7 +574,11 @@ class ImpositionEngine:
                 if found_file:
                     font_name = family
                     font_file = found_file
-                    print(f"[engine] Fonte do sistema encontrada: '{family}' -> {found_file}")
+                    # Log apenas na primeira vez que a fonte é resolvida (evita spam no log)
+                    _font_log_key = f"{family}|{found_file}"
+                    if _font_log_key not in _font_log_cache:
+                        _font_log_cache.add(_font_log_key)
+                        print(f"[engine] Fonte do sistema: '{family}' -> {found_file}")
                 elif el.get("_font_data"):
                     # Fonte embutida no payload (base64) - usar arquivo temporário
                     import base64, tempfile
@@ -579,7 +597,10 @@ class ImpositionEngine:
                 else:
                     font_name = "hebo" if is_bold else "helv"
                     font_file = None
-                    print(f"[engine] Fonte '{family}' nao encontrada no sistema, usando Helvetica{'Bold' if is_bold else ''}")
+                    _warn_key = f"not_found:{family}"
+                    if _warn_key not in _font_log_cache:
+                        _font_log_cache.add(_warn_key)
+                        print(f"[engine] Fonte '{family}' nao encontrada, usando Helvetica{'Bold' if is_bold else ''}")
             else:
                 font_name = font_map.get(raw_font_name, "helv")
 
@@ -589,7 +610,23 @@ class ImpositionEngine:
                 "color": rgb,
             }
             if font_file:
-                insert_kwargs["fontfile"] = font_file
+                # Registrar a fonte na pagina via insert_font(fontbuffer=) antes
+                # de chamar insert_text. Isso evita que o arquivo temporario seja
+                # lido novamente (pode ja ter sido deletado) e o PyMuPDF deduplica
+                # o stream da fonte quando o mesmo xref ja existe na pagina.
+                try:
+                    font_bytes = self._get_font_buffer(font_file)
+                    page.insert_font(fontname=font_name, fontbuffer=font_bytes)
+                    # insert_text usa apenas fontname — PyMuPDF encontra pelo xref ja registrado
+                    # fontfile NAO e passado para evitar re-leitura do arquivo
+                except Exception as _fe:
+                    # Fallback: tentar com fontfile diretamente
+                    if os.path.isfile(font_file):
+                        insert_kwargs["fontfile"] = font_file
+                    else:
+                        # Arquivo nao existe mais — usar fonte padrao
+                        insert_kwargs["fontname"] = "hebo" if is_bold else "helv"
+                        font_file = None
 
             # Medir largura real do texto para centralizar horizontalmente
             if font_file:

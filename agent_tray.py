@@ -101,12 +101,20 @@ def start_server_thread():
     
     worker_thread = threading.Thread(target=run_worker, daemon=True, name="IdealAgentWorker")
     worker_thread.start()
-    time.sleep(1)
+    # Aguardar servidor estar realmente pronto (testa a conexao em loop)
+    _deadline = time.time() + 30
+    while time.time() < _deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", 9000), timeout=1):
+                break
+        except OSError:
+            time.sleep(0.5)
+
 
 
 def open_panel(icon=None, item=None):
     # Abre a interface local - 100% offline, sem depender da internet
-    webbrowser.open("http://127.0.0.1:9000/app/index.html")
+    webbrowser.open("http://127.0.0.1:9000/app/")
 
 
 def add_to_startup(icon=None, item=None):
@@ -221,6 +229,9 @@ def main():
     print("[agent] Iniciando worker e servidor...")
     start_server_thread()
     print("[agent] Worker e servidor iniciados com sucesso!")
+
+    # Abrir o painel automaticamente ao iniciar
+    threading.Thread(target=open_panel, daemon=True).start()
 
     icon.run(setup=setup_tray)
 

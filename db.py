@@ -5,6 +5,7 @@ import urllib.request
 import urllib.parse
 
 import sys
+import datetime
 
 # Resolve o diretório correto para o banco de dados local persistente
 if getattr(sys, 'frozen', False):
@@ -959,3 +960,42 @@ def delete_mapa_teatro(mapa_id: str):
     if "mapas_teatro" in db:
         db["mapas_teatro"] = [m for m in db["mapas_teatro"] if m["id"] != mapa_id]
         _save_db(db)
+
+def _headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+
+def get_print_config(produto_id):
+    """Busca config de impressora salva para um produto."""
+    if not IS_SUPABASE_ACTIVE:
+        return None
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/producao_config_impressora?produto_id=eq.{produto_id}&select=*"
+        req = urllib.request.Request(url, headers=_headers(), method='GET')
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return data[0] if data else None
+    except Exception as e:
+        print(f"[db] get_print_config erro: {e}")
+        return None
+
+def upsert_print_config(data):
+    """Salva/atualiza config de impressora para um produto (upsert por produto_id)."""
+    if not IS_SUPABASE_ACTIVE:
+        return False
+    try:
+        data['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        body = json.dumps(data).encode('utf-8')
+        url = f"{SUPABASE_URL}/rest/v1/producao_config_impressora"
+        headers = _headers()
+        headers['Content-Type'] = 'application/json'
+        headers['Prefer'] = 'resolution=merge-duplicates'
+        req = urllib.request.Request(url, data=body, headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"[db] upsert_print_config: {resp.status}")
+            return True
+    except Exception as e:
+        print(f"[db] upsert_print_config erro: {e}")
+        return False

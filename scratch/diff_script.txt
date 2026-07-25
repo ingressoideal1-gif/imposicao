@@ -1,0 +1,298 @@
+diff --git a/frontend/script.js b/frontend/script.js
+index dc2b276..b319696 100644
+--- a/frontend/script.js
++++ b/frontend/script.js
+@@ -12741,7 +12741,7 @@ async function carregarModelosGlobais() {
+             const chunk = todosNumeros.slice(i, i + chunkSize);
+             const { data, error } = await supabaseClient
+                 .from('pedidos_modelos')
+-                .select('id, id_int, status_arte')
++                .select('id, id_int, status_arte, status_impressao, status_producao, quantidade')
+                 .in('id_int', chunk);
+                 
+             if (error) throw error;
+@@ -12751,6 +12751,8 @@ async function carregarModelosGlobais() {
+         state.modelosGlobais = {};
+         todosModelos.forEach(m => {
+             if (!state.modelosGlobais[m.id_int]) state.modelosGlobais[m.id_int] = [];
++            m.impressao = normalizarStatusImpressao(m.status_impressao || m.status_producao);
++            m.quantidade = parseInt(m.quantidade || 0);
+             state.modelosGlobais[m.id_int].push(m);
+         });
+         console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
+@@ -13022,7 +13024,7 @@ async function loadOSItens(osId) {
+                             num_inicial: item.numeracao_inicio || item.num_inicial,
+                             num_final: item.numeracao_fim || item.num_final,
+                             verso: !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE'),
+-                            impressao: item.status_producao || item.impressao || 'AGUARD.',
++                            impressao: normalizarStatusImpressao(item.status_impressao || item.status_producao || item.impressao),
+                             nome_produto_real: prop ? prop.nome_produto : null,
+                             amostra_cor_id: item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
+                             amostra_num_id: resolvedNumId || null,
+@@ -13239,6 +13241,73 @@ function getStatusBadge(status) {
+     return `<span class="badge ${s.cls}">${s.icon} ${label}</span>`;
+ }
+ 
++/**
++ * Normaliza o status de impressão para as novas opções: Aguardando, Impresso, Parcial, Revisão
++ */
++function normalizarStatusImpressao(status) {
++    if (!status) return 'Aguardando';
++    const s = status.toString().trim().toUpperCase();
++    if (s === 'AGUARD.' || s === 'AGUARDANDO') return 'Aguardando';
++    if (s === 'PARCIAL') return 'Parcial';
++    if (s === 'IMPRESSO') return 'Impresso';
++    if (s === 'ERRO' || s === 'REVISAO' || s === 'REVISÃO') return 'Revisão';
++    
++    const lower = status.toString().trim().toLowerCase();
++    if (lower === 'impresso') return 'Impresso';
++    if (lower === 'parcial') return 'Parcial';
++    if (lower === 'aguardando') return 'Aguardando';
++    if (lower === 'revisao' || lower === 'revisão') return 'Revisão';
++    
++    return status;
++}
++
++/**
++ * Calcula o status de impressão do pedido a partir de seus modelos
++ */
++function calcularStatusImpressaoPedido(modelos) {
++    if (!modelos || modelos.length === 0) return 'Aguardando';
++
++    // 1. Se qualquer modelo for 'Revisão', o status do pedido é 'Revisão'
++    const temRevisao = modelos.some(m => {
++        const st = normalizarStatusImpressao(m.impressao || m.status_impressao);
++        return st === 'Revisão';
++    });
++    if (temRevisao) return 'Revisão';
++
++    // Contar modelos impressos
++    const impressosCount = modelos.filter(m => {
++        const st = normalizarStatusImpressao(m.impressao || m.status_impressao);
++        return st === 'Impresso';
++    }).length;
++
++    // 2. Se todos os modelos estão impressos
++    if (impressosCount === modelos.length) {
++        return 'Impresso';
++    }
++
++    // 3. Se ao menos um está impresso (e nem todos, pois a condição acima falhou)
++    if (impressosCount > 0) {
++        return 'Parcial';
++    }
++
++    // 4. Se nenhum está impresso
++    return 'Aguardando';
++}
++
++/**
++ * Retorna badge HTML para o status da impressão do pedido
++ */
++function getStatusImpressaoBadge(status) {
++    const map = {
++        'Aguardando': { icon: '⏳', cls: 'badge-blue', label: 'Aguardando' },
++        'Impresso': { icon: '✅', cls: 'badge-green', label: 'Impresso' },
++        'Parcial': { icon: '🔄', cls: 'badge-amber', label: 'Parcial' },
++        'Revisão': { icon: '⚠️', cls: 'badge-red', label: 'Revisão' }
++    };
++    const s = map[status] || { icon: '❓', cls: '', label: status };
++    return `<span class="badge ${s.cls}">${s.icon} ${s.label}</span>`;
++}
++
+ /**
+  * Retorna badge HTML para aprovação
+  */
+@@ -13476,8 +13545,11 @@ function renderOrdens() {
+     const searchArte = (document.getElementById('os-search-arte')?.value || '').trim().toLowerCase();
+     const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
+ 
+-    // Fila 1: Impressão (status_interno === 'EM PRODUCAO')
+-    let ordensImpressao = state.ordens.filter(os => (os.status_interno || '').toUpperCase() === 'EM PRODUCAO' || (os.status_interno || '').toUpperCase() === 'EM PRODUÇÃO');
++    // Fila 1: Impressão (status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO')
++    let ordensImpressao = state.ordens.filter(os => {
++        const st = (os.status_interno || '').toUpperCase();
++        return st === 'EM PRODUCAO' || st === 'EM PRODUÇÃO' || st === 'EM IMPRESSAO' || st === 'EM IMPRESSÃO';
++    });
+ 
+     // --- Calcular Estatísticas Dinâmicas ---
+     let totalItensImpressao = 0;
+@@ -13696,11 +13768,15 @@ function renderOrdens() {
+                 
+                 // Na view de impressão, queremos contar os impressos
+                 const impressosCount = modelosGlobais.length > 0 
+-                    ? modelosGlobais.filter(m => m.impressao === 'IMPRESSO').length 
+-                    : osItensList.filter(item => item.impressao === 'IMPRESSO').length;
++                    ? modelosGlobais.filter(m => normalizarStatusImpressao(m.impressao) === 'Impresso').length 
++                    : osItensList.filter(item => normalizarStatusImpressao(item.impressao) === 'Impresso').length;
+                     
+                 const pct = totalItens > 0 ? Math.round((impressosCount / totalItens) * 100) : 0;
+                 
++                // Calcular status de impressão do pedido de acordo com os modelos
++                const modelosParaStatus = modelosGlobais.length > 0 ? modelosGlobais : osItensList;
++                const statusImpressaoPedido = calcularStatusImpressaoPedido(modelosParaStatus);
++
+                 // Barra de progresso do status de impressão
+                 const progressBarHtml = `
+                     <div style="width: 100%; min-width: 110px;">
+@@ -13709,7 +13785,7 @@ function renderOrdens() {
+                             <strong>${pct}%</strong>
+                         </div>
+                         <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
+-                            <div style="width: ${pct}%; height: 100%; background: ${pct === 100 ? 'var(--green)' : 'var(--blue)'}; border-radius: 3px; transition: width 0.3s ease;"></div>
++                            <div style="width: ${pct}%; height: 100%; background: var(--green); border-radius: 3px; transition: width 0.3s ease;"></div>
+                         </div>
+                     </div>
+                 `;
+@@ -13740,7 +13816,9 @@ function renderOrdens() {
+                 }
+ 
+                 // Soma das quantidades de todos os modelos
+-                const totalQtd = osItensList.reduce((acc, item) => acc + (item.quantidade || 0), 0);
++                const totalQtd = modelosGlobais.length > 0 
++                    ? modelosGlobais.reduce((acc, m) => acc + (m.quantidade || 0), 0)
++                    : osItensList.reduce((acc, item) => acc + (parseInt(item.quantidade || item.qtd || 0)), 0);
+ 
+                 // Frete (forma de envio)
+                 const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
+@@ -13770,7 +13848,7 @@ function renderOrdens() {
+                         <td><span class="badge">${totalItens} ${totalItens === 1 ? 'modelo' : 'modelos'}</span></td>
+                         <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
+                         <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1);">${frete}</span></td>
+-                        <td>${getStatusBadge(os.status)}</td>
++                        <td>${getStatusImpressaoBadge(statusImpressaoPedido)}</td>
+                     </tr>
+                 `;
+ 
+@@ -13950,9 +14028,9 @@ async function toggleOSDetail(osId) {
+     const os = state.ordens.find(o => o.id === osId);
+     if (!os) return;
+ 
+-    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' (vindo do Vibecode)
++    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO' (vindo do Vibecode)
+     const siUpper = (os.status_interno || '').toUpperCase();
+-    const isImpressao = siUpper === 'EM PRODUCAO' || siUpper === 'EM PRODUÇÃO' || os.status === 'EM IMPRESSÃO';
++    const isImpressao = siUpper === 'EM PRODUCAO' || siUpper === 'EM PRODUÇÃO' || siUpper === 'EM IMPRESSAO' || siUpper === 'EM IMPRESSÃO' || os.status === 'EM IMPRESSÃO';
+     const activeCard = document.getElementById(isImpressao ? 'os-detail-card-impressao' : 'os-detail-card-arte');
+     const inactiveCard = document.getElementById(isImpressao ? 'os-detail-card-arte' : 'os-detail-card-impressao');
+ 
+@@ -13994,9 +14072,9 @@ function renderOSItens(osId) {
+     const os = state.ordens.find(o => o.id === osId);
+     if (!os) return;
+ 
+-    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' (vindo do Vibecode)
++    // OSs na fila de impressão têm status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO' (vindo do Vibecode)
+     const siUpperR = (os.status_interno || '').toUpperCase();
+-    const isImpressao = siUpperR === 'EM PRODUCAO' || siUpperR === 'EM PRODUÇÃO' || os.status === 'EM IMPRESSÃO';
++    const isImpressao = siUpperR === 'EM PRODUCAO' || siUpperR === 'EM PRODUÇÃO' || siUpperR === 'EM IMPRESSAO' || siUpperR === 'EM IMPRESSÃO' || os.status === 'EM IMPRESSÃO';
+     const tbody = document.getElementById(isImpressao ? 'tbody-os-itens-impressao' : 'tbody-os-itens-arte');
+     if (!tbody) return;
+ 
+@@ -14023,10 +14101,10 @@ function renderOSItens(osId) {
+                 <td style="text-align: center;">${item.verso ? '✅' : '--'}</td>
+                 <td style="text-align: center;" onclick="event.stopPropagation()">
+                     <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
+-                        <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
+-                        <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
+-                        <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
+-                        <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>❌ Erro</option>
++                        <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
++                        <option value="Parcial" ${normalizarStatusImpressao(item.impressao) === 'Parcial' ? 'selected' : ''}>🔄 Parcial</option>
++                        <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
++                        <option value="Revisão" ${normalizarStatusImpressao(item.impressao) === 'Revisão' ? 'selected' : ''}>⚠️ Revisão</option>
+                     </select>
+                 </td>
+             </tr>
+@@ -14059,10 +14137,10 @@ function renderOSItens(osId) {
+             </td>
+             <td>
+                 <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
+-                    <option value="AGUARD." ${item.impressao === 'AGUARD.' ? 'selected' : ''}>⏳ Aguard.</option>
+-                    <option value="PARCIAL" ${item.impressao === 'PARCIAL' ? 'selected' : ''}>🔄 Parcial</option>
+-                    <option value="IMPRESSO" ${item.impressao === 'IMPRESSO' ? 'selected' : ''}>✅ Impresso</option>
+-                    <option value="ERRO" ${item.impressao === 'ERRO' ? 'selected' : ''}>❌ Erro</option>
++                    <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
++                    <option value="Parcial" ${normalizarStatusImpressao(item.impressao) === 'Parcial' ? 'selected' : ''}>🔄 Parcial</option>
++                    <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
++                    <option value="Revisão" ${normalizarStatusImpressao(item.impressao) === 'Revisão' ? 'selected' : ''}>⚠️ Revisão</option>
+                 </select>
+             </td>
+             <td style="display: flex; gap: 6px; flex-wrap: wrap;">
+@@ -14239,6 +14317,16 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
+             }
+         }
+ 
++        // Atualizar também no state.modelosGlobais
++        const numOs = parseInt(osId.toString().replace('vibe_', ''));
++        if (state.modelosGlobais && state.modelosGlobais[numOs]) {
++            const mod = state.modelosGlobais[numOs].find(m => String(m.id) === String(itemId));
++            if (mod) {
++                mod.impressao = novoStatus;
++                mod.status_impressao = novoStatus;
++            }
++        }
++
+         toast(`Impressão atualizada: ${novoStatus}`, 'success');
+         renderOrdens();
+     } catch (e) {
+@@ -15091,8 +15179,10 @@ function renderImpOSQueue() {
+                         <div style="display: flex; align-items: center; gap: 6px;">
+                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
+                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
+-                                <option value="Aguardando" ${item.status_impressao === 'Aguardando' || !item.status_impressao ? 'selected' : ''}>Aguardando</option>
+-                                <option value="IMPRESSO" ${item.status_impressao === 'IMPRESSO' ? 'selected' : ''}>IMPRESSO</option>
++                                <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
++                                <option value="Parcial" ${normalizarStatusImpressao(item.status_impressao) === 'Parcial' ? 'selected' : ''}>Parcial</option>
++                                <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
++                                <option value="Revisão" ${normalizarStatusImpressao(item.status_impressao) === 'Revisão' ? 'selected' : ''}>Revisão</option>
+                             </select>
+                         </div>
+                     </td>
+@@ -15294,6 +15384,16 @@ function impQueueUpdateField(itemId, osId, field, value) {
+     autoSaveOSItemField(itemId, osId, dbField, dbValue);
+ 
+     if (field === 'status_impressao') {
++        item.impressao = value;
++        // Atualizar também no state.modelosGlobais
++        const numOs = parseInt(osId.toString().replace('vibe_', ''));
++        if (state.modelosGlobais && state.modelosGlobais[numOs]) {
++            const mod = state.modelosGlobais[numOs].find(m => String(m.id) === String(itemId));
++            if (mod) {
++                mod.impressao = value;
++                mod.status_impressao = value;
++            }
++        }
+         renderImpOSQueue();
+     }
+ }
+@@ -15352,8 +15452,30 @@ function toggleImpOSQueue() {
+     }
+ }
+ 
++// Controla abertura e fechamento do Drawer Menu (menu lateral deslizante)
++window.toggleDrawer = function(show) {
++    const sidebar = document.querySelector('.sidebar');
++    const backdrop = document.getElementById('drawer-backdrop');
++    if (!sidebar || !backdrop) return;
++    
++    const shouldShow = show !== undefined ? !!show : !sidebar.classList.contains('active');
++    
++    if (shouldShow) {
++        sidebar.classList.add('active');
++        backdrop.classList.add('active');
++    } else {
++        sidebar.classList.remove('active');
++        backdrop.classList.remove('active');
++    }
++};
++
+ // Função global de navegação entre views
+ window.showView = function(viewId) {
++    // Fechar o Drawer Menu ao mudar de tela
++    if (typeof window.toggleDrawer === 'function') {
++        window.toggleDrawer(false);
++    }
++
+     // Salvar no localStorage para persistir após F5
+     localStorage.setItem('activeView', viewId);
+ 
