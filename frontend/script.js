@@ -18145,7 +18145,7 @@ async function loadBriefingBase(osId, osIntId) {
 }
 
 /**
- * Carrega e exibe os anexos vinculados ao pedido (de pedidos_artes.arquivos e propostas_chat.anexos)
+ * Carrega e exibe os anexos vinculados ao pedido da coluna 'arquivos' (jsonb) na tabela 'pedidos_artes'
  */
 async function loadAnexosPedido(osId, osNum) {
     const container = document.getElementById(`anexos-pedido-container-${osId}`);
@@ -18158,74 +18158,58 @@ async function loadAnexosPedido(osId, osNum) {
 
     try {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            // 1. Buscar de pedidos_artes
+            // Buscar exclusivamente da coluna 'arquivos' (jsonb) na tabela 'pedidos_artes'
             const { data: artesData } = await supabaseClient
                 .from('pedidos_artes')
-                .select('arquivos, storage_path, nome_arquivo, storage_bucket')
+                .select('arquivos, storage_path, nome_arquivo, storage_bucket, mime_type')
                 .eq('id_int', numInt);
 
             if (artesData && artesData.length > 0) {
                 artesData.forEach(pa => {
-                    if (pa.arquivos && Array.isArray(pa.arquivos)) {
-                        pa.arquivos.forEach(arq => {
-                            let fileUrl = arq.url;
+                    let arqs = pa.arquivos;
+                    if (typeof arqs === 'string') {
+                        try { arqs = JSON.parse(arqs); } catch(e) {}
+                    }
+                    if (arqs && Array.isArray(arqs)) {
+                        arqs.forEach(arq => {
+                            let fileUrl = arq.url || arq.public_url || arq.publicUrl;
+                            const bucket = arq.storage_bucket || pa.storage_bucket || 'chat-ideal';
+                            
                             if (!fileUrl && arq.storage_path) {
-                                const bucket = arq.storage_bucket || pa.storage_bucket || 'chat-ideal';
                                 const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(arq.storage_path);
                                 fileUrl = pUrl?.publicUrl;
                             }
+                            if (!fileUrl && arq.path) {
+                                const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(arq.path);
+                                fileUrl = pUrl?.publicUrl;
+                            }
+
                             if (fileUrl) {
                                 anexosList.push({
-                                    nome: arq.nome_arquivo || arq.name || 'Arquivo Anexo',
+                                    id: arq.id || crypto.randomUUID(),
+                                    nome: arq.nome_arquivo || arq.nome || arq.name || arq.filename || 'Anexo',
                                     url: fileUrl,
-                                    tamanho: arq.tamanho_bytes || arq.size || 0,
-                                    tipo: arq.mime_type || arq.type || '',
-                                    origem: arq.enviado_por || 'Arte'
+                                    tamanho: arq.tamanho_bytes || arq.tamanho || arq.size || 0,
+                                    tipo: arq.mime_type || arq.tipo || arq.type || '',
+                                    origem: arq.enviado_por || 'Arte/Comercial'
                                 });
                             }
                         });
                     }
-                    if (pa.storage_path && pa.nome_arquivo) {
+
+                    // Fallback se houver arquivo raiz individual salvo na pedidos_artes
+                    if (pa.storage_path && pa.nome_arquivo && anexosList.length === 0) {
                         const bucket = pa.storage_bucket || 'chat-ideal';
                         const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(pa.storage_path);
                         if (pUrl?.publicUrl) {
-                            if (!anexosList.some(item => item.url === pUrl.publicUrl)) {
-                                anexosList.push({
-                                    nome: pa.nome_arquivo,
-                                    url: pUrl.publicUrl,
-                                    tamanho: 0,
-                                    tipo: pa.mime_type || '',
-                                    origem: 'Arte Principal'
-                                });
-                            }
+                            anexosList.push({
+                                nome: pa.nome_arquivo,
+                                url: pUrl.publicUrl,
+                                tamanho: 0,
+                                tipo: pa.mime_type || '',
+                                origem: 'Arte Principal'
+                            });
                         }
-                    }
-                });
-            }
-
-            // 2. Buscar de propostas_chat
-            const { data: chatData } = await supabaseClient
-                .from('propostas_chat')
-                .select('anexos, autor_nome')
-                .eq('id_int', numInt)
-                .not('anexos', 'is', null);
-
-            if (chatData && chatData.length > 0) {
-                chatData.forEach(c => {
-                    if (c.anexos && Array.isArray(c.anexos)) {
-                        c.anexos.forEach(anx => {
-                            if (anx.url) {
-                                if (!anexosList.some(item => item.url === anx.url)) {
-                                    anexosList.push({
-                                        nome: anx.name || anx.nome_arquivo || 'Anexo do Chat',
-                                        url: anx.url,
-                                        tamanho: anx.size || anx.tamanho_bytes || 0,
-                                        tipo: anx.type || anx.mime_type || '',
-                                        origem: c.autor_nome || 'Atendimento'
-                                    });
-                                }
-                            }
-                        });
                     }
                 });
             }
@@ -18234,7 +18218,7 @@ async function loadAnexosPedido(osId, osNum) {
         if (anexosList.length === 0) {
             container.innerHTML = `
                 <div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 16px; background: rgba(0,0,0,0.02); border: 1px dashed var(--border); border-radius: 8px;">
-                    📎 Nenhum anexo encontrado para este pedido.
+                    📎 Nenhum anexo cadastrado neste pedido.
                 </div>
             `;
             return;
@@ -18250,7 +18234,7 @@ async function loadAnexosPedido(osId, osNum) {
                 icon = '📕';
                 iconBg = 'rgba(239,68,68,0.15)';
                 iconColor = '#ef4444';
-            } else if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) {
+            } else if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'ai', 'psd', 'cdr'].includes(ext)) {
                 icon = '🖼️';
                 iconBg = 'rgba(16,185,129,0.15)';
                 iconColor = '#10b981';
@@ -18274,7 +18258,7 @@ async function loadAnexosPedido(osId, osNum) {
                             </div>
                             <div style="font-size: 0.72rem; color: var(--text-dim); display: flex; gap: 8px;">
                                 ${sizeMb ? `<span>${sizeMb}</span>` : ''}
-                                <span>Por: ${anx.origem}</span>
+                                ${anx.origem ? `<span>Por: ${anx.origem}</span>` : ''}
                             </div>
                         </div>
                     </div>
@@ -18292,6 +18276,7 @@ async function loadAnexosPedido(osId, osNum) {
         container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;">Erro ao carregar anexos.</div>`;
     }
 }
+
 
 async function uploadAnexoPedido(osId, osNum) {
     const input = document.createElement('input');
