@@ -17119,13 +17119,14 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     const hasSavedArte = !!faceArteUrl;
 
     // Se nada selecionado (sem cor, sem numeração, sem arte para esta face), esconder canvas e mostrar vazio
-    const corId = item.amostra_cor_id || '';
-    const numId = item.amostra_num_id || '';
+    const corId = (cor ? cor.id : '') || item.amostra_cor_id || '';
+    const numId = (num ? num.id : '') || item.amostra_num_id || '';
     if (!corId && !numId && !hasArte && !hasSavedArte) {
         canvas.style.display = 'none';
         if (empty) empty.style.display = 'block';
         return;
     }
+
 
     let targetW = fmt.width_mm;
     let targetH = fmt.height_mm;
