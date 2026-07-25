@@ -17125,20 +17125,8 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
 
         Object.assign(itemLocal, dataToUpdate);
-
-        // Se o pedido estava com entrega_dados === 'APROVADO' e houve alteração no modelo/arte, muda para 'ALTERADO'
-        const numInt = parseInt(String(osId).replace('vibe_', ''));
-        if (!isNaN(numInt)) {
-            const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
-            if (arteGlobal && (arteGlobal.entrega_dados || '').toUpperCase() === 'APROVADO') {
-                arteGlobal.entrega_dados = 'ALTERADO';
-                await supabaseClient.from('pedidos_artes')
-                    .update({ entrega_dados: 'ALTERADO' })
-                    .eq('id_int', numInt);
-                if (typeof renderOrdens === 'function') renderOrdens();
-            }
-        }
     } catch (e) {
+
 
         console.error('[SAVE] Erro:', e);
         throw e;
@@ -18691,25 +18679,17 @@ async function saveBriefingField(osIntId, field, value, isObs = false, itemId = 
     briefingSaveTimeout = setTimeout(async () => {
         try {
             const current = state.pedidosArtesData[osIntId] || {};
-
-            // Se a aprovação de entrega/faturamento era APROVADO e algum campo do briefing mudou, altera para ALTERADO
-            const arteGlobal = state.todasArtes?.find(a => String(a.id_int) === String(osIntId));
-            if (arteGlobal && (arteGlobal.entrega_dados || '').toUpperCase() === 'APROVADO') {
-                arteGlobal.entrega_dados = 'ALTERADO';
-                current.entrega_dados = 'ALTERADO';
-                if (typeof renderOrdens === 'function') renderOrdens();
-            }
-
             const payload = {
+
                 id_int: osIntId,
                 nome_evento: current.nome_evento || null,
                 data_evento: current.data_evento || null,
                 local_evento: current.local_evento || null,
                 observacoes: current.observacoes || {},
                 designer_uid: current.designer_uid || null,
-                designer_nome: current.designer_nome || null,
-                ...(current.entrega_dados ? { entrega_dados: current.entrega_dados } : {})
+                designer_nome: current.designer_nome || null
             };
+
 
 
             const { data: existingData } = await supabaseClient
