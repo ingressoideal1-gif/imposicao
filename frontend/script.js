@@ -16331,7 +16331,28 @@ function renderAmostrasOSItens(osId) {
                         </div>
                     </div>
 
+                    <!-- Anexos do Pedido -->
+                    <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
+                        <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                                    📎 Anexos do Pedido
+                                </div>
+                                <div style="font-size: 0.95rem; color: var(--text-dim); margin-top: 4px;">
+                                    Arquivos e anexos vinculados a este pedido.
+                                </div>
+                            </div>
+                            <button class="btn btn-sm btn-secondary" onclick="uploadAnexoPedido('${osId}', '${osNum}')" style="font-size: 0.78rem; font-weight: 700; padding: 4px 10px; display: flex; align-items: center; gap: 6px;">
+                                📤 Upload Anexo
+                            </button>
+                        </div>
+                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;" id="anexos-pedido-container-${osId}">
+                            <div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;"><i class="fa-solid fa-spinner fa-spin"></i> Buscando anexos...</div>
+                        </div>
+                    </div>
+
                     <!-- Designers Ideal -->
+
                     <div class="card" style="border: 1px solid var(--border); box-shadow: var(--shadow);">
                         <div class="card-header" style="background: transparent; border-bottom: 0; padding: 16px 16px 4px 16px;">
                             <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
@@ -16415,8 +16436,10 @@ function renderAmostrasOSItens(osId) {
     
     if (isInternal) {
         loadBriefingBase(osId, osNum);
+        loadAnexosPedido(osId, osNum);
         loadUltimosPedidos(osId, os.cliente);
     }
+
 
     setTimeout(async () => {
         for (let idx = 0; idx < itens.length; idx++) {
@@ -18121,7 +18144,228 @@ async function loadBriefingBase(osId, osIntId) {
     }
 }
 
+/**
+ * Carrega e exibe os anexos vinculados ao pedido (de pedidos_artes.arquivos e propostas_chat.anexos)
+ */
+async function loadAnexosPedido(osId, osNum) {
+    const container = document.getElementById(`anexos-pedido-container-${osId}`);
+    if (!container || !osNum) return;
+
+    const numInt = parseInt(osNum);
+    if (isNaN(numInt)) return;
+
+    let anexosList = [];
+
+    try {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            // 1. Buscar de pedidos_artes
+            const { data: artesData } = await supabaseClient
+                .from('pedidos_artes')
+                .select('arquivos, storage_path, nome_arquivo, storage_bucket')
+                .eq('id_int', numInt);
+
+            if (artesData && artesData.length > 0) {
+                artesData.forEach(pa => {
+                    if (pa.arquivos && Array.isArray(pa.arquivos)) {
+                        pa.arquivos.forEach(arq => {
+                            let fileUrl = arq.url;
+                            if (!fileUrl && arq.storage_path) {
+                                const bucket = arq.storage_bucket || pa.storage_bucket || 'chat-ideal';
+                                const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(arq.storage_path);
+                                fileUrl = pUrl?.publicUrl;
+                            }
+                            if (fileUrl) {
+                                anexosList.push({
+                                    nome: arq.nome_arquivo || arq.name || 'Arquivo Anexo',
+                                    url: fileUrl,
+                                    tamanho: arq.tamanho_bytes || arq.size || 0,
+                                    tipo: arq.mime_type || arq.type || '',
+                                    origem: arq.enviado_por || 'Arte'
+                                });
+                            }
+                        });
+                    }
+                    if (pa.storage_path && pa.nome_arquivo) {
+                        const bucket = pa.storage_bucket || 'chat-ideal';
+                        const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(pa.storage_path);
+                        if (pUrl?.publicUrl) {
+                            if (!anexosList.some(item => item.url === pUrl.publicUrl)) {
+                                anexosList.push({
+                                    nome: pa.nome_arquivo,
+                                    url: pUrl.publicUrl,
+                                    tamanho: 0,
+                                    tipo: pa.mime_type || '',
+                                    origem: 'Arte Principal'
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 2. Buscar de propostas_chat
+            const { data: chatData } = await supabaseClient
+                .from('propostas_chat')
+                .select('anexos, autor_nome')
+                .eq('id_int', numInt)
+                .not('anexos', 'is', null);
+
+            if (chatData && chatData.length > 0) {
+                chatData.forEach(c => {
+                    if (c.anexos && Array.isArray(c.anexos)) {
+                        c.anexos.forEach(anx => {
+                            if (anx.url) {
+                                if (!anexosList.some(item => item.url === anx.url)) {
+                                    anexosList.push({
+                                        nome: anx.name || anx.nome_arquivo || 'Anexo do Chat',
+                                        url: anx.url,
+                                        tamanho: anx.size || anx.tamanho_bytes || 0,
+                                        tipo: anx.type || anx.mime_type || '',
+                                        origem: c.autor_nome || 'Atendimento'
+                                    });
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        if (anexosList.length === 0) {
+            container.innerHTML = `
+                <div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 16px; background: rgba(0,0,0,0.02); border: 1px dashed var(--border); border-radius: 8px;">
+                    📎 Nenhum anexo encontrado para este pedido.
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = anexosList.map(anx => {
+            const ext = (anx.nome.split('.').pop() || '').toLowerCase();
+            let icon = '📄';
+            let iconBg = 'rgba(59,130,246,0.15)';
+            let iconColor = '#3b82f6';
+
+            if (['pdf'].includes(ext)) {
+                icon = '📕';
+                iconBg = 'rgba(239,68,68,0.15)';
+                iconColor = '#ef4444';
+            } else if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) {
+                icon = '🖼️';
+                iconBg = 'rgba(16,185,129,0.15)';
+                iconColor = '#10b981';
+            } else if (['zip', 'rar', '7z', 'gz'].includes(ext)) {
+                icon = '📦';
+                iconBg = 'rgba(245,158,11,0.15)';
+                iconColor = '#f59e0b';
+            }
+
+            const sizeMb = anx.tamanho > 0 ? (anx.tamanho > 1048576 ? `${(anx.tamanho / 1048576).toFixed(1)} MB` : `${Math.round(anx.tamanho / 1024)} KB`) : '';
+
+            return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); gap: 10px; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                        <div style="width: 34px; height: 34px; border-radius: 8px; background: ${iconBg}; color: ${iconColor}; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">
+                            ${icon}
+                        </div>
+                        <div style="min-width: 0;">
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${anx.nome}">
+                                ${anx.nome}
+                            </div>
+                            <div style="font-size: 0.72rem; color: var(--text-dim); display: flex; gap: 8px;">
+                                ${sizeMb ? `<span>${sizeMb}</span>` : ''}
+                                <span>Por: ${anx.origem}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                        <a href="${anx.url}" target="_blank" download="${anx.nome}" rel="noopener" class="btn btn-sm" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 700; background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+                            📥 Download
+                        </a>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (e) {
+        console.error('Erro ao carregar anexos do pedido:', e);
+        container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;">Erro ao carregar anexos.</div>`;
+    }
+}
+
+async function uploadAnexoPedido(osId, osNum) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = async () => {
+        if (!input.files || input.files.length === 0) return;
+        const files = Array.from(input.files);
+        const numInt = parseInt(osNum);
+        if (isNaN(numInt)) return;
+
+        try {
+            toast(`Enviando ${files.length} anexo(s)...`, 'info');
+
+            for (const file of files) {
+                const fileName = `anexo_${numInt}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                const storagePath = `pedidos-artes/${numInt}/${fileName}`;
+                
+                const { error: uploadErr } = await supabaseClient.storage
+                    .from('chat-ideal')
+                    .upload(storagePath, file, { upsert: true });
+
+                if (uploadErr) throw uploadErr;
+
+                const { data: urlData } = supabaseClient.storage.from('chat-ideal').getPublicUrl(storagePath);
+                const publicUrl = urlData?.publicUrl;
+
+                const { data: existing } = await supabaseClient
+                    .from('pedidos_artes')
+                    .select('id, arquivos')
+                    .eq('id_int', numInt);
+
+                let curArquivos = [];
+                if (existing && existing.length > 0 && Array.isArray(existing[0].arquivos)) {
+                    curArquivos = [...existing[0].arquivos];
+                }
+
+                curArquivos.push({
+                    id: crypto.randomUUID(),
+                    nome_arquivo: file.name,
+                    storage_path: storagePath,
+                    storage_bucket: 'chat-ideal',
+                    url: publicUrl,
+                    tamanho_bytes: file.size,
+                    mime_type: file.type,
+                    created_at: new Date().toISOString(),
+                    enviado_por: 'Arte / Imposição'
+                });
+
+                if (existing && existing.length > 0) {
+                    await supabaseClient.from('pedidos_artes')
+                        .update({ arquivos: curArquivos })
+                        .eq('id_int', numInt);
+                } else {
+                    await supabaseClient.from('pedidos_artes')
+                        .insert({ id_int: numInt, arquivos: curArquivos });
+                }
+            }
+
+            toast('Anexo(s) enviado(s) com sucesso!', 'success');
+            loadAnexosPedido(osId, osNum);
+        } catch (err) {
+            console.error('Erro ao enviar anexo:', err);
+            toast('Erro ao enviar anexo: ' + err.message, 'error');
+        }
+    };
+    input.click();
+}
+
+window.loadAnexosPedido = loadAnexosPedido;
+window.uploadAnexoPedido = uploadAnexoPedido;
+
 async function loadUltimosPedidos(osId, clienteNome) {
+
     if (!clienteNome || typeof supabaseClient === 'undefined') return;
     
     try {
