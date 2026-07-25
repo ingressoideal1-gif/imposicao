@@ -10241,9 +10241,106 @@ window.handleSignOut = async function() {
             await supabaseClient.auth.signOut();
         }
         toast('Logoff efetuado!', 'success');
-        window.location.href = PARTNER_LOGIN_URL;
+        location.reload();
     } catch (e) {
         toast('Erro ao sair: ' + e.message, 'error');
+    }
+};
+
+// ──── Mostrar login overlay ───────────────────────────────────────────────
+function showLoginOverlay() {
+    // Criar overlay dinâmico se não existir
+    let overlay = document.getElementById('auth-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'auth-overlay';
+        overlay.className = 'auth-overlay active';
+        overlay.innerHTML = `
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h2>🎫 Ideal Imposition</h2>
+                    <p>Use suas credenciais do sistema para acessar</p>
+                </div>
+                <form onsubmit="handleLoginSubmit(event)">
+                    <div class="form-group" style="margin-bottom:14px;">
+                        <label class="form-label">📧 Email</label>
+                        <input type="email" id="auth-email" class="form-control" placeholder="seu@email.com" required autocomplete="email">
+                    </div>
+                    <div class="form-group" style="margin-bottom:20px;">
+                        <label class="form-label">🔒 Senha</label>
+                        <input type="password" id="auth-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                    </div>
+                    <div class="auth-actions">
+                        <button type="submit" id="btn-auth-submit" class="btn btn-primary btn-full" style="height:42px;font-size:0.95rem;">🚀 Entrar</button>
+                    </div>
+                </form>
+                <div class="auth-divider">ou</div>
+                <button id="btn-google-login" class="btn btn-google btn-full" onclick="handleGoogleLogin()" style="height:40px;">
+                    <svg class="google-icon" width="18" height="18" viewBox="0 0 48 48" style="margin-right:8px;">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    </svg>
+                    Login com Google
+                </button>
+                <div style="text-align:center;margin-top:14px;">
+                    <a href="${PARTNER_LOGIN_URL}" target="_blank" style="color:var(--text-dim);font-size:0.78rem;text-decoration:none;">Não tem conta? Cadastre-se no sistema parceiro →</a>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    } else {
+        overlay.classList.add('active');
+    }
+    document.body.classList.add('not-logged-in');
+}
+
+// ──── Handlers de login ───────────────────────────────────────────────────
+window.handleLoginSubmit = async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const btn = document.getElementById('btn-auth-submit');
+
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+
+        toast('Login efetuado com sucesso!', 'success');
+        document.getElementById('auth-overlay').classList.remove('active');
+        document.body.classList.remove('not-logged-in');
+
+        // Carregar permissões e UI
+        const user = data.user;
+        window._currentUser = user;
+        const perms = await ensureUserPermissions(user.id, user.email);
+        applyPermissions(perms);
+        updateProfileUI(user, perms);
+        loadAll();
+    } catch (err) {
+        toast('Erro: ' + (err.message || err), 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 Entrar';
+    }
+};
+
+window.handleGoogleLogin = async function() {
+    const btn = document.getElementById('btn-google-login');
+    if (btn) btn.disabled = true;
+    try {
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.origin + window.location.pathname }
+        });
+        if (error) throw error;
+    } catch (err) {
+        toast('Erro ao entrar com Google: ' + (err.message || err), 'error');
+        if (btn) btn.disabled = false;
     }
 };
 
@@ -10259,7 +10356,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Admin total em modo local
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
-        // Garantir que todos os nav estão visíveis
         document.querySelectorAll('.nav-btn').forEach(el => el.style.display = '');
         document.querySelectorAll('.nav-group-label').forEach(el => el.style.display = '');
 
@@ -10278,9 +10374,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { data: { session }, error } = await supabaseClient.auth.getSession();
 
         if (error || !session || !session.user) {
-            // Não está logado → redirecionar para o parceiro
-            console.log('[auth] Sem sessão — redirecionando para login do parceiro');
-            window.location.href = PARTNER_LOGIN_URL + '?redirect=' + encodeURIComponent(window.location.href);
+            // Sem sessão → mostrar tela de login
+            console.log('[auth] Sem sessão — exibindo login');
+            showLoginOverlay();
             return;
         }
 
@@ -10308,9 +10404,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Listener para mudança de sessão (logout externo, expiração etc)
     supabaseClient.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_OUT' || !session) {
-            window.location.href = PARTNER_LOGIN_URL;
+            showLoginOverlay();
         }
     });
+
 });
 
 
