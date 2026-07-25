@@ -16342,14 +16342,15 @@ function renderAmostrasOSItens(osId) {
                                     Arquivos e anexos vinculados a este pedido.
                                 </div>
                             </div>
-                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button class="btn btn-sm btn-primary" onclick="downloadTodosAnexosZip('${osNum}')" style="font-size: 0.78rem; font-weight: 700; padding: 4px 10px; display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3);" title="Baixar todos os anexos em um arquivo ZIP">
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <button id="btn-download-zip-${osId}" class="btn btn-sm btn-primary" onclick="downloadAnexosSelecionadosZip('${osId}', '${osNum}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px; display: flex; align-items: center; gap: 6px; background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3);" title="Baixar os anexos selecionados em um arquivo ZIP">
                                     📦 Baixar Todos (ZIP)
                                 </button>
-                                <button class="btn btn-sm btn-secondary" onclick="uploadAnexoPedido('${osId}', '${osNum}')" style="font-size: 0.78rem; font-weight: 700; padding: 4px 10px; display: flex; align-items: center; gap: 6px;">
+                                <button class="btn btn-sm btn-secondary" onclick="uploadAnexoPedido('${osId}', '${osNum}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px; display: flex; align-items: center; gap: 6px;">
                                     📤 Upload Anexo
                                 </button>
                             </div>
+
                         </div>
                         <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;" id="anexos-pedido-container-${osId}">
                             <div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;"><i class="fa-solid fa-spinner fa-spin"></i> Buscando anexos...</div>
@@ -18181,11 +18182,60 @@ function openAnexoLightbox(url, name) {
 }
 
 /**
- * Baixa todos os anexos do pedido em lote compactados num arquivo ZIP
+ * Alterna a seleção de todos os checkboxes de anexos do pedido
  */
-async function downloadTodosAnexosZip(osNum) {
+function toggleSelectAllAnexos(osId, checked) {
+    const checkboxes = document.querySelectorAll(`.anexo-checkbox-${osId}`);
+    checkboxes.forEach(cb => {
+        cb.checked = checked;
+    });
+    updateAnexoSelectionCount(osId);
+}
+
+/**
+ * Atualiza o contador e rótulo do botão de download em lote/ZIP
+ */
+function updateAnexoSelectionCount(osId) {
+    const checkboxes = Array.from(document.querySelectorAll(`.anexo-checkbox-${osId}`));
+    const selectedCount = checkboxes.filter(cb => cb.checked).length;
+    const btn = document.getElementById(`btn-download-zip-${osId}`);
+    const selectAllCb = document.getElementById(`select-all-anexos-${osId}`);
+
+    if (selectAllCb) {
+        selectAllCb.checked = checkboxes.length > 0 && selectedCount === checkboxes.length;
+    }
+
+    if (btn) {
+        if (selectedCount > 0) {
+            btn.innerHTML = `📦 Baixar Selecionados (${selectedCount})`;
+            btn.style.background = 'rgba(59,130,246,0.25)';
+            btn.style.borderColor = '#3b82f6';
+        } else {
+            btn.innerHTML = `📦 Baixar Todos (ZIP)`;
+            btn.style.background = 'rgba(59,130,246,0.15)';
+            btn.style.borderColor = 'rgba(59,130,246,0.3)';
+        }
+    }
+}
+
+/**
+ * Baixa apenas os anexos selecionados (ou todos se nenhum estiver marcado) num arquivo ZIP
+ */
+async function downloadAnexosSelecionadosZip(osId, osNum) {
     const numInt = parseInt(osNum);
     if (isNaN(numInt)) return;
+
+    const checkboxes = Array.from(document.querySelectorAll(`.anexo-checkbox-${osId}`));
+    let selectedCbs = checkboxes.filter(cb => cb.checked);
+
+    if (selectedCbs.length === 0) {
+        selectedCbs = checkboxes;
+    }
+
+    if (selectedCbs.length === 0) {
+        toast('Nenhum anexo disponível para download.', 'warning');
+        return;
+    }
 
     if (typeof JSZip === 'undefined') {
         toast('Carregando biblioteca de ZIP...', 'info');
@@ -18199,55 +18249,20 @@ async function downloadTodosAnexosZip(osNum) {
     }
 
     try {
-        toast(`Buscando anexos do Pedido #${numInt}...`, 'info');
-
-        const { data: artesData } = await supabaseClient
-            .from('pedidos_artes')
-            .select('arquivos, storage_path, nome_arquivo, storage_bucket')
-            .eq('id_int', numInt);
-
-        let filesToDownload = [];
-        if (artesData && artesData.length > 0) {
-            artesData.forEach(pa => {
-                let arqs = pa.arquivos;
-                if (typeof arqs === 'string') {
-                    try { arqs = JSON.parse(arqs); } catch(e) {}
-                }
-                if (arqs && Array.isArray(arqs)) {
-                    arqs.forEach((arq, idx) => {
-                        let fileUrl = arq.url || arq.public_url || arq.publicUrl;
-                        const bucket = arq.storage_bucket || pa.storage_bucket || 'chat-ideal';
-                        if (!fileUrl && arq.storage_path) {
-                            const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(arq.storage_path);
-                            fileUrl = pUrl?.publicUrl;
-                        }
-                        if (fileUrl) {
-                            filesToDownload.push({
-                                name: arq.nome_arquivo || arq.nome || arq.name || `anexo_${idx + 1}`,
-                                url: fileUrl
-                            });
-                        }
-                    });
-                }
-            });
-        }
-
-        if (filesToDownload.length === 0) {
-            toast('Nenhum anexo encontrado para download.', 'warning');
-            return;
-        }
-
-        toast(`Compactando ${filesToDownload.length} arquivo(s) em ZIP...`, 'info');
+        toast(`Compactando ${selectedCbs.length} anexo(s) em ZIP...`, 'info');
         const zip = new JSZip();
 
-        for (let i = 0; i < filesToDownload.length; i++) {
-            const item = filesToDownload[i];
+        for (let i = 0; i < selectedCbs.length; i++) {
+            const cb = selectedCbs[i];
+            const url = cb.dataset.url;
+            const name = cb.dataset.name || `anexo_${i + 1}`;
+            
             try {
-                const resp = await fetch(item.url);
+                const resp = await fetch(url);
                 const blob = await resp.blob();
-                zip.file(item.name, blob);
+                zip.file(name, blob);
             } catch (err) {
-                console.warn(`Erro ao baixar ${item.name} para o ZIP:`, err);
+                console.warn(`Erro ao baixar ${name} para o ZIP:`, err);
             }
         }
 
@@ -18255,13 +18270,13 @@ async function downloadTodosAnexosZip(osNum) {
         const downloadUrl = URL.createObjectURL(zipBlob);
         const a = document.createElement('a');
         a.href = downloadUrl;
-        a.download = `Anexos_Pedido_${numInt}.zip`;
+        a.download = `Anexos_Selecionados_Pedido_${numInt}.zip`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(downloadUrl);
 
-        toast(`Download do ZIP do Pedido #${numInt} concluído com sucesso!`, 'success');
+        toast(`Download ZIP (${selectedCbs.length} arquivo(s)) concluído com sucesso!`, 'success');
     } catch (e) {
         console.error('Erro ao gerar ZIP dos anexos:', e);
         toast('Erro ao gerar ZIP: ' + e.message, 'error');
@@ -18350,7 +18365,17 @@ async function loadAnexosPedido(osId, osNum) {
             return;
         }
 
-        container.innerHTML = anexosList.map(anx => {
+        const selectAllBar = `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 8px 8px; font-size: 0.78rem; color: var(--text-dim); border-bottom: 1px solid var(--border); margin-bottom: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; margin: 0; color: var(--text);">
+                    <input type="checkbox" id="select-all-anexos-${osId}" onchange="toggleSelectAllAnexos('${osId}', this.checked)" style="accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer;" />
+                    Selecionar Todos
+                </label>
+                <span style="font-size: 0.72rem; color: var(--text-dim);">${anexosList.length} arquivo(s)</span>
+            </div>
+        `;
+
+        const itemsHtml = anexosList.map(anx => {
             const ext = (anx.nome.split('.').pop() || '').toLowerCase();
             const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
             const isPdf = ['pdf'].includes(ext);
@@ -18385,7 +18410,8 @@ async function loadAnexosPedido(osId, osNum) {
 
             return `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); gap: 12px; transition: all 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                        <input type="checkbox" class="anexo-checkbox-${osId}" data-url="${anx.url}" data-name="${anx.nome}" onchange="updateAnexoSelectionCount('${osId}')" style="accent-color: #3b82f6; width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;" />
                         ${thumbHtml}
                         <div style="min-width: 0;">
                             <div style="font-weight: 700; color: var(--text); font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" onclick="openAnexoLightbox('${anx.url}', '${anx.nome}')" title="Clique para abrir preview de ${anx.nome}">
@@ -18410,11 +18436,15 @@ async function loadAnexosPedido(osId, osNum) {
             `;
         }).join('');
 
+        container.innerHTML = selectAllBar + itemsHtml;
+        updateAnexoSelectionCount(osId);
+
     } catch (e) {
         console.error('Erro ao carregar anexos do pedido:', e);
         container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 12px;">Erro ao carregar anexos.</div>`;
     }
 }
+
 
 
 
@@ -18487,9 +18517,12 @@ async function uploadAnexoPedido(osId, osNum) {
 }
 
 window.openAnexoLightbox = openAnexoLightbox;
-window.downloadTodosAnexosZip = downloadTodosAnexosZip;
+window.toggleSelectAllAnexos = toggleSelectAllAnexos;
+window.updateAnexoSelectionCount = updateAnexoSelectionCount;
+window.downloadAnexosSelecionadosZip = downloadAnexosSelecionadosZip;
 window.loadAnexosPedido = loadAnexosPedido;
 window.uploadAnexoPedido = uploadAnexoPedido;
+
 
 
 async function loadUltimosPedidos(osId, clienteNome) {
