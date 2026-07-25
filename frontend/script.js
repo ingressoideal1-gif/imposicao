@@ -13489,30 +13489,40 @@ function formatDate(dateStr) {
  */
 function getStatusBadge(status) {
     const map = {
-        'ARTE': { icon: '🎨', cls: 'badge-blue', label: 'Arte' },
-        'PRODUÇÃO': { icon: '🏭', cls: 'badge-amber', label: 'Produção' },
-        'FINALIZADA': { icon: '✅', cls: 'badge-teal', label: 'Finalizada' },
-        'CANCELADA': { icon: '❌', cls: 'badge-red', label: 'Cancelada' },
+        // ── 7 Status oficiais do fluxo de arte ──────────────────────
+        'Em Fila':             { icon: '📥', bg: '#6366f1', label: 'Em Fila' },
+        'Em Arte':             { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
+        'Arte Pronta':         { icon: '✅', bg: '#8b5cf6', label: 'Arte Pronta' },
+        'Enviar Arte':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
+        'Aguard. Aprovação':   { icon: '⏳', bg: '#f97316', label: 'Aguard. Aprovação' },
+        'Aprovada':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
+        'Reprovada':           { icon: '❌', bg: '#ef4444', label: 'Reprovada' },
 
-        // Status oficiais do fluxo de arte (definidos pelo usuário)
-        'Em Arte':             { icon: '🎨', cls: 'badge-blue',   label: 'Em Arte' },
-        'Enviar Arte':         { icon: '📤', cls: 'badge-amber',  label: 'Enviar Arte' },
-        'Pendente Informação': { icon: '⚠️', cls: 'badge-red',    label: 'Pendente Informação' },
-        'APROVADO':            { icon: '✅', cls: 'badge-teal',   label: 'Aprovado' },
-        'REPROVADO':           { icon: '❌', cls: 'badge-red',    label: 'Reprovado' },
+        // ── Status de produção / outros ─────────────────────────────
+        'ARTE':                { icon: '🎨', bg: '#3b82f6', label: 'Arte' },
+        'PRODUÇÃO':            { icon: '🏭', bg: '#f59e0b', label: 'Produção' },
+        'FINALIZADA':          { icon: '✅', bg: '#22c55e', label: 'Finalizada' },
+        'CANCELADA':           { icon: '❌', bg: '#ef4444', label: 'Cancelada' },
+        'EM IMPRESSÃO':        { icon: '🖨️', bg: '#a855f7', label: 'Em Impressão' },
+        'Pendente Informação': { icon: '⚠️', bg: '#ef4444', label: 'Pendente Info' },
 
-        // Legados (mantidos para compatibilidade com dados antigos)
-        'ARTE_EM_ANDAMENTO':   { icon: '🎨', cls: 'badge-blue',   label: 'Em Arte' },
-        'Enviar ARTE':         { icon: '📤', cls: 'badge-amber',  label: 'Enviar Arte' },
-        'ARTE_EM_CORRECAO':    { icon: '🎨', cls: 'badge-blue',   label: 'Em Arte' },
-        'ARTE_APROVADA':       { icon: '✅', cls: 'badge-teal',   label: 'Aprovado' },
-        'Arte APROVADA':       { icon: '✅', cls: 'badge-teal',   label: 'Aprovado' },
-        'EM IMPRESSÃO':        { icon: '🖨️', cls: 'badge-purple', label: 'Em Impressão' }
+        // ── Legados (mapeiam para os novos) ─────────────────────────
+        'APROVADO':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
+        'APROVADA_CLIENTE':    { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
+        'LIBERADA':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
+        'Arte APROVADA':       { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
+        'ARTE_APROVADA':       { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
+        'REPROVADO':           { icon: '❌', bg: '#ef4444', label: 'Reprovada' },
+        'REPROVADA_CLIENTE':   { icon: '❌', bg: '#ef4444', label: 'Reprovada' },
+        'Enviar ARTE':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
+        'ARTE_EM_ANDAMENTO':   { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
+        'ARTE_EM_CORRECAO':    { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
+        'AGUARDANDO_APROVACAO':{ icon: '⏳', bg: '#f97316', label: 'Aguard. Aprovação' },
     };
-    const s = map[status] || { icon: '❓', cls: '', label: status };
-    const label = s.label || status;
-    return `<span class="badge ${s.cls}">${s.icon} ${label}</span>`;
+    const s = map[status] || { icon: '❓', bg: '#6b7280', label: status || '—' };
+    return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;padding:3px 10px;border-radius:12px;background:${s.bg}22;color:${s.bg};font-weight:600;border:1px solid ${s.bg}44;">${s.icon} ${s.label}</span>`;
 }
+
 
 /**
  * Normaliza o status de impressão para as novas opções: Aguardando, Impresso, Parcial, Revisão
@@ -13993,10 +14003,20 @@ function renderOrdens() {
             if (!matchSetor) return false;
         }
 
-        // 4. Filtro de Status de Aprovação
+        // 4. Filtro de Status de Arte (compara pelo status da OS, não do item)
         if (state.filtroStatusArte) {
-            const matchStatus = itens.some(item => (item.aprovacao || 'PENDENTE').toUpperCase() === state.filtroStatusArte.toUpperCase());
-            if (!matchStatus) return false;
+            const osStatus = (os.status || '').trim();
+            const filtro = state.filtroStatusArte.trim();
+            // Mapear status legados para os novos
+            const statusNorm = {
+                'APROVADO': 'Aprovada', 'APROVADA_CLIENTE': 'Aprovada', 'LIBERADA': 'Aprovada',
+                'ARTE_APROVADA': 'Aprovada', 'Arte APROVADA': 'Aprovada',
+                'REPROVADO': 'Reprovada', 'REPROVADA_CLIENTE': 'Reprovada',
+                'Enviar ARTE': 'Enviar Arte', 'ARTE_EM_ANDAMENTO': 'Em Arte',
+                'ARTE_EM_CORRECAO': 'Em Arte', 'AGUARDANDO_APROVACAO': 'Aguard. Aprovação',
+            };
+            const osNorm = statusNorm[osStatus] || osStatus;
+            if (osNorm !== filtro) return false;
         }
 
         return true;
@@ -14273,21 +14293,49 @@ function renderOrdens() {
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
                         <td onclick="event.stopPropagation();">
                             ${(() => {
-                                // Se o status é "Enviar ARTE" ou já há link gerado no state, mostrar URL diretamente
+                                const perms = window._currentPerms || {};
+                                const canEdit = perms.perm_lista_arte_edit === true;
                                 const linkSalvo = state.linksCliente && state.linksCliente[os.id];
-                                // FIX-4: 'ARTE_APROVADA' é aprovação interna (não do cliente); 'REPROVADO' não deve destacar em azul igual a "pronto"
-                                const statusProntoParaLink = os.status === 'Enviar ARTE' || os.status === 'AGUARDANDO_APROVACAO';
+                                const st = (os.status || '').trim();
+                                const stUp = st.toUpperCase();
+                                let btns = [];
+
+                                // ── Botões por status ──
+                                const isReprovada = stUp === 'REPROVADA' || stUp === 'REPROVADO' || stUp === 'REPROVADA_CLIENTE';
+                                const isAprovada = stUp === 'APROVADA' || stUp === 'APROVADO' || stUp === 'APROVADA_CLIENTE' || stUp === 'LIBERADA' || stUp === 'ARTE_APROVADA' || stUp === 'ARTE APROVADA';
+                                const isArtePronta = st === 'Arte Pronta' || st === 'Enviar Arte' || st === 'Enviar ARTE';
+                                const isAguardando = st === 'Aguard. Aprovação' || stUp === 'AGUARDANDO_APROVACAO';
+
+                                // 1) Link de aprovação (Arte Pronta, Enviar Arte, Aguard. Aprovação)
                                 if (linkSalvo) {
-                                    return `
-                                        <div style="display:flex;gap:6px;align-items:center;justify-content:center;">
-                                            <a href="${linkSalvo}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="padding:3px 7px;font-size:0.85rem;display:flex;align-items:center;justify-content:center;text-decoration:none;" title="Abrir Link do Cliente">🔗</a>
-                                            <button class="btn btn-secondary btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar Link do Cliente" style="padding:3px 7px;font-size:0.85rem;display:flex;align-items:center;justify-content:center;">📋</button>
-                                        </div>`;
+                                    btns.push(`<div style="display:flex;gap:4px;">
+                                        <a href="${linkSalvo}" target="_blank" rel="noopener" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;text-decoration:none;" title="Abrir Link">🔗</a>
+                                        <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar Link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;">📋</button>
+                                    </div>`);
+                                } else if (isArtePronta || isAguardando) {
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:4px 8px;font-size:0.73rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🔗 Gerar Link</button>`);
                                 }
-                                return `<button class="btn btn-secondary btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Gerar link público para aprovação do cliente" style="padding:4px 8px;font-size:0.75rem;${statusProntoParaLink ? 'border-color:var(--blue);color:var(--blue);' : ''}">🔗 ${statusProntoParaLink ? 'Gerar Link' : 'Link do Cliente'}</button>`;
+
+                                // 2) Reprovar (quando status permite e usuário tem edit)
+                                if (!isReprovada && !isAprovada && st !== 'Em Fila') {
+                                    btns.push(`<button class="btn btn-sm" onclick="reprovarArteAdmin('${os.id}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:3px 7px;font-size:0.73rem;background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}" title="Reprovar Arte">❌</button>`);
+                                }
+
+                                // 3) Voltar p/ Arte (quando reprovada)
+                                if (isReprovada) {
+                                    btns.push(`<button class="btn btn-sm" onclick="voltarParaArteFromLista('${os.id}')" ${canEdit ? '' : 'disabled'} style="padding:4px 8px;font-size:0.73rem;background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">↩️ Voltar p/ Arte</button>`);
+                                }
+
+                                // 4) Liberar p/ Produção (quando aprovada)
+                                if (isAprovada) {
+                                    btns.push(`<button class="btn btn-sm" onclick="liberarParaProducao('${os.id}')" ${canEdit ? '' : 'disabled'} style="padding:4px 8px;font-size:0.73rem;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🖨️ Produção</button>`);
+                                }
+
+                                return btns.length > 0 ? `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">${btns.join('')}</div>` : '<span style="color:var(--text-dim);font-size:0.75rem;">—</span>';
                             })()}
                         </td>
                     </tr>
+
                 `;
             }).join('');
         }
@@ -16537,6 +16585,130 @@ async function voltarParaArte() {
 
 // Expor globalmente
 window.voltarParaArte = voltarParaArte;
+
+// ────────────────────────────────────────────────────────────────────────────
+// NOVAS AÇÕES DO FLUXO DE ARTE (v2)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Reprovar arte pelo Atendimento/Admin (direto da lista, sem ser via link do cliente).
+ * Muda o status para 'Reprovada'.
+ */
+window.reprovarArteAdmin = async function(osId) {
+    if (!confirm('Tem certeza que deseja REPROVAR a arte deste pedido?')) return;
+
+    const novoStatus = 'Reprovada';
+    try {
+        const os = state.ordens.find(o => o.id === osId);
+
+        // 1. Atualizar localStorage
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        // 2. Atualizar estado em memória
+        if (os) os.status = novoStatus;
+
+        // 3. Atualizar no banco Supabase
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (osId.startsWith('vibe_')) {
+                await supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId);
+            } else {
+                await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
+            }
+        }
+
+        toast(`Pedido #${os ? os.numero : ''} — Arte REPROVADA pelo atendimento.`, 'warning');
+        renderOrdens();
+    } catch (err) {
+        console.error('Erro ao reprovar arte:', err);
+        toast('Erro ao reprovar: ' + err.message, 'error');
+    }
+};
+
+/**
+ * Voltar pedido para 'Em Arte' direto da lista (quando está Reprovada).
+ * Diferente de voltarParaArte() que funciona da tela de Amostras.
+ */
+window.voltarParaArteFromLista = async function(osId) {
+    if (!confirm('Retornar pedido para "Em Arte"? O designer poderá corrigir.')) return;
+
+    const novoStatus = 'Em Arte';
+    try {
+        const os = state.ordens.find(o => o.id === osId);
+
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        if (os) os.status = novoStatus;
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (osId.startsWith('vibe_')) {
+                await supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId);
+            } else {
+                await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
+            }
+        }
+
+        toast(`Pedido #${os ? os.numero : ''} retornado para "Em Arte".`, 'info');
+        renderOrdens();
+    } catch (err) {
+        console.error('Erro ao voltar para arte:', err);
+        toast('Erro: ' + err.message, 'error');
+    }
+};
+
+/**
+ * Liberar pedido para Produção (muda status_interno para 'EM PRODUCAO').
+ * Usado quando a arte foi aprovada e o pedido pode ir para impressão.
+ */
+window.liberarParaProducao = async function(osId) {
+    if (!confirm('Liberar este pedido para PRODUÇÃO / IMPRESSÃO?')) return;
+
+    try {
+        const os = state.ordens.find(o => o.id === osId);
+
+        // Mudar status_interno para EM PRODUCAO (aparece na Lista de Impressão)
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            // Atualizar na proposta o status_interno
+            const numInt = os ? parseInt(os.numero) : null;
+            if (numInt) {
+                await supabaseClient.from('propostas')
+                    .update({ status_interno: 'EM PRODUCAO' })
+                    .eq('id_int', numInt);
+            }
+
+            // Atualizar status da OS de arte
+            if (osId.startsWith('vibe_')) {
+                await supabaseClient.from('pedidos_links_cliente')
+                    .update({ status_arte: 'EM PRODUCAO' })
+                    .eq('os_id', osId);
+            } else {
+                await supabaseClient.from('producao_ordens_servico')
+                    .update({ status: 'EM PRODUCAO' })
+                    .eq('id', osId);
+            }
+        }
+
+        // Atualizar estado local
+        if (os) {
+            os.status = 'EM PRODUCAO';
+            os.status_interno = 'EM PRODUCAO';
+        }
+
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = 'EM PRODUCAO';
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        toast(`Pedido #${os ? os.numero : ''} liberado para PRODUÇÃO! 🖨️`, 'success');
+        renderOrdens();
+    } catch (err) {
+        console.error('Erro ao liberar para produção:', err);
+        toast('Erro: ' + err.message, 'error');
+    }
+};
+
 
 /**
  * Ao selecionar cor em um card dinâmico, filtrar numerações compatíveis
