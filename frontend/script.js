@@ -16200,9 +16200,28 @@ async function loadDadosEntregaInterno(osId, osNum) {
     }
 }
 
+/**
+ * Alterna a visibilidade do box de entrega e faturamento no painel interno do pedido
+ */
+function toggleBoxEntregaDados(osId) {
+    const activeOs = osId || state.amostrasOSAtivo;
+    if (!activeOs) return;
+    const box = document.getElementById(`box-correcao-entrega-interno-${activeOs}`);
+    if (box) {
+        if (box.style.display === 'none' || !box.style.display) {
+            box.style.display = 'block';
+            box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            box.style.display = 'none';
+        }
+    }
+}
+
+window.toggleBoxEntregaDados = toggleBoxEntregaDados;
 window.marcarEntregaDadosCorrigido = marcarEntregaDadosCorrigido;
 window.clienteAprovarEntregaDados = clienteAprovarEntregaDados;
 window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDados;
+
 
 
 
@@ -16740,30 +16759,49 @@ function renderAmostrasOSItens(osId) {
     let entregaCardHtml = '';
 
 
-    // No painel interno (isInternal), se entregaStatus for CORRIGIR ou ALTERADO, exibir box em destaque no topo com os dados e solicitacao do cliente
-    if (isInternal && (entregaStatus === 'CORRIGIR' || entregaStatus === 'ALTERADO')) {
-        const paData = (state.pedidosArtesData && state.pedidosArtesData[os.numero]) || {};
-        let obsObj = paData.observacoes || {};
-        if (typeof obsObj === 'string') {
-            try { obsObj = JSON.parse(obsObj); } catch(e) {}
-        }
-        const correcaoTexto = (typeof obsObj === 'object' && obsObj) ? obsObj.correcao_entrega_faturamento || '' : '';
-
+    // No painel interno (isInternal), gerar box de entrega e faturamento
+    if (isInternal) {
         const isCorrigir = (entregaStatus === 'CORRIGIR');
-        const alertBorder = isCorrigir ? '2px solid #ef4444' : '2px solid #f97316';
-        const alertBg = isCorrigir ? 'rgba(239,68,68,0.05)' : 'rgba(249,115,22,0.05)';
-        const headerBg = isCorrigir ? 'rgba(239,68,68,0.15)' : 'rgba(249,115,22,0.15)';
-        const titleColor = isCorrigir ? '#ef4444' : '#f97316';
-        const badgeTag = isCorrigir ? '<span class="badge badge-red" style="font-size:0.8rem;font-weight:700;padding:4px 10px;">❌ CORRIGIR</span>' : '<span class="badge" style="background:#f97316;color:white;font-weight:700;font-size:0.8rem;padding:4px 10px;">⚠️ ALTERADO</span>';
-        const titleLabel = isCorrigir ? '🚨 Solicitação de Alteração de Entrega / Faturamento pelo Cliente' : '⚠️ Dados de Entrega / Faturamento Alterados';
+        const isAlterado = (entregaStatus === 'ALTERADO');
+        const isAprovado = (entregaStatus === 'APROVADO');
+
+        const initialDisplay = (isCorrigir || isAlterado) ? 'block' : 'none';
+
+        let alertBorder = '1px solid var(--border)';
+        let alertBg = 'rgba(255,255,255,0.02)';
+        let headerBg = 'rgba(255,255,255,0.05)';
+        let titleColor = 'var(--text)';
+        let badgeTag = '<span class="badge badge-teal" style="font-size:0.8rem;font-weight:700;padding:4px 10px;">✅ APROVADO</span>';
+        let titleLabel = '📦 Dados de Entrega e Faturamento do Pedido';
+
+        if (isCorrigir) {
+            alertBorder = '2px solid #ef4444';
+            alertBg = 'rgba(239,68,68,0.05)';
+            headerBg = 'rgba(239,68,68,0.15)';
+            titleColor = '#ef4444';
+            badgeTag = '<span class="badge badge-red" style="font-size:0.8rem;font-weight:700;padding:4px 10px;">❌ CORRIGIR</span>';
+            titleLabel = '🚨 Solicitação de Alteração de Entrega / Faturamento pelo Cliente';
+        } else if (isAlterado) {
+            alertBorder = '2px solid #f97316';
+            alertBg = 'rgba(249,115,22,0.05)';
+            headerBg = 'rgba(249,115,22,0.15)';
+            titleColor = '#f97316';
+            badgeTag = '<span class="badge" style="background:#f97316;color:white;font-weight:700;font-size:0.8rem;padding:4px 10px;">⚠️ ALTERADO</span>';
+            titleLabel = '⚠️ Dados de Entrega / Faturamento Alterados';
+        }
 
         entregaCardHtml += `
-            <div class="card" id="box-correcao-entrega-interno-${osId}" style="border: ${alertBorder}; background: ${alertBg}; margin-bottom: 20px; box-shadow: var(--shadow);">
+            <div class="card" id="box-correcao-entrega-interno-${osId}" style="display: ${initialDisplay}; border: ${alertBorder}; background: ${alertBg}; margin-bottom: 20px; box-shadow: var(--shadow);">
                 <div class="card-header" style="background: ${headerBg}; border-bottom: 1px solid var(--border); padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <div style="font-weight: 800; color: ${titleColor}; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
                         ${titleLabel}
                     </div>
-                    ${badgeTag}
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        ${badgeTag}
+                        <button class="btn btn-sm btn-ghost" onclick="toggleBoxEntregaDados('${osId}')" style="font-size: 0.78rem; padding: 4px 8px; color: var(--text-dim);" title="Minimizar / Fechar Box">
+                            ✕ Fechar
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body" style="padding: 18px; display: flex; flex-direction: column; gap: 14px;">
                     <!-- Dados Básicos da OS -->
@@ -16791,16 +16829,38 @@ function renderAmostrasOSItens(osId) {
                     <div id="solicitacao-cliente-texto-${osId}"></div>
 
                     <!-- Ação para Concluir/Aprovar -->
+                    ${(isCorrigir || isAlterado) ? `
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; justify-content: flex-end;">
                         <button class="btn btn-sm btn-teal" onclick="marcarEntregaDadosCorrigido('${osId}', '${osNum}')" style="font-weight: 700; padding: 8px 16px; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.4);">
                             ✅ Marcar Correção/Alteração como Concluída (Aprovado)
                         </button>
                     </div>
+                    ` : ''}
                 </div>
             </div>
         `;
 
+        // Atualizar o botão do topo da OS no banner
+        const btnToggle = document.getElementById('btn-toggle-entrega-dados');
+        if (btnToggle) {
+            btnToggle.style.display = 'inline-flex';
+            if (isCorrigir) {
+                btnToggle.className = 'btn btn-danger btn-sm';
+                btnToggle.innerHTML = '📦 Entrega/Faturam. <span class="badge badge-red" style="background:#b91c1c;color:white;margin-left:4px;">❌ CORRIGIR</span>';
+            } else if (isAlterado) {
+                btnToggle.className = 'btn btn-warning btn-sm';
+                btnToggle.innerHTML = '📦 Entrega/Faturam. <span class="badge" style="background:#ea580c;color:white;margin-left:4px;">⚠️ ALTERADO</span>';
+            } else if (isAprovado) {
+                btnToggle.className = 'btn btn-secondary btn-sm';
+                btnToggle.innerHTML = '📦 Entrega/Faturam. <span class="badge badge-teal" style="margin-left:4px;">✅ APROVADO</span>';
+            } else {
+                btnToggle.className = 'btn btn-secondary btn-sm';
+                btnToggle.innerHTML = '📦 Dados de Entrega / Faturamento';
+            }
+            btnToggle.onclick = () => toggleBoxEntregaDados(osId);
+        }
     }
+
 
     if (isClienteView && (entregaStatus === 'ALTERADO' || entregaStatus !== 'APROVADO')) {
         let badgeHeader = '<span class="badge" style="background: #f97316; color: white; font-weight: 700;">⚠️ REVISÃO SOLICITADA</span>';
