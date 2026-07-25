@@ -941,15 +941,16 @@ async function clienteFinalizarFluxo(fluxoTipo) {
                     if (osId.startsWith('vibe_')) {
                         const { error } = await supabaseClient
                             .from('pedidos_links_cliente')
-                            .update({ status_arte: 'REPROVADO' })
+                            .update({ status_arte: 'Em Alteração' })
                             .eq('os_id', osId);
                         if (error) throw error;
                     } else {
                         const { error } = await supabaseClient
                             .from('producao_ordens_servico')
-                            .update({ status: 'REPROVADO' }).eq('id', osId);
+                            .update({ status: 'Em Alteração' }).eq('id', osId);
                         if (error) throw error;
                     }
+
                 }
             } catch (osErr) {
                 console.warn('Erro ao atualizar status global da OS para correcao (pode ser restricao de RLS):', osErr);

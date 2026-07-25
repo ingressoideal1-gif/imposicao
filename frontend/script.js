@@ -13499,14 +13499,13 @@ function formatDate(dateStr) {
  */
 function getStatusBadge(status) {
     const map = {
-        // ── 7 Status oficiais do fluxo de arte ──────────────────────
-        'Em Fila':             { icon: '📥', bg: '#6366f1', label: 'Em Fila' },
+        // ── Status oficiais do fluxo de arte ──────────────────────
         'Em Arte':             { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
+        'Em Alteração':        { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
         'Arte Pronta':         { icon: '✅', bg: '#8b5cf6', label: 'Arte Pronta' },
         'Enviar Arte':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
         'Aguard. Aprovação':   { icon: '⏳', bg: '#f97316', label: 'Aguard. Aprovação' },
         'Aprovada':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
-        'Reprovada':           { icon: '❌', bg: '#ef4444', label: 'Reprovada' },
 
         // ── Status de produção / outros ─────────────────────────────
         'ARTE':                { icon: '🎨', bg: '#3b82f6', label: 'Arte' },
@@ -13516,17 +13515,21 @@ function getStatusBadge(status) {
         'EM IMPRESSÃO':        { icon: '🖨️', bg: '#a855f7', label: 'Em Impressão' },
         'Pendente Informação': { icon: '⚠️', bg: '#ef4444', label: 'Pendente Info' },
 
-        // ── Legados (mapeiam para os novos) ─────────────────────────
+        // ── Mapeamento e Legados ────────────────────────────────────
+        'Em Fila':             { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
+        'NOVO':                { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
+        'EM FILA':             { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
+        'ARTE_EM_ANDAMENTO':   { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
+        'ARTE_EM_CORRECAO':    { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
+        'REPROVADO':           { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
+        'REPROVADA':           { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
+        'REPROVADA_CLIENTE':   { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
         'APROVADO':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'APROVADA_CLIENTE':    { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'LIBERADA':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'Arte APROVADA':       { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'ARTE_APROVADA':       { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
-        'REPROVADO':           { icon: '❌', bg: '#ef4444', label: 'Reprovada' },
-        'REPROVADA_CLIENTE':   { icon: '❌', bg: '#ef4444', label: 'Reprovada' },
         'Enviar ARTE':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
-        'ARTE_EM_ANDAMENTO':   { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
-        'ARTE_EM_CORRECAO':    { icon: '🎨', bg: '#3b82f6', label: 'Em Arte' },
         'AGUARDANDO_APROVACAO':{ icon: '⏳', bg: '#f97316', label: 'Aguard. Aprovação' },
     };
     const s = map[status] || { icon: '❓', bg: '#6b7280', label: status || '—' };
@@ -14036,15 +14039,16 @@ function renderOrdens() {
 
         // 4. Filtro de Status de Arte (compara pelo status da OS, não do item)
         if (state.filtroStatusArte) {
-            const osStatus = (os.status || '').trim();
+            const osStatus = (os.status || '').trim().toUpperCase();
             const filtro = state.filtroStatusArte.trim();
-            // Mapear status legados para os novos
             const statusNorm = {
                 'APROVADO': 'Aprovada', 'APROVADA_CLIENTE': 'Aprovada', 'LIBERADA': 'Aprovada',
                 'ARTE_APROVADA': 'Aprovada', 'Arte APROVADA': 'Aprovada',
-                'REPROVADO': 'Reprovada', 'REPROVADA_CLIENTE': 'Reprovada',
-                'Enviar ARTE': 'Enviar Arte', 'ARTE_EM_ANDAMENTO': 'Em Arte',
-                'ARTE_EM_CORRECAO': 'Em Arte', 'AGUARDANDO_APROVACAO': 'Aguard. Aprovação',
+                'REPROVADO': 'Em Alteração', 'REPROVADA': 'Em Alteração', 'REPROVADA_CLIENTE': 'Em Alteração',
+                'ARTE_EM_CORRECAO': 'Em Alteração', 'Em Alteração': 'Em Alteração', 'Em Correção': 'Em Alteração',
+                'NOVO': 'Em Arte', 'EM FILA': 'Em Arte', 'Em Fila': 'Em Arte', 'ARTE_EM_ANDAMENTO': 'Em Arte',
+                'Enviar ARTE': 'Enviar Arte', 'Arte Pronta': 'Enviar Arte',
+                'AGUARDANDO_APROVACAO': 'Aguard. Aprovação',
             };
             const osNorm = statusNorm[osStatus] || osStatus;
             if (osNorm !== filtro) return false;
@@ -14295,15 +14299,19 @@ function renderOrdens() {
                     nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #3b82f6;">${arteComDesigner.designer_nome}</span>`;
                 }
 
-                let badgeBoxBg = '#3b82f6';
+                const osStUp = (os.status || '').trim().toUpperCase();
+                const isEmAlteracao = (osStUp === 'EM ALTERAÇÃO' || osStUp === 'EM ALTERACAO' || osStUp === 'REPROVADA' || osStUp === 'REPROVADO' || osStUp === 'REPROVADA_CLIENTE' || osStUp === 'ARTE_EM_CORRECAO');
 
-                if (entregaStatus === 'CORRIGIR') {
+                let badgeBoxBg = '#3b82f6'; // Azul por padrão para "Em Arte"
+
+                if (isEmAlteracao || entregaStatus === 'ALTERADO') {
+                    badgeBoxBg = '#f97316'; // Laranja para Em Alteração ou Entrega Alterada
+                } else if (entregaStatus === 'CORRIGIR') {
                     badgeBoxBg = '#ef4444';
-                } else if (entregaStatus === 'ALTERADO') {
-                    badgeBoxBg = '#f97316';
                 } else if (isAllApproved && entregaStatus === 'APROVADO') {
                     badgeBoxBg = '#22c55e';
                 }
+
 
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
@@ -17169,9 +17177,9 @@ window.voltarParaArte = voltarParaArte;
  * Muda o status para 'Reprovada'.
  */
 window.reprovarArteAdmin = async function(osId) {
-    if (!confirm('Tem certeza que deseja REPROVAR a arte deste pedido?')) return;
+    if (!confirm('Tem certeza que deseja solicitar ALTERAÇÃO para a arte deste pedido?')) return;
 
-    const novoStatus = 'Reprovada';
+    const novoStatus = 'Em Alteração';
     try {
         const os = state.ordens.find(o => o.id === osId);
 
@@ -17192,13 +17200,14 @@ window.reprovarArteAdmin = async function(osId) {
             }
         }
 
-        toast(`Pedido #${os ? os.numero : ''} — Arte REPROVADA pelo atendimento.`, 'warning');
+        toast(`Pedido #${os ? os.numero : ''} alterado para "Em Alteração".`, 'warning');
         renderOrdens();
     } catch (err) {
-        console.error('Erro ao reprovar arte:', err);
-        toast('Erro ao reprovar: ' + err.message, 'error');
+        console.error('Erro ao colocar em alteração:', err);
+        toast('Erro ao atualizar: ' + err.message, 'error');
     }
 };
+
 
 /**
  * Voltar pedido para 'Em Arte' direto da lista (quando está Reprovada).
