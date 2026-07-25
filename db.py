@@ -1037,17 +1037,19 @@ def upsert_user_permissions(data):
     try:
         data['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         body = json.dumps(data).encode('utf-8')
-        url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions"
+        url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?on_conflict=user_id"
         headers = _headers()
         headers['Content-Type'] = 'application/json'
-        headers['Prefer'] = 'resolution=merge-duplicates'
+        headers['Prefer'] = 'resolution=merge-duplicates,return=representation'
         req = urllib.request.Request(url, data=body, headers=headers, method='POST')
         with urllib.request.urlopen(req, timeout=10) as resp:
-            print(f"[db] upsert_user_permissions: {resp.status}")
+            result = resp.read().decode('utf-8')
+            print(f"[db] upsert_user_permissions: {resp.status} -> {result[:200]}")
             return True
     except Exception as e:
         print(f"[db] upsert_user_permissions erro: {e}")
         return False
+
 
 
 def delete_user_permissions(user_id):
