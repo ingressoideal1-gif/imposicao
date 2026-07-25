@@ -13506,8 +13506,10 @@ function getStatusBadge(status) {
         'Em Alteração':        { icon: '⚠️', bg: '#f97316', label: 'Em Alteração' },
         'Arte Pronta':         { icon: '✅', bg: '#8b5cf6', label: 'Arte Pronta' },
         'Enviar Arte':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
-        'Aguard. Aprovação':   { icon: '⏳', bg: '#f97316', label: 'Aguard. Aprovação' },
+        'Aguard. Aprovação':   { icon: '⏳', bg: '#8b5cf6', label: 'Aguard. Aprovação' },
+        'Aguardando':          { icon: '⏳', bg: '#8b5cf6', label: 'Aguard. Aprovação' },
         'Aprovada':            { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
+
 
         // ── Status de produção / outros ─────────────────────────────
         'ARTE':                { icon: '🎨', bg: '#3b82f6', label: 'Arte' },
@@ -14394,13 +14396,14 @@ function renderOrdens() {
                                 // 1) Link de aprovação (Arte Pronta, Enviar Arte, Aguard. Aprovação, ou quando Entrega foi Alterada/Corrigir)
                                 if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
-                                        <a href="${linkSalvo}" target="_blank" rel="noopener" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;text-decoration:none;" title="Abrir Link">🔗</a>
-                                        <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar Link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;">📋</button>
+                                        <button onclick="abrirLinkClienteEAtualizarStatus('${os.id}', '${os.numero}', '${linkSalvo}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir Link">🔗</button>
+                                        <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar Link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
                                     </div>`);
                                 } else if (isArtePronta || isAguardando || isEntregaAlterada) {
                                     const btnColor = isEntregaAlterada ? 'background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);' : 'background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);';
                                     btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:4px 8px;font-size:0.73rem;${btnColor}border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🔗 Gerar Link</button>`);
                                 }
+
 
                                 // 2) Reprovar (quando status permite e usuário tem edit)
                                 if (!isReprovada && !isAprovada && st !== 'Em Fila') {
@@ -19814,6 +19817,29 @@ async function getOrCreateLinkCliente(osId, numero) {
     }
 }
 
+async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
+    const novoStatus = 'Aguard. Aprovação';
+    const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
+    if (os && os.status !== 'Aprovada' && os.status !== 'APROVADO') {
+        os.status = novoStatus;
+        os.status_calculado = novoStatus;
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (osId.startsWith('vibe_')) {
+                await supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId);
+            } else {
+                await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
+            }
+        }
+        await loadOrdens();
+    }
+    window.open(linkUrl, '_blank');
+}
+window.abrirLinkClienteEAtualizarStatus = abrirLinkClienteEAtualizarStatus;
+
 /**
  * Gera (ou recupera) o link do cliente, copia para a área de transferência
  * e exibe um toast de confirmação.
@@ -19824,14 +19850,9 @@ async function gerarLinkCliente(osId, numero) {
         return;
     }
     try {
-        const linkUrl = await getOrCreateLinkCliente(osId, numero);
-        if (!linkUrl) {
-            toast('Tabela de links ainda não existe no banco. Execute o SQL de criação.', 'warning');
-            return;
-        }
-
-        // Alterar status para "Aguard. Aprovação" ao gerar o link
         const novoStatus = 'Aguard. Aprovação';
+
+        // 1. Atualizar overrides e estado local primeiro
         const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
         overrides[osId] = novoStatus;
         localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
@@ -19842,12 +19863,20 @@ async function gerarLinkCliente(osId, numero) {
             os.status_calculado = novoStatus;
         }
 
+        // 2. Atualizar no banco Supabase primeiro
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             if (osId.startsWith('vibe_')) {
                 await supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId);
             } else {
                 await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
             }
+        }
+
+        // 3. Obter ou criar o link do cliente (já gravando o novoStatus)
+        const linkUrl = await getOrCreateLinkCliente(osId, numero);
+        if (!linkUrl) {
+            toast('Tabela de links ainda não existe no banco. Execute o SQL de criação.', 'warning');
+            return;
         }
 
         try {
@@ -19857,13 +19886,14 @@ async function gerarLinkCliente(osId, numero) {
             prompt('Copie o link abaixo:', linkUrl);
         }
 
-        // Recarregar a lista para exibir os botões do link gerado e manter na Fila de Aprovação
+        // 4. Recarregar a lista para exibir os botões do link gerado e manter na Fila de Aprovação
         await loadOrdens();
     } catch (e) {
         console.error('Erro ao gerar link do cliente:', e);
         toast('Erro ao gerar o link: ' + e.message, 'error');
     }
 }
+
 
 
 function setFiltroSetor(setor) {
