@@ -2182,22 +2182,21 @@
                 <div class="page-header">
                     <div class="page-header-text">
                         <h1>🛡️ Gerenciamento de Usuários</h1>
-                        <p>Controle permissões de acesso da equipe e defina administradores/editores.</p>
+                        <p>Controle permissões de acesso da equipe nos módulos do Ideal Imposition.</p>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">👥</span> Usuários Cadastrados</span>
+                        <span class="card-title"><span class="icon">👥</span> Usuários e Permissões</span>
                         <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">🔄 Atualizar Lista</button>
                     </div>
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Nome / Email</th>
-                                <th>UID</th>
-                                <th>Cargo/Função</th>
-                                <th>Ações</th>
+                                <th style="width:200px;">Email / Setor</th>
+                                <th style="width:200px;">Role</th>
+                                <th>Permissões por Módulo</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-admin-users">
@@ -2206,6 +2205,7 @@
                     </table>
                 </div>
             </section>
+
 
             <!-- MODAL GERENCIAMENTO DE ARTES -->
             <div id="modal-artes" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">

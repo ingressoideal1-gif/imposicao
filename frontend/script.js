@@ -8712,17 +8712,22 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         const headers = {};
 
-        if (typeof firebase !== 'undefined' && firebase.auth() && firebase.auth().currentUser) {
+        // Usar token de sessão do Supabase Auth (se disponível)
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.auth) {
 
             try {
 
-                const token = await firebase.auth().currentUser.getIdToken();
+                const { data: { session } } = await supabaseClient.auth.getSession();
 
-                headers['Authorization'] = `Bearer ${token}`;
+                if (session && session.access_token) {
+
+                    headers['Authorization'] = `Bearer ${session.access_token}`;
+
+                }
 
             } catch (e) {
 
-                console.error("Erro ao obter Firebase ID Token para imposição:", e);
+                console.error("Erro ao obter Supabase Auth Token:", e);
 
             }
 
@@ -10106,367 +10111,345 @@ window.addCsvColumnElement = function(colName) {
 
 
 
-// - LÓGICA DE AUTENTICAÇÃO E ADMINISTRAÇÃO -
+// ────────────────────────────────────────────────────────────────────────────
+// LÓGICA DE AUTENTICAÇÃO (SUPABASE AUTH) E PERMISSÕES DO IMPOSITION
+// O login é feito pelo sistema parceiro. O Imposition apenas lê a sessão.
+// Em modo localhost/EXE → bypass total, sem login.
+// ────────────────────────────────────────────────────────────────────────────
 
-let authMode = 'login'; // 'login' ou 'register'
+// Estado global do usuário logado e suas permissões
+window._currentUser = null;
+window._currentPerms = null;
 
+const PARTNER_LOGIN_URL = 'https://vibe.ai-ideal.com.br/login';
 
-
-window.toggleAuthMode = function(e) {
-
-    if (e) e.preventDefault();
-
-    const title = document.querySelector('.auth-header h2');
-
-    const p = document.querySelector('.auth-header p');
-
-    const btnSubmit = document.getElementById('btn-auth-submit');
-
-    const toggleLink = document.getElementById('auth-toggle-link');
-
-    
-
-    if (authMode === 'login') {
-
-        authMode = 'register';
-
-        title.textContent = 'Ideal Imposition -- Cadastro';
-
-        p.textContent = 'Crie sua conta para começar';
-
-        btnSubmit.textContent = 'Cadastrar';
-
-        toggleLink.textContent = 'Já tem uma conta? Entrar';
-
-    } else {
-
-        authMode = 'login';
-
-        title.textContent = 'Ideal Imposition';
-
-        p.textContent = 'Faça login para acessar o painel online';
-
-        btnSubmit.textContent = 'Entrar';
-
-        toggleLink.textContent = 'Criar uma nova conta';
-
-    }
-
+// ──── Permissões padrão por role ────────────────────────────────────────────
+const ROLE_DEFAULTS = {
+    admin:        { perm_imposicao:true, perm_pedidos:true, perm_formatos:true, perm_numeracao:true, perm_saidas:true, perm_cores:true, perm_mapas:true, perm_amostras:true, perm_impressoras:true, perm_producao:true, perm_lista_arte:true, perm_admin:true },
+    editor:       { perm_imposicao:true, perm_pedidos:true, perm_formatos:true, perm_numeracao:true, perm_saidas:true, perm_cores:true, perm_mapas:true, perm_amostras:true, perm_impressoras:false, perm_producao:true, perm_lista_arte:true, perm_admin:false },
+    operador:     { perm_imposicao:true, perm_pedidos:true, perm_formatos:false, perm_numeracao:false, perm_saidas:false, perm_cores:false, perm_mapas:false, perm_amostras:false, perm_impressoras:false, perm_producao:true, perm_lista_arte:true, perm_admin:false },
+    visualizador: { perm_imposicao:false, perm_pedidos:false, perm_formatos:false, perm_numeracao:false, perm_saidas:false, perm_cores:false, perm_mapas:false, perm_amostras:false, perm_impressoras:false, perm_producao:true, perm_lista_arte:false, perm_admin:false },
 };
 
+// Mapeamento: permissão → IDs de nav-btn na sidebar
+const PERM_NAV_MAP = {
+    perm_formatos:    ['nav-formatos', 'nav-lista-formatos'],
+    perm_numeracao:   ['nav-numeracao', 'nav-catalogo'],
+    perm_mapas:       ['nav-mapas'],
+    perm_saidas:      ['nav-saidas'],
+    perm_cores:       ['nav-cores', 'nav-lista-cores'],
+    perm_imposicao:   ['nav-imposicao'],
+    perm_pedidos:     ['nav-pedido'],
+    perm_amostras:    ['nav-amostras'],
+    perm_producao:    ['nav-lista-impressao'],
+    perm_lista_arte:  ['nav-lista-arte'],
+    perm_impressoras: ['nav-impressoras'],
+    perm_admin:       ['nav-admin'],
+};
 
+// ──── Aplicar permissões na sidebar ────────────────────────────────────────
+function applyPermissions(perms) {
+    if (!perms) return;
+    window._currentPerms = perms;
 
-window.handleAuthSubmit = async function(e) {
-
-    e.preventDefault();
-
-    const email = document.getElementById('auth-email').value.trim();
-
-    const password = document.getElementById('auth-password').value;
-
-    const btnSubmit = document.getElementById('btn-auth-submit');
-
-    
-
-    btnSubmit.disabled = true;
-
-    btnSubmit.textContent = authMode === 'login' ? 'Entrando...' : 'Cadastrando...';
-
-    
-
-    try {
-
-        if (authMode === 'login') {
-
-            await firebase.auth().signInWithEmailAndPassword(email, password);
-
-            toast('Login efetuado com sucesso!', 'success');
-
-        } else {
-
-            await firebase.auth().createUserWithEmailAndPassword(email, password);
-
-            toast('Conta criada com sucesso!', 'success');
-
+    for (const [permKey, navIds] of Object.entries(PERM_NAV_MAP)) {
+        const allowed = perms[permKey] === true;
+        for (const navId of navIds) {
+            const el = document.getElementById(navId);
+            if (el) el.style.display = allowed ? '' : 'none';
         }
-
-        document.getElementById('auth-overlay').classList.remove('active');
-
-        document.body.classList.remove('not-logged-in');
-
-    } catch (err) {
-
-        toast('Erro: ' + err.message, 'error');
-
-    } finally {
-
-        btnSubmit.disabled = false;
-
-        btnSubmit.textContent = authMode === 'login' ? 'Entrar' : 'Cadastrar';
-
     }
 
-};
+    // Labels de grupo: esconder "Configuração" se nenhum módulo config visível
+    const configPerms = ['perm_formatos', 'perm_numeracao', 'perm_mapas', 'perm_saidas', 'perm_cores'];
+    const hasConfig = configPerms.some(p => perms[p] === true);
+    const configLabels = document.querySelectorAll('.nav-group-label');
+    if (configLabels[0]) configLabels[0].style.display = hasConfig ? '' : 'none';
 
+    // Admin label + button
+    const adminLabel = document.querySelector('.nav-group-label.admin-only');
+    if (adminLabel) adminLabel.style.display = perms.perm_admin ? '' : 'none';
+    const adminBtn = document.querySelector('.nav-btn.admin-only');
+    if (adminBtn) adminBtn.style.display = perms.perm_admin ? '' : 'none';
+}
 
-
-window.handleGoogleLogin = async function() {
-
-    const provider = new firebase.auth.GoogleAuthProvider();
-
-    const btnGoogle = document.getElementById('btn-google-login');
-
-    if (btnGoogle) btnGoogle.disabled = true;
-
-    
-
+// ──── Carregar permissões do backend ───────────────────────────────────────
+async function loadUserPermissions(userId) {
     try {
-
-        await firebase.auth().signInWithPopup(provider);
-
-        toast('Login com Google efetuado com sucesso!', 'success');
-
-        document.getElementById('auth-overlay').classList.remove('active');
-
-        document.body.classList.remove('not-logged-in');
-
-    } catch (err) {
-
-        toast('Erro ao entrar com Google: ' + err.message, 'error');
-
-    } finally {
-
-        if (btnGoogle) btnGoogle.disabled = false;
-
-    }
-
-};
-
-
-
-window.handleSignOut = async function() {
-
-    try {
-
-        await firebase.auth().signOut();
-
-        toast('Logoff efetuado!', 'success');
-
-        location.reload();
-
+        const resp = await fetch(`${API_BASE_URL}/api/user/permissions/${userId}`);
+        const data = await resp.json();
+        if (data.ok && data.permissions) {
+            return data.permissions;
+        }
     } catch (e) {
-
-        toast('Erro ao sair: ' + e.message, 'error');
-
+        console.warn('[auth] Erro ao carregar permissões:', e);
     }
+    return null;
+}
 
-};
+// ──── Auto-criar permissões para primeiro acesso ──────────────────────────
+async function ensureUserPermissions(userId, email) {
+    let perms = await loadUserPermissions(userId);
+    if (perms) return perms;
 
+    // Primeiro acesso — verificar se existem outros usuários
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
+        const data = await resp.json();
+        const existingUsers = (data.ok && data.permissions) ? data.permissions : [];
 
+        // Se não tem ninguém, este é o primeiro → admin
+        const role = existingUsers.length === 0 ? 'admin' : 'operador';
+        const defaults = ROLE_DEFAULTS[role];
 
-// Monitora o estado de autenticação do Firebase Auth
+        const newPerms = {
+            user_id: userId,
+            role: role,
+            ...defaults
+        };
 
-document.addEventListener('DOMContentLoaded', () => {
-
-    if (typeof firebase !== 'undefined' && firebase.auth) {
-
-        firebase.auth().onAuthStateChanged(async (user) => {
-
-            if (user) {
-
-                // Logado
-
-                document.getElementById('auth-overlay').classList.remove('active');
-
-                document.body.classList.remove('not-logged-in');
-
-                
-
-                // Mostrar informações do perfil
-
-                const profileBar = document.getElementById('user-profile-bar');
-
-                const emailDisplay = document.getElementById('user-email-display');
-
-                if (profileBar) profileBar.style.display = 'block';
-
-                if (emailDisplay) emailDisplay.textContent = user.email;
-
-
-
-                // Obter claims personalizadas (para saber se é admin)
-
-                try {
-
-                    const idTokenResult = await user.getIdTokenResult();
-
-                    const isAdmin = idTokenResult.claims.admin === true;
-
-                    if (isAdmin) {
-
-                        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
-
-                    } else {
-
-                        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-
-                    }
-
-                } catch (e) {
-
-                    console.error("Erro ao ler Claims:", e);
-
-                }
-
-
-
-                // Carregar dados principais
-
-                loadAll();
-
-            } else {
-
-                // Deslogado
-
-                document.getElementById('auth-overlay').classList.add('active');
-
-                document.body.classList.add('not-logged-in');
-
-                
-
-                const profileBar = document.getElementById('user-profile-bar');
-
-                if (profileBar) profileBar.style.display = 'none';
-
-                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-
-            }
-
+        await fetch(`${API_BASE_URL}/api/user/permissions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newPerms)
         });
 
+        console.log(`[auth] Permissões criadas para ${email}: role=${role}`);
+        return { ...newPerms };
+    } catch (e) {
+        console.warn('[auth] Erro ao criar permissões:', e);
+        return { ...ROLE_DEFAULTS.operador, role: 'operador', user_id: userId };
+    }
+}
+
+// ──── Atualizar UI do perfil logado ───────────────────────────────────────
+function updateProfileUI(user, perms) {
+    const profileBar = document.getElementById('user-profile-bar');
+    const emailDisplay = document.getElementById('user-email-display');
+
+    if (profileBar) profileBar.style.display = 'block';
+    if (emailDisplay) {
+        const roleBadge = perms ? `<span style="font-size:0.65rem;background:${perms.role === 'admin' ? 'rgba(239,68,68,0.2);color:#f87171' : 'rgba(59,130,246,0.2);color:#60a5fa'};padding:1px 6px;border-radius:10px;margin-left:4px;">${(perms.role || '').toUpperCase()}</span>` : '';
+        emailDisplay.innerHTML = (user.email || '—') + roleBadge;
+    }
+}
+
+// ──── Sign Out ────────────────────────────────────────────────────────────
+window.handleSignOut = async function() {
+    try {
+        if (supabaseClient && supabaseClient.auth) {
+            await supabaseClient.auth.signOut();
+        }
+        toast('Logoff efetuado!', 'success');
+        window.location.href = PARTNER_LOGIN_URL;
+    } catch (e) {
+        toast('Erro ao sair: ' + e.message, 'error');
+    }
+};
+
+// ──── Inicialização de auth (DOMContentLoaded) ────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+
+    if (isLocal) {
+        // ── Modo local/EXE → bypass total ──
+        console.log('[auth] Modo local — bypass de autenticação');
+        const profileBar = document.getElementById('user-profile-bar');
+        if (profileBar) profileBar.style.display = 'none';
+
+        // Admin total em modo local
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+        // Garantir que todos os nav estão visíveis
+        document.querySelectorAll('.nav-btn').forEach(el => el.style.display = '');
+        document.querySelectorAll('.nav-group-label').forEach(el => el.style.display = '');
+
+        loadAll();
+        return;
     }
 
-});
-
-
-
-// Lógica do Painel de Administração (Lista usuários e altera permissões)
-
-window.loadAdminUsers = async function() {
-
-    const tbody = document.getElementById('tbody-admin-users');
-
-    if (!tbody) return;
-
-    
-
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando usuários...</td></tr>';
-
-    
+    // ── Modo online → verificar sessão Supabase Auth ──
+    if (!supabaseClient || !supabaseClient.auth) {
+        console.warn('[auth] Supabase não disponível — sem autenticação');
+        loadAll();
+        return;
+    }
 
     try {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
 
-        const users = await api('GET', '/admin/users');
-
-        if (!users || !users.length) {
-
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum usuário retornado.</td></tr>';
-
+        if (error || !session || !session.user) {
+            // Não está logado → redirecionar para o parceiro
+            console.log('[auth] Sem sessão — redirecionando para login do parceiro');
+            window.location.href = PARTNER_LOGIN_URL + '?redirect=' + encodeURIComponent(window.location.href);
             return;
-
         }
 
-        
+        // Logado! 
+        const user = session.user;
+        window._currentUser = user;
+        console.log('[auth] Logado como:', user.email);
 
-        tbody.innerHTML = users.map(u => `
+        // Carregar/criar permissões
+        const perms = await ensureUserPermissions(user.id, user.email);
+        window._currentPerms = perms;
 
-            <tr>
+        // Aplicar permissões na UI
+        applyPermissions(perms);
+        updateProfileUI(user, perms);
 
-                <td>
-
-                    <strong>${u.display_name}</strong><br>
-
-                    <small style="color: var(--text-dim);">${u.email}</small>
-
-                </td>
-
-                <td><code style="font-size:0.75rem; background:rgba(0,0,0,0.2); padding: 2px 6px; border-radius:4px;">${u.uid}</code></td>
-
-                <td>
-
-                    <span class="badge ${u.role === 'admin' ? 'badge-red' : (u.role === 'editor' ? 'badge-blue' : 'badge-teal')}">${u.role.toUpperCase()}</span>
-
-                </td>
-
-                <td>
-
-                    <select class="form-control" style="width: auto; display: inline-block; padding: 4px 8px; font-size: 0.8rem; height: 30px;" onchange="changeUserRole('${u.uid}', this.value)">
-
-                        <option value="user" ${u.role === 'user' ? 'selected' : ''}>User (Visualizador)</option>
-
-                        <option value="editor" ${u.role === 'editor' ? 'selected' : ''}>Editor</option>
-
-                        <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
-
-                    </select>
-
-                </td>
-
-            </tr>
-
-        `).join('');
+        // Carregar dados
+        loadAll();
 
     } catch (e) {
-
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--red);">Erro: ${e.message}</td></tr>`;
-
-        toast('Erro ao obter usuários: ' + e.message, 'error');
-
+        console.error('[auth] Erro na verificação de sessão:', e);
+        loadAll();
     }
 
+    // Listener para mudança de sessão (logout externo, expiração etc)
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT' || !session) {
+            window.location.href = PARTNER_LOGIN_URL;
+        }
+    });
+});
+
+
+// ──────────────────────────────────────────────────────────────────────────
+// PAINEL DE ADMINISTRAÇÃO — Gerenciamento de Permissões do Imposition
+// ──────────────────────────────────────────────────────────────────────────
+
+const PERM_LABELS = {
+    perm_imposicao:   '🖨️ Imposição',
+    perm_pedidos:     '📦 Pedidos',
+    perm_formatos:    '📐 Formatos',
+    perm_numeracao:   '🔢 Numeração',
+    perm_saidas:      '📄 Saídas',
+    perm_cores:       '🎨 Cores',
+    perm_mapas:       '🗺️ Mapas',
+    perm_amostras:    '🧪 Amostras',
+    perm_impressoras: '🖨️ Impressoras',
+    perm_producao:    '📋 Produção',
+    perm_lista_arte:  '🎨 Lista de Arte',
+    perm_admin:       '🛡️ Admin',
 };
 
+window.loadAdminUsers = async function() {
+    const tbody = document.getElementById('tbody-admin-users');
+    if (!tbody) return;
 
-
-window.changeUserRole = async function(uid, newRole) {
-
-    if (!confirm(`Deseja alterar a função deste usuário para ${newRole.toUpperCase()}?`)) {
-
-        loadAdminUsers();
-
-        return;
-
-    }
-
-    
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
 
     try {
+        // Buscar todos os usuários com permissões no Imposition
+        const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
+        const data = await resp.json();
+        const users = (data.ok && data.permissions) ? data.permissions : [];
 
-        await api('POST', `/admin/users/${uid}/role`, { role: newRole });
+        if (!users.length) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color: var(--text-dim);">Nenhum usuário com permissões configuradas.</td></tr>';
+            return;
+        }
 
-        toast('Função de usuário atualizada!', 'success');
+        // Buscar dados de email/nome de cada user_id na tabela usuarios do Supabase
+        let userProfiles = {};
+        try {
+            if (supabaseClient) {
+                const { data: profiles } = await supabaseClient
+                    .from('usuarios')
+                    .select('user_id, email, setor, avatar, is_admin')
+                    .in('user_id', users.map(u => u.user_id));
+                if (profiles) {
+                    profiles.forEach(p => userProfiles[p.user_id] = p);
+                }
+            }
+        } catch (e) {
+            console.warn('[admin] Erro ao buscar perfis:', e);
+        }
 
-        loadAdminUsers();
+        tbody.innerHTML = users.map(u => {
+            const profile = userProfiles[u.user_id] || {};
+            const email = profile.email || u.user_id.substring(0, 12) + '...';
+            const setor = profile.setor || '';
+            const roleColor = u.role === 'admin' ? 'badge-red' : (u.role === 'editor' ? 'badge-blue' : 'badge-teal');
 
+            const permChecks = Object.keys(PERM_LABELS).map(pk => {
+                const checked = u[pk] === true ? 'checked' : '';
+                return `<label style="display:inline-flex;align-items:center;gap:3px;font-size:0.72rem;margin-right:8px;white-space:nowrap;cursor:pointer;">
+                    <input type="checkbox" ${checked} onchange="toggleUserPerm('${u.user_id}', '${pk}', this.checked)" style="cursor:pointer;">
+                    ${PERM_LABELS[pk]}
+                </label>`;
+            }).join('');
+
+            return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:12px;">
+                        <strong style="color:#fff;">${email}</strong>
+                        ${setor ? `<br><small style="color:var(--text-dim);">${setor}</small>` : ''}
+                    </td>
+                    <td style="padding:12px;">
+                        <select class="form-control" style="width:auto;display:inline-block;padding:4px 8px;font-size:0.8rem;height:30px;" onchange="changeUserRole('${u.user_id}', this.value)">
+                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                            <option value="editor" ${u.role === 'editor' ? 'selected' : ''}>Editor</option>
+                            <option value="operador" ${u.role === 'operador' ? 'selected' : ''}>Operador</option>
+                            <option value="visualizador" ${u.role === 'visualizador' ? 'selected' : ''}>Visualizador</option>
+                        </select>
+                        <span class="badge ${roleColor}" style="margin-left:6px;">${(u.role || '').toUpperCase()}</span>
+                    </td>
+                    <td style="padding:12px;">
+                        <div style="display:flex;flex-wrap:wrap;gap:2px 0;">
+                            ${permChecks}
+                        </div>
+                    </td>
+                </tr>`;
+        }).join('');
     } catch (e) {
-
-        toast('Erro ao alterar função: ' + e.message, 'error');
-
-        loadAdminUsers();
-
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red);">Erro: ${e.message}</td></tr>`;
     }
-
 };
 
+window.changeUserRole = async function(userId, newRole) {
+    if (!confirm(`Alterar role para ${newRole.toUpperCase()}?`)) {
+        loadAdminUsers();
+        return;
+    }
+    try {
+        const defaults = ROLE_DEFAULTS[newRole] || ROLE_DEFAULTS.operador;
+        await fetch(`${API_BASE_URL}/api/user/permissions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, role: newRole, ...defaults })
+        });
+        toast(`Role alterada para ${newRole.toUpperCase()}!`, 'success');
+        loadAdminUsers();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+        loadAdminUsers();
+    }
+};
 
+window.toggleUserPerm = async function(userId, permKey, value) {
+    try {
+        await fetch(`${API_BASE_URL}/api/user/permissions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, [permKey]: value })
+        });
+        toast(`Permissão ${PERM_LABELS[permKey] || permKey} ${value ? 'ativada' : 'desativada'}`, 'success');
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+};
 
-// Vincula clique na aba de administração para carregar usuários automaticamente
-
+// Carregar admin ao clicar na aba
 document.getElementById('nav-admin')?.addEventListener('click', () => {
-
     loadAdminUsers();
-
 });
+
+
+
+
+
+
 
 
 

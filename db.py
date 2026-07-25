@@ -999,3 +999,67 @@ def upsert_print_config(data):
     except Exception as e:
         print(f"[db] upsert_print_config erro: {e}")
         return False
+
+
+def get_user_permissions(user_id):
+    """Busca permissões do Imposition para um usuário."""
+    if not IS_SUPABASE_ACTIVE:
+        return None
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?user_id=eq.{user_id}&select=*"
+        req = urllib.request.Request(url, headers=_headers(), method='GET')
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return data[0] if data else None
+    except Exception as e:
+        print(f"[db] get_user_permissions erro: {e}")
+        return None
+
+
+def list_all_user_permissions():
+    """Lista todas as permissões de todos os usuários."""
+    if not IS_SUPABASE_ACTIVE:
+        return []
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?select=*&order=created_at.asc"
+        req = urllib.request.Request(url, headers=_headers(), method='GET')
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        print(f"[db] list_all_user_permissions erro: {e}")
+        return []
+
+
+def upsert_user_permissions(data):
+    """Salva/atualiza permissões do Imposition para um usuário (upsert por user_id)."""
+    if not IS_SUPABASE_ACTIVE:
+        return False
+    try:
+        data['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        body = json.dumps(data).encode('utf-8')
+        url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions"
+        headers = _headers()
+        headers['Content-Type'] = 'application/json'
+        headers['Prefer'] = 'resolution=merge-duplicates'
+        req = urllib.request.Request(url, data=body, headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"[db] upsert_user_permissions: {resp.status}")
+            return True
+    except Exception as e:
+        print(f"[db] upsert_user_permissions erro: {e}")
+        return False
+
+
+def delete_user_permissions(user_id):
+    """Remove permissões de um usuário."""
+    if not IS_SUPABASE_ACTIVE:
+        return False
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?user_id=eq.{user_id}"
+        req = urllib.request.Request(url, headers=_headers(), method='DELETE')
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            return True
+    except Exception as e:
+        print(f"[db] delete_user_permissions erro: {e}")
+        return False
+

@@ -1018,6 +1018,28 @@ async def save_print_config_endpoint(request: Request):
     ok = db.upsert_print_config(data)
     return {"ok": ok}
 
+@app.get("/api/user/permissions/{user_id}")
+async def get_user_permissions_endpoint(user_id: str):
+    perms = db.get_user_permissions(user_id)
+    return {"ok": True, "permissions": perms}
+
+@app.get("/api/user/permissions")
+async def list_user_permissions_endpoint():
+    perms = db.list_all_user_permissions()
+    return {"ok": True, "permissions": perms}
+
+@app.post("/api/user/permissions")
+async def save_user_permissions_endpoint(request: Request):
+    data = await request.json()
+    ok = db.upsert_user_permissions(data)
+    return {"ok": ok}
+
+@app.delete("/api/user/permissions/{user_id}")
+async def delete_user_permissions_endpoint(user_id: str):
+    ok = db.delete_user_permissions(user_id)
+    return {"ok": ok}
+
 # Fallback mount to serve static files from root (resolves absolute links like /style.css, /script.js, /supabase-config.js in frontend)
 app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="root_frontend")
+
 
