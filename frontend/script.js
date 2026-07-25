@@ -16566,13 +16566,12 @@ function renderAmostrasOSItens(osId) {
     // Media query hack for responsiveness inline if needed, but flex-wrap handles smaller screens if we used flex. 
     // Com display grid, podemos precisar de css. Para o painel principal, vamos assumir que o CSS do painel é robusto.
 
-    // Card de Conferência e Alerta de Dados de Entrega e Faturamento
     const arteGlobal = state.todasArtes?.find(a => String(a.id_int) === String(os.numero));
     const entregaStatus = (arteGlobal && arteGlobal.entrega_dados) ? arteGlobal.entrega_dados.toUpperCase() : '----';
     const isClienteView = (containerId === 'cliente-amostras-itens-container');
-    const isInternal = !isClienteView;
 
     let entregaCardHtml = '';
+
 
     // No painel interno (isInternal), se entregaStatus for CORRIGIR ou ALTERADO, exibir box em destaque no topo com os dados e solicitacao do cliente
     if (isInternal && (entregaStatus === 'CORRIGIR' || entregaStatus === 'ALTERADO')) {
