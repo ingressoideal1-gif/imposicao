@@ -18596,7 +18596,14 @@ function clearAmostrasOS() {
     if (container) container.innerHTML = '';
     if (banner) banner.style.display = 'none';
     if (avulsa) avulsa.style.display = '';
+
+    if (typeof window.showView === 'function') {
+        window.showView('view-lista-arte');
+    } else if (typeof showView === 'function') {
+        showView('view-lista-arte');
+    }
 }
+
 
 // --- Funções de Briefing e Designers (Tabela: pedidos_artes) ---
 
