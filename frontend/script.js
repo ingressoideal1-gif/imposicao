@@ -14356,7 +14356,7 @@ function renderOrdens() {
                         </td>
                         <td style="text-align: center; vertical-align: middle;">${entregaHtml}</td>
                         <td style="text-align: center;">
-                            ${getStatusBadge(os.status)}
+                            ${getStatusBadge(os.status_calculado || os.status)}
                             ${artProgressHtml}
                         </td>
                         <td><span class="badge">${itensCount} ${itensCount === 1 ? 'item' : 'itens'}</span></td>
@@ -14365,8 +14365,9 @@ function renderOrdens() {
                                 const perms = window._currentPerms || {};
                                 const canEdit = perms.perm_lista_arte_edit === true;
                                 const linkSalvo = state.linksCliente && state.linksCliente[os.id];
-                                const st = (os.status || '').trim();
+                                const st = (os.status_calculado || os.status || '').trim();
                                 const stUp = st.toUpperCase();
+
                                 let btns = [];
 
                                 const isEntregaAlterada = entregaStatus === 'ALTERADO' || entregaStatus === 'CORRIGIR';
