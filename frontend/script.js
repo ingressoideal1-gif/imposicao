@@ -13932,7 +13932,8 @@ function renderOrdens() {
 
     const validReprovadoList = ['REPROVADO', 'REPROVADA', 'REPROVADA_CLIENTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ARTE_EM_CORRECAO'];
     const validApprovedList = ['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'];
-    const validAprovacaoList = ['ENVIAR ARTE', 'ARTE PRONTA', 'ENVIAR ARTE', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO'];
+    const validAprovacaoList = ['ENVIAR ARTE', 'ARTE PRONTA', 'ENVIAR ARTE', 'AGUARD. APROVAÇÃO', 'AGUARD. APROVACAO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO', 'AGUARD. APROVAÇAO'];
+
 
     state.ordens.forEach(os => {
         const osNumeroInt = parseInt(os.numero);
@@ -19828,17 +19829,42 @@ async function gerarLinkCliente(osId, numero) {
             toast('Tabela de links ainda não existe no banco. Execute o SQL de criação.', 'warning');
             return;
         }
+
+        // Alterar status para "Aguard. Aprovação" ao gerar o link
+        const novoStatus = 'Aguard. Aprovação';
+        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
+        overrides[osId] = novoStatus;
+        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+
+        const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
+        if (os) {
+            os.status = novoStatus;
+            os.status_calculado = novoStatus;
+        }
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            if (osId.startsWith('vibe_')) {
+                await supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId);
+            } else {
+                await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
+            }
+        }
+
         try {
             await navigator.clipboard.writeText(linkUrl);
             toast(`Link copiado! 📋 ${linkUrl}`, 'success');
         } catch (clipErr) {
             prompt('Copie o link abaixo:', linkUrl);
         }
+
+        // Recarregar a lista para exibir os botões do link gerado e manter na Fila de Aprovação
+        await loadOrdens();
     } catch (e) {
         console.error('Erro ao gerar link do cliente:', e);
         toast('Erro ao gerar o link: ' + e.message, 'error');
     }
 }
+
 
 function setFiltroSetor(setor) {
     state.filtroSetor = setor;
