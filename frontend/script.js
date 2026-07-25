@@ -16034,9 +16034,131 @@ async function marcarEntregaDadosCorrigido(osId, osNum) {
     }
 }
 
+/**
+ * Carrega e exibe os dados atuais de entrega, faturamento e solicitação do cliente no box de alerta interno
+ */
+async function loadDadosEntregaInterno(osId, osNum) {
+    const container = document.getElementById(`detalhes-entrega-faturamento-${osId}`);
+    const obsContainer = document.getElementById(`solicitacao-cliente-texto-${osId}`);
+    const numInt = parseInt(osNum);
+    if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return;
+
+    try {
+        // 1. Buscar dados da proposta, clientes e enderecos
+        const { data: propData } = await supabaseClient
+            .from('propostas')
+            .select('id_faturado, id_cliente, id_endereco_ent')
+            .eq('id_int', numInt)
+            .limit(1);
+
+        let cli = null;
+        let end = null;
+
+        if (propData && propData.length > 0) {
+            const prop = propData[0];
+            const idCli = prop.id_faturado || prop.id_cliente;
+            const idEnd = prop.id_endereco_ent;
+
+            if (idCli) {
+                const { data: cliData } = await supabaseClient.from('clientes').select('*').eq('id_cliente', idCli).limit(1);
+                if (cliData && cliData.length > 0) cli = cliData[0];
+            }
+            if (idEnd) {
+                const { data: endData } = await supabaseClient.from('enderecos').select('*').eq('id', idEnd).limit(1);
+                if (endData && endData.length > 0) end = endData[0];
+            }
+        }
+
+        // 2. Buscar observações / solicitação de alteração do cliente em pedidos_artes
+        const { data: paData } = await supabaseClient
+            .from('pedidos_artes')
+            .select('observacoes, entrega_dados')
+            .eq('id_int', numInt)
+            .maybeSingle();
+
+        let correcaoTexto = '';
+        if (paData && paData.observacoes) {
+            let obs = paData.observacoes;
+            if (typeof obs === 'string') {
+                try { obs = JSON.parse(obs); } catch(e) {}
+            }
+            if (typeof obs === 'object' && obs) {
+                correcaoTexto = obs.correcao_entrega_faturamento || obs.correcao_endereco || obs.correcao_nf || '';
+            }
+        }
+
+        // 3. Renderizar Dados de Faturamento e Entrega
+        if (container) {
+            let cliHtml = cli ? `
+                <div style="font-size: 0.86rem; line-height: 1.5; color: var(--text);">
+                    <strong>Razão Social/Nome:</strong> ${cli.nome || cli.fantasia || '--'}<br>
+                    <strong>CPF/CNPJ:</strong> ${cli.documento || '--'}<br>
+                    ${cli.ins_estadual ? `<strong>I.E.:</strong> ${cli.ins_estadual}<br>` : ''}
+                    <strong>E-mail:</strong> ${cli.email_financeiro || cli.email_contato || cli.email || '--'}<br>
+                    <strong>Telefone:</strong> ${cli.whatsapp_1 || cli.telefone_fixo || '--'}
+                </div>
+            ` : '<div style="font-size: 0.85rem; color: var(--text-dim); font-style: italic;">Dados de faturamento não cadastrados.</div>';
+
+            let endHtml = end ? `
+                <div style="font-size: 0.86rem; line-height: 1.5; color: var(--text);">
+                    ${end.recebedor ? `<strong>Recebedor:</strong> ${end.recebedor} ${end.cpf_recebedor ? `(CPF: ${end.cpf_recebedor})` : ''}<br>` : ''}
+                    <strong>Rua:</strong> ${end.endereco || end.rua || end.logradouro || '--'}, ${end.numero || 'S/N'}<br>
+                    ${end.complemento ? `<strong>Compl.:</strong> ${end.complemento}<br>` : ''}
+                    <strong>Bairro:</strong> ${end.bairro || '--'}<br>
+                    <strong>Cidade/UF:</strong> ${end.cidade || '--'} - ${end.uf || ''}<br>
+                    <strong>CEP:</strong> ${end.cep || '--'}
+                </div>
+            ` : '<div style="font-size: 0.85rem; color: var(--text-dim); font-style: italic;">Endereço de entrega não cadastrado.</div>';
+
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; background: rgba(0,0,0,0.03); padding: 14px; border: 1px solid var(--border); border-radius: 8px;">
+                    <div>
+                        <div style="font-size: 0.78rem; color: var(--blue); text-transform: uppercase; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-file-invoice"></i> Dados de Faturamento Atuais:
+                        </div>
+                        ${cliHtml}
+                    </div>
+                    <div>
+                        <div style="font-size: 0.78rem; color: var(--teal); text-transform: uppercase; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-truck-fast"></i> Endereço de Entrega Atual:
+                        </div>
+                        ${endHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 4. Renderizar Texto da Solicitação do Cliente
+        if (obsContainer && correcaoTexto) {
+            obsContainer.innerHTML = `
+                <div style="margin-top: 10px;">
+                    <div style="font-size: 0.85rem; font-weight: 800; color: #ef4444; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-comment-dots"></i> Solicitação de Alteração enviada pelo Cliente:
+                    </div>
+                    <div style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(239,68,68,0.4); border-radius: 8px; padding: 12px 14px; color: #fca5a5; font-size: 0.92rem; font-family: monospace; white-space: pre-wrap; line-height: 1.5;">${correcaoTexto}</div>
+                </div>
+            `;
+        } else if (obsContainer && !correcaoTexto) {
+            obsContainer.innerHTML = `
+                <div style="margin-top: 10px;">
+                    <div style="font-size: 0.85rem; font-weight: 800; color: #f97316; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-comment-dots"></i> Solicitação de Alteração pelo Cliente:
+                    </div>
+                    <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(249,115,22,0.3); border-radius: 8px; padding: 10px 12px; color: var(--text-dim); font-size: 0.85rem; font-style: italic;">
+                        O cliente solicitou revisão nos dados de entrega e faturamento.
+                    </div>
+                </div>
+            `;
+        }
+    } catch (e) {
+        console.error('Erro ao carregar detalhes de entrega interno:', e);
+    }
+}
+
 window.marcarEntregaDadosCorrigido = marcarEntregaDadosCorrigido;
 window.clienteAprovarEntregaDados = clienteAprovarEntregaDados;
 window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDados;
+
 
 
 /**
@@ -16716,7 +16838,9 @@ function renderAmostrasOSItens(osId) {
         loadBriefingBase(osId, osNum);
         loadAnexosPedido(osId, osNum);
         loadUltimosPedidos(osId, os.cliente);
+        loadDadosEntregaInterno(osId, osNum);
     }
+
 
 
     setTimeout(async () => {
