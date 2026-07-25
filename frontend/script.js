@@ -15914,6 +15914,100 @@ async function navigateToAmostrasFromOS(osId) {
 }
 
 /**
+ * Aprova os dados de entrega e faturamento pelo cliente no Link Público
+ */
+async function clienteAprovarEntregaDados(osId, osNum) {
+    const numInt = parseInt(osNum);
+    if (isNaN(numInt)) return;
+
+    try {
+        toast('Confirmando aprovação dos dados de entrega e faturamento...', 'info');
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            await supabaseClient
+                .from('pedidos_artes')
+                .update({ entrega_dados: 'APROVADO' })
+                .eq('id_int', numInt);
+        }
+
+        const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
+        if (arteGlobal) arteGlobal.entrega_dados = 'APROVADO';
+
+        toast('✅ Dados de Entrega e Faturamento Aprovados com Sucesso!', 'success');
+
+        if (typeof renderOrdens === 'function') renderOrdens();
+        renderAmostrasOSItens(osId);
+    } catch (e) {
+        console.error('Erro ao aprovar entrega_dados pelo cliente:', e);
+        toast('Erro ao aprovar dados: ' + e.message, 'error');
+    }
+}
+
+/**
+ * Solicita correção nos dados de entrega e faturamento pelo cliente no Link Público
+ */
+async function clienteSolicitarCorrecaoEntregaDados(osId, osNum) {
+    const box = document.getElementById(`box-obs-entrega-cliente-${osId}`);
+    const txt = document.getElementById(`txt-obs-entrega-cliente-${osId}`);
+
+    if (box && box.style.display === 'none') {
+        box.style.display = 'block';
+        if (txt) txt.focus();
+        return;
+    }
+
+    const obsText = txt ? txt.value.trim() : '';
+
+    const numInt = parseInt(osNum);
+    if (isNaN(numInt)) return;
+
+    try {
+        toast('Enviando solicitação de correção de entrega e faturamento...', 'info');
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            // Se houver observações, append no campo de observações de pedidos_artes
+            const { data: existing } = await supabaseClient
+                .from('pedidos_artes')
+                .select('observacoes')
+                .eq('id_int', numInt)
+                .maybeSingle();
+
+            let obsObj = (existing && existing.observacoes) ? existing.observacoes : {};
+            if (typeof obsObj === 'string') {
+                try { obsObj = JSON.parse(obsObj); } catch(e) {}
+            }
+            if (typeof obsObj !== 'object' || !obsObj) obsObj = {};
+
+            if (obsText) {
+                obsObj['correcao_entrega_faturamento'] = `${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}: ${obsText}`;
+            }
+
+            await supabaseClient
+                .from('pedidos_artes')
+                .update({
+                    entrega_dados: 'CORRIGIR',
+                    observacoes: obsObj
+                })
+                .eq('id_int', numInt);
+        }
+
+        const arteGlobal = state.todasArtes?.find(a => a.id_int === numInt);
+        if (arteGlobal) arteGlobal.entrega_dados = 'CORRIGIR';
+
+        toast('❌ Solicitação de correção de entrega/faturamento enviada para a equipe!', 'warning');
+
+        if (typeof renderOrdens === 'function') renderOrdens();
+        renderAmostrasOSItens(osId);
+    } catch (e) {
+        console.error('Erro ao solicitar correção de entrega_dados pelo cliente:', e);
+        toast('Erro ao solicitar correção: ' + e.message, 'error');
+    }
+}
+
+window.clienteAprovarEntregaDados = clienteAprovarEntregaDados;
+window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDados;
+
+/**
  * Renderiza os cards de itens do pedido na página de Amostras
  * Cada item gera um card com: Produto, Setor, Quantidade, NI→NF, Verso, Cor, Numeração + Decisão
  */
@@ -15923,6 +16017,7 @@ function renderAmostrasOSItens(osId) {
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
     const idCliente = os ? os.id_cliente : null;
+
     const banner = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-banner' : 'cliente-os-banner');
     const avulsa = document.getElementById('amostra-combinada-avulsa');
 
@@ -16439,7 +16534,86 @@ function renderAmostrasOSItens(osId) {
     // Media query hack for responsiveness inline if needed, but flex-wrap handles smaller screens if we used flex. 
     // Com display grid, podemos precisar de css. Para o painel principal, vamos assumir que o CSS do painel é robusto.
 
-    container.innerHTML = finalHtml;
+    // Card de Conferência de Dados de Entrega e Faturamento (Exibido no Link do Cliente ou quando status estiver ALTERADO)
+    const arteGlobal = state.todasArtes?.find(a => String(a.id_int) === String(os.numero));
+    const entregaStatus = (arteGlobal && arteGlobal.entrega_dados) ? arteGlobal.entrega_dados.toUpperCase() : '----';
+    const isClienteView = (containerId === 'cliente-amostras-itens-container');
+
+    let entregaCardHtml = '';
+    if (entregaStatus === 'ALTERADO' || (isClienteView && entregaStatus !== 'APROVADO')) {
+        let badgeHeader = '<span class="badge" style="background: #f97316; color: white; font-weight: 700;">⚠️ REVISÃO SOLICITADA</span>';
+        let descText = 'Os dados de <strong>Entrega e Faturamento</strong> deste pedido sofreram alterações. Por favor, confira as informações abaixo e confirme a sua aprovação ou solicite as correções necessárias:';
+        let cardBg = 'rgba(249,115,22,0.03)';
+        let cardBorder = '2px solid #f97316';
+        let headerBg = 'rgba(249,115,22,0.12)';
+
+        if (entregaStatus === 'APROVADO') {
+            badgeHeader = '<span class="badge badge-teal">✅ APROVADO</span>';
+            descText = 'Os dados de <strong>Entrega e Faturamento</strong> deste pedido foram conferidos e aprovados.';
+            cardBg = 'rgba(16,185,129,0.03)';
+            cardBorder = '1px solid rgba(16,185,129,0.3)';
+            headerBg = 'rgba(16,185,129,0.1)';
+        } else if (entregaStatus === 'CORRIGIR') {
+            badgeHeader = '<span class="badge badge-red">❌ CORREÇÃO SOLICITADA</span>';
+            descText = 'Foi solicitada uma <strong>correção</strong> nos dados de Entrega e Faturamento. A equipe está revisando.';
+            cardBg = 'rgba(239,68,68,0.03)';
+            cardBorder = '1px solid rgba(239,68,68,0.3)';
+            headerBg = 'rgba(239,68,68,0.1)';
+        }
+
+        entregaCardHtml = `
+            <div class="card" style="border: ${cardBorder}; background: ${cardBg}; margin-bottom: 20px; box-shadow: var(--shadow);">
+                <div class="card-header" style="background: ${headerBg}; border-bottom: 1px solid var(--border); padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <div style="font-weight: 800; color: var(--text); font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                        📦 Conferência de Dados de Entrega e Faturamento
+                    </div>
+                    ${badgeHeader}
+                </div>
+                <div class="card-body" style="padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+                    <p style="font-size: 0.9rem; color: var(--text); margin: 0; line-height: 1.5;">
+                        ${descText}
+                    </p>
+
+                    <!-- Informações do Cliente/Pedido -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; background: rgba(0,0,0,0.02); padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;">
+                        <div>
+                            <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Cliente / Razão Social:</span>
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.92rem;">${os.cliente || '--'}</div>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Número do Pedido:</span>
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.92rem;">#${os.numero || '--'}</div>
+                        </div>
+                        <div>
+                            <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Status Atual:</span>
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.92rem;">${entregaStatus}</div>
+                        </div>
+                    </div>
+
+                    <!-- Campo para Obs / Correções se necessário -->
+                    <div id="box-obs-entrega-cliente-${osId}" style="display: none; margin-top: 4px;">
+                        <label style="font-size: 0.82rem; font-weight: 700; color: #ef4444; margin-bottom: 6px; display: block;">
+                            Descreva o que precisa ser corrigido nos dados de entrega/faturamento:
+                        </label>
+                        <textarea id="txt-obs-entrega-cliente-${osId}" class="form-control" rows="3" placeholder="Insira os detalhes da correção (ex: novo endereço, CEP, CNPJ, faturamento...)" style="resize: vertical; border-color: rgba(239,68,68,0.4);"></textarea>
+                    </div>
+
+                    <!-- Botões de Ação do Cliente -->
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
+                        <button class="btn btn-success" onclick="clienteAprovarEntregaDados('${osId}', '${osNum}')" style="font-weight: 700; padding: 10px 20px; font-size: 0.88rem; display: flex; align-items: center; gap: 8px;">
+                            ✅ Aprovar Dados de Entrega e Faturamento
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="clienteSolicitarCorrecaoEntregaDados('${osId}', '${osNum}')" style="font-weight: 700; padding: 10px 18px; font-size: 0.88rem; display: flex; align-items: center; gap: 8px; border: 1px solid #ef4444; color: #ef4444; background: transparent;">
+                            ❌ Solicitar Correção nos Dados
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = entregaCardHtml + finalHtml;
+
     
     if (isInternal) {
         loadBriefingBase(osId, osNum);
