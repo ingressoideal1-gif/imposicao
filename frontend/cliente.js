@@ -810,19 +810,53 @@ async function initClientePage(numero, token) {
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
 
+        // Buscar entrega_dados da tabela pedidos_artes
+        let entregaStatus = '----';
+        try {
+            const numInt = parseInt(linkData.numero_pedido || linkData.id_int || numero);
+            if (!isNaN(numInt)) {
+                const { data: paData } = await supabaseClient
+                    .from('pedidos_artes')
+                    .select('entrega_dados')
+                    .eq('id_int', numInt)
+                    .maybeSingle();
+                if (paData && paData.entrega_dados) {
+                    entregaStatus = paData.entrega_dados.toUpperCase();
+                    if (!state.todasArtes) state.todasArtes = [];
+                    let globalArte = state.todasArtes.find(a => String(a.id_int) === String(numInt));
+                    if (globalArte) {
+                        globalArte.entrega_dados = paData.entrega_dados;
+                    } else {
+                        state.todasArtes.push({ id_int: numInt, entrega_dados: paData.entrega_dados });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[ClienteView] Erro ao carregar entrega_dados:', e);
+        }
+
         // REGRA DE ACESSO DO CLIENTE:
-        // Somente 'Enviar Arte' (e legado 'Enviar ARTE') abre as janelas de aprovação.
-        // 'APROVADO' → tela de sucesso.
-        // 'REPROVADO' → tela de reprovação (aguardando correção).
-        // QUALQUER outro status ('Em Arte', 'Pendente Informação', null, etc.) → mensagem de aguarde.
+        // Se a entrega/faturamento estiver em 'ALTERADO' OU se a OS estiver em 'Enviar Arte' (ou 'Enviar ARTE'),
+        // a página do cliente DEVE ABRIR para que ele faça a conferência e aprovação dos dados!
         const statusUP = osStatus.trim().toUpperCase();
         const isAprovado  = (statusUP === 'APROVADO' || statusUP === 'APROVADA_CLIENTE');
         const isReprovado = (statusUP === 'REPROVADO' || statusUP === 'REPROVADA_CLIENTE');
         const isEnviarArte = (osStatus.trim() === 'Enviar Arte' || osStatus.trim() === 'Enviar ARTE');
+        const isEntregaAlterada = (entregaStatus === 'ALTERADO');
 
-        console.log('[ClienteView] Status final para decisão de exibição:', osStatus, '| isEnviarArte:', isEnviarArte, '| isAprovado:', isAprovado, '| isReprovado:', isReprovado);
+        console.log('[ClienteView] Decisão de exibição:', { osStatus, entregaStatus, isEntregaAlterada, isEnviarArte, isAprovado, isReprovado });
 
-        if (isAprovado) {
+        if (isEntregaAlterada || isEnviarArte) {
+            // Permite acesso direto à aprovação de entrega/faturamento ou artes
+            const itensArray = state.osItens[osId] || [];
+            const todosAprovados = itensArray.length > 0 && itensArray.every(item => item.amostra_status === 'APROVADA');
+            
+            if (todosAprovados && !isEntregaAlterada) {
+                mostrarConfirmacaoDadosCliente(osId);
+            } else {
+                renderAmostrasOSItens(osId);
+            }
+        } else if (isAprovado) {
             mostrarResultadoCliente(
                 '✅',
                 'Artes Aprovadas!',
@@ -834,27 +868,15 @@ async function initClientePage(numero, token) {
                 'Artes Reprovadas',
                 'Recebemos sua solicitação de alteração e nossa equipe está realizando as correções. Em breve você receberá um novo link para aprovação.'
             );
-        } else if (isEnviarArte) {
-            // Único status onde o cliente vê as artes e pode aprovar/reprovar
-            const itensArray = state.osItens[osId] || [];
-            const todosAprovados = itensArray.length > 0 && itensArray.every(item => item.amostra_status === 'APROVADA');
-            
-            if (todosAprovados) {
-                // Se as artes já foram todas aprovadas mas o status da OS ainda é Enviar Arte,
-                // significa que ele fechou na etapa de Endereço/NF. Continua de onde parou.
-                mostrarConfirmacaoDadosCliente(osId);
-            } else {
-                renderAmostrasOSItens(osId);
-            }
         } else {
-            // Em Arte, Pendente Informação, ou qualquer outro status intermediário
-            // → cliente não deve ver as artes ainda
+            // Em Arte, Pendente Informação, ou qualquer outro status intermediário sem alteração de entrega
             mostrarResultadoCliente(
                 '🕐',
                 'Artes em Preparação',
                 'Sua arte ainda está sendo preparada pela nossa equipe. Assim que estiver pronta para aprovação, você receberá um novo link. Qualquer dúvida, entre em contato com seu ATENDIMENTO.'
             );
         }
+
 
 
     } catch (e) {
