@@ -16095,36 +16095,31 @@ async function loadDadosEntregaInterno(osId, osNum) {
                 try { obs = JSON.parse(obs); } catch(e) {}
             }
             if (typeof obs === 'object' && obs) {
-                correcaoTexto = obs.correcao_entrega_faturamento || obs.correcao_endereco || obs.correcao_nf || obs.correcao || '';
-                if (!correcaoTexto && Object.keys(obs).length > 0) {
-                    const vals = Object.entries(obs)
-                        .filter(([k, v]) => k.includes('entrega') || k.includes('faturam') || k.includes('correcao'))
-                        .map(([k, v]) => String(v));
-                    if (vals.length > 0) correcaoTexto = vals.join('\n');
+                correcaoTexto = obs.correcao_entrega_faturamento || obs.correcao_endereco || obs.correcao_nf || obs.correcao_cliente || '';
+                if (correcaoTexto && typeof correcaoTexto === 'string' && (correcaoTexto.includes('Engine') || correcaoTexto.includes('Motivo Técnico'))) {
+                    correcaoTexto = '';
                 }
             }
         }
 
-        // Se ainda não achou o texto na tabela pedidos_artes, verificar no chat da proposta
+        // Se ainda não achou o texto em pedidos_artes, buscar mensagens enviadas EXCLUSIVAMENTE pelo cliente em propostas_chat
         if (!correcaoTexto) {
             try {
                 const { data: chatData } = await supabaseClient
                     .from('propostas_chat')
-                    .select('mensagem')
+                    .select('mensagem, remetente_nome')
                     .eq('id_int', numInt)
+                    .ilike('remetente_nome', '%cliente%')
                     .order('id', { ascending: false })
-                    .limit(5);
+                    .limit(10);
 
                 if (chatData && chatData.length > 0) {
-                    const msgCliente = chatData.find(c =>
-                        c.mensagem && (
-                            c.mensagem.includes('⚠️') ||
-                            c.mensagem.includes('REPORTOU') ||
-                            c.mensagem.includes('ALTERAÇÃO') ||
-                            c.mensagem.includes('CORREÇÃO') ||
-                            c.mensagem.includes('Endereço')
-                        )
-                    ) || chatData[0];
+                    // Filtrar apenas mensagens reais do cliente que NÃO sejam logs técnicos de engine ou sistema
+                    const msgCliente = chatData.find(c => {
+                        const m = c.mensagem || '';
+                        const isEngineLog = m.toLowerCase().includes('engine') || m.toLowerCase().includes('motivo técnico') || m.toLowerCase().includes('status alterado pela');
+                        return !isEngineLog && (m.includes('REPORTOU') || m.includes('SOLICITAÇÃO') || m.includes('Novo Endereço') || m.includes('Dados Faturamento') || m.includes('ALTERAÇÃO') || m.length > 5);
+                    });
                     if (msgCliente && msgCliente.mensagem) {
                         correcaoTexto = msgCliente.mensagem;
                     }
@@ -16133,6 +16128,7 @@ async function loadDadosEntregaInterno(osId, osNum) {
                 console.warn('[loadDadosEntregaInterno] Erro ao buscar propostas_chat:', chatErr);
             }
         }
+
 
 
 
