@@ -13957,18 +13957,22 @@ function renderOrdens() {
         });
 
         const isEmAlteracaoCalculado = validReprovadoList.includes(osStatus) || validReprovadoList.includes(globalStatus) || temItemReprovado;
+        const isApprovedCalculado = validApprovedList.includes(osStatus) || validApprovedList.includes(globalStatus);
+        const isEnviarArteCalculado = osStatus === 'ENVIAR ARTE' || osStatus === 'ARTE PRONTA' || globalStatus === 'ENVIAR ARTE' || globalStatus === 'ARTE PRONTA';
         const temLinkGerado = !!(state.linksCliente && state.linksCliente[os.id]);
-
 
         if (isEmAlteracaoCalculado) {
             os.status_calculado = 'Em Alteração';
-        } else if (validApprovedList.includes(osStatus) || validApprovedList.includes(globalStatus)) {
+        } else if (isApprovedCalculado) {
             os.status_calculado = 'Aprovada';
+        } else if (isEnviarArteCalculado) {
+            os.status_calculado = 'Enviar Arte';
         } else if (temLinkGerado || validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus)) {
-            os.status_calculado = temLinkGerado ? 'Aguard. Aprovação' : ((osStatus === 'ENVIAR ARTE' || globalStatus === 'ENVIAR ARTE') ? 'Enviar Arte' : 'Aguard. Aprovação');
+            os.status_calculado = 'Aguard. Aprovação';
         } else {
             os.status_calculado = os.status || 'Em Arte';
         }
+
 
 
         // Status dos Dados de Entrega / Faturamento
