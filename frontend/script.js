@@ -16562,6 +16562,7 @@ function renderAmostrasOSItens(osId) {
                             ⚙️ Configurações da Amostra
                         </h3>
                         <div style="display: flex; flex-direction: column; gap: 14px;">
+                            <div id="amostra-item-config-cornum-${idx}" style="display: ${item.modo_pdf ? 'none' : 'flex'}; flex-direction: column; gap: 14px;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
                                 <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
@@ -16584,6 +16585,7 @@ function renderAmostrasOSItens(osId) {
                                     ${numOpts}
                                 </select>
                             </div>
+                            </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
                                 ${item.verso ? `
@@ -16598,9 +16600,10 @@ function renderAmostrasOSItens(osId) {
                                         <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
                                         <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
                                         <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
+                                        <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página">📄 PDF</button>
                                         <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.arte_url || item.amostra_arte_base64 ? '(Salva)' : ''}</span>
                                     </div>
-                                    <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
+                                    <div style="display:${item.modo_pdf ? 'none' : 'flex'}; gap:10px; align-items: center; flex-wrap: wrap;">
                                         <span class="badge badge-amber" style="font-size: 0.7rem; font-weight: 700; width: 60px; text-align: center;">VERSO</span>
                                         <label class="btn btn-sm btn-secondary" for="amostra-item-arte-verso-${idx}" style="margin: 0; cursor: pointer;">
                                             🖼️ Upload Verso
@@ -16629,6 +16632,7 @@ function renderAmostrasOSItens(osId) {
                                     <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
                                     <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
                                     <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
+                                    <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página">📄 PDF</button>
                                     <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.arte_url || item.amostra_arte_base64 ? '(Arte Salva)' : ''}</span>
                                     <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 0.95rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
                                         <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
@@ -16666,11 +16670,26 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
+                        ${item.modo_pdf && item.arte_url ? `
+                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                            </div>
+                            <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: none;">
+                                 <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                                 <p style="font-size: 0.85rem; font-weight: 600;">PDF Multi-Página</p>
+                            </div>
+                        </div>
+                        ` : `
                         <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
                         <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 ? 'none' : 'block'};">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Aguardando visualização da Arte...</p>
                         </div>
+                        `}
                         `)
                     :
                         (item.verso ? `
@@ -16693,12 +16712,28 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
+                        ${item.modo_pdf ? `
+                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                            </div>
+                            <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                                 <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                                 <p style="font-size: 0.95rem; font-weight: 600;">Modo PDF Multi-Página</p>
+                                 <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">Faça upload de um PDF e navegue pelas páginas.</p>
+                            </div>
+                        </div>
+                        ` : `
                         <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
                         <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
                              <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">A visualização combinada aparecerá em tempo real neste espaço.</p>
                         </div>
+                        `}
                         `)
                     }
                 </div>
@@ -17563,13 +17598,39 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
                 }
             }
 
-            
-            // Renderizar IMEDIATAMENTE a arte
-            renderItemAmostraCombinada(idx, osId);
+            // Se modo PDF, gerar snapshot da primeira página e inicializar viewer
+            if (item && item.modo_pdf && file.type === 'application/pdf') {
+                try {
+                    const arrayBuf = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+                    const page = await pdf.getPage(1);
+                    const vp = page.getViewport({ scale: 2.0 });
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = vp.width;
+                    offCanvas.height = vp.height;
+                    const octx = offCanvas.getContext('2d');
+                    await page.render({ canvasContext: octx, viewport: vp }).promise;
+                    const snapshotBase64 = offCanvas.toDataURL('image/png');
+                    item.amostra_arte_base64 = snapshotBase64;
+                    await saveAmostraToDB(itemId, osId, { amostra_arte_base64: snapshotBase64 });
+                } catch (snapErr) {
+                    console.warn('[PDF MODE] Erro ao gerar snapshot da página 1:', snapErr);
+                }
+                // Salvar URL no banco
+                const dbField = face === 'verso' ? 'verso_arte_url' : 'arte_url';
+                await saveAmostraToDB(itemId, osId, { [dbField]: publicUrl });
+                // Limpar viewer state antigo e re-renderizar
+                delete pdfViewerState[idx];
+                renderAmostrasOSItens(osId);
+                setTimeout(() => initPdfViewer(idx, publicUrl), 100);
+            } else {
+                // Renderizar IMEDIATAMENTE a arte (modo padrão)
+                renderItemAmostraCombinada(idx, osId);
 
-            // Salvar no banco
-            const dbField = face === 'verso' ? 'verso_arte_url' : 'arte_url';
-            await saveAmostraToDB(itemId, osId, { [dbField]: publicUrl });
+                // Salvar no banco
+                const dbField = face === 'verso' ? 'verso_arte_url' : 'arte_url';
+                await saveAmostraToDB(itemId, osId, { [dbField]: publicUrl });
+            }
             toast('Arte enviada com sucesso!', 'success');
         } catch(e) {
             console.error('Upload falhou:', e);
@@ -17772,6 +17833,101 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     }
 }
 
+// ========== MODO PDF MULTI-PÁGINA ==========
+const pdfViewerState = {};
+
+async function toggleModoPdf(idx, osId, itemId) {
+    const items = state.osItens[osId] || [];
+    const item = items.find(i => String(i.id) === String(itemId));
+    if (!item) return;
+    
+    item.modo_pdf = !item.modo_pdf;
+    
+    // Persiste no banco
+    try {
+        await saveAmostraToDB(itemId, osId, { modo_pdf: item.modo_pdf });
+    } catch (e) {
+        console.error('[PDF MODE] Erro ao salvar modo_pdf:', e);
+    }
+    
+    // Re-renderiza o card completo
+    renderAmostrasOSItens(osId);
+    toast(item.modo_pdf ? '📄 Modo PDF ativado — cor e numeração desconsideradas' : '🎨 Modo padrão restaurado', 'info');
+}
+
+async function initPdfViewer(idx, pdfUrl) {
+    if (!pdfUrl) return;
+    
+    try {
+        // Use proxy to avoid CORS issues with Supabase Storage
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(pdfUrl)}`;
+        const response = await fetch(proxyUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        pdfViewerState[idx] = {
+            pdf: pdf,
+            currentPage: 1,
+            totalPages: pdf.numPages
+        };
+        
+        await renderPdfViewerPage(idx, 1);
+    } catch (err) {
+        console.error('[PDF Viewer] Erro ao carregar PDF:', err);
+        toast('Erro ao carregar PDF para visualização', 'error');
+    }
+}
+
+async function renderPdfViewerPage(idx, pageNum) {
+    const viewerState = pdfViewerState[idx];
+    if (!viewerState || !viewerState.pdf) return;
+    
+    try {
+        const page = await viewerState.pdf.getPage(pageNum);
+        const scale = 2.0;
+        const viewport = page.getViewport({ scale });
+        
+        const canvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
+        if (!canvas) return;
+        
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        
+        canvas.style.display = 'block';
+        
+        // Update navigation
+        const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
+        if (nav) nav.style.display = 'flex';
+        
+        const pageInfo = document.getElementById(`amostra-pdf-page-info-${idx}`);
+        if (pageInfo) pageInfo.textContent = `Página ${pageNum} / ${viewerState.totalPages}`;
+        
+        // Hide empty state
+        const empty = document.getElementById(`amostra-item-empty-${idx}`);
+        if (empty) empty.style.display = 'none';
+        
+        viewerState.currentPage = pageNum;
+    } catch (err) {
+        console.error('[PDF Viewer] Erro ao renderizar página:', err);
+    }
+}
+
+function pdfViewerPrevPage(idx) {
+    const viewerState = pdfViewerState[idx];
+    if (!viewerState || viewerState.currentPage <= 1) return;
+    renderPdfViewerPage(idx, viewerState.currentPage - 1);
+}
+
+function pdfViewerNextPage(idx) {
+    const viewerState = pdfViewerState[idx];
+    if (!viewerState || viewerState.currentPage >= viewerState.totalPages) return;
+    renderPdfViewerPage(idx, viewerState.currentPage + 1);
+}
+
 /**
  * Renderiza o canvas de preview combinada para um card de item individual.
  * Usa exatamente a mesma lógica do card avulso:
@@ -17825,6 +17981,19 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
 
 async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
     if (!canvas) return;
+
+    // Se modo PDF ativo, não compor multicamada — usar PDF viewer dedicado
+    const itemForPdf = (state.osItens[osId] || [])[idx];
+    if (itemForPdf && itemForPdf.modo_pdf) {
+        if (canvas) canvas.style.display = 'none';
+        if (empty) empty.style.display = 'none';
+        // Inicializar o PDF viewer se tiver arte
+        const pdfUrl = face === 'back' ? itemForPdf.verso_arte_url : itemForPdf.arte_url;
+        if (pdfUrl && !pdfViewerState[idx]) {
+            initPdfViewer(idx, pdfUrl);
+        }
+        return;
+    }
 
     // Determinar se tem arte selecionada ou salva para esta face
     const inputId = face === 'back' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;

@@ -345,8 +345,19 @@ function renderAmostrasOSItens(osId) {
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
                                 <div style="font-size: 0.8rem; font-weight: 700; color: var(--blue); margin-bottom: 6px; text-transform: uppercase;">Frente</div>
+                                ${item.modo_pdf && item.arte_url ? `
+                                <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                                    <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                                    <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                        <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
+                                        <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                                    </div>
+                                </div>
+                                ` : `
                                 <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
-                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 ? 'none' : 'block'};">
+                                `}
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 || (item.modo_pdf && item.arte_url) ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Sem Frente</p>
                                 </div>
@@ -361,8 +372,19 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
+                        ${item.modo_pdf && item.arte_url ? `
+                        <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
+                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
+                                <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
+                                <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
+                            </div>
+                        </div>
+                        ` : `
                         <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
-                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 ? 'none' : 'block'};">
+                        `}
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 || (item.modo_pdf && item.arte_url) ? 'none' : 'block'};">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Aguardando visualização da Arte...</p>
                         </div>
@@ -557,6 +579,15 @@ function renderAmostrasOSItens(osId) {
         // Atualizar a barra final de ações do cliente dinamicamente
         atualizarBarraFinalCliente(osId);
     }, 50);
+
+    // Auto-inicializar PDF viewers para itens em modo PDF
+    setTimeout(() => {
+        itens.forEach((item, idx) => {
+            if (item.modo_pdf && item.arte_url) {
+                initPdfViewer(idx, item.arte_url);
+            }
+        });
+    }, 200);
 }
 
 
@@ -2307,3 +2338,58 @@ function saveAmostraItemObs(itemId, osId, obs) {
     saveAmostraToDB(itemId, osId, { amostra_obs: obs });
 }
 window.saveAmostraItemObs = saveAmostraItemObs;
+
+// ========== MODO PDF MULTI-PÁGINA (Cliente) ==========
+const pdfViewerState = {};
+
+async function initPdfViewer(idx, pdfUrl) {
+    if (!pdfUrl) return;
+    try {
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(pdfUrl)}`;
+        const response = await fetch(proxyUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        pdfViewerState[idx] = { pdf, currentPage: 1, totalPages: pdf.numPages };
+        await renderPdfViewerPage(idx, 1);
+    } catch (err) {
+        console.error('[PDF Viewer Cliente] Erro:', err);
+    }
+}
+
+async function renderPdfViewerPage(idx, pageNum) {
+    const vs = pdfViewerState[idx];
+    if (!vs || !vs.pdf) return;
+    try {
+        const page = await vs.pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
+        if (!canvas) return;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        canvas.style.display = 'block';
+        const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
+        if (nav) nav.style.display = 'flex';
+        const info = document.getElementById(`amostra-pdf-page-info-${idx}`);
+        if (info) info.textContent = `Página ${pageNum} / ${vs.totalPages}`;
+        const empty = document.getElementById(`amostra-item-empty-${idx}`);
+        if (empty) empty.style.display = 'none';
+        vs.currentPage = pageNum;
+    } catch (err) {
+        console.error('[PDF Viewer Cliente] Erro página:', err);
+    }
+}
+
+function pdfViewerPrevPage(idx) {
+    const vs = pdfViewerState[idx];
+    if (!vs || vs.currentPage <= 1) return;
+    renderPdfViewerPage(idx, vs.currentPage - 1);
+}
+
+function pdfViewerNextPage(idx) {
+    const vs = pdfViewerState[idx];
+    if (!vs || vs.currentPage >= vs.totalPages) return;
+    renderPdfViewerPage(idx, vs.currentPage + 1);
+}

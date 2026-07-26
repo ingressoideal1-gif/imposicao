@@ -2044,4 +2044,15 @@ input[type=number] {
     }
 }
 
-
+/* ===== Modo PDF Multi-Página ===== */
+.btn-pdf-active {
+    background: var(--blue) !important;
+    color: #fff !important;
+    border-color: var(--blue) !important;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+    font-weight: 700;
+}
+.btn-pdf-active:hover {
+    background: #2563eb !important;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.7);
+}
