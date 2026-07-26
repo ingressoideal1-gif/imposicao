@@ -3414,15 +3414,29 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
         bgColor = bgColor || '#ffffff';
         color = color || '#000000';
 
+        console.log('[QR DEBUG] typeof qrcode:', typeof qrcode, '| text:', text, '| sz:', sz, '| color:', color);
+
         var qr = qrcode(0, 'L');
+        console.log('[QR DEBUG] qr created:', typeof qr, '| addData:', typeof qr.addData, '| make:', typeof qr.make);
         qr.addData(text);
         qr.make();
 
         var moduleCount = qr.getModuleCount();
-        var margin = 2; // Margem oficial de Quiet Zone (2 módulos)
+        var margin = 2;
         var totalCount = moduleCount + margin * 2;
         var cellSize = sz / totalCount;
         var hsz = sz / 2;
+
+        console.log('[QR DEBUG] moduleCount:', moduleCount, '| totalCount:', totalCount, '| cellSize:', cellSize, '| hsz:', hsz);
+
+        // Contar módulos escuros para debug
+        var darkCount = 0;
+        for (var dr = 0; dr < moduleCount; dr++) {
+            for (var dc = 0; dc < moduleCount; dc++) {
+                if (qr.isDark(dr, dc)) darkCount++;
+            }
+        }
+        console.log('[QR DEBUG] darkCount:', darkCount, '/', moduleCount * moduleCount);
 
         // Fundo Branco incluindo a Quiet Zone (margem)
         ctx.fillStyle = bgColor;
@@ -3441,14 +3455,20 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
                 }
             }
         }
+        console.log('[QR DEBUG] Rendering complete. Drew', darkCount, 'dark modules');
     } catch (e) {
-        console.error('[QR Code] Erro ao gerar QR Code:', e);
+        console.error('[QR Code] Erro ao gerar QR Code:', e, e.stack);
         var hsz = sz / 2;
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(x - hsz, y - hsz, sz, sz);
         ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x - hsz, y - hsz, sz, sz);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - hsz + 1, y - hsz + 1, sz - 2, sz - 2);
+        // Escrever mensagem de erro visível
+        ctx.fillStyle = '#ef4444';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('QR ERR', x, y);
     }
 }
 
