@@ -14030,9 +14030,12 @@ function renderOrdens() {
         baseOrdensArte = ordensAprovados;
     } else if (activeFilaTipo === 'aprovacao') {
         baseOrdensArte = ordensAprovacao;
+    } else if (activeFilaTipo === 'todos') {
+        baseOrdensArte = ordensTodos;
     } else if (activeFilaTipo === 'fila') {
         baseOrdensArte = ordensFilaArte;
     }
+
 
 
     // Atualizar título da tabela e destaque nos cards
