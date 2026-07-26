@@ -3398,6 +3398,203 @@ function drawCanvas() {
 
 
 
+// ===== GERADOR DE QR CODE PURO JS =====
+const QRCodeLib = (function() {
+    const PAD0 = 0xec, PAD1 = 0x11;
+    const GF256_EXP = new Uint8Array(512), GF256_LOG = new Uint8Array(256);
+    for (let i = 0, x = 1; i < 255; i++) {
+        GF256_EXP[i] = x; GF256_LOG[x] = i;
+        x = (x << 1) ^ (x & 128 ? 0x11d : 0);
+    }
+    for (let i = 255; i < 512; i++) GF256_EXP[i] = GF256_EXP[i - 255];
+
+    function gfMul(x, y) { return (x && y) ? GF256_EXP[GF256_LOG[x] + GF256_LOG[y]] : 0; }
+
+    function rsPoly(deg) {
+        let poly = [1];
+        for (let i = 0; i < deg; i++) {
+            const next = new Array(poly.length + 1).fill(0);
+            for (let j = 0; j < poly.length; j++) {
+                next[j] ^= poly[j];
+                next[j + 1] ^= gfMul(poly[j], GF256_EXP[i]);
+            }
+            poly = next;
+        }
+        return poly;
+    }
+
+    const VERSIONS = [
+        null,
+        { size: 21, dataCap: 19, ecLen: 7 },
+        { size: 25, dataCap: 34, ecLen: 10 },
+        { size: 29, dataCap: 55, ecLen: 15 },
+        { size: 33, dataCap: 80, ecLen: 20 },
+        { size: 37, dataCap: 108, ecLen: 26 },
+        { size: 41, dataCap: 136, ecLen: 28 },
+        { size: 45, dataCap: 156, ecLen: 30 },
+        { size: 49, dataCap: 194, ecLen: 30 }
+    ];
+
+    function encodeText(text) {
+        text = String(text || '0001');
+        const bytes = [];
+        for (let i = 0; i < text.length; i++) {
+            const code = text.charCodeAt(i);
+            if (code < 128) bytes.push(code);
+            else if (code < 2048) { bytes.push(192 | (code >> 6), 128 | (code & 63)); }
+            else { bytes.push(224 | (code >> 12), 128 | ((code >> 6) & 63), 128 | (code & 63)); }
+        }
+
+        let ver = 1;
+        while (ver < VERSIONS.length - 1 && bytes.length + 2 > VERSIONS[ver].dataCap) ver++;
+        const vInfo = VERSIONS[ver];
+
+        const bits = [];
+        function pushBits(val, len) {
+            for (let i = len - 1; i >= 0; i--) bits.push((val >> i) & 1);
+        }
+        pushBits(4, 4); // Byte mode (0100)
+        pushBits(bytes.length, ver <= 9 ? 8 : 16);
+        for (const b of bytes) pushBits(b, 8);
+
+        const dataBytes = [];
+        for (let i = 0; i < bits.length; i += 8) {
+            let b = 0;
+            for (let j = 0; j < 8; j++) if (i + j < bits.length) b |= (bits[i + j] << (7 - j));
+            dataBytes.push(b);
+        }
+        let padFlag = 0;
+        while (dataBytes.length < vInfo.dataCap) {
+            dataBytes.push(padFlag ? PAD1 : PAD0);
+            padFlag ^= 1;
+        }
+
+        const poly = rsPoly(vInfo.ecLen);
+        const res = new Array(vInfo.ecLen).fill(0);
+        for (let i = 0; i < dataBytes.length; i++) {
+            const m = res.shift() ^ dataBytes[i];
+            res.push(0);
+            for (let j = 0; j < vInfo.ecLen; j++) res[j] ^= gfMul(poly[j], m);
+        }
+        const fullBytes = dataBytes.concat(res);
+        const fullBits = [];
+        for (const b of fullBytes) {
+            for (let i = 7; i >= 0; i--) fullBits.push((b >> i) & 1);
+        }
+
+        const size = vInfo.size;
+        const grid = Array.from({ length: size }, () => new Array(size).fill(null));
+
+        function setRect(r, c, w, h, val) {
+            for (let i = 0; i < h; i++) {
+                for (let j = 0; j < w; j++) grid[r + i][c + j] = val;
+            }
+        }
+        function drawFinder(r, c) {
+            setRect(r, c, 7, 7, true);
+            setRect(r + 1, c + 1, 5, 5, false);
+            setRect(r + 2, c + 2, 3, 3, true);
+        }
+
+        drawFinder(0, 0);
+        drawFinder(0, size - 7);
+        drawFinder(size - 7, 0);
+
+        setRect(7, 0, 8, 1, false); setRect(0, 7, 1, 7, false);
+        setRect(7, size - 8, 8, 1, false); setRect(0, size - 8, 1, 7, false);
+        setRect(size - 8, 0, 8, 1, false); setRect(size - 7, 7, 1, 7, false);
+
+        for (let i = 8; i < size - 8; i++) {
+            if (grid[6][i] === null) grid[6][i] = (i % 2 === 0);
+            if (grid[i][6] === null) grid[i][6] = (i % 2 === 0);
+        }
+
+        if (ver >= 2) {
+            const pos = size - 7;
+            for (let i = -2; i <= 2; i++) {
+                for (let j = -2; j <= 2; j++) {
+                    const max = Math.max(Math.abs(i), Math.abs(j));
+                    grid[pos + i][pos + j] = (max !== 1);
+                }
+            }
+        }
+
+        grid[size - 8][8] = true;
+        for (let i = 0; i < 9; i++) {
+            if (grid[8][i] === null) grid[8][i] = false;
+            if (grid[i][8] === null) grid[i][8] = false;
+        }
+        for (let i = 0; i < 8; i++) {
+            if (grid[size - 1 - i][8] === null) grid[size - 1 - i][8] = false;
+            if (grid[8][size - 1 - i] === null) grid[8][size - 1 - i] = false;
+        }
+
+        let bitIdx = 0, dir = -1, x = size - 1;
+        while (x > 0) {
+            if (x === 6) x--;
+            for (let y = (dir < 0 ? size - 1 : 0); y >= 0 && y < size; y += dir) {
+                for (let c = 0; c < 2; c++) {
+                    const cx = x - c;
+                    if (grid[y][cx] === null) {
+                        let bit = bitIdx < fullBits.length ? !!fullBits[bitIdx++] : false;
+                        if ((y + cx) % 2 === 0) bit = !bit;
+                        grid[y][cx] = bit;
+                    }
+                }
+            }
+            dir = -dir;
+            x -= 2;
+        }
+
+        const formatBits = [1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0];
+        let fIdx = 0;
+        for (let i = 0; i < 6; i++) grid[8][i] = !!formatBits[fIdx++];
+        grid[8][7] = !!formatBits[fIdx++];
+        grid[8][8] = !!formatBits[fIdx++];
+        grid[7][8] = !!formatBits[fIdx++];
+        for (let i = 5; i >= 0; i--) grid[i][8] = !!formatBits[fIdx++];
+
+        fIdx = 0;
+        for (let i = 0; i < 7; i++) grid[size - 1 - i][8] = !!formatBits[fIdx++];
+        for (let i = 0; i < 8; i++) grid[8][size - 8 + i] = !!formatBits[fIdx++];
+
+        return { size, grid };
+    }
+
+    return { encodeText };
+})();
+
+function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor = '#ffffff') {
+    try {
+        const qr = QRCodeLib.encodeText(text || '0001');
+        const count = qr.size;
+        const cellSize = sz / count;
+        const hsz = sz / 2;
+
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(x - hsz, y - hsz, sz, sz);
+
+        ctx.fillStyle = color || '#000000';
+        for (let r = 0; r < count; r++) {
+            for (let c = 0; c < count; c++) {
+                if (qr.grid[r][c]) {
+                    ctx.fillRect(
+                        x - hsz + c * cellSize,
+                        y - hsz + r * cellSize,
+                        cellSize + 0.35,
+                        cellSize + 0.35
+                    );
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[QR Code] Fallback:', e);
+        const hsz = sz / 2;
+        ctx.fillStyle = color || '#000000';
+        ctx.fillRect(x - hsz, y - hsz, sz, sz);
+    }
+}
+
 function drawElement(ctx, el, S) {
 
     const x = el.x_mm * S;
@@ -3509,45 +3706,24 @@ function drawElement(ctx, el, S) {
 
 
     } else if (el.type === 'QR') {
-
         const sz = (el.size_mm || 15) * S;
-        const hsz = sz / 2; // half-size para ancoragem central
-
-        ctx.fillStyle = color;
-
-        // Desenhar QR placeholder centrado no ponto de ancoragem
-
-        ctx.fillRect(-hsz, -hsz, sz, sz);
-
-        ctx.fillStyle = '#fff';
-
-        const cell = sz / 7;
-
-        // Cantos do QR
-
-        for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
-
-            ctx.fillStyle = '#fff';
-
-            ctx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
-
-            ctx.fillStyle = color;
-
-            ctx.fillRect(-hsz + cx * cell + cell * 0.5, -hsz + cy * cell + cell * 0.5, 2 * cell, 2 * cell);
-
+        let qrText = '';
+        if (el.fixed) {
+            qrText = el.fixed_value || '';
+        } else if (el.source === 'database') {
+            const colName = el.csv_column || '';
+            const csvRow = (state.csvData && state.csvData[0]) ? state.csvData[0] : null;
+            if (csvRow && typeof csvRow[colName] !== 'undefined') {
+                qrText = String(csvRow[colName]);
+            } else {
+                qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+            }
+        } else {
+            const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+            const raw = padVal > 0 ? String(1).padStart(padVal, '0') : '1';
+            qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
         }
-
-        ctx.font = `${Math.max(6, sz * 0.14)}px Inter`;
-
-        ctx.fillStyle = '#fff';
-
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        ctx.fillText('QR', 0, 0);
-
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
+        renderQRCodeOnCtx(ctx, qrText, 0, 0, sz, color);
 
 
 
@@ -6889,27 +7065,8 @@ function drawPreview() {
                     } else if (el.type === 'QR') {
 
                         const sz = (el.size_mm || 15) * MM2PT * scale;
-                        const hsz = sz / 2;
 
-                        ctx.fillStyle = color;
-
-                        ctx.fillRect(-hsz, -hsz, sz, sz);
-
-                        ctx.fillStyle = '#ffffff';
-
-                        const cell = sz / 7;
-
-                        for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
-
-                            ctx.fillStyle = '#ffffff';
-
-                            ctx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
-
-                            ctx.fillStyle = color;
-
-                            ctx.fillRect(-hsz + cx * cell + cell * 0.5, -hsz + cy * cell + cell * 0.5, 2 * cell, 2 * cell);
-
-                        }
+                        renderQRCodeOnCtx(ctx, val_str, 0, 0, sz, color);
 
                     } else if (el.type === 'BARCODE') {
 
@@ -11189,27 +11346,23 @@ window.onAmostraNumeracaoSelect = function() {
             } else if (el.type === 'QR') {
 
                 const sz = (el.size_mm || 15) * S;
-                const hsz = sz / 2;
-
-                ctx.fillStyle = color;
-
-                ctx.fillRect(-hsz, -hsz, sz, sz);
-
-                ctx.fillStyle = '#ffffff';
-
-                const cell = sz / 7;
-
-                for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
-
-                    ctx.fillStyle = '#ffffff';
-
-                    ctx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
-
-                    ctx.fillStyle = color;
-
-                    ctx.fillRect(-hsz + cx * cell + cell * 0.5, -hsz + cy * cell + cell * 0.5, 2 * cell, 2 * cell);
-
+                let qrText = '';
+                if (el.fixed) {
+                    qrText = el.fixed_value || '';
+                } else if (el.source === 'database') {
+                    const colName = el.csv_column || '';
+                    const csvRow = (state.csvData && state.csvData[0]) ? state.csvData[0] : null;
+                    if (csvRow && typeof csvRow[colName] !== 'undefined') {
+                        qrText = String(csvRow[colName]);
+                    } else {
+                        qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                    }
+                } else {
+                    const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                    const raw = padVal > 0 ? String(1).padStart(padVal, '0') : '1';
+                    qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
+                renderQRCodeOnCtx(ctx, qrText, 0, 0, sz, color);
 
             } else if (el.type === 'BARCODE') {
 
@@ -18308,17 +18461,27 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 numCtx.textBaseline = 'alphabetic';
             } else if (el.type === 'QR') {
                 const sz = (el.size_mm || 15) * S;
-                const hsz = sz / 2;
-                numCtx.fillStyle = color;
-                numCtx.fillRect(-hsz, -hsz, sz, sz);
-                numCtx.fillStyle = '#ffffff';
-                const cell = sz / 7;
-                for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
-                    numCtx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
-                    numCtx.fillStyle = color;
-                    numCtx.fillRect(-hsz + cx * cell + cell, -hsz + cy * cell + cell, cell, cell);
-                    numCtx.fillStyle = '#ffffff';
+                let qrText = '';
+                if (el.fixed) {
+                    qrText = el.fixed_value || '';
+                } else if (el.source === 'database') {
+                    const colName = el.csv_column || '';
+                    const csvRow = (state.csvData && state.csvData[0]) ? state.csvData[0] : null;
+                    if (csvRow && typeof csvRow[colName] !== 'undefined') {
+                        qrText = String(csvRow[colName]);
+                    } else {
+                        qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                    }
+                } else {
+                    const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                    const start = parseInt(
+                        item?.numeracao_inicio || item?.num_inicial ||
+                        item?.NUMERACAO_INICIO || 1
+                    ) || 1;
+                    const raw = padVal > 0 ? String(start).padStart(padVal, '0') : String(start);
+                    qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
+                renderQRCodeOnCtx(numCtx, qrText, 0, 0, sz, color);
             } else if (el.type === 'BARCODE') {
                 const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
                 const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
