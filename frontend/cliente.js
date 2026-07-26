@@ -1834,8 +1834,7 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
         bgColor = bgColor || '#ffffff';
         color = color || '#000000';
 
-        var fn = (typeof window.qrcode === 'function') ? window.qrcode : qrcode;
-        var qr = fn(0, 1);
+        var qr = qrcode(0, 'L');
         qr.addData(text);
         qr.make();
 
