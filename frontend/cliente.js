@@ -841,12 +841,20 @@ async function initClientePage(numero, token) {
         const statusUP = osStatus.trim().toUpperCase();
         const isAprovado  = (statusUP === 'APROVADO' || statusUP === 'APROVADA_CLIENTE');
         const isReprovado = (statusUP === 'REPROVADO' || statusUP === 'REPROVADA_CLIENTE');
-        const isEnviarArte = (osStatus.trim() === 'Enviar Arte' || osStatus.trim() === 'Enviar ARTE');
+        const isAguardandoAprovacao = (
+            statusUP === 'AGUARD. APROVAÇÃO' ||
+            statusUP === 'AGUARD. APROVACAO' ||
+            statusUP === 'AGUARDANDO_APROVACAO' ||
+            statusUP === 'AGUARDANDO' ||
+            statusUP === 'ENVIAR ARTE' ||
+            osStatus.trim() === 'Enviar Arte'
+        );
         const isEntregaAlterada = (entregaStatus === 'ALTERADO');
 
-        console.log('[ClienteView] Decisão de exibição:', { osStatus, entregaStatus, isEntregaAlterada, isEnviarArte, isAprovado, isReprovado });
+        console.log('[ClienteView] Decisão de exibição:', { osStatus, entregaStatus, isEntregaAlterada, isAguardandoAprovacao, isAprovado, isReprovado });
 
-        if (isEntregaAlterada || isEnviarArte) {
+        if (isEntregaAlterada || isAguardandoAprovacao) {
+
             // Permite acesso direto à aprovação de entrega/faturamento ou artes
             const itensArray = state.osItens[osId] || [];
             const todosAprovados = itensArray.length > 0 && itensArray.every(item => item.amostra_status === 'APROVADA');
