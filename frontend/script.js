@@ -12715,8 +12715,9 @@ async function sincronizarStatusOrdensDinamico() {
                 const s = (os.status || '').trim().toUpperCase();
                 const ignorar = [
                     'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
-                    'APROVADO', 'APROVADA_CLIENTE'
+                    'APROVADO', 'APROVADA_CLIENTE', 'AGUARD. APROVAÇÃO', 'AGUARDANDO_APROVACAO'
                 ];
+
 
                 return !ignorar.includes(s);
             });
@@ -14292,8 +14293,9 @@ function renderOrdens() {
                 // Não sobrescrever se o status já for Enviar Arte, ou se for um status avançado/ação do cliente
                 const ignorar = [
                     'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
-                    'APROVADO', 'APROVADA_CLIENTE'
+                    'APROVADO', 'APROVADA_CLIENTE', 'AGUARD. APROVAÇÃO', 'AGUARDANDO_APROVACAO'
                 ];
+
 
                 if (ignorar.includes(autoStatus)) return;
                 var autoTodos = autoItens.every(function(i) { return (i.amostra_status || '').toUpperCase() === 'PRONTO'; });
