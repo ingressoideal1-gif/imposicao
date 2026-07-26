@@ -18257,22 +18257,21 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
                 } else if (el.type === 'CAMAROTE_LOCAL') {
-                    // Ler início da numeração real do item — cobre maiusc/minusc
-                    const _inicio = parseInt(
-                        item?.numeracao_inicio || item?.num_inicial ||
-                        item?.NUMERACAO_INICIO || 1
+                    // C_INI = Início do local (mesa/camarote) — NÃO confundir com NI (num_inicial)
+                    const _cIni = parseInt(
+                        item?.c_ini || item?.C_INI || 1
                     );
-                    label = `${el.prefix || ''}${_inicio}`;
+                    label = `${el.prefix || ''}${_cIni}`;
                 } else if (el.type === 'CAMAROTE_PESSOA') {
                     label = `${el.prefix || ''}1`;
                 } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
-                    // Cobrir Q_CAM / L_CAM em qualquer capitalização
                     const _lCamB = parseInt(
-                        item?.L_CAM || item?.l_cam ||
+                        item?.l_cam || item?.L_CAM ||
                         item?.lotacao_cam || item?.LOTACAO_CAM ||
                         item?.lotacao || 5
                     );
                     label = `${el.prefix || ''}1/${_lCamB}`;
+
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                     let current_val = 1;
