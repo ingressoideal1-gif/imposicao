@@ -13959,24 +13959,29 @@ function renderOrdens() {
             return validReprovadoList.includes(sAm) || validReprovadoList.includes(sArt);
         });
 
-        const isEmAlteracaoCalculado = validReprovadoList.includes(osStatus) || validReprovadoList.includes(globalStatus) || temItemReprovado;
-        const isApprovedCalculado = validApprovedList.includes(osStatus) || validApprovedList.includes(globalStatus);
+        let todosModelosAprovados = modelosGlobaisOS.length > 0 && modelosGlobaisOS.every(m => {
+            const sAm = (m.amostra_status || '').trim().toUpperCase();
+            const sArt = (m.status_arte || '').trim().toUpperCase();
+            return validApprovedList.includes(sAm) || validApprovedList.includes(sArt);
+        });
+
+        const isApprovedCalculado = validApprovedList.includes(osStatus) || validApprovedList.includes(globalStatus) || todosModelosAprovados;
+        const isEmAlteracaoCalculado = (validReprovadoList.includes(osStatus) || validReprovadoList.includes(globalStatus) || temItemReprovado) && !todosModelosAprovados;
         const isEnviarArteCalculado = osStatus === 'ENVIAR ARTE' || osStatus === 'ARTE PRONTA' || globalStatus === 'ENVIAR ARTE' || globalStatus === 'ARTE PRONTA';
         const temLinkGerado = !!(state.linksCliente && state.linksCliente[os.id]);
 
-        if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO') {
-            os.status_calculado = 'Aguard. Aprovação';
+        if (isApprovedCalculado) {
+            os.status_calculado = 'Aprovada';
         } else if (isEmAlteracaoCalculado) {
             os.status_calculado = 'Em Alteração';
-        } else if (isApprovedCalculado) {
-            os.status_calculado = 'Aprovada';
         } else if (isEnviarArteCalculado) {
             os.status_calculado = 'Enviar Arte';
-        } else if (temLinkGerado || validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus)) {
+        } else if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO' || temLinkGerado || validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus)) {
             os.status_calculado = 'Aguard. Aprovação';
         } else {
             os.status_calculado = os.status || 'Em Arte';
         }
+
 
 
 
