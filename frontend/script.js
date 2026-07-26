@@ -13963,7 +13963,9 @@ function renderOrdens() {
         const isEnviarArteCalculado = osStatus === 'ENVIAR ARTE' || osStatus === 'ARTE PRONTA' || globalStatus === 'ENVIAR ARTE' || globalStatus === 'ARTE PRONTA';
         const temLinkGerado = !!(state.linksCliente && state.linksCliente[os.id]);
 
-        if (isEmAlteracaoCalculado) {
+        if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO') {
+            os.status_calculado = 'Aguard. Aprovação';
+        } else if (isEmAlteracaoCalculado) {
             os.status_calculado = 'Em Alteração';
         } else if (isApprovedCalculado) {
             os.status_calculado = 'Aprovada';
@@ -13974,6 +13976,7 @@ function renderOrdens() {
         } else {
             os.status_calculado = os.status || 'Em Arte';
         }
+
 
 
 
@@ -19831,22 +19834,14 @@ async function getOrCreateLinkCliente(osId, numero) {
         
         if (existing) {
             token = existing.token;
-            // FIX-1: Só sincronizar o status se o link ainda estiver em estado inicial ("Enviar Arte").
-            // Nunca sobrescrever status gravados pelo cliente (APROVADO, REPROVADO) nem status
-            // definidos manualmente pelo atendente (Em Arte, Pendente Informação) — caso contrário,
-            // clicar em "Copiar Link" poderia resetar um status que o atendente acabou de definir.
-            const statusFinais = ['APROVADO', 'REPROVADO', 'APROVADA_CLIENTE', 'REPROVADA_CLIENTE', 'EM ARTE', 'PENDENTE'];
-            const statusAtualNoLink = (existing.status_arte || '').toUpperCase();
-            const deveAtualizar = !statusFinais.some(sf => statusAtualNoLink.includes(sf));
-            if (deveAtualizar) {
-                await supabaseClient
-                    .from('pedidos_links_cliente')
-                    .update({ status_arte: currentStatus })
-                    .eq('id', existing.id);
-            } else {
-                console.log('[Link] Status final protegido — não sobrescrever:', existing.status_arte);
-            }
-        } else {
+            await supabaseClient
+                .from('pedidos_links_cliente')
+                .update({ status_arte: currentStatus })
+                .eq('id', existing.id);
+            if (!state.linksClienteData) state.linksClienteData = {};
+            state.linksClienteData[osId] = { ...existing, status_arte: currentStatus };
+        }
+ else {
             token = generateClientToken(6);
             const { error: insertError } = await supabaseClient
                 .from('pedidos_links_cliente')
