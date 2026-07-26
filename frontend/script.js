@@ -123,7 +123,9 @@ const state = {
     filtroStatus: "",
     filtroSetorArte: "",
     filtroStatusArte: "",
+    filtroFilaTipo: "fila",
 };
+
 
 // - Variáveis globais de usuários -
 let usuariosSupabase = [];
@@ -14004,9 +14006,10 @@ function renderOrdens() {
     const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
     if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = ordensAprovados.length;
 
-    // Seleção da fila ativa ('todos', 'fila', 'aprovacao' ou 'aprovados')
-    const activeFilaTipo = state.filtroFilaTipo || 'todos';
-    let baseOrdensArte = ordensTodos;
+    // Seleção da fila ativa ('fila', 'todos', 'aprovacao' ou 'aprovados')
+    const activeFilaTipo = state.filtroFilaTipo || 'fila';
+    let baseOrdensArte = ordensFilaArte;
+
 
     if (state.filtroStatusArte === 'Aprovada') {
         baseOrdensArte = ordensAprovados;
@@ -15948,8 +15951,10 @@ window.showView = function(viewId) {
     if (viewId === 'view-lista-arte') {
         state.todasArtes = null;
         state.modelosGlobais = null;
+        if (!state.filtroFilaTipo) state.filtroFilaTipo = 'fila';
         loadOrdens();
-    } else if (viewId === 'view-lista-impressao') {
+    }
+ else if (viewId === 'view-lista-impressao') {
         loadOrdens();
     }
 
