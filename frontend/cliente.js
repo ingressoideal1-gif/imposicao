@@ -2345,9 +2345,22 @@ const pdfViewerState = {};
 async function initPdfViewer(idx, pdfUrl) {
     if (!pdfUrl) return;
     try {
-        const proxyUrl = `/api/proxy?url=${encodeURIComponent(pdfUrl)}`;
-        const response = await fetch(proxyUrl);
-        const arrayBuffer = await response.arrayBuffer();
+        let arrayBuffer;
+        // Tentar buscar diretamente (Supabase Storage permite CORS para buckets públicos)
+        try {
+            const directResponse = await fetch(pdfUrl);
+            if (directResponse.ok) {
+                arrayBuffer = await directResponse.arrayBuffer();
+            } else {
+                throw new Error('Direct fetch failed: ' + directResponse.status);
+            }
+        } catch (directErr) {
+            console.warn('[PDF Viewer Cliente] Fetch direto falhou, tentando proxy...', directErr);
+            const proxyUrl = `/api/proxy?url=${encodeURIComponent(pdfUrl)}`;
+            const proxyResponse = await fetch(proxyUrl);
+            if (!proxyResponse.ok) throw new Error('Proxy fetch failed: ' + proxyResponse.status);
+            arrayBuffer = await proxyResponse.arrayBuffer();
+        }
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         pdfViewerState[idx] = { pdf, currentPage: 1, totalPages: pdf.numPages };
         await renderPdfViewerPage(idx, 1);
