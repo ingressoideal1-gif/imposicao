@@ -13983,15 +13983,16 @@ function renderOrdens() {
         const isArteAprovada = (os.status_calculado === 'Aprovada');
 
         const isTotalmenteAprovado = isArteAprovada && isEntregaAprovada;
-        const isEmAprovação = (os.status_calculado === 'Enviar Arte') || validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus);
+        const isEmAprovacaoFila = (os.status_calculado === 'Enviar Arte' || os.status_calculado === 'Aguard. Aprovação' || os.status_calculado === 'Arte Pronta' || os.status_calculado === 'Aprovada');
 
         if (isTotalmenteAprovado) {
             ordensAprovados.push(os);
-        } else if (isEmAprovação) {
+        } else if (isEmAprovacaoFila) {
             ordensAprovacao.push(os);
         } else {
             ordensFilaArte.push(os);
         }
+
     });
 
     // --- Calcular Estatísticas dos Cards KPI ---
