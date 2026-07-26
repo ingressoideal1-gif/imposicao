@@ -3464,10 +3464,9 @@ function drawElement(ctx, el, S) {
 
 
     ctx.save();
-
-    ctx.translate(x, y);
-
-    ctx.rotate(rot);
+    try {
+        ctx.translate(x, y);
+        ctx.rotate(rot);
 
 
 
@@ -3561,6 +3560,7 @@ function drawElement(ctx, el, S) {
 
     } else if (el.type === 'QR') {
         const sz = (el.size_mm || 15) * S;
+        const hsz = sz / 2;
         let qrText = '';
         if (el.fixed) {
             qrText = el.fixed_value || '';
@@ -3773,7 +3773,9 @@ function drawElement(ctx, el, S) {
 
 
 
-    ctx.restore();
+    } finally {
+        ctx.restore();
+    }
 
 }
 
