@@ -14438,15 +14438,19 @@ function renderOrdens() {
                                 const isAguardando = st === 'Aguard. Aprovação' || stUp === 'AGUARDANDO_APROVACAO';
 
                                 // 1) Link de aprovação (Arte Pronta, Enviar Arte, Aguard. Aprovação, ou quando Entrega foi Alterada/Corrigir)
-                                if (linkSalvo) {
+                                if (isArtePronta) {
+                                    const labelLink = linkSalvo ? '🔗 Enviar Link' : '🔗 Gerar Link';
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">${labelLink}</button>`);
+                                } else if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
                                         <button onclick="abrirLinkClienteEAtualizarStatus('${os.id}', '${os.numero}', '${linkSalvo}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir Link">🔗</button>
                                         <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar Link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
                                     </div>`);
-                                } else if (isArtePronta || isAguardando || isEntregaAlterada) {
+                                } else if (isAguardando || isEntregaAlterada) {
                                     const btnColor = isEntregaAlterada ? 'background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);' : 'background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);';
                                     btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:4px 8px;font-size:0.73rem;${btnColor}border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🔗 Gerar Link</button>`);
                                 }
+
 
 
                                 // 2) Reprovar (quando status permite e usuário tem edit)
