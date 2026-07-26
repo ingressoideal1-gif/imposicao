@@ -12715,8 +12715,9 @@ async function sincronizarStatusOrdensDinamico() {
                 const s = (os.status || '').trim().toUpperCase();
                 const ignorar = [
                     'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
-                    'APROVADO', 'APROVADA_CLIENTE', 'REPROVADO', 'REPROVADA_CLIENTE', 'AGUARDANDO_APROVACAO'
+                    'APROVADO', 'APROVADA_CLIENTE'
                 ];
+
                 return !ignorar.includes(s);
             });
             if (osParaVerificar.length > 0) {
@@ -13101,7 +13102,8 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const osId = `vibe_${key}`;
                 const dbStatusArte = state.linksClienteData && state.linksClienteData[osId] && state.linksClienteData[osId].status_arte;
-                const savedStatus = dbStatusArte || vibeStatusOverrides[osId];
+                const savedStatus = vibeStatusOverrides[osId] || dbStatusArte;
+
 
                 // Buscar dados reais da proposta
                 const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
@@ -14286,8 +14288,9 @@ function renderOrdens() {
                 // Não sobrescrever se o status já for Enviar Arte, ou se for um status avançado/ação do cliente
                 const ignorar = [
                     'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
-                    'APROVADO', 'APROVADA_CLIENTE', 'REPROVADO', 'REPROVADA_CLIENTE', 'AGUARDANDO_APROVACAO'
+                    'APROVADO', 'APROVADA_CLIENTE'
                 ];
+
                 if (ignorar.includes(autoStatus)) return;
                 var autoTodos = autoItens.every(function(i) { return (i.amostra_status || '').toUpperCase() === 'PRONTO'; });
                 if (!autoTodos) return;
