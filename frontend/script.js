@@ -3406,10 +3406,7 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
         bgColor = bgColor || '#ffffff';
         color = color || '#000000';
 
-        console.log('[QR DEBUG] typeof qrcode:', typeof qrcode, '| text:', text, '| sz:', sz, '| color:', color);
-
         var qr = qrcode(0, 'L');
-        console.log('[QR DEBUG] qr created:', typeof qr, '| addData:', typeof qr.addData, '| make:', typeof qr.make);
         qr.addData(text);
         qr.make();
 
@@ -3419,18 +3416,7 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
         var cellSize = sz / totalCount;
         var hsz = sz / 2;
 
-        console.log('[QR DEBUG] moduleCount:', moduleCount, '| totalCount:', totalCount, '| cellSize:', cellSize, '| hsz:', hsz);
-
-        // Contar módulos escuros para debug
-        var darkCount = 0;
-        for (var dr = 0; dr < moduleCount; dr++) {
-            for (var dc = 0; dc < moduleCount; dc++) {
-                if (qr.isDark(dr, dc)) darkCount++;
-            }
-        }
-        console.log('[QR DEBUG] darkCount:', darkCount, '/', moduleCount * moduleCount);
-
-        // Fundo Branco incluindo a Quiet Zone (margem)
+        // Fundo branco incluindo a Quiet Zone (margem)
         ctx.fillStyle = bgColor;
         ctx.fillRect(x - hsz, y - hsz, sz, sz);
 
@@ -3447,9 +3433,8 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
                 }
             }
         }
-        console.log('[QR DEBUG] Rendering complete. Drew', darkCount, 'dark modules');
     } catch (e) {
-        console.error('[QR Code] Erro ao gerar QR Code:', e, e.stack);
+        console.error('[QR Code] Erro ao gerar QR Code:', e);
         var hsz = sz / 2;
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(x - hsz, y - hsz, sz, sz);
