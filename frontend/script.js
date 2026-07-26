@@ -14007,13 +14007,19 @@ function renderOrdens() {
     // Seleção da fila ativa ('todos', 'fila', 'aprovacao' ou 'aprovados')
     const activeFilaTipo = state.filtroFilaTipo || 'todos';
     let baseOrdensArte = ordensTodos;
-    if (activeFilaTipo === 'aprovados') {
+
+    if (state.filtroStatusArte === 'Aprovada') {
+        baseOrdensArte = ordensAprovados;
+    } else if (state.filtroStatusArte) {
+        baseOrdensArte = state.ordens;
+    } else if (activeFilaTipo === 'aprovados') {
         baseOrdensArte = ordensAprovados;
     } else if (activeFilaTipo === 'aprovacao') {
         baseOrdensArte = ordensAprovacao;
     } else if (activeFilaTipo === 'fila') {
         baseOrdensArte = ordensFilaArte;
     }
+
 
     // Atualizar título da tabela e destaque nos cards
     const tituloTabelaArteEl = document.getElementById('titulo-tabela-arte');
@@ -14095,20 +14101,30 @@ function renderOrdens() {
 
         // 4. Filtro de Status de Arte (compara pelo status calculado da OS)
         if (state.filtroStatusArte) {
-            const osStatusCalculado = (os.status_calculado || os.status || '').trim().toUpperCase();
+            const osStatusCalculado = (os.status_calculado || os.status || '').trim();
             const filtro = state.filtroStatusArte.trim();
-            const statusNorm = {
-                'APROVADO': 'Aprovada', 'APROVADA_CLIENTE': 'Aprovada', 'LIBERADA': 'Aprovada',
-                'ARTE_APROVADA': 'Aprovada', 'Arte APROVADA': 'Aprovada',
-                'REPROVADO': 'Em Alteração', 'REPROVADA': 'Em Alteração', 'REPROVADA_CLIENTE': 'Em Alteração',
-                'ARTE_EM_CORRECAO': 'Em Alteração', 'Em Alteração': 'Em Alteração', 'EM ALTERAÇÃO': 'Em Alteração', 'Em Correção': 'Em Alteração',
-                'NOVO': 'Em Arte', 'EM FILA': 'Em Arte', 'Em Fila': 'Em Arte', 'ARTE_EM_ANDAMENTO': 'Em Arte',
-                'Enviar ARTE': 'Enviar Arte', 'Arte Pronta': 'Enviar Arte',
+            const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+
+            const statusNormMap = {
+                'EM ARTE': 'Em Arte',
+                'EM ALTERACAO': 'Em Alteração',
+                'ARTE_EM_CORRECAO': 'Em Alteração',
+                'REPROVADO': 'Em Alteração',
+                'REPROVADA': 'Em Alteração',
+                'REPROVADA_CLIENTE': 'Em Alteração',
+                'ENVIAR ARTE': 'Enviar Arte',
+                'ARTE PRONTA': 'Enviar Arte',
+                'AGUARD. APROVACAO': 'Aguard. Aprovação',
+                'AGUARDANDO': 'Aguard. Aprovação',
                 'AGUARDANDO_APROVACAO': 'Aguard. Aprovação',
+                'APROVADA': 'Aprovada',
+                'APROVADO': 'Aprovada'
             };
-            const osNorm = statusNorm[osStatusCalculado] || osStatusCalculado;
-            if (osNorm !== filtro) return false;
+
+            const stNormCalculado = statusNormMap[norm(osStatusCalculado)] || osStatusCalculado;
+            if (norm(stNormCalculado) !== norm(filtro)) return false;
         }
+
 
         return true;
     });
