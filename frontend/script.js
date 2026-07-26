@@ -3508,7 +3508,14 @@ function drawElement(ctx, el, S) {
         } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
             label = `${el.prefix || ''}1/5`;
         } else if (el.source === 'database') {
-            label = `${el.prefix || ''}[${el.csv_column || 'coluna'}]${el.suffix || ''}`;
+            const colName = el.csv_column || '';
+            const csvData = state.csvData || state.numCsvData || null;
+            const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+            if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+            } else {
+                label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+            }
         } else {
             const padValue = typeof el.pad !== 'undefined' ? el.pad : 6;
             const dummyNum = String(el.ticket_pos || 1).padStart(padValue, '0');
@@ -3566,9 +3573,10 @@ function drawElement(ctx, el, S) {
             qrText = el.fixed_value || '';
         } else if (el.source === 'database') {
             const colName = el.csv_column || '';
-            const csvRow = (state.csvData && state.csvData[0]) ? state.csvData[0] : null;
-            if (csvRow && typeof csvRow[colName] !== 'undefined') {
-                qrText = String(csvRow[colName]);
+            const csvData = state.csvData || state.numCsvData || null;
+            const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+            if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
             } else {
                 qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
             }
@@ -11179,6 +11187,15 @@ window.onAmostraNumeracaoSelect = function() {
                     label = `${el.prefix || ''}1`;
                 } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
                     label = `${el.prefix || ''}1/5`;
+                } else if (el.source === 'database') {
+                    const colName = el.csv_column || '';
+                    const csvData = state.csvData || state.numCsvData || null;
+                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                        label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                    } else {
+                        label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                    }
                 } else {
 
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
@@ -11207,9 +11224,10 @@ window.onAmostraNumeracaoSelect = function() {
                     qrText = el.fixed_value || '';
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
-                    const csvRow = (state.csvData && state.csvData[0]) ? state.csvData[0] : null;
-                    if (csvRow && typeof csvRow[colName] !== 'undefined') {
-                        qrText = String(csvRow[colName]);
+                    const csvData = state.csvData || state.numCsvData || null;
+                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                        qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
                         qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
                     }
@@ -18281,6 +18299,15 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     );
                     label = `${el.prefix || ''}1/${_lCamB}`;
 
+                } else if (el.source === 'database') {
+                    const colName = el.csv_column || '';
+                    const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                        label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                    } else {
+                        label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                    }
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                     let current_val = 1;
@@ -18322,9 +18349,10 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     qrText = el.fixed_value || '';
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
-                    const csvRow = (state.csvData && state.csvData[0]) ? state.csvData[0] : null;
-                    if (csvRow && typeof csvRow[colName] !== 'undefined') {
-                        qrText = String(csvRow[colName]);
+                    const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                        qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
                         qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
                     }
