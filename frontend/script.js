@@ -13928,9 +13928,8 @@ function renderDesignersBoxHTML(osId, osNum) {
                         ${d.init}
                     </div>
                     <div>
-                        <div style="font-weight: 700; color: var(--text); font-size: 0.92rem; display: flex; align-items: center; gap: 8px;">
-                            ${d.nome} 
-                            ${isSelected ? `<span class="designer-badge badge badge-blue" style="font-size: 0.68rem; padding: 3px 8px; font-weight: 800; background: #3b82f6; color: white;">✓ SELECIONADO</span>` : `<span class="designer-badge badge badge-teal" style="display: none; font-size: 0.6rem; padding: 2px 6px;">Selecionado</span>`}
+                        <div style="font-weight: 700; color: var(--text); font-size: 0.92rem;">
+                            ${d.nome}
                         </div>
                         ${d.email ? `<div style="font-size: 0.82rem; color: var(--text-dim); margin-top: 2px;">${d.email}</div>` : ''}
                     </div>
