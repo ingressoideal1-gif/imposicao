@@ -17513,10 +17513,15 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
 
     const corId = corSelect.value;
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
+    const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
 
-    // Se no for carga inicial, salva no banco
+    if (item) {
+        item.amostra_cor_id = corId || null;
+        if (!isInitialLoad) item._needsSnapshot = true;
+    }
+
+    // Se não for carga inicial, salva no banco
     if (!isInitialLoad) {
-        if (item) item._needsSnapshot = true;
         saveAmostraToDB(itemId, osId, { amostra_cor_id: corId || null });
     }
 
