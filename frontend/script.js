@@ -129,6 +129,8 @@ const state = {
 
 // - Variáveis globais de usuários -
 let usuariosSupabase = [];
+let designersSupabase = [];
+let atendentesSupabase = [];
 
 const VENDEDORES_LISTA = [
     'L. Martins',
@@ -13689,32 +13691,51 @@ const DESIGNERS_LISTA = [
 ];
 
 /**
- * Carrega a lista de usuários da tabela producao_usuarios do Supabase
+ * Carrega a lista de usuários da tabela usuarios do Supabase e separa por setor (Designer vs Atendente)
  */
 async function loadUsuarios() {
-    if (usuariosSupabase && usuariosSupabase.length > 0) {
-        return;
-    }
     try {
         if (!supabaseClient) {
             console.log("SupabaseClient não inicializado. Usando fallbacks locais para usuários.");
             return;
         }
         const { data, error } = await supabaseClient
-            .from('producao_usuarios')
-            .select('nome')
-            .eq('ativo', true);
+            .from('usuarios')
+            .select('nome_usuario, setor');
 
         if (error) {
-            console.error("Erro ao carregar usuários do Supabase:", error);
+            console.error("Erro ao carregar usuários da tabela usuarios:", error);
+            // Fallback para producao_usuarios caso usuarios falhe
+            const { data: fallbackData } = await supabaseClient
+                .from('producao_usuarios')
+                .select('nome')
+                .eq('ativo', true);
+            if (fallbackData && fallbackData.length > 0) {
+                usuariosSupabase = fallbackData.map(u => u.nome).filter(Boolean);
+            }
             return;
         }
 
         if (data && data.length > 0) {
-            usuariosSupabase = data.map(u => u.nome).filter(Boolean);
-            console.log("Usuários carregados do Supabase:", usuariosSupabase);
-        } else {
-            console.log("Nenhum usuário ativo retornado do Supabase. Usando fallbacks.");
+            designersSupabase = [];
+            atendentesSupabase = [];
+            usuariosSupabase = [];
+
+            data.forEach(u => {
+                const nome = (u.nome_usuario || '').trim();
+                if (!nome) return;
+                usuariosSupabase.push(nome);
+
+                const setor = (u.setor || '').toLowerCase();
+                if (setor.includes('designer') || setor.includes('arte') || setor === 'designer') {
+                    designersSupabase.push(nome);
+                } else if (setor.includes('atend') || setor === 'atendente' || setor === 'atendimento') {
+                    atendentesSupabase.push(nome);
+                }
+            });
+
+            console.log("Designers carregados da tabela usuarios:", designersSupabase);
+            console.log("Atendentes carregados da tabela usuarios:", atendentesSupabase);
         }
     } catch (err) {
         console.error("Exceção ao carregar usuários:", err);
@@ -13763,11 +13784,11 @@ function populateDesignerFilter() {
 
     const currentValue = filterSelect.value;
     
-    // Coletar designers atribuídos + lista base
-    const baseList = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
+    // Lista exclusiva de designers da tabela usuarios
+    const baseList = (designersSupabase && designersSupabase.length > 0)
+        ? designersSupabase
+        : ((usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA);
     const allDesigners = new Set(baseList);
-    const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
-    Object.values(overrides).forEach(d => { if (d) allDesigners.add(d); });
 
     filterSelect.innerHTML = '<option value="">🎨 Todos os Designers</option>';
     [...allDesigners].sort().forEach(d => {
@@ -13779,6 +13800,30 @@ function populateDesignerFilter() {
 
     filterSelect.value = currentValue;
 }
+
+function populateAtendenteFilter() {
+    const filterSelect = document.getElementById('os-filter-atendente');
+    if (!filterSelect) return;
+
+    const currentValue = filterSelect.value;
+    
+    // Lista exclusiva de atendentes da tabela usuarios (ou vendedores como fallback)
+    const baseList = (atendentesSupabase && atendentesSupabase.length > 0)
+        ? atendentesSupabase
+        : (state.ordens ? [...new Set(state.ordens.map(o => o.vendedor).filter(Boolean))] : []);
+    const allAtendentes = new Set(baseList);
+
+    filterSelect.innerHTML = '<option value="">🎧 Todos os Atendentes</option>';
+    [...allAtendentes].sort().forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        filterSelect.appendChild(opt);
+    });
+
+    filterSelect.value = currentValue;
+}
+window.populateAtendenteFilter = populateAtendenteFilter;
 
 /**
  * Gera o HTML do select inline de designer para uma OS na tabela
@@ -14138,6 +14183,14 @@ function renderOrdens() {
             if (!matchDesigner) return false;
         }
 
+        // 2b. Filtro de Atendente
+        const filterAtendente = (document.getElementById('os-filter-atendente')?.value || '');
+        if (filterAtendente) {
+            const osVend = getOSVendedor(os.id);
+            const matchAtendente = (osVend === filterAtendente) || (os.vendedor === filterAtendente);
+            if (!matchAtendente) return false;
+        }
+
         // 3. Filtro de Setor
         if (state.filtroSetorArte) {
             const matchSetor = itens.some(item => {
@@ -14192,8 +14245,9 @@ function renderOrdens() {
     const countArte = document.getElementById('os-arte-count-badge');
     if (countArte) countArte.textContent = `${filteredArte.length} ${filteredArte.length === 1 ? 'Pedido' : 'Pedidos'}`;
 
-    // Popular filtro de designers
+    // Popular filtro de designers e atendentes
     populateDesignerFilter();
+    populateAtendenteFilter();
 
 
     // Renderizar Fila de Impressão

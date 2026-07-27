@@ -1871,8 +1871,11 @@
                             <input type="text" id="os-search-arte" class="form-control" placeholder="Buscar Pedido, Evento ou Cliente..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;">
                             <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">🔍</span>
                         </div>
-                        <select id="os-filter-designer" class="form-control" onchange="renderOrdens()" style="width: 200px; font-size: 0.85rem;">
+                        <select id="os-filter-designer" class="form-control" onchange="renderOrdens()" style="width: 180px; font-size: 0.85rem;">
                             <option value="">🎨 Todos os Designers</option>
+                        </select>
+                        <select id="os-filter-atendente" class="form-control" onchange="renderOrdens()" style="width: 180px; font-size: 0.85rem;">
+                            <option value="">🎧 Todos os Atendentes</option>
                         </select>
                         <button class="btn btn-secondary btn-sm" onclick="loadOrdens()" title="Atualizar lista">🔄 Atualizar</button>
                     </div>
