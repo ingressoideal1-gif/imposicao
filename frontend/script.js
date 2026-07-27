@@ -13748,16 +13748,33 @@ async function loadUsuarios() {
 function getOSDesigner(osId, osNumero) {
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     if (overrides[osId]) return overrides[osId];
-    
-    if (osNumero && state.todasArtes) {
-        const osNumeroInt = parseInt(osNumero);
-        const artes = state.todasArtes.filter(a => a.id_int === osNumeroInt);
-        const arteComDesigner = artes.find(a => a.designer_nome);
-        if (arteComDesigner) {
-            return arteComDesigner.designer_nome;
+
+    const os = state.ordens ? state.ordens.find(o => o.id === osId || String(o.id_int) === String(osId)) : null;
+    const numToUse = osNumero || (os ? os.numero : null) || osId;
+    const osNumeroInt = parseInt(numToUse);
+
+    if (osNumeroInt) {
+        // 1. Checar em state.pedidosArtesData
+        if (state.pedidosArtesData && state.pedidosArtesData[osNumeroInt] && state.pedidosArtesData[osNumeroInt].designer_nome) {
+            return state.pedidosArtesData[osNumeroInt].designer_nome;
+        }
+
+        // 2. Checar em state.todasArtes
+        if (state.todasArtes) {
+            const artes = state.todasArtes.filter(a => a.id_int === osNumeroInt);
+            const arteComDesigner = artes.find(a => a.designer_nome);
+            if (arteComDesigner && arteComDesigner.designer_nome) {
+                return arteComDesigner.designer_nome;
+            }
         }
     }
-    
+
+    // 3. Checar se a própria OS possui a propriedade designer ou designer_nome
+    if (os) {
+        if (os.designer_nome) return os.designer_nome;
+        if (os.designer) return os.designer;
+    }
+
     return '';
 }
 
@@ -13784,11 +13801,19 @@ function populateDesignerFilter() {
 
     const currentValue = filterSelect.value;
     
-    // Lista exclusiva de designers da tabela usuarios
+    // Lista exclusiva de designers da tabela usuarios + designers atribuídos nas OSs
     const baseList = (designersSupabase && designersSupabase.length > 0)
         ? designersSupabase
         : ((usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA);
     const allDesigners = new Set(baseList);
+
+    // Incluir designers atribuídos às OSs existentes
+    if (state.ordens) {
+        state.ordens.forEach(os => {
+            const des = getOSDesigner(os.id, os.numero);
+            if (des) allDesigners.add(des);
+        });
+    }
 
     filterSelect.innerHTML = '<option value="">🎨 Todos os Designers</option>';
     [...allDesigners].sort().forEach(d => {
@@ -14179,7 +14204,7 @@ function renderOrdens() {
 
         // 2. Filtro de Designer
         if (filterDesigner) {
-            const matchDesigner = getOSDesigner(os.id) === filterDesigner;
+            const matchDesigner = getOSDesigner(os.id, os.numero) === filterDesigner;
             if (!matchDesigner) return false;
         }
 
