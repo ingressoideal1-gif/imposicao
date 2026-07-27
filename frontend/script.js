@@ -131,6 +131,7 @@ const state = {
 let usuariosSupabase = [];
 let designersSupabase = [];
 let atendentesSupabase = [];
+let designersObjetosSupabase = [];
 
 const VENDEDORES_LISTA = [
     'L. Martins',
@@ -13701,7 +13702,7 @@ async function loadUsuarios() {
         }
         const { data, error } = await supabaseClient
             .from('usuarios')
-            .select('nome_usuario, setor');
+            .select('user_id, nome_usuario, email, setor');
 
         if (error) {
             console.error("Erro ao carregar usuários da tabela usuarios:", error);
@@ -13720,6 +13721,7 @@ async function loadUsuarios() {
             designersSupabase = [];
             atendentesSupabase = [];
             usuariosSupabase = [];
+            designersObjetosSupabase = [];
 
             data.forEach(u => {
                 const nome = (u.nome_usuario || '').trim();
@@ -13729,6 +13731,11 @@ async function loadUsuarios() {
                 const setor = (u.setor || '').toLowerCase();
                 if (setor.includes('designer') || setor.includes('arte') || setor === 'designer') {
                     designersSupabase.push(nome);
+                    designersObjetosSupabase.push({
+                        user_id: u.user_id || u.nome_usuario,
+                        nome_usuario: nome,
+                        email: u.email || ''
+                    });
                 } else if (setor.includes('atend') || setor === 'atendente' || setor === 'atendimento') {
                     atendentesSupabase.push(nome);
                 }
@@ -13849,6 +13856,142 @@ function populateAtendenteFilter() {
     filterSelect.value = currentValue;
 }
 window.populateAtendenteFilter = populateAtendenteFilter;
+
+/**
+ * Gera o HTML dos cards de designers no box "Designers Ideal"
+ */
+function renderDesignersBoxHTML(osId, osNum) {
+    let list = [];
+    if (designersObjetosSupabase && designersObjetosSupabase.length > 0) {
+        list = designersObjetosSupabase.map(d => ({
+            uid: d.user_id || d.nome_usuario,
+            nome: d.nome_usuario,
+            email: d.email || '',
+            init: (d.nome_usuario || 'D').charAt(0).toUpperCase()
+        }));
+    } else if (designersSupabase && designersSupabase.length > 0) {
+        list = designersSupabase.map(nome => ({
+            uid: nome,
+            nome: nome,
+            email: '',
+            init: nome.charAt(0).toUpperCase()
+        }));
+    } else {
+        const fallbacks = (usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA;
+        list = fallbacks.map(nome => ({
+            uid: nome,
+            nome: nome,
+            email: '',
+            init: nome.charAt(0).toUpperCase()
+        }));
+    }
+
+    const currentAssignedDesigner = getOSDesigner(osId, osNum);
+    const allOrdens = state.ordens || [];
+
+    return list.map(d => {
+        const pedidosSet = new Set();
+        let modelosCount = 0;
+
+        allOrdens.forEach(o => {
+            const desOS = getOSDesigner(o.id, o.numero);
+            if (desOS && desOS.toLowerCase() === d.nome.toLowerCase()) {
+                pedidosSet.add(o.numero || o.id);
+                const itensOS = state.osItens[o.id] || [];
+                modelosCount += (itensOS.length > 0 ? itensOS.length : (o._itens_count || 1));
+            }
+        });
+
+        const pedidosCount = pedidosSet.size;
+        const isSelected = currentAssignedDesigner && currentAssignedDesigner.toLowerCase() === d.nome.toLowerCase();
+
+        const borderStyle = isSelected 
+            ? '2px solid #3b82f6' 
+            : '1px solid var(--border)';
+        const bgStyle = isSelected 
+            ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(37, 99, 235, 0.26))' 
+            : 'rgba(0,0,0,0.02)';
+        const boxShadowStyle = isSelected 
+            ? '0 4px 14px rgba(59, 130, 246, 0.35)' 
+            : 'none';
+
+        const safeNome = d.nome.replace(/'/g, "\\'");
+
+        return `
+            <div class="designer-card ${isSelected ? 'selected' : ''}" 
+                 data-uid="${d.uid}" 
+                 data-nome="${d.nome}"
+                 onclick="confirmAndSelectDesigner('${osId}', '${osNum}', '${d.uid}', '${safeNome}')" 
+                 style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: ${borderStyle}; border-radius: 10px; cursor: pointer; transition: all 0.25s ease; background: ${bgStyle}; box-shadow: ${boxShadowStyle};">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 38px; height: 38px; border-radius: 50%; background: ${isSelected ? '#3b82f6' : '#a7f3d0'}; color: ${isSelected ? '#ffffff' : '#065f46'}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; transition: all 0.2s;">
+                        ${d.init}
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; color: var(--text); font-size: 0.92rem; display: flex; align-items: center; gap: 8px;">
+                            ${d.nome} 
+                            ${isSelected ? `<span class="designer-badge badge badge-blue" style="font-size: 0.68rem; padding: 3px 8px; font-weight: 800; background: #3b82f6; color: white;">✓ SELECIONADO</span>` : `<span class="designer-badge badge badge-teal" style="display: none; font-size: 0.6rem; padding: 2px 6px;">Selecionado</span>`}
+                        </div>
+                        ${d.email ? `<div style="font-size: 0.82rem; color: var(--text-dim); margin-top: 2px;">${d.email}</div>` : ''}
+                    </div>
+                </div>
+                <div style="text-align: right; font-size: 0.78rem; color: var(--text-dim); line-height: 1.4;">
+                    Pedidos: <strong style="color: ${isSelected ? '#3b82f6' : 'var(--text)'}; font-size: 0.88rem;">${pedidosCount}</strong><br>
+                    Modelos: <strong style="color: ${isSelected ? '#3b82f6' : 'var(--text)'}; font-size: 0.88rem;">${modelosCount}</strong>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function confirmAndSelectDesigner(osId, osNum, uid, nome) {
+    const currentAssigned = getOSDesigner(osId, osNum);
+    
+    if (currentAssigned && currentAssigned.toLowerCase() === nome.toLowerCase()) {
+        return;
+    }
+
+    const confirmText = currentAssigned 
+        ? `Tem certeza que deseja atribuir este pedido a outro Designer (${nome})?`
+        : `Tem certeza que deseja atribuir este pedido ao Designer (${nome})?`;
+
+    if (!confirm(confirmText)) {
+        return;
+    }
+
+    const osIntId = parseInt(osNum);
+
+    // 1. Salva override local
+    setOSDesigner(osId, nome);
+
+    if (!state.pedidosArtesData) state.pedidosArtesData = {};
+    if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = {};
+    state.pedidosArtesData[osIntId].designer_uid = uid;
+    state.pedidosArtesData[osIntId].designer_nome = nome;
+
+    if (state.todasArtes) {
+        const arteObj = state.todasArtes.find(a => a.id_int === osIntId);
+        if (arteObj) {
+            arteObj.designer_nome = nome;
+            arteObj.designer_uid = uid;
+        }
+    }
+
+    // 2. Persiste no Supabase
+    await selectDesigner(osIntId, uid, nome);
+
+    // 3. Atualizar o container de Designers na página
+    const container = document.getElementById(`designers-box-container-${osId}`);
+    if (container) {
+        container.innerHTML = renderDesignersBoxHTML(osId, osNum);
+    }
+
+    // 4. Atualizar as tabelas principais para refletir o designer imediatamente
+    renderOrdens();
+}
+
+window.renderDesignersBoxHTML = renderDesignersBoxHTML;
+window.confirmAndSelectDesigner = confirmAndSelectDesigner;
 
 /**
  * Gera o HTML do select inline de designer para uma OS na tabela
@@ -16961,54 +17104,8 @@ function renderAmostrasOSItens(osId) {
                                 Equipe de design responsável pela criação de artes.
                             </div>
                         </div>
-                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;">
-                            ${(() => {
-                                const designers = [
-                                    {uid: 'edison-uid', nome: 'Edison Jr', email: 'ingressoideal1@gmail.com', init: 'E'},
-                                    {uid: 'emily-uid', nome: 'Emily Boeira', email: 'emilyboeira51@gmail.com', init: 'E'},
-                                    {uid: 'vitoria-uid', nome: 'Vitória Colbeich', email: 'vitoria.dseg@gmail.com', init: 'V'}
-                                ];
-                                // Contar pedidos e modelos por designer
-                                const artes = state.todasArtes || [];
-                                const allOrdens = state.ordens || [];
-                                return designers.map(d => {
-                                    // Pedidos: quantos pedidos únicos têm este designer atribuído
-                                    const pedidosSet = new Set();
-                                    artes.forEach(a => {
-                                        if (a.designer_uid === d.uid || a.designer_nome === d.nome) {
-                                            pedidosSet.add(a.id_int);
-                                        }
-                                    });
-                                    const pedidosCount = pedidosSet.size;
-                                    // Modelos: soma de modelos de todos os pedidos designados
-                                    let modelosCount = 0;
-                                    pedidosSet.forEach(idInt => {
-                                        const os = allOrdens.find(o => String(o.numero) === String(idInt));
-                                        if (os && state.osItens[os.id]) {
-                                            modelosCount += state.osItens[os.id].length;
-                                        }
-                                    });
-                                    return `
-                                <div class="designer-card" data-uid="${d.uid}" onclick="selectDesigner('${osNum}', '${d.uid}', '${d.nome}')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: rgba(0,0,0,0.01);">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="width: 36px; height: 36px; border-radius: 50%; background: #a7f3d0; color: #065f46; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">
-                                            ${d.init}
-                                        </div>
-                                        <div>
-                                            <div style="font-weight: 700; color: var(--text); font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
-                                                ${d.nome} <span class="designer-badge badge badge-teal" style="display: none; font-size: 0.6rem; padding: 2px 6px;">Selecionado</span>
-                                            </div>
-                                            <div style="font-size: 0.95rem; color: var(--text-dim);">${d.email}</div>
-                                        </div>
-                                    </div>
-                                    <div style="text-align: right; font-size: 0.7rem; color: var(--text-dim);">
-                                        Pedidos: <strong>${pedidosCount}</strong><br>
-                                        Modelos: <strong>${modelosCount}</strong>
-                                    </div>
-                                </div>
-                                    `;
-                                }).join('');
-                            })()}
+                        <div class="card-body" style="padding: 16px; display: flex; flex-direction: column; gap: 10px;" id="designers-box-container-${osId}">
+                            ${renderDesignersBoxHTML(osId, osNum)}
                         </div>
                     </div>
 
@@ -19818,33 +19915,11 @@ function updateBriefingUI(osId, osIntId) {
         }
     });
 
-    // Atualiza Designer Ideal Selecionado
-    let designerUid = data.designer_uid;
-    
-    // Se não tem designer_uid salvo, tentar pegar da lista de arte (via designer_nome)
-    if (!designerUid && data.designer_nome) {
-        const designerMap = {
-            'Edison Jr': 'edison-uid',
-            'Emily Boeira': 'emily-uid',
-            'Vitória Colbeich': 'vitoria-uid'
-        };
-        designerUid = designerMap[data.designer_nome] || null;
+    // Atualiza Designer Ideal Selecionado no container
+    const desContainer = document.getElementById(`designers-box-container-${osId}`);
+    if (desContainer) {
+        desContainer.innerHTML = renderDesignersBoxHTML(osId, osIntId);
     }
-    
-    document.querySelectorAll('.designer-card').forEach(card => {
-        const uid = card.getAttribute('data-uid');
-        if (uid === designerUid) {
-            card.classList.add('selected');
-            card.querySelector('.designer-badge').style.display = 'inline-block';
-            card.style.borderColor = 'var(--teal)';
-            card.style.background = 'rgba(16, 185, 129, 0.05)';
-        } else {
-            card.classList.remove('selected');
-            card.querySelector('.designer-badge').style.display = 'none';
-            card.style.borderColor = 'var(--border)';
-            card.style.background = 'rgba(0,0,0,0.01)';
-        }
-    });
 }
 
 let briefingSaveTimeout = null;
