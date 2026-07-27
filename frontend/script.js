@@ -18620,6 +18620,105 @@ async function snapshotAmostraAndUpload(idx, osId, item, canvas, face = 'frente'
     }
 }
 
+// Versão promisificada do snapshot — aguarda upload completar antes de resolver
+function snapshotAmostraSync(idx, osId, item, canvas, face) {
+    return new Promise((resolve) => {
+        if (!supabaseClient || !canvas || canvas.width === 0 || canvas.height === 0) {
+            resolve();
+            return;
+        }
+        try {
+            canvas.toBlob(async (blob) => {
+                if (!blob) { resolve(); return; }
+                try {
+                    const fileName = `amostra_${face}_${osId}_${item.id}_${Date.now()}.jpg`;
+                    const { error } = await supabaseClient
+                        .storage
+                        .from('amostras_renderizadas')
+                        .upload(fileName, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: true });
+
+                    if (!error) {
+                        const { data: urlData } = supabaseClient.storage.from('amostras_renderizadas').getPublicUrl(fileName);
+                        const publicUrl = urlData.publicUrl;
+                        const dbField = face === 'verso' ? 'verso_amostra_arte_base64' : 'amostra_arte_base64';
+                        await saveAmostraToDB(item.id, osId, { [dbField]: publicUrl });
+                        if (face === 'verso') {
+                            item.verso_amostra_arte_base64 = publicUrl;
+                        } else {
+                            item.amostra_arte_base64 = publicUrl;
+                        }
+                    } else {
+                        console.warn('[Snapshot Sync] Upload error:', error);
+                    }
+                } catch(e) {
+                    console.warn('[Snapshot Sync] Erro no upload:', e);
+                }
+                resolve();
+            }, 'image/jpeg', 0.85);
+        } catch(e) {
+            console.warn('[Snapshot Sync] toBlob error:', e);
+            resolve();
+        }
+    });
+}
+
+// Força a regeneração de TODOS os snapshots de uma OS usando canvas offscreen
+// Garante que a imagem do link do cliente seja idêntica à janela combinada do editor
+async function forceRegenerateSnapshots(osId) {
+    const itens = state.osItens[osId] || [];
+    if (!itens.length) {
+        console.log('[Snapshot] Nenhum item carregado para OS', osId);
+        return;
+    }
+
+    const S = 150 / 25.4;
+
+    for (let idx = 0; idx < itens.length; idx++) {
+        const item = itens[idx];
+
+        // Pular items em modo PDF (usam viewer dedicado)
+        if (item.modo_pdf) continue;
+
+        const corId = item.amostra_cor_id || '';
+        const numId = item.amostra_num_id || '';
+        const hasArteUrl = !!item.arte_url;
+
+        // Pular items sem configuração visual
+        if (!corId && !numId && !hasArteUrl) continue;
+
+        const cor = corId ? state.cores.find(c => c.id === corId) : null;
+        const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+
+        // Preload PDF elements na numeração se necessário
+        if (num) {
+            preloadAmostraItemPdfElements(num, idx, osId);
+        }
+
+        let fmt = null;
+        if (cor && cor.formato_id) fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
+        if (!fmt && num && num.formato_id) fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
+        if (!fmt && state.formatos.length > 0) fmt = state.formatos[0];
+        if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+
+        // Renderizar e snapshot da FRENTE (canvas offscreen)
+        const canvasFront = document.createElement('canvas');
+        await drawAmostraFace(item, 'front', canvasFront, null, fmt, cor, num, idx, osId, S);
+        if (canvasFront.width > 0 && canvasFront.height > 0) {
+            await snapshotAmostraSync(idx, osId, item, canvasFront, 'frente');
+        }
+
+        // Renderizar e snapshot do VERSO (se duplex)
+        if (item.verso) {
+            const canvasBack = document.createElement('canvas');
+            await drawAmostraFace(item, 'back', canvasBack, null, fmt, cor, num, idx, osId, S);
+            if (canvasBack.width > 0 && canvasBack.height > 0) {
+                await snapshotAmostraSync(idx, osId, item, canvasBack, 'verso');
+            }
+        }
+    }
+}
+window.forceRegenerateSnapshots = forceRegenerateSnapshots;
+
 // Expor globalmente
 window.renderItemAmostraCombinada = renderItemAmostraCombinada;
 
@@ -20275,6 +20374,14 @@ async function gerarLinkCliente(osId, numero) {
             } else {
                 await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
             }
+        }
+
+        // Regenerar os snapshots de imagem offscreen para garantir que o link do cliente reflita exatamente a janela combinada
+        try {
+            toast('Gerando imagens atualizadas da amostra...', 'info');
+            await forceRegenerateSnapshots(osId);
+        } catch (snapErr) {
+            console.warn('[Gerar Link] Erro ao regenerar snapshots:', snapErr);
         }
 
         // 3. Obter ou criar o link do cliente (já gravando o novoStatus)
