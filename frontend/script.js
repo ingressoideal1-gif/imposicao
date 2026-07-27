@@ -18665,6 +18665,13 @@ function snapshotAmostraSync(idx, osId, item, canvas, face) {
 // Força a regeneração de TODOS os snapshots de uma OS usando canvas offscreen
 // Garante que a imagem do link do cliente seja idêntica à janela combinada do editor
 async function forceRegenerateSnapshots(osId) {
+    if ((!state.osItens[osId] || !state.osItens[osId].length) && typeof loadOSItens === 'function') {
+        try {
+            await loadOSItens(osId);
+        } catch (e) {
+            console.warn('[Snapshot] Erro ao carregar itens da OS:', e);
+        }
+    }
     const itens = state.osItens[osId] || [];
     if (!itens.length) {
         console.log('[Snapshot] Nenhum item carregado para OS', osId);
