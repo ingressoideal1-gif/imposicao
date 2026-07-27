@@ -21413,15 +21413,10 @@ window.setFiltroStatus = setFiltroStatus;
 window.setFiltroSetorArte = setFiltroSetorArte;
 window.setFiltroStatusArte = setFiltroStatusArte;
 
-// - ROUTER: Verificar rota do cliente no carregamento -
+// - ROUTER: Garantir que a página principal da aplicação seja a Lista de Arte (ao entrar e no F5) -
 document.addEventListener('DOMContentLoaded', () => {
-    // checkClienteRoute removed
-
-    // Restaurar a aba salva no localStorage
-    const savedView = localStorage.getItem('activeView');
-    if (savedView && typeof window.showView === 'function') {
-        // Pequeno atraso para garantir que a interface já tenha sido construída
-        setTimeout(() => window.showView(savedView), 50);
+    if (typeof window.showView === 'function') {
+        setTimeout(() => window.showView('view-lista-arte'), 50);
     }
 });
 
