@@ -2306,10 +2306,12 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             numCtx.restore();
         });
 
-        // Compor numeração sobre o canvas final (centralizado)
+        // Compor numeração sobre o canvas final (centralizado) em modo multiply
         const ndx = (finalWidth - numCanvas.width) / 2;
         const ndy = (finalHeight - numCanvas.height) / 2;
+        ctx.globalCompositeOperation = 'multiply';
         ctx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+        ctx.globalCompositeOperation = 'source-over';
     }
 
     // Borda decorativa
