@@ -19056,12 +19056,13 @@ function toggleSelectAllAnexos(osId, checked) {
 }
 
 /**
- * Atualiza o contador e rótulo do botão de download em lote/ZIP
+ * Atualiza o contador e rótulo do botão de download em lote/ZIP e exibição de botões de ocultar em lote
  */
-function updateAnexoSelectionCount(osId) {
+function updateAnexoSelectionCount(osId, osNum) {
     const checkboxes = Array.from(document.querySelectorAll(`.anexo-checkbox-${osId}`));
     const selectedCount = checkboxes.filter(cb => cb.checked).length;
     const btn = document.getElementById(`btn-download-zip-${osId}`);
+    const btnOcultar = document.getElementById(`btn-ocultar-lote-${osId}`);
     const selectAllCb = document.getElementById(`select-all-anexos-${osId}`);
 
     if (selectAllCb) {
@@ -19079,6 +19080,78 @@ function updateAnexoSelectionCount(osId) {
             btn.style.borderColor = 'rgba(59,130,246,0.3)';
         }
     }
+
+    if (btnOcultar) {
+        if (selectedCount > 0) {
+            btnOcultar.style.display = 'inline-flex';
+            btnOcultar.innerHTML = `🙈 Ocultar (${selectedCount})`;
+        } else {
+            btnOcultar.style.display = 'none';
+        }
+    }
+}
+
+/**
+ * Alterna a visibilidade (oculto: true/false) de anexos específicos e persiste no Supabase
+ */
+async function toggleOcultarAnexos(osId, osNum, targetIds, novoStatusOculto) {
+    const numInt = parseInt(osNum);
+    if (isNaN(numInt)) return;
+
+    try {
+        const { data: existing, error: selectErr } = await supabaseClient
+            .from('pedidos_artes')
+            .select('id, arquivos')
+            .eq('id_int', numInt);
+
+        if (selectErr) throw selectErr;
+        if (!existing || existing.length === 0) return;
+
+        let curArquivos = existing[0].arquivos;
+        if (typeof curArquivos === 'string') {
+            try { curArquivos = JSON.parse(curArquivos); } catch(e) {}
+        }
+        if (!Array.isArray(curArquivos)) return;
+
+        let alterado = false;
+        curArquivos.forEach(arq => {
+            const arqId = arq.id || arq.url || arq.storage_path || arq.nome_arquivo || arq.nome;
+            if (targetIds.includes(arqId) || targetIds.includes(arq.nome_arquivo) || targetIds.includes(arq.nome) || targetIds.includes(arq.url)) {
+                arq.oculto = novoStatusOculto;
+                alterado = true;
+            }
+        });
+
+        if (alterado) {
+            const { error: updateErr } = await supabaseClient
+                .from('pedidos_artes')
+                .update({ arquivos: curArquivos })
+                .eq('id_int', numInt);
+
+            if (updateErr) throw updateErr;
+
+            toast(novoStatusOculto ? 'Anexo(s) ocultado(s) com sucesso!' : 'Anexo(s) reexibido(s) com sucesso!', 'success');
+        }
+
+        loadAnexosPedido(osId, osNum);
+    } catch (err) {
+        console.error('Erro ao alterar visibilidade de anexos:', err);
+        toast('Erro ao atualizar anexo: ' + err.message, 'error');
+    }
+}
+
+/**
+ * Oculta em lote os anexos selecionados via checkbox
+ */
+async function toggleOcultarAnexosSelecionados(osId, osNum, novoStatusOculto = true) {
+    const checkboxes = Array.from(document.querySelectorAll(`.anexo-checkbox-${osId}`));
+    const selectedCbs = checkboxes.filter(cb => cb.checked);
+    if (selectedCbs.length === 0) {
+        toast('Selecione ao menos um anexo para ocultar.', 'warning');
+        return;
+    }
+    const targetIds = selectedCbs.map(cb => cb.dataset.id || cb.dataset.name || cb.dataset.url);
+    await toggleOcultarAnexos(osId, osNum, targetIds, novoStatusOculto);
 }
 
 /**
@@ -19156,6 +19229,10 @@ async function loadAnexosPedido(osId, osNum) {
     const numInt = parseInt(osNum);
     if (isNaN(numInt)) return;
 
+    // Verificar se o toggle 'Mostrar Ocultados' está ativado
+    const showHiddenCb = document.getElementById(`show-hidden-anexos-${osId}`);
+    const showHidden = showHiddenCb ? showHiddenCb.checked : false;
+
     let anexosList = [];
 
     try {
@@ -19194,7 +19271,8 @@ async function loadAnexosPedido(osId, osNum) {
                                     tamanho: arq.tamanho_bytes || arq.tamanho || arq.size || 0,
                                     tipo: arq.mime_type || arq.tipo || arq.type || '',
                                     origem: arq.enviado_por || 'Arte/Comercial',
-                                    data: arq.created_at || arq.uploaded_at || arq.data || pa.created_at
+                                    data: arq.created_at || arq.uploaded_at || arq.data || pa.created_at,
+                                    oculto: !!arq.oculto
                                 });
                             }
                         });
@@ -19206,12 +19284,14 @@ async function loadAnexosPedido(osId, osNum) {
                         const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(pa.storage_path);
                         if (pUrl?.publicUrl) {
                             anexosList.push({
+                                id: pa.id || pa.storage_path,
                                 nome: pa.nome_arquivo,
                                 url: pUrl.publicUrl,
                                 tamanho: 0,
                                 tipo: pa.mime_type || '',
                                 origem: 'Arte Principal',
-                                data: pa.created_at
+                                data: pa.created_at,
+                                oculto: false
                             });
                         }
                     }
@@ -19228,17 +19308,40 @@ async function loadAnexosPedido(osId, osNum) {
             return;
         }
 
+        const hiddenCount = anexosList.filter(a => a.oculto).length;
+        const visibleList = showHidden ? anexosList : anexosList.filter(a => !a.oculto);
+
         const selectAllBar = `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 8px 8px; font-size: 0.78rem; color: var(--text-dim); border-bottom: 1px solid var(--border); margin-bottom: 8px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; margin: 0; color: var(--text);">
-                    <input type="checkbox" id="select-all-anexos-${osId}" onchange="toggleSelectAllAnexos('${osId}', this.checked)" style="accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer;" />
-                    Selecionar Todos
-                </label>
-                <span style="font-size: 0.72rem; color: var(--text-dim);">${anexosList.length} arquivo(s)</span>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 10px 8px; font-size: 0.78rem; color: var(--text-dim); border-bottom: 1px solid var(--border); margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; margin: 0; color: var(--text);">
+                        <input type="checkbox" id="select-all-anexos-${osId}" onchange="toggleSelectAllAnexos('${osId}', this.checked)" style="accent-color: #3b82f6; width: 15px; height: 15px; cursor: pointer;" />
+                        Selecionar Todos
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; margin: 0; color: ${hiddenCount > 0 ? '#8b5cf6' : 'var(--text-dim)'}; font-size: 0.76rem;" title="Exibir anexos que foram ocultados">
+                        <input type="checkbox" id="show-hidden-anexos-${osId}" ${showHidden ? 'checked' : ''} onchange="loadAnexosPedido('${osId}', '${osNum}')" style="accent-color: #8b5cf6; width: 14px; height: 14px; cursor: pointer;" />
+                        👁️ Mostrar Ocultados ${hiddenCount > 0 ? `(${hiddenCount})` : ''}
+                    </label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="btn-ocultar-lote-${osId}" onclick="toggleOcultarAnexosSelecionados('${osId}', '${osNum}', true)" class="btn btn-sm" style="display: none; padding: 3px 10px; font-size: 0.75rem; font-weight: 700; background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; align-items: center; gap: 4px;" title="Ocultar anexos selecionados">
+                        🙈 Ocultar Selecionados
+                    </button>
+                    <span style="font-size: 0.72rem; color: var(--text-dim);">${visibleList.length} de ${anexosList.length} arquivo(s)</span>
+                </div>
             </div>
         `;
 
-        const itemsHtml = anexosList.map(anx => {
+        if (visibleList.length === 0) {
+            container.innerHTML = selectAllBar + `
+                <div style="font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 16px; background: rgba(0,0,0,0.02); border: 1px dashed var(--border); border-radius: 8px;">
+                    🙈 Todos os anexos deste pedido estão ocultados. Marque "Mostrar Ocultados" para visualizá-los.
+                </div>
+            `;
+            return;
+        }
+
+        const itemsHtml = visibleList.map(anx => {
             const ext = (anx.nome.split('.').pop() || '').toLowerCase();
             const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
             const isPdf = ['pdf'].includes(ext);
@@ -19271,14 +19374,20 @@ async function loadAnexosPedido(osId, osNum) {
             const sizeMb = anx.tamanho > 0 ? (anx.tamanho > 1048576 ? `${(anx.tamanho / 1048576).toFixed(1)} MB` : `${Math.round(anx.tamanho / 1024)} KB`) : '';
             const dataFmt = anx.data ? formatDateTime(anx.data) : '';
 
+            const isOculto = anx.oculto;
+            const containerStyle = isOculto
+                ? 'display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px dashed rgba(239,68,68,0.4); border-radius: 8px; background: rgba(239,68,68,0.03); gap: 12px; transition: all 0.2s; opacity: 0.7;'
+                : 'display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); gap: 12px; transition: all 0.2s;';
+
             return `
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); gap: 12px; transition: all 0.2s;">
+                <div style="${containerStyle}">
                     <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                        <input type="checkbox" class="anexo-checkbox-${osId}" data-url="${anx.url}" data-name="${anx.nome}" onchange="updateAnexoSelectionCount('${osId}')" style="accent-color: #3b82f6; width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;" />
+                        <input type="checkbox" class="anexo-checkbox-${osId}" data-id="${anx.id}" data-url="${anx.url}" data-name="${anx.nome}" onchange="updateAnexoSelectionCount('${osId}', '${osNum}')" style="accent-color: #3b82f6; width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;" />
                         ${thumbHtml}
                         <div style="min-width: 0;">
-                            <div style="font-weight: 700; color: var(--text); font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" onclick="openAnexoLightbox('${anx.url}', '${anx.nome}')" title="Clique para abrir preview de ${anx.nome}">
-                                ${anx.nome}
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; gap: 6px;" onclick="openAnexoLightbox('${anx.url}', '${anx.nome}')" title="Clique para abrir preview de ${anx.nome}">
+                                <span>${anx.nome}</span>
+                                ${isOculto ? `<span style="background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 800;">🙈 Oculto</span>` : ''}
                             </div>
                             <div style="font-size: 0.72rem; color: var(--text-dim); display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px;">
                                 ${sizeMb ? `<span>${sizeMb}</span>` : ''}
@@ -19288,6 +19397,15 @@ async function loadAnexosPedido(osId, osNum) {
                         </div>
                     </div>
                     <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
+                        ${isOculto ? `
+                            <button onclick="toggleOcultarAnexos('${osId}', '${osNum}', ['${anx.id}'], false)" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(139,92,246,0.15); color: #8b5cf6; border: 1px solid rgba(139,92,246,0.3); border-radius: 6px;" title="Reexibir / Desocultar anexo">
+                                👁️ Reexibir
+                            </button>
+                        ` : `
+                            <button onclick="toggleOcultarAnexos('${osId}', '${osNum}', ['${anx.id}'], true)" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(0,0,0,0.03); color: var(--text-dim); border: 1px solid var(--border); border-radius: 6px;" title="Ocultar anexo da listagem">
+                                🙈 Ocultar
+                            </button>
+                        `}
                         <button onclick="openAnexoLightbox('${anx.url}', '${anx.nome}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); border-radius: 6px;" title="Visualizar Preview">
                             👁️ Preview
                         </button>
@@ -19300,7 +19418,7 @@ async function loadAnexosPedido(osId, osNum) {
         }).join('');
 
         container.innerHTML = selectAllBar + itemsHtml;
-        updateAnexoSelectionCount(osId);
+        updateAnexoSelectionCount(osId, osNum);
 
     } catch (e) {
         console.error('Erro ao carregar anexos do pedido:', e);
@@ -19356,7 +19474,8 @@ async function uploadAnexoPedido(osId, osNum) {
                     tamanho_bytes: file.size,
                     mime_type: file.type,
                     created_at: new Date().toISOString(),
-                    enviado_por: 'Arte / Imposição'
+                    enviado_por: 'Arte / Imposição',
+                    oculto: false
                 });
 
                 if (existing && existing.length > 0) {
@@ -19385,6 +19504,8 @@ window.updateAnexoSelectionCount = updateAnexoSelectionCount;
 window.downloadAnexosSelecionadosZip = downloadAnexosSelecionadosZip;
 window.loadAnexosPedido = loadAnexosPedido;
 window.uploadAnexoPedido = uploadAnexoPedido;
+window.toggleOcultarAnexos = toggleOcultarAnexos;
+window.toggleOcultarAnexosSelecionados = toggleOcultarAnexosSelecionados;
 
 
 
