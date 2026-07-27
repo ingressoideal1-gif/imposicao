@@ -1032,23 +1032,22 @@ async function clienteAprovarTudo() {
     return clienteFinalizarFluxo('APROVAR_TUDO');
 }
 
-window.clienteConfirmacoes = { enderecoOk: null, nfOk: null, enderecoCorrecao: '', nfCorrecao: '' };
+window.clienteConfirmacoes = { geralOk: null, geralCorrecao: '', cliHtml: '', endHtml: '' };
 
 function checarConclusaoConfirmacoes() {
     const btn = document.getElementById('btn-finalizar-confirmacoes');
     if (!btn) return;
     
-    const endFeito = window.clienteConfirmacoes.enderecoOk === true || (window.clienteConfirmacoes.enderecoOk === false && window.clienteConfirmacoes.enderecoCorrecao !== '');
-    const nfFeito = window.clienteConfirmacoes.nfOk === true || (window.clienteConfirmacoes.nfOk === false && window.clienteConfirmacoes.nfCorrecao !== '');
+    const geralOk = window.clienteConfirmacoes.geralOk;
+    const geralCorr = window.clienteConfirmacoes.geralCorrecao;
+    const feito = (geralOk === true) || (geralOk === false && geralCorr !== '');
 
-    if (endFeito && nfFeito) {
+    if (feito) {
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
         
-        const precisaAtencao = window.clienteConfirmacoes.enderecoOk === false || window.clienteConfirmacoes.nfOk === false;
-        
-        if (precisaAtencao) {
+        if (geralOk === false) {
             btn.innerHTML = '⚠️ Solicitar correção do Atendimento';
             btn.style.backgroundColor = '#f97316'; // Laranja
             btn.style.borderColor = '#f97316';
@@ -1069,9 +1068,9 @@ function checarConclusaoConfirmacoes() {
     }
 }
 
-window.desfazerConfirmacao = function(tipo) {
-    window.clienteConfirmacoes[`${tipo}Ok`] = null;
-    window.clienteConfirmacoes[`${tipo}Correcao`] = '';
+window.desfazerConfirmacao = function(tipo = 'geral') {
+    window.clienteConfirmacoes.geralOk = null;
+    window.clienteConfirmacoes.geralCorrecao = '';
     
     const btnConfirmar = document.getElementById(`btn-confirmar-${tipo}`);
     const btnAlterar = document.getElementById(`btn-alterar-${tipo}`);
@@ -1086,16 +1085,21 @@ window.desfazerConfirmacao = function(tipo) {
         btnAlterar.style.color = 'var(--text)';
     }
     
-    document.getElementById(`acoes-${tipo}`).style.display = 'flex';
-    document.getElementById(`correcao-${tipo}`).style.display = 'none';
-    document.getElementById(`status-${tipo}`).innerHTML = '';
-    document.getElementById(`input-correcao-${tipo}`).value = '';
+    const acoesEl = document.getElementById(`acoes-${tipo}`);
+    const corrEl = document.getElementById(`correcao-${tipo}`);
+    const statusEl = document.getElementById(`status-${tipo}`);
+    const inputEl = document.getElementById(`input-correcao-${tipo}`);
+
+    if (acoesEl) acoesEl.style.display = 'flex';
+    if (corrEl) corrEl.style.display = 'none';
+    if (statusEl) statusEl.innerHTML = '';
+    if (inputEl) inputEl.value = '';
     
     checarConclusaoConfirmacoes();
 };
 
 window.acaoConfirmacaoItem = function(tipo, ok) {
-    window.clienteConfirmacoes[`${tipo}Ok`] = ok;
+    window.clienteConfirmacoes.geralOk = ok;
     
     const btnConfirmar = document.getElementById(`btn-confirmar-${tipo}`);
     const btnAlterar = document.getElementById(`btn-alterar-${tipo}`);
@@ -1113,8 +1117,8 @@ window.acaoConfirmacaoItem = function(tipo, ok) {
             btnAlterar.style.borderColor = 'var(--border-color)';
             btnAlterar.style.color = 'var(--text)';
         }
-        boxCorrecao.style.display = 'none';
-        badgeStatus.innerHTML = '';
+        if (boxCorrecao) boxCorrecao.style.display = 'none';
+        if (badgeStatus) badgeStatus.innerHTML = '';
     } else {
         if (btnAlterar) {
             btnAlterar.style.backgroundColor = '#f97316';
@@ -1126,43 +1130,48 @@ window.acaoConfirmacaoItem = function(tipo, ok) {
             btnConfirmar.style.borderColor = 'var(--border-color)';
             btnConfirmar.style.color = 'var(--text)';
         }
-        boxCorrecao.style.display = 'block';
-        badgeStatus.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                <span style="color: #f97316; font-weight: bold;">⚠️ Informe os dados corretos abaixo:</span>
-            </div>
-        `;
+        if (boxCorrecao) boxCorrecao.style.display = 'block';
+        if (badgeStatus) {
+            badgeStatus.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                    <span style="color: #f97316; font-weight: bold;">⚠️ Informe os dados corretos abaixo:</span>
+                </div>
+            `;
+        }
     }
     checarConclusaoConfirmacoes();
 };
 
-window.salvarCorrecaoTexto = function(tipo) {
+window.salvarCorrecaoTexto = function(tipo = 'geral') {
     const textarea = document.getElementById(`input-correcao-${tipo}`);
-    const texto = textarea.value.trim();
+    const texto = textarea ? textarea.value.trim() : '';
     if (!texto) {
         toast('Por favor, informe os dados corretos antes de salvar.', 'warning');
         return;
     }
     
-    window.clienteConfirmacoes[`${tipo}Correcao`] = texto;
-    document.getElementById(`correcao-${tipo}`).style.display = 'none';
+    window.clienteConfirmacoes.geralCorrecao = texto;
+    const boxCorrecao = document.getElementById(`correcao-${tipo}`);
+    if (boxCorrecao) boxCorrecao.style.display = 'none';
     
     const badgeStatus = document.getElementById(`status-${tipo}`);
-    badgeStatus.innerHTML = `
-        <div style="background: rgba(249, 115, 22, 0.1); padding: 10px; border-radius: 6px; border: 1px solid #f97316;">
-            <div style="display:flex; align-items:center; justify-content:space-between;">
-                <span style="color: #f97316; font-weight: bold;">✅ Correção Registrada</span>
-                <button class="btn btn-sm" onclick="desfazerConfirmacao('${tipo}')" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 5px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Editar</button>
+    if (badgeStatus) {
+        badgeStatus.innerHTML = `
+            <div style="background: rgba(249, 115, 22, 0.1); padding: 10px; border-radius: 6px; border: 1px solid #f97316; margin-bottom: 10px;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <span style="color: #f97316; font-weight: bold;">✅ Correção Registrada</span>
+                    <button class="btn btn-sm" onclick="desfazerConfirmacao('${tipo}')" style="background: transparent; border: 1px solid var(--border-color); color: var(--text); padding: 5px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Editar</button>
+                </div>
+                <small style="color: var(--text-dim); margin-top: 5px; display: inline-block; word-break: break-word;">${texto.substring(0, 150)}${texto.length > 150 ? '...' : ''}</small>
             </div>
-            <small style="color: var(--text-dim); margin-top: 5px; display: inline-block; word-break: break-word;">${texto.substring(0, 150)}${texto.length > 150 ? '...' : ''}</small>
-        </div>
-    `;
+        `;
+    }
     
     checarConclusaoConfirmacoes();
 };
 
 async function mostrarConfirmacaoDadosCliente(osId) {
-    window.clienteConfirmacoes = { enderecoOk: null, nfOk: null, enderecoCorrecao: '', nfCorrecao: '' };
+    window.clienteConfirmacoes = { geralOk: null, geralCorrecao: '', cliHtml: '', endHtml: '' };
     const contentEl = document.getElementById('cliente-content');
     
     const container = document.getElementById('cliente-amostras-itens-container');
@@ -1212,40 +1221,58 @@ async function mostrarConfirmacaoDadosCliente(osId) {
             if (endData && endData.length > 0) enderecoEntrega = endData[0];
         }
 
-        let endHtml = '<div style="color: var(--text-dim); font-style: italic;">Endereço não cadastrado no pedido.</div>';
-        if (enderecoEntrega) {
-            let recebedorHtml = '';
-            if (enderecoEntrega.recebedor) {
-                recebedorHtml = `<b>Recebedor:</b> ${enderecoEntrega.recebedor} ${enderecoEntrega.cpf_recebedor ? `(CPF: ${enderecoEntrega.cpf_recebedor})` : ''}<br>`;
-            }
-            
-            endHtml = `
-                <div style="font-size: 0.95rem; line-height: 1.5; color: var(--text);">
-                    ${recebedorHtml}
-                    <b>Rua:</b> ${enderecoEntrega.endereco || enderecoEntrega.rua || enderecoEntrega.logradouro || ''}, ${enderecoEntrega.numero || 'S/N'}<br>
-                    ${enderecoEntrega.complemento ? `<b>Complemento:</b> ${enderecoEntrega.complemento}<br>` : ''}
-                    <b>Bairro:</b> ${enderecoEntrega.bairro || ''}<br>
-                    <b>Cidade/UF:</b> ${enderecoEntrega.cidade || ''} - ${enderecoEntrega.uf || ''}<br>
-                    <b>CEP:</b> ${enderecoEntrega.cep || ''}
-                </div>
-            `;
-        }
-        window.clienteConfirmacoes.endHtml = endHtml;
-
+        // 1. DADOS PARA NOTA FISCAL (PRIMEIRO BLOCO)
         let cliHtml = '<div style="color: var(--text-dim); font-style: italic;">Dados de faturamento não cadastrados.</div>';
         if (clienteFaturamento) {
             const nomeRazao = clienteFaturamento.nome || clienteFaturamento.fantasia || '';
+            const documento = clienteFaturamento.documento || '';
+            const ie = clienteFaturamento.ins_estadual || 'ISENTO';
+            const email = clienteFaturamento.email_financeiro || clienteFaturamento.email_contato || clienteFaturamento.email || '';
+            const telefone = clienteFaturamento.whatsapp_1 || clienteFaturamento.telefone_fixo || '';
+
             cliHtml = `
-                <div style="font-size: 0.95rem; line-height: 1.5; color: var(--text);">
+                <div style="font-size: 0.95rem; line-height: 1.6; color: var(--text);">
                     <b>Nome/Razão Social:</b> ${nomeRazao}<br>
-                    <b>CPF/CNPJ:</b> ${clienteFaturamento.documento || ''}<br>
-                    ${clienteFaturamento.ins_estadual ? `<b>I.E.:</b> ${clienteFaturamento.ins_estadual}<br>` : ''}
-                    <b>E-mail:</b> ${clienteFaturamento.email_financeiro || clienteFaturamento.email_contato || clienteFaturamento.email || ''}<br>
-                    <b>Telefone:</b> ${clienteFaturamento.whatsapp_1 || clienteFaturamento.telefone_fixo || ''}
+                    <b>CPF/CNPJ:</b> ${documento}<br>
+                    <b>I.E.:</b> ${ie}<br>
+                    <b>E-mail:</b> ${email}<br>
+                    <b>Telefone:</b> ${telefone}
                 </div>
             `;
         }
         window.clienteConfirmacoes.cliHtml = cliHtml;
+
+        // 2. ENDEREÇO DE ENTREGA (SEGUNDO BLOCO)
+        let endHtml = '<div style="color: var(--text-dim); font-style: italic;">Endereço não cadastrado no pedido.</div>';
+        if (enderecoEntrega) {
+            let recebedorHtml = '';
+            if (enderecoEntrega.recebedor) {
+                recebedorHtml = `<b>Recebedor:</b> ${enderecoEntrega.recebedor}<br>`;
+            }
+            let cpfRecebedorHtml = '';
+            if (enderecoEntrega.cpf_recebedor) {
+                cpfRecebedorHtml = `<b>CPF:</b> ${enderecoEntrega.cpf_recebedor}<br>`;
+            }
+
+            const ruaNumero = `${enderecoEntrega.endereco || enderecoEntrega.rua || enderecoEntrega.logradouro || ''}, ${enderecoEntrega.numero || 'S/N'}`;
+            const complemento = enderecoEntrega.complemento ? `<b>Complemento:</b> ${enderecoEntrega.complemento}<br>` : '';
+            const bairro = enderecoEntrega.bairro || '';
+            const cidadeUf = `${enderecoEntrega.cidade || ''} - ${enderecoEntrega.uf || ''}`;
+            const cep = enderecoEntrega.cep || '';
+
+            endHtml = `
+                <div style="font-size: 0.95rem; line-height: 1.6; color: var(--text);">
+                    ${recebedorHtml}
+                    ${cpfRecebedorHtml}
+                    <b>Rua:</b> ${ruaNumero}<br>
+                    ${complemento}
+                    <b>Bairro:</b> ${bairro}<br>
+                    <b>Cidade/UF:</b> ${cidadeUf}<br>
+                    <b>CEP:</b> ${cep}
+                </div>
+            `;
+        }
+        window.clienteConfirmacoes.endHtml = endHtml;
 
         confirmContainer.innerHTML = `
             <div style="background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -1256,45 +1283,36 @@ async function mostrarConfirmacaoDadosCliente(osId) {
                     <p style="color: var(--text-dim); margin-top: 5px;">Por favor, confira seus dados de entrega e faturamento antes de finalizar.</p>
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 20px; margin-bottom: 25px;">
-                    <!-- CARD ENDEREÇO -->
-                    <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
-                            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text);">📦 Endereço de Entrega</h3>
-                        </div>
-                        <div style="margin-bottom: 15px;">${endHtml}</div>
-                        
-                        <div id="status-endereco" style="margin-bottom: 10px;"></div>
-                        
-                        <div id="acoes-endereco" style="display: flex; gap: 10px;">
-                            <button class="btn" id="btn-confirmar-endereco" onclick="acaoConfirmacaoItem('endereco', true)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s; cursor: pointer;">CONFIRMAR</button>
-                            <button class="btn" id="btn-alterar-endereco" onclick="acaoConfirmacaoItem('endereco', false)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s; cursor: pointer;">ALTERAR</button>
-                        </div>
-
-                        <div id="correcao-endereco" style="display: none; margin-top: 10px;">
-                            <textarea id="input-correcao-endereco" class="form-control" rows="3" placeholder="Digite o CEP e Número do local de entrega correto aqui..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 10px; border-radius: 4px;"></textarea>
-                            <button class="btn" onclick="salvarCorrecaoTexto('endereco')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 40px;">💾 Salvar Correção</button>
-                        </div>
-                    </div>
+                <!-- CARD UNIFICADO DE DADOS DE ENTREGA E FATURAMENTO -->
+                <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 25px;">
                     
-                    <!-- CARD NOTA FISCAL -->
-                    <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
-                            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text);">🧾 Dados para Nota Fiscal</h3>
-                        </div>
-                        <div style="margin-bottom: 15px;">${cliHtml}</div>
-                        
-                        <div id="status-nf" style="margin-bottom: 10px;"></div>
-                        
-                        <div id="acoes-nf" style="display: flex; gap: 10px;">
-                            <button class="btn" id="btn-confirmar-nf" onclick="acaoConfirmacaoItem('nf', true)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s; cursor: pointer;">CONFIRMAR</button>
-                            <button class="btn" id="btn-alterar-nf" onclick="acaoConfirmacaoItem('nf', false)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 40px; font-weight: bold; transition: all 0.2s; cursor: pointer;">ALTERAR</button>
-                        </div>
+                    <!-- BLOCO 1: DADOS PARA NOTA FISCAL -->
+                    <div style="margin-bottom: 22px;">
+                        <h3 style="margin: 0 0 12px 0; font-size: 1.1rem; color: var(--text); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            🧾 Dados para Nota Fiscal
+                        </h3>
+                        <div style="margin-bottom: 10px;">${cliHtml}</div>
+                    </div>
 
-                        <div id="correcao-nf" style="display: none; margin-top: 10px;">
-                            <textarea id="input-correcao-nf" class="form-control" rows="3" placeholder="Digite o CPF ou CNPJ correto aqui..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 10px; border-radius: 4px;"></textarea>
-                            <button class="btn" onclick="salvarCorrecaoTexto('nf')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 40px;">💾 Salvar Correção</button>
-                        </div>
+                    <!-- BLOCO 2: ENDEREÇO DE ENTREGA -->
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 12px 0; font-size: 1.1rem; color: var(--text); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            📦 ENDEREÇO DE ENTREGA
+                        </h3>
+                        <div style="margin-bottom: 10px;">${endHtml}</div>
+                    </div>
+
+                    <div id="status-geral" style="margin-bottom: 10px;"></div>
+                    
+                    <!-- BOTÕES UNIFICADOS -->
+                    <div id="acoes-geral" style="display: flex; gap: 12px; margin-top: 15px;">
+                        <button class="btn" id="btn-confirmar-geral" onclick="acaoConfirmacaoItem('geral', true)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 46px; font-size: 1rem; font-weight: bold; transition: all 0.2s; cursor: pointer;">CONFIRMAR</button>
+                        <button class="btn" id="btn-alterar-geral" onclick="acaoConfirmacaoItem('geral', false)" style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text); flex: 1; min-height: 46px; font-size: 1rem; font-weight: bold; transition: all 0.2s; cursor: pointer;">ALTERAR</button>
+                    </div>
+
+                    <div id="correcao-geral" style="display: none; margin-top: 14px;">
+                        <textarea id="input-correcao-geral" class="form-control" rows="4" placeholder="Informe aqui quais dados de faturamento e/ou endereço de entrega precisam ser corrigidos..." style="width: 100%; margin-bottom: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color); color: var(--text); padding: 12px; border-radius: 6px; font-size: 0.95rem;"></textarea>
+                        <button class="btn" onclick="salvarCorrecaoTexto('geral')" style="background-color: #f97316; border-color: #f97316; color: #fff; width: 100%; min-height: 44px; font-weight: bold; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">💾 Salvar Correção</button>
                     </div>
                 </div>
 
@@ -1317,20 +1335,16 @@ window.finalizarConfirmacaoCliente = async function() {
     const confirmContainer = document.getElementById('cliente-confirmacao-container');
     if (confirmContainer) confirmContainer.style.display = 'none';
 
-    const endOk = window.clienteConfirmacoes.enderecoOk;
-    const endCorr = window.clienteConfirmacoes.enderecoCorrecao;
-    const nfOk = window.clienteConfirmacoes.nfOk;
-    const nfCorr = window.clienteConfirmacoes.nfCorrecao;
+    const geralOk = window.clienteConfirmacoes.geralOk;
+    const geralCorr = window.clienteConfirmacoes.geralCorrecao;
 
-    const precisaAtencao = (!endOk && endCorr) || (!nfOk && nfCorr);
+    const precisaAtencao = (geralOk === false && geralCorr !== '');
 
     let mensagemLog = '';
     if (!precisaAtencao) {
         mensagemLog = `✅ O CLIENTE CONFIRMOU os dados de entrega e faturamento.`;
     } else {
-        mensagemLog = `⚠️ O CLIENTE REPORTOU DADOS INCORRETOS:\n\n`;
-        if (!endOk && endCorr) mensagemLog += `📍 Novo Endereço:\n${endCorr}\n\n`;
-        if (!nfOk && nfCorr) mensagemLog += `🧾 Novos Dados Faturamento:\n${nfCorr}`;
+        mensagemLog = `⚠️ O CLIENTE REPORTOU DADOS INCORRETOS:\n\n${geralCorr}`;
     }
 
     try {
@@ -1390,16 +1404,16 @@ window.finalizarConfirmacaoCliente = async function() {
 
     if (precisaAtencao) {
         mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', 
-            'Sua aprovação foi concluída e os dados confirmados.<br><br><b style="color: #f97316;">Como você não aprovou o local de entrega e/ou dados para Nota Fiscal, AGUARDE CONTATO DO SEU ATENDENTE PARA CORREÇÃO.</b>');
+            'Sua aprovação foi concluída e os dados confirmados.<br><br><b style="color: #f97316;">Como você solicitou alteração nos dados de faturamento e/ou entrega, AGUARDE CONTATO DO SEU ATENDENTE PARA CORREÇÃO.</b>');
     } else {
         const sucessoHTML = `
             Sua aprovação foi concluída e os dados confirmados.<br><br>
             <div style="text-align: left; background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 15px;">
-                <h4 style="margin: 0 0 10px 0; color: var(--text);">📦 Endereço Aprovado:</h4>
-                ${window.clienteConfirmacoes.endHtml}
-                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
                 <h4 style="margin: 0 0 10px 0; color: var(--text);">🧾 Nota Fiscal Aprovada:</h4>
                 ${window.clienteConfirmacoes.cliHtml}
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+                <h4 style="margin: 0 0 10px 0; color: var(--text);">📦 Endereço Aprovado:</h4>
+                ${window.clienteConfirmacoes.endHtml}
             </div>
         `;
         mostrarResultadoCliente('✅', 'Pedido Aprovado com Sucesso!', sucessoHTML);
