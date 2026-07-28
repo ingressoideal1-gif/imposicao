@@ -249,19 +249,25 @@ async function setupEditorWorkspace() {
                     }
                 }
 
-                fabric.Image.fromURL(imgUrl, (fImg) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => {
+                    const fImg = new fabric.Image(img);
                     if (fImg && fImg.width > 0 && fImg.height > 0) {
+                        const scale = fc.height / fImg.height;
                         fImg.set({
-                            scaleX: fc.width / fImg.width,
-                            scaleY: fc.height / fImg.height,
-                            left: 0,
+                            scaleX: scale,
+                            scaleY: scale,
+                            left: (fc.width - (fImg.width * scale)) / 2,
                             top: 0
                         });
                         fc.add(fImg);
                         fc.renderAll();
+                        setTimeout(() => fc.renderAll(), 50);
                         saveEditorHistory();
                     }
-                }, { crossOrigin: 'Anonymous' });
+                };
+                img.src = imgUrl;
             } catch (err) {
                 console.warn('[Criador de Arte] Erro ao carregar imagem existente no editor:', err);
             }
@@ -753,34 +759,50 @@ async function handleEditorFileUpload(event) {
             const octx = offCanvas.getContext('2d');
             await page.render({ canvasContext: octx, viewport: vp }).promise;
 
-            fabric.Image.fromURL(offCanvas.toDataURL(), (fImg) => {
-                fImg.scaleToWidth(fc.width * 0.8);
+            const pdfDataUrl = offCanvas.toDataURL();
+            const img = new Image();
+            img.onload = () => {
+                const fImg = new fabric.Image(img);
+                const scale = fc.height / fImg.height;
                 fImg.set({
-                    left: (fc.width - fImg.scaledWidth) / 2,
-                    top: (fc.height - fImg.scaledHeight) / 2
+                    scaleX: scale,
+                    scaleY: scale,
+                    left: (fc.width - (fImg.width * scale)) / 2,
+                    top: 0
                 });
                 fc.add(fImg);
                 fc.setActiveObject(fImg);
                 fc.renderAll();
+                setTimeout(() => fc.renderAll(), 50);
                 saveEditorHistory();
-            });
+                toast('PDF adicionado ao editor!', 'success');
+            };
+            img.src = pdfDataUrl;
         } catch (e) {
             toast('Erro ao carregar PDF: ' + e.message, 'error');
         }
     } else {
         const reader = new FileReader();
         reader.onload = function(e) {
-            fabric.Image.fromURL(e.target.result, (fImg) => {
-                fImg.scaleToWidth(Math.min(fc.width * 0.7, fImg.width));
+            const imgDataUrl = e.target.result;
+            const img = new Image();
+            img.onload = () => {
+                const fImg = new fabric.Image(img);
+                const scale = fc.height / fImg.height;
                 fImg.set({
-                    left: (fc.width - fImg.scaledWidth) / 2,
-                    top: (fc.height - fImg.scaledHeight) / 2
+                    scaleX: scale,
+                    scaleY: scale,
+                    left: (fc.width - (fImg.width * scale)) / 2,
+                    top: 0
                 });
                 fc.add(fImg);
                 fc.setActiveObject(fImg);
                 fc.renderAll();
+                setTimeout(() => fc.renderAll(), 50);
                 saveEditorHistory();
-            });
+                toast('Imagem adicionada ao editor!', 'success');
+            };
+            img.src = imgDataUrl;
         };
         reader.readAsDataURL(file);
     }
