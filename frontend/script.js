@@ -17872,10 +17872,11 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
     if (!corSelect || !numSelect) return;
 
     const corId = corSelect.value;
-    const cor = corId ? state.cores.find(c => c.id === corId) : null;
-    const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    const cor = corId ? (state.cores || []).find(c => String(c.id) === String(corId)) : null;
+    const selectedText = corSelect.selectedIndex >= 0 ? corSelect.options[corSelect.selectedIndex].text : '';
+    const corNome = cor ? (cor.name || cor.padrao || cor.cor || cor.nome) : (selectedText && !selectedText.startsWith('--') ? selectedText : null);
 
-    const corNome = cor ? (cor.name || cor.padrao) : null;
+    const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
 
     if (item) {
         item.amostra_cor_id = corId || null;
@@ -18216,16 +18217,17 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             Object.assign(overrides[cacheKey], dataToUpdate);
             localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
         } else if (modeloId && modeloId !== '') {
+            const queryModeloId = (!isNaN(parseInt(modeloId)) && !String(modeloId).includes('vibe')) ? parseInt(modeloId) : modeloId;
             const { data: updateResult, error } = await vibeClient
                 .from('pedidos_modelos')
                 .update(dbData)
-                .eq('id', modeloId)
+                .eq('id', queryModeloId)
                 .select('id, id_produto_proposta_origem');
             
             if (error) {
                 console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code);
             } else {
-                console.log('[SAVE] OK -> pedidos_modelos id=', modeloId);
+                console.log('[SAVE] OK -> pedidos_modelos id=', queryModeloId, dbData);
             }
         }
 
