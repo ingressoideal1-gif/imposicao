@@ -14676,7 +14676,7 @@ function renderOrdens() {
                 const itensCount = itensReais.length > 0 ? itensReais.length : (os._itens_count || 0);
                 
                 // Entrega / Faturamento
-                const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(os.numero));
+                const arteGlobal = (state.todasArtes || []).find(a => String(a.id_int) === String(os.numero));
                 const entregaStatus = (arteGlobal && arteGlobal.entrega_dados) ? arteGlobal.entrega_dados.toUpperCase() : '----';
                 let entregaHtml = `<span onclick="event.stopPropagation(); alterarEntregaDadosStatus('${os.numero}', '${entregaStatus}')" style="cursor: pointer; color: var(--text-dim);" title="Clique para alternar status">----</span>`;
                 if (entregaStatus === 'APROVADO') {
@@ -16390,50 +16390,85 @@ window.findOSInState = findOSInState;
  * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
  */
 async function navigateToAmostrasFromOS(osId) {
-    let os = findOSInState(osId);
-    if (!os) {
-        try {
-            await loadOrdens();
-            os = findOSInState(osId);
-        } catch (e) {
-            console.warn('Erro ao tentar recarregar ordens:', e);
+    try {
+        console.log('[Nav] navigateToAmostrasFromOS chamado com osId:', osId);
+
+        let os = findOSInState(osId);
+        console.log('[Nav] OS encontrada no state:', os ? `#${os.numero} id=${os.id}` : 'NÃO ENCONTRADA');
+
+        if (!os) {
+            toast('Carregando pedido...', 'info');
+            try {
+                await loadOrdens();
+                os = findOSInState(osId);
+                console.log('[Nav] OS após reload:', os ? `#${os.numero}` : 'ainda não encontrada');
+            } catch (e) {
+                console.warn('[Nav] Erro ao recarregar ordens:', e);
+            }
         }
-    }
 
-    if (!os) {
-        toast('Pedido não encontrado.', 'error');
-        return;
-    }
-
-    const realOSId = os.id || osId;
-
-    // Garantir que os itens estejam carregados com todos os dados (ignorar cache simples do Vibecode)
-    const needsFullLoad = !state.osItens[realOSId] || state.osItens[realOSId].length === 0 || state.osItens[realOSId].some(i => i._dbLoaded !== true);
-    if (needsFullLoad) {
-        await loadOSItens(realOSId);
-    }
-
-    // Garantir que cores e numerações estejam carregados (necessários para os selects)
-    if (!state.cores || state.cores.length === 0 || !state.numeracoes || state.numeracoes.length === 0) {
-        try {
-            await loadAll();
-        } catch (e) {
-            console.warn('Erro ao carregar dados de cadastro:', e);
+        if (!os) {
+            toast('Pedido não encontrado (ID: ' + osId + ')', 'error');
+            return;
         }
+
+        const realOSId = os.id || osId;
+        console.log('[Nav] Usando realOSId:', realOSId, '| numero:', os.numero);
+
+        // Garantir que os itens estejam carregados com todos os dados
+        const needsFullLoad = !state.osItens[realOSId] || state.osItens[realOSId].length === 0 || state.osItens[realOSId].some(i => i._dbLoaded !== true);
+        if (needsFullLoad) {
+            console.log('[Nav] Carregando itens da OS...');
+            try {
+                await loadOSItens(realOSId);
+            } catch (e) {
+                console.warn('[Nav] Erro ao carregar itens:', e);
+            }
+        }
+        console.log('[Nav] Itens carregados:', (state.osItens[realOSId] || []).length);
+
+        // Garantir que cores e numerações estejam carregados
+        if (!state.cores || state.cores.length === 0 || !state.numeracoes || state.numeracoes.length === 0) {
+            try {
+                await loadAll();
+            } catch (e) {
+                console.warn('[Nav] Erro ao carregar dados de cadastro:', e);
+            }
+        }
+
+        // Salvar o ID do pedido ativo na tela de Amostras
+        state.amostrasOSAtivo = realOSId;
+
+        // Navegar para a view de Amostras
+        console.log('[Nav] Navegando para view-amostras...');
+        if (typeof window.showView === 'function') {
+            window.showView('view-amostras');
+        } else if (typeof showView === 'function') {
+            showView('view-amostras');
+        } else {
+            // fallback manual
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+            const view = document.getElementById('view-amostras');
+            if (view) view.classList.add('active');
+            localStorage.setItem('activeView', 'view-amostras');
+        }
+
+        console.log('[Nav] Renderizando itens da OS...');
+        // Renderizar os cards de itens com pequeno delay para garantir que o DOM está ativo
+        setTimeout(() => {
+            try {
+                renderAmostrasOSItens(realOSId);
+                console.log('[Nav] renderAmostrasOSItens concluído.');
+            } catch (e) {
+                console.error('[Nav] Erro em renderAmostrasOSItens:', e);
+                toast('Erro ao renderizar itens: ' + e.message, 'error');
+            }
+        }, 50);
+
+    } catch (e) {
+        console.error('[Nav] Erro fatal em navigateToAmostrasFromOS:', e);
+        toast('Erro ao abrir pedido: ' + (e.message || e), 'error');
     }
-
-    // Salvar o ID do pedido ativo na tela de Amostras
-    state.amostrasOSAtivo = realOSId;
-
-    // Navegar para a view de Amostras (showView cuida de ativar nav + view)
-    if (typeof window.showView === 'function') {
-        window.showView('view-amostras');
-    } else if (typeof showView === 'function') {
-        showView('view-amostras');
-    }
-
-    // Renderizar os cards de itens
-    renderAmostrasOSItens(realOSId);
 }
 
 /**
