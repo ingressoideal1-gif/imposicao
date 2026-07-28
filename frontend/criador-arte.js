@@ -1621,6 +1621,99 @@ function editorAlinharCanvas(pos) {
     saveEditorHistory();
 }
 
+/**
+ * 💻 Carregar Fontes Instaladas no PC do Usuário via Local Font Access API
+ */
+async function carregarFontesLocaisPC() {
+    if ('queryLocalFonts' in window) {
+        try {
+            toast('Solicitando permissão para acessar fontes do PC...', 'info');
+            const localFonts = await window.queryLocalFonts();
+            
+            const fontFamilies = new Set();
+            localFonts.forEach(f => {
+                if (f.family) fontFamilies.add(f.family);
+            });
+
+            const sortedFamilies = Array.from(fontFamilies).sort((a, b) => a.localeCompare(b));
+            populateFontFamilySelect(sortedFamilies);
+            toast(`✅ ${sortedFamilies.length} fontes instaladas no seu PC foram carregadas!`, 'success');
+        } catch (err) {
+            console.warn('[Fontes Locais] Permissão negada ou erro:', err);
+            toast('Acesso às fontes do sistema não permitido ou cancelado.', 'warning');
+        }
+    } else {
+        toast('Seu navegador não suporta consulta automática de fontes. Use a opção "✍️ Digitar Nome" ou navegue pelo Chrome/Edge.', 'warning');
+    }
+}
+
+/**
+ * Atualizar Família da Fonte com suporte a carregamento dinâmico
+ */
+async function editorUpdateFontFamily(fontFamily) {
+    const fc = window.editorState ? window.editorState.fabricCanvas : null;
+    const obj = fc ? fc.getActiveObject() : null;
+    if (!obj || !fontFamily) return;
+
+    try {
+        if (document.fonts && typeof document.fonts.load === 'function') {
+            await document.fonts.load(`16px "${fontFamily}"`);
+        }
+    } catch (e) {
+        console.warn(`[Fontes] Não foi possível forçar pré-carregamento da fonte "${fontFamily}":`, e);
+    }
+
+    obj.set('fontFamily', fontFamily);
+    fc.renderAll();
+    saveEditorHistory();
+}
+
+/**
+ * Preencher o dropdown de fontes preservando a seleção atual
+ */
+function populateFontFamilySelect(familiesArray) {
+    const select = document.getElementById('prop-font-family');
+    if (!select || !Array.isArray(familiesArray)) return;
+
+    const currentVal = select.value;
+    const standardFonts = ['Arial', 'Helvetica', 'Impact', 'Courier New', 'Times New Roman', 'Verdana', 'Trebuchet MS', 'Georgia', 'Montserrat', 'Roboto', 'Open Sans', 'Oswald', 'Comic Sans MS', 'Tahoma'];
+
+    const allFamilies = Array.from(new Set([...standardFonts, ...familiesArray])).sort((a, b) => a.localeCompare(b));
+
+    select.innerHTML = '';
+    allFamilies.forEach(family => {
+        const opt = document.createElement('option');
+        opt.value = family;
+        opt.textContent = family;
+        if (family === currentVal) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+
+/**
+ * Digitar manualmente o nome de qualquer fonte instalada no PC
+ */
+function editorPromptFontePersonalizada() {
+    const nome = prompt('Digite o nome exato da fonte instalada no seu PC (ex: Bebas Neue, Gotham-Bold, Aptos):', 'Bebas Neue');
+    if (!nome || !nome.trim()) return;
+
+    const familyName = nome.trim();
+    const select = document.getElementById('prop-font-family');
+    if (select) {
+        let existingOpt = Array.from(select.options).find(o => o.value.toLowerCase() === familyName.toLowerCase());
+        if (!existingOpt) {
+            existingOpt = document.createElement('option');
+            existingOpt.value = familyName;
+            existingOpt.textContent = `${familyName} (PC)`;
+            select.appendChild(existingOpt);
+        }
+        select.value = existingOpt.value;
+    }
+
+    editorUpdateFontFamily(familyName);
+    toast(`Fonte "${familyName}" aplicada ao texto!`, 'success');
+}
+
 // Expor funções globais para HTML
 window.abrirCriadorDeArte = abrirCriadorDeArte;
 window.fecharCriadorDeArte = fecharCriadorDeArte;
@@ -1651,3 +1744,7 @@ window.carregarAnexosNoEditor = carregarAnexosNoEditor;
 window.fetchAnexosDoPedido = fetchAnexosDoPedido;
 window.adicionarAnexoNaArte = adicionarAnexoNaArte;
 window.editorAlinharCanvas = editorAlinharCanvas;
+window.carregarFontesLocaisPC = carregarFontesLocaisPC;
+window.editorUpdateFontFamily = editorUpdateFontFamily;
+window.populateFontFamilySelect = populateFontFamilySelect;
+window.editorPromptFontePersonalizada = editorPromptFontePersonalizada;
