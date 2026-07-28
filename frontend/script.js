@@ -19896,39 +19896,56 @@ window.toggleOcultarAnexosSelecionados = toggleOcultarAnexosSelecionados;
 
 
 
-async function selecionarPedidoDoCliente(targetNum) {
+async function selecionarPedidoDoCliente(targetNum, clienteNome) {
     if (!targetNum) return;
     const targetNumStr = String(targetNum);
-    const os = state.ordens ? state.ordens.find(o => String(o.numero) === targetNumStr || String(o.id_int) === targetNumStr || o.id === targetNumStr) : null;
+    const targetNumInt = parseInt(targetNum);
+
+    let os = state.ordens ? state.ordens.find(o => String(o.numero) === targetNumStr || String(o.id_int) === targetNumStr || o.id === targetNumStr) : null;
     
-    if (os) {
-        await navigateToAmostrasFromOS(os.id);
-        return;
+    if (!os) {
+        os = {
+            id: targetNumStr,
+            id_int: targetNumInt,
+            numero: targetNumInt,
+            cliente: clienteNome || 'Cliente',
+            vendedor: ''
+        };
+        if (!state.ordens) state.ordens = [];
+        state.ordens.push(os);
     }
 
-    // Se a OS não estiver na memória de state.ordens, criar referência mínima e navegar
-    const osId = targetNumStr;
-    const newOS = {
-        id: osId,
-        id_int: parseInt(targetNumStr),
-        numero: parseInt(targetNumStr),
-        cliente: 'Cliente',
-        vendedor: ''
-    };
-    if (!state.ordens) state.ordens = [];
-    state.ordens.push(newOS);
-    await navigateToAmostrasFromOS(osId);
+    if (clienteNome && (!os.cliente || os.cliente === 'Cliente')) {
+        os.cliente = clienteNome;
+    }
+
+    await navigateToAmostrasFromOS(os.id);
 }
 window.selecionarPedidoDoCliente = selecionarPedidoDoCliente;
 
 async function loadUltimosPedidos(osId, clienteNome) {
+    const currentOS = state.ordens ? state.ordens.find(o => o.id === osId || String(o.numero) === String(osId) || String(o.id_int) === String(osId)) : null;
+    const currentNumInt = currentOS ? parseInt(currentOS.numero || currentOS.id_int || osId) : parseInt(osId);
+
+    // Se clienteNome estiver ausente ou for 'Cliente', buscar nome real na tabela de propostas no banco
+    if ((!clienteNome || clienteNome.trim().toLowerCase() === 'cliente') && currentNumInt && typeof supabaseClient !== 'undefined') {
+        try {
+            const { data: pProp } = await supabaseClient
+                .from('propostas')
+                .select('cliente')
+                .eq('id_int', currentNumInt)
+                .maybeSingle();
+            if (pProp && pProp.cliente) {
+                clienteNome = pProp.cliente;
+                if (currentOS) currentOS.cliente = pProp.cliente;
+            }
+        } catch (e) {}
+    }
 
     if (!clienteNome || typeof supabaseClient === 'undefined') return;
     
     try {
         console.log("Buscando histórico para o cliente:", clienteNome);
-        const currentOS = state.ordens ? state.ordens.find(o => o.id === osId || String(o.numero) === String(osId) || String(o.id_int) === String(osId)) : null;
-        const currentNumInt = currentOS ? parseInt(currentOS.numero || currentOS.id_int || osId) : parseInt(osId);
 
         // 1. Buscar os últimos pedidos em propostas para este cliente
         const { data: propostasData, error: errProp } = await supabaseClient
@@ -19974,6 +19991,8 @@ async function loadUltimosPedidos(osId, clienteNome) {
             });
         }
         
+        const safeClienteName = clienteNome.replace(/'/g, "\\'");
+
         // 3. Montar HTML de exibição interativo com clique e destaque do pedido atual
         const html = propostas.map(p => {
             const ev = eventoMap[p.id_int] || {};
@@ -19998,7 +20017,7 @@ async function loadUltimosPedidos(osId, clienteNome) {
                 : 'none';
 
             return `
-                <div onclick="selecionarPedidoDoCliente(${p.id_int})" 
+                <div onclick="selecionarPedidoDoCliente(${p.id_int}, '${safeClienteName}')" 
                      title="${isCurrent ? 'Pedido Atual Exibido' : 'Clique para alternar para o Pedido #' + p.id_int}"
                      style="padding: 12px; border: ${borderStyle}; border-radius: 8px; background: ${bgStyle}; box-shadow: ${shadowStyle}; cursor: pointer; transition: all 0.2s ease;"
                      onmouseover="${!isCurrent ? "this.style.borderColor='#14b8a6'; this.style.transform='translateY(-2px)';" : ''}"
