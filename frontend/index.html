@@ -2471,7 +2471,7 @@
                 </div>
             </div>
 
-            <div id="editor-inspector-panel" style="width: 260px; background: #1e293b; border-left: 1px solid #334155; padding: 14px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;">
+            <div id="editor-inspector-panel" style="width: 290px; min-width: 290px; background: #1e293b; border-left: 1px solid #334155; padding: 14px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box;">
                 <div style="font-size: 0.82rem; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em;">⚙️ Propriedades</div>
                 <div id="editor-no-selection" style="font-size: 0.82rem; color: #94a3b8; font-style: italic; text-align: center; padding: 20px 0;">
                     Selecione um elemento na arte para editar suas propriedades.
@@ -2482,49 +2482,49 @@
                     <div style="display: flex; flex-direction: column; gap: 8px; background: #0f172a; padding: 10px; border-radius: 8px;">
                         <label style="font-size: 0.75rem; color: #38bdf8; font-weight: 700; text-transform: uppercase;">Transformação e Tamanho</label>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                            <div class="form-group" style="margin: 0;">
-                                <label style="font-size: 0.72rem; color: #94a3b8;">Largura (mm)</label>
-                                <input type="number" id="prop-width-mm" class="form-control" min="0.5" step="0.5" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateDimension('width', parseFloat(this.value))">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; box-sizing: border-box;">
+                            <div class="form-group" style="margin: 0; min-width: 0;">
+                                <label style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 2px;">Largura (mm)</label>
+                                <input type="number" id="prop-width-mm" class="form-control" min="0.5" step="0.5" style="font-size: 0.8rem; background: #1e293b; color: white; width: 100%; box-sizing: border-box; padding: 4px 6px; height: 32px;" onchange="editorUpdateDimension('width', parseFloat(this.value))">
                             </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label style="font-size: 0.72rem; color: #94a3b8;">Altura (mm)</label>
-                                <input type="number" id="prop-height-mm" class="form-control" min="0.5" step="0.5" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateDimension('height', parseFloat(this.value))">
+                            <div class="form-group" style="margin: 0; min-width: 0;">
+                                <label style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 2px;">Altura (mm)</label>
+                                <input type="number" id="prop-height-mm" class="form-control" min="0.5" step="0.5" style="font-size: 0.8rem; background: #1e293b; color: white; width: 100%; box-sizing: border-box; padding: 4px 6px; height: 32px;" onchange="editorUpdateDimension('height', parseFloat(this.value))">
                             </div>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                            <div class="form-group" style="margin: 0;">
-                                <label style="font-size: 0.72rem; color: #94a3b8;">Rotação (°)</label>
-                                <input type="number" id="prop-angle" class="form-control" min="0" max="360" step="1" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateProperty('angle', parseFloat(this.value))">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; box-sizing: border-box;">
+                            <div class="form-group" style="margin: 0; min-width: 0;">
+                                <label style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 2px;">Rotação (°)</label>
+                                <input type="number" id="prop-angle" class="form-control" min="0" max="360" step="1" style="font-size: 0.8rem; background: #1e293b; color: white; width: 100%; box-sizing: border-box; padding: 4px 6px; height: 32px;" onchange="editorUpdateProperty('angle', parseFloat(this.value))">
                             </div>
-                            <div class="form-group" style="margin: 0;">
-                                <label style="font-size: 0.72rem; color: #94a3b8;">Escala (%)</label>
-                                <input type="number" id="prop-scale" class="form-control" min="1" max="1000" step="1" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateScale(parseFloat(this.value))">
+                            <div class="form-group" style="margin: 0; min-width: 0;">
+                                <label style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 2px;">Escala (%)</label>
+                                <input type="number" id="prop-scale" class="form-control" min="1" max="1000" step="1" style="font-size: 0.8rem; background: #1e293b; color: white; width: 100%; box-sizing: border-box; padding: 4px 6px; height: 32px;" onchange="editorUpdateScale(parseFloat(this.value))">
                             </div>
                         </div>
                     </div>
 
                     <div class="form-group" style="margin: 0;">
                         <label style="font-size: 0.75rem; color: #cbd5e1; font-weight: 700;">Cor de Preenchimento</label>
-                        <input type="color" id="prop-fill-color" class="form-control" style="height: 36px; padding: 2px; cursor: pointer; background: transparent;" onchange="editorUpdateProperty('fill', this.value)">
+                        <input type="color" id="prop-fill-color" class="form-control" style="height: 36px; padding: 2px; cursor: pointer; background: transparent; width: 100%; box-sizing: border-box;" onchange="editorUpdateProperty('fill', this.value)">
                     </div>
 
                     <div class="form-group" style="margin: 0;">
                         <label style="font-size: 0.75rem; color: #cbd5e1; font-weight: 700;">Cor da Borda</label>
-                        <input type="color" id="prop-stroke-color" class="form-control" style="height: 36px; padding: 2px; cursor: pointer; background: transparent;" onchange="editorUpdateProperty('stroke', this.value)">
+                        <input type="color" id="prop-stroke-color" class="form-control" style="height: 36px; padding: 2px; cursor: pointer; background: transparent; width: 100%; box-sizing: border-box;" onchange="editorUpdateProperty('stroke', this.value)">
                     </div>
 
                     <div class="form-group" style="margin: 0;">
                         <label style="font-size: 0.75rem; color: #cbd5e1; font-weight: 700;">Opacidade: <span id="prop-opacity-val">100%</span></label>
-                        <input type="range" id="prop-opacity" min="0" max="1" step="0.05" value="1" class="form-control" oninput="editorUpdateProperty('opacity', parseFloat(this.value)); document.getElementById('prop-opacity-val').textContent = Math.round(this.value*100) + '%';">
+                        <input type="range" id="prop-opacity" min="0" max="1" step="0.05" value="1" class="form-control" style="width: 100%; box-sizing: border-box;" oninput="editorUpdateProperty('opacity', parseFloat(this.value)); document.getElementById('prop-opacity-val').textContent = Math.round(this.value*100) + '%';">
                     </div>
 
                     <div id="editor-text-controls" style="display: none; flex-direction: column; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px;">
                         <label style="font-size: 0.75rem; color: #38bdf8; font-weight: 700; text-transform: uppercase;">Propriedades de Texto</label>
                         <div class="form-group" style="margin: 0;">
                             <label style="font-size: 0.72rem; color: #94a3b8;">Fonte</label>
-                            <select id="prop-font-family" class="form-control" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateProperty('fontFamily', this.value)">
+                            <select id="prop-font-family" class="form-control" style="font-size: 0.8rem; background: #1e293b; color: white; width: 100%; box-sizing: border-box;" onchange="editorUpdateProperty('fontFamily', this.value)">
                                 <option value="Arial">Arial</option>
                                 <option value="Helvetica">Helvetica</option>
                                 <option value="Impact">Impact</option>
@@ -2533,16 +2533,27 @@
                                 <option value="Verdana">Verdana</option>
                                 <option value="Trebuchet MS">Trebuchet MS</option>
                                 <option value="Georgia">Georgia</option>
+                                <option value="Montserrat">Montserrat</option>
+                                <option value="Roboto">Roboto</option>
+                                <option value="Open Sans">Open Sans</option>
+                                <option value="Oswald">Oswald</option>
+                                <option value="Comic Sans MS">Comic Sans MS</option>
+                                <option value="Tahoma">Tahoma</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin: 0;">
                             <label style="font-size: 0.72rem; color: #94a3b8;">Tamanho da Fonte</label>
-                            <input type="number" id="prop-font-size" class="form-control" min="6" max="300" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateProperty('fontSize', parseInt(this.value))">
+                            <input type="number" id="prop-font-size" class="form-control" min="6" max="300" style="font-size: 0.8rem; background: #1e293b; color: white; width: 100%; box-sizing: border-box;" onchange="editorUpdateProperty('fontSize', parseInt(this.value))">
                         </div>
                         <div style="display: flex; gap: 6px;">
-                            <button class="btn btn-sm btn-secondary" onclick="editorToggleTextStyle('bold')" style="flex: 1; font-weight: 800;">B</button>
-                            <button class="btn btn-sm btn-secondary" onclick="editorToggleTextStyle('italic')" style="flex: 1; font-style: italic;">I</button>
-                            <button class="btn btn-sm btn-secondary" onclick="editorToggleTextStyle('underline')" style="flex: 1; text-decoration: underline;">U</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorToggleTextStyle('bold')" style="flex: 1; font-weight: 800;" title="Negrito">B</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorToggleTextStyle('italic')" style="flex: 1; font-style: italic;" title="Itálico">I</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorToggleTextStyle('underline')" style="flex: 1; text-decoration: underline;" title="Sublinhado">U</button>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button class="btn btn-sm btn-secondary" onclick="editorUpdateProperty('textAlign', 'left')" style="flex: 1;" title="Alinhar à Esquerda">⬅ Esquerda</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorUpdateProperty('textAlign', 'center')" style="flex: 1;" title="Centralizar">↔ Centro</button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorUpdateProperty('textAlign', 'right')" style="flex: 1;" title="Alinhar à Direita">Direita ➡️</button>
                         </div>
                     </div>
 

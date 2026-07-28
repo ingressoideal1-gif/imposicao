@@ -928,7 +928,15 @@ function updateInspectorFromSelection() {
 
     // Controles de Texto
     if (textControls) {
-        if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
+        const isTextObj = obj && (
+            obj.type === 'i-text' ||
+            obj.type === 'text' ||
+            obj.type === 'textbox' ||
+            (obj.isType && (obj.isType('text') || obj.isType('i-text') || obj.isType('textbox'))) ||
+            obj.text !== undefined
+        );
+
+        if (isTextObj) {
             textControls.style.display = 'flex';
             const fontSel = document.getElementById('prop-font-family');
             if (fontSel) fontSel.value = obj.fontFamily || 'Arial';
