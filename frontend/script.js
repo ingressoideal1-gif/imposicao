@@ -13755,13 +13755,21 @@ async function loadUsuarios() {
 /**
  * Obtém o designer atribuído a uma OS (salvo em localStorage)
  */
+/**
+ * Obtém o designer atribuído a uma OS (salvo em localStorage)
+ */
 function getOSDesigner(osId, osNumero) {
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
-    if (overrides[osId]) return overrides[osId];
+    if (osId && overrides[osId]) return overrides[osId];
+    if (osNumero && overrides[osNumero]) return overrides[osNumero];
 
-    const os = state.ordens ? state.ordens.find(o => o.id === osId || String(o.id_int) === String(osId)) : null;
+    const os = state.ordens ? state.ordens.find(o => o.id === osId || String(o.id_int) === String(osId) || String(o.numero) === String(osId) || String(o.numero) === String(osNumero)) : null;
     const numToUse = osNumero || (os ? os.numero : null) || osId;
     const osNumeroInt = parseInt(numToUse);
+
+    if (osNumeroInt && overrides[osNumeroInt]) return overrides[osNumeroInt];
+    if (os && os.id && overrides[os.id]) return overrides[os.id];
+    if (os && os.numero && overrides[os.numero]) return overrides[os.numero];
 
     if (osNumeroInt) {
         // 1. Checar em state.pedidosArtesData
@@ -13791,12 +13799,25 @@ function getOSDesigner(osId, osNumero) {
 /**
  * Define o designer responsável por uma OS (salva em localStorage)
  */
-function setOSDesigner(osId, designerName) {
+function setOSDesigner(osId, designerName, osNumero) {
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     if (designerName) {
-        overrides[osId] = designerName;
+        if (osId) overrides[osId] = designerName;
+        if (osNumero) overrides[osNumero] = designerName;
+        const osInt = parseInt(osNumero || osId);
+        if (osInt) overrides[osInt] = designerName;
+
+        const os = state.ordens ? state.ordens.find(o => o.id === osId || String(o.id_int) === String(osId) || String(o.numero) === String(osId) || String(o.numero) === String(osNumero)) : null;
+        if (os) {
+            if (os.id) overrides[os.id] = designerName;
+            if (os.numero) overrides[os.numero] = designerName;
+            if (os.id_int) overrides[os.id_int] = designerName;
+            os.designer_nome = designerName;
+            os.designer = designerName;
+        }
     } else {
         delete overrides[osId];
+        if (osNumero) delete overrides[osNumero];
     }
     localStorage.setItem('vibe_designer_overrides', JSON.stringify(overrides));
     renderOrdens();
@@ -13950,10 +13971,10 @@ async function confirmAndSelectDesigner(osId, osNum, uid, nome) {
         return;
     }
 
-    const osIntId = parseInt(osNum);
+    const osIntId = parseInt(osNum || osId);
 
     // 1. Salva override local
-    setOSDesigner(osId, nome);
+    setOSDesigner(osId, nome, osNum);
 
     if (!state.pedidosArtesData) state.pedidosArtesData = {};
     if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = {};
@@ -13968,16 +13989,27 @@ async function confirmAndSelectDesigner(osId, osNum, uid, nome) {
         }
     }
 
-    // 2. Persiste no Supabase
+    // 2. Atualizar todos os containers DOM imediatamente para alteração instantânea de UI
+    const containerIds = [
+        `designers-box-container-${osId}`,
+        `designers-box-container-${osNum}`,
+        `designers-box-container-${osIntId}`
+    ];
+    containerIds.forEach(id => {
+        const c = document.getElementById(id);
+        if (c) c.innerHTML = renderDesignersBoxHTML(osId, osNum);
+    });
+
+    // 3. Persiste no Supabase
     await selectDesigner(osIntId, uid, nome);
 
-    // 3. Atualizar o container de Designers na página
-    const container = document.getElementById(`designers-box-container-${osId}`);
-    if (container) {
-        container.innerHTML = renderDesignersBoxHTML(osId, osNum);
-    }
+    // 4. Re-garante atualização do container
+    containerIds.forEach(id => {
+        const c = document.getElementById(id);
+        if (c) c.innerHTML = renderDesignersBoxHTML(osId, osNum);
+    });
 
-    // 4. Atualizar as tabelas principais para refletir o designer imediatamente
+    // 5. Atualizar as tabelas principais para refletir o designer imediatamente
     renderOrdens();
 }
 
