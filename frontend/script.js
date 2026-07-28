@@ -14762,8 +14762,8 @@ function renderOrdens() {
                         <td onclick="event.stopPropagation();">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span onclick="navigateToAmostrasFromOS('${os.id}')" style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
-                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="font-size: 0.85rem; color: #38bdf8; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); padding: 5px 8px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; transition: all 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
-                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; padding: 4px 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; text-decoration: none; transition: transform 0.2s, background-color 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
+                                    <img src="icon-vibe.png" alt="Vibe" style="height: 32px; width: auto; display: block; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));" />
                                 </a>
                             </div>
                         </td>
@@ -17295,10 +17295,11 @@ function renderAmostrasOSItens(osId) {
                         </div>
                         <div>
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Pedido Nº:</span>
-                            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
                                 <span>#${os.numero || '--'}</span>
-                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="font-size: 0.76rem; color: #38bdf8; background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3); padding: 2px 7px; border-radius: 4px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Abrir Pedido #${os.numero} no Vibe Ideal">
-                                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.68rem;"></i> Vibe
+                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; font-size: 0.8rem; color: #38bdf8;" title="Abrir Pedido #${os.numero} no Vibe Ideal">
+                                    <img src="icon-vibe.png" alt="Vibe" style="height: 24px; width: auto; display: block; object-fit: contain;" />
+                                    <span style="font-weight: 700;">Vibe</span>
                                 </a>
                             </div>
                         </div>
