@@ -13826,7 +13826,68 @@ function setOSDesigner(osId, designerName, osNumero) {
 // Expor globalmente
 window.setOSDesigner = setOSDesigner;
 
-function populateDesignerFilter() {
+let _hasUserChangedDesignerFilter = false;
+
+function onDesignerFilterChange() {
+    _hasUserChangedDesignerFilter = true;
+    renderOrdens();
+}
+window.onDesignerFilterChange = onDesignerFilterChange;
+
+function getLoggedInDesignerName() {
+    let userEmail = null;
+    let userId = null;
+
+    if (window._currentUser) {
+        userEmail = window._currentUser.email;
+        userId = window._currentUser.id;
+    }
+
+    if (!userEmail && typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.auth) {
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.includes('auth-token')) {
+                    const val = JSON.parse(localStorage.getItem(key) || '{}');
+                    if (val && val.user && val.user.email) {
+                        userEmail = val.user.email;
+                        userId = val.user.id;
+                        break;
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    if (!userEmail) {
+        userEmail = localStorage.getItem('vibe_user_email') || 
+                    localStorage.getItem('user_email') || 
+                    localStorage.getItem('loggedInUserEmail');
+    }
+
+    if (designersObjetosSupabase && designersObjetosSupabase.length > 0) {
+        if (userEmail) {
+            const match = designersObjetosSupabase.find(d => 
+                (d.email && d.email.toLowerCase().trim() === userEmail.toLowerCase().trim()) ||
+                (d.user_id && String(d.user_id) === String(userId))
+            );
+            if (match) return match.nome_usuario;
+        }
+
+        if (window._currentUser && window._currentUser.user_metadata) {
+            const metaName = window._currentUser.user_metadata.name || window._currentUser.user_metadata.nome_usuario || window._currentUser.user_metadata.full_name;
+            if (metaName) {
+                const match = designersObjetosSupabase.find(d => d.nome_usuario.toLowerCase().trim() === metaName.toLowerCase().trim());
+                if (match) return match.nome_usuario;
+            }
+        }
+    }
+
+    return null;
+}
+window.getLoggedInDesignerName = getLoggedInDesignerName;
+
+function populateDesignerFilter(forceDefault = false) {
     const filterSelect = document.getElementById('os-filter-designer');
     if (!filterSelect) return;
 
@@ -13843,7 +13904,22 @@ function populateDesignerFilter() {
         filterSelect.appendChild(opt);
     });
 
-    filterSelect.value = currentValue;
+    const loggedInDesigner = getLoggedInDesignerName();
+
+    if ((!_hasUserChangedDesignerFilter && loggedInDesigner) || forceDefault) {
+        if (designersSupabase && designersSupabase.includes(loggedInDesigner)) {
+            filterSelect.value = loggedInDesigner;
+            return;
+        }
+    }
+
+    if (currentValue && [...allDesigners].includes(currentValue)) {
+        filterSelect.value = currentValue;
+    } else if (loggedInDesigner && [...allDesigners].includes(loggedInDesigner)) {
+        filterSelect.value = loggedInDesigner;
+    } else {
+        filterSelect.value = '';
+    }
 }
 
 function populateAtendenteFilter() {
