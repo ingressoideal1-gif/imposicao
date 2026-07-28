@@ -172,8 +172,19 @@ async function setupEditorWorkspace() {
 
         window.editorState.fabricCanvas = fc;
 
-        // Se houver JSON salvo da arte, recarregar os objetos editáveis!
-        const savedJson = face === 'verso' ? item.verso_arte_json : item.arte_json;
+        // Tentar recarregar estrutura vetorial JSON salva (memória ou localStorage)
+        let savedJson = face === 'verso' ? item.verso_arte_json : item.arte_json;
+        if (!savedJson && item.id) {
+            savedJson = localStorage.getItem(`ideal_arte_json_${item.id}_${face}`);
+        }
+        if (!savedJson) {
+            savedJson = localStorage.getItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`);
+        }
+
+        const existingImgUrl = face === 'verso' ? 
+            (item.verso_arte_url || item.verso_amostra_arte_base64) : 
+            (item.arte_url || item.amostra_arte_base64);
+
         if (savedJson) {
             try {
                 fc.loadFromJSON(savedJson, () => {
@@ -182,6 +193,36 @@ async function setupEditorWorkspace() {
                 });
             } catch(e) {
                 console.warn('[Criador de Arte] Erro ao carregar JSON da arte salva:', e);
+            }
+        } else if (existingImgUrl) {
+            // Se não tiver JSON vetorial mas já existir uma arte enviada/salva no modelo, carrega no canvas!
+            try {
+                let imgUrl = existingImgUrl;
+                if (imgUrl.includes('application/pdf') || imgUrl.toLowerCase().endsWith('.pdf')) {
+                    const arrayBuf = await fetch(imgUrl).then(r => r.arrayBuffer());
+                    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuf) }).promise;
+                    const page = await pdf.getPage(1);
+                    const vp = page.getViewport({ scale: 2.0 });
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = vp.width; offCanvas.height = vp.height;
+                    await page.render({ canvasContext: offCanvas.getContext('2d'), viewport: vp }).promise;
+                    imgUrl = offCanvas.toDataURL();
+                }
+
+                fabric.Image.fromURL(imgUrl, (fImg) => {
+                    if (fImg) {
+                        fImg.scaleToWidth(fc.width * 0.9);
+                        fImg.set({
+                            left: (fc.width - fImg.scaledWidth) / 2,
+                            top: (fc.height - fImg.scaledHeight) / 2
+                        });
+                        fc.add(fImg);
+                        fc.renderAll();
+                        saveEditorHistory();
+                    }
+                }, { crossOrigin: 'Anonymous' });
+            } catch (err) {
+                console.warn('[Criador de Arte] Erro ao carregar imagem existente no editor:', err);
             }
         }
     }
@@ -893,6 +934,12 @@ async function salvarArteDoEditor() {
 
         // 1. Exportar JSON de estrutura editável
         const jsonStructure = JSON.stringify(fc.toJSON());
+
+        // Salvar em localStorage como cache persistente de alta confiabilidade
+        if (item.id) {
+            localStorage.setItem(`ideal_arte_json_${item.id}_${face}`, jsonStructure);
+        }
+        localStorage.setItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`, jsonStructure);
 
         // 2. Exportar imagem PNG de alta resolução da Camada 3 (sem fundo nem numeração)
         const base64DataUrl = fc.toDataURL({
