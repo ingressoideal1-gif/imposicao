@@ -16939,6 +16939,7 @@ function renderAmostrasOSItens(osId) {
                                 <div style="display:flex; flex-direction: column; gap:10px; margin-top: 4px;">
                                     <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
                                         <span class="badge badge-blue" style="font-size: 0.7rem; font-weight: 700; width: 60px; text-align: center;">FRENTE</span>
+                                        <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="font-weight:700; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Abrir Criador de Arte 2D para este modelo">🎨 Criar Arte</button>
                                         <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">
                                             🖼️ Upload Arte
                                         </label>
@@ -16952,6 +16953,7 @@ function renderAmostrasOSItens(osId) {
                                     </div>
                                     <div style="display:${item.modo_pdf ? 'none' : 'flex'}; gap:10px; align-items: center; flex-wrap: wrap;">
                                         <span class="badge badge-amber" style="font-size: 0.7rem; font-weight: 700; width: 60px; text-align: center;">VERSO</span>
+                                        <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'verso')" style="font-weight:700; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff;" title="Abrir Criador de Arte 2D para o Verso">🎨 Criar Verso</button>
                                         <label class="btn btn-sm btn-secondary" for="amostra-item-arte-verso-${idx}" style="margin: 0; cursor: pointer;">
                                             🖼️ Upload Verso
                                         </label>
