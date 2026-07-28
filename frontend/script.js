@@ -17432,7 +17432,11 @@ function renderAmostrasOSItens(osId) {
             const numSelect = document.getElementById(`amostra-item-num-${idx}`);
             const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
             
-            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.arte_url || hasSelectValue) {
+            const hasSavedLocal = (item.id && (localStorage.getItem(`ideal_arte_url_${item.id}_frente`) || localStorage.getItem(`ideal_arte_url_${item.id}_verso`) || localStorage.getItem(`ideal_arte_json_${item.id}_frente`) || localStorage.getItem(`ideal_arte_json_${item.id}_verso`))) ||
+                                  localStorage.getItem(`ideal_arte_url_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_url_${osId}_${idx}_verso`) ||
+                                  localStorage.getItem(`ideal_arte_json_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_json_${osId}_${idx}_verso`);
+
+            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.arte_url || item.verso_arte_url || item.arte_json || item.verso_arte_json || hasSavedLocal || hasSelectValue) {
                 await renderItemAmostraCombinada(idx, osId);
                 // Pequena pausa para permitir renderização fluida da UI sem travar o browser
                 await new Promise(r => setTimeout(r, 20));
@@ -18325,7 +18329,16 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     const arteInput = container ? container.querySelector(`#${inputId}`) : null;
 
     const hasArte = arteInput && arteInput.files && arteInput.files.length > 0;
-    const faceArteUrl = face === 'back' ? item.verso_arte_url : item.arte_url;
+    let faceArteUrl = face === 'back' ? item.verso_arte_url : item.arte_url;
+    if (!faceArteUrl && item) {
+        const faceKey = face === 'back' ? 'verso' : 'frente';
+        faceArteUrl = (item.id ? localStorage.getItem(`ideal_arte_url_${item.id}_${faceKey}`) : null) ||
+                      localStorage.getItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`);
+        if (faceArteUrl) {
+            if (face === 'back') item.verso_arte_url = faceArteUrl;
+            else item.arte_url = faceArteUrl;
+        }
+    }
     const hasSavedArte = !!faceArteUrl;
 
     // Se nada selecionado (sem cor, sem numeração, sem arte para esta face), esconder canvas e mostrar vazio

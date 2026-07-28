@@ -1015,10 +1015,14 @@ async function salvarArteDoEditor() {
             item.verso_amostra_arte_base64 = base64DataUrl;
             item.verso_arte_url = base64DataUrl;
             item.verso_arte_json = jsonStructure;
+            if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_verso`, base64DataUrl);
+            localStorage.setItem(`ideal_arte_url_${osId}_${itemIdx}_verso`, base64DataUrl);
         } else {
             item.amostra_arte_base64 = base64DataUrl;
             item.arte_url = base64DataUrl;
             item.arte_json = jsonStructure;
+            if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_frente`, base64DataUrl);
+            localStorage.setItem(`ideal_arte_url_${osId}_${itemIdx}_frente`, base64DataUrl);
         }
 
         // Limpar o input de arquivo bruto do DOM para que o motor de amostragem (drawAmostraFace) use a arte compilada do editor
