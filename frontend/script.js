@@ -17875,20 +17875,35 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
     const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
 
+    const corNome = cor ? (cor.name || cor.padrao) : null;
+
     if (item) {
         item.amostra_cor_id = corId || null;
+        if (corNome) {
+            item.cor = corNome;
+            item.padrao = corNome;
+        }
         if (!isInitialLoad) item._needsSnapshot = true;
     }
 
     // Se não for carga inicial, salva no banco
     if (!isInitialLoad) {
-        saveAmostraToDB(itemId, osId, { amostra_cor_id: corId || null });
+        saveAmostraToDB(itemId, osId, { 
+            amostra_cor_id: corId || null,
+            padrao: corNome || null,
+            cor: corNome || null
+        }).then(() => {
+            toast(`Cor "${corNome || 'Padrão'}" atualizada no banco e no Vibe!`, 'success');
+        }).catch(err => {
+            console.error('Erro ao salvar cor:', err);
+            toast('Erro ao salvar cor no banco: ' + (err.message || err), 'error');
+        });
     }
 
     // Filtrar numerações pelo formato da COR selecionada
     const curNumVal = numSelect.value;
     const corFormatoId = cor ? cor.formato_id : null;
-    const os = state.ordens.find(o => o.id === osId);
+    const os = typeof findOSInState === 'function' ? findOSInState(osId) : state.ordens.find(o => o.id === osId);
     const idCliente = os ? os.id_cliente : null;
 
     const filteredNums = (state.numeracoes || []).filter(n => {
@@ -17936,11 +17951,23 @@ function onItemNumSelect(idx, osId, itemId) {
     const numObj = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
     const numNome = numObj ? numObj.name : null;
     const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
-    if (item) item._needsSnapshot = true;
+    if (item) {
+        item.amostra_num_id = numId || null;
+        item.gabarito_operacional = numNome || null;
+        item.numeracao = numNome || null;
+        item.tipo_numeracao = numNome || null;
+        item._needsSnapshot = true;
+    }
     
     saveAmostraToDB(itemId, osId, { 
         amostra_num_id: numId || null,
-        gabarito_operacional: numNome || null
+        gabarito_operacional: numNome || null,
+        tipo_numeracao: numNome || null
+    }).then(() => {
+        toast(`Numeração "${numNome || 'Nenhuma'}" atualizada no banco e no Vibe!`, 'success');
+    }).catch(err => {
+        console.error('Erro ao salvar numeração:', err);
+        toast('Erro ao salvar numeração no banco: ' + (err.message || err), 'error');
     });
     renderItemAmostraCombinada(idx, osId);
 }
@@ -18145,16 +18172,11 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
 
     const itemLocal = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     if (!itemLocal) {
-        console.warn('[SAVE] Item nao encontrado no state. itemId=', itemId, '| osId=', osId);
+        console.warn('[SAVE] Item não encontrado no state. itemId=', itemId, '| osId=', osId);
         return;
     }
 
     const modeloId = itemLocal._pedidoModeloId || itemLocal.id;
-
-    if (!modeloId || modeloId === '') {
-        console.warn('[SAVE] modeloId esta vazio, ignorando update no banco');
-        return;
-    }
 
     try {
         const dbData = { ...dataToUpdate };
@@ -18170,7 +18192,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             }
         }
 
-        // Remove campos virtuais (frontend-only) que no existem na tabela pedidos_modelos
+        // Remove campos virtuais (frontend-only) que não existem na tabela pedidos_modelos
         if ('amostra_obs' in dbData) {
             dbData.observacao_arte = dbData.amostra_obs;
             delete dbData.amostra_obs;
@@ -18179,48 +18201,91 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             delete dbData.amostra_status;
         }
 
-        // Se no sobrou nenhum campo para atualizar, evita fazer a requisicao que pode causar erro
+        // Se não sobrou nenhum campo para atualizar, evita fazer a requisição
         if (Object.keys(dbData).length === 0) {
             return;
         }
 
-        // SE O ID FOR UM ITEM VIRTUAL (Vibecode Fallback), no salvar em pedidos_modelos!
-        // Itens virtuais so gerados pelo carregarVibeOrders e no tm _dbLoaded = true
+        // 1. Atualizar em pedidos_modelos (se não for item virtual não carregado)
         if (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded) {
-            console.log('[SAVE] Ignorando pedidos_modelos para ID virtual:', modeloId);
+            console.log('[SAVE] Item virtual Vibecode: salvando overrides locais:', cacheKey);
             Object.assign(itemLocal, dataToUpdate);
-            // Salvar tambm no localStorage para persistncia na sesso
             const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
-            const cacheKey = itemLocal.id; // Ex: vibe_item_1224
+            const cacheKey = itemLocal.id;
             if (!overrides[cacheKey]) overrides[cacheKey] = {};
             Object.assign(overrides[cacheKey], dataToUpdate);
             localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
-            return;
+        } else if (modeloId && modeloId !== '') {
+            const { data: updateResult, error } = await vibeClient
+                .from('pedidos_modelos')
+                .update(dbData)
+                .eq('id', modeloId)
+                .select('id, id_produto_proposta_origem');
+            
+            if (error) {
+                console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code);
+            } else {
+                console.log('[SAVE] OK -> pedidos_modelos id=', modeloId);
+            }
         }
 
-        const { data: updateResult, error } = await vibeClient
-            .from('pedidos_modelos')
-            .update(dbData)
-            .eq('id', modeloId)
-            .select('id');
-        
-        if (error) {
-            console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code);
-            throw error;
+        // 2. ATUALIZAR PRODUTOS_PROPOSTA NO SUPABASE (SISTEMA VIBE)
+        const propData = {};
+        if ('amostra_cor_id' in dataToUpdate) propData.amostra_cor_id = dataToUpdate.amostra_cor_id;
+        if ('amostra_num_id' in dataToUpdate) propData.amostra_num_id = dataToUpdate.amostra_num_id;
+        if ('padrao' in dataToUpdate || 'cor' in dataToUpdate) {
+            const valCor = dataToUpdate.padrao || dataToUpdate.cor;
+            if (valCor) {
+                propData.padrao = valCor;
+                propData.cor = valCor;
+            }
+        }
+        if ('gabarito_operacional' in dataToUpdate || 'tipo_numeracao' in dataToUpdate) {
+            const valNum = dataToUpdate.gabarito_operacional || dataToUpdate.tipo_numeracao;
+            if (valNum) {
+                propData.gabarito_operacional = valNum;
+                propData.tipo_numeracao = valNum;
+            }
         }
 
-        const rowsUpdated = updateResult ? updateResult.length : 0;
-        if (rowsUpdated === 0) {
-            console.warn('[SAVE] 0 linhas atualizadas! id=', modeloId);
-        } else {
-            console.log('[SAVE] OK -> pedidos_modelos id=', modeloId);
+        if (Object.keys(propData).length > 0) {
+            const propId = itemLocal.id_produto_proposta_origem || (typeof itemLocal.id === 'number' || (!isNaN(parseInt(itemLocal.id)) && !String(itemLocal.id).includes('vibe')) ? parseInt(itemLocal.id) : null);
+            let propUpdated = false;
+
+            if (propId) {
+                const { error: propErr } = await vibeClient
+                    .from('produtos_proposta')
+                    .update(propData)
+                    .eq('id', propId);
+                if (!propErr) {
+                    propUpdated = true;
+                    console.log('[SAVE VIBE] OK -> produtos_proposta por ID=', propId, propData);
+                } else {
+                    console.warn('[SAVE VIBE] Erro ao atualizar produtos_proposta por ID:', propErr.message);
+                }
+            }
+
+            if (!propUpdated && osId) {
+                const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+                const osNum = osObj ? parseInt(osObj.numero) : parseInt(String(osId).replace('vibe_', ''));
+                if (!isNaN(osNum)) {
+                    let query = vibeClient.from('produtos_proposta').update(propData).eq('id_int', osNum);
+                    if (itemLocal.nome_modelo || itemLocal.produto) {
+                        query = query.eq('nome_produto', itemLocal.nome_modelo || itemLocal.produto);
+                    }
+                    const { error: propErr2 } = await query;
+                    if (!propErr2) {
+                        console.log('[SAVE VIBE] OK -> produtos_proposta por id_int=', osNum, propData);
+                    } else {
+                        console.warn('[SAVE VIBE] Erro ao atualizar produtos_proposta por id_int:', propErr2.message);
+                    }
+                }
+            }
         }
 
         Object.assign(itemLocal, dataToUpdate);
     } catch (e) {
-
-
-        console.error('[SAVE] Erro:', e);
+        console.error('[SAVE] Erro em saveAmostraToDB:', e);
         throw e;
     }
 }
