@@ -80,14 +80,25 @@ async function setupEditorWorkspace() {
     const item = window.editorState.activeItem;
     const osId = window.editorState.osId;
     const face = window.editorState.currentFace;
+    const itemIdx = window.editorState.activeItemIdx;
 
     if (!item) return;
 
-    // Obter Cor, Numeração e Formato
-    const corId = (face === 'verso' && item.amostra_cor_verso_id) ? item.amostra_cor_verso_id : item.amostra_cor_id;
-    const numId = item.amostra_num_id;
+    // Obter Cor, Numeração e Formato consultando DOM selects + item + fuzzy match
+    const containerId = state.amostrasContainerId || 'amostras-itens-container';
+    const container = document.getElementById(containerId);
 
-    const cor = corId ? (state.cores || []).find(c => String(c.id) === String(corId)) : null;
+    const corSelect = container ? container.querySelector(`#amostra-item-cor-${itemIdx}`) : null;
+    const numSelect = container ? container.querySelector(`#amostra-item-num-${itemIdx}`) : null;
+
+    let corId = (corSelect && corSelect.value) ? corSelect.value : ((face === 'verso' && item.amostra_cor_verso_id) ? item.amostra_cor_verso_id : item.amostra_cor_id);
+    let numId = (numSelect && numSelect.value) ? numSelect.value : item.amostra_num_id;
+
+    let cor = corId ? (state.cores || []).find(c => String(c.id) === String(corId)) : null;
+    if (!cor && item.cor && state.cores) {
+        cor = state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || (typeof globalFuzzyMatch === 'function' && globalFuzzyMatch(c.name, item.cor)));
+    }
+
     const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
 
     let fmt = null;
@@ -176,7 +187,7 @@ async function setupEditorWorkspace() {
     }
 
     // Renderizar Camadas 1 e 2
-    renderEditorLayer1Cor(cor, fmt, face);
+    await renderEditorLayer1Cor(cor, fmt, face);
     renderEditorLayer2Numeracao(num, fmt, face);
 
     // Ajustar zoom inicial à tela
@@ -194,36 +205,82 @@ async function renderEditorLayer1Cor(cor, fmt, face) {
     ctx.clearRect(0, 0, l1.width, l1.height);
 
     let corRendered = false;
-    if (cor && (cor.pdf_base64 || (face === 'verso' && cor.pdf_verso_base64)) && typeof pdfjsLib !== 'undefined') {
-        try {
-            const hasVersoFile = (face === 'verso' && cor.pdf_verso_base64);
-            const rawPdfData = hasVersoFile ? cor.pdf_verso_base64 : cor.pdf_base64;
-            const base64Data = rawPdfData.includes('base64,') ? rawPdfData.split('base64,')[1] : rawPdfData;
-            const binStr = atob(base64Data);
-            const bytes = new Uint8Array(binStr.length);
-            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
 
-            const loadingTask = pdfjsLib.getDocument({ data: bytes });
-            const pdf = await loadingTask.promise;
-            const pageNum = (face === 'verso' && !hasVersoFile && pdf.numPages >= 2) ? 2 : 1;
-            const page = await pdf.getPage(pageNum);
+    if (cor) {
+        const hasVerso = (face === 'verso');
+        const rawData = hasVerso ? 
+            (cor.pdf_verso_base64 || cor.pdf_verso_url || cor.verso_pdf_url || cor.pdf_base64 || cor.pdf_url || cor.url || cor.pdf || cor.imagem_verso_base64 || cor.imagem_base64) : 
+            (cor.pdf_base64 || cor.pdf_url || cor.url || cor.pdf || cor.imagem_base64 || cor.imagem_url);
 
-            const viewport = page.getViewport({ scale: 1.0 });
-            const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
-            const scaledViewport = page.getViewport({ scale: pdfScale * (scalePx / 2.8346) });
+        if (rawData && typeof rawData === 'string') {
+            const isPdf = rawData.includes('application/pdf') || 
+                rawData.toLowerCase().includes('.pdf') || 
+                rawData.startsWith('JVBERi') || 
+                (!rawData.startsWith('data:image') && !rawData.startsWith('http') && !rawData.endsWith('.png') && !rawData.endsWith('.jpg') && !rawData.endsWith('.jpeg'));
 
-            const offCanvas = document.createElement('canvas');
-            offCanvas.width = scaledViewport.width;
-            offCanvas.height = scaledViewport.height;
-            const offCtx = offCanvas.getContext('2d');
-            await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+            if (isPdf && typeof pdfjsLib !== 'undefined') {
+                try {
+                    let bytes;
+                    if (rawData.startsWith('http') || rawData.startsWith('/')) {
+                        const res = await fetch(rawData);
+                        const buf = await res.arrayBuffer();
+                        bytes = new Uint8Array(buf);
+                    } else {
+                        const base64Data = rawData.includes('base64,') ? rawData.split('base64,')[1] : rawData;
+                        const binStr = atob(base64Data);
+                        bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    }
 
-            const dx = (l1.width - offCanvas.width) / 2;
-            const dy = (l1.height - offCanvas.height) / 2;
-            ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+                    const loadingTask = pdfjsLib.getDocument({ data: bytes });
+                    const pdf = await loadingTask.promise;
+                    const pageNum = (hasVerso && pdf.numPages >= 2 && !cor.pdf_verso_base64 && !cor.pdf_verso_url) ? 2 : 1;
+                    const page = await pdf.getPage(pageNum);
+
+                    const viewport = page.getViewport({ scale: 1.0 });
+                    const pdfScale = (fmt.width_mm * 2.8346) / viewport.width;
+                    const scaledViewport = page.getViewport({ scale: pdfScale * (scalePx / 2.8346) });
+
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = scaledViewport.width;
+                    offCanvas.height = scaledViewport.height;
+                    const offCtx = offCanvas.getContext('2d');
+                    await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+
+                    const dx = (l1.width - offCanvas.width) / 2;
+                    const dy = (l1.height - offCanvas.height) / 2;
+                    ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+                    corRendered = true;
+                } catch (e) {
+                    console.warn('[Criador de Arte] Erro ao renderizar PDF da cor:', e);
+                }
+            }
+
+            if (!corRendered) {
+                try {
+                    let imgUrl = rawData;
+                    if (!imgUrl.startsWith('http') && !imgUrl.startsWith('data:')) {
+                        imgUrl = 'data:image/png;base64,' + rawData;
+                    }
+                    const img = new Image();
+                    img.crossOrigin = 'Anonymous';
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = imgUrl;
+                    });
+                    ctx.drawImage(img, 0, 0, l1.width, l1.height);
+                    corRendered = true;
+                } catch (e) {
+                    console.warn('[Criador de Arte] Erro ao renderizar Imagem da cor:', e);
+                }
+            }
+        }
+
+        if (!corRendered && (cor.cor_hex || cor.hex || cor.color_hex)) {
+            ctx.fillStyle = cor.cor_hex || cor.hex || cor.color_hex;
+            ctx.fillRect(0, 0, l1.width, l1.height);
             corRendered = true;
-        } catch (e) {
-            console.warn('[Criador de Arte] Erro ao renderizar camada 1:', e);
         }
     }
 
