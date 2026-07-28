@@ -2465,6 +2465,33 @@
                 </div>
                 
                 <div id="editor-controls-active" style="display: none; flex-direction: column; gap: 12px;">
+                    <!-- Transformação: Rotação, Escala e Dimensões (mm) -->
+                    <div style="display: flex; flex-direction: column; gap: 8px; background: #0f172a; padding: 10px; border-radius: 8px;">
+                        <label style="font-size: 0.75rem; color: #38bdf8; font-weight: 700; text-transform: uppercase;">Transformação e Tamanho</label>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.72rem; color: #94a3b8;">Largura (mm)</label>
+                                <input type="number" id="prop-width-mm" class="form-control" min="0.5" step="0.5" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateDimension('width', parseFloat(this.value))">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.72rem; color: #94a3b8;">Altura (mm)</label>
+                                <input type="number" id="prop-height-mm" class="form-control" min="0.5" step="0.5" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateDimension('height', parseFloat(this.value))">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.72rem; color: #94a3b8;">Rotação (°)</label>
+                                <input type="number" id="prop-angle" class="form-control" min="0" max="360" step="1" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateProperty('angle', parseFloat(this.value))">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 0.72rem; color: #94a3b8;">Escala (%)</label>
+                                <input type="number" id="prop-scale" class="form-control" min="1" max="1000" step="1" style="font-size: 0.8rem; background: #1e293b; color: white;" onchange="editorUpdateScale(parseFloat(this.value))">
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-group" style="margin: 0;">
                         <label style="font-size: 0.75rem; color: #cbd5e1; font-weight: 700;">Cor de Preenchimento</label>
                         <input type="color" id="prop-fill-color" class="form-control" style="height: 36px; padding: 2px; cursor: pointer; background: transparent;" onchange="editorUpdateProperty('fill', this.value)">

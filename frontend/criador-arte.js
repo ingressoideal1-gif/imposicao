@@ -163,12 +163,36 @@ async function setupEditorWorkspace() {
             selection: true
         });
 
-        // Eventos de seleção
+        // Eventos de seleção e transformação em tempo real
         fc.on('selection:created', updateInspectorFromSelection);
         fc.on('selection:updated', updateInspectorFromSelection);
         fc.on('selection:cleared', clearInspectorPanel);
-        fc.on('object:modified', saveEditorHistory);
-        fc.on('object:added', saveEditorHistory);
+        fc.on('object:modified', () => { updateInspectorFromSelection(); saveEditorHistory(); });
+        fc.on('object:scaling', updateInspectorFromSelection);
+        fc.on('object:rotating', updateInspectorFromSelection);
+        fc.on('object:moving', (e) => {
+            updateInspectorFromSelection();
+            const obj = e.target;
+            if (!obj) return;
+            // Movimento paralelo travado nos eixos X/Y quando Shift estiver pressionado
+            if (e.e && e.e.shiftKey) {
+                const startX = obj._dragStartX !== undefined ? obj._dragStartX : obj.left;
+                const startY = obj._dragStartY !== undefined ? obj._dragStartY : obj.top;
+                const deltaX = Math.abs(obj.left - startX);
+                const deltaY = Math.abs(obj.top - startY);
+                if (deltaX > deltaY) {
+                    obj.set('top', startY);
+                } else {
+                    obj.set('left', startX);
+                }
+            }
+        });
+        fc.on('mouse:down', (e) => {
+            if (e.target) {
+                e.target._dragStartX = e.target.left;
+                e.target._dragStartY = e.target.top;
+            }
+        });
 
         window.editorState.fabricCanvas = fc;
 
@@ -867,6 +891,21 @@ function updateInspectorFromSelection() {
     if (noSel) noSel.style.display = 'none';
     if (controls) controls.style.display = 'flex';
 
+    // Rotação (°), Escala (%), Dimensões (mm)
+    const scalePx = window.editorState.scalePxPerMm || 4.0;
+
+    const angleIn = document.getElementById('prop-angle');
+    if (angleIn) angleIn.value = Math.round((obj.angle || 0) % 360);
+
+    const scaleIn = document.getElementById('prop-scale');
+    if (scaleIn) scaleIn.value = Math.round((obj.scaleX || 1) * 100);
+
+    const wMmIn = document.getElementById('prop-width-mm');
+    if (wMmIn) wMmIn.value = (obj.getScaledWidth() / scalePx).toFixed(1);
+
+    const hMmIn = document.getElementById('prop-height-mm');
+    if (hMmIn) hMmIn.value = (obj.getScaledHeight() / scalePx).toFixed(1);
+
     // Opacidade
     const opInput = document.getElementById('prop-opacity');
     const opVal = document.getElementById('prop-opacity-val');
@@ -940,6 +979,104 @@ function editorToggleMultiply(checked) {
     obj.set('globalCompositeOperation', checked ? 'multiply' : 'source-over');
     fc.renderAll();
     saveEditorHistory();
+}
+
+/**
+ * Alterar Dimensão (Largura/Altura em mm)
+ */
+function editorUpdateDimension(dim, valMm) {
+    const fc = window.editorState.fabricCanvas;
+    const obj = fc ? fc.getActiveObject() : null;
+    if (!obj || isNaN(valMm) || valMm <= 0) return;
+
+    const scalePx = window.editorState.scalePxPerMm || 4.0;
+    const valPx = valMm * scalePx;
+
+    if (dim === 'width') {
+        obj.scaleToWidth(valPx);
+    } else if (dim === 'height') {
+        obj.scaleToHeight(valPx);
+    }
+    fc.renderAll();
+    updateInspectorFromSelection();
+    saveEditorHistory();
+}
+
+/**
+ * Alterar Escala (%)
+ */
+function editorUpdateScale(valPercent) {
+    const fc = window.editorState.fabricCanvas;
+    const obj = fc ? fc.getActiveObject() : null;
+    if (!obj || isNaN(valPercent) || valPercent <= 0) return;
+
+    const factor = valPercent / 100;
+    obj.set({
+        scaleX: factor,
+        scaleY: factor
+    });
+    fc.renderAll();
+    updateInspectorFromSelection();
+    saveEditorHistory();
+}
+
+/**
+ * Duplicar objeto selecionado horizontalmente (largura do objeto + 10mm)
+ */
+function editorDuplicarHorizontalmente() {
+    const fc = window.editorState.fabricCanvas;
+    if (!fc) return;
+    const obj = fc.getActiveObject();
+    if (!obj) return;
+
+    const scalePx = window.editorState.scalePxPerMm || 4.0;
+    const gapPx = 10 * scalePx; // 10mm em pixels (40px)
+
+    obj.clone((cloned) => {
+        const widthPx = obj.getScaledWidth();
+        cloned.set({
+            left: obj.left + widthPx + gapPx,
+            top: obj.top,
+            evented: true,
+            hasControls: true
+        });
+        fc.add(cloned);
+        fc.setActiveObject(cloned);
+        fc.renderAll();
+        saveEditorHistory();
+        toast('Objeto duplicado horizontalmente (+10mm)!', 'info');
+    });
+}
+
+// Listener de Atalhos de Teclado (Delete, Backspace, Ctrl+D / Cmd+D)
+if (!window._editorKeyboardListenerAdded) {
+    window._editorKeyboardListenerAdded = true;
+    document.addEventListener('keydown', (e) => {
+        const view = document.getElementById('view-criador-arte');
+        if (!view || view.style.display === 'none') return;
+
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT' || activeEl.isContentEditable)) {
+            return;
+        }
+
+        const fc = window.editorState ? window.editorState.fabricCanvas : null;
+        if (!fc) return;
+        const activeObj = fc.getActiveObject();
+        if (activeObj && activeObj.isEditing) return;
+
+        // Tecla Delete ou Backspace para deletar elemento
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault();
+            editorDeletarSelecionado();
+        }
+
+        // Atalho Ctrl+D ou Cmd+D para duplicar horizontalmente (largura + 10mm)
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+            e.preventDefault();
+            editorDuplicarHorizontalmente();
+        }
+    });
 }
 
 /**
@@ -1085,8 +1222,11 @@ window.handleEditorFileUpload = handleEditorFileUpload;
 window.editorMoverParaFrente = editorMoverParaFrente;
 window.editorEnviarParaTras = editorEnviarParaTras;
 window.editorDuplicarSelecionado = editorDuplicarSelecionado;
+window.editorDuplicarHorizontalmente = editorDuplicarHorizontalmente;
 window.editorDeletarSelecionado = editorDeletarSelecionado;
 window.editorUpdateProperty = editorUpdateProperty;
+window.editorUpdateDimension = editorUpdateDimension;
+window.editorUpdateScale = editorUpdateScale;
 window.editorToggleTextStyle = editorToggleTextStyle;
 window.editorToggleMultiply = editorToggleMultiply;
 window.editorUndo = editorUndo;
