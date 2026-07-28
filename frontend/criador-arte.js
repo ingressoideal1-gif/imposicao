@@ -1477,6 +1477,85 @@ async function adicionarAnexoNaArte(url, nome, tipo) {
     }
 }
 
+/**
+ * Alinhar objeto ou seleção múltipla em relação ao Canvas (Prancha)
+ */
+function editorAlinharCanvas(pos) {
+    const fc = window.editorState ? window.editorState.fabricCanvas : null;
+    if (!fc) return;
+
+    const activeObj = fc.getActiveObject();
+    if (!activeObj) {
+        toast('Selecione um elemento para alinhar.', 'warning');
+        return;
+    }
+
+    const canvasW = fc.width;
+    const canvasH = fc.height;
+
+    if (activeObj.type === 'activeSelection') {
+        const groupRect = activeObj.getBoundingRect();
+        let deltaX = 0;
+        let deltaY = 0;
+
+        switch (pos) {
+            case 'left':
+                deltaX = 0 - groupRect.left;
+                break;
+            case 'centerH':
+                deltaX = ((canvasW - groupRect.width) / 2) - groupRect.left;
+                break;
+            case 'right':
+                deltaX = (canvasW - groupRect.width) - groupRect.left;
+                break;
+            case 'top':
+                deltaY = 0 - groupRect.top;
+                break;
+            case 'centerV':
+                deltaY = ((canvasH - groupRect.height) / 2) - groupRect.top;
+                break;
+            case 'bottom':
+                deltaY = (canvasH - groupRect.height) - groupRect.top;
+                break;
+        }
+
+        activeObj.set({
+            left: activeObj.left + deltaX,
+            top: activeObj.top + deltaY
+        });
+        activeObj.setCoords();
+    } else {
+        const objW = activeObj.getScaledWidth();
+        const objH = activeObj.getScaledHeight();
+
+        switch (pos) {
+            case 'left':
+                activeObj.set('left', 0);
+                break;
+            case 'centerH':
+                fc.centerObjectH(activeObj);
+                break;
+            case 'right':
+                activeObj.set('left', canvasW - objW);
+                break;
+            case 'top':
+                activeObj.set('top', 0);
+                break;
+            case 'centerV':
+                fc.centerObjectV(activeObj);
+                break;
+            case 'bottom':
+                activeObj.set('top', canvasH - objH);
+                break;
+        }
+        activeObj.setCoords();
+    }
+
+    fc.renderAll();
+    updateInspectorFromSelection();
+    saveEditorHistory();
+}
+
 // Expor funções globais para HTML
 window.abrirCriadorDeArte = abrirCriadorDeArte;
 window.fecharCriadorDeArte = fecharCriadorDeArte;
@@ -1506,3 +1585,4 @@ window.salvarArteDoEditor = salvarArteDoEditor;
 window.carregarAnexosNoEditor = carregarAnexosNoEditor;
 window.fetchAnexosDoPedido = fetchAnexosDoPedido;
 window.adicionarAnexoNaArte = adicionarAnexoNaArte;
+window.editorAlinharCanvas = editorAlinharCanvas;

@@ -2505,6 +2505,35 @@
                         </div>
                     </div>
 
+                    <!-- Alinhamento na Prancha (Canvas) -->
+                    <div style="display: flex; flex-direction: column; gap: 8px; background: #0f172a; padding: 10px; border-radius: 8px;">
+                        <label style="font-size: 0.75rem; color: #38bdf8; font-weight: 700; text-transform: uppercase;">Alinhamento na Prancha</label>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+                            <button class="btn btn-sm btn-secondary" onclick="editorAlinharCanvas('left')" style="font-size: 0.73rem; padding: 6px 2px; font-weight: 600;" title="Alinhar à Esquerda da Prancha">
+                                ⇤ Esquerda
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorAlinharCanvas('centerH')" style="font-size: 0.73rem; padding: 6px 2px; font-weight: 600;" title="Centralizar Horizontalmente">
+                                ↔ Centro H
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorAlinharCanvas('right')" style="font-size: 0.73rem; padding: 6px 2px; font-weight: 600;" title="Alinhar à Direita da Prancha">
+                                ⇥ Direita
+                            </button>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+                            <button class="btn btn-sm btn-secondary" onclick="editorAlinharCanvas('top')" style="font-size: 0.73rem; padding: 6px 2px; font-weight: 600;" title="Alinhar ao Topo da Prancha">
+                                ⤒ Topo
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorAlinharCanvas('centerV')" style="font-size: 0.73rem; padding: 6px 2px; font-weight: 600;" title="Centralizar Verticalmente">
+                                ↕ Centro V
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="editorAlinharCanvas('bottom')" style="font-size: 0.73rem; padding: 6px 2px; font-weight: 600;" title="Alinhar à Base da Prancha">
+                                ⤓ Base
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="form-group" style="margin: 0;">
                         <label style="font-size: 0.75rem; color: #cbd5e1; font-weight: 700;">Cor de Preenchimento</label>
                         <input type="color" id="prop-fill-color" class="form-control" style="height: 36px; padding: 2px; cursor: pointer; background: transparent; width: 100%; box-sizing: border-box;" onchange="editorUpdateProperty('fill', this.value)">
