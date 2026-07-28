@@ -307,6 +307,9 @@ async function setupEditorWorkspace() {
 
     // Carregar anexos do pedido na barra lateral esquerda
     carregarAnexosNoEditor();
+
+    // Salvar snapshot do estado inicial para o historico (passo 0)
+    saveEditorHistory();
 }
 
 /**
@@ -1087,44 +1090,106 @@ if (!window._editorKeyboardListenerAdded) {
             e.preventDefault();
             editorDuplicarHorizontalmente();
         }
+
+        // Atalho Ctrl+Z / Cmd+Z (Desfazer) e Ctrl+Shift+Z / Ctrl+Y (Refazer)
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+            e.preventDefault();
+            if (e.shiftKey) {
+                editorRedo();
+            } else {
+                editorUndo();
+            }
+        } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+            e.preventDefault();
+            editorRedo();
+        }
     });
 }
 
 /**
- * Histórico Undo / Redo
+ * Histórico Undo / Redo (Até 30 Níveis de Desfazer)
  */
 function saveEditorHistory() {
-    if (window.editorState.isRestoringHistory) return;
+    if (!window.editorState || window.editorState.isRestoringHistory) return;
     const fc = window.editorState.fabricCanvas;
     if (!fc) return;
 
     const json = JSON.stringify(fc.toJSON());
+
+    // Se o estado não mudou, evita salvar duplicatas
+    if (window.editorState.history.length > 0 && window.editorState.history[window.editorState.historyIndex] === json) {
+        updateUndoRedoButtonsUI();
+        return;
+    }
+
+    // Se houver novas ações no meio do histórico, descarta o caminho futuro
     window.editorState.history = window.editorState.history.slice(0, window.editorState.historyIndex + 1);
     window.editorState.history.push(json);
-    window.editorState.historyIndex++;
+
+    // Suporte para pelo menos 30 níveis de Undo
+    const maxLevels = 30;
+    if (window.editorState.history.length > maxLevels) {
+        window.editorState.history.shift();
+    }
+
+    window.editorState.historyIndex = window.editorState.history.length - 1;
+    updateUndoRedoButtonsUI();
 }
 
 function editorUndo() {
+    if (!window.editorState) return;
     if (window.editorState.historyIndex > 0) {
         window.editorState.historyIndex--;
         restoreEditorHistory();
+        toast(`↩ Desfeito (${window.editorState.historyIndex + 1}/${window.editorState.history.length})`, 'info');
+    } else {
+        toast('Nenhuma alteração anterior para desfazer.', 'warning');
     }
 }
+
 function editorRedo() {
+    if (!window.editorState) return;
     if (window.editorState.historyIndex < window.editorState.history.length - 1) {
         window.editorState.historyIndex++;
         restoreEditorHistory();
+        toast(`↪ Refeito (${window.editorState.historyIndex + 1}/${window.editorState.history.length})`, 'info');
+    } else {
+        toast('Nenhuma alteração para refazer.', 'warning');
     }
 }
+
 function restoreEditorHistory() {
-    const fc = window.editorState.fabricCanvas;
+    const fc = window.editorState ? window.editorState.fabricCanvas : null;
+    if (!fc) return;
     const json = window.editorState.history[window.editorState.historyIndex];
-    if (fc && json) {
+    if (json) {
         window.editorState.isRestoringHistory = true;
         fc.loadFromJSON(json, () => {
             fc.renderAll();
             window.editorState.isRestoringHistory = false;
+            updateInspectorFromSelection();
+            updateUndoRedoButtonsUI();
         });
+    }
+}
+
+function updateUndoRedoButtonsUI() {
+    const undoBtn = document.getElementById('btn-editor-undo');
+    const redoBtn = document.getElementById('btn-editor-redo');
+    if (!window.editorState) return;
+
+    const canUndo = window.editorState.historyIndex > 0;
+    const canRedo = window.editorState.historyIndex < window.editorState.history.length - 1;
+
+    if (undoBtn) {
+        undoBtn.disabled = !canUndo;
+        undoBtn.style.opacity = canUndo ? '1' : '0.4';
+        undoBtn.style.cursor = canUndo ? 'pointer' : 'not-allowed';
+    }
+    if (redoBtn) {
+        redoBtn.disabled = !canRedo;
+        redoBtn.style.opacity = canRedo ? '1' : '0.4';
+        redoBtn.style.cursor = canRedo ? 'pointer' : 'not-allowed';
     }
 }
 
