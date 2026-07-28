@@ -14759,8 +14759,13 @@ function renderOrdens() {
 
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
-                        <td>
-                            <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block;">${os.numero}</span>
+                        <td onclick="event.stopPropagation();">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span onclick="navigateToAmostrasFromOS('${os.id}')" style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
+                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="font-size: 0.85rem; color: #38bdf8; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); padding: 5px 8px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; transition: all 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </a>
+                            </div>
                         </td>
 
                         <td>
@@ -17290,7 +17295,12 @@ function renderAmostrasOSItens(osId) {
                         </div>
                         <div>
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Pedido Nº:</span>
-                            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem;">#${os.numero || '--'}</div>
+                            <div style="font-weight: 700; color: var(--text); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                                <span>#${os.numero || '--'}</span>
+                                <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="font-size: 0.76rem; color: #38bdf8; background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3); padding: 2px 7px; border-radius: 4px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Abrir Pedido #${os.numero} no Vibe Ideal">
+                                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.68rem;"></i> Vibe
+                                </a>
+                            </div>
                         </div>
                         <div>
                             <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Status de Entrega/Faturam.:</span>
