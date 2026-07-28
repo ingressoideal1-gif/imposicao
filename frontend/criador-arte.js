@@ -298,13 +298,19 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
     if (!l2) return;
     const ctx = l2.getContext('2d');
     const scalePx = window.editorState.scalePxPerMm;
+    const item = window.editorState.activeItem;
     ctx.clearRect(0, 0, l2.width, l2.height);
 
     if (!num || !num.elements) return;
 
-    // Desenhar elementos de numeração e picote
+    // Fundo transparente -- contorno guia do formato
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, l2.width, l2.height);
+
     num.elements.forEach(el => {
         const elFace = el.face || 'both';
+
         if (face === 'verso') {
             if (el.type !== 'PICOTE' && elFace !== 'back' && elFace !== 'both') return;
         } else {
@@ -328,15 +334,137 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
             const fs = (el.font_size || 12) * scalePx / 2.8346;
             ctx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
             ctx.fillStyle = color;
-            ctx.fillText(el.text || '00001', 0, 0);
+
+            let label = '';
+            if (el.type === 'FIXED') {
+                label = el.fixed_value || 'TEXTO';
+            } else if (el.type === 'TEATRO_FILA') {
+                const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                label = `${el.prefix || ''}${_fVal}`;
+            } else if (el.type === 'TEATRO_LUGAR') {
+                const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                label = `${el.prefix || ''}${_lVal}`;
+            } else if (el.type === 'TEATRO_COMBO') {
+                const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : 'A';
+                const fila = `${el.prefix_fila || ''}${_fVal}`;
+                const lugar = `${el.prefix_lugar || ''}${_lVal}`;
+                label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+            } else if (el.type === 'CAMAROTE_LOCAL') {
+                const _cIni = parseInt(item?.c_ini || item?.C_INI || 1);
+                label = `${el.prefix || ''}${_cIni}`;
+            } else if (el.type === 'CAMAROTE_PESSOA') {
+                label = `${el.prefix || ''}1`;
+            } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                const _lCamB = parseInt(item?.l_cam || item?.L_CAM || item?.lotacao_cam || item?.LOTACAO_CAM || item?.lotacao || 5);
+                label = `${el.prefix || ''}1/${_lCamB}`;
+            } else if (el.source === 'database') {
+                const colName = el.csv_column || '';
+                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+                const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                } else {
+                    label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                }
+            } else {
+                const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
+                let current_val = 1;
+                if (num && num.tipo === "TICKET") {
+                    const pos = parseInt(el.ticket_pos) || 1;
+                    const start = parseInt(item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1) || 1;
+                    current_val = start + (pos - 1);
+                } else {
+                    current_val = parseInt(item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1) || 1;
+                }
+                label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
+            }
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            if (label.includes('\n')) {
+                const lines = label.split('\n');
+                const lineHeight = fs * 1.2;
+                const totalH = lines.length * lineHeight;
+                const blockTop = -totalH / 2;
+                lines.forEach((line, i) => {
+                    const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
+                    ctx.fillText(line, 0, lineCenter);
+                });
+            } else {
+                ctx.fillText(label, 0, 0);
+            }
+
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+        } else if (el.type === 'QR') {
+            const sz = (el.size_mm || 15) * scalePx;
+            let qrText = '';
+            if (el.fixed) {
+                qrText = el.fixed_value || '';
+            } else if (el.source === 'database') {
+                const colName = el.csv_column || '';
+                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+                const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                } else {
+                    qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                }
+            } else {
+                const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                const start = parseInt(item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1) || 1;
+                const raw = padVal > 0 ? String(start).padStart(padVal, '0') : String(start);
+                qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
+            }
+            if (typeof renderQRCodeOnCtx === 'function') {
+                renderQRCodeOnCtx(ctx, qrText, 0, 0, sz, color);
+            }
+        } else if (el.type === 'BARCODE') {
+            const bw = (el.barcode_width_mm || el.width_mm || 30) * scalePx;
+            const bh = (el.barcode_height_mm || el.height_mm || 8) * scalePx;
+            const hbw = bw / 2, hbh = bh / 2;
+            ctx.fillStyle = color;
+            const barW = bw / 40;
+            const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
+            for (let i = 0; i < pattern.length; i++) {
+                if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
+            }
         } else if (el.type === 'PICOTE') {
-            ctx.strokeStyle = '#ef4444';
-            ctx.setLineDash([6, 4]);
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.0;
+            ctx.setLineDash([6, 3]);
             ctx.beginPath();
-            ctx.moveTo(0, -1000);
-            ctx.lineTo(0, 1000);
+            ctx.moveTo(0, -y);
+            ctx.lineTo(0, l2.height - y);
             ctx.stroke();
+            ctx.setLineDash([]);
+        } else if (el.type === 'SVG' || el.type === 'PDF') {
+            const w = (el.width_mm || 20) * scalePx;
+            const h = (el.height_mm || 20) * scalePx;
+            const hw = w / 2, hh_el = h / 2;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-hw, -hh_el, w, h);
+            ctx.clip();
+
+            if (el.type === 'PDF' && el._pdfCanvas) {
+                ctx.drawImage(el._pdfCanvas, -hw, -hh_el, w, h);
+            } else {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(-hw, -hh_el, w, h);
+                ctx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                ctx.fillStyle = color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('PDF', 0, 0);
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+            }
+            ctx.restore();
         }
 
         ctx.restore();
