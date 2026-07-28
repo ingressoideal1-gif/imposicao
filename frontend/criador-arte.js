@@ -193,9 +193,26 @@ async function setupEditorWorkspace() {
             savedJson = localStorage.getItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`);
         }
 
-        const existingImgUrl = face === 'verso' ? 
+        let rawArteSource = face === 'verso' ? 
             (item.verso_arte_url || item.verso_amostra_arte_base64) : 
             (item.arte_url || item.amostra_arte_base64);
+
+        // Se não tiver fonte salva no objeto item, buscar se há um arquivo selecionado no input file do DOM
+        if (!rawArteSource) {
+            const inputId = face === 'verso' ? `amostra-item-arte-verso-${itemIdx}` : `amostra-item-arte-${itemIdx}`;
+            const containerId = state.amostrasContainerId || 'amostras-itens-container';
+            const container = document.getElementById(containerId) || document;
+            const input = container.querySelector(`#${inputId}`);
+            if (input && input.files && input.files[0]) {
+                const file = input.files[0];
+                rawArteSource = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = () => resolve(null);
+                    reader.readAsDataURL(file);
+                });
+            }
+        }
 
         if (savedJson) {
             try {
@@ -206,27 +223,39 @@ async function setupEditorWorkspace() {
             } catch(e) {
                 console.warn('[Criador de Arte] Erro ao carregar JSON da arte salva:', e);
             }
-        } else if (existingImgUrl) {
-            // Se não tiver JSON vetorial mas já existir uma arte enviada/salva no modelo, carrega no canvas!
+        } else if (rawArteSource) {
+            // Se não tiver JSON vetorial mas existir arte carregada/enviada, carregar no canvas preenchendo 100%!
             try {
-                let imgUrl = existingImgUrl;
+                let imgUrl = rawArteSource;
                 if (imgUrl.includes('application/pdf') || imgUrl.toLowerCase().endsWith('.pdf')) {
-                    const arrayBuf = await fetch(imgUrl).then(r => r.arrayBuffer());
-                    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuf) }).promise;
-                    const page = await pdf.getPage(1);
-                    const vp = page.getViewport({ scale: 2.0 });
-                    const offCanvas = document.createElement('canvas');
-                    offCanvas.width = vp.width; offCanvas.height = vp.height;
-                    await page.render({ canvasContext: offCanvas.getContext('2d'), viewport: vp }).promise;
-                    imgUrl = offCanvas.toDataURL();
+                    let bytes;
+                    if (imgUrl.startsWith('data:')) {
+                        const base64Data = imgUrl.split('base64,')[1];
+                        const binStr = atob(base64Data);
+                        bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    } else {
+                        const arrayBuf = await fetch(imgUrl).then(r => r.arrayBuffer());
+                        bytes = new Uint8Array(arrayBuf);
+                    }
+                    if (typeof pdfjsLib !== 'undefined') {
+                        const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+                        const page = await pdf.getPage(1);
+                        const vp = page.getViewport({ scale: 2.0 });
+                        const offCanvas = document.createElement('canvas');
+                        offCanvas.width = vp.width; offCanvas.height = vp.height;
+                        await page.render({ canvasContext: offCanvas.getContext('2d'), viewport: vp }).promise;
+                        imgUrl = offCanvas.toDataURL();
+                    }
                 }
 
                 fabric.Image.fromURL(imgUrl, (fImg) => {
-                    if (fImg) {
-                        fImg.scaleToWidth(fc.width * 0.9);
+                    if (fImg && fImg.width > 0 && fImg.height > 0) {
                         fImg.set({
-                            left: (fc.width - fImg.scaledWidth) / 2,
-                            top: (fc.height - fImg.scaledHeight) / 2
+                            scaleX: fc.width / fImg.width,
+                            scaleY: fc.height / fImg.height,
+                            left: 0,
+                            top: 0
                         });
                         fc.add(fImg);
                         fc.renderAll();
@@ -969,6 +998,19 @@ async function salvarArteDoEditor() {
             item.arte_url = base64DataUrl;
             item.arte_json = jsonStructure;
         }
+
+        // Limpar o input de arquivo bruto do DOM para que o motor de amostragem (drawAmostraFace) use a arte compilada do editor
+        const inputId = face === 'verso' ? `amostra-item-arte-verso-${itemIdx}` : `amostra-item-arte-${itemIdx}`;
+        const nameLabelId = face === 'verso' ? `amostra-item-arte-verso-name-${itemIdx}` : `amostra-item-arte-name-${itemIdx}`;
+        const removeBtnId = face === 'verso' ? `btn-remove-amostra-arte-verso-${itemIdx}` : `btn-remove-amostra-arte-${itemIdx}`;
+
+        const input = document.getElementById(inputId);
+        const nameLabel = document.getElementById(nameLabelId);
+        const removeBtn = document.getElementById(removeBtnId);
+
+        if (input) input.value = '';
+        if (nameLabel) nameLabel.textContent = 'Arte do Criador';
+        if (removeBtn) removeBtn.style.display = 'inline-block';
 
         // 4. Salvar no Supabase / Banco
         const numInt = parseInt(osId);
