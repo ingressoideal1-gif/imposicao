@@ -16973,6 +16973,7 @@ function renderAmostrasOSItens(osId) {
                                 </div>
                                 ` : `
                                 <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+                                    <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="font-weight:700; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Abrir Criador de Arte 2D para este modelo">🎨 Criar Arte</button>
                                     <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">
                                         🖼️ Upload Arte
                                     </label>
