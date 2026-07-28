@@ -14759,9 +14759,9 @@ function renderOrdens() {
 
                 return `
                     <tr class="os-row" onclick="navigateToAmostrasFromOS('${os.id}')" style="cursor: pointer; ${isAllApproved ? 'background: rgba(34,197,94,0.05); border-left: 3px solid var(--green);' : ''}" title="Abrir Amostras">
-                        <td onclick="event.stopPropagation();">
+                        <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <span onclick="navigateToAmostrasFromOS('${os.id}')" style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
+                                <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background-color: ${badgeBoxBg}; padding: 4px 12px; border-radius: 6px; display: inline-block; cursor: pointer;" title="Abrir Amostras do Pedido #${os.numero}">${os.numero}</span>
                                 <a href="https://vibe.ai-ideal.com.br/orcamentos/${os.numero}/editar?tab=produtos" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; padding: 3px 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; text-decoration: none; transition: transform 0.2s, background-color 0.2s; cursor: pointer;" title="Abrir Pedido #${os.numero} no Vibe Ideal (Sistema Parceiro)" onclick="event.stopPropagation();">
                                     <img src="icon-vibe.png" alt="Vibe" style="height: 22px; width: auto; display: block; object-fit: contain; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));" />
                                 </a>
