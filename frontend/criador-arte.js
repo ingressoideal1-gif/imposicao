@@ -172,6 +172,18 @@ async function setupEditorWorkspace() {
 
         window.editorState.fabricCanvas = fc;
 
+        // Garantir que a div .canvas-container do Fabric fique em z-index: 10 (acima da cor layer1 e abaixo da numeração layer2)
+        const stackWrapper = document.getElementById('editor-canvas-stack');
+        if (stackWrapper) {
+            const fabricWrapper = stackWrapper.querySelector('.canvas-container');
+            if (fabricWrapper) {
+                fabricWrapper.style.position = 'absolute';
+                fabricWrapper.style.top = '0px';
+                fabricWrapper.style.left = '0px';
+                fabricWrapper.style.zIndex = '10';
+            }
+        }
+
         // Tentar recarregar estrutura vetorial JSON salva (memória ou localStorage)
         let savedJson = face === 'verso' ? item.verso_arte_json : item.arte_json;
         if (!savedJson && item.id) {

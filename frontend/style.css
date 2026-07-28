@@ -2047,6 +2047,201 @@ input[type=number] {
 /* ===== Modo PDF Multi-Página ===== */
 .btn-pdf-active {
     background: var(--blue) !important;
+.prod-search-input { width: 100%; background-color: #334155; border: 1px solid rgba(255,255,255,0.15); border-radius: 0.75rem; padding: 0.5rem 1rem 0.5rem 2.5rem; font-size: 0.75rem; color: #e2e8f0; outline: none; }
+.prod-search-input:focus { border-color: #3b82f6; }
+.prod-update-wrapper { width: 33.333%; position: relative; }
+.prod-btn-outline { width: 100%; background-color: rgba(51, 65, 85, 0.5); border: 1px solid rgba(255,255,255,0.15); color: #d1d5db; border-radius: 0.75rem; padding: 0.5rem; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: 0.2s; }
+.prod-btn-outline:hover { background-color: #374151; }
+.prod-table-card { background-color: #1e293b; border-radius: 0.75rem; flex: 1; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid rgba(255,255,255,0.15); }
+.prod-table-header { padding: 0.75rem; background-color: #334155; border-bottom: 1px solid rgba(255,255,255,0.15); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.prod-table-title { font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; display: flex; align-items: center; gap: 0.25rem; }
+.prod-table-body { flex: 1; overflow-y: auto; font-size: 0.875rem; }
+.prod-table { width: 100%; text-align: left; border-collapse: collapse; }
+.prod-table th { padding: 0.75rem; color: #6b7280; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; background-color: #1e293b; position: sticky; top: 0; border-bottom: 1px solid rgba(255,255,255,0.15); z-index: 10; white-space: nowrap; }
+.prod-table td { padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.15); white-space: nowrap; }
+.prod-table tr:hover td { background-color: rgba(255,255,255,0.05); }
+.prod-side-metrics { width: 18rem; display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0; }
+.prod-metrics-title { padding: 0.25rem; font-size: 0.75rem; text-transform: uppercase; font-weight: 900; letter-spacing: 0.1em; color: #9ca3af; margin:0; }
+.prod-metrics-subtitle { font-size: 0.625rem; text-transform: lowercase; color: #6b7280; font-weight: 400; margin:0; }
+.prod-metric-card { background-color: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 0.75rem; padding: 1rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.prod-metric-value { font-size: 2.25rem; font-weight: 900; line-height: 1; letter-spacing: -0.025em; }
+.text-cyan { color: #22d3ee; }
+.text-purple { color: #c084fc; }
+.text-teal { color: #2dd4bf; }
+.text-amber { color: #fbbf24; }
+.text-green { color: #4ade80; }
+.text-orange { color: #f97316; }
+.prod-metric-label { text-align: right; text-transform: uppercase; font-weight: 700; font-size: 0.625rem; letter-spacing: 0.05em; color: #9ca3af; line-height: 1.25; }
+.prod-metric-label span { color: #d1d5db; }
+.prod-status-filters { display: flex; flex-direction: column; gap: 0.25rem; }
+.prod-filter-status { background: transparent; border: 1px solid rgba(255,255,255,0.2); padding: 0.5rem; text-align: left; font-size: 0.75rem; width: 100%; border-radius: 0.5rem; color: #9ca3af; cursor: pointer; transition: 0.2s; }
+.prod-filter-status.active { background: rgba(20, 184, 166, 0.15); border-color: var(--teal); color: #5eead4; }
+
+/* Adicional para esconder barra de scroll nativa mas manter rolagem se quisermos (opcional) */
+.custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* Adaptação em telas menores */
+@media (max-width: 1024px) {
+    .prod-panel-container { flex-direction: column; overflow: auto; }
+    .prod-main-area { flex: auto; overflow: visible; }
+    .prod-side-metrics { width: 100%; flex-direction: row; flex-wrap: nowrap; }
+    .prod-side-metrics > div { flex: 1 1 calc(50% - 0.5rem); min-width: 150px; }
+    .prod-metrics-title { width: 100%; }
+}
+
+.hover-row {
+    transition: opacity 0.15s ease-in-out;
+}
+.hover-row:hover {
+    opacity: 0.6 !important;
+}
+.hover-row:has(select:hover),
+.hover-row:has(button:hover) {
+    opacity: 1 !important;
+}
+
+/* Estilo premium e hovers para os dropdowns select na fila de modelos */
+.hover-row select {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    text-align: center !important;
+    text-align-last: center !important;
+}
+.hover-row select:hover {
+    background: rgba(30, 41, 59, 0.95) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4) !important;
+    transform: translateY(-1px);
+}
+.hover-row select:focus {
+    outline: none !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Remove spinner arrows from number inputs */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* ─── Responsividade para Desktops (Largura >= 1024px) ───────────────────────── */
+@media (min-width: 1024px) {
+    .sidebar {
+        position: static !important;
+        transform: translateX(0) !important;
+        box-shadow: none !important;
+        flex-shrink: 0;
+        width: var(--sidebar-w-collapsed);
+        padding: 24px 6px;
+        overflow: hidden;
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sidebar:hover {
+        width: var(--sidebar-w);
+        padding: 24px 14px;
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5) !important;
+        z-index: 1001;
+    }
+
+    /* Logo: esconder texto quando colapsado */
+    .sidebar .sidebar-logo-text {
+        opacity: 0;
+        white-space: nowrap;
+        transition: opacity 0.2s ease;
+    }
+    .sidebar:hover .sidebar-logo-text {
+        opacity: 1;
+    }
+
+    .sidebar .sidebar-logo img {
+        min-width: 28px;
+        max-width: 28px;
+        transition: all 0.3s ease;
+    }
+    .sidebar:hover .sidebar-logo img {
+        min-width: unset;
+        max-width: unset;
+    }
+
+    /* Labels de grupo: esconder quando colapsado */
+    .sidebar .nav-group-label {
+        opacity: 0;
+        height: 0;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        transition: opacity 0.2s ease, height 0.2s ease, padding 0.2s ease;
+    }
+    .sidebar:hover .nav-group-label {
+        opacity: 1;
+        height: auto;
+        padding: 14px 10px 6px;
+    }
+
+    /* Nav buttons: centralizar ícone quando colapsado */
+    .sidebar .nav-btn {
+        justify-content: center;
+        padding: 11px 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        font-size: 0;
+    }
+    .sidebar .nav-btn .nav-icon {
+        font-size: 1.1rem;
+    }
+    .sidebar:hover .nav-btn {
+        justify-content: flex-start;
+        padding: 11px 14px;
+        font-size: 0.9rem;
+    }
+
+    /* Esconder texto e badge dos nav-btn quando colapsado */
+    .sidebar .nav-btn .nav-badge {
+        opacity: 0;
+        width: 0;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        transition: opacity 0.2s ease;
+    }
+    .sidebar:hover .nav-btn .nav-badge {
+        opacity: 1;
+        width: auto;
+        padding: 1px 7px;
+        margin-left: auto;
+    }
+
+    .sidebar-close-btn {
+        display: none !important;
+    }
+
+    .drawer-trigger {
+        display: none !important;
+    }
+
+    .drawer-backdrop {
+        display: none !important;
+    }
+
+    .view-section {
+        padding: 36px 60px !important;
+    }
+}
+
+/* ===== Modo PDF Multi-Página ===== */
+.btn-pdf-active {
+    background: var(--blue) !important;
     color: #fff !important;
     border-color: var(--blue) !important;
     box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
@@ -2055,4 +2250,28 @@ input[type=number] {
 .btn-pdf-active:hover {
     background: #2563eb !important;
     box-shadow: 0 0 12px rgba(59, 130, 246, 0.7);
+}
+
+/* ─── Criador de Arte Canvas Stack Layers ─────────────────────────────────── */
+#editor-canvas-stack #editor-canvas-layer1 {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 1 !important;
+    pointer-events: none !important;
+}
+
+#editor-canvas-stack .canvas-container {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 10 !important;
+}
+
+#editor-canvas-stack #editor-canvas-layer2 {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 100 !important;
+    pointer-events: none !important;
 }
