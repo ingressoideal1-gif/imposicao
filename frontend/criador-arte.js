@@ -304,6 +304,9 @@ async function setupEditorWorkspace() {
 
     // Ajustar zoom inicial à tela
     editorResetZoom();
+
+    // Carregar anexos do pedido na barra lateral esquerda
+    carregarAnexosNoEditor();
 }
 
 /**
@@ -1206,6 +1209,266 @@ async function salvarArteDoEditor() {
     }
 }
 
+/**
+ * 📎 Carregar Anexos do Pedido na barra lateral do Criador de Arte
+ */
+async function carregarAnexosNoEditor() {
+    const listEl = document.getElementById('editor-anexos-list');
+    if (!listEl) return;
+
+    const osId = window.editorState ? window.editorState.osId : null;
+    if (!osId) {
+        listEl.innerHTML = `
+            <div style="font-size: 0.75rem; color: #64748b; font-style: italic; text-align: center; padding: 10px;">
+                Nenhum pedido ativo.
+            </div>`;
+        return;
+    }
+
+    listEl.innerHTML = `
+        <div style="font-size: 0.75rem; color: #38bdf8; font-style: italic; text-align: center; padding: 10px;">
+            <i class="fa-solid fa-spinner fa-spin"></i> Buscando anexos...
+        </div>`;
+
+    // Descobrir o número da OS para consulta no Supabase
+    let osNum = window.editorState ? window.editorState.osNum : null;
+    if (!osNum && typeof state !== 'undefined' && state.ordens) {
+        const os = state.ordens.find(o => o.id === osId);
+        if (os) osNum = os.numero;
+    }
+
+    const anexos = await fetchAnexosDoPedido(osId, osNum);
+
+    if (!anexos || anexos.length === 0) {
+        listEl.innerHTML = `
+            <div style="font-size: 0.75rem; color: #64748b; font-style: italic; text-align: center; padding: 10px; border: 1px dashed #334155; border-radius: 6px;">
+                📎 Nenhum anexo encontrado neste pedido.
+            </div>`;
+        return;
+    }
+
+    const itemsHtml = anexos.map((anx) => {
+        const ext = (anx.nome.split('.').pop() || '').toLowerCase();
+        const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
+        const isPdf = ['pdf'].includes(ext);
+
+        let icon = isImage ? '🖼️' : (isPdf ? '📕' : '📄');
+
+        const escapedUrl = anx.url.replace(/'/g, "\\'");
+        const escapedName = anx.nome.replace(/'/g, "\\'");
+
+        return `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #0f172a; padding: 6px 8px; border-radius: 6px; border: 1px solid #334155; gap: 6px;" title="${anx.nome}">
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                    <span style="font-size: 0.9rem; flex-shrink: 0;">${icon}</span>
+                    <span style="font-size: 0.75rem; color: #e2e8f0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${anx.nome}</span>
+                </div>
+                ${(isImage || isPdf) ? `
+                    <button class="btn btn-sm" onclick="adicionarAnexoNaArte('${escapedUrl}', '${escapedName}', '${isPdf ? 'pdf' : 'image'}')" style="padding: 2px 8px; font-size: 0.72rem; font-weight: 700; background: #0284c7; color: white; border: none; border-radius: 4px; flex-shrink: 0; cursor: pointer;" title="Adicionar à arte">
+                        ➕ Usar
+                    </button>
+                ` : `
+                    <span style="font-size: 0.68rem; color: #64748b;">(Outro)</span>
+                `}
+            </div>
+        `;
+    }).join('');
+
+    listEl.innerHTML = itemsHtml;
+}
+
+/**
+ * Busca os anexos do pedido no Supabase / State
+ */
+async function fetchAnexosDoPedido(osId, osNum) {
+    if (typeof state !== 'undefined' && state.anexosPedido && state.anexosPedido[osId] && state.anexosPedido[osId].length > 0) {
+        return state.anexosPedido[osId];
+    }
+
+    const searchNum = osNum || osId;
+    const numInt = parseInt(String(searchNum).replace(/\D/g, ''), 10);
+    if (isNaN(numInt)) return [];
+
+    let anexosList = [];
+
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        try {
+            const { data: artesData } = await supabaseClient
+                .from('pedidos_artes')
+                .select('arquivos, storage_path, nome_arquivo, storage_bucket, mime_type, created_at')
+                .eq('id_int', numInt);
+
+            if (artesData && artesData.length > 0) {
+                artesData.forEach(pa => {
+                    let arqs = pa.arquivos;
+                    if (typeof arqs === 'string') {
+                        try { arqs = JSON.parse(arqs); } catch(e) {}
+                    }
+                    if (arqs && Array.isArray(arqs)) {
+                        arqs.forEach(arq => {
+                            let fileUrl = arq.url || arq.public_url || arq.publicUrl;
+                            const bucket = arq.storage_bucket || pa.storage_bucket || 'chat-ideal';
+                            if (!fileUrl && arq.storage_path) {
+                                const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(arq.storage_path);
+                                fileUrl = pUrl?.publicUrl;
+                            }
+                            if (!fileUrl && arq.path) {
+                                const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(arq.path);
+                                fileUrl = pUrl?.publicUrl;
+                            }
+
+                            if (fileUrl) {
+                                anexosList.push({
+                                    id: arq.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2)),
+                                    nome: arq.nome_arquivo || arq.nome || arq.name || 'Anexo',
+                                    url: fileUrl,
+                                    tamanho: arq.tamanho_bytes || arq.tamanho || 0,
+                                    tipo: arq.mime_type || arq.tipo || '',
+                                    oculto: !!arq.oculto
+                                });
+                            }
+                        });
+                    }
+                    if (pa.storage_path && pa.nome_arquivo && anexosList.length === 0) {
+                        const bucket = pa.storage_bucket || 'chat-ideal';
+                        const { data: pUrl } = supabaseClient.storage.from(bucket).getPublicUrl(pa.storage_path);
+                        if (pUrl?.publicUrl) {
+                            anexosList.push({
+                                id: pa.id || pa.storage_path,
+                                nome: pa.nome_arquivo,
+                                url: pUrl.publicUrl,
+                                tamanho: 0,
+                                tipo: pa.mime_type || '',
+                                oculto: false
+                            });
+                        }
+                    }
+                });
+            }
+        } catch (err) {
+            console.error('[Criador de Arte] Erro ao buscar anexos no Supabase:', err);
+        }
+    }
+
+    if (typeof state !== 'undefined') {
+        if (!state.anexosPedido) state.anexosPedido = {};
+        state.anexosPedido[osId] = anexosList;
+    }
+
+    return anexosList;
+}
+
+/**
+ * Adiciona um anexo (Imagem ou PDF) diretamente na Camada 3 (Arte Fabric) do Criador de Arte
+ */
+async function adicionarAnexoNaArte(url, nome, tipo) {
+    if (!url) return;
+    const fc = window.editorState ? window.editorState.fabricCanvas : null;
+    if (!fc) return;
+
+    try {
+        toast(`Carregando anexo "${nome}" na arte...`, 'info');
+
+        if (tipo === 'pdf' || nome.toLowerCase().endsWith('.pdf')) {
+            // Processar PDF via PDF.js
+            let arrayBuffer;
+            try {
+                const directResponse = await fetch(url);
+                if (directResponse.ok) {
+                    arrayBuffer = await directResponse.arrayBuffer();
+                } else {
+                    throw new Error('Direct fetch failed');
+                }
+            } catch (err) {
+                const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+                const proxyResponse = await fetch(proxyUrl);
+                if (!proxyResponse.ok) throw new Error('Proxy fetch failed');
+                arrayBuffer = await proxyResponse.arrayBuffer();
+            }
+
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const page = await pdf.getPage(1);
+            const scale = 2.0;
+            const viewport = page.getViewport({ scale });
+
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext('2d');
+
+            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+            const dataUrl = canvas.toDataURL('image/png');
+
+            fabric.Image.fromURL(dataUrl, (fImg) => {
+                if (!fImg || !fImg.height) {
+                    toast('Erro ao processar página do PDF', 'error');
+                    return;
+                }
+                const imgScale = fc.height / fImg.height;
+                fImg.set({
+                    scaleX: imgScale,
+                    scaleY: imgScale,
+                    left: (fc.width - fImg.width * imgScale) / 2,
+                    top: 0
+                });
+                fc.add(fImg);
+                fc.setActiveObject(fImg);
+                fc.renderAll();
+                saveEditorHistory();
+                toast(`Anexo PDF "${nome}" inserido na arte!`, 'success');
+            });
+
+        } else {
+            // Imagem padrão (PNG, JPG, SVG, WebP)
+            const tempImg = new Image();
+            tempImg.crossOrigin = 'anonymous';
+            tempImg.onload = () => {
+                const fImg = new fabric.Image(tempImg);
+                const scale = fc.height / fImg.height;
+                fImg.set({
+                    scaleX: scale,
+                    scaleY: scale,
+                    left: (fc.width - fImg.width * scale) / 2,
+                    top: 0
+                });
+                fc.add(fImg);
+                fc.setActiveObject(fImg);
+                fc.renderAll();
+                saveEditorHistory();
+                toast(`Anexo "${nome}" inserido na arte!`, 'success');
+            };
+            tempImg.onerror = () => {
+                // Fallback com proxy local se a imagem falhar por CORS
+                const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+                const proxyImg = new Image();
+                proxyImg.onload = () => {
+                    const fImg = new fabric.Image(proxyImg);
+                    const scale = fc.height / fImg.height;
+                    fImg.set({
+                        scaleX: scale,
+                        scaleY: scale,
+                        left: (fc.width - fImg.width * scale) / 2,
+                        top: 0
+                    });
+                    fc.add(fImg);
+                    fc.setActiveObject(fImg);
+                    fc.renderAll();
+                    saveEditorHistory();
+                    toast(`Anexo "${nome}" inserido na arte!`, 'success');
+                };
+                proxyImg.onerror = () => {
+                    toast(`Não foi possível carregar o anexo "${nome}"`, 'error');
+                };
+                proxyImg.src = proxyUrl;
+            };
+            tempImg.src = url;
+        }
+    } catch (err) {
+        console.error('[Criador de Arte] Erro ao adicionar anexo:', err);
+        toast('Erro ao adicionar anexo: ' + err.message, 'error');
+    }
+}
+
 // Expor funções globais para HTML
 window.abrirCriadorDeArte = abrirCriadorDeArte;
 window.fecharCriadorDeArte = fecharCriadorDeArte;
@@ -1232,3 +1495,6 @@ window.editorToggleMultiply = editorToggleMultiply;
 window.editorUndo = editorUndo;
 window.editorRedo = editorRedo;
 window.salvarArteDoEditor = salvarArteDoEditor;
+window.carregarAnexosNoEditor = carregarAnexosNoEditor;
+window.fetchAnexosDoPedido = fetchAnexosDoPedido;
+window.adicionarAnexoNaArte = adicionarAnexoNaArte;
