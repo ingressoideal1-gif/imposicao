@@ -13286,11 +13286,12 @@ async function loadOSItens(osId) {
         if (state._loadingOSItens[osId]) return;
         state._loadingOSItens[osId] = true;
 
-        const os = state.ordens.find(o => o.id === osId);
+        const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null);
         if (!os) {
             state._loadingOSItens[osId] = false;
             return;
         }
+        const targetId = os.id || osId;
 
         // Se não carregado ainda, ou se tem apenas o cache básico do Vibecode, busca a fonte de dados principal
         const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
@@ -16370,19 +16371,46 @@ window.showView = function(viewId) {
 };
 
 /**
+ * Helper resiliente para encontrar uma OS no state.ordens por id, id_int ou numero
+ */
+function findOSInState(osId) {
+    if (!state.ordens || !state.ordens.length) return null;
+    if (!osId && osId !== 0) return null;
+    const osIdStr = String(osId).trim();
+    return state.ordens.find(o => 
+        o.id === osId || 
+        String(o.id) === osIdStr || 
+        String(o.id_int) === osIdStr || 
+        String(o.numero) === osIdStr
+    ) || null;
+}
+window.findOSInState = findOSInState;
+
+/**
  * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
  */
 async function navigateToAmostrasFromOS(osId) {
-    const os = state.ordens.find(o => o.id === osId);
+    let os = findOSInState(osId);
+    if (!os) {
+        try {
+            await loadOrdens();
+            os = findOSInState(osId);
+        } catch (e) {
+            console.warn('Erro ao tentar recarregar ordens:', e);
+        }
+    }
+
     if (!os) {
         toast('Pedido não encontrado.', 'error');
         return;
     }
 
+    const realOSId = os.id || osId;
+
     // Garantir que os itens estejam carregados com todos os dados (ignorar cache simples do Vibecode)
-    const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
+    const needsFullLoad = !state.osItens[realOSId] || state.osItens[realOSId].length === 0 || state.osItens[realOSId].some(i => i._dbLoaded !== true);
     if (needsFullLoad) {
-        await loadOSItens(osId);
+        await loadOSItens(realOSId);
     }
 
     // Garantir que cores e numerações estejam carregados (necessários para os selects)
@@ -16395,13 +16423,17 @@ async function navigateToAmostrasFromOS(osId) {
     }
 
     // Salvar o ID do pedido ativo na tela de Amostras
-    state.amostrasOSAtivo = osId;
+    state.amostrasOSAtivo = realOSId;
 
     // Navegar para a view de Amostras (showView cuida de ativar nav + view)
-    window.showView('view-amostras');
+    if (typeof window.showView === 'function') {
+        window.showView('view-amostras');
+    } else if (typeof showView === 'function') {
+        showView('view-amostras');
+    }
 
     // Renderizar os cards de itens
-    renderAmostrasOSItens(osId);
+    renderAmostrasOSItens(realOSId);
 }
 
 /**
@@ -16721,7 +16753,8 @@ window.clienteSolicitarCorrecaoEntregaDados = clienteSolicitarCorrecaoEntregaDad
  * Cada item gera um card com: Produto, Setor, Quantidade, NI→NF, Verso, Cor, Numeração + Decisão
  */
 function renderAmostrasOSItens(osId) {
-    const os = state.ordens.find(o => o.id === osId);
+    const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null);
+    const targetOSId = os ? os.id : osId;
     const osNum = os ? (os.numero || os.id_int || os.id) : osId;
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
@@ -16732,10 +16765,10 @@ function renderAmostrasOSItens(osId) {
 
     if (!os || !container) return;
 
-    if (state.osItens[osId]) {
-        state.osItens[osId].sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0));
+    if (state.osItens[targetOSId]) {
+        state.osItens[targetOSId].sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0));
     }
-    const itens = state.osItens[osId] || [];
+    const itens = state.osItens[targetOSId] || state.osItens[osId] || [];
 
     // Mostrar banner, esconder card avulso se for painel interno
     if (banner) {
