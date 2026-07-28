@@ -13729,7 +13729,7 @@ async function loadUsuarios() {
                 usuariosSupabase.push(nome);
 
                 const setor = (u.setor || '').toLowerCase();
-                if (setor.includes('designer') || setor.includes('arte') || setor === 'designer') {
+                if (setor.includes('designer')) {
                     designersSupabase.push(nome);
                     designersObjetosSupabase.push({
                         user_id: u.user_id || u.nome_usuario,
@@ -13743,6 +13743,9 @@ async function loadUsuarios() {
 
             console.log("Designers carregados da tabela usuarios:", designersSupabase);
             console.log("Atendentes carregados da tabela usuarios:", atendentesSupabase);
+            
+            populateDesignerFilter();
+            populateAtendenteFilter();
         }
     } catch (err) {
         console.error("Exceção ao carregar usuários:", err);
@@ -13808,19 +13811,8 @@ function populateDesignerFilter() {
 
     const currentValue = filterSelect.value;
     
-    // Lista exclusiva de designers da tabela usuarios + designers atribuídos nas OSs
-    const baseList = (designersSupabase && designersSupabase.length > 0)
-        ? designersSupabase
-        : ((usuariosSupabase && usuariosSupabase.length > 0) ? usuariosSupabase : DESIGNERS_LISTA);
-    const allDesigners = new Set(baseList);
-
-    // Incluir designers atribuídos às OSs existentes
-    if (state.ordens) {
-        state.ordens.forEach(os => {
-            const des = getOSDesigner(os.id, os.numero);
-            if (des) allDesigners.add(des);
-        });
-    }
+    // Mostrar APENAS os designers encontrados na tabela usuarios cuja coluna setor contenha "designer"
+    const allDesigners = new Set(designersSupabase || []);
 
     filterSelect.innerHTML = '<option value="">🎨 Todos os Designers</option>';
     [...allDesigners].sort().forEach(d => {
