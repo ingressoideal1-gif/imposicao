@@ -13512,7 +13512,7 @@ async function loadOSItens(osId) {
         }
 
         renderOSItens(osId);
-        renderOrdens();
+        // Não chamar renderOrdens() aqui para evitar re-renderizar a tabela durante a navegação para amostras
     } catch (e) {
         console.error('Erro ao carregar itens da OS:', e);
         toast('Erro ao carregar itens: ' + e.message, 'error');
