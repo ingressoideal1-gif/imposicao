@@ -19896,21 +19896,59 @@ window.toggleOcultarAnexosSelecionados = toggleOcultarAnexosSelecionados;
 
 
 
+async function selecionarPedidoDoCliente(targetNum) {
+    if (!targetNum) return;
+    const targetNumStr = String(targetNum);
+    const os = state.ordens ? state.ordens.find(o => String(o.numero) === targetNumStr || String(o.id_int) === targetNumStr || o.id === targetNumStr) : null;
+    
+    if (os) {
+        await navigateToAmostrasFromOS(os.id);
+        return;
+    }
+
+    // Se a OS não estiver na memória de state.ordens, criar referência mínima e navegar
+    const osId = targetNumStr;
+    const newOS = {
+        id: osId,
+        id_int: parseInt(targetNumStr),
+        numero: parseInt(targetNumStr),
+        cliente: 'Cliente',
+        vendedor: ''
+    };
+    if (!state.ordens) state.ordens = [];
+    state.ordens.push(newOS);
+    await navigateToAmostrasFromOS(osId);
+}
+window.selecionarPedidoDoCliente = selecionarPedidoDoCliente;
+
 async function loadUltimosPedidos(osId, clienteNome) {
 
     if (!clienteNome || typeof supabaseClient === 'undefined') return;
     
     try {
         console.log("Buscando histórico para o cliente:", clienteNome);
-        // 1. Buscar os últimos 5 pedidos em propostas para este cliente (ilike para ignorar maiúsculas/minúsculas)
-        const { data: propostas, error: errProp } = await supabaseClient
+        const currentOS = state.ordens ? state.ordens.find(o => o.id === osId || String(o.numero) === String(osId) || String(o.id_int) === String(osId)) : null;
+        const currentNumInt = currentOS ? parseInt(currentOS.numero || currentOS.id_int || osId) : parseInt(osId);
+
+        // 1. Buscar os últimos pedidos em propostas para este cliente
+        const { data: propostasData, error: errProp } = await supabaseClient
             .from('propostas')
             .select('id_int, created_at')
             .ilike('cliente', `%${clienteNome.trim()}%`)
             .order('created_at', { ascending: false })
-            .limit(5);
+            .limit(6);
             
         if (errProp) throw errProp;
+        let propostas = propostasData || [];
+
+        // Garantir que o pedido atual esteja presente na listagem para permitir retornar a ele
+        if (currentNumInt && !isNaN(currentNumInt) && !propostas.some(p => p.id_int === currentNumInt)) {
+            propostas.unshift({
+                id_int: currentNumInt,
+                created_at: currentOS?.created_at || new Date().toISOString()
+            });
+        }
+        
         if (!propostas || propostas.length === 0) {
             const container = document.getElementById(`ultimos-pedidos-container-${osId}`);
             if (container) container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim); text-align: center; padding: 16px; background: rgba(0,0,0,0.02); border-radius: 8px;">Nenhum pedido anterior encontrado para<br><strong>${clienteNome}</strong></div>`;
@@ -19927,7 +19965,6 @@ async function loadUltimosPedidos(osId, clienteNome) {
             
         if (errArtes && errArtes.code !== '42P01') throw errArtes;
         
-        // Mapear primeiro evento encontrado de cada pedido
         const eventoMap = {};
         if (artes) {
             artes.forEach(a => {
@@ -19937,21 +19974,41 @@ async function loadUltimosPedidos(osId, clienteNome) {
             });
         }
         
-        // 3. Montar HTML de exibição
+        // 3. Montar HTML de exibição interativo com clique e destaque do pedido atual
         const html = propostas.map(p => {
             const ev = eventoMap[p.id_int] || {};
             const nome = ev.nome_evento ? ev.nome_evento : 'Evento não informado no Briefing';
-            const dataEv = ev.data_evento ? `<div style="margin-top: 4px; font-size: 0.95rem; color: var(--text-dim)"><i class="fa-regular fa-calendar"></i> Evento: ${ev.data_evento}</div>` : '';
+            const dataEv = ev.data_evento ? `<div style="margin-top: 4px; font-size: 0.82rem; color: var(--text-dim)"><i class="fa-regular fa-calendar"></i> Evento: ${ev.data_evento}</div>` : '';
             let dataCriacao = '';
             if (p.created_at) {
                 const d = new Date(p.created_at);
                 dataCriacao = d.toLocaleDateString('pt-BR');
             }
+
+            const isCurrent = (p.id_int === currentNumInt || String(p.id_int) === String(osId));
+
+            const borderStyle = isCurrent 
+                ? '2px solid #14b8a6' 
+                : '1px solid var(--border)';
+            const bgStyle = isCurrent 
+                ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.14), rgba(6, 182, 212, 0.2))' 
+                : 'rgba(0,0,0,0.015)';
+            const shadowStyle = isCurrent 
+                ? '0 2px 10px rgba(20, 184, 166, 0.25)' 
+                : 'none';
+
             return `
-                <div style="padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.015); transition: all 0.2s;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
-                        <span style="font-weight: 800; font-size: 0.95rem; color: var(--primary);">#${p.id_int}</span>
-                        <span style="font-size: 0.95rem; color: var(--text-dim); background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 12px;">${dataCriacao}</span>
+                <div onclick="selecionarPedidoDoCliente(${p.id_int})" 
+                     title="${isCurrent ? 'Pedido Atual Exibido' : 'Clique para alternar para o Pedido #' + p.id_int}"
+                     style="padding: 12px; border: ${borderStyle}; border-radius: 8px; background: ${bgStyle}; box-shadow: ${shadowStyle}; cursor: pointer; transition: all 0.2s ease;"
+                     onmouseover="${!isCurrent ? "this.style.borderColor='#14b8a6'; this.style.transform='translateY(-2px)';" : ''}"
+                     onmouseout="${!isCurrent ? "this.style.borderColor='var(--border)'; this.style.transform='none';" : ''}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 800; font-size: 0.95rem; color: ${isCurrent ? '#14b8a6' : 'var(--primary)'};">
+                            #${p.id_int}
+                            ${isCurrent ? `<span style="font-size: 0.65rem; background: #14b8a6; color: white; padding: 2px 6px; border-radius: 10px; font-weight: 800; margin-left: 6px;">📍 ATUAL</span>` : ''}
+                        </span>
+                        <span style="font-size: 0.8rem; color: var(--text-dim); background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 12px;">${dataCriacao}</span>
                     </div>
                     <div style="font-size: 0.85rem; font-weight: 600; color: var(--text);">
                         ${nome}
