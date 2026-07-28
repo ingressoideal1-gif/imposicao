@@ -18193,14 +18193,25 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             }
         }
 
-        // Remove campos virtuais (frontend-only) que não existem na tabela pedidos_modelos
+        // Mapear observação
         if ('amostra_obs' in dbData) {
             dbData.observacao_arte = dbData.amostra_obs;
-            delete dbData.amostra_obs;
         }
-        if ('amostra_status' in dbData) {
-            delete dbData.amostra_status;
+
+        // Garantir que padrao e gabarito_operacional estão preenchidos para pedidos_modelos
+        if (!dbData.padrao && dbData.cor) {
+            dbData.padrao = dbData.cor;
         }
+        if (!dbData.gabarito_operacional && (dbData.numeracao || dbData.tipo_numeracao)) {
+            dbData.gabarito_operacional = dbData.numeracao || dbData.tipo_numeracao;
+        }
+
+        // Remover campos virtuais (frontend-only) que não são colunas da tabela pedidos_modelos
+        delete dbData.amostra_obs;
+        delete dbData.amostra_status;
+        delete dbData.cor;
+        delete dbData.numeracao;
+        delete dbData.tipo_numeracao;
 
         // Se não sobrou nenhum campo para atualizar, evita fazer a requisição
         if (Object.keys(dbData).length === 0) {
@@ -18209,7 +18220,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
 
         // 1. Atualizar em pedidos_modelos (se não for item virtual não carregado)
         if (itemLocal._source === 'vibecode' && !itemLocal._dbLoaded) {
-            console.log('[SAVE] Item virtual Vibecode: salvando overrides locais:', cacheKey);
+            console.log('[SAVE] Item virtual Vibecode: salvando overrides locais:', itemLocal.id);
             Object.assign(itemLocal, dataToUpdate);
             const overrides = JSON.parse(localStorage.getItem('vibe_item_amostra_overrides') || '{}');
             const cacheKey = itemLocal.id;
@@ -18225,7 +18236,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                 .select('id, id_produto_proposta_origem');
             
             if (error) {
-                console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code);
+                console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code, '| dbData:', dbData);
             } else {
                 console.log('[SAVE] OK -> pedidos_modelos id=', queryModeloId, dbData);
             }
@@ -18235,19 +18246,13 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         const propData = {};
         if ('amostra_cor_id' in dataToUpdate) propData.amostra_cor_id = dataToUpdate.amostra_cor_id;
         if ('amostra_num_id' in dataToUpdate) propData.amostra_num_id = dataToUpdate.amostra_num_id;
-        if ('padrao' in dataToUpdate || 'cor' in dataToUpdate) {
-            const valCor = dataToUpdate.padrao || dataToUpdate.cor;
-            if (valCor) {
-                propData.padrao = valCor;
-                propData.cor = valCor;
-            }
+        const valCor = dataToUpdate.padrao || dataToUpdate.cor;
+        if (valCor) {
+            propData.padrao = valCor;
         }
-        if ('gabarito_operacional' in dataToUpdate || 'tipo_numeracao' in dataToUpdate) {
-            const valNum = dataToUpdate.gabarito_operacional || dataToUpdate.tipo_numeracao;
-            if (valNum) {
-                propData.gabarito_operacional = valNum;
-                propData.tipo_numeracao = valNum;
-            }
+        const valNum = dataToUpdate.gabarito_operacional || dataToUpdate.numeracao || dataToUpdate.tipo_numeracao;
+        if (valNum) {
+            propData.gabarito_operacional = valNum;
         }
 
         if (Object.keys(propData).length > 0) {
