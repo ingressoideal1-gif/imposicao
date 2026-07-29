@@ -695,11 +695,23 @@ async function api(method, path, body = null) {
 
                 }
 
-                const { data, error } = await supabaseClient.from(col).insert([insertPayload]).select().single();
+                let { data, error } = await supabaseClient.from(col).insert([insertPayload]).select().single();
+
+                if (error && (error.message || '').includes("Could not find the '")) {
+                    const match = (error.message || '').match(/Could not find the '(.*?)' column/);
+                    if (match && match[1]) {
+                        const missingCol = match[1];
+                        console.warn(`[api] Coluna '${missingCol}' ausente na tabela '${col}'. Tratando graciosamente...`);
+                        delete insertPayload[missingCol];
+                        const retryRes = await supabaseClient.from(col).insert([insertPayload]).select().single();
+                        data = retryRes.data;
+                        error = retryRes.error;
+                    }
+                }
 
                 if (error) throw error;
 
-                return { id: data.id };
+                return { id: data ? data.id : id };
 
             } else if (method === 'PUT') {
 
@@ -721,7 +733,18 @@ async function api(method, path, body = null) {
 
                 }
 
-                const { error } = await supabaseClient.from(col).update(updateData).eq('id', docId);
+                let { error } = await supabaseClient.from(col).update(updateData).eq('id', docId);
+
+                if (error && (error.message || '').includes("Could not find the '")) {
+                    const match = (error.message || '').match(/Could not find the '(.*?)' column/);
+                    if (match && match[1]) {
+                        const missingCol = match[1];
+                        console.warn(`[api] Coluna '${missingCol}' ausente na tabela '${col}'. Tratando graciosamente...`);
+                        delete updateData[missingCol];
+                        const retryRes = await supabaseClient.from(col).update(updateData).eq('id', docId);
+                        error = retryRes.error;
+                    }
+                }
 
                 if (error) throw error;
 
@@ -810,6 +833,14 @@ async function loadAll() {
         state.saidas = sais;
 
         state.cores = cores || [];
+        try {
+            const localRefMap = JSON.parse(localStorage.getItem('ideal_cores_referencia_map') || '{}');
+            state.cores.forEach(c => {
+                if (localRefMap[c.id]) {
+                    c.cor_referencia = localRefMap[c.id];
+                }
+            });
+        } catch(e) {}
 
         state.modelosImposicao = modelos || [];
         state.produtosGlobais = vibeProdutos || [];
@@ -1969,6 +2000,19 @@ function onCorReferenciaInput(val) {
 }
 window.onCorReferenciaInput = onCorReferenciaInput;
 
+function saveLocalCorReferencia(id, val) {
+    if (!id) return;
+    try {
+        const map = JSON.parse(localStorage.getItem('ideal_cores_referencia_map') || '{}');
+        if (val) {
+            map[id] = val;
+        } else {
+            delete map[id];
+        }
+        localStorage.setItem('ideal_cores_referencia_map', JSON.stringify(map));
+    } catch(e){}
+}
+
 async function duplicateCor(id) {
     const c = state.cores.find(x => x.id === id);
     if (!c) return;
@@ -1987,7 +2031,10 @@ async function duplicateCor(id) {
             pdf_verso_base64: c.pdf_verso_base64 || null
         };
 
-        await api('POST', '/cores', clone);
+        const res = await api('POST', '/cores', clone);
+        if (res && res.id && clone.cor_referencia) {
+            saveLocalCorReferencia(res.id, clone.cor_referencia);
+        }
         toast('Cor duplicada!', 'success');
         await loadAll();
     } catch (e) {
@@ -2036,20 +2083,20 @@ async function saveCor() {
         pdf_verso_base64: frenteVerso ? (corPdfVersoBase64 || null) : null
     };
 
-
-
     try {
 
         if (id) {
 
             await api('PUT', `/cores/${id}`, data);
-
+            saveLocalCorReferencia(id, corReferencia);
             toast('Cor atualizada!', 'success');
 
         } else {
 
-            await api('POST', '/cores', data);
-
+            const res = await api('POST', '/cores', data);
+            if (res && res.id) {
+                saveLocalCorReferencia(res.id, corReferencia);
+            }
             toast('Cor cadastrada!', 'success');
 
         }
@@ -2057,8 +2104,6 @@ async function saveCor() {
         cancelCorEdit();
 
         await loadAll();
-
-        
 
         // Redirecionar para a página Listar Cores após salvar
 
