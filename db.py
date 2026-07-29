@@ -1065,3 +1065,92 @@ def delete_user_permissions(user_id):
         print(f"[db] delete_user_permissions erro: {e}")
         return False
 
+
+def get_email_config() -> dict:
+    """Busca configurações salvas do servidor SMTP de e-mail."""
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", "configuracoes_email?id=eq.default")
+            if res and len(res) > 0:
+                return res[0]
+        except Exception as e:
+            print(f"[db] get_email_config Supabase erro: {e}")
+    db_data = _get_db()
+    return db_data.get("email_config", {})
+
+
+def save_email_config(config: dict) -> bool:
+    """Salva configurações do servidor SMTP de e-mail."""
+    config["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    if IS_SUPABASE_ACTIVE:
+        try:
+            config["id"] = "default"
+            body = json.dumps(config).encode('utf-8')
+            url = f"{SUPABASE_URL}/rest/v1/configuracoes_email?on_conflict=id"
+            headers = _headers()
+            headers['Content-Type'] = 'application/json'
+            headers['Prefer'] = 'resolution=merge-duplicates,return=representation'
+            req = urllib.request.Request(url, data=body, headers=headers, method='POST')
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                print(f"[db] save_email_config Supabase: {resp.status}")
+        except Exception as e:
+            print(f"[db] save_email_config Supabase erro: {e}")
+
+    db_data = _get_db()
+    db_data["email_config"] = config
+    _save_db(db_data)
+    return True
+
+
+def send_email_smtp(to_email: str, subject: str, body_text: str, body_html: str = None, smtp_config: dict = None) -> dict:
+    """Realiza o disparo de e-mail via servidor SMTP (TLS/SSL)."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    config = smtp_config or get_email_config()
+    email_remetente = config.get("email_remetente") or os.getenv("SMTP_EMAIL_REMETENTE") or "atendimento@ingressoideal.com.br"
+    nome_remetente = config.get("nome_remetente") or os.getenv("SMTP_NOME_REMETENTE") or "Ingresso Ideal"
+    host = config.get("host") or os.getenv("SMTP_HOST")
+    port = int(config.get("port") or os.getenv("SMTP_PORT") or 587)
+    user = config.get("user") or os.getenv("SMTP_USER") or email_remetente
+    password = config.get("password") or os.getenv("SMTP_PASSWORD")
+    use_tls = config.get("use_tls", True)
+    use_ssl = config.get("use_ssl", False) or port == 465
+
+    if not host or not user or not password:
+        return {"ok": False, "error": "Servidor SMTP não configurado. Por favor, cadastre o e-mail remetente e as credenciais nas configurações de e-mail do sistema."}
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"{nome_remetente} <{email_remetente}>"
+        msg["To"] = to_email
+
+        if body_text:
+            msg.attach(MIMEText(body_text, "plain", "utf-8"))
+        if body_html:
+            msg.attach(MIMEText(body_html, "html", "utf-8"))
+        elif body_text:
+            # Converter quebras de linha em <br> para HTML limpo
+            html_content = f"""<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+                {body_text.replace(chr(10), '<br>')}
+            </div>"""
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+        if use_ssl or port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=15)
+        else:
+            server = smtplib.SMTP(host, port, timeout=15)
+            if use_tls:
+                server.starttls()
+
+        server.login(user, password)
+        server.sendmail(email_remetente, [to_email], msg.as_string())
+        server.quit()
+
+        return {"ok": True, "message": f"E-mail enviado com sucesso para {to_email}!"}
+    except Exception as e:
+        print(f"[SMTP Error] Erro ao enviar e-mail para {to_email}:", e)
+        return {"ok": False, "error": str(e)}
+

@@ -21223,6 +21223,204 @@ window.copiarTextoEmailModal = copiarTextoEmailModal;
 window.copiarWhatsAppModal = copiarWhatsAppModal;
 window.dispararMailtoCliente = dispararMailtoCliente;
 
+// ─── CONFIGURAÇÕES E DISPARO DIRETO DE E-MAIL (SMTP / API) ───────────────────
+
+function carregarConfigEmailRemetente() {
+    const config = JSON.parse(localStorage.getItem('ideal_email_remetente_config') || '{}');
+    const elRemetente = document.getElementById('config-email-remetente');
+    const elNome = document.getElementById('config-email-nome');
+    const elHost = document.getElementById('config-email-host');
+    const elPort = document.getElementById('config-email-port');
+    const elUser = document.getElementById('config-email-user');
+    const elPass = document.getElementById('config-email-password');
+    const elTls = document.getElementById('config-email-tls');
+
+    if (elRemetente) elRemetente.value = config.email_remetente || 'atendimento@ingressoideal.com.br';
+    if (elNome) elNome.value = config.nome_remetente || 'Ingresso Ideal — Atendimento';
+    if (elHost) elHost.value = config.host || '';
+    if (elPort) elPort.value = config.port || '587';
+    if (elUser) elUser.value = config.user || '';
+    if (elPass) elPass.value = config.has_password ? '******' : (config.password || '');
+    if (elTls) elTls.checked = config.use_tls !== false;
+
+    fetch('/api/email/config')
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.ok && data.config) {
+                const cfg = data.config;
+                if (cfg.email_remetente && elRemetente) elRemetente.value = cfg.email_remetente;
+                if (cfg.nome_remetente && elNome) elNome.value = cfg.nome_remetente;
+                if (cfg.host && elHost) elHost.value = cfg.host;
+                if (cfg.port && elPort) elPort.value = cfg.port;
+                if (cfg.user && elUser) elUser.value = cfg.user;
+                if (cfg.has_password && elPass) elPass.value = '******';
+                localStorage.setItem('ideal_email_remetente_config', JSON.stringify(cfg));
+            }
+        }).catch(() => {});
+}
+
+function abrirModalConfigEmail() {
+    const modal = document.getElementById('modal-config-email-remetente');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.style.zIndex = '9999999';
+        carregarConfigEmailRemetente();
+    }
+}
+
+function fecharModalConfigEmail() {
+    const modal = document.getElementById('modal-config-email-remetente');
+    if (modal) modal.style.display = 'none';
+}
+
+async function salvarConfigEmailRemetente() {
+    const config = {
+        email_remetente: document.getElementById('config-email-remetente')?.value || '',
+        nome_remetente: document.getElementById('config-email-nome')?.value || '',
+        host: document.getElementById('config-email-host')?.value || '',
+        port: parseInt(document.getElementById('config-email-port')?.value || '587'),
+        user: document.getElementById('config-email-user')?.value || '',
+        password: document.getElementById('config-email-password')?.value || '',
+        use_tls: document.getElementById('config-email-tls')?.checked !== false
+    };
+
+    if (!config.email_remetente) {
+        toast('Por favor, informe o e-mail remetente!', 'warning');
+        return;
+    }
+
+    localStorage.setItem('ideal_email_remetente_config', JSON.stringify(config));
+
+    try {
+        await fetch('/api/email/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+    } catch (e) {
+        console.warn('[Config Email] Não foi possível salvar no backend FastAPI:', e);
+    }
+
+    toast('Configurações de e-mail salvas com sucesso! ⚙️', 'success');
+    fecharModalConfigEmail();
+}
+
+async function testarEnvioEmailConfig() {
+    const rem = document.getElementById('config-email-remetente')?.value;
+    if (!rem) {
+        toast('Informe o e-mail remetente para testar.', 'warning');
+        return;
+    }
+    toast('Enviando e-mail de teste para ' + rem + '...', 'info');
+    
+    const config = {
+        email_remetente: rem,
+        nome_remetente: document.getElementById('config-email-nome')?.value || 'Teste Ingresso Ideal',
+        host: document.getElementById('config-email-host')?.value || '',
+        port: parseInt(document.getElementById('config-email-port')?.value || '587'),
+        user: document.getElementById('config-email-user')?.value || '',
+        password: document.getElementById('config-email-password')?.value || '',
+        use_tls: document.getElementById('config-email-tls')?.checked !== false
+    };
+
+    try {
+        const res = await fetch('/api/email/enviar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                to: rem,
+                subject: 'Teste de Conexão SMTP — Ingresso Ideal',
+                body_text: 'Este é um e-mail de teste para validar a configuração de envio SMTP da aplicação.',
+                smtp_config: config
+            })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+            toast('E-mail de teste enviado com sucesso! 🚀 Verifique sua caixa de entrada.', 'success');
+        } else {
+            toast('Erro no teste: ' + (data.detail || data.error || 'Falha na conexão SMTP'), 'error');
+        }
+    } catch (err) {
+        toast('Erro ao testar envio: ' + err.message, 'error');
+    }
+}
+
+async function dispararEmailDiretoCliente() {
+    const to = document.getElementById('modal-email-to')?.value || '';
+    const subject = document.getElementById('modal-email-subject')?.value || '';
+    const body = document.getElementById('modal-email-body')?.value || '';
+    const btn = document.getElementById('btn-disparar-email-direto');
+
+    if (!to) {
+        toast('Por favor, informe o e-mail do cliente (Destinatário)!', 'warning');
+        return;
+    }
+    if (!subject) {
+        toast('Por favor, informe o assunto do e-mail!', 'warning');
+        return;
+    }
+
+    const origBtnHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Disparando E-mail...';
+    }
+
+    toast('Disparando e-mail pela aplicação...', 'info');
+
+    const configLocal = JSON.parse(localStorage.getItem('ideal_email_remetente_config') || '{}');
+
+    try {
+        const res = await fetch('/api/email/enviar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                to: to,
+                subject: subject,
+                body_text: body,
+                smtp_config: configLocal
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+            toast(`E-mail disparado com sucesso para ${to}! 🚀`, 'success');
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-check"></i> E-mail Enviado!';
+            setTimeout(() => {
+                fecharModalEnviarEmailCliente();
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origBtnHtml;
+                }
+            }, 1200);
+        } else {
+            const errorMsg = data.detail || data.error || 'Falha no disparo do e-mail.';
+            toast('Erro no disparo: ' + errorMsg, 'error');
+            if (errorMsg.includes('não configurado') || errorMsg.includes('SMTP')) {
+                abrirModalConfigEmail();
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origBtnHtml;
+            }
+        }
+    } catch (err) {
+        console.error('[Disparo Direto] Erro:', err);
+        toast('Erro de conexão ao disparar e-mail: ' + err.message, 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origBtnHtml;
+        }
+    }
+}
+
+window.abrirModalConfigEmail = abrirModalConfigEmail;
+window.fecharModalConfigEmail = fecharModalConfigEmail;
+window.salvarConfigEmailRemetente = salvarConfigEmailRemetente;
+window.testarEnvioEmailConfig = testarEnvioEmailConfig;
+window.dispararEmailDiretoCliente = dispararEmailDiretoCliente;
+
 
 
 function setFiltroSetor(setor) {

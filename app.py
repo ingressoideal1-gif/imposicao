@@ -1039,6 +1039,54 @@ async def delete_user_permissions_endpoint(user_id: str):
     ok = db.delete_user_permissions(user_id)
     return {"ok": ok}
 
+# ─── DISPARO DE E-MAILS & CONFIGURAÇÕES SMTP ─────────────────────────────────
+
+@app.get("/api/email/config")
+async def get_email_config_endpoint():
+    config = db.get_email_config()
+    safe_config = { **config }
+    if "password" in safe_config and safe_config["password"]:
+        safe_config["has_password"] = True
+        safe_config["password"] = "******"
+    return {"ok": True, "config": safe_config}
+
+@app.post("/api/email/config")
+async def save_email_config_endpoint(request: Request):
+    data = await request.json()
+    existing = db.get_email_config()
+    if data.get("password") == "******" and "password" in existing:
+        data["password"] = existing["password"]
+    ok = db.save_email_config(data)
+    return {"ok": ok}
+
+@app.post("/api/email/enviar")
+async def send_email_endpoint(request: Request):
+    data = await request.json()
+    to_email = data.get("to")
+    subject = data.get("subject")
+    body_text = data.get("body_text", "")
+    body_html = data.get("body_html", "")
+    custom_config = data.get("smtp_config")
+
+    if not to_email or not subject:
+        raise HTTPException(status_code=400, detail="Destinatário e Assunto são obrigatórios.")
+
+    if not custom_config or not custom_config.get("host"):
+        db_config = db.get_email_config()
+        if custom_config:
+            if not custom_config.get("password") or custom_config.get("password") == "******":
+                custom_config["password"] = db_config.get("password")
+            merged = { **db_config, **custom_config }
+            custom_config = merged
+        else:
+            custom_config = db_config
+
+    result = db.send_email_smtp(to_email, subject, body_text, body_html, custom_config)
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Erro ao enviar e-mail."))
+
+    return result
+
 # Fallback mount to serve static files from root (resolves absolute links like /style.css, /script.js, /supabase-config.js in frontend)
 app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="root_frontend")
 
