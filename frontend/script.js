@@ -20961,7 +20961,7 @@ function ensureModalEmailElement() {
                         </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button class="btn btn-secondary btn-sm" onclick="abrirModalConfigEmail()" style="font-size:0.78rem;font-weight:700;padding:5px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;" title="Configurar Servidor SMTP e E-mail Remetente">
+                        <button class="btn btn-secondary btn-sm" id="btn-abrir-config-email" onclick="abrirModalConfigEmail()" style="font-size:0.78rem;font-weight:700;padding:5px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;" title="Configurar Servidor SMTP e E-mail Remetente">
                             ⚙️ Configurar Remetente
                         </button>
                         <button onclick="fecharModalEnviarEmailCliente()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
@@ -21024,6 +21024,7 @@ function ensureModalEmailElement() {
             </div>
         `;
         document.body.appendChild(modal);
+        document.getElementById('btn-abrir-config-email').addEventListener('click', abrirModalConfigEmail);
     }
     if (modal.parentNode !== document.body) {
         document.body.appendChild(modal);
@@ -21114,11 +21115,16 @@ function ensureModalConfigEmailElement() {
 }
 
 function abrirModalConfigEmail() {
+    console.log('[Email Config] abrirModalConfigEmail acionado!');
+    toast('Abrindo configurações de remetente...', 'info');
     const modal = ensureModalConfigEmailElement();
-    modal.style.display = 'flex';
-    modal.style.zIndex = '9999999';
-    carregarConfigEmailRemetente();
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.style.zIndex = '9999999';
+        carregarConfigEmailRemetente();
+    }
 }
+window.abrirModalConfigEmail = abrirModalConfigEmail;
 
 /**
  * Abre o modal de notificação/e-mail do cliente após a geração do link
