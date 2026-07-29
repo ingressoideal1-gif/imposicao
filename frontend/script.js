@@ -21017,6 +21017,10 @@ function ensureModalEmailElement() {
         `;
         document.body.appendChild(modal);
     }
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
+    modal.style.zIndex = '999999';
     return modal;
 }
 
@@ -21026,6 +21030,7 @@ function ensureModalEmailElement() {
 async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
     const modal = ensureModalEmailElement();
     modal.style.display = 'flex'; // Exibir imediatamente!
+    modal.style.zIndex = '999999';
 
     // Preencher dados iniciais de feedback visual
     const elNum = document.getElementById('modal-email-os-numero');
