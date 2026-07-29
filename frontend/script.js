@@ -14442,8 +14442,20 @@ function renderOrdens() {
 
 
     // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---
+    let _debugFilterCount = 0;
+    const _filterAtendente0 = (document.getElementById('os-filter-atendente')?.value || '');
+    console.log('[DEBUG FILTER] filterAtendente PRE-filter:', JSON.stringify(_filterAtendente0), '| searchArte:', JSON.stringify(searchArte), '| filtroSetorArte:', JSON.stringify(state.filtroSetorArte), '| filtroStatusArte:', JSON.stringify(state.filtroStatusArte));
     let filteredArte = baseOrdensArte.filter(os => {
         const itens = state.osItens[os.id] || [];
+        const _fa = (document.getElementById('os-filter-atendente')?.value || '');
+        const _fd = filterDesigner;
+        const _sa = searchArte;
+        const _fset = state.filtroSetorArte;
+        const _fst = state.filtroStatusArte;
+        if (_debugFilterCount < 10) {
+            console.log(`[DEBUG FILTER OS#${os.numero}] filterAtendente:${JSON.stringify(_fa)} filterDesigner:${JSON.stringify(_fd)} searchArte:${JSON.stringify(_sa)} filtroSetor:${JSON.stringify(_fset)} filtroStatus:${JSON.stringify(_fst)} status_calc:${os.status_calculado} status:${os.status}`);
+            _debugFilterCount++;
+        }
 
         // 1. Busca textual
         if (searchArte) {
