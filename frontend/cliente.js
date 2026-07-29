@@ -249,8 +249,8 @@ function renderAmostrasOSItens(osId) {
             `<option value="${n.id}" ${String(n.id) === String(resolvedNumId) ? 'selected' : ''}>${n.name}</option>`
         ).join('');
         return `
-        <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
-            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;">
+            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>

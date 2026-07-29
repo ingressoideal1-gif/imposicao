@@ -15851,8 +15851,8 @@ function renderImpOSQueue() {
         `;
 
         html += `
-        <div class="card mb-3" style="background:#1e293b; border: 2px solid var(--blue); border-radius: 6px; overflow:hidden;" data-setor="${setorPcp}">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue);">
+        <div class="card mb-1" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 3pt;" data-setor="${setorPcp}">
+            <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c;">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderImpOSQueue', 'box-arrow-${prodId}-renderImpOSQueue')">
                     <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
                         <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
@@ -16946,8 +16946,8 @@ function renderAmostrasOSItens(osId) {
             `<option value="${n.id}" ${String(n.id) === String(resolvedNumId) ? 'selected' : ''}>${n.name}</option>`
         ).join('');
         return `
-        <div class="card" style="border: 2px solid var(--blue); margin-bottom: 0;">
-            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;">
+            <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                     <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
