@@ -2678,7 +2678,7 @@ function renderPedOSQueue() {
     const selectStyleDisabled = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: rgba(255, 255, 255, 0.5); padding: 8px 12px; font-size: 1.15rem; width: 100%; cursor: not-allowed; text-align: center; text-align-last: center; font-weight: 600;';
     const btnStyle = 'border:none; border-radius:6px; padding:10px 18px; font-size:1.05rem; cursor:pointer; font-weight:700; transition:all 0.2s ease; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);';
 
-    const selectHeaderStyle = 'background:#1e293b; border:1px solid #3b82f6; border-radius:4px; color:#f1f5f9; padding:4px 8px; font-size:0.85rem; cursor:pointer;';
+    const selectHeaderStyle = 'background:#1e293b; border:1px solid #918f8c; border-radius:4px; color:#f1f5f9; padding:4px 8px; font-size:0.85rem; cursor:pointer;';
     const selectHeaderStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:4px 8px; font-size:0.85rem; cursor:not-allowed;';
 
     let html = '';
@@ -2763,17 +2763,17 @@ function renderPedOSQueue() {
         `;
 
         html += `
-        <div class="card mb-3" style="background:#1e293b; border: 2px solid var(--blue); border-radius: 6px; overflow:hidden;" data-setor="${setorPcp}">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid var(--blue);">
+        <div class="card mb-3" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 3pt;" data-setor="${setorPcp}">
+            <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c;">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">
                     <h5 class="mb-0" style="color: #facc15; font-size: calc(1.1rem + 3pt); font-weight:bold;">
-                        <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
+                        <i class="fas fa-box-open me-2" style="color:#918f8c;"></i>${nomeReal} ${setorBadge}
                     </h5>
                 </div>
                 ${headerDropdowns}
             </div>
-            <div class="table-responsive" id="box-body-${prodId}-renderPedOSQueue">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border:none;">
+            <div class="table-responsive" id="box-body-${prodId}-renderPedOSQueue" style="padding: 0 3pt;">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border-collapse: separate; border-spacing: 0 3pt;">
                     <tbody>
         `;
 
@@ -2784,10 +2784,10 @@ function renderPedOSQueue() {
             const inactiveBg = isImpresso ? '#007f41' : '#1473e6';
             const isSelected = state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id));
             const rowBg = isSelected 
-                ? 'background: rgba(34, 197, 94, 0.25); border-left: 5px solid #22c55e;' 
+                ? 'background: rgba(34, 197, 94, 0.25); border-left: 5px solid #22c55e; outline: 1px solid #918f8c;' 
                 : (isActive
-                    ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;'
-                    : `background: ${inactiveBg}; border-bottom: 1px solid rgba(255, 255, 255, 0.15);`);
+                    ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c; outline: 1px solid #918f8c;'
+                    : `background: ${inactiveBg}; outline: 1px solid #918f8c;`);
 
             let itemFmtId = boxFmtSel;
 
