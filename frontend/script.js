@@ -20832,6 +20832,14 @@ async function getOrCreateLinkCliente(osId, numero) {
 
 async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
     const novoStatus = 'Aguard. Aprovação';
+    const host = window.location.origin;
+    const finalUrl = linkUrl || `${host}/cliente.html?os=${osId}`;
+
+    // 1. ABRIR MODAL DE E-MAIL E PÁGINA DO CLIENTE IMEDIATAMENTE!
+    abrirModalEnviarEmailCliente(osId, numero, finalUrl);
+    window.open(finalUrl, '_blank');
+
+    // 2. Atualizar status e recarregar em segundo plano
     const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
     if (os && os.status !== 'Aprovada' && os.status !== 'APROVADO') {
         os.status = novoStatus;
@@ -20847,14 +20855,8 @@ async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
                 await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
             }
         }
-        await loadOrdens();
+        loadOrdens();
     }
-    if (linkUrl) {
-        window.open(linkUrl, '_blank');
-    }
-    setTimeout(() => {
-        abrirModalEnviarEmailCliente(osId, numero, linkUrl);
-    }, 150);
 }
 window.abrirLinkClienteEAtualizarStatus = abrirLinkClienteEAtualizarStatus;
 window.enviar_link = function(osId, numero) { return gerarLinkCliente(osId, numero); };
@@ -20863,7 +20865,7 @@ window.enviarLinkCliente = window.enviar_link;
 
 /**
  * Gera (ou recupera) o link do cliente, copia para a área de transferência
- * e exibe um toast de confirmação.
+ * e exibe o modal de e-mail instantaneamente.
  */
 async function gerarLinkCliente(osId, numero) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
@@ -20884,7 +20886,14 @@ async function gerarLinkCliente(osId, numero) {
             os.status_calculado = novoStatus;
         }
 
-        // 2. Atualizar no banco Supabase primeiro
+        // 2. URL de fallback imediata
+        const host = window.location.origin;
+        const fallbackUrl = `${host}/cliente.html?os=${osId}`;
+
+        // 3. ABRIR MODAL DE NOTIFICAÇÃO DO CLIENTE IMEDIATAMENTE (SEM AGUARDAR REDE)!
+        abrirModalEnviarEmailCliente(osId, numero, fallbackUrl);
+
+        // 4. Atualizar no Supabase em segundo plano
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             if (osId.startsWith('vibe_')) {
                 await supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId);
@@ -20893,20 +20902,12 @@ async function gerarLinkCliente(osId, numero) {
             }
         }
 
-        // Regenerar os snapshots de imagem offscreen para garantir que o link do cliente reflita exatamente a janela combinada
-        try {
-            toast('Gerando imagens atualizadas da amostra...', 'info');
-            await forceRegenerateSnapshots(osId);
-        } catch (snapErr) {
-            console.warn('[Gerar Link] Erro ao regenerar snapshots:', snapErr);
-        }
+        // 5. Obter/Criar o link oficial registrado no banco
+        const linkUrl = await getOrCreateLinkCliente(osId, numero) || fallbackUrl;
 
-        // 3. Obter ou criar o link do cliente (já gravando o novoStatus)
-        const linkUrl = await getOrCreateLinkCliente(osId, numero);
-        if (!linkUrl) {
-            toast('Tabela de links ainda não existe no banco. Execute o SQL de criação.', 'warning');
-            return;
-        }
+        // Atualizar campo de link no modal se o oficial for retornado
+        const elLink = document.getElementById('modal-email-link-display');
+        if (elLink) elLink.textContent = linkUrl;
 
         try {
             await navigator.clipboard.writeText(linkUrl);
@@ -20915,13 +20916,13 @@ async function gerarLinkCliente(osId, numero) {
             console.warn('[Gerar Link] Não foi possível copiar para o clipboard:', clipErr);
         }
 
-        // 4. Recarregar a lista para exibir os botões do link gerado e manter na Fila de Aprovação
-        await loadOrdens();
+        // 6. Recarregar lista
+        loadOrdens();
 
-        // 5. Abrir o modal de disparo de e-mail ao cliente
-        setTimeout(() => {
-            abrirModalEnviarEmailCliente(osId, numero, linkUrl);
-        }, 100);
+        // 7. Regenerar snapshots em segundo plano (sem travar o modal)
+        forceRegenerateSnapshots(osId).catch(snapErr => {
+            console.warn('[Gerar Link] Erro ao regenerar snapshots:', snapErr);
+        });
 
     } catch (e) {
         console.error('Erro ao gerar link do cliente:', e);
