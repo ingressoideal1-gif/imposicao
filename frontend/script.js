@@ -15851,28 +15851,39 @@ function renderImpOSQueue() {
         `;
 
         html += `
-        <div class="card mb-1" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 3pt;" data-setor="${setorPcp}">
+        <div class="card mb-1" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 6pt;" data-setor="${setorPcp}">
             <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c;">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderImpOSQueue', 'box-arrow-${prodId}-renderImpOSQueue')">
                     <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
-                        <i class="fas fa-box-open me-2" style="color:var(--blue);"></i>${nomeReal} ${setorBadge}
+                        <i class="fas fa-box-open me-2" style="color:#918f8c;"></i>${nomeReal} ${setorBadge}
                     </h5>
                 </div>
                 ${headerDropdowns}
             </div>
-            <div class="table-responsive" id="box-body-${prodId}-renderImpOSQueue">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border:none;">
+            <div class="table-responsive" id="box-body-${prodId}-renderImpOSQueue" style="padding: 0 3pt;">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border-collapse: separate; border-spacing: 0 6pt;">
                     <tbody>
         `;
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const statusImpressaoVal = item.status_impressao || 'Aguardando';
-            const isImpresso = statusImpressaoVal === 'IMPRESSO';
-            const inactiveBg = isImpresso ? '#007f41' : '#1473e6';
-            const rowBg = isActive
-                ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c;'
-                : `background: ${inactiveBg}; border-bottom: 1px solid rgba(255, 255, 255, 0.15);`;
+            const rawStatus = String(item.status_impressao || item.impressao || 'Aguardando').toUpperCase();
+            
+            let statusBg = '#918f8c'; // Aguardando
+            if (rawStatus.includes('IMPRESSO')) {
+                statusBg = '#162037'; // Impresso
+            } else if (rawStatus.includes('PARCIAL')) {
+                statusBg = '#636561'; // Parcial
+            } else if (rawStatus.includes('AGUARD') || rawStatus === 'AGUARDANDO') {
+                statusBg = '#918f8c'; // Aguardando
+            }
+
+            let rowBgColor = statusBg;
+            if (isActive) {
+                rowBgColor = 'rgba(154, 153, 158, 0.5)'; // Lente #9a999e 50% transparência
+            }
+
+            const rowBg = `background: ${rowBgColor}; outline: 1px solid #918f8c;${isActive ? ' border-left: 5px solid #9a999e;' : ''}`;
 
             let itemFmtId = boxFmtSel;
 

@@ -2763,7 +2763,7 @@ function renderPedOSQueue() {
         `;
 
         html += `
-        <div class="card mb-3" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 3pt;" data-setor="${setorPcp}">
+        <div class="card mb-3" style="background:#1e293b; border: 1px solid #918f8c; border-radius: 6px; overflow:hidden; margin-bottom: 6pt;" data-setor="${setorPcp}">
             <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c;">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">
                     <h5 class="mb-0" style="color: #facc15; font-size: calc(1.1rem + 3pt); font-weight:bold;">
@@ -2773,21 +2773,30 @@ function renderPedOSQueue() {
                 ${headerDropdowns}
             </div>
             <div class="table-responsive" id="box-body-${prodId}-renderPedOSQueue" style="padding: 0 3pt;">
-                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border-collapse: separate; border-spacing: 0 3pt;">
+                <table class="data-table table-dark table-sm mb-0 align-middle" style="font-size:1.0rem; margin:0; width:100%; border-collapse: separate; border-spacing: 0 6pt;">
                     <tbody>
         `;
 
         html += groupItens.map((item, idx) => {
             const isActive = activeItem.itemId === item.id || String(activeItem.itemId) === String(item.id);
-            const statusImpressaoVal = item.status_impressao || 'Aguardando';
-            const isImpresso = statusImpressaoVal === 'IMPRESSO';
-            const inactiveBg = isImpresso ? '#007f41' : '#1473e6';
             const isSelected = state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id));
-            const rowBg = isSelected 
-                ? 'background: rgba(34, 197, 94, 0.25); border-left: 5px solid #22c55e; outline: 1px solid #918f8c;' 
-                : (isActive
-                    ? 'background: rgba(249, 115, 22, 0.8); border-left: 5px solid #ea580c; outline: 1px solid #918f8c;'
-                    : `background: ${inactiveBg}; outline: 1px solid #918f8c;`);
+            const rawStatus = String(item.status_impressao || item.impressao || 'Aguardando').toUpperCase();
+            
+            let statusBg = '#918f8c'; // Aguardando
+            if (rawStatus.includes('IMPRESSO')) {
+                statusBg = '#162037'; // Impresso
+            } else if (rawStatus.includes('PARCIAL')) {
+                statusBg = '#636561'; // Parcial
+            } else if (rawStatus.includes('AGUARD') || rawStatus === 'AGUARDANDO') {
+                statusBg = '#918f8c'; // Aguardando
+            }
+
+            let rowBgColor = statusBg;
+            if (isSelected || isActive) {
+                rowBgColor = 'rgba(154, 153, 158, 0.5)'; // Lente #9a999e 50% transparência
+            }
+
+            const rowBg = `background: ${rowBgColor}; outline: 1px solid #918f8c;${(isSelected || isActive) ? ' border-left: 5px solid #9a999e;' : ''}`;
 
             let itemFmtId = boxFmtSel;
 
