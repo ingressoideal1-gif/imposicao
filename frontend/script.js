@@ -15994,10 +15994,27 @@ function renderImpOSQueue() {
                     }
                 }
             }
+            let selectedCorObj = null;
+            if (selectedCorId) {
+                selectedCorObj = coresItem.find(c => String(c.id) === String(selectedCorId));
+            }
+            if (!selectedCorObj && corIdAtual) {
+                selectedCorObj = (state.cores || []).find(c => String(c.id) === String(corIdAtual));
+            }
+            if (!selectedCorObj && corNomeAtual) {
+                selectedCorObj = (state.cores || []).find(c => globalNormStr(c.name) === globalNormStr(corNomeAtual) || globalFuzzyMatch(c.name, corNomeAtual));
+            }
+            const corRefHex = selectedCorObj ? (selectedCorObj.cor_referencia || selectedCorObj.hex || '') : '';
+
             const coresOptions = coresItem.map(c => {
                 const sel = selectedCorId && String(c.id) === selectedCorId ? 'selected' : '';
-                return `<option value="${c.id}" ${sel}>${c.name}</option>`;
+                const refHex = c.cor_referencia || c.hex || '';
+                const optStyle = refHex ? `background-color: ${refHex}; color: #000000; font-weight: bold;` : '';
+                return `<option value="${c.id}" ${sel} style="${optStyle}">${c.name}</option>`;
             }).join('');
+
+            const corSelectBg = corRefHex || '#1e293b';
+            const corSelectStyle = `${selectStyle}; background-color: ${corSelectBg} !important; color: #000000 !important; font-weight: bold;`;
 
             let selectedNumId = null;
             const numIdAtual = item.numeracao_id ? String(item.numeracao_id) : (item.amostra_num_id ? String(item.amostra_num_id) : null);
@@ -16047,7 +16064,10 @@ function renderImpOSQueue() {
                         ${item.modelo || '--'}
                     </td>
                     <td style="padding: 12px; font-size: 1.15rem; font-weight:600; color:#ffffff; min-width:140px;" title="Nome do Modelo">
-                        ${nomeDoModelo}
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 22px; height: 22px; min-width: 22px; min-height: 22px; border-radius: 50%; background-color: ${corRefHex || 'transparent'}; border: ${corRefHex ? '2px solid rgba(255, 255, 255, 0.8)' : '2px dashed #918f8c'}; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.4);" title="Cor de referência: ${corRefHex || 'Nenhuma'}"></span>
+                            <span>${nomeDoModelo}</span>
+                        </div>
                     </td>
                     
                     <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Quantidade">
@@ -16077,7 +16097,7 @@ function renderImpOSQueue() {
                     <td style="padding: 12px; width: 250px; min-width: 250px; max-width: 250px;" title="Cor">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">COR</span>
-                            <select style="${selectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
+                            <select style="${corSelectStyle}" onchange="impQueueUpdateCor('${item.id}', '${osId}', this.value)" onclick="event.stopPropagation()">
                                 <option value="">— Cor —</option>
                                 ${coresOptions}
                             </select>
