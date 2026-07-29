@@ -1868,23 +1868,15 @@ function renderCores() {
                 <table class="data-table">
 
                     <thead>
-
                         <tr>
-
                             <th>Nome da Cor</th>
-
                             <th>Tamanho</th>
-
+                            <th>Referência de Cor</th>
                             <th>Arquivo PDF</th>
-
                             <th style="text-align: right; width: 120px;">Ações</th>
-
                         </tr>
-
                     </thead>
-
                     <tbody>
-
                         ${coresDoFormato.map(c => {
                             let pdfLinkFront = c.pdf_base64 
                                 ? `<a href="${c.pdf_base64}" download="${c.pdf_filename || 'referencia_frente.pdf'}" class="badge badge-teal" style="text-decoration:none;" onclick="event.stopPropagation();">📥 Frente</a>`
@@ -1898,11 +1890,19 @@ function renderCores() {
                             }
                             
                             const pdfLinks = pdfLinkFront + pdfLinkBack;
+                            const refCorHex = c.cor_referencia || c.hex || '';
+                            const refCorBadge = refCorHex
+                                ? `<div style="display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,0.3); padding:4px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.15);">
+                                    <span style="display:inline-block; width:16px; height:16px; border-radius:3px; background:${refCorHex}; border:1px solid #ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.5);"></span>
+                                    <span style="font-family:monospace; font-weight:600; font-size:0.85rem; color:#ffffff;">${refCorHex}</span>
+                                   </div>`
+                                : '<span style="color:var(--text-faint)">— Sem Cor —</span>';
                             
                             return `
                                 <tr style="cursor: pointer;" onclick="editCor('${c.id}')" title="Clique para editar/visualizar esta cor">
                                     <td><strong>${c.name}</strong></td>
                                     <td>${c.width_mm} × ${c.height_mm} mm</td>
+                                    <td>${refCorBadge}</td>
                                     <td>${pdfLinks}</td>
 
                                     <td class="actions-cell" style="text-align: right;" onclick="event.stopPropagation();">
@@ -1910,13 +1910,9 @@ function renderCores() {
                                         <button class="btn btn-sm btn-ghost" onclick="editCor('${c.id}')">✏️ Editar</button>
                                         <button class="btn btn-danger btn-sm" onclick="deleteCor('${c.id}')">🗑️</button>
                                     </td>
-
                                 </tr>
-
                             `;
-
                         }).join('')}
-
                     </tbody>
 
                 </table>
@@ -1935,6 +1931,44 @@ function renderCores() {
 
 window.renderCores = renderCores;
 
+async function pipetaCorReferencia() {
+    if (!('EyeDropper' in window)) {
+        const picker = document.getElementById('cor-hex-picker');
+        if (picker) picker.click();
+        if (typeof toast === 'function') toast('Navegador sem suporte à pipeta nativa. Seletor de cor aberto.', 'info');
+        return;
+    }
+    try {
+        const eyeDropper = new EyeDropper();
+        const result = await eyeDropper.open();
+        if (result && result.sRGBHex) {
+            const hex = result.sRGBHex.toUpperCase();
+            const inputRef = document.getElementById('cor-referencia');
+            const inputPicker = document.getElementById('cor-hex-picker');
+            if (inputRef) inputRef.value = hex;
+            if (inputPicker) inputPicker.value = hex;
+            if (typeof toast === 'function') toast(`Cor capturada com sucesso: ${hex}`, 'success');
+        }
+    } catch (err) {
+        console.log('[Pipeta] Captura de cor cancelada ou encerrada pelo usuário');
+    }
+}
+window.pipetaCorReferencia = pipetaCorReferencia;
+
+function onCorHexPickerInput(val) {
+    const refInput = document.getElementById('cor-referencia');
+    if (refInput) refInput.value = (val || '').toUpperCase();
+}
+window.onCorHexPickerInput = onCorHexPickerInput;
+
+function onCorReferenciaInput(val) {
+    const pickerInput = document.getElementById('cor-hex-picker');
+    if (pickerInput && /^#[0-9A-F]{6}$/i.test((val || '').trim())) {
+        pickerInput.value = val.trim();
+    }
+}
+window.onCorReferenciaInput = onCorReferenciaInput;
+
 async function duplicateCor(id) {
     const c = state.cores.find(x => x.id === id);
     if (!c) return;
@@ -1945,6 +1979,7 @@ async function duplicateCor(id) {
             formato_id: c.formato_id,
             width_mm: parseFloat(c.width_mm),
             height_mm: parseFloat(c.height_mm),
+            cor_referencia: c.cor_referencia || c.hex || "",
             pdf_base64: c.pdf_base64 || null,
             pdf_filename: c.pdf_filename || "",
             frente_verso: c.frente_verso || false,
@@ -1975,7 +2010,7 @@ async function saveCor() {
 
     const h = parseFloat(document.getElementById('cor-h').value);
 
-
+    const corReferencia = document.getElementById('cor-referencia')?.value.trim() || '';
 
     if (!name) return toast('Informe o nome da cor.', 'error');
 
@@ -1993,6 +2028,7 @@ async function saveCor() {
         formato_id: formatoId,
         width_mm: w,
         height_mm: h,
+        cor_referencia: corReferencia,
         pdf_base64: corPdfBase64 || null,
         pdf_filename: corPdfFilename || "",
         frente_verso: frenteVerso,
@@ -2068,7 +2104,11 @@ function editCor(id) {
 
     document.getElementById('cor-h').value = c.height_mm;
 
-    
+    const refVal = c.cor_referencia || c.hex || '';
+    const refInput = document.getElementById('cor-referencia');
+    const pickerInput = document.getElementById('cor-hex-picker');
+    if (refInput) refInput.value = refVal;
+    if (pickerInput && /^#[0-9A-F]{6}$/i.test(refVal)) pickerInput.value = refVal;
 
     const chkFrenteVerso = document.getElementById('cor-frente-verso');
     if (chkFrenteVerso) chkFrenteVerso.checked = c.frente_verso || false;
@@ -2111,6 +2151,11 @@ function cancelCorEdit() {
     document.getElementById('cor-formato').value = '';
     document.getElementById('cor-w').value = '';
     document.getElementById('cor-h').value = '';
+    
+    const refInput = document.getElementById('cor-referencia');
+    const pickerInput = document.getElementById('cor-hex-picker');
+    if (refInput) refInput.value = '';
+    if (pickerInput) pickerInput.value = '#3b82f6';
     
     const chkFrenteVerso = document.getElementById('cor-frente-verso');
     if (chkFrenteVerso) chkFrenteVerso.checked = false;
