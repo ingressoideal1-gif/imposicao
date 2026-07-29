@@ -16665,18 +16665,17 @@ async function loadDadosEntregaInterno(osId, osNum) {
             try {
                 const { data: chatData } = await supabaseClient
                     .from('propostas_chat')
-                    .select('mensagem, remetente_nome')
+                    .select('*')
                     .eq('id_int', numInt)
-                    .ilike('remetente_nome', '%cliente%')
                     .order('id', { ascending: false })
                     .limit(10);
 
                 if (chatData && chatData.length > 0) {
-                    // Filtrar apenas mensagens reais do cliente que NÃO sejam logs técnicos de engine ou sistema
                     const msgCliente = chatData.find(c => {
+                        const rNome = String(c.remetente_nome || c.setor || c.tipo || '').toLowerCase();
                         const m = c.mensagem || '';
                         const isEngineLog = m.toLowerCase().includes('engine') || m.toLowerCase().includes('motivo técnico') || m.toLowerCase().includes('status alterado pela');
-                        return !isEngineLog && (m.includes('REPORTOU') || m.includes('SOLICITAÇÃO') || m.includes('Novo Endereço') || m.includes('Dados Faturamento') || m.includes('ALTERAÇÃO') || m.length > 5);
+                        return !isEngineLog && (rNome.includes('cliente') || m.includes('REPORTOU') || m.includes('SOLICITAÇÃO') || m.includes('Novo Endereço') || m.includes('Dados Faturamento') || m.includes('ALTERAÇÃO') || m.length > 5);
                     });
                     if (msgCliente && msgCliente.mensagem) {
                         correcaoTexto = msgCliente.mensagem;
