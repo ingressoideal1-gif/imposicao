@@ -20879,12 +20879,14 @@ window.enviarLinkCliente = window.enviar_link;
 
 function gerarLinkClienteBanner() {
     const activeOSId = state.activeOSId || localStorage.getItem('activeOSId');
+    console.log('[LinkDebug] gerarLinkClienteBanner: activeOSId=', activeOSId);
     if (!activeOSId) {
         toast('Nenhum pedido ativo selecionado.', 'warning');
         return;
     }
     const os = typeof findOSInState === 'function' ? findOSInState(activeOSId) : (state.ordens ? state.ordens.find(o => o.id === activeOSId) : null);
     const osNum = os ? (os.numero || os.id_int || os.id) : activeOSId;
+    console.log('[LinkDebug] Chamando gerarLinkCliente com osId=', activeOSId, 'num=', osNum);
     gerarLinkCliente(activeOSId, osNum);
 }
 window.gerarLinkClienteBanner = gerarLinkClienteBanner;
@@ -20917,6 +20919,7 @@ async function gerarLinkCliente(osId, numero) {
         const fallbackUrl = `${host}/cliente.html?os=${osId}`;
 
         // 3. ABRIR MODAL DE NOTIFICAÇÃO DO CLIENTE IMEDIATAMENTE (SEM AGUARDAR REDE)!
+        console.log('[LinkDebug] Chamando abrirModalEnviarEmailCliente...');
         abrirModalEnviarEmailCliente(osId, numero, fallbackUrl);
 
         // 4. Atualizar no Supabase em segundo plano
@@ -21145,9 +21148,12 @@ window.abrirModalConfigEmail = abrirModalConfigEmail;
  * Abre o modal de notificação/e-mail do cliente após a geração do link
  */
 async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
+    console.log('[LinkDebug] abrirModalEnviarEmailCliente ENTRY osId=', osId, 'numero=', numero);
     const modal = ensureModalEmailElement();
+    console.log('[LinkDebug] modal element:', modal, 'display antes:', modal?.style?.display);
     modal.style.display = 'flex'; // Exibir imediatamente!
     modal.style.zIndex = '999999';
+    console.log('[LinkDebug] modal display SETADO para flex, zIndex=999999');
 
     // Garantir listeners dos botões do modal
     const btnCfg = document.getElementById('btn-abrir-config-email');
