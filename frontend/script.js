@@ -13907,19 +13907,15 @@ function populateDesignerFilter(forceDefault = false) {
 
     const loggedInDesigner = getLoggedInDesignerName();
 
-    if ((!_hasUserChangedDesignerFilter && loggedInDesigner) || forceDefault) {
-        if (designersSupabase && designersSupabase.includes(loggedInDesigner)) {
-            filterSelect.value = loggedInDesigner;
-            return;
-        }
-    }
-
-    if (currentValue && [...allDesigners].includes(currentValue)) {
-        filterSelect.value = currentValue;
-    } else if (loggedInDesigner && [...allDesigners].includes(loggedInDesigner)) {
+    // Com forceDefault=true (chamada explícita de reset), auto-selecionar o designer logado.
+    // Sem forceDefault: SEMPRE preservar o valor atual do select — incluindo '' (Todos os Designers) —
+    // para garantir que o filtro seja consistente entre F5 e cliques de card sem sumiço silencioso.
+    if (forceDefault && loggedInDesigner && designersSupabase && designersSupabase.includes(loggedInDesigner)) {
         filterSelect.value = loggedInDesigner;
+    } else if (currentValue && [...allDesigners].includes(currentValue)) {
+        filterSelect.value = currentValue; // Restaurar a seleção anterior
     } else {
-        filterSelect.value = '';
+        filterSelect.value = ''; // Padrão: Todos os Designers
     }
 }
 
@@ -14199,6 +14195,14 @@ function renderOrdens() {
     // Filtros de busca
     const searchImpressao = (document.getElementById('os-search-impressao')?.value || '').trim().toLowerCase();
     const searchArte = (document.getElementById('os-search-arte')?.value || '').trim().toLowerCase();
+
+    // IMPORTANTE: popular filtros ANTES de ler os valores do DOM para garantir
+    // consistência entre a 1ª renderização (F5) e as subsequentes (clique de card).
+    // Sem isso, filterDesigner seria '' no F5 (select vazio) e 'Designer X' nos renders
+    // seguintes (após populateDesignerFilter ter setado o select), causando sumiço dos pedidos.
+    populateDesignerFilter();
+    populateAtendenteFilter();
+
     const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
 
     // Fila 1: Impressão (status_interno === 'EM PRODUCAO' ou 'EM IMPRESSAO')
@@ -14524,9 +14528,7 @@ function renderOrdens() {
     const countArte = document.getElementById('os-arte-count-badge');
     if (countArte) countArte.textContent = `${filteredArte.length} ${filteredArte.length === 1 ? 'Pedido' : 'Pedidos'}`;
 
-    // Popular filtro de designers e atendentes
-    populateDesignerFilter();
-    populateAtendenteFilter();
+    // Filtros já foram populados no início de renderOrdens() para consistência do filterDesigner.
 
 
     // Renderizar Fila de Impressão
@@ -21582,12 +21584,8 @@ function setFiltroSetor(setor) {
 }
 
 
-function setFiltroFilaArte(tipo) {
-    state.filtroFilaTipo = tipo; // 'fila' ou 'aprovados'
-    renderOrdens();
-}
-
-window.setFiltroFilaArte = setFiltroFilaArte;
+// setFiltroFilaArte está definida na linha ~14183 com limpeza de filtroStatusArte.
+// Não redefinir aqui para não sobrescrever a versão correta.
 
 function setFiltroStatus(status) {
 
