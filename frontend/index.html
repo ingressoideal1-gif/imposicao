@@ -1718,7 +1718,7 @@
                             <div class="prod-search-row">
                                 <div class="prod-search-wrapper">
                                     <i class="fa-solid fa-magnifying-glass prod-search-icon"></i>
-                                    <input type="text" id="os-search-impressao" placeholder="Buscar Pedido, Evento ou Cliente..." oninput="renderOrdens()" class="prod-search-input">
+                                    <input type="text" id="os-search-impressao" placeholder="Buscar Pedido, Evento ou Cliente..." oninput="renderOrdens()" class="prod-search-input" autocomplete="off">
                                 </div>
                                 <div class="prod-update-wrapper">
                                     <button class="prod-btn-outline" onclick="loadOrdens()">
@@ -1871,7 +1871,7 @@
                     </div>
                     <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <div style="position: relative;">
-                            <input type="text" id="os-search-arte" class="form-control" placeholder="Buscar Pedido, Evento ou Cliente..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;">
+                            <input type="text" id="os-search-arte" class="form-control" placeholder="Buscar Pedido, Evento ou Cliente..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;" autocomplete="off">
                             <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">🔍</span>
                         </div>
                         <select id="os-filter-designer" class="form-control" onchange="onDesignerFilterChange()" style="width: 180px; font-size: 0.85rem;">
@@ -2259,7 +2259,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=384"></script>
+    <script src="script.js?v=385"></script>
     <script src="criador-arte.js?v=1"></script>
     <script src="/pedido.js?v=381"></script>
 

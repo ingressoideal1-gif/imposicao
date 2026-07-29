@@ -14190,7 +14190,6 @@ window.setFiltroFilaArte = setFiltroFilaArte;
 function renderOrdens() {
     const tbodyImpressao = document.getElementById('tbody-impressao');
     const tbodyArte = document.getElementById('tbody-arte');
-    console.log('[DEBUG-renderOrdens] tbodyArte:', !!tbodyArte, '| tbodyImpressao:', !!tbodyImpressao, '| ordens.length:', (state.ordens||[]).length);
     if (!tbodyImpressao && !tbodyArte) return;
 
     // Filtros de busca
@@ -14439,23 +14438,9 @@ function renderOrdens() {
         cardTodosEl.style.boxShadow = '0 0 12px rgba(6, 182, 212, 0.3)';
     }
 
-
-
     // --- Aplicar Filtros (Busca, Designer, Setor e Status) ---
-    let _debugFilterCount = 0;
-    const _filterAtendente0 = (document.getElementById('os-filter-atendente')?.value || '');
-    console.log('[DEBUG FILTER] filterAtendente PRE-filter:', JSON.stringify(_filterAtendente0), '| searchArte:', JSON.stringify(searchArte), '| filtroSetorArte:', JSON.stringify(state.filtroSetorArte), '| filtroStatusArte:', JSON.stringify(state.filtroStatusArte));
     let filteredArte = baseOrdensArte.filter(os => {
         const itens = state.osItens[os.id] || [];
-        const _fa = (document.getElementById('os-filter-atendente')?.value || '');
-        const _fd = filterDesigner;
-        const _sa = searchArte;
-        const _fset = state.filtroSetorArte;
-        const _fst = state.filtroStatusArte;
-        if (_debugFilterCount < 10) {
-            console.log(`[DEBUG FILTER OS#${os.numero}] filterAtendente:${JSON.stringify(_fa)} filterDesigner:${JSON.stringify(_fd)} searchArte:${JSON.stringify(_sa)} filtroSetor:${JSON.stringify(_fset)} filtroStatus:${JSON.stringify(_fst)} status_calc:${os.status_calculado} status:${os.status}`);
-            _debugFilterCount++;
-        }
 
         // 1. Busca textual
         if (searchArte) {
@@ -14525,9 +14510,6 @@ function renderOrdens() {
 
 
         return true;
-    });
-    const filterDesignerDebug = (document.getElementById('os-filter-designer')?.value || '');
-    console.log('[DEBUG-renderOrdens] filteredArte.length:', filteredArte.length, '| filterDesigner:', JSON.stringify(filterDesignerDebug), '| activeFilaTipo:', activeFilaTipo, '| ordensFilaArte:', ordensFilaArte.length, '| ordensAprovacao:', ordensAprovacao.length, '| ordensAprovados:', ordensAprovados.length, '| baseOrdensArte:', baseOrdensArte.length);
 
     // Atualizar badges da navegação lateral
     const badgeImpressao = document.getElementById('badge-impressao');
@@ -14657,7 +14639,6 @@ function renderOrdens() {
     }
 
     // Renderizar Fila de Arte
-    console.log('[DEBUG-renderOrdens] Renderizando arte. tbodyArte:', !!tbodyArte, '| filteredArte.length:', filteredArte.length);
     if (tbodyArte) {
         const emptyArte = document.getElementById('empty-arte');
         const tableArte = document.getElementById('table-arte');
