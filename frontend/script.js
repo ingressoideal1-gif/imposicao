@@ -20849,9 +20849,17 @@ async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
         }
         await loadOrdens();
     }
-    window.open(linkUrl, '_blank');
+    if (linkUrl) {
+        window.open(linkUrl, '_blank');
+    }
+    setTimeout(() => {
+        abrirModalEnviarEmailCliente(osId, numero, linkUrl);
+    }, 150);
 }
 window.abrirLinkClienteEAtualizarStatus = abrirLinkClienteEAtualizarStatus;
+window.enviar_link = function(osId, numero) { return gerarLinkCliente(osId, numero); };
+window.enviarLink = window.enviar_link;
+window.enviarLinkCliente = window.enviar_link;
 
 /**
  * Gera (ou recupera) o link do cliente, copia para a área de transferência
