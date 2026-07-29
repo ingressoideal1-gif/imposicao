@@ -21044,7 +21044,7 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
             try {
                 const { data: propData } = await supabaseClient
                     .from('propostas')
-                    .select('id_faturado, id_cliente, cliente, cliente_nome, dados_cliente')
+                    .select('*')
                     .eq('id_int', numInt)
                     .limit(1);
 
@@ -21053,7 +21053,7 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
                     if (!clienteNome) clienteNome = prop.cliente || prop.cliente_nome || prop.dados_cliente || '';
                     const idCli = prop.id_faturado || prop.id_cliente;
                     if (idCli) {
-                        const { data: cliData } = await supabaseClient.from('clientes').select('email_financeiro, email_contato, email, nome, fantasia').eq('id_cliente', idCli).limit(1);
+                        const { data: cliData } = await supabaseClient.from('clientes').select('*').eq('id_cliente', idCli).limit(1);
                         if (cliData && cliData.length > 0) {
                             const cli = cliData[0];
                             clienteEmail = cli.email_financeiro || cli.email_contato || cli.email || '';
