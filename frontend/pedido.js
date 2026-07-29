@@ -2789,7 +2789,7 @@ function renderPedOSQueue() {
             if (rawStatus.includes('IMPRESSO')) {
                 statusBg = '#162037'; // Impresso
             } else if (rawStatus.includes('PARCIAL')) {
-                statusBg = '#636561'; // Parcial
+                statusBg = '#32352e'; // Parcial
             } else if (rawStatus.includes('AGUARD') || rawStatus === 'AGUARDANDO') {
                 statusBg = '#918f8c'; // Aguardando
             }
