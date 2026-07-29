@@ -14788,7 +14788,7 @@ function renderOrdens() {
                         <td onclick="event.stopPropagation();">
                             ${(() => {
                                 const perms = window._currentPerms || {};
-                                const canEdit = perms.perm_lista_arte_edit === true;
+                                const canEdit = perms.perm_lista_arte_edit !== false;
                                 const linkSalvo = state.linksCliente && state.linksCliente[os.id];
                                 const st = (os.status_calculado || os.status || '').trim();
                                 const stUp = st.toUpperCase();
@@ -14806,7 +14806,7 @@ function renderOrdens() {
                                 // 1) Link de aprovação (Arte Pronta, Enviar Arte, Aguard. Aprovação, ou quando Entrega foi Alterada/Corrigir)
                                 if (isArtePronta) {
                                     const labelLink = linkSalvo ? '🔗 Enviar Link' : '🔗 Gerar Link';
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">${labelLink}</button>`);
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;cursor:pointer;">${labelLink}</button>`);
                                 } else if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
                                         <button onclick="abrirLinkClienteEAtualizarStatus('${os.id}', '${os.numero}', '${linkSalvo}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir Link">🔗</button>
@@ -14814,7 +14814,7 @@ function renderOrdens() {
                                     </div>`);
                                 } else if (isAguardando || isEntregaAlterada) {
                                     const btnColor = isEntregaAlterada ? 'background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);' : 'background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);';
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" ${canEdit ? '' : 'disabled title="Sem permissão"'} style="padding:4px 8px;font-size:0.73rem;${btnColor}border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🔗 Gerar Link</button>`);
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;${btnColor}border-radius:6px;cursor:pointer;">🔗 Gerar Link</button>`);
                                 }
 
 
@@ -20861,6 +20861,18 @@ window.abrirLinkClienteEAtualizarStatus = abrirLinkClienteEAtualizarStatus;
 window.enviar_link = function(osId, numero) { return gerarLinkCliente(osId, numero); };
 window.enviarLink = window.enviar_link;
 window.enviarLinkCliente = window.enviar_link;
+
+function gerarLinkClienteBanner() {
+    const activeOSId = state.activeOSId || localStorage.getItem('activeOSId');
+    if (!activeOSId) {
+        toast('Nenhum pedido ativo selecionado.', 'warning');
+        return;
+    }
+    const os = typeof findOSInState === 'function' ? findOSInState(activeOSId) : (state.ordens ? state.ordens.find(o => o.id === activeOSId) : null);
+    const osNum = os ? (os.numero || os.id_int || os.id) : activeOSId;
+    gerarLinkCliente(activeOSId, osNum);
+}
+window.gerarLinkClienteBanner = gerarLinkClienteBanner;
 
 /**
  * Gera (ou recupera) o link do cliente, copia para a área de transferência
