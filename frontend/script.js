@@ -20904,16 +20904,212 @@ async function gerarLinkCliente(osId, numero) {
             await navigator.clipboard.writeText(linkUrl);
             toast(`Link copiado! 📋 ${linkUrl}`, 'success');
         } catch (clipErr) {
-            prompt('Copie o link abaixo:', linkUrl);
+            console.warn('[Gerar Link] Não foi possível copiar para o clipboard:', clipErr);
         }
 
         // 4. Recarregar a lista para exibir os botões do link gerado e manter na Fila de Aprovação
         await loadOrdens();
+
+        // 5. Abrir o modal de disparo de e-mail ao cliente
+        setTimeout(() => {
+            abrirModalEnviarEmailCliente(osId, numero, linkUrl);
+        }, 100);
+
     } catch (e) {
         console.error('Erro ao gerar link do cliente:', e);
         toast('Erro ao gerar o link: ' + e.message, 'error');
     }
 }
+
+/**
+ * Abre o modal de notificação/e-mail do cliente após a geração do link
+ */
+async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
+    const modal = document.getElementById('modal-envio-email-cliente');
+    if (!modal) return;
+
+    try {
+        toast('Preparando modelo de e-mail...', 'info');
+
+        const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.numero) === String(numero)) : null);
+        const numInt = parseInt(String(numero || osId).replace(/\D/g, ''));
+
+        // 1. Buscar dados do cliente
+        let clienteNome = os ? (os.cliente || '') : '';
+        let clienteEmail = '';
+        let nomeEvento = '';
+
+        if (state.todasArtes) {
+            const arteObj = state.todasArtes.find(a => String(a.id_int) === String(numInt));
+            if (arteObj && arteObj.nome_evento) nomeEvento = arteObj.nome_evento;
+        }
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && !isNaN(numInt)) {
+            try {
+                const { data: propData } = await supabaseClient
+                    .from('propostas')
+                    .select('id_faturado, id_cliente, cliente, cliente_nome, dados_cliente')
+                    .eq('id_int', numInt)
+                    .limit(1);
+
+                if (propData && propData.length > 0) {
+                    const prop = propData[0];
+                    if (!clienteNome) clienteNome = prop.cliente || prop.cliente_nome || prop.dados_cliente || '';
+                    const idCli = prop.id_faturado || prop.id_cliente;
+                    if (idCli) {
+                        const { data: cliData } = await supabaseClient.from('clientes').select('email_financeiro, email_contato, email, nome, fantasia').eq('id_cliente', idCli).limit(1);
+                        if (cliData && cliData.length > 0) {
+                            const cli = cliData[0];
+                            clienteEmail = cli.email_financeiro || cli.email_contato || cli.email || '';
+                            if (!clienteNome) clienteNome = cli.nome || cli.fantasia || '';
+                        }
+                    }
+                }
+            } catch (errCli) {
+                console.warn('[Email Modal] Erro ao buscar dados do cliente:', errCli);
+            }
+        }
+
+        if (!clienteNome) clienteNome = 'Cliente';
+
+        // 2. Carregar itens da OS se não estiverem no state
+        if (!state.osItens[osId] || state.osItens[osId].length === 0) {
+            try {
+                await loadOSItens(osId);
+            } catch (eItens) {
+                console.warn('[Email Modal] Erro ao carregar itens:', eItens);
+            }
+        }
+
+        const itens = state.osItens[osId] || [];
+
+        // 3. Montar preenchimento da UI do Modal
+        document.getElementById('modal-email-os-numero').textContent = numero || (os ? os.numero : '');
+        document.getElementById('modal-email-link-display').textContent = linkUrl || '';
+        document.getElementById('modal-email-to').value = clienteEmail;
+
+        const assuntoStr = `Aprovação de Arte - Pedido #${numero} - ${clienteNome}${nomeEvento ? ` (${nomeEvento})` : ''}`;
+        document.getElementById('modal-email-subject').value = assuntoStr;
+
+        // 4. Construir texto da mensagem (E-mail / WhatsApp)
+        let bodyLines = [];
+        bodyLines.push(`Olá, ${clienteNome}!`);
+        bodyLines.push(``);
+        bodyLines.push(`Suas artes relativas ao Pedido #${numero}${nomeEvento ? ` (${nomeEvento})` : ''} já estão prontas para sua conferência e aprovação.`);
+        bodyLines.push(``);
+        bodyLines.push(`--------------------------------------------------`);
+        bodyLines.push(`RESUMO DOS MODELOS DO PEDIDO:`);
+        bodyLines.push(`--------------------------------------------------`);
+
+        let modelosContainer = document.getElementById('modal-email-modelos-container');
+        if (modelosContainer) modelosContainer.innerHTML = '';
+
+        itens.forEach((item, i) => {
+            const idxStr = (i + 1).toString().padStart(2, '0');
+            const modNome = item.produto || item.nome_modelo || `Modelo ${i + 1}`;
+            const qtdStr = item.qtd || item.quantidade || '0';
+            const corStr = item.cor || item.padrao || 'Padrão';
+            const numStr = item.gabarito_operacional || item.numeracao || item.tipo_numeracao || 'Padrão';
+            const imgUrl = item.arte_url || item.amostra_arte_base64 || '';
+            const versoUrl = item.verso_arte_url || item.verso_amostra_arte_base64 || '';
+
+            bodyLines.push(`[${idxStr}] ${modNome}`);
+            bodyLines.push(`     • Quantidade: ${qtdStr}`);
+            bodyLines.push(`     • Cor: ${corStr}`);
+            bodyLines.push(`     • Numeração: ${numStr}`);
+            if (imgUrl) bodyLines.push(`     • Imagem da Arte (Frente): ${imgUrl.startsWith('data:') ? '[Arte Gerada no Sistema]' : imgUrl}`);
+            if (versoUrl) bodyLines.push(`     • Imagem da Arte (Verso): ${versoUrl.startsWith('data:') ? '[Arte Gerada no Sistema]' : versoUrl}`);
+            bodyLines.push(``);
+
+            // Thumbnail do modelo no modal
+            if (modelosContainer) {
+                const card = document.createElement('div');
+                card.style.cssText = 'background:rgba(255,255,255,0.04);border:1px solid var(--border-color, rgba(255,255,255,0.1));border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;';
+                card.innerHTML = `
+                    <div style="font-weight:700;font-size:0.8rem;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">#${idxStr} - ${modNome}</div>
+                    <div style="font-size:0.73rem;color:var(--text-dim, #94a3b8);">Qtd: ${qtdStr} | Cor: ${corStr}</div>
+                    ${imgUrl ? `<img src="${imgUrl}" style="width:100%;height:100px;object-fit:contain;border-radius:4px;background:#000;margin-top:4px;" alt="${modNome}" />` : '<div style="height:60px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--text-dim);">Sem Amostra</div>'}
+                `;
+                modelosContainer.appendChild(card);
+            }
+        });
+
+        bodyLines.push(`--------------------------------------------------`);
+        bodyLines.push(`LINK DE APROVAÇÃO INTERATIVA:`);
+        bodyLines.push(linkUrl);
+        bodyLines.push(`--------------------------------------------------`);
+        bodyLines.push(``);
+        bodyLines.push(`Por favor, acesse o link acima para conferir o visual final, aprovar ou indicar alterações necessárias.`);
+        bodyLines.push(``);
+        bodyLines.push(`Atenciosamente,`);
+        bodyLines.push(`Equipe Ideal Imposition / Atendimento`);
+
+        document.getElementById('modal-email-body').value = bodyLines.join('\n');
+
+        // 5. Exibir modal
+        modal.style.display = 'flex';
+        window._activeEmailModalData = { osId, numero, linkUrl, clienteEmail, clienteNome, bodyText: bodyLines.join('\n') };
+
+    } catch (e) {
+        console.error('[Email Modal] Erro ao abrir modal de e-mail:', e);
+        toast('Erro ao carregar dados para o e-mail: ' + e.message, 'error');
+    }
+}
+
+function fecharModalEnviarEmailCliente() {
+    const modal = document.getElementById('modal-envio-email-cliente');
+    if (modal) modal.style.display = 'none';
+}
+
+function copiarLinkClienteModal() {
+    const linkStr = document.getElementById('modal-email-link-display')?.textContent || '';
+    if (linkStr) {
+        navigator.clipboard.writeText(linkStr).then(() => {
+            toast('Link de aprovação copiado!', 'success');
+        });
+    }
+}
+
+function copiarTextoEmailModal() {
+    const bodyStr = document.getElementById('modal-email-body')?.value || '';
+    if (bodyStr) {
+        navigator.clipboard.writeText(bodyStr).then(() => {
+            toast('Texto do e-mail copiado!', 'success');
+        });
+    }
+}
+
+function copiarWhatsAppModal() {
+    const bodyStr = document.getElementById('modal-email-body')?.value || '';
+    if (bodyStr) {
+        let waText = bodyStr.replace(/--------------------------------------------------/g, '----------------------------');
+        navigator.clipboard.writeText(waText).then(() => {
+            toast('Texto formatado para WhatsApp copiado!', 'success');
+        });
+    }
+}
+
+function dispararMailtoCliente() {
+    const to = document.getElementById('modal-email-to')?.value || '';
+    const subject = document.getElementById('modal-email-subject')?.value || '';
+    const body = document.getElementById('modal-email-body')?.value || '';
+
+    if (!to) {
+        toast('Por favor, informe o e-mail do destinatário!', 'warning');
+        return;
+    }
+
+    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+    toast('Disparando cliente de e-mail...', 'info');
+}
+
+window.abrirModalEnviarEmailCliente = abrirModalEnviarEmailCliente;
+window.fecharModalEnviarEmailCliente = fecharModalEnviarEmailCliente;
+window.copiarLinkClienteModal = copiarLinkClienteModal;
+window.copiarTextoEmailModal = copiarTextoEmailModal;
+window.copiarWhatsAppModal = copiarWhatsAppModal;
+window.dispararMailtoCliente = dispararMailtoCliente;
 
 
 
