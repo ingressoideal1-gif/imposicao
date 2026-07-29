@@ -14510,6 +14510,7 @@ function renderOrdens() {
 
 
         return true;
+    });
 
     // Atualizar badges da navegação lateral
     const badgeImpressao = document.getElementById('badge-impressao');
