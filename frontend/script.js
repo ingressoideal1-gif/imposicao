@@ -21381,29 +21381,17 @@ function carregarConfigEmailRemetente() {
     if (elUser) elUser.value = config.user || '';
     if (elPass) elPass.value = config.has_password ? '******' : (config.password || '');
     if (elTls) elTls.checked = config.use_tls !== false;
-
-    fetch('/api/email/config')
-        .then(r => r.json())
-        .then(data => {
-            if (data && data.ok && data.config) {
-                const cfg = data.config;
-                if (cfg.email_remetente && elRemetente) elRemetente.value = cfg.email_remetente;
-                if (cfg.nome_remetente && elNome) elNome.value = cfg.nome_remetente;
-                if (cfg.host && elHost) elHost.value = cfg.host;
-                if (cfg.port && elPort) elPort.value = cfg.port;
-                if (cfg.user && elUser) elUser.value = cfg.user;
-                if (cfg.has_password && elPass) elPass.value = '******';
-                localStorage.setItem('ideal_email_remetente_config', JSON.stringify(cfg));
-            }
-        }).catch(() => {});
 }
 
 function abrirModalConfigEmail() {
+    console.log('[Email Config] abrirModalConfigEmail chamado');
     const modal = document.getElementById('modal-config-email-remetente');
+    console.log('[Email Config] modal element:', modal ? 'encontrado' : 'NAO encontrado');
     if (modal) {
         modal.style.display = 'flex';
         modal.style.zIndex = '9999999';
         carregarConfigEmailRemetente();
+        console.log('[Email Config] modal display setado para flex');
     }
 }
 
@@ -21429,16 +21417,6 @@ async function salvarConfigEmailRemetente() {
     }
 
     localStorage.setItem('ideal_email_remetente_config', JSON.stringify(config));
-
-    try {
-        await fetch('/api/email/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(config)
-        });
-    } catch (e) {
-        console.warn('[Config Email] Não foi possível salvar no backend FastAPI:', e);
-    }
 
     toast('Configurações de e-mail salvas com sucesso! ⚙️', 'success');
     fecharModalConfigEmail();
