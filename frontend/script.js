@@ -20929,12 +20929,99 @@ async function gerarLinkCliente(osId, numero) {
     }
 }
 
+function ensureModalEmailElement() {
+    let modal = document.getElementById('modal-envio-email-cliente');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-envio-email-cliente';
+        modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;';
+        modal.innerHTML = `
+            <div style="background:var(--card-bg, #1e293b);border:1px solid var(--border-color, rgba(255,255,255,0.15));width:100%;max-width:760px;max-height:92vh;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,0.6);display:flex;flex-direction:column;overflow:hidden;">
+                <!-- Header -->
+                <div style="padding:16px 20px;border-bottom:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.1rem;box-shadow:0 4px 12px rgba(245,158,11,0.3);">
+                            ✉️
+                        </div>
+                        <div>
+                            <h3 style="margin:0;font-size:1.1rem;font-weight:800;color:#fff;">Enviar Notificação ao Cliente</h3>
+                            <p style="margin:0;font-size:0.78rem;color:var(--text-dim, #94a3b8);" id="modal-email-subtitle">Pedido #<span id="modal-email-os-numero"></span> — Link e E-mail Gerados com Sucesso</p>
+                        </div>
+                    </div>
+                    <button onclick="fecharModalEnviarEmailCliente()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
+                </div>
+
+                <!-- Body -->
+                <div style="padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px;">
+                    
+                    <!-- Box Link Copiado -->
+                    <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.85rem;">
+                            <span style="font-weight:700;color:#60a5fa;">🔗 Link de Aprovação:</span>
+                            <span id="modal-email-link-display" style="color:#e2e8f0;font-family:monospace;margin-left:6px;"></span>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="copiarLinkClienteModal()" style="font-size:0.78rem;font-weight:700;white-space:nowrap;padding:6px 12px;">📋 Copiar Link</button>
+                    </div>
+
+                    <!-- Campos de E-mail -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="form-group" style="margin:0;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Destinatário (E-mail do Cliente)</label>
+                            <input type="email" id="modal-email-to" class="form-control" placeholder="cliente@email.com" style="width:100%;font-size:0.88rem;">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Assunto do E-mail</label>
+                            <input type="text" id="modal-email-subject" class="form-control" style="width:100%;font-size:0.88rem;">
+                        </div>
+                    </div>
+
+                    <!-- Prévia do E-mail / Corpo -->
+                    <div class="form-group" style="margin:0;display:flex;flex-direction:column;gap:6px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin:0;">Corpo da Mensagem / Modelos do Pedido</label>
+                            <span style="font-size:0.75rem;color:var(--text-dim, #94a3b8);">Inclui detalhes e artes de cada modelo</span>
+                        </div>
+                        <textarea id="modal-email-body" class="form-control" rows="10" style="width:100%;font-family:monospace;font-size:0.82rem;line-height:1.45;resize:vertical;"></textarea>
+                    </div>
+
+                    <!-- Prévia dos Modelos (Cards com Foto) -->
+                    <div id="modal-email-modelos-preview" style="display:flex;flex-direction:column;gap:10px;">
+                        <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin:0;">🖼️ Amostras Incluídas no Envio:</label>
+                        <div id="modal-email-modelos-container" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px;"></div>
+                    </div>
+
+                </div>
+
+                <!-- Footer / Ações -->
+                <div style="padding:14px 20px;border-top:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,0.2);flex-wrap:wrap;">
+                    <button class="btn btn-secondary btn-sm" onclick="fecharModalEnviarEmailCliente()" style="font-size:0.82rem;font-weight:600;">Fechar</button>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <button class="btn btn-secondary btn-sm" onclick="copiarTextoEmailModal()" style="font-size:0.82rem;font-weight:700;display:inline-flex;align-items:center;gap:6px;"><i class="fa-regular fa-copy"></i> Copiar E-mail</button>
+                        <button class="btn btn-secondary btn-sm" onclick="copiarWhatsAppModal()" style="font-size:0.82rem;font-weight:700;color:#22c55e;border-color:rgba(34,197,94,0.4);display:inline-flex;align-items:center;gap:6px;"><i class="fa-brands fa-whatsapp"></i> Copiar WhatsApp</button>
+                        <button class="btn btn-primary btn-sm" onclick="dispararMailtoCliente()" style="font-size:0.85rem;font-weight:800;background:linear-gradient(135deg,#3b82f6,#2563eb);display:inline-flex;align-items:center;gap:6px;"><i class="fa-solid fa-paper-plane"></i> 📧 Disparar E-mail (Mailto)</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    return modal;
+}
+
 /**
  * Abre o modal de notificação/e-mail do cliente após a geração do link
  */
 async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
-    const modal = document.getElementById('modal-envio-email-cliente');
-    if (!modal) return;
+    const modal = ensureModalEmailElement();
+    modal.style.display = 'flex'; // Exibir imediatamente!
+
+    // Preencher dados iniciais de feedback visual
+    const elNum = document.getElementById('modal-email-os-numero');
+    if (elNum) elNum.textContent = numero || osId;
+    const elLink = document.getElementById('modal-email-link-display');
+    if (elLink) elLink.textContent = linkUrl || 'Carregando...';
+    const elBody = document.getElementById('modal-email-body');
+    if (elBody && !elBody.value) elBody.value = 'Carregando informações do pedido e modelos...';
 
     try {
         toast('Preparando modelo de e-mail...', 'info');
