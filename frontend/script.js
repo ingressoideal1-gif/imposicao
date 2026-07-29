@@ -20946,9 +20946,9 @@ function ensureModalEmailElement() {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'modal-envio-email-cliente';
-        modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;';
+        modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;';
         modal.innerHTML = `
-            <div style="background:var(--card-bg, #1e293b);border:1px solid var(--border-color, rgba(255,255,255,0.15));width:100%;max-width:760px;max-height:92vh;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,0.6);display:flex;flex-direction:column;overflow:hidden;">
+            <div style="background:var(--card-bg, #1e293b);border:1px solid var(--border-color, rgba(255,255,255,0.15));width:100%;max-width:780px;max-height:92vh;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,0.6);display:flex;flex-direction:column;overflow:hidden;">
                 <!-- Header -->
                 <div style="padding:16px 20px;border-bottom:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);">
                     <div style="display:flex;align-items:center;gap:10px;">
@@ -20957,10 +20957,15 @@ function ensureModalEmailElement() {
                         </div>
                         <div>
                             <h3 style="margin:0;font-size:1.1rem;font-weight:800;color:#fff;">Enviar Notificação ao Cliente</h3>
-                            <p style="margin:0;font-size:0.78rem;color:var(--text-dim, #94a3b8);" id="modal-email-subtitle">Pedido #<span id="modal-email-os-numero"></span> — Link e E-mail Gerados com Sucesso</p>
+                            <p style="margin:0;font-size:0.78rem;color:var(--text-dim, #94a3b8);" id="modal-email-subtitle">Pedido #<span id="modal-email-os-numero"></span> — Notificação Pronta para Disparo</p>
                         </div>
                     </div>
-                    <button onclick="fecharModalEnviarEmailCliente()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button class="btn btn-secondary btn-sm" onclick="abrirModalConfigEmail()" style="font-size:0.78rem;font-weight:700;padding:5px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#cbd5e1;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;" title="Configurar Servidor SMTP e E-mail Remetente">
+                            ⚙️ Configurar Remetente
+                        </button>
+                        <button onclick="fecharModalEnviarEmailCliente()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
+                    </div>
                 </div>
 
                 <!-- Body -->
@@ -20993,7 +20998,7 @@ function ensureModalEmailElement() {
                             <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin:0;">Corpo da Mensagem / Modelos do Pedido</label>
                             <span style="font-size:0.75rem;color:var(--text-dim, #94a3b8);">Inclui detalhes e artes de cada modelo</span>
                         </div>
-                        <textarea id="modal-email-body" class="form-control" rows="10" style="width:100%;font-family:monospace;font-size:0.82rem;line-height:1.45;resize:vertical;"></textarea>
+                        <textarea id="modal-email-body" class="form-control" rows="9" style="width:100%;font-family:monospace;font-size:0.82rem;line-height:1.45;resize:vertical;"></textarea>
                     </div>
 
                     <!-- Prévia dos Modelos (Cards com Foto) -->
@@ -21005,12 +21010,15 @@ function ensureModalEmailElement() {
                 </div>
 
                 <!-- Footer / Ações -->
-                <div style="padding:14px 20px;border-top:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,0.2);flex-wrap:wrap;">
+                <div style="padding:14px 20px;border-top:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,0,0,0.25);flex-wrap:wrap;">
                     <button class="btn btn-secondary btn-sm" onclick="fecharModalEnviarEmailCliente()" style="font-size:0.82rem;font-weight:600;">Fechar</button>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <button class="btn btn-secondary btn-sm" onclick="copiarTextoEmailModal()" style="font-size:0.82rem;font-weight:700;display:inline-flex;align-items:center;gap:6px;"><i class="fa-regular fa-copy"></i> Copiar E-mail</button>
                         <button class="btn btn-secondary btn-sm" onclick="copiarWhatsAppModal()" style="font-size:0.82rem;font-weight:700;color:#22c55e;border-color:rgba(34,197,94,0.4);display:inline-flex;align-items:center;gap:6px;"><i class="fa-brands fa-whatsapp"></i> Copiar WhatsApp</button>
-                        <button class="btn btn-primary btn-sm" onclick="dispararMailtoCliente()" style="font-size:0.85rem;font-weight:800;background:linear-gradient(135deg,#3b82f6,#2563eb);display:inline-flex;align-items:center;gap:6px;"><i class="fa-solid fa-paper-plane"></i> 📧 Disparar E-mail (Mailto)</button>
+                        <button class="btn btn-secondary btn-sm" onclick="dispararMailtoCliente()" style="font-size:0.82rem;font-weight:700;display:inline-flex;align-items:center;gap:6px;" title="Abrir software de e-mail do sistema (Outlook/Mail)"><i class="fa-solid fa-envelope-open-text"></i> Abrir Outlook</button>
+                        <button class="btn btn-primary btn-sm" id="btn-disparar-email-direto" onclick="dispararEmailDiretoCliente()" style="font-size:0.88rem;font-weight:800;background:linear-gradient(135deg,#10b981,#059669);border:none;padding:7px 16px;box-shadow:0 4px 14px rgba(16,185,129,0.35);display:inline-flex;align-items:center;gap:7px;">
+                            <i class="fa-solid fa-paper-plane"></i> 🚀 Disparar E-mail pela Aplicação
+                        </button>
                     </div>
                 </div>
             </div>
@@ -21022,6 +21030,94 @@ function ensureModalEmailElement() {
     }
     modal.style.zIndex = '999999';
     return modal;
+}
+
+function ensureModalConfigEmailElement() {
+    let modal = document.getElementById('modal-config-email-remetente');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-config-email-remetente';
+        modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999999;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;';
+        modal.innerHTML = `
+            <div style="background:var(--card-bg, #1e293b);border:1px solid var(--border-color, rgba(255,255,255,0.15));width:100%;max-width:560px;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,0.6);display:flex;flex-direction:column;overflow:hidden;">
+                <!-- Header -->
+                <div style="padding:16px 20px;border-bottom:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.1rem;box-shadow:0 4px 12px rgba(59,130,246,0.3);">
+                            ⚙️
+                        </div>
+                        <div>
+                            <h3 style="margin:0;font-size:1.1rem;font-weight:800;color:#fff;">Configurações de E-mail Remetente</h3>
+                            <p style="margin:0;font-size:0.78rem;color:var(--text-dim, #94a3b8);">Cadastre o servidor SMTP da gráfica para envio direto</p>
+                        </div>
+                    </div>
+                    <button onclick="fecharModalConfigEmail()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
+                </div>
+
+                <!-- Body -->
+                <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="form-group" style="margin:0;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">E-mail Remetente (De:)</label>
+                            <input type="email" id="config-email-remetente" class="form-control" placeholder="atendimento@ingressoideal.com.br" style="width:100%;font-size:0.85rem;">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Nome de Exibição</label>
+                            <input type="text" id="config-email-nome" class="form-control" placeholder="Ingresso Ideal — Atendimento" style="width:100%;font-size:0.85rem;">
+                        </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
+                        <div class="form-group" style="margin:0;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Servidor SMTP (Host)</label>
+                            <input type="text" id="config-email-host" class="form-control" placeholder="smtp.gmail.com / mail.ingressoideal.com.br" style="width:100%;font-size:0.85rem;">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Porta</label>
+                            <input type="number" id="config-email-port" class="form-control" placeholder="587" value="587" style="width:100%;font-size:0.85rem;">
+                        </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="form-group" style="margin:0;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Usuário Autenticação</label>
+                            <input type="text" id="config-email-user" class="form-control" placeholder="usuario@ingressoideal.com.br" style="width:100%;font-size:0.85rem;">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="text-transform:uppercase;font-weight:700;font-size:0.75rem;color:var(--text-dim, #94a3b8);margin-bottom:4px;display:block;">Senha / Token de App</label>
+                            <input type="password" id="config-email-password" class="form-control" placeholder="••••••••••••" style="width:100%;font-size:0.85rem;">
+                        </div>
+                    </div>
+
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+                        <input type="checkbox" id="config-email-tls" checked style="width:16px;height:16px;cursor:pointer;">
+                        <label for="config-email-tls" style="font-size:0.82rem;color:#cbd5e1;cursor:pointer;">Usar Conexão Segura (TLS/SSL)</label>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div style="padding:14px 20px;border-top:1px solid var(--border-color, rgba(255,255,255,0.1));display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.25);">
+                    <button class="btn btn-secondary btn-sm" onclick="fecharModalConfigEmail()" style="font-size:0.82rem;">Cancelar</button>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-secondary btn-sm" onclick="testarEnvioEmailConfig()" style="font-size:0.82rem;font-weight:700;">🧪 Envio Teste</button>
+                        <button class="btn btn-primary btn-sm" onclick="salvarConfigEmailRemetente()" style="font-size:0.85rem;font-weight:800;background:linear-gradient(135deg,#3b82f6,#2563eb);padding:6px 16px;">💾 Salvar Configurações</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+    }
+    return modal;
+}
+
+function abrirModalConfigEmail() {
+    const modal = ensureModalConfigEmailElement();
+    modal.style.display = 'flex';
+    modal.style.zIndex = '9999999';
+    carregarConfigEmailRemetente();
 }
 
 /**
