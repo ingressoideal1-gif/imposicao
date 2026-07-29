@@ -14178,6 +14178,17 @@ function renderVendedorSelect(osId) {
 }
 
 /**
+ * Altera o filtro do card KPI da Fila de Arte ('todos', 'fila', 'aprovacao', 'aprovados')
+ */
+function setFiltroFilaArte(tipo) {
+    console.log('[Lista Arte] Filtrar por card:', tipo);
+    state.filtroFilaTipo = tipo;
+    state.filtroStatusArte = '';
+    renderOrdens();
+}
+window.setFiltroFilaArte = setFiltroFilaArte;
+
+/**
  * Renderiza as tabelas de OS (Fila de Impressão e Fila de Arte) na view
  */
 function renderOrdens() {
