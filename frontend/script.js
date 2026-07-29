@@ -21383,17 +21383,6 @@ function carregarConfigEmailRemetente() {
     if (elTls) elTls.checked = config.use_tls !== false;
 }
 
-function abrirModalConfigEmail() {
-    console.log('[Email Config] abrirModalConfigEmail chamado');
-    const modal = document.getElementById('modal-config-email-remetente');
-    console.log('[Email Config] modal element:', modal ? 'encontrado' : 'NAO encontrado');
-    if (modal) {
-        modal.style.display = 'flex';
-        modal.style.zIndex = '9999999';
-        carregarConfigEmailRemetente();
-        console.log('[Email Config] modal display setado para flex');
-    }
-}
 
 function fecharModalConfigEmail() {
     const modal = document.getElementById('modal-config-email-remetente');
