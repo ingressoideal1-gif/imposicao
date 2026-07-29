@@ -14190,6 +14190,7 @@ window.setFiltroFilaArte = setFiltroFilaArte;
 function renderOrdens() {
     const tbodyImpressao = document.getElementById('tbody-impressao');
     const tbodyArte = document.getElementById('tbody-arte');
+    console.log('[DEBUG-renderOrdens] tbodyArte:', !!tbodyArte, '| tbodyImpressao:', !!tbodyImpressao, '| ordens.length:', (state.ordens||[]).length);
     if (!tbodyImpressao && !tbodyArte) return;
 
     // Filtros de busca
@@ -14513,6 +14514,8 @@ function renderOrdens() {
 
         return true;
     });
+    const filterDesignerDebug = (document.getElementById('os-filter-designer')?.value || '');
+    console.log('[DEBUG-renderOrdens] filteredArte.length:', filteredArte.length, '| filterDesigner:', JSON.stringify(filterDesignerDebug), '| activeFilaTipo:', activeFilaTipo, '| ordensFilaArte:', ordensFilaArte.length, '| ordensAprovacao:', ordensAprovacao.length, '| ordensAprovados:', ordensAprovados.length, '| baseOrdensArte:', baseOrdensArte.length);
 
     // Atualizar badges da navegação lateral
     const badgeImpressao = document.getElementById('badge-impressao');
@@ -14642,6 +14645,7 @@ function renderOrdens() {
     }
 
     // Renderizar Fila de Arte
+    console.log('[DEBUG-renderOrdens] Renderizando arte. tbodyArte:', !!tbodyArte, '| filteredArte.length:', filteredArte.length);
     if (tbodyArte) {
         const emptyArte = document.getElementById('empty-arte');
         const tableArte = document.getElementById('table-arte');
