@@ -2740,15 +2740,18 @@ function renderPedOSQueue() {
             return `<option value="${s.id}" ${sel}>${s.name}</option>`;
         }).join('');
 
+        const allGroupImpresso = groupItens.length > 0 && groupItens.every(i => String(i.status_impressao || i.impressao || '').toUpperCase().includes('IMPRESSO'));
+        const btnImpSelDisplay = allGroupImpresso ? 'display:none;' : 'display:inline-flex;';
+
         const headerDropdowns = `
             <div style="display:flex; gap:10px; align-items:center;" onclick="event.stopPropagation()">
                 <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Gerar PDF dos modelos selecionados"
                     onclick="pedQueueGerarPDFMulti()">
                     📄 PDF Sel.
                 </button>
-                <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Imprimir modelos selecionados"
+                <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; padding:6px 12px; font-size:0.9rem; ${btnImpSelDisplay}" title="Imprimir modelos selecionados"
                     onclick="pedQueueImprimirMulti()">
-                    🖨️ Imp. Sel.
+                    🖨️  Imp. Sel.
                 </button>
                 <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato PadrÃ£o do Produto">
                     <option value="">— Formato —</option>
@@ -2964,7 +2967,37 @@ function renderPedOSQueue() {
     }
 
     wrapper.innerHTML = html;
+    updatePedImprimirButtonsVisibility();
 }
+
+function updatePedImprimirButtonsVisibility() {
+    let activeIsImpresso = false;
+    if (state.activeOSItem) {
+        const itens = state.osItens[state.activeOSItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(state.activeOSItem.itemId));
+        if (item) {
+            const st = String(item.status_impressao || item.impressao || '').toUpperCase();
+            if (st.includes('IMPRESSO')) {
+                activeIsImpresso = true;
+            }
+        }
+    }
+
+    const btnImposePrint = document.getElementById('ped-btn-impose-print');
+    const btnPreviewPrint = document.getElementById('ped-preview-btn-print');
+    const btnRefazerPrint = document.getElementById('ped-refazer-btn-print');
+
+    if (btnImposePrint) {
+        btnImposePrint.style.display = activeIsImpresso ? 'none' : 'flex';
+    }
+    if (btnPreviewPrint) {
+        btnPreviewPrint.style.display = activeIsImpresso ? 'none' : 'flex';
+    }
+    if (btnRefazerPrint) {
+        btnRefazerPrint.style.display = activeIsImpresso ? 'none' : 'inline-block';
+    }
+}
+window.updatePedImprimirButtonsVisibility = updatePedImprimirButtonsVisibility;
 
 
 
@@ -4244,6 +4277,7 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
             }
         }
         renderPedOSQueue();
+        updatePedImprimirButtonsVisibility();
     }
 }
 

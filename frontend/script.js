@@ -16017,7 +16017,7 @@ function renderImpOSQueue() {
                             onclick="event.stopPropagation(); impQueueGerarPDF('${jsItemId}', '${jsOsId}')">
                             📄 PDF
                         </button>
-                        <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff;" title="Imprimir este modelo"
+                        <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; ${rawStatus.includes('IMPRESSO') ? 'display:none;' : ''}" title="Imprimir este modelo"
                             onclick="event.stopPropagation(); impQueueImprimir('${jsItemId}', '${jsOsId}')">
                             🖨️ Imp.
                         </button>
