@@ -14192,10 +14192,13 @@ function renderOrdens() {
     const tbodyArte = document.getElementById('tbody-arte');
     if (!tbodyImpressao && !tbodyArte) return;
 
-    // Filtros de busca
-    const searchImpressao = (document.getElementById('os-search-impressao')?.value || '').trim().toLowerCase();
-    const searchArte = (document.getElementById('os-search-arte')?.value || '').trim().toLowerCase();
-    console.log('[RO] search:', JSON.stringify(searchArte), '| ordens:', (state.ordens||[]).length, '| filtroTipo:', state.filtroFilaTipo);
+    // Filtros de busca — guard contra autocomplete do browser (Chrome ignora autocomplete=off)
+    const _searchArteEl = document.getElementById('os-search-arte');
+    const _searchImpEl = document.getElementById('os-search-impressao');
+    if (_searchArteEl && _searchArteEl.value.includes('@')) _searchArteEl.value = '';
+    if (_searchImpEl && _searchImpEl.value.includes('@')) _searchImpEl.value = '';
+    const searchImpressao = (_searchImpEl?.value || '').trim().toLowerCase();
+    const searchArte = (_searchArteEl?.value || '').trim().toLowerCase();
 
     // IMPORTANTE: popular filtros ANTES de ler os valores do DOM para garantir
     // consistência entre a 1ª renderização (F5) e as subsequentes (clique de card).
@@ -14512,7 +14515,6 @@ function renderOrdens() {
 
         return true;
     });
-    console.log('[RO] filteredArte:', filteredArte.length, '/', baseOrdensArte.length, '| filaArte:', ordensFilaArte.length, '| tipo:', activeFilaTipo);
 
     // Atualizar badges da navegação lateral
     const badgeImpressao = document.getElementById('badge-impressao');
