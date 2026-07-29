@@ -21134,6 +21134,22 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
     modal.style.display = 'flex'; // Exibir imediatamente!
     modal.style.zIndex = '999999';
 
+    // Garantir listeners dos botões do modal
+    const btnCfg = document.getElementById('btn-abrir-config-email');
+    if (btnCfg) {
+        btnCfg.onclick = function(e) {
+            if (e) e.stopPropagation();
+            abrirModalConfigEmail();
+        };
+    }
+    const btnSendDirect = document.getElementById('btn-disparar-email-direto');
+    if (btnSendDirect) {
+        btnSendDirect.onclick = function(e) {
+            if (e) e.stopPropagation();
+            dispararEmailDiretoCliente();
+        };
+    }
+
     // Preencher dados iniciais de feedback visual
     const elNum = document.getElementById('modal-email-os-numero');
     if (elNum) elNum.textContent = numero || osId;
