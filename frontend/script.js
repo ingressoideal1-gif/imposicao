@@ -15878,12 +15878,8 @@ function renderImpOSQueue() {
                 statusBg = '#918f8c'; // Aguardando
             }
 
-            let rowBgColor = statusBg;
-            if (isActive) {
-                rowBgColor = 'rgba(154, 153, 158, 0.5)'; // Lente #9a999e 50% transparência
-            }
-
-            const rowBg = `background: ${rowBgColor}; outline: 1px solid #918f8c;${isActive ? ' border-left: 5px solid #9a999e;' : ''}`;
+            const rowStroke = isActive ? 'outline: 2pt solid #f97316;' : 'outline: 1px solid #918f8c;';
+            const rowBg = `background: ${statusBg}; ${rowStroke}`;
 
             let itemFmtId = boxFmtSel;
 
