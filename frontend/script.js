@@ -21412,50 +21412,13 @@ async function salvarConfigEmailRemetente() {
 }
 
 async function testarEnvioEmailConfig() {
-    const rem = document.getElementById('config-email-remetente')?.value;
-    if (!rem) {
-        toast('Informe o e-mail remetente para testar.', 'warning');
-        return;
-    }
-    toast('Enviando e-mail de teste para ' + rem + '...', 'info');
-    
-    const config = {
-        email_remetente: rem,
-        nome_remetente: document.getElementById('config-email-nome')?.value || 'Teste Ingresso Ideal',
-        host: document.getElementById('config-email-host')?.value || '',
-        port: parseInt(document.getElementById('config-email-port')?.value || '587'),
-        user: document.getElementById('config-email-user')?.value || '',
-        password: document.getElementById('config-email-password')?.value || '',
-        use_tls: document.getElementById('config-email-tls')?.checked !== false
-    };
-
-    try {
-        const res = await fetch('/api/email/enviar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                to: rem,
-                subject: 'Teste de Conexão SMTP — Ingresso Ideal',
-                body_text: 'Este é um e-mail de teste para validar a configuração de envio SMTP da aplicação.',
-                smtp_config: config
-            })
-        });
-        const data = await res.json();
-        if (res.ok && data.ok) {
-            toast('E-mail de teste enviado com sucesso! 🚀 Verifique sua caixa de entrada.', 'success');
-        } else {
-            toast('Erro no teste: ' + (data.detail || data.error || 'Falha na conexão SMTP'), 'error');
-        }
-    } catch (err) {
-        toast('Erro ao testar envio: ' + err.message, 'error');
-    }
+    toast('⚠️ Envio direto de e-mail requer servidor SMTP (backend). Use "Abrir Outlook" ou copie o texto por enquanto.', 'warning');
 }
 
 async function dispararEmailDiretoCliente() {
     const to = document.getElementById('modal-email-to')?.value || '';
     const subject = document.getElementById('modal-email-subject')?.value || '';
     const body = document.getElementById('modal-email-body')?.value || '';
-    const btn = document.getElementById('btn-disparar-email-direto');
 
     if (!to) {
         toast('Por favor, informe o e-mail do cliente (Destinatário)!', 'warning');
@@ -21466,59 +21429,10 @@ async function dispararEmailDiretoCliente() {
         return;
     }
 
-    const origBtnHtml = btn ? btn.innerHTML : '';
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Disparando E-mail...';
-    }
-
-    toast('Disparando e-mail pela aplicação...', 'info');
-
-    const configLocal = JSON.parse(localStorage.getItem('ideal_email_remetente_config') || '{}');
-
-    try {
-        const res = await fetch('/api/email/enviar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                to: to,
-                subject: subject,
-                body_text: body,
-                smtp_config: configLocal
-            })
-        });
-
-        const data = await res.json();
-
-        if (res.ok && data.ok) {
-            toast(`E-mail disparado com sucesso para ${to}! 🚀`, 'success');
-            if (btn) btn.innerHTML = '<i class="fa-solid fa-check"></i> E-mail Enviado!';
-            setTimeout(() => {
-                fecharModalEnviarEmailCliente();
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = origBtnHtml;
-                }
-            }, 1200);
-        } else {
-            const errorMsg = data.detail || data.error || 'Falha no disparo do e-mail.';
-            toast('Erro no disparo: ' + errorMsg, 'error');
-            if (errorMsg.includes('não configurado') || errorMsg.includes('SMTP')) {
-                abrirModalConfigEmail();
-            }
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = origBtnHtml;
-            }
-        }
-    } catch (err) {
-        console.error('[Disparo Direto] Erro:', err);
-        toast('Erro de conexão ao disparar e-mail: ' + err.message, 'error');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = origBtnHtml;
-        }
-    }
+    // Sem backend SMTP, redirecionar para mailto como fallback
+    toast('Abrindo cliente de e-mail com os dados preenchidos...', 'info');
+    const mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoLink, '_blank');
 }
 
 window.abrirModalConfigEmail = abrirModalConfigEmail;
