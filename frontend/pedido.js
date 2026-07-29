@@ -2944,7 +2944,7 @@ function renderPedOSQueue() {
                                 ${coresOptions}
                             </select>
                         </div>
-                    </td>`
+                    </td>
                     <td style="padding: 12px; width: 260px; min-width: 260px; max-width: 260px;" title="Numeração">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Núm.</span>
