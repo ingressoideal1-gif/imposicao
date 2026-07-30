@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <!-- ============================================================ -->
+  <!--  NewProd Agent - WiX Toolset Installer Script (.MSI)        -->
+  <!-- ============================================================ -->
+  <Product Id="*" 
+           Name="NewProd Agent" 
+           Language="1046" 
+           Codepage="65001"
+           Version="1.0.0.0" 
+           Manufacturer="Ingresso Ideal" 
+           UpgradeCode="A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D">
+
+    <Package InstallerVersion="300" 
+             Compressed="yes" 
+             InstallScope="perUser" 
+             Description="NewProd Agent - Agente de Imposicao e Impressao Local" 
+             Comments="Servico local de impressao e imposicao para Ingresso Ideal" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- ─── Diretórios de Instalação (Pasta do Usuário / LocalAppData) ────── -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="INSTALLFOLDER" Name="NewProd Agent" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="NewProd Agent" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
+    </Directory>
+
+    <!-- ─── Componentes de Arquivos e Atalhos ────────────────────────────── -->
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="B8F4C3D2-9C5E-4A7B-8D3E-2F6A7B8C9D0E">
+        <File Id="NewProdExe" Source="dist\NewProd.exe" KeyPath="yes" />
+        
+        <!-- Registro para Iniciar com o Windows -->
+        <RegistryValue Root="HKCU" 
+                       Key="Software\Microsoft\Windows\CurrentVersion\Run" 
+                       Name="NewProdAgent" 
+                       Value="&quot;[INSTALLFOLDER]NewProd.exe&quot;" 
+                       Type="string" />
+
+        <!-- Atalho no Menu Iniciar -->
+        <Shortcut Id="StartMenuShortcut" 
+                  Directory="ApplicationProgramsFolder" 
+                  Name="NewProd Agent" 
+                  Description="Agente de Imposicao e Impressao Local" 
+                  WorkingDirectory="INSTALLFOLDER" 
+                  Icon="AgentIcon.ico" 
+                  Advertise="no" />
+
+        <!-- Atalho na Area de Trabalho -->
+        <Shortcut Id="DesktopShortcut" 
+                  Directory="DesktopFolder" 
+                  Name="NewProd Agent" 
+                  Description="Agente de Imposicao e Impressao Local" 
+                  WorkingDirectory="INSTALLFOLDER" 
+                  Icon="AgentIcon.ico" 
+                  Advertise="no" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- ─── Remover pasta do Menu Iniciar na desinstalação ───────────────── -->
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="CleanupMenu" Guid="C9A5D4E3-0F6A-5B8C-9E4F-3A7B8C9D0E1F">
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\NewProdAgent" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Ícone do instalador -->
+    <Icon Id="AgentIcon.ico" SourceFile="agent_icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AgentIcon.ico" />
+
+    <!-- ─── Recursos a Incluir no MSI ────────────────────────────────────── -->
+    <Feature Id="MainFeature" Title="NewProd Agent" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="CleanupMenu" />
+    </Feature>
+  </Product>
+</Wix>

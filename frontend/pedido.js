@@ -3189,6 +3189,15 @@ window.editPedidoCustomNumeracao = function(fieldId) {
 window.runPedImposition = async function (mode) {
     if (window.isImposing) return;
     window.isImposing = true;
+    window._printCancelRequested = false;
+
+    const btnCancelPed = document.getElementById('ped-btn-cancel-print');
+    if (btnCancelPed) btnCancelPed.style.display = 'inline-flex';
+    const btnImpose = document.getElementById('ped-btn-impose');
+    if (btnImpose) btnImpose.style.display = 'none';
+    const btnImposePrint = document.getElementById('ped-btn-impose-print');
+    if (btnImposePrint) btnImposePrint.style.display = 'none';
+
     try {
 
     let fmtId = document.getElementById('ped-formato').value;
@@ -4075,22 +4084,23 @@ window.runPedImposition = async function (mode) {
 
         if (pBar) pBar.style.width = '100%';
 
-        if (pText) pText.textContent = 'ConcluÃ­do! (100%)';
+        if (pText) pText.textContent = 'Concluído! (100%)';
 
         setTimeout(() => {
-            overlay.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
+            const btnCancelPed = document.getElementById('ped-btn-cancel-print');
+            if (btnCancelPed) btnCancelPed.style.display = 'none';
             const btn = document.getElementById('ped-btn-impose');
-            btn.disabled = false;
-            btn.innerHTML = 'ðŸš€ Gerar PDF';
-            btn.style.opacity = '1';
-            btn.style.pointerEvents = 'auto';
+            if (btn) {
+                btn.style.display = 'inline-flex';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            }
+            const btnPrint = document.getElementById('ped-btn-impose-print');
+            if (btnPrint) btnPrint.style.display = 'inline-flex';
         }, 400);
         impositionAbortController = null;
-
-    }
-
-    } finally {
-        window.isImposing = false;
     }
 
 };

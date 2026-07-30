@@ -8257,10 +8257,35 @@ function showFileInfo() {
 
 
 
+window._printCancelRequested = false;
+
+function cancelarImpressaoOuGeracao() {
+    console.warn('[Cancelamento] Cancelamento de impressão/geração acionado.');
+    window._printCancelRequested = true;
+
+    if (window.impositionAbortController) {
+        try { window.impositionAbortController.abort(); } catch (_) {}
+    }
+
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.remove('active');
+
+    const btnCancelPed = document.getElementById('ped-btn-cancel-print');
+    if (btnCancelPed) btnCancelPed.style.display = 'none';
+
+    const btnImpose = document.getElementById('ped-btn-impose');
+    if (btnImpose) btnImpose.style.display = 'inline-flex';
+    const btnImposePrint = document.getElementById('ped-btn-impose-print');
+    if (btnImposePrint) btnImposePrint.style.display = 'inline-flex';
+
+    window.isImposing = false;
+    window.isPrinting = false;
+
+    if (typeof toast === 'function') toast('🛑 Impressão / Geração cancelada imediatamente!', 'warning');
+}
+window.cancelarImpressaoOuGeracao = cancelarImpressaoOuGeracao;
+
 let impositionAbortController = null;
-
-
-
 window.isImposing = false;
 window.runImposition = async function (mode, returnBlob = false) {
     if (window.isImposing) return;
@@ -8722,24 +8747,22 @@ window.runImposition = async function (mode, returnBlob = false) {
 
 
 
-    // Instancia o AbortController e associa ao botão de cancelamento
+    window._printCancelRequested = false;
 
+    // Instancia o AbortController e associa ao botão de cancelamento
     impositionAbortController = new AbortController();
+    window.impositionAbortController = impositionAbortController;
 
     const cancelBtn = document.getElementById('btn-cancel-imposition');
-
     if (cancelBtn) {
-
+        cancelBtn.innerHTML = '🛑 Cancelar Impressão / Geração';
         cancelBtn.onclick = () => {
-
-            if (impositionAbortController) {
-
+            if (typeof window.cancelarImpressaoOuGeracao === 'function') {
+                window.cancelarImpressaoOuGeracao();
+            } else if (impositionAbortController) {
                 impositionAbortController.abort();
-
             }
-
         };
-
     }
 
 
@@ -22614,81 +22637,104 @@ async function sendPrintJobDirect(queue) {
         return false;
     }
 
-    // Aplicar transformações de Impressão Reversa / Folha a Folha se selecionados
-    if (options.impressao_reversa || options.folha_a_folha) {
-        const modoDesc = options.impressao_reversa && options.folha_a_folha
-            ? 'Reversa + Folha a Folha'
-            : (options.impressao_reversa ? 'Impressão Reversa' : 'Folha a Folha');
-        toast(`Processando páginas (${modoDesc})...`, 'info');
-        queue = await processPrintQueueOptions(queue, options);
-    }
+    const btnCancelPed = document.getElementById('ped-btn-cancel-print');
+    if (btnCancelPed) btnCancelPed.style.display = 'inline-flex';
+    const btnImpose = document.getElementById('ped-btn-impose');
+    if (btnImpose) btnImpose.style.display = 'none';
+    const btnImposePrint = document.getElementById('ped-btn-impose-print');
+    if (btnImposePrint) btnImposePrint.style.display = 'none';
 
-    const isLocalMode = !window._activeAgentData ||
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1';
+    try {
+        window.isPrinting = true;
 
-    let successCount = 0;
-    let failCount = 0;
+        // Aplicar transformações de Impressão Reversa / Folha a Folha se selecionados
+        if (options.impressao_reversa || options.folha_a_folha) {
+            const modoDesc = options.impressao_reversa && options.folha_a_folha
+                ? 'Reversa + Folha a Folha'
+                : (options.impressao_reversa ? 'Impressão Reversa' : 'Folha a Folha');
+            toast(`Processando páginas (${modoDesc})...`, 'info');
+            queue = await processPrintQueueOptions(queue, options);
+        }
 
-    for (let i = 0; i < queue.length; i++) {
-        const item = queue[i];
-        toast(`Enviando ${i + 1}/${queue.length}: ${item.name}...`, 'info');
+        const isLocalMode = !window._activeAgentData ||
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1';
 
-        // Determinar bandeja correta baseado no tipo de arquivo (capa/miolo)
-        let itemOptions = { ...options };
-        if (options.tray_capa && options.tray_miolo) {
-            const nameLower = (item.name || '').toLowerCase();
-            if (nameLower.includes('_capa') || nameLower.includes('_contracapa')) {
-                itemOptions.tray = options.tray_capa;
-            } else {
-                itemOptions.tray = options.tray_miolo;
+        let successCount = 0;
+        let failCount = 0;
+
+        for (let i = 0; i < queue.length; i++) {
+            if (window._printCancelRequested) {
+                console.warn('[sendPrintJobDirect] Interrompido por solicitação de cancelamento.');
+                toast('🛑 Envio para a impressora cancelado!', 'warning');
+                window._printCancelRequested = false;
+                return false;
+            }
+
+            const item = queue[i];
+            toast(`Enviando ${i + 1}/${queue.length}: ${item.name}...`, 'info');
+
+            // Determinar bandeja correta baseado no tipo de arquivo (capa/miolo)
+            let itemOptions = { ...options };
+            if (options.tray_capa && options.tray_miolo) {
+                const nameLower = (item.name || '').toLowerCase();
+                if (nameLower.includes('_capa') || nameLower.includes('_contracapa')) {
+                    itemOptions.tray = options.tray_capa;
+                } else {
+                    itemOptions.tray = options.tray_miolo;
+                }
+            }
+
+            try {
+                if (isLocalMode) {
+                    const formData = new FormData();
+                    formData.append('file', item.blob, item.name);
+                    formData.append('printer_name', printerName);
+                    formData.append('options', JSON.stringify(itemOptions));
+                    const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        throw new Error(errText || 'Falha ao enviar para impressora local.');
+                    }
+                } else {
+                    if (!_printerAgentActive || !window._activeAgentData) {
+                        throw new Error('Agente de Impressão inativo. Inicie o NewProd.exe.');
+                    }
+                    const fileName = `print_job_${Date.now()}_${i}.pdf`;
+                    const filePath = `${window._activeAgentData.id}/${fileName}`;
+                    const { error: uploadError } = await supabaseClient.storage
+                        .from('print_jobs')
+                        .upload(filePath, item.blob, { contentType: 'application/pdf', upsert: false });
+                    if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
+                    const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
+                    const { error: dbError } = await supabaseClient.from('print_queue').insert({
+                        agent_id: window._activeAgentData.id,
+                        file_url: urlData.publicUrl,
+                        printer_name: printerName,
+                        ppd_options: options,
+                        status: 'pending'
+                    });
+                    if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
+                }
+                successCount++;
+            } catch (e) {
+                failCount++;
+                console.error(`[PrintDirect] Erro ao enviar ${item.name}:`, e);
+                toast(`Erro ao imprimir "${item.name}": ${e.message}`, 'error');
             }
         }
 
-        try {
-            if (isLocalMode) {
-                const formData = new FormData();
-                formData.append('file', item.blob, item.name);
-                formData.append('printer_name', printerName);
-                formData.append('options', JSON.stringify(itemOptions));
-                const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
-                if (!res.ok) {
-                    const errText = await res.text();
-                    throw new Error(errText || 'Falha ao enviar para impressora local.');
-                }
-            } else {
-                if (!_printerAgentActive || !window._activeAgentData) {
-                    throw new Error('Agente de Impressão inativo. Inicie o NewProd.exe.');
-                }
-                const fileName = `print_job_${Date.now()}_${i}.pdf`;
-                const filePath = `${window._activeAgentData.id}/${fileName}`;
-                const { error: uploadError } = await supabaseClient.storage
-                    .from('print_jobs')
-                    .upload(filePath, item.blob, { contentType: 'application/pdf', upsert: false });
-                if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
-                const { data: urlData } = supabaseClient.storage.from('print_jobs').getPublicUrl(filePath);
-                const { error: dbError } = await supabaseClient.from('print_queue').insert({
-                    agent_id: window._activeAgentData.id,
-                    file_url: urlData.publicUrl,
-                    printer_name: printerName,
-                    ppd_options: options,
-                    status: 'pending'
-                });
-                if (dbError) throw new Error(`Falha ao registrar job: ${dbError.message}`);
-            }
-            successCount++;
-        } catch (e) {
-            failCount++;
-            console.error(`[PrintDirect] Erro ao enviar ${item.name}:`, e);
-            toast(`Erro ao imprimir "${item.name}": ${e.message}`, 'error');
+        if (failCount === 0) {
+            toast(`✓ ${successCount} arquivo(s) enviado(s) para "${printerName}"!`, 'success');
+            return true;
         }
+        return false;
+    } finally {
+        window.isPrinting = false;
+        if (btnCancelPed) btnCancelPed.style.display = 'none';
+        if (btnImpose) btnImpose.style.display = 'inline-flex';
+        if (btnImposePrint) btnImposePrint.style.display = 'inline-flex';
     }
-
-    if (failCount === 0) {
-        toast(`✓ ${successCount} arquivo(s) enviado(s) para "${printerName}"!`, 'success');
-        return true;
-    }
-    return false;
 }
 
 

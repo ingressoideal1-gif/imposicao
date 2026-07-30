@@ -1368,6 +1368,9 @@
                                 <button class="btn btn-primary" id="ped-btn-impose-print" onclick="runPedImposition('print')" style="flex:1;background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; opacity:0.5;" disabled>
                                     🖨️ Imprimir
                                 </button>
+                                <button class="btn btn-danger" id="ped-btn-cancel-print" onclick="cancelarImpressaoOuGeracao()" style="display:none; flex:1; background: linear-gradient(135deg, #ef4444, #dc2626); border-color: #ef4444; color: white; padding: 12px; border-radius: 8px; font-weight: 700; box-shadow: 0 4px 12px rgba(239,68,68,0.3);" title="Cancelar Impressão / Envio Imediatamente">
+                                    🛑 Cancelar Impressão
+                                </button>
                             </div>
                             </div>
                         </div>
@@ -2281,9 +2284,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=415"></script>
+    <script src="script.js?v=416"></script>
     <script src="criador-arte.js?v=1"></script>
-    <script src="/pedido.js?v=415"></script>
+    <script src="/pedido.js?v=416"></script>
 
 
 
