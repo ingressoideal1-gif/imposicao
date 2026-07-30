@@ -425,15 +425,27 @@ def _embed_system_fonts(numeracao_obj):
         "/System/Library/Fonts",
         os.path.expanduser("~/Library/Fonts"),
     ]
-    for el in numeracao_obj["elements"]:
-        raw_fn = el.get("font_name", "")
-        if not raw_fn.startswith("system:"):
+    standard_fonts = ("helv", "hebo", "cour", "times", "helvetica", "arial", "courier", "times new roman")
+    for el in numeracao_obj.get("elements", []):
+        raw_fn = (el.get("font_name") or el.get("font_family") or "").strip()
+        if not raw_fn:
             continue
-        parts = raw_fn[7:].split("|")
-        family = parts[0]
-        is_bold = "bold" in parts[1:]
-        is_italic = "italic" in parts[1:]
-        cache_key = f"{family}|{'b' if is_bold else ''}|{'i' if is_italic else ''}"
+        if raw_fn.startswith("system:"):
+            parts = raw_fn[7:].split("|")
+            family = parts[0]
+            is_bold = "bold" in parts[1:]
+            is_italic = "italic" in parts[1:]
+        else:
+            family = raw_fn
+            is_bold = "bold" in family.lower() or el.get("font_weight") == "bold" or el.get("bold") is True
+            is_italic = "italic" in family.lower() or el.get("font_style") == "italic"
+
+        if family.lower() in standard_fonts and not el.get("_font_data"):
+            continue
+        if el.get("_font_data"):
+            continue
+
+        cache_key = f"{family.lower()}|{'b' if is_bold else ''}|{'i' if is_italic else ''}"
         if cache_key in font_cache:
             el["_font_data"] = font_cache[cache_key]
             continue
