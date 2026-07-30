@@ -15910,21 +15910,30 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     // Garante que todos os itens reais (pedidos_modelos) da OS sejam carregados antes de abrir
     await loadOSItens(osId);
 
-    const itens = state.osItens[osId] || [];
+    const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+    const realOsId = osObj ? osObj.id : osId;
+
+    const itens = state.osItens[realOsId] || state.osItens[osId] || [];
     if (!itens.length) {
         return toast('Esta OS não possui itens.', 'error');
     }
 
-    // Inicializar o item ativo com itemId null para que nenhum venha selecionado
-    state.activeOSItem = { itemId: null, osId: osId };
+    // Selecionar o primeiro modelo/item por padrão
+    const firstItem = itens[0];
+    state.activeOSItem = { itemId: firstItem.id, osId: realOsId };
 
-    // Ocultar as janelas de visualização por padrão
-    const impPreview = document.getElementById('imp-preview-card-container');
-    if (impPreview) impPreview.style.display = 'none';
+    // Exibir as janelas de visualização do pedido por padrão
     const pedPreview = document.getElementById('ped-preview-card-container');
-    if (pedPreview) pedPreview.style.display = 'none';
+    if (pedPreview) pedPreview.style.display = 'block';
+    const impPreview = document.getElementById('imp-preview-card-container');
+    if (impPreview) impPreview.style.display = 'block';
 
-    // Renderizar as filas de itens
+    // Carregar o primeiro item na imposição (preenche formato, cor e desenha o preview)
+    if (typeof enviarParaImposicao === 'function') {
+        await enviarParaImposicao(firstItem.id, realOsId, false);
+    }
+
+    // Renderizar a fila de modelos do pedido
     if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
     if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
 
@@ -16586,7 +16595,7 @@ window.showView = function(viewId) {
     if (viewId === 'view-pedido') {
         if (state.activeOSItem) {
             const { osId, itemId } = state.activeOSItem;
-            const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
+            const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId) : null);
             let nomeEvento = '';
             if (state.todasArtes) {
                 const arteObj = state.todasArtes.find(a => String(a.id_int) === String(osId).replace('vibe_', ''));
@@ -16604,10 +16613,11 @@ window.showView = function(viewId) {
             if (pedViewSubtitle) {
                 pedViewSubtitle.style.display = 'none';
             }
-            if (itemId) {
-                const pedPreview = document.getElementById('ped-preview-card-container');
-                if (pedPreview) pedPreview.style.display = 'block';
-            }
+            const pedPreview = document.getElementById('ped-preview-card-container');
+            if (pedPreview) pedPreview.style.display = 'block';
+
+            if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+            if (typeof drawPedPreview === 'function') drawPedPreview();
         }
     }
 };
