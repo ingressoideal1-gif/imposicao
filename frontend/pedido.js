@@ -2253,13 +2253,7 @@ function clearPedActiveOS() {
 
 
     const infoEl = document.getElementById('ped-file-info');
-
-    if (infoEl) {
-        infoEl.style.display = 'none';
-        infoEl.textContent = '';
-    }
-
-    const fileInput = document.getElementById('ped-file');
+        const fileInput = document.getElementById('ped-file');
     if (fileInput) {
         fileInput.value = '';
     }
@@ -2302,7 +2296,6 @@ async function enviarParaPedido(itemId, osId) {
         // Inicializar painel lateral de driver de impressão
         if (typeof initPedPrintPanel === 'function') {
             initPedPrintPanel().then(() => {
-                // Carregar config de impressora salva para o produto deste modelo
                 const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
                 if (prodId && typeof loadPrintConfigForProduct === 'function') {
                     loadPrintConfigForProduct(prodId);
@@ -2314,149 +2307,39 @@ async function enviarParaPedido(itemId, osId) {
         }
     }
 
-    // Navegar para a view de Imposição
+    // Navegar para a view de Pedido (sem mudar para Imposição)
     const navBtn = document.querySelector('[data-view="view-pedido"]');
     if (navBtn) navBtn.click();
 
-    // --- MATCHING AUTOMÁTICO DE FORMATO (VIA PRODUTO, COR OU NOME) E SAÍDA ---
-    let formatoId = item.formato_id;
-    
-    // Tentar match do formato via Produto Global
-    if (!formatoId && state.produtosGlobais) {
-        const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
-        let produtoObj = null;
-        if (prodId) {
-            produtoObj = state.produtosGlobais.find(p => String(p.id) === String(prodId) || String(p.id_produto) === String(prodId));
-        }
-        if (!produtoObj) {
-            const prodName = item.nome_produto_real || item.produto;
-            if (prodName) {
-                const cleanProdName = prodName.toLowerCase().trim();
-                produtoObj = state.produtosGlobais.find(p => {
-                    const nameMatch = (p.nomeReal || '').toLowerCase().trim() === cleanProdName || globalFuzzyMatch(p.nomeReal, prodName);
-                    if (nameMatch) return true;
-                    const apelidos = (p.apelidos || '').split(',').map(a => a.trim().toLowerCase());
-                    return apelidos.includes(cleanProdName) || apelidos.some(a => globalFuzzyMatch(a, prodName));
-                });
-            }
-        }
-        if (produtoObj && produtoObj.id_formato) {
-            formatoId = produtoObj.id_formato;
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OS→Ped] Formato matched via Produto "${produtoObj.nomeReal}" → ${formatoId}`);
-        }
+    // ====================================================================
+    // DELEGAR resolução de Formato / Saída / Numeração / Arte
+    // para enviarParaImposicao (código comprovadamente funcional no script.js)
+    // switchTab=false para não mudar a aba
+    // ====================================================================
+    if (typeof enviarParaImposicao === 'function') {
+        await enviarParaImposicao(item.id, osId, false);
     }
 
-    // Tentar match do formato via Cor
-    if (!formatoId && item.cor) {
-        const corMatched = state.cores ? state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || globalFuzzyMatch(c.name, item.cor)) : null;
-        if (corMatched && corMatched.formato_id) {
-            formatoId = corMatched.formato_id;
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OS→Ped] Formato matched via Cor "${item.cor}" → ${formatoId}`);
-        }
-    }
-
-    // Tentar match do formato via Nome da arte
-    if (!formatoId && item.formato) {
-        formatoId = matchFormato(item.formato);
-        if (formatoId) {
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OS→Ped] Formato matched via Nome: "${item.formato}" → ${formatoId}`);
-        }
-    }
-    
-    // Tentar match do formato via Nome da Numeração
-    if (!formatoId && item.numeracao) {
-        formatoId = matchFormato(item.numeracao);
-        if (formatoId) {
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OS→Ped] Formato matched via Numeração: "${item.numeracao}" → ${formatoId}`);
-        }
-    }
-    
-    // FALLBACK: Se o formato continuar indefinido, seleciona o 1º formato padrão cadastrado
-    if (!formatoId && state.formatos && state.formatos.length > 0) {
-        formatoId = state.formatos[0].id;
-        console.log(`[OS→Ped] Fallback de formato ativado → ${formatoId}`);
-    }
-
-    if (formatoId) {
-        const fmtSelect = document.getElementById('ped-formato');
-        if (fmtSelect) {
-            fmtSelect.value = formatoId;
-            fmtSelect.dispatchEvent(new Event('change'));
-        }
-
-        // Tentar match da Saída via item > formato default > primeiro disponível
-        const formatoObj = state.formatos ? state.formatos.find(f => String(f.id) === String(formatoId)) : null;
-        const resolvedSaidaId = item.saida_id || (formatoObj ? formatoObj.default_saida_id : null) || (state.saidas && state.saidas[0] ? state.saidas[0].id : null);
-
-        if (resolvedSaidaId) {
-            setTimeout(() => {
-                const saidaSelect = document.getElementById('ped-saida');
-                if (saidaSelect) {
-                    saidaSelect.value = resolvedSaidaId;
-                    saidaSelect.dispatchEvent(new Event('change'));
-                    console.log(`[OS→Ped] Saída resolvida → ${resolvedSaidaId}`);
-                }
-            }, 150);
-        }
-    }
-
-    // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
-    // Delay maior (500ms) para garantir que o change do formato já populou as opções de numeração
-    setTimeout(() => {
-        // Repopular numerações para o formato ativo antes de tentar selecionar
-        if (typeof populatePedNumeracoes === 'function') populatePedNumeracoes();
-
-        let numId = item.numeracao_id;
-        if (!numId && item.numeracao) {
-            numId = matchNumeracao(item.numeracao, formatoId);
-            if (numId) {
-                autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
-                console.log(`[OS→Ped] Numeração matched: "${item.numeracao}" → ${numId}`);
-            }
-        }
-        if (numId) {
-            const numSelect = document.getElementById('ped-numeracao');
-            if (numSelect) {
-                // Verificar se a opção existe no dropdown
-                const opt = numSelect.querySelector(`option[value="${numId}"]`);
-                if (opt) {
-                    numSelect.value = numId;
-                    numSelect.dispatchEvent(new Event('change'));
-                } else {
-                    console.warn(`[OS→Ped] Numeração ${numId} não disponível no dropdown para formato ${formatoId}`);
-                }
-            }
-        }
-    }, 500);
-
-    // --- PREENCHER FAIXA DE NUMERAÃ‡ÃƒO ---
+    // --- PREENCHER FAIXA DE NUMERAÇÃO (ped-start / ped-end) ---
     setTimeout(() => {
         const numStart = document.getElementById('ped-start');
         const numEnd = document.getElementById('ped-end');
         if (numStart && item.num_inicial) numStart.value = item.num_inicial;
         if (numEnd && item.num_final) numEnd.value = item.num_final;
 
-        // --- CAMAROTE: preencher C_INI, Q_CAM e L_CAM do item de OS e mostrar painel ---
+        // --- CAMAROTE: preencher C_INI, Q_CAM e L_CAM ---
         const cIniHidden = document.getElementById('ped-c-ini');
         const qCamHidden = document.getElementById('ped-q-cam');
         const lCamHidden = document.getElementById('ped-l-cam');
-        // Cobre: Q_CAM, q_cam, qtd_locais, qtd_cam (vÃ¡rias colunas possÃ­veis no Supabase)
         const cIniVal = item.C_INI || item.c_ini || 1;
         const qCamVal = item.Q_CAM || item.q_cam || item.qtd_locais || item.qtd_cam || 0;
         const lCamVal = item.L_CAM || item.l_cam || item.lotacao_cam || item.lotacao || item.lotacao_por_local || 1;
         if (cIniHidden) cIniHidden.value = cIniVal;
         if (qCamHidden) qCamHidden.value = qCamVal;
         if (lCamHidden) lCamHidden.value = lCamVal;
-
-        // ForÃ§ar atualização da visibilidade do painel CAMAROTE
     }, 400);
 
-    // --- PREENCHER MODO DE IMPRESSÃƒO ---
-    // Aguardar a navegação de aba + preenchimento dos selects antes de desenhar
+    // --- PREENCHER MODO DE IMPRESSÃO + BLOCOS ---
     setTimeout(() => {
         const printMode = document.getElementById('ped-print-mode');
         if (printMode) {
@@ -2479,75 +2362,19 @@ async function enviarParaPedido(itemId, osId) {
             }
         }
         updatePedSummary();
-        if (typeof drawPreview === 'function') drawPedPreview();
+        if (typeof drawPedPreview === 'function') drawPedPreview();
     }, 800);
 
     // --- ATUALIZAR PAINEL DE ITENS OS ---
     setTimeout(() => { renderPedOSQueue(); }, 600);
-    
-    // --- CARREGAR ARTE (PDF/IMAGEM) ---
-    setTimeout(() => {
-        // Prioridade 1: arte_url do prÃ³prio item
-        // Prioridade 2: pdf_url da cor correspondente
-        const arteUrl = item.arte_url || null;
-        
-        // Tentar encontrar a arte via cor — prioridade: amostra_cor_id > fuzzy match
-        const corObj = item.amostra_cor_id
-            ? (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id))
-            : (state.cores || []).find(c => globalFuzzyMatch(c.name, item.cor || item.padrao || ''));
-        const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
-        
-        const arteSource = arteUrl || arteViaCor;
-        
-        if (arteSource) {
-            // Extrair o nome do arquivo da URL para preservar a extensão correta (.jpg, .pdf, etc.)
-            const filenameFromUrl = arteSource.startsWith('http')
-                ? decodeURIComponent(arteSource.split('/').pop().split('?')[0])
-                : null;
-            const filename = filenameFromUrl || item.nome_arquivo_arte || (corObj ? `${corObj.name}.pdf` : `Arte_${item.modelo || 'Modelo'}.pdf`);
-            
-            const loadArte = (src) => {
-                if (!src || !src.startsWith('http')) {
-                    console.warn('[OSâ†’Imp] Fonte de arte invÃ¡lida (não Ã© URL HTTP):', src);
-                    return;
-                }
-                fetch(src)
-                    .then(res => {
-                        const ct = res.headers.get('content-type') || '';
-                        return res.blob().then(blob => ({ blob, ct }));
-                    })
-                    .then(({ blob, ct }) => {
-                        // Validar que Ã© PDF ou imagem antes de carregar
-                        const isPdf = ct.includes('pdf') || filename.toLowerCase().endsWith('.pdf');
-                        const isImg = ct.includes('image') || /\.(png|jpg|jpeg|webp)$/i.test(filename);
-                        if (!isPdf && !isImg) {
-                            console.warn('[OSâ†’Imp] ConteÃºdo retornado não Ã© PDF nem imagem. Content-Type:', ct);
-                            return;
-                        }
-                        const file = new File([blob], filename, { type: ct || (isPdf ? 'application/pdf' : 'image/png') });
-                        state.expectedArteName = filename;
-                        loadPedArtFile(file);
-                        const impInfo = document.getElementById('ped-file-info');
-                        if (impInfo) {
-                            impInfo.textContent = `âœ… ${filename} (Carregado do Pedido)`;
-                            impInfo.style.display = 'block';
-                        }
-                        setTimeout(() => { if (typeof drawPreview === 'function') drawPedPreview(); }, 600);
-                    })
-                    .catch(err => console.warn('[OSâ†’Imp] Erro ao baixar arte via URL:', err));
-            };
-            
-            loadArte(arteSource);
-            if (corObj) console.log(`[OSâ†’Imp] Arte carregada via Cor "${corObj.name}"`);
-        } else {
-            console.warn(`[OSâ†’Imp] Nenhuma arte encontrada para item ${item.id} (cor: ${item.cor || item.padrao || ''})`);
-        }
-    }, 700);
 
-    const os = state.ordens.find(o => o.id === osId);
+    // --- TOAST ---
+    const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
     const osNum = os ? os.numero : '';
-    const formatoObjToast = state.formatos ? state.formatos.find(f => String(f.id) === String(formatoId)) : null;
-    const nomeFmtToast = formatoObjToast ? formatoObjToast.name : (item.formato || 'Formato NÃ£o Definido');
+    const fmtSelect = document.getElementById('ped-formato');
+    const currentFmtId = fmtSelect ? fmtSelect.value : '';
+    const formatoObjToast = state.formatos ? state.formatos.find(f => String(f.id) === String(currentFmtId || item.formato_id)) : null;
+    const nomeFmtToast = formatoObjToast ? formatoObjToast.name : (item.formato || 'Formato Não Definido');
     toast(`Item "${item.produto} -- ${nomeFmtToast}" da OS #${osNum} carregado na Imposição!`, 'info');
 }
 window.enviarParaPedido = enviarParaPedido;
