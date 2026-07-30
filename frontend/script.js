@@ -8119,6 +8119,7 @@ function updateImpSummary() {
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
 
+    const perSheet = fmt.cols * fmt.rows;
     const total_impressions = (num && num.tipo === "TICKET") ? Math.ceil(total / ticket_qtd) : total;
     let sheets = Math.ceil(total_impressions / perSheet);
 
