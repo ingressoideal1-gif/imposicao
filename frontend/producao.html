@@ -1359,6 +1359,9 @@
                                     </div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
+                                    <label style="font-size: 0.78rem; margin-bottom: 0; display: flex; align-items: center; gap: 5px; cursor: pointer; background: rgba(56,189,248,0.12); padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; font-weight: 700;" title="Adicionar a camada base da COR (Amostra) à visualização da imposição (Apenas visualização, NUNCA é impressa)">
+                                        <input type="checkbox" id="ped-preview-toggle-amostra" onchange="drawPedPreview()" style="cursor: pointer; accent-color: #0284c7;"> 🎨 AMOSTRA
+                                    </label>
                                     <select id="ped-preview-set-input" class="form-control" style="height: 28px; padding: 2px 6px; font-size: 0.85rem; width: auto; display: none;" onchange="changePedPreviewPage()">
                                         <option value="1">Set 1</option>
                                     </select>
@@ -2013,9 +2016,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="/script.js?v=416"></script>
+    <script src="/script.js?v=417"></script>
     <script src="/criador-arte.js?v=1"></script>
-    <script src="/pedido.js?v=416"></script>
+    <script src="/pedido.js?v=417"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">

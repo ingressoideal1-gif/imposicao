@@ -811,15 +811,10 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-            // Clipping restrito Ã  cÃ©lula (impede que artes com sangria vazem)
-
+            // Clipping restrito à célula (impede que artes com sangria vazem)
             ctx.beginPath();
-
             ctx.rect(-cw / 2, -ch / 2, cw, ch);
-
             ctx.clip();
-
-
 
             let multiArteItem = null;
             const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
@@ -836,6 +831,87 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                             break;
                         }
                         accumulated += q;
+                    }
+                }
+            }
+
+            // ─── CAMADA BASE DA COR (AMOSTRA) ──────────────────────────────────
+            // Se o checkbox "AMOSTRA" (#ped-preview-toggle-amostra) estiver marcado,
+            // desenhamos a camada base da Cor (amostra_cor_id / Cor da OS) abaixo
+            // de todas as demais camadas. (Apenas visualização, NUNCA é impressa).
+            const showAmostraCor = document.getElementById('ped-preview-toggle-amostra')?.checked === true;
+            if (showAmostraCor) {
+                const sItem = state.activeOSItem ? (state.osItens[state.activeOSItem.osId]?.find(i => String(i.id) === String(state.activeOSItem.itemId))) : null;
+                const corId = (multiArteItem && multiArteItem.amostra_cor_id)
+                    ? multiArteItem.amostra_cor_id
+                    : (sItem ? sItem.amostra_cor_id : (document.getElementById('ped-cor')?.value || ''));
+                
+                const corObj = corId
+                    ? (state.cores || []).find(c => String(c.id) === String(corId))
+                    : (state.cores || []).find(c => globalFuzzyMatch(c.name, (sItem ? (sItem.cor || sItem.padrao || '') : '')));
+
+                if (corObj) {
+                    // 1. Desenhar cor de fundo / hex de referência se cadastrada
+                    const hexColor = corObj.cor_referencia || corObj.hex || corObj.color || '';
+                    if (hexColor) {
+                        ctx.fillStyle = hexColor;
+                        ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
+                    }
+
+                    // 2. Se a cor possuir arquivo PDF ou imagem de amostra (Frente/Verso)
+                    const corPdfUrl = isBack ? (corObj.pdf_verso_url || corObj.pdf_verso_base64) : (corObj.pdf_url || corObj.pdf_base64);
+                    if (corPdfUrl) {
+                        if (!corObj._pdfCache) corObj._pdfCache = {};
+                        const cKey = isBack ? 'verso' : 'frente';
+                        const corPdfDoc = corObj._pdfCache[cKey];
+
+                        if (corPdfDoc) {
+                            if (corPdfDoc.pagesCache && corPdfDoc.pagesCache['page_1']) {
+                                const cachedCorCanvas = corPdfDoc.pagesCache['page_1'];
+                                ctx.drawImage(cachedCorCanvas, -cw / 2, -ch / 2, cw, ch);
+                            } else if (!corPdfDoc.rendering) {
+                                corPdfDoc.rendering = true;
+                                (async () => {
+                                    try {
+                                        const p = await corPdfDoc.getPage(1);
+                                        const vp = p.getViewport({ scale: 1.5 });
+                                        const off = document.createElement('canvas');
+                                        off.width = vp.width;
+                                        off.height = vp.height;
+                                        const octx = off.getContext('2d');
+                                        octx.fillStyle = '#ffffff';
+                                        octx.fillRect(0, 0, off.width, off.height);
+                                        await p.render({ canvasContext: octx, viewport: vp }).promise;
+                                        if (!corPdfDoc.pagesCache) corPdfDoc.pagesCache = {};
+                                        corPdfDoc.pagesCache['page_1'] = off;
+                                        if (typeof drawPedPreview === 'function') drawPedPreview();
+                                    } catch (e) {
+                                        console.error('Erro ao renderizar pág da Cor base:', e);
+                                    } finally {
+                                        delete corPdfDoc.rendering;
+                                    }
+                                })();
+                            }
+                        } else if (!corObj._pdfLoading) {
+                            corObj._pdfLoading = true;
+                            if (typeof pdfjsLib !== 'undefined') {
+                                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                                }
+                                const fetchPromise = corPdfUrl.startsWith('data:')
+                                    ? pdfjsLib.getDocument({ data: atob(corPdfUrl.split('base64,')[1] || corPdfUrl) }).promise
+                                    : fetch(corPdfUrl).then(r => r.arrayBuffer()).then(buf => pdfjsLib.getDocument({ data: buf }).promise);
+
+                                fetchPromise.then(doc => {
+                                    corObj._pdfCache[cKey] = doc;
+                                    delete corObj._pdfLoading;
+                                    if (typeof drawPedPreview === 'function') drawPedPreview();
+                                }).catch(e => {
+                                    console.error('Erro ao carregar PDF da cor da amostra:', e);
+                                    delete corObj._pdfLoading;
+                                });
+                            }
+                        }
                     }
                 }
             }
