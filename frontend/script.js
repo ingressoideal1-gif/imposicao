@@ -18113,6 +18113,13 @@ function onItemNumSelect(idx, osId, itemId) {
             if (!item.verso_tipo || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
                 item.verso_tipo = 'FRENTE E VERSO';
             }
+        } else {
+            if (item.verso_tipo === 'FRENTE E VERSO') {
+                item.verso_tipo = 'SÓ FRENTE';
+                item.verso = false;
+            } else {
+                item.verso = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            }
         }
         if (oldVerso !== item.verso) {
             versoStateChanged = true;
@@ -19158,10 +19165,21 @@ async function renderItemAmostraCombinada(idx, osId) {
     const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
 
     const numIsDuplex = isNumeracaoDuplex(num);
-    if (numIsDuplex && !item.verso) {
-        item.verso = true;
-        if (!item.verso_tipo || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
-            item.verso_tipo = 'FRENTE E VERSO';
+    const oldVersoInCanvas = !!item.verso;
+
+    if (numIsDuplex) {
+        if (!item.verso) {
+            item.verso = true;
+            if (!item.verso_tipo || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
+                item.verso_tipo = 'FRENTE E VERSO';
+            }
+        }
+    } else {
+        if (item.verso_tipo === 'FRENTE E VERSO') {
+            item.verso_tipo = 'SÓ FRENTE';
+            item.verso = false;
+        } else {
+            item.verso = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
         }
     }
 
@@ -19185,22 +19203,23 @@ async function renderItemAmostraCombinada(idx, osId) {
 
     const S = 150 / 25.4;
 
+    const canvasBackInDOM = container.querySelector(`#amostra-item-canvas-verso-${idx}`);
+    if (oldVersoInCanvas !== item.verso || (item.verso && !canvasBackInDOM) || (!item.verso && canvasBackInDOM)) {
+        const containerId = state.amostrasContainerId || 'amostras-itens-container';
+        if (containerId === 'cliente-amostras-itens-container' && typeof renderClienteAmostrasItens === 'function') {
+            renderClienteAmostrasItens(osId);
+            return;
+        } else if (typeof renderAmostrasItens === 'function') {
+            renderAmostrasItens(osId);
+            return;
+        }
+    }
+
     if (item.verso) {
         const canvasFront = container.querySelector(`#amostra-item-canvas-${idx}`);
         const emptyFront = container.querySelector(`#amostra-item-empty-${idx}`);
         const canvasBack = container.querySelector(`#amostra-item-canvas-verso-${idx}`);
         const emptyBack = container.querySelector(`#amostra-item-empty-verso-${idx}`);
-
-        if (!canvasBack) {
-            const containerId = state.amostrasContainerId || 'amostras-itens-container';
-            if (containerId === 'cliente-amostras-itens-container' && typeof renderClienteAmostrasItens === 'function') {
-                renderClienteAmostrasItens(osId);
-                return;
-            } else if (typeof renderAmostrasItens === 'function') {
-                renderAmostrasItens(osId);
-                return;
-            }
-        }
 
         await drawAmostraFace(item, 'front', canvasFront, emptyFront, fmt, cor, num, idx, osId, S);
         await drawAmostraFace(item, 'back', canvasBack, emptyBack, fmt, cor, num, idx, osId, S);
