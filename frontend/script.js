@@ -9005,21 +9005,13 @@ window.runImposition = async function (mode, returnBlob = false) {
                         if (currentEvent === "file" && dataStr) {
                             try {
                                 const fileObj = JSON.parse(dataStr);
-                                toast(`Salvando: ${fileObj.name}...`, 'info');
-                                
                                 const binStr = atob(fileObj.data);
                                 const bytes = new Uint8Array(binStr.length);
-                                for (let i = 0; i < binStr.length; i++) {
-                                    bytes[i] = binStr.charCodeAt(i);
-                                }
+                                for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
                                 const fBlob = new Blob([bytes], {type: "application/pdf"});
 
-                                if (directoryHandle) {
-                                    const fh = await directoryHandle.getFileHandle(fileObj.name, { create: true });
-                                    const writable = await fh.createWritable();
-                                    await writable.write(fBlob);
-                                    await writable.close();
-                                } else {
+                                const fallbackDownload = async () => {
+                                    toast(`Baixando: ${fileObj.name}...`, 'info');
                                     const url = window.URL.createObjectURL(fBlob);
                                     const a = document.createElement('a');
                                     a.href = url;
@@ -9029,6 +9021,21 @@ window.runImposition = async function (mode, returnBlob = false) {
                                     a.remove();
                                     window.URL.revokeObjectURL(url);
                                     await new Promise(r => setTimeout(r, 200));
+                                };
+
+                                if (directoryHandle) {
+                                    try {
+                                        toast(`Salvando: ${fileObj.name}...`, 'info');
+                                        const fh = await directoryHandle.getFileHandle(fileObj.name, { create: true });
+                                        const writable = await fh.createWritable();
+                                        await writable.write(fBlob);
+                                        await writable.close();
+                                    } catch (saveErr) {
+                                        console.warn(`[Fallback] Erro ao salvar "${fileObj.name}" na pasta. Tentando download normal...`, saveErr);
+                                        await fallbackDownload();
+                                    }
+                                } else {
+                                    await fallbackDownload();
                                 }
                             } catch (e) {
                                 console.error("Erro ao processar arquivo do stream:", e);

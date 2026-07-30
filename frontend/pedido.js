@@ -3780,17 +3780,8 @@ window.runPedImposition = async function (mode) {
                                 for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
                                 const fBlob = new Blob([bytes], {type: "application/pdf"});
 
-                                if (mode === 'print') {
-                                    printBlobQueue.push({ name: fileObj.name, blob: fBlob });
-                                    toast(`Arquivo gerado: ${fileObj.name}`, 'info');
-                                } else if (directoryHandle) {
-                                    toast(`Salvando: ${fileObj.name}...`, 'info');
-                                    const fh = await directoryHandle.getFileHandle(fileObj.name, { create: true });
-                                    const writable = await fh.createWritable();
-                                    await writable.write(fBlob);
-                                    await writable.close();
-                                } else {
-                                    toast(`Salvando: ${fileObj.name}...`, 'info');
+                                const fallbackDownload = async () => {
+                                    toast(`Baixando: ${fileObj.name}...`, 'info');
                                     const url = window.URL.createObjectURL(fBlob);
                                     const a = document.createElement('a');
                                     a.href = url;
@@ -3800,6 +3791,24 @@ window.runPedImposition = async function (mode) {
                                     a.remove();
                                     window.URL.revokeObjectURL(url);
                                     await new Promise(r => setTimeout(r, 200));
+                                };
+
+                                if (mode === 'print') {
+                                    printBlobQueue.push({ name: fileObj.name, blob: fBlob });
+                                    toast(`Arquivo gerado: ${fileObj.name}`, 'info');
+                                } else if (directoryHandle) {
+                                    try {
+                                        toast(`Salvando: ${fileObj.name}...`, 'info');
+                                        const fh = await directoryHandle.getFileHandle(fileObj.name, { create: true });
+                                        const writable = await fh.createWritable();
+                                        await writable.write(fBlob);
+                                        await writable.close();
+                                    } catch (saveErr) {
+                                        console.warn(`[Fallback] Erro ao salvar "${fileObj.name}" na pasta. Tentando download normal...`, saveErr);
+                                        await fallbackDownload();
+                                    }
+                                } else {
+                                    await fallbackDownload();
                                 }
                             } catch (e) {
                                 console.error("Erro ao processar arquivo do stream:", e);
