@@ -22372,13 +22372,79 @@ function getPedPrintOptions() {
         duplex: parseInt(document.getElementById('ped-print-duplex')?.value) || 1,
         color: parseInt(document.getElementById('ped-print-color')?.value) || 2,
         copies: parseInt(document.getElementById('ped-print-copies')?.value) || 1,
-        orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1
+        orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1,
+        impressao_reversa: document.getElementById('ped-print-reverse')?.checked === true,
+        folha_a_folha: document.getElementById('ped-print-sheet-by-sheet')?.checked === true
     };
     if (isDualTray) {
         options.tray_capa = parseInt(document.getElementById('ped-print-tray-capa')?.value) || options.tray;
         options.tray_miolo = parseInt(document.getElementById('ped-print-tray-miolo')?.value) || options.tray;
     }
     return { printerName, options };
+}
+
+// Processa a fila de PDFs aplicando Impressão Reversa e/ou Folha a Folha se ativados
+async function processPrintQueueOptions(queue, options) {
+    if (!options || (!options.impressao_reversa && !options.folha_a_folha)) {
+        return queue;
+    }
+
+    const { PDFDocument } = window.PDFLib || {};
+    if (!PDFDocument) {
+        console.warn('[processPrintQueueOptions] window.PDFLib.PDFDocument não disponível.');
+        return queue;
+    }
+
+    const newQueue = [];
+
+    for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
+        try {
+            const arrayBuffer = await item.blob.arrayBuffer();
+            const pdfDoc = await PDFDocument.load(arrayBuffer);
+            const totalPages = pdfDoc.getPageCount();
+
+            // Determinar a ordem das páginas (reversa: N -> 1, normal: 1 -> N)
+            const pageIndices = [];
+            if (options.impressao_reversa) {
+                for (let p = totalPages - 1; p >= 0; p--) pageIndices.push(p);
+            } else {
+                for (let p = 0; p < totalPages; p++) pageIndices.push(p);
+            }
+
+            if (options.folha_a_folha) {
+                // Gerar 1 arquivo PDF para cada página individualmente na ordem calculada
+                const baseName = (item.name || 'documento.pdf').replace(/\.pdf$/i, '');
+                for (let k = 0; k < pageIndices.length; k++) {
+                    const pageIdx = pageIndices[k];
+                    const singleDoc = await PDFDocument.create();
+                    const [copiedPage] = await singleDoc.copyPages(pdfDoc, [pageIdx]);
+                    singleDoc.addPage(copiedPage);
+                    const singleBytes = await singleDoc.save();
+                    const singleBlob = new Blob([singleBytes], { type: 'application/pdf' });
+                    const pageNumStr = String(pageIdx + 1).padStart(3, '0');
+                    newQueue.push({
+                        name: `${baseName}_pag_${pageNumStr}.pdf`,
+                        blob: singleBlob
+                    });
+                }
+            } else if (options.impressao_reversa) {
+                // Arquivo único contendo todas as páginas em ordem invertida
+                const reverseDoc = await PDFDocument.create();
+                const copiedPages = await reverseDoc.copyPages(pdfDoc, pageIndices);
+                copiedPages.forEach(p => reverseDoc.addPage(p));
+                const reverseBytes = await reverseDoc.save();
+                const reverseBlob = new Blob([reverseBytes], { type: 'application/pdf' });
+                newQueue.push({ name: item.name, blob: reverseBlob });
+            } else {
+                newQueue.push(item);
+            }
+        } catch (err) {
+            console.error(`[processPrintQueueOptions] Erro ao reordenar PDF "${item.name}":`, err);
+            newQueue.push(item);
+        }
+    }
+    return newQueue;
 }
 
 // Envia os blobs gerados diretamente para a impressora configurada no painel lateral
@@ -22389,6 +22455,15 @@ async function sendPrintJobDirect(queue) {
     if (!printerName) {
         toast('Selecione uma impressora no painel de configuração de impressão.', 'error');
         return false;
+    }
+
+    // Aplicar transformações de Impressão Reversa / Folha a Folha se selecionados
+    if (options.impressao_reversa || options.folha_a_folha) {
+        const modoDesc = options.impressao_reversa && options.folha_a_folha
+            ? 'Reversa + Folha a Folha'
+            : (options.impressao_reversa ? 'Impressão Reversa' : 'Folha a Folha');
+        toast(`Processando páginas (${modoDesc})...`, 'info');
+        queue = await processPrintQueueOptions(queue, options);
     }
 
     const isLocalMode = !window._activeAgentData ||
@@ -22513,6 +22588,8 @@ async function savePrintConfigForProduct() {
         color: parseInt(document.getElementById('ped-print-color')?.value) || 2,
         copies: parseInt(document.getElementById('ped-print-copies')?.value) || 1,
         orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1,
+        impressao_reversa: document.getElementById('ped-print-reverse')?.checked === true,
+        folha_a_folha: document.getElementById('ped-print-sheet-by-sheet')?.checked === true,
         updated_at: new Date().toISOString()
     };
 
@@ -22671,6 +22748,11 @@ async function _applyPrintConfig(config) {
                     const orientSel = document.getElementById('ped-print-orientation');
                     if (orientSel) orientSel.value = String(config.orientation);
                 }
+                const chkReverse = document.getElementById('ped-print-reverse');
+                if (chkReverse) chkReverse.checked = !!(config.impressao_reversa || config.reverse_print);
+
+                const chkSheet = document.getElementById('ped-print-sheet-by-sheet');
+                if (chkSheet) chkSheet.checked = !!(config.folha_a_folha || config.sheet_by_sheet);
 
                 // Mostrar indicador visual
                 const indicator = document.getElementById('ped-print-saved-indicator');
@@ -22692,6 +22774,7 @@ window.initPedPrintPanel = initPedPrintPanel;
 window.reloadPedPrinterList = reloadPedPrinterList;
 window.onPedPrinterChange = onPedPrinterChange;
 window.getPedPrintOptions = getPedPrintOptions;
+window.processPrintQueueOptions = processPrintQueueOptions;
 window.sendPrintJobDirect = sendPrintJobDirect;
 
 
