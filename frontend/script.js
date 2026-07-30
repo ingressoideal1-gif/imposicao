@@ -18146,8 +18146,8 @@ function onItemNumSelect(idx, osId, itemId) {
         const containerId = state.amostrasContainerId || 'amostras-itens-container';
         if (containerId === 'cliente-amostras-itens-container' && typeof renderClienteAmostrasItens === 'function') {
             renderClienteAmostrasItens(osId);
-        } else if (typeof renderAmostrasItens === 'function') {
-            renderAmostrasItens(osId);
+        } else if (typeof renderAmostrasOSItens === 'function') {
+            renderAmostrasOSItens(osId);
         } else {
             renderItemAmostraCombinada(idx, osId);
         }
@@ -19209,8 +19209,8 @@ async function renderItemAmostraCombinada(idx, osId) {
         if (containerId === 'cliente-amostras-itens-container' && typeof renderClienteAmostrasItens === 'function') {
             renderClienteAmostrasItens(osId);
             return;
-        } else if (typeof renderAmostrasItens === 'function') {
-            renderAmostrasItens(osId);
+        } else if (typeof renderAmostrasOSItens === 'function') {
+            renderAmostrasOSItens(osId);
             return;
         }
     }
