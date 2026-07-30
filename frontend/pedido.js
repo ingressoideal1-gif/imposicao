@@ -2238,7 +2238,7 @@ async function enviarParaPedido(itemId, osId) {
         if (typeof initPedPrintPanel === 'function') {
             initPedPrintPanel().then(() => {
                 // Carregar config de impressora salva para o produto deste modelo
-                const prodId = item._vibe_id_produto;
+                const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
                 if (prodId && typeof loadPrintConfigForProduct === 'function') {
                     loadPrintConfigForProduct(prodId);
                 }

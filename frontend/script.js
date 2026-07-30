@@ -22473,11 +22473,11 @@ function _getActiveProductInfo() {
     const itens = state.osItens[activeItem.osId] || [];
     const item = itens.find(i => String(i.id) === String(activeItem.itemId));
     if (!item) return null;
-    const prodId = item._vibe_id_produto || null;
+    const prodId = item._vibe_id_produto || item.id_produto || item.produto_id || null;
     if (!prodId) return null;
     const prodObj = (state.produtosGlobais || []).find(p => String(p.id_produto) === String(prodId));
-    const prodNome = prodObj ? (prodObj.nomeReal || `Produto #${prodId}`) : (item.nome_produto_real || 'Produto');
-    return { prodId, prodNome };
+    const prodNome = prodObj ? (prodObj.nomeReal || `Produto #${prodId}`) : (item.nome_produto_real || item.produto || 'Produto');
+    return { prodId: String(prodId), prodNome };
 }
 
 function _updateSaveButtonLabel() {
@@ -22512,29 +22512,50 @@ async function savePrintConfigForProduct() {
         duplex: parseInt(document.getElementById('ped-print-duplex')?.value) || 1,
         color: parseInt(document.getElementById('ped-print-color')?.value) || 2,
         copies: parseInt(document.getElementById('ped-print-copies')?.value) || 1,
-        orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1
+        orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1,
+        updated_at: new Date().toISOString()
     };
 
-    // Salvar no cache local
+    // 1. Salvar no cache local
     _printConfigCache[info.prodId] = config;
 
-    // Salvar no localStorage (fallback offline)
+    // 2. Salvar no localStorage (fallback offline)
     try { localStorage.setItem(`printConfig_${info.prodId}`, JSON.stringify(config)); } catch(e) {}
 
-    // Salvar no backend/Supabase
+    // 3. Salvar no Supabase (tabela producao_print_config)
     const btn = document.getElementById('ped-print-save-btn');
     if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
     try {
-        const resp = await fetch(`${API_BASE_URL}/api/print-config`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(config)
-        });
-        const data = await resp.json();
-        if (data.ok) {
-            toast(`✅ Config salva para "${info.prodNome}"`, 'success');
-        } else {
-            // Fallback: ja esta salvo no localStorage
+        const sb = typeof getSupabase === 'function' ? getSupabase() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+        let savedInSupabase = false;
+
+        if (sb) {
+            const { error } = await sb.from('producao_print_config').upsert(config, { onConflict: 'produto_id' });
+            if (!error) {
+                savedInSupabase = true;
+                toast(`✅ Config de impressão salva no banco para "${info.prodNome}"`, 'success');
+            } else {
+                console.warn('[printConfig] Aviso/Erro ao salvar no Supabase (producao_print_config):', error);
+            }
+        }
+
+        if (!savedInSupabase) {
+            // Tentar endpoint API se houver backend
+            try {
+                const resp = await fetch(`${API_BASE_URL}/api/print-config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    savedInSupabase = true;
+                    toast(`✅ Config de impressão salva no backend para "${info.prodNome}"`, 'success');
+                }
+            } catch (e) {}
+        }
+
+        if (!savedInSupabase) {
             toast(`Config salva localmente para "${info.prodNome}"`, 'info');
         }
     } catch (e) {
@@ -22549,32 +22570,49 @@ async function loadPrintConfigForProduct(produtoId) {
     if (!produtoId) return;
     const prodId = String(produtoId);
 
-    // 1. Verificar cache em memoria
+    // 1. Verificar cache em memória
     if (_printConfigCache[prodId]) {
-        _applyPrintConfig(_printConfigCache[prodId]);
+        await _applyPrintConfig(_printConfigCache[prodId]);
         return;
     }
 
-    // 2. Tentar backend/Supabase
+    // 2. Tentar carregar do Supabase (producao_print_config)
+    const sb = typeof getSupabase === 'function' ? getSupabase() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+    if (sb) {
+        try {
+            const { data, error } = await sb.from('producao_print_config').select('*').eq('produto_id', prodId).maybeSingle();
+            if (data && !error) {
+                _printConfigCache[prodId] = data;
+                try { localStorage.setItem(`printConfig_${prodId}`, JSON.stringify(data)); } catch(e) {}
+                await _applyPrintConfig(data);
+                return;
+            }
+        } catch (e) {
+            console.warn('[printConfig] Erro ao carregar do Supabase:', e);
+        }
+    }
+
+    // 3. Tentar backend API
     try {
         const resp = await fetch(`${API_BASE_URL}/api/print-config/${encodeURIComponent(prodId)}`);
         const data = await resp.json();
         if (data.ok && data.config) {
             _printConfigCache[prodId] = data.config;
-            _applyPrintConfig(data.config);
+            try { localStorage.setItem(`printConfig_${prodId}`, JSON.stringify(data.config)); } catch(e) {}
+            await _applyPrintConfig(data.config);
             return;
         }
     } catch (e) {
         console.warn('[printConfig] load from backend error:', e);
     }
 
-    // 3. Fallback localStorage
+    // 4. Fallback localStorage
     try {
         const stored = localStorage.getItem(`printConfig_${prodId}`);
         if (stored) {
             const config = JSON.parse(stored);
             _printConfigCache[prodId] = config;
-            _applyPrintConfig(config);
+            await _applyPrintConfig(config);
             return;
         }
     } catch (e) {}
