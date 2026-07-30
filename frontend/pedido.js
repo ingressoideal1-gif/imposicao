@@ -1032,7 +1032,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                             if (cachedPage) {
 
+                                if (showAmostraCor) ctx.globalCompositeOperation = 'multiply';
+
                                 ctx.drawImage(cachedPage, offH - dw / 2, offV - dh / 2, dw, dh);
+
+                                if (showAmostraCor) ctx.globalCompositeOperation = 'source-over';
 
                             } else {
 
@@ -1141,9 +1145,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                             ctx.strokeRect(offH - dw / 2, offV - dh / 2, dw, dh);
 
                         } else {
+                            if (showAmostraCor) ctx.globalCompositeOperation = 'multiply';
 
                             ctx.drawImage(activeImage, 0, 0, activeImage.width, activeImage.height, offH - dw / 2, offV - dh / 2, dw, dh);
 
+                            if (showAmostraCor) ctx.globalCompositeOperation = 'source-over';
                         }
 
                     }
@@ -1289,6 +1295,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         numPrintMode = metaEl.print_mode;
                     }
                 }
+
+                if (showAmostraCor) ctx.globalCompositeOperation = 'multiply';
 
                 currentNum.elements.forEach(el => {
 
@@ -1645,6 +1653,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     ctx.restore();
 
                 });
+
+                if (showAmostraCor) ctx.globalCompositeOperation = 'source-over';
 
             }
 
