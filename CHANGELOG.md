@@ -4,7 +4,27 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.2.0** — 2026-06-28
+## Versão atual: **v1.3.0 (v408)** — 2026-07-29
+
+---
+
+## [v1.3.0 (v408) — 2026-07-29] — Suporte aos Modos de Impressão Reversa e Folha a Folha, Cores e Ajustes de Fila do Pedido
+
+### Resumo
+Implementação completa dos novos modos de impressão física (**Impressão Reversa** e **Folha a Folha**), persistência de parametrização de impressão por produto no Supabase, adição do círculo indicador de cor de referência nos modelos, e ajustes visuais nas linhas da fila do pedido.
+
+### Implementações Aplicadas
+
+| # | Módulo / Função | O que mudou |
+|---|---|---|
+| 1 | Modos de Impressão (`v407`) | Adicionados checkboxes **🔄 Impressão reversa** e **📄 Folha a Folha** no painel de configuração de impressão e no motor de spooling em tempo real (`processPrintQueueOptions`). |
+| 2 | Persistência de Impressão (`v406`) | Integração da tabela `producao_print_config` no Supabase com sincronização automática (`savePrintConfigForProduct` e `loadPrintConfigForProduct`). |
+| 3 | Estilo de Status Aguardando (`v408`) | Atualizada a cor de fundo das linhas de modelo com status "Aguardando" para **`#65625e`** em `pedido.js` e `script.js`. |
+| 4 | Círculo Indicador de Referência (`v404`/`v405`) | Inserido círculo (60% da altura da linha) antes do nome do modelo preenchido com o Hexadecimal da cor de referência. |
+| 5 | Dropdown de Cor (`v404`) | Cor de fundo dinâmica com o Hexadecimal da cor selecionada e texto forçado em preto 100% legível (`color: #000000 !important;`). |
+| 6 | Resiliência do Supabase (`v403`) | Interceptador gracioso na função `api()` para tratar ausência da coluna `cor_referencia` sem travar a interface. |
+| 7 | Ajustes de Layout na Fila (`v396`) | Atualizada a cor das bordas e delimitadores para `#918f8c` e aplicado espaçamento vertical de `3pt` entre linhas de modelos. |
+| 8 | Compilação do Executável | Recompilado `dist/IdealImpositionAgent.exe` com tratamento robusto para liberação de portas e processos em segundo plano. |
 
 ---
 
