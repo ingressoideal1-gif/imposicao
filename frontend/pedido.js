@@ -2341,8 +2341,9 @@ async function enviarParaPedido(itemId, osId) {
             }
         }
         if (produtoObj && produtoObj.id_formato) {
-            const fmtObj = (state.formatos || []).find(f => String(f.id_formato_num) === String(produtoObj.id_formato) || String(f.id) === String(produtoObj.id_formato));
-            if (fmtObj) formatoId = fmtObj.id;
+            formatoId = produtoObj.id_formato;
+            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            console.log(`[OS→Ped] Formato matched via Produto "${produtoObj.nomeReal}" → ${formatoId}`);
         }
     }
 
@@ -2351,67 +2352,86 @@ async function enviarParaPedido(itemId, osId) {
         const corMatched = state.cores ? state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || globalFuzzyMatch(c.name, item.cor)) : null;
         if (corMatched && corMatched.formato_id) {
             formatoId = corMatched.formato_id;
+            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            console.log(`[OS→Ped] Formato matched via Cor "${item.cor}" → ${formatoId}`);
         }
     }
 
-    // Tentar match do formato via Nome da arte ou numeração
-    if (!formatoId && (item.formato || item.numeracao || item.observacoes)) {
-        formatoId = matchFormato(item.formato || item.numeracao || item.observacoes);
+    // Tentar match do formato via Nome da arte
+    if (!formatoId && item.formato) {
+        formatoId = matchFormato(item.formato);
+        if (formatoId) {
+            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            console.log(`[OS→Ped] Formato matched via Nome: "${item.formato}" → ${formatoId}`);
+        }
     }
     
-    // FALLBACK GUARANTEE: Se o formato continuar indefinido, seleciona o 1º formato padrão cadastrado
+    // Tentar match do formato via Nome da Numeração
+    if (!formatoId && item.numeracao) {
+        formatoId = matchFormato(item.numeracao);
+        if (formatoId) {
+            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
+            console.log(`[OS→Ped] Formato matched via Numeração: "${item.numeracao}" → ${formatoId}`);
+        }
+    }
+    
+    // FALLBACK: Se o formato continuar indefinido, seleciona o 1º formato padrão cadastrado
     if (!formatoId && state.formatos && state.formatos.length > 0) {
         formatoId = state.formatos[0].id;
-        console.log(`[enviarParaPedido] Fallback de formato ativado → ${formatoId}`);
+        console.log(`[OS→Ped] Fallback de formato ativado → ${formatoId}`);
     }
 
     if (formatoId) {
-        item.formato_id = formatoId;
         const fmtSelect = document.getElementById('ped-formato');
         if (fmtSelect) {
-            if (typeof populatePedNumeracoes === 'function') populatePedNumeracoes();
             fmtSelect.value = formatoId;
             fmtSelect.dispatchEvent(new Event('change'));
         }
 
-        // Tentar match da Saída via Formato ou 1º registro de saída disponível
+        // Tentar match da Saída via item > formato default > primeiro disponível
         const formatoObj = state.formatos ? state.formatos.find(f => String(f.id) === String(formatoId)) : null;
         const resolvedSaidaId = item.saida_id || (formatoObj ? formatoObj.default_saida_id : null) || (state.saidas && state.saidas[0] ? state.saidas[0].id : null);
 
         if (resolvedSaidaId) {
-            item.saida_id = resolvedSaidaId;
             setTimeout(() => {
                 const saidaSelect = document.getElementById('ped-saida');
                 if (saidaSelect) {
                     saidaSelect.value = resolvedSaidaId;
                     saidaSelect.dispatchEvent(new Event('change'));
-                    console.log(`[OS→Imp] Saída matched via Formato "${formatoObj?.name}" → ${resolvedSaidaId}`);
+                    console.log(`[OS→Ped] Saída resolvida → ${resolvedSaidaId}`);
                 }
-            }, 100);
+            }, 150);
         }
     }
 
     // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
+    // Delay maior (500ms) para garantir que o change do formato já populou as opções de numeração
     setTimeout(() => {
+        // Repopular numerações para o formato ativo antes de tentar selecionar
+        if (typeof populatePedNumeracoes === 'function') populatePedNumeracoes();
+
         let numId = item.numeracao_id;
         if (!numId && item.numeracao) {
             numId = matchNumeracao(item.numeracao, formatoId);
             if (numId) {
                 autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
-                console.log(`[OSâ†’Imp] Numeração matched: "${item.numeracao}" â†’ ${numId}`);
+                console.log(`[OS→Ped] Numeração matched: "${item.numeracao}" → ${numId}`);
             }
         }
         if (numId) {
             const numSelect = document.getElementById('ped-numeracao');
             if (numSelect) {
+                // Verificar se a opção existe no dropdown
                 const opt = numSelect.querySelector(`option[value="${numId}"]`);
                 if (opt) {
                     numSelect.value = numId;
                     numSelect.dispatchEvent(new Event('change'));
+                } else {
+                    console.warn(`[OS→Ped] Numeração ${numId} não disponível no dropdown para formato ${formatoId}`);
                 }
             }
         }
-    }, 300);
+    }, 500);
 
     // --- PREENCHER FAIXA DE NUMERAÃ‡ÃƒO ---
     setTimeout(() => {
