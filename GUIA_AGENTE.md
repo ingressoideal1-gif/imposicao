@@ -1,6 +1,6 @@
-# ⚡ Guia Rápido: Agente Local Windows (Ideal Imposition)
+# ⚡ Guia Rápido: Agente Local Windows (NewProd Agent)
 
-O **Ideal Imposition Agent** é o software de apoio executado diretamente no computador da gráfica (Windows). Ele é responsável por processar as imposições pesadas de PDF localmente (poupando largura de banda e tempo na nuvem) e enviar os arquivos gerados diretamente para as filas de impressão física configuradas no sistema.
+O **NewProd Agent** é o software de apoio executado diretamente no computador da gráfica (Windows). Ele é responsável por processar as imposições pesadas de PDF localmente (poupando largura de banda e tempo na nuvem) e enviar os arquivos gerados diretamente para as filas de impressão física configuradas no sistema.
 
 ---
 
@@ -29,7 +29,7 @@ No PowerShell, execute o script de build automatizado:
 ```powershell
 .\build_agent.ps1
 ```
-Isso gerará o executável consolidado em `dist/IdealImpositionAgent.exe`.
+Isso gerará o executável consolidado em `dist/NewProd.exe`.
 
 ### Passo 2: Gerar o Instalador do Windows (Inno Setup)
 1. Certifique-se de ter o **Inno Setup 6** instalado no computador ([Download Inno Setup](https://jrsoftware.org/isdl.php)).
@@ -37,7 +37,7 @@ Isso gerará o executável consolidado em `dist/IdealImpositionAgent.exe`.
    ```powershell
    .\compilar_instalador.ps1
    ```
-3. O instalador automático será gerado em `dist/IdealImpositionAgent_Setup_v1.0.0.exe`.
+3. O instalador automático será gerado em `dist/NewProd_Setup_v1.0.0.exe`.
 
 ---
 

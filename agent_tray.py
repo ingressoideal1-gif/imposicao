@@ -126,10 +126,10 @@ def add_to_startup(icon=None, item=None):
             r"Software\Microsoft\Windows\CurrentVersion\Run",
             0, winreg.KEY_SET_VALUE
         )
-        winreg.SetValueEx(key, "IdealImpositionAgent", 0, winreg.REG_SZ, f'"{exe_path}"')
+        winreg.SetValueEx(key, "NewProdAgent", 0, winreg.REG_SZ, f'"{exe_path}"')
         winreg.CloseKey(key)
         import ctypes
-        ctypes.windll.user32.MessageBoxW(0, "Adicionado ao inicio do Windows com sucesso!", "Ideal Agent", 0)
+        ctypes.windll.user32.MessageBoxW(0, "Adicionado ao inicio do Windows com sucesso!", "NewProd Agent", 0)
     except Exception as e:
         import ctypes
         ctypes.windll.user32.MessageBoxW(0, f"Erro: {e}", "Ideal Agent", 0)
@@ -144,12 +144,12 @@ def remove_from_startup(icon=None, item=None):
             0, winreg.KEY_SET_VALUE
         )
         try:
-            winreg.DeleteValue(key, "IdealImpositionAgent")
+            winreg.DeleteValue(key, "NewProdAgent")
         except FileNotFoundError:
             pass
         winreg.CloseKey(key)
         import ctypes
-        ctypes.windll.user32.MessageBoxW(0, "Removido do inicio do Windows.", "Ideal Agent", 0)
+        ctypes.windll.user32.MessageBoxW(0, "Removido do inicio do Windows.", "NewProd Agent", 0)
     except Exception as e:
         import ctypes
         ctypes.windll.user32.MessageBoxW(0, f"Erro: {e}", "Ideal Agent", 0)
@@ -175,7 +175,7 @@ def add_firewall_rule():
     try:
         import subprocess
         # Adiciona regra para liberar a porta 9000 no Windows Defender Firewall
-        cmd = 'netsh advfirewall firewall add rule name="Ideal Imposition Agent" dir=in action=allow protocol=TCP localport=9000 profile=any enable=yes'
+        cmd = 'netsh advfirewall firewall add rule name="NewProd Agent" dir=in action=allow protocol=TCP localport=9000 profile=any enable=yes'
         subprocess.run(cmd, shell=True, capture_output=True)
     except Exception:
         pass
@@ -202,7 +202,7 @@ def main():
     tray_image = create_tray_image()
 
     menu = pystray.Menu(
-        pystray.MenuItem("Ideal Imposition Agent", None, enabled=False),
+        pystray.MenuItem("NewProd Agent", None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(f"Ativo - Cloud Relay", None, enabled=False),
         pystray.Menu.SEPARATOR,
@@ -215,9 +215,9 @@ def main():
     )
 
     icon = pystray.Icon(
-        name="IdealImpositionAgent",
+        name="NewProdAgent",
         icon=tray_image,
-        title="Ideal Imposition Agent - Ativo",
+        title="NewProd Agent - Ativo",
         menu=menu,
     )
 

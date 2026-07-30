@@ -77,7 +77,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='IdealImpositionAgent',
+    name='NewProd',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

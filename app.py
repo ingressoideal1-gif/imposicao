@@ -102,7 +102,7 @@ LOCAL_AGENT_VERSION = "v358"
 
 @app.get("/api/status")
 def read_root():
-    return {"status": "running", "message": "Ideal Imposition Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
+    return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
 
 @app.get("/api/version")
 def version_info():

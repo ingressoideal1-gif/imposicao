@@ -2596,7 +2596,7 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                             throw new Error('Falha na API local');
                         }
                     } catch (err) {
-                        toast('Erro na impressão local. Verifique se o Ideal Imposition Agent está rodando.', 'error');
+                        toast('Erro na impressão local. Verifique se o NewProd Agent está rodando.', 'error');
                     }
                 }
             } else {

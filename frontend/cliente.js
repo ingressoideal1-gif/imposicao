@@ -741,13 +741,18 @@ async function initClientePage(numero, token) {
                     if (item.status_arte === 'AGUARDANDO_CLIENTE' || item.status_arte === 'PRONTO') statusFrontend = 'PRONTO';
                     else if (item.status_arte === 'APROVADA_CLIENTE' || item.status_arte === 'APROVADA') statusFrontend = 'APROVADA';
                     else if (item.status_arte === 'REPROVADA_CLIENTE' || item.status_arte === 'REPROVADA') statusFrontend = 'REPROVADA';
+                    const resolvedNumId = item.amostra_num_id || (prop ? prop.amostra_num_id : null);
+                    const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
+                    const numIsDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(matchedNum) : !!(matchedNum && (matchedNum.print_mode === 'duplex' || (matchedNum.elements && matchedNum.elements.some(e => e && e.face === 'back'))));
+                    const itemVerso = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE') || numIsDuplex;
                     return {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',
                         nome_produto_real: prop ? prop.nome_produto : null,
                         id_produto: prop ? prop.id_produto : (item.id_produto || null),
                         os_id: osId,
-                        verso: !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE'),
+                        verso: itemVerso,
+                        verso_tipo: itemVerso ? (item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE' ? item.verso_tipo : 'FRENTE E VERSO') : (item.verso_tipo || 'SÓ FRENTE'),
                         amostra_obs: item.observacao_arte || item.amostra_obs || '',
                         amostra_status: statusFrontend
                     };

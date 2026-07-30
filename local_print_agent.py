@@ -79,11 +79,11 @@ LOCAL_AGENT_VERSION = "v355"
 @app.get("/", include_in_schema=False)
 def root_redirect():
     """Retorna status JSON (compatibilidade) e serve como health check."""
-    return {"status": "running", "message": "Ideal Imposition Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
+    return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
 
 @app.get("/api/status")
 def read_root():
-    return {"status": "running", "message": "Ideal Imposition Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
+    return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
 
 @app.get("/api/version")
 def version_info():

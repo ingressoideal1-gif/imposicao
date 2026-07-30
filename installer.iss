@@ -1,10 +1,10 @@
-﻿; ============================================================
-;  Ideal Imposition Agent -- Inno Setup Script
 ; ============================================================
-#define AppName      "Ideal Imposition Agent"
+;  NewProd Agent -- Inno Setup Script
+; ============================================================
+#define AppName      "NewProd Agent"
 #define AppVersion   "1.0.0"
 #define AppPublisher "Ingresso Ideal"
-#define AppExeName   "IdealImpositionAgent.exe"
+#define AppExeName   "NewProd.exe"
 #define AppURL       "https://ingresso-ideal.vercel.app"
 #define AppId        "{{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}"
 
@@ -25,7 +25,7 @@ LicenseFile=
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=dist
-OutputBaseFilename=IdealImpositionAgent_Setup_v{#AppVersion}
+OutputBaseFilename=NewProd_Setup_v{#AppVersion}
 SetupIconFile=agent_icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -59,7 +59,7 @@ Name: "{userdesktop}\{#AppName}";    FileName: "{app}\{#AppExeName}"; Tasks: des
 [Registry]
 ; Iniciar com Windows (opcional, via tarefa selecionada no instalador)
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
-  ValueType: string; ValueName: "IdealImpositionAgent"; \
+  ValueType: string; ValueName: "NewProdAgent"; \
   ValueData: """{app}\{#AppExeName}"""; \
   Flags: uninsdeletevalue; Tasks: startupicon
 
@@ -80,8 +80,8 @@ var
   ResultCode: Integer;
 begin
   Result := True;
-  if CheckForMutexes('IdealImpositionAgent') then begin
-    if MsgBox('O Ideal Imposition Agent esta em execucao.' + #13#10 +
+  if CheckForMutexes('NewProdAgent') then begin
+    if MsgBox('O NewProd Agent esta em execucao.' + #13#10 +
               'Deseja encerra-lo antes de continuar a instalacao?',
               mbConfirmation, MB_YESNO) = IDYES then begin
       Exec('taskkill.exe', '/F /IM {#AppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);

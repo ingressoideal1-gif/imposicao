@@ -3262,6 +3262,15 @@ function initCanvas() {
 
 
 
+function isNumeracaoDuplex(numObj) {
+    if (!numObj) return false;
+    if (numObj.print_mode === 'duplex') return true;
+    if (Array.isArray(numObj.elements) && numObj.elements.some(el => el && el.face === 'back')) return true;
+    const name = (numObj.name || numObj.tipo || '').toLowerCase();
+    return name.includes('verso') || name.includes('duplex') || name.includes('frente e verso');
+}
+window.isNumeracaoDuplex = isNumeracaoDuplex;
+
 function drawCanvasFace(canvas, face) {
 
     const ctx = canvas.getContext('2d');
@@ -13414,7 +13423,10 @@ async function loadOSItens(osId) {
 
                         const resolvedNumId = item.amostra_num_id || (prop ? prop.amostra_num_id : null);
                         const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
-                        
+                        const numIsDuplex = isNumeracaoDuplex(matchedNum);
+                        const itemVerso = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE') || numIsDuplex;
+                        const resolvedVersoTipo = itemVerso ? (item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE' ? item.verso_tipo : 'FRENTE E VERSO') : (item.verso_tipo || 'SÓ FRENTE');
+
                         const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || item.tipo_numeracao || item.numeracao);
                         const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || null);
 
@@ -13431,7 +13443,8 @@ async function loadOSItens(osId) {
                             qtd: item.quantidade || item.qtd || 0,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
-                            verso: !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE'),
+                            verso: itemVerso,
+                            verso_tipo: resolvedVersoTipo,
                             impressao: normalizarStatusImpressao(item.status_impressao || item.status_producao || item.impressao),
                             nome_produto_real: prop ? prop.nome_produto : null,
                             amostra_cor_id: item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
@@ -18083,25 +18096,57 @@ function onItemNumSelect(idx, osId, itemId) {
     const numObj = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
     const numNome = numObj ? numObj.name : null;
     const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    
+    let versoStateChanged = false;
     if (item) {
         item.amostra_num_id = numId || null;
         item.gabarito_operacional = numNome || null;
         item.numeracao = numNome || null;
         item.tipo_numeracao = numNome || null;
         item._needsSnapshot = true;
+
+        const isDuplexNum = isNumeracaoDuplex(numObj);
+        const oldVerso = !!item.verso;
+
+        if (isDuplexNum) {
+            item.verso = true;
+            if (!item.verso_tipo || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
+                item.verso_tipo = 'FRENTE E VERSO';
+            }
+        }
+        if (oldVerso !== item.verso) {
+            versoStateChanged = true;
+        }
     }
     
-    saveAmostraToDB(itemId, osId, { 
+    const dataToSave = { 
         amostra_num_id: numId || null,
         gabarito_operacional: numNome || null,
         tipo_numeracao: numNome || null
-    }).then(() => {
+    };
+    if (item && item.verso_tipo) {
+        dataToSave.verso_tipo = item.verso_tipo;
+    }
+
+    saveAmostraToDB(itemId, osId, dataToSave).then(() => {
         toast(`Numeração "${numNome || 'Nenhuma'}" atualizada no banco e no Vibe!`, 'success');
     }).catch(err => {
         console.error('Erro ao salvar numeração:', err);
         toast('Erro ao salvar numeração no banco: ' + (err.message || err), 'error');
     });
-    renderItemAmostraCombinada(idx, osId);
+
+    if (versoStateChanged) {
+        const containerId = state.amostrasContainerId || 'amostras-itens-container';
+        if (containerId === 'cliente-amostras-itens-container' && typeof renderClienteAmostrasItens === 'function') {
+            renderClienteAmostrasItens(osId);
+        } else if (typeof renderAmostrasItens === 'function') {
+            renderAmostrasItens(osId);
+        } else {
+            renderItemAmostraCombinada(idx, osId);
+        }
+    } else {
+        renderItemAmostraCombinada(idx, osId);
+    }
 }
 
 async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
@@ -19112,6 +19157,14 @@ async function renderItemAmostraCombinada(idx, osId) {
     const cor = corId ? state.cores.find(c => c.id === corId) : null;
     const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
 
+    const numIsDuplex = isNumeracaoDuplex(num);
+    if (numIsDuplex && !item.verso) {
+        item.verso = true;
+        if (!item.verso_tipo || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
+            item.verso_tipo = 'FRENTE E VERSO';
+        }
+    }
+
     if (num) {
         preloadAmostraItemPdfElements(num, idx, osId);
     }
@@ -19137,6 +19190,17 @@ async function renderItemAmostraCombinada(idx, osId) {
         const emptyFront = container.querySelector(`#amostra-item-empty-${idx}`);
         const canvasBack = container.querySelector(`#amostra-item-canvas-verso-${idx}`);
         const emptyBack = container.querySelector(`#amostra-item-empty-verso-${idx}`);
+
+        if (!canvasBack) {
+            const containerId = state.amostrasContainerId || 'amostras-itens-container';
+            if (containerId === 'cliente-amostras-itens-container' && typeof renderClienteAmostrasItens === 'function') {
+                renderClienteAmostrasItens(osId);
+                return;
+            } else if (typeof renderAmostrasItens === 'function') {
+                renderAmostrasItens(osId);
+                return;
+            }
+        }
 
         await drawAmostraFace(item, 'front', canvasFront, emptyFront, fmt, cor, num, idx, osId, S);
         await drawAmostraFace(item, 'back', canvasBack, emptyBack, fmt, cor, num, idx, osId, S);
@@ -21725,7 +21789,7 @@ async function checkPrinterAgent() {
     } else {
         if (indicator) indicator.style.background = '#ef4444';
         if (label) label.textContent = 'Agente Local Inativo';
-        if (detail) detail.textContent = 'Inicie o IdealImpositionAgent.exe no computador da impressora.';
+        if (detail) detail.textContent = 'Inicie o NewProd.exe no computador da impressora.';
         if (printerCard) { printerCard.style.opacity = '0.5'; printerCard.style.pointerEvents = 'none'; }
         if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; ppdCard.style.display = 'none'; }
         if (badge) badge.style.display = 'none';
@@ -22105,7 +22169,7 @@ async function sendPrintJob() {
             } else {
                 // Cloud Relay via Supabase
                 if (!_printerAgentActive || !window._activeAgentData) {
-                    throw new Error('Agente de Impressão inativo. Inicie o IdealImpositionAgent.exe.');
+                    throw new Error('Agente de Impressão inativo. Inicie o NewProd.exe.');
                 }
                 const fileName = `print_job_${Date.now()}_${i}.pdf`;
                 const filePath = `${window._activeAgentData.id}/${fileName}`;
@@ -22501,7 +22565,7 @@ async function sendPrintJobDirect(queue) {
                 }
             } else {
                 if (!_printerAgentActive || !window._activeAgentData) {
-                    throw new Error('Agente de Impressão inativo. Inicie o IdealImpositionAgent.exe.');
+                    throw new Error('Agente de Impressão inativo. Inicie o NewProd.exe.');
                 }
                 const fileName = `print_job_${Date.now()}_${i}.pdf`;
                 const filePath = `${window._activeAgentData.id}/${fileName}`;

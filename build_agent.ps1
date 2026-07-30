@@ -20,10 +20,10 @@ python -m pip install pyinstaller pystray pillow fastapi uvicorn PyMuPDF qrcode 
 # 3. Limpar pastas de build anteriores
 Write-Host "Limpando diretórios de compilação antigos..." -ForegroundColor Green
 if (Test-Path "build") { Remove-Item -Recurse -Force "build" -ErrorAction SilentlyContinue }
-if (Test-Path "dist") { Remove-Item -Recurse -Force "dist\IdealImpositionAgent.exe", "dist\IdealImpositionAgent" -ErrorAction SilentlyContinue }
+if (Test-Path "dist") { Remove-Item -Recurse -Force "dist\NewProd.exe", "dist\NewProd" -ErrorAction SilentlyContinue }
 
 # 4. Executar o PyInstaller usando a especificação existente
 Write-Host "Compilando executável com PyInstaller..." -ForegroundColor Green
 .\venv\Scripts\python.exe -m PyInstaller --clean agent_tray.spec
 
-Write-Host "`nSUCESSO! Binário compilado em dist/IdealImpositionAgent.exe" -ForegroundColor Green
+Write-Host "`nSUCESSO! Binário compilado em dist/NewProd.exe" -ForegroundColor Green

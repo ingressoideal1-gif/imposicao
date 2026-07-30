@@ -5,8 +5,8 @@ Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition"
 Write-Host "--- COMPILANDO INSTALADOR DO AGENTE LOCAL WINDOWS ---" -ForegroundColor Cyan
 
 # 1. Verificar se o executável compilado existe
-if (-not (Test-Path "dist\IdealImpositionAgent.exe")) {
-    Write-Host "[ERRO] Executável dist\IdealImpositionAgent.exe não encontrado. Por favor, execute primeiro: .\build_agent.ps1" -ForegroundColor Red
+if (-not (Test-Path "dist\NewProd.exe")) {
+    Write-Host "[ERRO] Executável dist\NewProd.exe não encontrado. Por favor, execute primeiro: .\build_agent.ps1" -ForegroundColor Red
     exit 1
 }
 
