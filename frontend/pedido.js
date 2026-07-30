@@ -2729,10 +2729,15 @@ function renderPedOSQueue() {
     }
 
     const osId = activeItem.osId;
-    const itens = state.osItens[osId] || [];
+    const itens = typeof getOSItens === 'function' ? getOSItens(osId) : (state.osItens[osId] || []);
     if (!itens.length) {
         container.style.display = 'none';
         return;
+    }
+
+    // Se o item ativo não tem itemId definido, seleciona o primeiro item automaticamente
+    if (!activeItem.itemId && itens.length > 0) {
+        activeItem.itemId = itens[0].id;
     }
 
     container.style.display = 'block';

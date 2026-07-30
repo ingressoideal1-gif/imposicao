@@ -15706,24 +15706,42 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
         }
     }
     
+    // Fallback: Se o formato não foi definido ou não bateu com nenhum produto, seleciona o 1º formato padrão do sistema
+    if (!formatoId && state.formatos && state.formatos.length > 0) {
+        formatoId = state.formatos[0].id;
+        console.log(`[OS→Imp] Fallback de Formato ativado: ${formatoId}`);
+    }
+    
     if (formatoId) {
         const fmtSelect = document.getElementById('imp-formato');
         if (fmtSelect) {
             fmtSelect.value = formatoId;
             fmtSelect.dispatchEvent(new Event('change'));
         }
+        const pedFmtSelect = document.getElementById('ped-formato');
+        if (pedFmtSelect) {
+            if (typeof populatePedNumeracoes === 'function') populatePedNumeracoes();
+            pedFmtSelect.value = formatoId;
+            pedFmtSelect.dispatchEvent(new Event('change'));
+        }
 
-        // Tentar match da Saída via Formato
-        const formatoObj = state.formatos ? state.formatos.find(f => f.id == formatoId) : null;
-        if (formatoObj && formatoObj.default_saida_id) {
+        // Tentar match da Saída via Formato ou primeiro registro disponível
+        const formatoObj = state.formatos ? state.formatos.find(f => String(f.id) === String(formatoId)) : null;
+        const resolvedSaidaId = item.saida_id || (formatoObj ? formatoObj.default_saida_id : null) || (state.saidas && state.saidas[0] ? state.saidas[0].id : null);
+
+        if (resolvedSaidaId) {
             setTimeout(() => {
                 const saidaSelect = document.getElementById('imp-saida');
                 if (saidaSelect) {
-                    saidaSelect.value = formatoObj.default_saida_id;
+                    saidaSelect.value = resolvedSaidaId;
                     saidaSelect.dispatchEvent(new Event('change'));
-                    console.log(`[OS→Imp] Saída matched via Formato "${formatoObj.name}" → ${formatoObj.default_saida_id}`);
                 }
-            }, 100); // pequeno delay para garantir que o formato populou as saídas
+                const pedSaidaSelect = document.getElementById('ped-saida');
+                if (pedSaidaSelect) {
+                    pedSaidaSelect.value = resolvedSaidaId;
+                    pedSaidaSelect.dispatchEvent(new Event('change'));
+                }
+            }, 100);
         }
     }
 
@@ -16637,6 +16655,31 @@ function findOSInState(osId) {
     ) || null;
 }
 window.findOSInState = findOSInState;
+
+/**
+ * Helper resiliente para obter os itens de uma OS do state.osItens por qualquer variação da chave de ID
+ */
+function getOSItens(osId) {
+    if (!osId && osId !== 0) return [];
+    if (state.osItens[osId] && state.osItens[osId].length > 0) return state.osItens[osId];
+
+    const os = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+    if (os) {
+        if (state.osItens[os.id] && state.osItens[os.id].length > 0) return state.osItens[os.id];
+        if (os.numero && state.osItens[os.numero] && state.osItens[os.numero].length > 0) return state.osItens[os.numero];
+        if (os.id_int && state.osItens[os.id_int] && state.osItens[os.id_int].length > 0) return state.osItens[os.id_int];
+        if (state.osItens[`vibe_${os.numero}`] && state.osItens[`vibe_${os.numero}`].length > 0) return state.osItens[`vibe_${os.numero}`];
+        if (state.osItens[`vibe_${os.id_int}`] && state.osItens[`vibe_${os.id_int}`].length > 0) return state.osItens[`vibe_${os.id_int}`];
+    }
+    const cleanId = String(osId).replace('vibe_', '');
+    for (const k of Object.keys(state.osItens || {})) {
+        if (k.replace('vibe_', '') === cleanId && state.osItens[k] && state.osItens[k].length > 0) {
+            return state.osItens[k];
+        }
+    }
+    return [];
+}
+window.getOSItens = getOSItens;
 
 /**
  * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
