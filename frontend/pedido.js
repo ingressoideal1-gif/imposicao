@@ -2368,6 +2368,133 @@ async function enviarParaPedido(itemId, osId) {
     // --- ATUALIZAR PAINEL DE ITENS OS ---
     setTimeout(() => { renderPedOSQueue(); }, 600);
 
+    // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
+    setTimeout(() => {
+        let numId = item.numeracao_id;
+        const fmtSelect = document.getElementById('ped-formato');
+        const formatoId = fmtSelect ? fmtSelect.value : null;
+        
+        if (!numId && item.numeracao) {
+            numId = matchNumeracao(item.numeracao, formatoId);
+            if (numId) {
+                autoSaveOSItemField(itemId, osId, 'numeracao_id', numId);
+            }
+        }
+        if (numId) {
+            const numSelect = document.getElementById('ped-numeracao');
+            if (numSelect) {
+                const opt = numSelect.querySelector(`option[value="${numId}"]`);
+                if (opt) {
+                    numSelect.value = numId;
+                    numSelect.dispatchEvent(new Event('change'));
+                }
+            }
+        }
+    }, 500);
+    
+    // --- CARREGAR ARTE (PDF/IMAGEM) ---
+    setTimeout(() => {
+        const arteUrl = item.arte_url || null;
+        const corObj = item.amostra_cor_id
+            ? (state.cores || []).find(c => String(c.id) === String(item.amostra_cor_id))
+            : (state.cores || []).find(c => globalFuzzyMatch(c.name, item.cor || item.padrao || ''));
+        
+        if (arteUrl) {
+            state.isColorTemplate = false;
+            const filenameFromUrl = decodeURIComponent(arteUrl.split('/').pop().split('?')[0]);
+            const filename = filenameFromUrl || item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
+            
+            fetch(arteUrl)
+                .then(res => {
+                    const ct = res.headers.get('content-type') || '';
+                    return res.blob().then(blob => ({ blob, ct }));
+                })
+                .then(({ blob, ct }) => {
+                    const isPdf = ct.includes('pdf') || filename.toLowerCase().endsWith('.pdf');
+                    const isImg = ct.includes('image') || /\.(png|jpg|jpeg|webp)$/i.test(filename);
+                    if (!isPdf && !isImg) return;
+                    const file = new File([blob], filename, { type: ct || (isPdf ? 'application/pdf' : 'image/png') });
+                    state.expectedArteName = filename;
+                    loadPedArtFile(file);
+                    
+                    const pedInfo = document.getElementById('ped-file-info');
+                    if (pedInfo) {
+                        pedInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
+                        pedInfo.style.display = 'block';
+                    }
+                    setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
+                })
+                .catch(err => console.warn('[OS→Ped] Erro ao baixar arte via URL:', err));
+                
+            // Carregar Verso se houver
+            state.pedArtVersoPdfDoc = null;
+            if (item.verso_arte_url) {
+                const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
+                fetch(item.verso_arte_url)
+                    .then(res => {
+                        const ct = res.headers.get('content-type') || '';
+                        return res.blob().then(blob => ({ blob, ct }));
+                    })
+                    .then(({ blob, ct }) => {
+                        const isPdf = ct.includes('pdf') || filenameV.toLowerCase().endsWith('.pdf');
+                        if (isPdf && typeof pdfjsLib !== 'undefined') {
+                            blob.arrayBuffer().then(arrayBuffer => {
+                                pdfjsLib.getDocument({ data: arrayBuffer }).promise.then(pdfV => {
+                                    state.pedArtVersoPdfDoc = pdfV;
+                                    setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
+                                }).catch(e => console.error('[OS→Ped] Erro ao carregar PDF de verso da arte:', e));
+                            });
+                        }
+                    })
+                    .catch(err => console.warn('[OS→Ped] Erro ao baixar arte de verso via URL:', err));
+            }
+        } else if (corObj && corObj.pdf_base64) {
+            state.isColorTemplate = true;
+            try {
+                const base64Data = corObj.pdf_base64.includes('base64,') ? corObj.pdf_base64.split('base64,')[1] : corObj.pdf_base64;
+                const binStr = atob(base64Data);
+                const bytes = new Uint8Array(binStr.length);
+                for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'application/pdf' });
+                const filename = corObj.pdf_filename || `${corObj.name}.pdf`;
+                const file = new File([blob], filename, { type: 'application/pdf' });
+                state.expectedArteName = filename;
+                loadPedArtFile(file);
+                
+                // Carregar Verso da Cor se for Duplex
+                state.pedArtVersoPdfDoc = null;
+                if (corObj.frente_verso && corObj.pdf_verso_base64) {
+                    const base64DataV = corObj.pdf_verso_base64.includes('base64,') ? corObj.pdf_verso_base64.split('base64,')[1] : corObj.pdf_verso_base64;
+                    const binStrV = atob(base64DataV);
+                    const bytesV = new Uint8Array(binStrV.length);
+                    for (let i = 0; i < binStrV.length; i++) bytesV[i] = binStrV.charCodeAt(i);
+                    pdfjsLib.getDocument({ data: bytesV }).promise.then(pdfV => {
+                        state.pedArtVersoPdfDoc = pdfV;
+                        setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
+                    }).catch(e => console.error('[OS→Ped] Erro ao carregar PDF de verso da cor:', e));
+                }
+                
+                const pedInfo = document.getElementById('ped-file-info');
+                if (pedInfo) {
+                    pedInfo.textContent = `✅ ${filename} (Carregado da Cor)`;
+                    pedInfo.style.display = 'block';
+                }
+                setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
+            } catch (e) {
+                console.error('[OS→Ped] Erro ao carregar PDF base64 da cor:', e);
+            }
+        } else {
+            state.isColorTemplate = false;
+            state.pedArtFile = null;
+            state.pedArtPdfDoc = null;
+            state.pedArtVersoPdfDoc = null;
+            state.pedArtImage = null;
+            const pedInfo = document.getElementById('ped-file-info');
+            if (pedInfo) pedInfo.style.display = 'none';
+            setTimeout(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
+        }
+    }, 700);
+
     // --- TOAST ---
     const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
     const osNum = os ? os.numero : '';
