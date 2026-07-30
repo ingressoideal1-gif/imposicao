@@ -2785,13 +2785,13 @@ function renderPedOSQueue() {
             const isSelected = state.selectedOSItems && state.selectedOSItems.find(s => String(s.itemId) === String(item.id));
             const rawStatus = String(item.status_impressao || item.impressao || 'Aguardando').toUpperCase();
             
-            let statusBg = '#918f8c'; // Aguardando
+            let statusBg = '#65625e'; // Aguardando
             if (rawStatus.includes('IMPRESSO')) {
                 statusBg = '#162037'; // Impresso
             } else if (rawStatus.includes('PARCIAL')) {
                 statusBg = '#32352e'; // Parcial
             } else if (rawStatus.includes('AGUARD') || rawStatus === 'AGUARDANDO') {
-                statusBg = '#918f8c'; // Aguardando
+                statusBg = '#65625e'; // Aguardando
             }
 
             const isCurrentSelected = isSelected || isActive;
