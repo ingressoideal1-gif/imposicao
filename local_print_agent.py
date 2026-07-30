@@ -89,6 +89,10 @@ def read_root():
 def version_info():
     return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION}
 
+@app.get("/api/fontes")
+def list_fontes():
+    return db.get_catalogo_fontes()
+
 @app.get("/api/printers")
 def list_printers():
     return print_service.get_printers()

@@ -229,7 +229,43 @@ const state_fonts = {
     loadedFromAPI: false, // true SOMENTE quando queryLocalFonts() retornou com sucesso
     loading: false,
     permissionDenied: false,
+    catalogo: [],
 };
+
+async function loadCatalogoFontes() {
+    try {
+        const apiBase = (typeof getApiBaseUrl === 'function') ? getApiBaseUrl() : '';
+        const res = await fetch(`${apiBase}/api/fontes`);
+        if (res.ok) {
+            const list = await res.json();
+            state_fonts.catalogo = list || [];
+            
+            let styleEl = document.getElementById('catalogo-fontes-css');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'catalogo-fontes-css';
+                document.head.appendChild(styleEl);
+            }
+            
+            let cssText = '';
+            for (const f of state_fonts.catalogo) {
+                if (f.arquivo_url && f.font_family) {
+                    cssText += `
+                    @font-face {
+                        font-family: '${f.font_family}';
+                        src: url('${f.arquivo_url}');
+                        font-display: swap;
+                    }\n`;
+                }
+            }
+            styleEl.textContent = cssText;
+            console.log(`[Fonts] Catálogo de fontes web carregado: ${state_fonts.catalogo.length} fonte(s)`);
+        }
+    } catch (e) {
+        console.warn('[Fonts] Não foi possível carregar o catálogo de fontes web:', e);
+    }
+}
+window.loadCatalogoFontes = loadCatalogoFontes;
 
 // Fontes Base-14 embutidas no PDF (sem necessidade de arquivo externo)
 const BUILTIN_FONTS = [
@@ -244,6 +280,9 @@ const BUILTIN_FONTS = [
 // Carrega fontes do sistema via Local Font Access API (Chrome 103+).
 // forceRequest = true → ignora estado anterior e pede permissão novamente.
 async function loadSystemFonts(forceRequest = false) {
+    if (!state_fonts.catalogo || !state_fonts.catalogo.length) {
+        loadCatalogoFontes();
+    }
     if (state_fonts.loading) return;
     // Se já carregou da API real, não precisa recarregar (a menos que forçado)
     if (state_fonts.loadedFromAPI && !forceRequest) return;
@@ -393,6 +432,23 @@ function createFontPicker(elId, currentValue, onChange) {
         const match    = f => !q || f.family.toLowerCase().includes(q) || (f.style || '').toLowerCase().includes(q);
 
         let html = '';
+
+        // - Fontes do Catálogo Web (Gráfica) -
+        if (state_fonts.catalogo && state_fonts.catalogo.length) {
+            const catFiltered = state_fonts.catalogo.filter(f => !q || (f.nome || '').toLowerCase().includes(q) || (f.font_family || '').toLowerCase().includes(q));
+            if (catFiltered.length) {
+                html += `<div class="font-picker-group-label" style="color:#38bdf8; font-weight:700;">🌐 Fontes Oficiais da Gráfica (${catFiltered.length})</div>`;
+                for (const f of catFiltered) {
+                    const fullName = f.nome;
+                    const sel = fullName === currentFont ? 'selected' : '';
+                    html += `<div class="font-picker-opt ${sel}" data-value="${fullName}">
+                        <span class="fp-sample" style="font-family:'${f.font_family}',sans-serif; font-weight:700;">Aa 123</span>
+                        <span class="fp-name">${f.nome}</span>
+                        <span class="fp-style-tag" style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);">Oficial</span>
+                    </div>`;
+                }
+            }
+        }
 
         // - Fontes embutidas -
         const bFiltered = builtins.filter(match);

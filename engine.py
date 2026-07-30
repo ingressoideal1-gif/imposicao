@@ -606,12 +606,31 @@ class ImpositionEngine:
                             _font_log_cache.add(_font_log_key)
                             print(f"[engine] Fonte do sistema encontrada: '{family}' -> {found_file}")
                     else:
-                        font_name = font_map.get(raw_font_name, "hebo" if is_bold else "helv")
-                        font_file = None
-                        _warn_key = f"not_found:{family}"
-                        if _warn_key not in _font_log_cache:
-                            _font_log_cache.add(_warn_key)
-                            print(f"[engine] Fonte '{family}' nao encontrada no sistema, usando Helvetica{'Bold' if is_bold else ''}")
+                        # 3. Tentar baixar a fonte do Catálogo Web se URL fornecida
+                        font_url = el.get("arquivo_url") or el.get("font_url")
+                        if font_url:
+                            try:
+                                import urllib.request, re
+                                safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', family) + ".ttf"
+                                fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+                                os.makedirs(fonts_dir, exist_ok=True)
+                                dest = os.path.join(fonts_dir, safe_name)
+                                if not os.path.exists(dest):
+                                    print(f"[engine] Baixando fonte do catálogo web: {family} -> {font_url}")
+                                    urllib.request.urlretrieve(font_url, dest)
+                                if os.path.exists(dest):
+                                    font_name = family
+                                    font_file = dest
+                            except Exception as _dl_err:
+                                print(f"[engine] Aviso ao baixar fonte do catálogo: {_dl_err}")
+
+                        if not font_file:
+                            font_name = font_map.get(raw_font_name, "hebo" if is_bold else "helv")
+                            font_file = None
+                            _warn_key = f"not_found:{family}"
+                            if _warn_key not in _font_log_cache:
+                                _font_log_cache.add(_warn_key)
+                                print(f"[engine] Fonte '{family}' nao encontrada no sistema, usando Helvetica{'Bold' if is_bold else ''}")
 
             insert_kwargs = {
                 "fontsize": font_size,

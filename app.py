@@ -408,6 +408,23 @@ def delete_mapa_teatro(mapa_id: str, user: dict = Depends(get_current_user)):
     db.delete_mapa_teatro(mapa_id)
     return {"status": "success"}
 
+# ─── CATALOGO DE FONTES WEB ───────────────────────────────────────────────────
+
+@app.get("/api/fontes")
+def list_fontes():
+    return db.get_catalogo_fontes()
+
+@app.post("/api/fontes")
+async def create_fonte(request: Request, user: dict = Depends(get_current_user)):
+    data = await request.json()
+    res = db.save_catalogo_fonte(data)
+    return {"status": "success", "fonte": res}
+
+@app.delete("/api/fontes/{fonte_id}")
+def remove_fonte(fonte_id: str, user: dict = Depends(get_current_user)):
+    db.delete_catalogo_fonte(fonte_id)
+    return {"status": "success"}
+
 # ─── Embutir fontes do sistema nos elementos da numeração ─────────────────────
 
 def _embed_system_fonts(numeracao_obj):

@@ -961,6 +961,49 @@ def delete_mapa_teatro(mapa_id: str):
         db["mapas_teatro"] = [m for m in db["mapas_teatro"] if m["id"] != mapa_id]
         _save_db(db)
 
+def get_catalogo_fontes() -> list:
+    """Retorna lista de fontes do catálogo centralizado."""
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("GET", "catalogo_fontes?order=nome.asc") or []
+            if res:
+                return res
+        except Exception as e:
+            print(f"[db] Erro ao carregar catalogo_fontes no Supabase: {e}")
+    db = _get_db()
+    return db.get("catalogo_fontes", [])
+
+def save_catalogo_fonte(fonte_data: dict) -> dict:
+    """Salva ou atualiza uma fonte no catálogo centralizado."""
+    fid = fonte_data.get("id") or str(uuid.uuid4())
+    fonte_data["id"] = fid
+    if IS_SUPABASE_ACTIVE:
+        try:
+            res = _supabase_request("POST", "catalogo_fontes", fonte_data)
+            return res or fonte_data
+        except Exception as e:
+            print(f"[db] Erro ao salvar fonte no Supabase: {e}")
+    db = _get_db()
+    if "catalogo_fontes" not in db:
+        db["catalogo_fontes"] = []
+    db["catalogo_fontes"] = [f for f in db["catalogo_fontes"] if f.get("id") != fid]
+    db["catalogo_fontes"].append(fonte_data)
+    _save_db(db)
+    return fonte_data
+
+def delete_catalogo_fonte(fonte_id: str):
+    """Remove uma fonte do catálogo centralizado."""
+    if IS_SUPABASE_ACTIVE:
+        try:
+            _supabase_request("DELETE", f"catalogo_fontes?id=eq.{fonte_id}")
+            return
+        except Exception as e:
+            print(f"[db] Erro ao deletar fonte no Supabase: {e}")
+    db = _get_db()
+    if "catalogo_fontes" in db:
+        db["catalogo_fontes"] = [f for f in db["catalogo_fontes"] if f.get("id") != fonte_id]
+        _save_db(db)
+
 def _headers():
     return {
         "apikey": SUPABASE_KEY,
