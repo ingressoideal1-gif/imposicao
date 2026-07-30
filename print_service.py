@@ -202,11 +202,8 @@ def get_printer_capabilities(printer_name):
                 print(f"Error getting trays: {e}")
                 trays = []
                 
-            # Check duplex support
-            try:
-                duplex_supported = bool(win32print.DeviceCapabilities(printer_name, "", win32con.DC_DUPLEX))
-            except Exception:
-                duplex_supported = False
+            # Check duplex support (assume True for production printers to prevent locking the dropdown)
+            duplex_supported = True
                 
             defaults = {
                 "duplex": int(getattr(devmode, "Duplex", 1)) if devmode else 1,

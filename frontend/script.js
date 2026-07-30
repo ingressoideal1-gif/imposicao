@@ -22093,10 +22093,10 @@ async function onPrintPrinterChange() {
 
     const duplexSel = document.getElementById('print-option-duplex');
     if (duplexSel) {
-        duplexSel.disabled = !caps.duplex_supported;
-        duplexSel.querySelectorAll('option').forEach(opt => {
-            opt.selected = parseInt(opt.value) === defaultDuplex;
-        });
+        duplexSel.disabled = false;
+        const isJobDuplex = state.printMode === 'duplex' || (state.activeOSItem && !!state.activeOSItem.verso);
+        const targetDuplex = isJobDuplex ? 2 : (defaultDuplex || 1);
+        duplexSel.value = String(targetDuplex);
     }
 
     const colorSel = document.getElementById('print-option-color');
@@ -22410,10 +22410,10 @@ async function onPedPrinterChange() {
 
     const duplexSel = document.getElementById('ped-print-duplex');
     if (duplexSel) {
-        duplexSel.disabled = !caps.duplex_supported;
-        duplexSel.querySelectorAll('option').forEach(opt => {
-            opt.selected = parseInt(opt.value) === defaultDuplex;
-        });
+        duplexSel.disabled = false;
+        const isJobDuplex = state.printMode === 'duplex' || (state.activeOSItem && !!state.activeOSItem.verso);
+        const targetDuplex = isJobDuplex ? 2 : (defaultDuplex || 1);
+        duplexSel.value = String(targetDuplex);
     }
 
     const colorSel = document.getElementById('ped-print-color');
