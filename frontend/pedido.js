@@ -1453,25 +1453,41 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         const sz = (el.size_mm || 15) * MM2PT * scale;
                         const hsz = sz / 2;
 
-                        ctx.fillStyle = color;
+                        const offCanvas = document.createElement('canvas');
 
-                        ctx.fillRect(-hsz, -hsz, sz, sz);
+                        offCanvas.width = sz;
 
-                        ctx.fillStyle = '#ffffff';
+                        offCanvas.height = sz;
+
+                        const offCtx = offCanvas.getContext('2d');
+
+
+
+                        offCtx.fillStyle = color;
+
+                        offCtx.fillRect(0, 0, sz, sz);
+
+
+
+                        offCtx.fillStyle = '#ffffff';
 
                         const cell = sz / 7;
 
                         for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
 
-                            ctx.fillStyle = '#ffffff';
+                            offCtx.fillStyle = '#ffffff';
 
-                            ctx.fillRect(-hsz + cx * cell, -hsz + cy * cell, 3 * cell, 3 * cell);
+                            offCtx.fillRect(cx * cell, cy * cell, 3 * cell, 3 * cell);
 
-                            ctx.fillStyle = color;
+                            offCtx.fillStyle = color;
 
-                            ctx.fillRect(-hsz + cx * cell + cell * 0.5, -hsz + cy * cell + cell * 0.5, 2 * cell, 2 * cell);
+                            offCtx.fillRect(cx * cell + cell * 0.5, cy * cell + cell * 0.5, 2 * cell, 2 * cell);
 
                         }
+
+
+
+                        ctx.drawImage(offCanvas, -hsz, -hsz, sz, sz);
 
                     } else if (el.type === 'BARCODE') {
 
