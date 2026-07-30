@@ -2264,31 +2264,16 @@ function clearPedActiveOS() {
 
 
 
-    const fileInput = document.getElementById('ped-file');
-
-    if (fileInput) {
-
-        fileInput.value = '';
-
-    }
-
-
-
-    toast('OS desvinculada. Validações de arquivo liberadas.', 'info');
-
-}
-window.clearPedActiveOS = clearPedActiveOS;
-
 async function enviarParaPedido(itemId, osId) {
-    const itens = state.osItens[osId] || [];
-    const item = itens.find(i => String(i.id) === String(itemId));
+    const itens = typeof getOSItens === 'function' ? getOSItens(osId) : (state.osItens[osId] || []);
+    const item = itens.find(i => String(i.id) === String(itemId)) || itens[0];
     if (!item) return toast('Item não encontrado.', 'error');
 
-    // Guardar referência ao item ativo para atualização automÃ¡tica pÃ³s-imposição
-    state.activeOSItem = { itemId, osId };
+    // Guardar referência ao item ativo para atualização automática pós-imposição
+    state.activeOSItem = { itemId: item.id, osId };
 
     // Atualizar o título do cabeçalho da página de Pedido
-    const activeOS = state.ordens ? state.ordens.find(o => o.id === osId) : null;
+    const activeOS = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId) : null);
     let nomeEvento = '';
     if (state.todasArtes) {
         const arteObj = state.todasArtes.find(a => String(a.id_int) === String(osId).replace('vibe_', ''));
@@ -2329,58 +2314,77 @@ async function enviarParaPedido(itemId, osId) {
     const navBtn = document.querySelector('[data-view="view-pedido"]');
     if (navBtn) navBtn.click();
 
-    // --- MATCHING AUTOMÃTICO DE FORMATO (VIA COR OU NOME) E SAÃDA ---
+    // --- MATCHING AUTOMÁTICO DE FORMATO (VIA PRODUTO, COR OU NOME) E SAÍDA ---
     let formatoId = item.formato_id;
     
+    // Tentar match do formato via Produto Global
+    if (!formatoId && state.produtosGlobais) {
+        const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
+        let produtoObj = null;
+        if (prodId) {
+            produtoObj = state.produtosGlobais.find(p => String(p.id) === String(prodId) || String(p.id_produto) === String(prodId));
+        }
+        if (!produtoObj) {
+            const prodName = item.nome_produto_real || item.produto;
+            if (prodName) {
+                const cleanProdName = prodName.toLowerCase().trim();
+                produtoObj = state.produtosGlobais.find(p => {
+                    const nameMatch = (p.nomeReal || '').toLowerCase().trim() === cleanProdName || globalFuzzyMatch(p.nomeReal, prodName);
+                    if (nameMatch) return true;
+                    const apelidos = (p.apelidos || '').split(',').map(a => a.trim().toLowerCase());
+                    return apelidos.includes(cleanProdName) || apelidos.some(a => globalFuzzyMatch(a, prodName));
+                });
+            }
+        }
+        if (produtoObj && produtoObj.id_formato) {
+            const fmtObj = (state.formatos || []).find(f => String(f.id_formato_num) === String(produtoObj.id_formato) || String(f.id) === String(produtoObj.id_formato));
+            if (fmtObj) formatoId = fmtObj.id;
+        }
+    }
+
     // Tentar match do formato via Cor
     if (!formatoId && item.cor) {
         const corMatched = state.cores ? state.cores.find(c => (c.name || '').toLowerCase().trim() === item.cor.toLowerCase().trim() || globalFuzzyMatch(c.name, item.cor)) : null;
         if (corMatched && corMatched.formato_id) {
             formatoId = corMatched.formato_id;
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OSâ†’Imp] Formato matched via Cor "${item.cor}" â†’ ${formatoId}`);
         }
     }
 
-    // Tentar match do formato via Nome da arte
-    if (!formatoId && item.formato) {
-        formatoId = matchFormato(item.formato);
-        if (formatoId) {
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OSâ†’Imp] Formato matched via Nome: "${item.formato}" â†’ ${formatoId}`);
-        }
+    // Tentar match do formato via Nome da arte ou numeração
+    if (!formatoId && (item.formato || item.numeracao || item.observacoes)) {
+        formatoId = matchFormato(item.formato || item.numeracao || item.observacoes);
     }
     
-    // Tentar match do formato via Nome da Numeração
-    if (!formatoId && item.numeracao) {
-        formatoId = matchFormato(item.numeracao);
-        if (formatoId) {
-            autoSaveOSItemField(itemId, osId, 'formato_id', formatoId);
-            console.log(`[OSâ†’Imp] Formato matched via Numeração: "${item.numeracao}" â†’ ${formatoId}`);
-        }
+    // FALLBACK GUARANTEE: Se o formato continuar indefinido, seleciona o 1º formato padrão cadastrado
+    if (!formatoId && state.formatos && state.formatos.length > 0) {
+        formatoId = state.formatos[0].id;
+        console.log(`[enviarParaPedido] Fallback de formato ativado → ${formatoId}`);
     }
-    
+
     if (formatoId) {
+        item.formato_id = formatoId;
         const fmtSelect = document.getElementById('ped-formato');
         if (fmtSelect) {
+            if (typeof populatePedNumeracoes === 'function') populatePedNumeracoes();
             fmtSelect.value = formatoId;
             fmtSelect.dispatchEvent(new Event('change'));
         }
 
-        // Tentar match da SaÃ­da via Formato
-        const formatoObj = state.formatos ? state.formatos.find(f => f.id == formatoId) : null;
-        if (formatoObj && formatoObj.default_saida_id) {
+        // Tentar match da Saída via Formato ou 1º registro de saída disponível
+        const formatoObj = state.formatos ? state.formatos.find(f => String(f.id) === String(formatoId)) : null;
+        const resolvedSaidaId = item.saida_id || (formatoObj ? formatoObj.default_saida_id : null) || (state.saidas && state.saidas[0] ? state.saidas[0].id : null);
+
+        if (resolvedSaidaId) {
+            item.saida_id = resolvedSaidaId;
             setTimeout(() => {
                 const saidaSelect = document.getElementById('ped-saida');
                 if (saidaSelect) {
-                    saidaSelect.value = formatoObj.default_saida_id;
+                    saidaSelect.value = resolvedSaidaId;
                     saidaSelect.dispatchEvent(new Event('change'));
-                    console.log(`[OSâ†’Imp] SaÃ­da matched via Formato "${formatoObj.name}" â†’ ${formatoObj.default_saida_id}`);
+                    console.log(`[OS→Imp] Saída matched via Formato "${formatoObj?.name}" → ${resolvedSaidaId}`);
                 }
-            }, 100); // pequeno delay para garantir que o formato populou as saídas
+            }, 100);
         }
-    }
-
     // --- MATCHING AUTOMÃTICO DE NUMERAÃ‡ÃƒO ---
     setTimeout(() => {
         let numId = item.numeracao_id;
