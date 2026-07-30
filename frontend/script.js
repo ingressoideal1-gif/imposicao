@@ -265,8 +265,125 @@ async function loadCatalogoFontes() {
         console.warn('[Fonts] Não foi possível carregar o catálogo de fontes web:', e);
     }
 }
-window.loadCatalogoFontes = loadCatalogoFontes;
+// --- Fontes Web Manager ---
+async function renderCatFontesUI() {
+    const tbody = document.getElementById('tbody-fontes');
+    const empty = document.getElementById('empty-fontes');
+    if (!tbody || !empty) return;
+    
+    if (!state_fonts.catalogo || state_fonts.catalogo.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'flex';
+        return;
+    }
+    empty.style.display = 'none';
+    let html = '';
+    state_fonts.catalogo.forEach(f => {
+        html += `
+            <tr>
+                <td style="font-family: '${f.font_family}', sans-serif; font-size: 1.2rem;">${f.nome}</td>
+                <td><code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">${f.font_family}</code></td>
+                <td><span class="badge" style="background: var(--gray-lighter); color: var(--text-dim);">${f.categoria || 'Geral'}</span></td>
+                <td><span style="color: #10b981;">●</span> Ativo</td>
+                <td class="text-right">
+                    <button class="btn btn-sm" onclick="deletarFonteWeb('${f.id}')" style="color: var(--danger); background: #fee2e2; border: 1px solid #fca5a5;">🗑️ Excluir</button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+}
+window.renderCatFontesUI = renderCatFontesUI;
 
+async function salvarNovaFonteWeb() {
+    const nome = document.getElementById('fonte-name').value.trim();
+    const family = document.getElementById('fonte-family').value.trim();
+    const categoria = document.getElementById('fonte-categoria').value.trim() || 'Geral';
+    const fileInput = document.getElementById('fonte-file');
+    
+    if (!nome || !family || !fileInput.files || fileInput.files.length === 0) {
+        alert('Por favor, preencha o Nome, a Família CSS e selecione um arquivo de fonte (.ttf, .otf, .woff).');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const btn = document.getElementById('btn-salvar-fonte');
+    btn.disabled = true;
+    btn.innerText = '⏳ Enviando...';
+    
+    try {
+        const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const timestamp = Date.now();
+        const storagePath = `fontes/${timestamp}_${safeName}`;
+        
+        const { error: uploadError } = await supabaseClient.storage
+            .from('chat-ideal')
+            .upload(storagePath, file, { upsert: true });
+            
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabaseClient.storage
+            .from('chat-ideal')
+            .getPublicUrl(storagePath);
+            
+        const arquivo_url = publicUrlData.publicUrl;
+        
+        const payload = {
+            nome: nome,
+            font_family: family,
+            categoria: categoria,
+            arquivo_url: arquivo_url,
+            ativo: true
+        };
+        
+        const apiBase = (typeof getApiBaseUrl === 'function') ? getApiBaseUrl() : '';
+        const res = await fetch(`${apiBase}/api/fontes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) throw new Error('Erro ao salvar no banco');
+        
+        document.getElementById('fonte-name').value = '';
+        document.getElementById('fonte-family').value = '';
+        document.getElementById('fonte-file').value = '';
+        
+        await loadCatalogoFontes();
+        renderCatFontesUI();
+        
+        alert('Fonte cadastrada com sucesso!');
+        
+    } catch (e) {
+        console.error('[Fontes] Erro no upload:', e);
+        alert('Erro ao fazer upload da fonte: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = '📤 Fazer Upload';
+    }
+}
+window.salvarNovaFonteWeb = salvarNovaFonteWeb;
+
+async function deletarFonteWeb(id) {
+    if (!confirm('Deseja realmente remover esta fonte do catálogo?')) return;
+    
+    try {
+        const apiBase = (typeof getApiBaseUrl === 'function') ? getApiBaseUrl() : '';
+        const res = await fetch(`${apiBase}/api/fontes?id=${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!res.ok) throw new Error('Erro ao remover do banco');
+        
+        await loadCatalogoFontes();
+        renderCatFontesUI();
+        
+    } catch (e) {
+        console.error('[Fontes] Erro ao deletar:', e);
+        alert('Erro ao excluir fonte: ' + e.message);
+    }
+}
+window.deletarFonteWeb = deletarFonteWeb;
 // Fontes Base-14 embutidas no PDF (sem necessidade de arquivo externo)
 const BUILTIN_FONTS = [
     { family: 'Sans-Serif (Helvetica)', fullName: 'helv',      style: 'Regular' },
