@@ -2255,14 +2255,18 @@ function clearPedActiveOS() {
     const infoEl = document.getElementById('ped-file-info');
 
     if (infoEl) {
-
         infoEl.style.display = 'none';
-
         infoEl.textContent = '';
-
     }
 
+    const fileInput = document.getElementById('ped-file');
+    if (fileInput) {
+        fileInput.value = '';
+    }
 
+    toast('OS desvinculada. Validações de arquivo liberadas.', 'info');
+}
+window.clearPedActiveOS = clearPedActiveOS;
 
 async function enviarParaPedido(itemId, osId) {
     const itens = typeof getOSItens === 'function' ? getOSItens(osId) : (state.osItens[osId] || []);
@@ -2385,7 +2389,9 @@ async function enviarParaPedido(itemId, osId) {
                 }
             }, 100);
         }
-    // --- MATCHING AUTOMÃTICO DE NUMERAÃ‡ÃƒO ---
+    }
+
+    // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
     setTimeout(() => {
         let numId = item.numeracao_id;
         if (!numId && item.numeracao) {
@@ -3283,7 +3289,6 @@ window.runPedImposition = async function (mode) {
     const btnImposePrint = document.getElementById('ped-btn-impose-print');
     if (btnImposePrint) btnImposePrint.style.display = 'none';
 
-    try {
 
     let fmtId = document.getElementById('ped-formato').value;
 
