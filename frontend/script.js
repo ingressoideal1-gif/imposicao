@@ -8833,6 +8833,24 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         }
 
+        function updateAgentStatusFooterBadge(localActive, version) {
+            const dot = document.getElementById('agent-status-dot');
+            const text = document.getElementById('agent-version-text');
+            if (!dot || !text) return;
+
+            if (localActive) {
+                const verName = version || "NewProd 1.0";
+                text.textContent = verName.includes("NewProd") ? verName : `NewProd 1.0 (${verName})`;
+                dot.style.background = "#22c55e";
+                dot.style.boxShadow = "0 0 8px #22c55e";
+            } else {
+                text.textContent = "NewProd 1.0 (Offline)";
+                dot.style.background = "#f43f5e";
+                dot.style.boxShadow = "0 0 8px #f43f5e";
+            }
+        }
+        window.updateAgentStatusFooterBadge = updateAgentStatusFooterBadge;
+
         
 
         const headers = {};
