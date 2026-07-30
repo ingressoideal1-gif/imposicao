@@ -2719,10 +2719,7 @@ function renderPedOSQueue() {
         return;
     }
 
-    // Se o item ativo não tem itemId definido, seleciona o primeiro item automaticamente
-    if (!activeItem.itemId && itens.length > 0) {
-        activeItem.itemId = itens[0].id;
-    }
+    // Não selecionar item automaticamente. O usuário deve clicar explicitamente.
 
     container.style.display = 'block';
 

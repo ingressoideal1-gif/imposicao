@@ -15944,22 +15944,23 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
         return toast('Esta OS não possui itens.', 'error');
     }
 
-    // Selecionar o primeiro modelo/item por padrão
-    const firstItem = itens[0];
-    state.activeOSItem = { itemId: firstItem.id, osId: realOsId };
+    // Não selecionar modelo/item por padrão
+    state.activeOSItem = { itemId: null, osId: realOsId };
 
-    // Exibir as janelas de visualização do pedido por padrão
+    // Ocultar as janelas de visualização do pedido por padrão até que um modelo seja clicado
     const pedPreview = document.getElementById('ped-preview-card-container');
-    if (pedPreview) pedPreview.style.display = 'block';
+    if (pedPreview) pedPreview.style.display = 'none';
     const impPreview = document.getElementById('imp-preview-card-container');
-    if (impPreview) impPreview.style.display = 'block';
+    if (impPreview) impPreview.style.display = 'none';
 
-    // Carregar o primeiro item na imposição (preenche formato, cor e desenha o preview)
-    if (typeof enviarParaImposicao === 'function') {
-        await enviarParaImposicao(firstItem.id, realOsId, false);
-    }
+    // Limpar seleções múltiplas de artes anteriores, e variáveis de arte
+    if (state.selectedOSItems) state.selectedOSItems = [];
+    state.pedArtFile = null;
+    state.pedArtPdfDoc = null;
+    state.impArtFile = null;
+    state.impArtPdfDoc = null;
 
-    // Renderizar a fila de modelos do pedido
+    // Renderizar a fila de modelos do pedido (agora abrirá sem nenhum selecionado)
     if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
     if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
 
