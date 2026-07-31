@@ -480,7 +480,8 @@ def add_numeracao(data: dict) -> str:
             "tipo": data.get("tipo", "SEQUENCIAL"),
             "ticket_qtd": data.get("ticket_qtd", 1),
             "ticket_logica": data.get("ticket_logica", "PILHA"),
-            "Cli_Num": data.get("Cli_Num")
+            "Cli_Num": data.get("Cli_Num"),
+            "print_mode": data.get("print_mode", "front")
         }
         _supabase_request("POST", "producao_numeracoes", clean_data)
         return new_id
@@ -505,7 +506,8 @@ def update_numeracao(num_id: str, data: dict) -> bool:
                 "tipo": data.get("tipo", "SEQUENCIAL"),
                 "ticket_qtd": data.get("ticket_qtd", 1),
                 "ticket_logica": data.get("ticket_logica", "PILHA"),
-                "Cli_Num": data.get("Cli_Num")
+                "Cli_Num": data.get("Cli_Num"),
+                "print_mode": data.get("print_mode", "front")
             }
             res = _supabase_request("PATCH", f"producao_numeracoes?id=eq.{num_id}", clean_data)
             return bool(res)

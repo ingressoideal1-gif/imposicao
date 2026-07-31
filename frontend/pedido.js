@@ -1759,6 +1759,20 @@ window.nextPedPreviewPage = function() {
     drawPedPreview();
 };
 
+function onPedNumeracaoSelect() {
+    const numId = document.getElementById('ped-numeracao')?.value;
+    if (numId && window.state && window.state.numeracoes) {
+        const num = window.state.numeracoes.find(n => String(n.id) === String(numId));
+        if (num && num.print_mode) {
+            const printModeSelect = document.getElementById('ped-print-mode');
+            if (printModeSelect) {
+                printModeSelect.value = num.print_mode;
+            }
+        }
+    }
+    updatePedSummary();
+}
+
 function updatePedSummary() {
 
     const fmtSelect = document.getElementById('ped-formato');
@@ -2254,6 +2268,7 @@ function updatePedSummary() {
     drawPedPreview();
 
 }
+window.onPedNumeracaoSelect = onPedNumeracaoSelect;
 window.updatePedSummary = updatePedSummary;
 
 function clearPedActiveOS() {

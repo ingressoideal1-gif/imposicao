@@ -5946,6 +5946,7 @@ window.saveNumeracao = async function () {
             is_custom: window.customNumeracaoEditState ? true : false,
             os_item_id: window.customNumeracaoEditState ? window.customNumeracaoEditState.itemId : null,
             Cli_Num: window.customNumeracaoEditState ? window.customNumeracaoEditState.cliNum : (id ? (state.numeracoes.find(n => String(n.id) === String(id))?.Cli_Num || null) : null),
+            print_mode: document.getElementById('num-print-mode')?.value || 'front',
 
             elements: [
                 ...state.numElements.map(el => {
@@ -7888,6 +7889,24 @@ async function loadMapaTeatroData(mapaId) {
     drawPreview();
 }
 
+function onImpNumeracaoSelect() {
+    const numId = document.getElementById('imp-numeracao')?.value;
+    if (numId && state.numeracoes) {
+        const num = state.numeracoes.find(n => String(n.id) === String(numId));
+        if (num && num.print_mode) {
+            const printModeSelect = document.getElementById('imp-print-mode');
+            if (printModeSelect) {
+                printModeSelect.value = num.print_mode;
+                if (typeof onImposicaoPrintModeChange === 'function') {
+                    onImposicaoPrintModeChange(num.print_mode);
+                }
+            }
+        }
+    }
+    updateImpSummary();
+    if (typeof toggleImpNumEditButtons === 'function') toggleImpNumEditButtons();
+}
+
 function updateImpSummary() {
     const schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
     const fmtSelect = document.getElementById('imp-formato');
@@ -8281,6 +8300,7 @@ function updateImpSummary() {
 
 }
 
+window.onImpNumeracaoSelect = onImpNumeracaoSelect;
 window.updateImpSummary = updateImpSummary;
 
 window.drawPreview = drawPreview;
