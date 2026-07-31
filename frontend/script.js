@@ -234,7 +234,7 @@ const state_fonts = {
 
 async function loadCatalogoFontes() {
     try {
-        const apiBase = (typeof getApiBaseUrl === 'function') ? getApiBaseUrl() : '';
+        const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
         const res = await fetch(`${apiBase}/api/fontes`);
         if (res.ok) {
             const list = await res.json();
@@ -336,7 +336,7 @@ async function salvarNovaFonteWeb() {
             ativo: true
         };
         
-        const apiBase = (typeof getApiBaseUrl === 'function') ? getApiBaseUrl() : '';
+        const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
         const res = await fetch(`${apiBase}/api/fontes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -368,7 +368,7 @@ async function deletarFonteWeb(id) {
     if (!confirm('Deseja realmente remover esta fonte do catálogo?')) return;
     
     try {
-        const apiBase = (typeof getApiBaseUrl === 'function') ? getApiBaseUrl() : '';
+        const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
         const res = await fetch(`${apiBase}/api/fontes?id=${id}`, {
             method: 'DELETE'
         });
