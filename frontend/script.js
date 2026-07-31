@@ -6504,10 +6504,16 @@ function drawPreview() {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
+            // Verificar via numeracao_id/amostra_num_id
             const fallbackNumId = item.numeracao_id || item.amostra_num_id;
             if (fallbackNumId) {
                 const fallbackNum = (state.numeracoes || []).find(n => String(n.id) === String(fallbackNumId));
                 if (_isCamarote(fallbackNum)) isNumCamarote = true;
+            }
+            // Fallback direto: tipo_numeracao ou numeracao string do item
+            if (!isNumCamarote) {
+                const tipoStr = String(item.tipo_numeracao || item.numeracao || item.gabarito_operacional || '').toUpperCase();
+                if (tipoStr === 'CAMAROTE' || tipoStr.includes('CAMAROTE')) isNumCamarote = true;
             }
         }
     }
@@ -13766,6 +13772,7 @@ async function loadOSItens(osId) {
                             numeracao: resolvedNumeracao,
                             gabarito_operacional: resolvedGabarito,
                             numeracao_id: resolvedNumId || null,
+                            tipo_numeracao: item.tipo_numeracao || item.gabarito_operacional || null,
                             qtd: item.quantidade || item.qtd || 0,
                             num_inicial: item.numeracao_inicio || item.num_inicial,
                             num_final: item.numeracao_fim || item.num_final,
