@@ -16360,6 +16360,12 @@ function renderImpOSQueue() {
             const qtdValNum = parseInt(qtdVal) || 0;
             const nfCalculado = qtdValNum > 0 ? (niValNum + (qtdValNum * ticket_qtd) - 1) : '';
 
+            // Detectar CAMAROTE
+            const isCamarote = selectedNum && (selectedNum.tipo === 'CAMAROTE' || selectedNum.type === 'CAMAROTE');
+            const qCamVal = item.q_cam || item.Q_CAM || item.qtd_locais || item.qtd_cam || '';
+            const lCamVal = item.l_cam || item.L_CAM || item.lotacao_cam || item.lotacao || item.lotacao_por_local || '';
+            const cIniVal = item.c_ini || item.C_INI || 1;
+
             const jsItemId = item.id;
             const jsOsId = osId;
 
@@ -16376,6 +16382,32 @@ function renderImpOSQueue() {
                         </div>
                     </td>
                     
+                    ${isCamarote ? `
+                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Qtd. Locais (Q_CAM)">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #f59e0b; white-space: nowrap;">Q_CAM</span>
+                            <input type="number" min="0" value="${qCamVal}" style="${inputStyle}" placeholder="Q_CAM"
+                                onchange="impQueueUpdateField('${item.id}', '${osId}', 'q_cam', this.value)"
+                                onclick="event.stopPropagation()" />
+                        </div>
+                    </td>
+                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Lotação por Local (L_CAM)">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #f59e0b; white-space: nowrap;">L_CAM</span>
+                            <input type="number" min="1" value="${lCamVal}" style="${inputStyle}" placeholder="L_CAM"
+                                onchange="impQueueUpdateField('${item.id}', '${osId}', 'l_cam', this.value)"
+                                onclick="event.stopPropagation()" />
+                        </div>
+                    </td>
+                    <td style="padding: 12px; width: 155px; min-width: 155px; max-width: 155px;" title="Início do Local (C_INI)">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.05rem; font-weight: bold; color: #f59e0b; white-space: nowrap;">C_INI</span>
+                            <input type="number" min="1" value="${cIniVal}" style="${inputStyle}" placeholder="C_INI"
+                                onchange="impQueueUpdateField('${item.id}', '${osId}', 'c_ini', this.value)"
+                                onclick="event.stopPropagation()" />
+                        </div>
+                    </td>
+                    ` : `
                     <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Quantidade">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">QTD</span>
@@ -16400,6 +16432,7 @@ function renderImpOSQueue() {
                                 onclick="event.stopPropagation()" />
                         </div>
                     </td>
+                    `}
                     <td style="padding: 12px; width: 250px; min-width: 250px; max-width: 250px;" title="Cor">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">COR</span>
