@@ -349,7 +349,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
             const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
             
-            const wantsDuplex = sItem ? !!(sItem.verso_tipo && sItem.verso_tipo !== 'SO FRENTE' && sItem.verso_tipo !== 'SO FRENTE') : false;
+            const wantsDuplex = sItem ? (sItem.verso_tipo === 'FxVerso' || sItem.verso === true) : false;
             const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
             const itemArteVersoUrl = (sItem && wantsDuplex) ? (sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor) : null;
 
@@ -411,7 +411,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
-            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            const wantsDuplex = (item.verso_tipo === 'FxVerso' || item.verso === true);
             state.printMode = wantsDuplex ? 'duplex' : 'front';
         }
     }
@@ -2384,7 +2384,7 @@ async function enviarParaPedido(itemId, osId) {
     setTimeout(() => {
         const printMode = document.getElementById('ped-print-mode');
         if (printMode) {
-            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            const wantsDuplex = (item.verso_tipo === 'FxVerso' || item.verso === true);
             printMode.value = wantsDuplex ? 'duplex' : 'front';
             if (typeof updatePedSummary === 'function') {
                 updatePedSummary();
@@ -3061,9 +3061,8 @@ function renderPedOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Verso</span>
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
-                                <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
-                                <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' ? 'selected' : ''}>VERSO COMUM</option>
-                                <option value="VERSO VARIÃ VEL" ${item.verso_tipo === 'VERSO VARIÃ VEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÃ VEL</option>
+                                <option value="Frente" ${item.verso_tipo === 'Frente' || !item.verso_tipo ? 'selected' : ''}>Frente</option>
+                                <option value="FxVerso" ${item.verso_tipo === 'FxVerso' ? 'selected' : ''}>FxVerso</option>
                             </select>
                         </div>
                     </td>
@@ -3333,7 +3332,7 @@ window.runPedImposition = async function (mode) {
             const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
             const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
             
-            const wantsDuplex = sItem ? !!(sItem.verso_tipo && sItem.verso_tipo !== 'SO FRENTE' && sItem.verso_tipo !== 'SO FRENTE') : false;
+            const wantsDuplex = sItem ? (sItem.verso_tipo === 'FxVerso' || sItem.verso === true) : false;
             const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
             const itemArteVersoUrl = (sItem && wantsDuplex) ? (sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor) : null;
 
@@ -4301,6 +4300,13 @@ async function pedQueueUpdateNum(itemId, osId, numId) {
         item.numeracao_id = num.id;
         autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
 
+        // Atualizar verso_tipo baseado no print_mode da numeração (fonte de verdade: producao_numeracoes)
+        const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : (num.print_mode === 'duplex');
+        const novoVersoTipo = isDuplex ? 'FxVerso' : 'Frente';
+        item.verso_tipo = novoVersoTipo;
+        item.verso = isDuplex;
+        autoSaveOSItemField(itemId, osId, 'verso_tipo', novoVersoTipo);
+
         // Recalcular num_final
         let ticket_qtd = 1;
         if (num.tipo === 'TICKET') {
@@ -4395,10 +4401,10 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
             const el = document.getElementById('ped-qtd');
             if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
         } else if (field === 'verso_tipo') {
-            item.verso = !!(value && value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
+            item.verso = (value === 'FxVerso');
             const printMode = document.getElementById('ped-print-mode');
             if (printMode) {
-                const wantsDuplex = (value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
+                const wantsDuplex = (value === 'FxVerso');
                 printMode.value = wantsDuplex ? 'duplex' : 'front';
                 if (typeof updatePedSummary === 'function') {
                     updatePedSummary();
