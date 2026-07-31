@@ -6990,27 +6990,42 @@ function drawPreview() {
                     const local_idx = (typeof item_local_index !== 'undefined') ? item_local_index : item_index;
                     const cell_stack_size = sheetsPerBlock;
                     const bloco_num = Math.floor(local_idx / cell_stack_size) + 1;
-                    const blocoNum = String(bloco_num).padStart(2, '0');
-                    const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
                     
                     const textX = -cw/2 + (xPdf * MM2PT * scale);
                     const textY = -ch/2 + (yPdf * MM2PT * scale);
                     
-                    ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
-                    ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                    
-                    const seqStartInput = document.getElementById('imp-start');
-                    const seqStart = (seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1;
-                    
-                    const start_idx = (bloco_num - 1) * cell_stack_size;
-                    const end_idx = start_idx + cell_stack_size - 1;
-                    const v_start = seqStart + start_idx * ticket_qtd;
-                    const v_end = seqStart + end_idx * ticket_qtd;
-                    
-                    const vStartStr = String(v_start).padStart(4, '0');
-                    const vEndStr = String(v_end).padStart(4, '0');
-                    
-                    ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
+                    // CAMAROTE: usar "Camarote XX - de 1 a L_CAM" com C_INI como início
+                    if (isNumCamarote) {
+                        const cIniEl = document.getElementById('ped-c-ini') || document.getElementById('imp-c-ini');
+                        const lCamEl = document.getElementById('ped-l-cam') || document.getElementById('imp-l-cam');
+                        const cIni = parseInt(cIniEl?.value) || 1;
+                        const lCam = parseInt(lCamEl?.value) || 1;
+                        const camaroteNum = String(cIni + (bloco_num - 1)).padStart(2, '0');
+                        const wCamarote = ctx.measureText(`Camarote ${camaroteNum}`).width;
+                        
+                        ctx.fillText(`Camarote ${camaroteNum}`, textX, textY);
+                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+                        ctx.fillText(` - de 1 a ${lCam}`, textX + wCamarote, textY);
+                    } else {
+                        const blocoNum = String(bloco_num).padStart(2, '0');
+                        const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
+                        
+                        ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
+                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+                        
+                        const seqStartInput = document.getElementById('imp-start');
+                        const seqStart = (seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1;
+                        
+                        const start_idx = (bloco_num - 1) * cell_stack_size;
+                        const end_idx = start_idx + cell_stack_size - 1;
+                        const v_start = seqStart + start_idx * ticket_qtd;
+                        const v_end = seqStart + end_idx * ticket_qtd;
+                        
+                        const vStartStr = String(v_start).padStart(4, '0');
+                        const vEndStr = String(v_end).padStart(4, '0');
+                        
+                        ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
+                    }
                 }
                 ctx.restore();
                 continue;

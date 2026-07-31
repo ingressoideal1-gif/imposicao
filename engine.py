@@ -1839,9 +1839,10 @@ class ImpositionEngine:
                 v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
                 v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
                 
-                # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding
+                # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding, com C_INI como início
                 if getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
-                    bloco_str = f"Camarote {bloco_num:02d}"
+                    camarote_num = cfg.c_ini + (bloco_num - 1)
+                    bloco_str = f"Camarote {camarote_num:02d}"
                     sufixo_str = f" - de 1 a {cfg.l_cam}"
                 else:
                     bloco_str = f"Bloco {bloco_num:02d}"
@@ -2264,9 +2265,10 @@ class ImpositionEngine:
                 v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
                 v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
 
-                # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding
+                # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding, com C_INI como início
                 if getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
-                    bloco_str = f"Camarote {bloco_num:02d}"
+                    camarote_num = cfg.c_ini + (bloco_num - 1)
+                    bloco_str = f"Camarote {camarote_num:02d}"
                     sufixo_str = f" - de 1 a {cfg.l_cam}"
                 else:
                     bloco_str = f"Bloco {bloco_num:02d}"
