@@ -793,20 +793,18 @@ async function api(method, path, body = null) {
                     }
 
                     if (col === 'producao_numeracoes' && data) {
-                        // Priorizar coluna print_mode da tabela
-                        if (data.print_mode && data.print_mode !== 'front') {
-                            // Coluna já tem valor válido, manter
-                        } else if (data.elements && Array.isArray(data.elements)) {
+                        // Sempre filtrar METADATA dos elements
+                        if (data.elements && Array.isArray(data.elements)) {
                             const metadataEl = data.elements.find(el => el.type === 'METADATA');
-                            if (metadataEl && metadataEl.print_mode) {
-                                data.print_mode = metadataEl.print_mode;
+                            if (metadataEl) {
+                                // Se a coluna não tem print_mode, extrair do METADATA
+                                if (!data.print_mode || data.print_mode === 'front') {
+                                    if (metadataEl.print_mode) data.print_mode = metadataEl.print_mode;
+                                }
                                 data.elements = data.elements.filter(el => el.type !== 'METADATA');
-                            } else if (!data.print_mode) {
-                                data.print_mode = 'front';
                             }
-                        } else if (!data.print_mode) {
-                            data.print_mode = 'front';
                         }
+                        if (!data.print_mode) data.print_mode = 'front';
                     }
 
                     return data;
@@ -825,20 +823,18 @@ async function api(method, path, body = null) {
 
                     if (col === 'producao_numeracoes' && data) {
                         data.forEach(n => {
-                            // Priorizar coluna print_mode da tabela producao_numeracoes
-                            if (n.print_mode && n.print_mode !== 'front') {
-                                // Coluna já tem valor válido, manter
-                            } else if (n.elements && Array.isArray(n.elements)) {
+                            // Sempre filtrar METADATA dos elements
+                            if (n.elements && Array.isArray(n.elements)) {
                                 const metadataEl = n.elements.find(el => el.type === 'METADATA');
-                                if (metadataEl && metadataEl.print_mode) {
-                                    n.print_mode = metadataEl.print_mode;
+                                if (metadataEl) {
+                                    // Se a coluna não tem print_mode, extrair do METADATA
+                                    if (!n.print_mode || n.print_mode === 'front') {
+                                        if (metadataEl.print_mode) n.print_mode = metadataEl.print_mode;
+                                    }
                                     n.elements = n.elements.filter(el => el.type !== 'METADATA');
-                                } else if (!n.print_mode) {
-                                    n.print_mode = 'front';
                                 }
-                            } else if (!n.print_mode) {
-                                n.print_mode = 'front';
                             }
+                            if (!n.print_mode) n.print_mode = 'front';
                         });
                     }
 
