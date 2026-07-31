@@ -6347,7 +6347,7 @@ async function loadImpArtFile(file) {
 function drawPreview() {
 
     let fmtId = document.getElementById('imp-formato')?.value || '';
-    let numId = document.getElementById('imp-numeracao')?.value || '';
+    let numId = document.getElementById('imp-numeracao')?.value || document.getElementById('ped-numeracao')?.value || '';
     let saiId = document.getElementById('imp-saida')?.value || '';
     let start = parseInt(document.getElementById('imp-start')?.value, 10) || 1;
     let end = parseInt(document.getElementById('imp-end')?.value, 10) || 100;
@@ -6484,7 +6484,21 @@ function drawPreview() {
 
     // Mostrar/esconder painel CAMAROTE conforme tipo da numeração (tela principal)
     const camPanel = document.getElementById('ped-camarote-panel');
-    const isNumCamarote = num && (num.tipo === 'CAMAROTE' || num.type === 'CAMAROTE');
+    let isNumCamarote = num && (num.tipo === 'CAMAROTE' || num.type === 'CAMAROTE');
+    // Fallback: verificar numeração do item ativo se num não resolveu CAMAROTE
+    if (!isNumCamarote && activeItem) {
+        const itens = state.osItens[activeItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+        if (item) {
+            const fallbackNumId = item.numeracao_id || item.amostra_num_id;
+            if (fallbackNumId) {
+                const fallbackNum = (state.numeracoes || []).find(n => String(n.id) === String(fallbackNumId));
+                if (fallbackNum && (fallbackNum.tipo === 'CAMAROTE' || fallbackNum.type === 'CAMAROTE')) {
+                    isNumCamarote = true;
+                }
+            }
+        }
+    }
     if (camPanel) camPanel.style.display = isNumCamarote ? 'block' : 'none';
 
 
@@ -6996,10 +7010,20 @@ function drawPreview() {
                     
                     // CAMAROTE: usar "Camarote XX - de 1 a L_CAM" com C_INI como início
                     if (isNumCamarote) {
-                        const cIniEl = document.getElementById('ped-c-ini') || document.getElementById('imp-c-ini');
-                        const lCamEl = document.getElementById('ped-l-cam') || document.getElementById('imp-l-cam');
-                        const cIni = parseInt(cIniEl?.value) || 1;
-                        const lCam = parseInt(lCamEl?.value) || 1;
+                        // Pegar c_ini e l_cam do item ativo (pedidos_modelos)
+                        let cIni = 1, lCam = 1;
+                        if (activeItem) {
+                            const _itens = state.osItens[activeItem.osId] || [];
+                            const _item = _itens.find(i => String(i.id) === String(activeItem.itemId));
+                            if (_item) {
+                                cIni = parseInt(_item.c_ini || _item.C_INI) || 1;
+                                lCam = parseInt(_item.l_cam || _item.L_CAM) || 1;
+                            }
+                        }
+                        // Fallback para inputs do painel
+                        if (cIni <= 1) cIni = parseInt(document.getElementById('ped-c-ini')?.value) || parseInt(document.getElementById('imp-c-ini')?.value) || 1;
+                        if (lCam <= 1) lCam = parseInt(document.getElementById('ped-l-cam')?.value) || parseInt(document.getElementById('imp-l-cam')?.value) || 1;
+                        
                         const camaroteNum = String(cIni + (bloco_num - 1)).padStart(2, '0');
                         const wCamarote = ctx.measureText(`Camarote ${camaroteNum}`).width;
                         
