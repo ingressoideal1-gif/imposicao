@@ -6489,10 +6489,17 @@ function drawPreview() {
 
     const num2 = state.numeracoes.find(n => String(n.id) === String(num2Id)) || null;
 
-    // Mostrar/esconder painel CAMAROTE conforme tipo da numeração (tela principal)
+    // Detectar CAMAROTE: igual ao engine.py — checar .tipo OU svg_content contendo "CAMAROTE"
     const camPanel = document.getElementById('ped-camarote-panel');
-    let isNumCamarote = num && (num.tipo === 'CAMAROTE' || num.type === 'CAMAROTE');
-    // Fallback: verificar numeração do item ativo se num não resolveu CAMAROTE
+    function _isCamarote(n) {
+        if (!n) return false;
+        if (n.tipo === 'CAMAROTE' || n.type === 'CAMAROTE') return true;
+        if (n.svg_content && String(n.svg_content).includes('CAMAROTE')) return true;
+        if (Array.isArray(n.elements) && n.elements.some(e => e && String(e.type || '').startsWith('CAMAROTE_'))) return true;
+        return false;
+    }
+    let isNumCamarote = _isCamarote(num);
+    // Fallback: verificar numeração do item ativo
     if (!isNumCamarote && activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
@@ -6500,9 +6507,7 @@ function drawPreview() {
             const fallbackNumId = item.numeracao_id || item.amostra_num_id;
             if (fallbackNumId) {
                 const fallbackNum = (state.numeracoes || []).find(n => String(n.id) === String(fallbackNumId));
-                if (fallbackNum && (fallbackNum.tipo === 'CAMAROTE' || fallbackNum.type === 'CAMAROTE')) {
-                    isNumCamarote = true;
-                }
+                if (_isCamarote(fallbackNum)) isNumCamarote = true;
             }
         }
     }
