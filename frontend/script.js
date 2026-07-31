@@ -6393,6 +6393,13 @@ function drawPreview() {
         }
     }
 
+    // Resolver numId do item ativo independente de fmtId/saiId
+    if (!numId && activeItem) {
+        const itens = state.osItens[activeItem.osId] || [];
+        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
+        if (item) numId = item.numeracao_id || item.amostra_num_id || '';
+    }
+
     const canvas = document.getElementById('preview-canvas');
 
     if (!canvas) return;
