@@ -16512,6 +16512,16 @@ function impQueueUpdateNum(itemId, osId, numId) {
         item.numeracao_id = num.id;
         autoSaveOSItemField(itemId, osId, 'amostra_num_id', num.id);
 
+        // Atualizar modo de verso baseado na numeração
+        const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : false;
+        // Se a numeração é FxVerso, garantimos que o item seja pelo menos VERSO COMUM (se ele já não for VERSO VARIÁVEL)
+        // Se for Frente, mudamos para SÓ FRENTE
+        let novoVersoTipo = isDuplex ? (item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'VERSO VARIÁVEL' : 'VERSO COMUM') : 'SÓ FRENTE';
+        
+        item.verso_tipo = novoVersoTipo;
+        item.verso = isDuplex;
+        autoSaveOSItemField(itemId, osId, 'verso_tipo', novoVersoTipo);
+
         // Recalcular num_final
         let ticket_qtd = 1;
         if (num.tipo === 'TICKET') {
@@ -16531,6 +16541,10 @@ function impQueueUpdateNum(itemId, osId, numId) {
             const nfInput = row.querySelector('td[title="Num. Final"] input');
             if (nfInput) {
                 nfInput.value = nf;
+            }
+            const versoSelect = row.querySelector('td[title="Frente e Verso/Tipo de Verso"] select');
+            if (versoSelect) {
+                versoSelect.value = novoVersoTipo;
             }
         }
 
