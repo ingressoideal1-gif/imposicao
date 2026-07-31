@@ -1223,27 +1223,81 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     const local_idx = (typeof item_local_index !== 'undefined') ? item_local_index : item_index;
                     const cell_stack_size = sheetsPerBlock;
                     const bloco_num = Math.floor(local_idx / cell_stack_size) + 1;
-                    const blocoNum = String(bloco_num).padStart(2, '0');
-                    const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
-                    
+
                     const textX = -cw/2 + (xPdf * MM2PT * scale);
                     const textY = -ch/2 + (yPdf * MM2PT * scale);
-                    
-                    ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
-                    ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                    
-                    const seqStartInput = document.getElementById('ped-start');
-                    const seqStart = multiArteItem ? multiArteItem.start : ((seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1);
-                    
-                    const start_idx = (bloco_num - 1) * cell_stack_size;
-                    const end_idx = start_idx + cell_stack_size - 1;
-                    const v_start = seqStart + start_idx * item_ticket_qtd;
-                    const v_end = seqStart + end_idx * item_ticket_qtd;
-                    
-                    const vStartStr = String(v_start).padStart(4, '0');
-                    const vEndStr = String(v_end).padStart(4, '0');
-                    
-                    ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
+
+                    function _isCamaroteLocal(n) {
+                        if (!n) return false;
+                        if (n.tipo === 'CAMAROTE' || n.type === 'CAMAROTE') return true;
+                        if (n.svg_content && String(n.svg_content).includes('CAMAROTE')) return true;
+                        if (Array.isArray(n.elements) && n.elements.some(e => e && String(e.type || '').startsWith('CAMAROTE_'))) return true;
+                        return false;
+                    }
+
+                    let isNumCamarote = _isCamaroteLocal(num);
+                    let activeOSItemObj = null;
+                    if (activeItem) {
+                        const _itens = state.osItens[activeItem.osId] || [];
+                        activeOSItemObj = _itens.find(i => String(i.id) === String(activeItem.itemId));
+                    }
+                    if (!isNumCamarote) {
+                        if (multiArteItem && multiArteItem.num1_id) {
+                            const itemNum = (state.numeracoes || []).find(n => String(n.id) === String(multiArteItem.num1_id));
+                            if (_isCamaroteLocal(itemNum)) isNumCamarote = true;
+                        }
+                        if (!isNumCamarote && activeOSItemObj) {
+                            const nid = activeOSItemObj.numeracao_id || activeOSItemObj.amostra_num_id;
+                            if (nid) {
+                                const itemNum = (state.numeracoes || []).find(n => String(n.id) === String(nid));
+                                if (_isCamaroteLocal(itemNum)) isNumCamarote = true;
+                            }
+                        }
+                        if (!isNumCamarote) {
+                            const checkObj = multiArteItem || activeOSItemObj;
+                            if (checkObj) {
+                                const tipoStr = String(checkObj.tipo_numeracao || checkObj.numeracao || checkObj.gabarito_operacional || '').toUpperCase();
+                                if (tipoStr === 'CAMAROTE' || tipoStr.includes('CAMAROTE')) isNumCamarote = true;
+                            }
+                        }
+                    }
+
+                    if (isNumCamarote) {
+                        let cIni = 1, lCam = 1;
+                        const targetObj = multiArteItem || activeOSItemObj;
+                        if (targetObj) {
+                            cIni = parseInt(targetObj.c_ini || targetObj.C_INI) || 1;
+                            lCam = parseInt(targetObj.l_cam || targetObj.L_CAM) || 1;
+                        }
+                        if (cIni <= 1) cIni = parseInt(document.getElementById('ped-c-ini')?.value) || 1;
+                        if (lCam <= 1) lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
+
+                        const camaroteNum = String(cIni + (bloco_num - 1)).padStart(2, '0');
+                        const wCamarote = ctx.measureText(`Camarote ${camaroteNum}`).width;
+
+                        ctx.fillText(`Camarote ${camaroteNum}`, textX, textY);
+                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+                        ctx.fillText(` - de 1 a ${lCam}`, textX + wCamarote, textY);
+                    } else {
+                        const blocoNum = String(bloco_num).padStart(2, '0');
+                        const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
+                        
+                        ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
+                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+                        
+                        const seqStartInput = document.getElementById('ped-start');
+                        const seqStart = multiArteItem ? multiArteItem.start : ((seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1);
+                        
+                        const start_idx = (bloco_num - 1) * cell_stack_size;
+                        const end_idx = start_idx + cell_stack_size - 1;
+                        const v_start = seqStart + start_idx * item_ticket_qtd;
+                        const v_end = seqStart + end_idx * item_ticket_qtd;
+                        
+                        const vStartStr = String(v_start).padStart(4, '0');
+                        const vEndStr = String(v_end).padStart(4, '0');
+                        
+                        ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
+                    }
                 }
                 ctx.restore();
                 continue;
