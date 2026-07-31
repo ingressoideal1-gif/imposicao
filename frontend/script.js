@@ -793,15 +793,18 @@ async function api(method, path, body = null) {
                     }
 
                     if (col === 'producao_numeracoes' && data) {
-                        if (data.elements && Array.isArray(data.elements)) {
+                        // Priorizar coluna print_mode da tabela
+                        if (data.print_mode && data.print_mode !== 'front') {
+                            // Coluna já tem valor válido, manter
+                        } else if (data.elements && Array.isArray(data.elements)) {
                             const metadataEl = data.elements.find(el => el.type === 'METADATA');
-                            if (metadataEl) {
+                            if (metadataEl && metadataEl.print_mode) {
                                 data.print_mode = metadataEl.print_mode;
                                 data.elements = data.elements.filter(el => el.type !== 'METADATA');
-                            } else {
+                            } else if (!data.print_mode) {
                                 data.print_mode = 'front';
                             }
-                        } else {
+                        } else if (!data.print_mode) {
                             data.print_mode = 'front';
                         }
                     }
@@ -822,15 +825,18 @@ async function api(method, path, body = null) {
 
                     if (col === 'producao_numeracoes' && data) {
                         data.forEach(n => {
-                            if (n.elements && Array.isArray(n.elements)) {
+                            // Priorizar coluna print_mode da tabela producao_numeracoes
+                            if (n.print_mode && n.print_mode !== 'front') {
+                                // Coluna já tem valor válido, manter
+                            } else if (n.elements && Array.isArray(n.elements)) {
                                 const metadataEl = n.elements.find(el => el.type === 'METADATA');
-                                if (metadataEl) {
+                                if (metadataEl && metadataEl.print_mode) {
                                     n.print_mode = metadataEl.print_mode;
                                     n.elements = n.elements.filter(el => el.type !== 'METADATA');
-                                } else {
+                                } else if (!n.print_mode) {
                                     n.print_mode = 'front';
                                 }
-                            } else {
+                            } else if (!n.print_mode) {
                                 n.print_mode = 'front';
                             }
                         });
@@ -13674,8 +13680,21 @@ async function loadOSItens(osId) {
                         const resolvedNumId = item.amostra_num_id || (prop ? prop.amostra_num_id : null);
                         const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
                         const numIsDuplex = isNumeracaoDuplex(matchedNum);
-                        const itemVerso = !!(item.verso_tipo && item.verso_tipo !== 'Frente' && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE') || numIsDuplex;
-                        const resolvedVersoTipo = itemVerso ? 'FxVerso' : (item.verso_tipo === 'FxVerso' ? 'FxVerso' : 'Frente');
+                        // Fonte de verdade: print_mode da numeração em producao_numeracoes
+                        let resolvedVersoTipo;
+                        if (matchedNum) {
+                            // Numeração encontrada: usar print_mode da numeração
+                            resolvedVersoTipo = numIsDuplex ? 'FxVerso' : 'Frente';
+                        } else {
+                            // Sem numeração: usar verso_tipo salvo no pedido, convertendo valores legados
+                            const vt = item.verso_tipo;
+                            if (vt === 'FxVerso' || vt === 'VERSO COMUM' || vt === 'VERSO VARIÁVEL' || vt === 'VERSO VARIAVEL' || vt === 'FRENTE E VERSO') {
+                                resolvedVersoTipo = 'FxVerso';
+                            } else {
+                                resolvedVersoTipo = 'Frente';
+                            }
+                        }
+                        const itemVerso = (resolvedVersoTipo === 'FxVerso');
 
                         const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || item.tipo_numeracao || item.numeracao);
                         const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || null);
