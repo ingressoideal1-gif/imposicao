@@ -6360,7 +6360,7 @@ function drawPreview() {
         const itens = state.osItens[activeItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
-            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            const wantsDuplex = !!(item.verso_tipo && item.verso_tipo !== 'Frente');
             state.printMode = wantsDuplex ? 'duplex' : 'front';
         }
     }
@@ -8460,7 +8460,7 @@ window.runImposition = async function (mode, returnBlob = false) {
             const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
             const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
             
-            const wantsDuplex = sItem ? !!(sItem.verso_tipo && sItem.verso_tipo !== 'SÓ FRENTE' && sItem.verso_tipo !== 'SO FRENTE') : false;
+            const wantsDuplex = sItem ? !!(sItem.verso_tipo && sItem.verso_tipo !== 'Frente') : false;
             const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
             const itemArteVersoUrl = (sItem && wantsDuplex) ? (sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor) : null;
             
@@ -13674,8 +13674,8 @@ async function loadOSItens(osId) {
                         const resolvedNumId = item.amostra_num_id || (prop ? prop.amostra_num_id : null);
                         const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
                         const numIsDuplex = isNumeracaoDuplex(matchedNum);
-                        const itemVerso = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE') || numIsDuplex;
-                        const resolvedVersoTipo = itemVerso ? (item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE' ? item.verso_tipo : 'FRENTE E VERSO') : (item.verso_tipo || 'SÓ FRENTE');
+                        const itemVerso = !!(item.verso_tipo && item.verso_tipo !== 'Frente' && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE') || numIsDuplex;
+                        const resolvedVersoTipo = itemVerso ? 'FxVerso' : (item.verso_tipo === 'FxVerso' ? 'FxVerso' : 'Frente');
 
                         const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || item.tipo_numeracao || item.numeracao);
                         const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || null);
@@ -15609,7 +15609,7 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
             if (item) {
                 item[field] = value;
                 if (field === 'verso_tipo') {
-                    item.verso = !!(value && value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
+                    item.verso = !!(value && value !== 'Frente');
                 }
             }
         }
@@ -15637,7 +15637,7 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
             
             const updatePayload = { [dbField]: dbValue };
             if (dbField === 'verso_tipo') {
-                updatePayload.frente_verso = (value !== 'SÓ FRENTE');
+                updatePayload.frente_verso = (value !== 'Frente');
             }
             
             const isNumericId = /^\d+$/.test(String(itemId).trim());
@@ -15674,7 +15674,7 @@ async function saveActiveOSItemField(field, value) {
         if (item) {
             item[field] = value;
             if (field === 'verso_tipo') {
-                item.verso = !!(value && value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
+                item.verso = !!(value && value !== 'Frente');
             }
             
             // Mapear campo local → coluna no banco (pedidos_modelos)
@@ -15768,17 +15768,17 @@ function onImposicaoPrintModeChange(value) {
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
             if (isDuplex) {
-                const currentIsVerso = item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE';
+                const currentIsVerso = item.verso_tipo && item.verso_tipo !== 'Frente';
                 if (!currentIsVerso) {
-                    saveActiveOSItemField('verso_tipo', 'FRENTE E VERSO');
+                    saveActiveOSItemField('verso_tipo', 'FxVerso');
                 }
             } else {
-                saveActiveOSItemField('verso_tipo', 'SÓ FRENTE');
+                saveActiveOSItemField('verso_tipo', 'Frente');
             }
             return;
         }
     }
-    saveActiveOSItemField('verso_tipo', isDuplex ? 'FRENTE E VERSO' : 'SÓ FRENTE');
+    saveActiveOSItemField('verso_tipo', isDuplex ? 'FxVerso' : 'Frente');
 }
 window.onImposicaoPrintModeChange = onImposicaoPrintModeChange;
 
@@ -16407,9 +16407,8 @@ function renderImpOSQueue() {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Verso</span>
                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
-                                <option value="SÓ FRENTE" ${item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE' || !item.verso_tipo ? 'selected' : ''}>SÓ FRENTE</option>
-                                <option value="VERSO COMUM" ${item.verso_tipo === 'VERSO COMUM' || item.verso_tipo === 'FRENTE E VERSO' ? 'selected' : ''}>VERSO COMUM</option>
-                                <option value="VERSO VARIÁVEL" ${item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>VERSO VARIÁVEL</option>
+                                <option value="Frente" ${item.verso_tipo === 'Frente' || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE' || !item.verso_tipo ? 'selected' : ''}>Frente</option>
+                                <option value="FxVerso" ${item.verso_tipo === 'FxVerso' || item.verso_tipo === 'VERSO COMUM' || item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>FxVerso</option>
                             </select>
                         </div>
                     </td>
@@ -16514,9 +16513,9 @@ function impQueueUpdateNum(itemId, osId, numId) {
 
         // Atualizar modo de verso baseado na numeração
         const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : false;
-        // Se a numeração é FxVerso, garantimos que o item seja pelo menos VERSO COMUM (se ele já não for VERSO VARIÁVEL)
-        // Se for Frente, mudamos para SÓ FRENTE
-        let novoVersoTipo = isDuplex ? (item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'VERSO VARIÁVEL' : 'VERSO COMUM') : 'SÓ FRENTE';
+        // Se a numeração é FxVerso, mudamos para FxVerso
+        // Se for Frente, mudamos para Frente
+        let novoVersoTipo = isDuplex ? 'FxVerso' : 'Frente';
         
         item.verso_tipo = novoVersoTipo;
         item.verso = isDuplex;
@@ -16620,7 +16619,7 @@ function impQueueUpdateField(itemId, osId, field, value) {
         } else if (field === 'verso_tipo') {
             const printMode = document.getElementById('imp-print-mode');
             if (printMode) {
-                const wantsDuplex = (value !== 'SÓ FRENTE' && value !== 'SO FRENTE');
+                const wantsDuplex = (value !== 'Frente');
                 printMode.value = wantsDuplex ? 'duplex' : 'front';
                 printMode.dispatchEvent(new Event('change'));
             }
@@ -18428,15 +18427,15 @@ function onItemNumSelect(idx, osId, itemId) {
 
         if (isDuplexNum) {
             item.verso = true;
-            if (!item.verso_tipo || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
-                item.verso_tipo = 'FRENTE E VERSO';
+            if (!item.verso_tipo || item.verso_tipo === 'Frente' || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
+                item.verso_tipo = 'FxVerso';
             }
         } else {
-            if (item.verso_tipo === 'FRENTE E VERSO') {
-                item.verso_tipo = 'SÓ FRENTE';
+            if (item.verso_tipo === 'FxVerso' || item.verso_tipo === 'VERSO COMUM') {
+                item.verso_tipo = 'Frente';
                 item.verso = false;
             } else {
-                item.verso = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+                item.verso = !!(item.verso_tipo && item.verso_tipo !== 'Frente');
             }
         }
         if (oldVerso !== item.verso) {
@@ -19488,16 +19487,16 @@ async function renderItemAmostraCombinada(idx, osId) {
     if (numIsDuplex) {
         if (!item.verso) {
             item.verso = true;
-            if (!item.verso_tipo || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
-                item.verso_tipo = 'FRENTE E VERSO';
+            if (!item.verso_tipo || item.verso_tipo === 'Frente' || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
+                item.verso_tipo = 'FxVerso';
             }
         }
     } else {
-        if (item.verso_tipo === 'FRENTE E VERSO') {
-            item.verso_tipo = 'SÓ FRENTE';
+        if (item.verso_tipo === 'FxVerso' || item.verso_tipo === 'VERSO COMUM') {
+            item.verso_tipo = 'Frente';
             item.verso = false;
         } else {
-            item.verso = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE');
+            item.verso = !!(item.verso_tipo && item.verso_tipo !== 'Frente');
         }
     }
 
@@ -20955,7 +20954,7 @@ async function openArtesModal(itemId, osId) {
     artesModalState.osId = osId;
     artesModalState.id_int = os.numero || osId.replace('vibe_', '');
     artesModalState.modeloNome = item.modelo || 'Padrão';
-    artesModalState.versoTipo = item.verso_tipo || 'SÓ FRENTE';
+    artesModalState.versoTipo = item.verso_tipo || 'Frente';
     
     document.getElementById('modal-artes-modelo-nome').textContent = artesModalState.modeloNome;
     document.getElementById('modal-artes').style.display = 'flex';
