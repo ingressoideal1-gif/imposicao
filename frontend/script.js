@@ -6512,6 +6512,16 @@ function drawPreview() {
         }
     }
     if (camPanel) camPanel.style.display = isNumCamarote ? 'block' : 'none';
+    // === DEBUG CAMAROTE (remover após correção) ===
+    console.log('[CAPA-DEBUG] numId=', numId, '| num=', num, '| isNumCamarote=', isNumCamarote, '| activeItem=', activeItem);
+    if (activeItem) {
+        const _di = state.osItens[activeItem.osId] || [];
+        const _it = _di.find(i => String(i.id) === String(activeItem.itemId));
+        console.log('[CAPA-DEBUG] item=', _it, '| numeracao_id=', _it?.numeracao_id, '| amostra_num_id=', _it?.amostra_num_id);
+        const _nid = _it?.numeracao_id || _it?.amostra_num_id;
+        const _fn = (state.numeracoes||[]).find(n => String(n.id) === String(_nid));
+        console.log('[CAPA-DEBUG] fallbackNum=', _fn, '| keys=', _fn ? Object.keys(_fn) : null);
+    }
 
 
     const MM2PT = 2.8346;
