@@ -15087,9 +15087,9 @@ function renderOrdens() {
                 }
 
                 let nomeDesignerHtml = '';
-                const arteComDesigner = artesDaOS.find(a => a.designer_nome);
-                if (arteComDesigner) {
-                    nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #3b82f6;">${arteComDesigner.designer_nome}</span>`;
+                const desigDaOS = getOSDesigner(os.id, os.numero);
+                if (desigDaOS) {
+                    nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #3b82f6;">${desigDaOS}</span>`;
                 }
 
                 const osStUp = (os.status_calculado || os.status || '').trim().toUpperCase();
@@ -20835,15 +20835,33 @@ async function selectDesigner(osIntId, uid, nome) {
     // Salva direto no banco
     if (!osIntId || typeof supabaseClient === 'undefined') return;
     try {
-        const { error } = await supabaseClient
-            .from('pedidos_artes')
-            .upsert({
-                id_int: osIntId,
-                designer_uid: uid,
-                designer_nome: nome
-            }, { onConflict: 'id_int' });
+        const payload = {
+            id_int: osIntId,
+            designer_uid: uid,
+            designer_nome: nome
+        };
 
-        if (error) throw error;
+        const { data: existingData } = await supabaseClient
+            .from('pedidos_artes')
+            .select('id')
+            .eq('id_int', osIntId)
+            .limit(1);
+
+        let opError;
+        if (existingData && existingData.length > 0) {
+            const res = await supabaseClient
+                .from('pedidos_artes')
+                .update({ designer_uid: uid, designer_nome: nome })
+                .eq('id_int', osIntId);
+            opError = res.error;
+        } else {
+            const res = await supabaseClient
+                .from('pedidos_artes')
+                .insert(payload);
+            opError = res.error;
+        }
+
+        if (opError) throw opError;
         showToast("Designer atribuído com sucesso!", "success");
     } catch (e) {
         console.error("Erro ao salvar designer:", e);

@@ -59,12 +59,12 @@ Write-Host "  Light:  $wixLight" -ForegroundColor Gray
 
 # 3. Compilar agent_installer.wxs -> agent_installer.wixobj
 Write-Host "`nEtapa 1/2: Compilando XML (.wxs -> .wixobj)..." -ForegroundColor Green
-& $wixCandle -nologo "agent_installer.wxs" -out "dist\agent_installer.wixobj"
+& $wixCandle -ext WixUIExtension -nologo "agent_installer.wxs" -out "dist\agent_installer.wixobj"
 
 # 4. Enlincar .wixobj -> NewProd_Setup_v1.0.msi
 Write-Host "Etapa 2/2: Gerando pacote final MSI (.wixobj -> .msi)..." -ForegroundColor Green
-$msiOutput = "dist\NewProd_Setup_v1.0.msi"
-& $wixLight -nologo -sval "dist\agent_installer.wixobj" -out $msiOutput
+$msiOutput = "dist\NewProd_Setup_v1.1.msi"
+& $wixLight -ext WixUIExtension -nologo -sval "dist\agent_installer.wixobj" -out $msiOutput
 
 if (Test-Path $msiOutput) {
     $sizeMb = [math]::Round((Get-Item $msiOutput).Length / 1MB, 2)

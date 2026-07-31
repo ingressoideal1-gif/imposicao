@@ -7,7 +7,7 @@
            Name="NewProd Agent" 
            Language="1046" 
            Codepage="65001"
-           Version="1.0.0.0" 
+           Version="1.1.0.0" 
            Manufacturer="Ingresso Ideal" 
            UpgradeCode="A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D">
 
@@ -73,6 +73,9 @@
     <!-- Ícone do instalador -->
     <Icon Id="AgentIcon.ico" SourceFile="agent_icon.ico" />
     <Property Id="ARPPRODUCTICON" Value="AgentIcon.ico" />
+
+    <UIRef Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
 
     <!-- ─── Recursos a Incluir no MSI ────────────────────────────────────── -->
     <Feature Id="MainFeature" Title="NewProd Agent" Level="1">
