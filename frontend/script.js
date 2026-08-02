@@ -15042,7 +15042,7 @@ function renderOrdens() {
                 }
 
                 let previewHtml = `
-                    <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
+                    <div style="width: 126px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
                         🖼️
                     </div>
                 `;
@@ -15050,14 +15050,14 @@ function renderOrdens() {
                     const isPdf = previewSrc.startsWith('data:application/pdf') || previewSrc.includes('JVBERi') || previewSrc.toLowerCase().endsWith('.pdf');
                     if (isPdf) {
                         previewHtml = `
-                            <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${previewSrc}', '_blank')">
+                            <div style="width: 126px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${previewSrc}', '_blank')">
                                 📄
                             </div>
                         `;
                     } else {
                         previewHtml = `
                             <img src="${previewSrc}" 
-                                 style="width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
+                                 style="width: 126px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
                                  onclick="event.stopPropagation(); openClienteLightbox('${previewSrc}')" 
                                  title="Clique para ampliar a arte" />
                         `;
