@@ -32,7 +32,7 @@ $producaoFile = "frontend\producao.html"
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."
 git add -A
-git commit -m "fix: add api proxy to REAL vercel.json in frontend/ (v$nextV)"
+git commit -m "fix: load fonts on boot + readable font names in picker (v$nextV)"
 git push origin main
 
 # 4. Vercel deploy

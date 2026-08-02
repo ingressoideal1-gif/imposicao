@@ -411,6 +411,23 @@ function createFontPicker(elId, currentValue, onChange) {
 
     const getLabelForValue = (v) => {
         if (!v) return 'Selecione uma fonte...';
+        // Traduzir IDs internos para nomes legíveis
+        const builtinNames = {
+            'helv': 'Helvetica', 'hebo': 'Helvetica Bold',
+            'helv-bold': 'Helvetica Bold',
+            'times': 'Times New Roman', 'times-bold': 'Times New Roman Bold',
+            'cour': 'Courier', 'cour-bold': 'Courier Bold'
+        };
+        if (builtinNames[v]) return builtinNames[v];
+        if (v.startsWith('system:')) {
+            const parts = v.slice(7).split('|');
+            return parts[0] || v;
+        }
+        // Tentar encontrar no catálogo pelo font_family
+        if (state_fonts.catalogo && state_fonts.catalogo.length) {
+            const cat = state_fonts.catalogo.find(f => f.font_family === v || f.nome === v);
+            if (cat) return cat.nome;
+        }
         return v;
     };
 
@@ -23465,6 +23482,9 @@ window.setFiltroStatusArte = setFiltroStatusArte;
 
 // - ROUTER: Garantir que a página principal da aplicação seja o Painel de Produção (ao entrar e no F5) -
 document.addEventListener('DOMContentLoaded', () => {
+    // Carregar catálogo de fontes no boot da aplicação para que esteja disponível
+    // em todas as views (Criar Arte, Numerações, etc)
+    loadCatalogoFontes();
     if (typeof window.showView === 'function') {
         setTimeout(() => window.showView('view-lista-impressao'), 50);
     }
