@@ -1249,24 +1249,15 @@ async function salvarArteDoEditor() {
                 });
 
                 const pdfBytes = await pdfDoc.save();
+                const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
                 const fileName = `arte_criada_${face}_${osId}_${item.id || itemIdx}_${Date.now()}.pdf`;
 
                 // Fazer upload do arquivo PDF para o Storage do Supabase (para imposição e impressão)
                 if (typeof uploadToStorage === 'function') {
-                    const uploadedUrl = await uploadToStorage(pdfBytes, fileName, 'artes');
-                    if (uploadedUrl && typeof uploadedUrl === 'string') {
+                    const uploadedUrl = await uploadToStorage(pdfBlob, fileName, 'artes');
+                    if (uploadedUrl && typeof uploadedUrl === 'string' && uploadedUrl.length > 0) {
                         pdfUrlOrData = uploadedUrl;
                     }
-                }
-
-                // Fallback: se o upload de rede falhar, gera um Data URL PDF válido em Base64
-                if (pdfUrlOrData === base64PngUrl) {
-                    let binary = '';
-                    const len = pdfBytes.byteLength;
-                    for (let i = 0; i < len; i++) {
-                        binary += String.fromCharCode(pdfBytes[i]);
-                    }
-                    pdfUrlOrData = 'data:application/pdf;base64,' + btoa(binary);
                 }
             }
         } catch (pdfErr) {

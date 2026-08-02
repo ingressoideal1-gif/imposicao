@@ -5745,64 +5745,85 @@ function deselectAllCards() {
 // - Salvar Numeração -
 
 async function uploadToStorage(content, fileName, path) {
-    if (!content) return content;
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return content;
-    if (typeof content === 'string' && content.startsWith('http')) return content; // Already a URL
+    if (!content) return '';
+    if (typeof content === 'string' && content.startsWith('http')) return content; // Já é uma URL HTTP pública
+
+    let mimeType = 'application/octet-stream';
+    const nameLower = (fileName || '').toLowerCase();
+    if (nameLower.endsWith('.pdf')) mimeType = 'application/pdf';
+    else if (nameLower.endsWith('.png')) mimeType = 'image/png';
+    else if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) mimeType = 'image/jpeg';
+    else if (nameLower.endsWith('.svg')) mimeType = 'image/svg+xml';
 
     let blob;
     try {
         if (content instanceof File || content instanceof Blob) {
             blob = content;
+        } else if (content instanceof Uint8Array || content instanceof ArrayBuffer) {
+            blob = new Blob([content], { type: mimeType });
         } else if (typeof content === 'string' && content.startsWith('data:')) {
-            const res = await fetch(content);
-            blob = await res.blob();
-        } else {
-            blob = new Blob([content], { type: 'image/svg+xml' });
-        }
-    } catch (fetchErr) {
-        console.warn("Erro ao converter conteúdo em Blob usando fetch, tentando conversão manual:", fetchErr);
-        try {
-            if (typeof content === 'string' && content.startsWith('data:')) {
-                const parts = content.split(',');
-                const mime = parts[0].match(/:(.*?);/)[1];
-                const bstr = atob(parts[1]);
-                let n = bstr.length;
-                const u8arr = new Uint8Array(n);
-                while (n--) {
-                    u8arr[n] = bstr.charCodeAt(n);
-                }
-                blob = new Blob([u8arr], { type: mime });
-            } else {
-                throw fetchErr;
+            const parts = content.split(',');
+            const mime = parts[0].match(/:(.*?);/)?.[1] || mimeType;
+            const bstr = atob(parts[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
             }
-        } catch (convErr) {
-            console.error("Falha na conversão manual do base64:", convErr);
-            return content; // Fallback: retorna o conteúdo original (base64)
+            blob = new Blob([u8arr], { type: mime });
+        } else {
+            blob = new Blob([content], { type: mimeType });
         }
+    } catch (convErr) {
+        console.warn("[Storage] Erro ao converter conteúdo em Blob:", convErr);
+        if (typeof content === 'string') return content;
+        return '';
+    }
+
+    // Se supabaseClient não estiver configurado, converter blob para Base64 Data URL string
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(blob);
+        });
     }
 
     const safeName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : 'arquivo';
-    const finalPath = `${path}/${Date.now()}_${safeName}`;
-    
-    try {
-        const { data, error } = await supabaseClient.storage
-            .from('imposicao-storage')
-            .upload(finalPath, blob, { upsert: true });
+    const finalPath = `${path || 'uploads'}/${Date.now()}_${safeName}`;
+    const bucketsToTry = ['artes', 'imposicao-storage'];
 
-        if (error) {
-            console.warn("Erro no upload para o Supabase Storage, salvando como Base64:", error);
-            return content; // Fallback: retorna o base64 para salvar diretamente no DB
+    for (const bucketName of bucketsToTry) {
+        try {
+            const { data, error } = await supabaseClient.storage
+                .from(bucketName)
+                .upload(finalPath, blob, { upsert: true, cacheControl: '3600' });
+
+            if (!error && data) {
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from(bucketName)
+                    .getPublicUrl(finalPath);
+
+                if (publicUrlData && publicUrlData.publicUrl) {
+                    console.log(`[Storage] Upload OK bucket '${bucketName}':`, publicUrlData.publicUrl);
+                    return publicUrlData.publicUrl;
+                }
+            } else {
+                console.warn(`[Storage] Bucket '${bucketName}' retornou erro:`, error?.message || error);
+            }
+        } catch (e) {
+            console.warn(`[Storage] Exceção no bucket '${bucketName}':`, e);
         }
-
-        const { data: publicUrlData } = supabaseClient.storage
-            .from('imposicao-storage')
-            .getPublicUrl(finalPath);
-
-        return publicUrlData.publicUrl;
-    } catch (uploadErr) {
-        console.warn("Falha de rede/exceção ao enviar para o Supabase Storage, salvando como Base64:", uploadErr);
-        return content; // Fallback: retorna o base64 para salvar diretamente no DB
     }
+
+    // Fallback Final: Se o upload de rede nos buckets falhar, converter para Data URL (Base64)
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(blob);
+    });
 }
 
 
