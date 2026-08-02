@@ -13521,7 +13521,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             if (uniqueIdInts.length > 0) {
                 const { data: propData, error: propError } = await vibeClient
                     .from('propostas')
-                    .select('id, id_int, cliente, vendedor, status_interno, created_at, id_cliente, id_faturado')
+                    .select('id, id_int, cliente, vendedor, status_interno, created_at, id_cliente, id_faturado, frete_escolhido')
                     .in('id_int', uniqueIdInts);
                 if (!propError && propData) {
                     propostas = propData;
@@ -13585,6 +13585,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                     data_pedido: dataPedido,
                     valor_total: valorTotal,
                     prazo_entrega: prazoEntrega,
+                    frete_escolhido: propReal?.frete_escolhido || null,
                     observacoes: `Proposta #${key} -- Vibecode`,
                     criado_por: null,
                     created_at: p.created_at,
@@ -15070,20 +15071,28 @@ function renderOrdens() {
                     ? modelosGlobais.reduce((acc, m) => acc + (m.quantidade || 0), 0)
                     : osItensList.reduce((acc, item) => acc + (parseInt(item.quantidade || item.qtd || 0)), 0);
 
-                // Frete (forma de envio)
-                const freteRaw = (state.freteMap && state.freteMap[os.numero]) || 'Retirada Local';
+                // Frete (forma de envio) — lido direto do campo frete_escolhido da proposta
+                const freteRaw = (os.frete_escolhido || '').trim() || 'Retirada Local';
+                // Normalizar: comparação case-insensitive
+                const freteNorm = freteRaw.toUpperCase();
                 const FRETE_IMGS = {
-                    'Sedex':                    'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293785_Sedex.png',
-                    'Transportadora S\u00e3o Miguel': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293565_Sao-Miguel.png',
-                    'Motoboy':                  'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293109_Motoboy.png',
-                    'Retirada Local':           'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
-                    'Retirar':                  'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
+                    'SEDEX':                     'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293785_Sedex.png',
+                    'TRANSPORTADORA S\u00c3O MIGUEL': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293565_Sao-Miguel.png',
+                    'MOTOBOY':                   'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293109_Motoboy.png',
+                    'RETIRADA LOCAL':             'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
+                    'RETIRAR':                   'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
+                    'RETIRADA':                  'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
                 };
-                const freteImgUrl = FRETE_IMGS[freteRaw];
+                // Busca por correspondência parcial também (ex: "SAO MIGUEL" ↔ "TRANSPORTADORA SÃO MIGUEL")
+                let freteImgUrl = FRETE_IMGS[freteNorm];
+                if (!freteImgUrl) {
+                    const key = Object.keys(FRETE_IMGS).find(k => freteNorm.includes(k) || k.includes(freteNorm));
+                    if (key) freteImgUrl = FRETE_IMGS[key];
+                }
                 const freteHtml = freteImgUrl
                     ? `<img src="${freteImgUrl}" alt="${freteRaw}" title="${freteRaw}" style="height:28px; max-width:80px; object-fit:contain; display:block; margin:0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='';">
                        <span style="display:none; font-size:0.78rem; color:var(--text-dim);">${freteRaw}</span>`
-                    : `<span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text); border:1px solid rgba(255,255,255,0.1);">${freteRaw}</span>`;
+                    : `<span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text); border:1px solid rgba(255,255,255,0.1); font-size:0.75rem;">${freteRaw}</span>`;
 
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
                 let nomeEventoHtml = '';
