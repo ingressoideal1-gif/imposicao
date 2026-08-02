@@ -18940,41 +18940,95 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             if (!overrides[cacheKey]) overrides[cacheKey] = {};
             Object.assign(overrides[cacheKey], dataToUpdate);
             localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
-        } else {
-            let updatedCount = 0;
-            if (modeloId && modeloId !== '') {
-                const queryModeloId = (!isNaN(parseInt(modeloId)) && !String(modeloId).includes('vibe')) ? parseInt(modeloId) : modeloId;
-                const { data: updateResult, error } = await vibeClient
-                    .from('pedidos_modelos')
-                    .update(dbData)
-                    .eq('id', queryModeloId)
-                    .select('id, id_produto_proposta_origem');
-                
-                if (error) {
-                    console.error('[SAVE] Erro pedidos_modelos por ID:', error.message, '| code:', error.code, '| dbData:', dbData);
-                } else if (updateResult && updateResult.length > 0) {
-                    updatedCount = updateResult.length;
-                    console.log('[SAVE] OK -> pedidos_modelos id=', queryModeloId, dbData);
-                }
-            }
+        let updatedCount = 0;
 
-            // Fallback: se update por ID de modelo não alterou nenhuma linha, tenta por id_int (número da OS)
-            if (updatedCount === 0 && osId) {
-                const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
-                const osNum = osObj ? parseInt(osObj.numero) : parseInt(String(osId).replace('vibe_', ''));
-                if (!isNaN(osNum)) {
-                    let query = vibeClient.from('pedidos_modelos').update(dbData).eq('id_int', osNum);
-                    if (itemLocal.nome_modelo || itemLocal.produto) {
-                        query = query.eq('nome_modelo', itemLocal.nome_modelo || itemLocal.produto);
-                    }
-                    const { data: retryRes, error: retryErr } = await query.select('id');
-                    if (!retryErr && retryRes && retryRes.length > 0) {
-                        console.log('[SAVE] Fallback OK -> pedidos_modelos por id_int=', osNum, dbData);
-                        itemLocal._pedidoModeloId = retryRes[0].id;
-                    } else if (retryErr) {
-                        console.error('[SAVE] Erro fallback pedidos_modelos:', retryErr.message);
-                    }
-                }
+        // A) Tentar update por _pedidoModeloId ou ID do item
+        if (modeloId && modeloId !== '') {
+            const queryModeloId = (!isNaN(parseInt(modeloId)) && !String(modeloId).includes('vibe')) ? parseInt(modeloId) : modeloId;
+            const { data: updateResult, error } = await vibeClient
+                .from('pedidos_modelos')
+                .update(dbData)
+                .eq('id', queryModeloId)
+                .select('id');
+
+            if (!error && updateResult && updateResult.length > 0) {
+                updatedCount = updateResult.length;
+                console.log('[SAVE] OK por ID -> pedidos_modelos id=', queryModeloId, dbData);
+            } else if (error) {
+                console.error('[SAVE] Erro pedidos_modelos por ID:', error.message);
+            }
+        }
+
+        // B) Tentar update por id_produto_proposta_origem
+        if (updatedCount === 0 && itemId && !isNaN(parseInt(itemId))) {
+            const propOrigemId = parseInt(itemId);
+            const { data: res, error: err } = await vibeClient
+                .from('pedidos_modelos')
+                .update(dbData)
+                .eq('id_produto_proposta_origem', propOrigemId)
+                .select('id');
+            if (!err && res && res.length > 0) {
+                updatedCount = res.length;
+                itemLocal._pedidoModeloId = res[0].id;
+                console.log('[SAVE] OK por id_produto_proposta_origem=', propOrigemId, dbData);
+            }
+        }
+
+        // C) Tentar update por id_int (número da OS) + ordem
+        const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+        const osNum = osObj ? parseInt(osObj.numero) : parseInt(String(osId).replace('vibe_', ''));
+
+        if (updatedCount === 0 && !isNaN(osNum)) {
+            const itemOrdem = itemLocal ? (itemLocal.ordem || 1) : 1;
+            const { data: res, error: err } = await vibeClient
+                .from('pedidos_modelos')
+                .update(dbData)
+                .eq('id_int', osNum)
+                .eq('ordem', itemOrdem)
+                .select('id');
+            if (!err && res && res.length > 0) {
+                updatedCount = res.length;
+                itemLocal._pedidoModeloId = res[0].id;
+                console.log('[SAVE] OK por id_int + ordem=', osNum, itemOrdem, dbData);
+            }
+        }
+
+        // D) Tentar update por id_int (qualquer linha da OS)
+        if (updatedCount === 0 && !isNaN(osNum)) {
+            const { data: res, error: err } = await vibeClient
+                .from('pedidos_modelos')
+                .update(dbData)
+                .eq('id_int', osNum)
+                .select('id');
+            if (!err && res && res.length > 0) {
+                updatedCount = res.length;
+                itemLocal._pedidoModeloId = res[0].id;
+                console.log('[SAVE] OK por id_int=', osNum, dbData);
+            }
+        }
+
+        // E) Se NENHUMA linha existia em pedidos_modelos, AUTO-CRIAR (INSERT) a linha agora!
+        if (updatedCount === 0 && !isNaN(osNum)) {
+            const insertPayload = {
+                id_int: osNum,
+                id_produto_proposta_origem: (!isNaN(parseInt(itemId))) ? parseInt(itemId) : null,
+                nome_modelo: itemLocal ? (itemLocal.nome_modelo || itemLocal.produto || 'Modelo') : 'Modelo',
+                quantidade: itemLocal ? (itemLocal.qtd || itemLocal.quantidade || 0) : 0,
+                ordem: itemLocal ? (itemLocal.ordem || 1) : 1,
+                status_arte: 'PENDENTE',
+                status_producao: 'PENDENTE',
+                ...dbData
+            };
+            const { data: insData, error: insErr } = await vibeClient
+                .from('pedidos_modelos')
+                .insert([insertPayload])
+                .select('id');
+            if (!insErr && insData && insData.length > 0) {
+                updatedCount = insData.length;
+                if (itemLocal) itemLocal._pedidoModeloId = insData[0].id;
+                console.log('[SAVE] INSERT OK em pedidos_modelos id=', insData[0].id, insertPayload);
+            } else if (insErr) {
+                console.error('[SAVE] Erro INSERT em pedidos_modelos:', insErr.message);
             }
         }
 
