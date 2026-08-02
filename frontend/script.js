@@ -18925,6 +18925,8 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         delete dbData.url_arquivo;
         delete dbData.url_arquivo_arte_verso;
         delete dbData.verso_url_arquivo;
+        delete dbData.arte_json;
+        delete dbData.verso_arte_json;
 
         // Se não sobrou nenhum campo para atualizar, evita fazer a requisição
         if (Object.keys(dbData).length === 0) {
@@ -19040,18 +19042,8 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         if ('amostra_num_id' in dataToUpdate) propData.amostra_num_id = dataToUpdate.amostra_num_id;
         if ('arte_url' in dataToUpdate) {
             propData.arte_url = dataToUpdate.arte_url;
-            propData.url_arquivo = dataToUpdate.arte_url;
-            propData.url_arquivo_arte = dataToUpdate.arte_url;
-        }
-        if ('verso_arte_url' in dataToUpdate) {
-            propData.verso_arte_url = dataToUpdate.verso_arte_url;
-            propData.verso_url_arquivo = dataToUpdate.verso_arte_url;
-            propData.url_arquivo_arte_verso = dataToUpdate.verso_arte_url;
         }
         if ('amostra_arte_base64' in dataToUpdate) propData.amostra_arte_base64 = dataToUpdate.amostra_arte_base64;
-        if ('verso_amostra_arte_base64' in dataToUpdate) propData.verso_amostra_arte_base64 = dataToUpdate.verso_amostra_arte_base64;
-        if ('arte_json' in dataToUpdate) propData.arte_json = dataToUpdate.arte_json;
-        if ('verso_arte_json' in dataToUpdate) propData.verso_arte_json = dataToUpdate.verso_arte_json;
 
         const valCor = dataToUpdate.padrao || dataToUpdate.cor;
         if (valCor) {
