@@ -18907,16 +18907,6 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             dbData.observacao_arte = dbData.amostra_obs;
         }
 
-        // Garantir sincronia de colunas de arte (arte_url ↔ url_arquivo_arte ↔ url_arquivo)
-        if (dbData.arte_url) {
-            dbData.url_arquivo_arte = dbData.arte_url;
-            dbData.url_arquivo = dbData.arte_url;
-        }
-        if (dbData.verso_arte_url) {
-            dbData.url_arquivo_arte_verso = dbData.verso_arte_url;
-            dbData.verso_url_arquivo = dbData.verso_arte_url;
-        }
-
         // Garantir que padrao e gabarito_operacional estão preenchidos para pedidos_modelos
         if (!dbData.padrao && dbData.cor) {
             dbData.padrao = dbData.cor;
@@ -18925,12 +18915,16 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             dbData.gabarito_operacional = dbData.numeracao || dbData.tipo_numeracao;
         }
 
-        // Remover campos virtuais (frontend-only) que não são colunas da tabela pedidos_modelos
+        // Remover campos virtuais ou não existentes na tabela pedidos_modelos
         delete dbData.amostra_obs;
         delete dbData.amostra_status;
         delete dbData.cor;
         delete dbData.numeracao;
         delete dbData.tipo_numeracao;
+        delete dbData.url_arquivo_arte;
+        delete dbData.url_arquivo;
+        delete dbData.url_arquivo_arte_verso;
+        delete dbData.verso_url_arquivo;
 
         // Se não sobrou nenhum campo para atualizar, evita fazer a requisição
         if (Object.keys(dbData).length === 0) {
@@ -18946,18 +18940,41 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             if (!overrides[cacheKey]) overrides[cacheKey] = {};
             Object.assign(overrides[cacheKey], dataToUpdate);
             localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
-        } else if (modeloId && modeloId !== '') {
-            const queryModeloId = (!isNaN(parseInt(modeloId)) && !String(modeloId).includes('vibe')) ? parseInt(modeloId) : modeloId;
-            const { data: updateResult, error } = await vibeClient
-                .from('pedidos_modelos')
-                .update(dbData)
-                .eq('id', queryModeloId)
-                .select('id, id_produto_proposta_origem');
-            
-            if (error) {
-                console.error('[SAVE] Erro pedidos_modelos:', error.message, '| code:', error.code, '| dbData:', dbData);
-            } else {
-                console.log('[SAVE] OK -> pedidos_modelos id=', queryModeloId, dbData);
+        } else {
+            let updatedCount = 0;
+            if (modeloId && modeloId !== '') {
+                const queryModeloId = (!isNaN(parseInt(modeloId)) && !String(modeloId).includes('vibe')) ? parseInt(modeloId) : modeloId;
+                const { data: updateResult, error } = await vibeClient
+                    .from('pedidos_modelos')
+                    .update(dbData)
+                    .eq('id', queryModeloId)
+                    .select('id, id_produto_proposta_origem');
+                
+                if (error) {
+                    console.error('[SAVE] Erro pedidos_modelos por ID:', error.message, '| code:', error.code, '| dbData:', dbData);
+                } else if (updateResult && updateResult.length > 0) {
+                    updatedCount = updateResult.length;
+                    console.log('[SAVE] OK -> pedidos_modelos id=', queryModeloId, dbData);
+                }
+            }
+
+            // Fallback: se update por ID de modelo não alterou nenhuma linha, tenta por id_int (número da OS)
+            if (updatedCount === 0 && osId) {
+                const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+                const osNum = osObj ? parseInt(osObj.numero) : parseInt(String(osId).replace('vibe_', ''));
+                if (!isNaN(osNum)) {
+                    let query = vibeClient.from('pedidos_modelos').update(dbData).eq('id_int', osNum);
+                    if (itemLocal.nome_modelo || itemLocal.produto) {
+                        query = query.eq('nome_modelo', itemLocal.nome_modelo || itemLocal.produto);
+                    }
+                    const { data: retryRes, error: retryErr } = await query.select('id');
+                    if (!retryErr && retryRes && retryRes.length > 0) {
+                        console.log('[SAVE] Fallback OK -> pedidos_modelos por id_int=', osNum, dbData);
+                        itemLocal._pedidoModeloId = retryRes[0].id;
+                    } else if (retryErr) {
+                        console.error('[SAVE] Erro fallback pedidos_modelos:', retryErr.message);
+                    }
+                }
             }
         }
 
