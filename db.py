@@ -964,16 +964,26 @@ def delete_mapa_teatro(mapa_id: str):
         _save_db(db)
 
 def get_catalogo_fontes() -> list:
-    """Retorna lista de fontes do catálogo centralizado."""
+    """Retorna lista de fontes do catálogo centralizado, mesclando Supabase e local."""
+    supa_fonts = []
     if IS_SUPABASE_ACTIVE:
         try:
             res = _supabase_request("GET", "catalogo_fontes?order=nome.asc") or []
             if res:
-                return res
+                supa_fonts = res
         except Exception as e:
             print(f"[db] Erro ao carregar catalogo_fontes no Supabase: {e}")
+            
     db = _get_db()
-    return db.get("catalogo_fontes", [])
+    local_fonts = db.get("catalogo_fontes", [])
+    
+    # Mesclar mantendo Supabase como prioridade em caso de conflito de ID
+    merged = { f.get("id"): f for f in local_fonts if f.get("id") }
+    for f in supa_fonts:
+        if f.get("id"):
+            merged[f.get("id")] = f
+            
+    return list(merged.values())
 
 def save_catalogo_fonte(fonte_data: dict) -> dict:
     """Salva ou atualiza uma fonte no catálogo centralizado."""
