@@ -15301,11 +15301,16 @@ function renderOrdens() {
                                 const isAprovada = stUp === 'APROVADA' || stUp === 'APROVADO' || stUp === 'APROVADA_CLIENTE' || stUp === 'LIBERADA' || stUp === 'ARTE_APROVADA' || stUp === 'ARTE APROVADA';
                                 const isArtePronta = st === 'Arte Pronta' || st === 'Enviar Arte' || st === 'Enviar ARTE';
                                 const isAguardando = st === 'Aguard. Aprovação' || stUp === 'AGUARDANDO_APROVACAO';
+                                const isAlterado = stUp === 'EM ALTERAÇÃO' || stUp === 'EM ALTERACAO' || st === 'Em Alteração';
 
-                                // 1) Link de aprovação (Arte Pronta, Enviar Arte, Aguard. Aprovação, ou quando Entrega foi Alterada/Corrigir)
+                                // 1) Botão de link
                                 if (isArtePronta) {
+                                    // Arte pronta para envio: Gerar (1ª vez) ou Reenviar (se já tem link)
                                     const labelLink = linkSalvo ? '🔗 Enviar Link' : '🔗 Gerar Link';
                                     btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;cursor:pointer;">${labelLink}</button>`);
+                                } else if (isAlterado) {
+                                    // Arte alterada/corrigida: sempre mostrar opção de reenviar com nova imagem
+                                    btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);border-radius:6px;cursor:pointer;" title="Regenerar imagem e reenviar link com arte corrigida">⚠️ Reenviar Link</button>`);
                                 } else if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
                                         <button onclick="abrirLinkClienteEAtualizarStatus('${os.id}', '${os.numero}', '${linkSalvo}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir Link">🔗</button>
@@ -19808,8 +19813,9 @@ function snapshotAmostraSync(idx, osId, item, canvas, face) {
 // Força a regeneração de TODOS os snapshots de uma OS usando canvas offscreen
 // Garante que a imagem do link do cliente seja idêntica à janela combinada do editor
 async function forceRegenerateSnapshots(osId) {
-    // Garantir que os itens da OS estão carregados
-    if ((!state.osItens[osId] || !state.osItens[osId].length) && typeof loadOSItens === 'function') {
+    // Garantir que os itens da OS estão carregados —
+    // SEMPRE recarregar do banco para pegar a arte mais recente (após alterações)
+    if (typeof loadOSItens === 'function') {
         try {
             await loadOSItens(osId);
         } catch (e) {
