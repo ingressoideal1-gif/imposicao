@@ -32,7 +32,7 @@ $producaoFile = "frontend\producao.html"
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."
 git add -A
-git commit -m "feat: load all fonts and fix frontend list empty bug (v$nextV)"
+git commit -m "fix: resolve javascript syntax error that broke menus (v$nextV)"
 git push origin main
 
 # 4. Vercel deploy

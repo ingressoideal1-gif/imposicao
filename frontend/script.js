@@ -420,11 +420,6 @@ function createFontPicker(elId, currentValue, onChange) {
         const fam   = css.replace(/^(bold |italic )*/, '');
         return `<span class="fp-preview" style="font-family:${fam}">${label}</span><span class="fp-arrow">▾</span>`;
     };
-        const label = getLabelForValue(v);
-        const css   = getFontCSS(v);
-        const fam   = css.replace(/^(bold |italic )*/, '');
-        return `<span class="fp-preview" style="font-family:${fam}">${label}</span><span class="fp-arrow">▾</span>`;
-    };
 
     wrap.innerHTML = `
         <button type="button" class="font-picker-trigger" id="fpt-${elId}">
