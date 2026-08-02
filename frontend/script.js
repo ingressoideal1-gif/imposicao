@@ -260,6 +260,16 @@ async function loadCatalogoFontes() {
             }
             styleEl.textContent = cssText;
             console.log(`[Fonts] Catálogo de fontes web carregado: ${state_fonts.catalogo.length} fonte(s)`);
+            
+            // Atualiza a tabela na UI caso esteja renderizada
+            if (typeof renderCatFontesUI === 'function') {
+                renderCatFontesUI();
+            }
+            // Atualiza o badge no menu lateral
+            const badge = document.getElementById('badge-fontes');
+            if (badge) {
+                badge.textContent = state_fonts.catalogo.length;
+            }
         }
     } catch (e) {
         console.warn('[Fonts] Não foi possível carregar o catálogo de fontes web:', e);
@@ -384,103 +394,8 @@ async function deletarFonteWeb(id) {
     }
 }
 window.deletarFonteWeb = deletarFonteWeb;
-// Fontes Base-14 embutidas no PDF (sem necessidade de arquivo externo)
-const BUILTIN_FONTS = [
-    { family: 'Sans-Serif (Helvetica)', fullName: 'helv',      style: 'Regular' },
-    { family: 'Sans-Serif Bold',        fullName: 'helv-bold', style: 'Bold' },
-    { family: 'Serif (Times)',           fullName: 'times',     style: 'Regular' },
-    { family: 'Serif Bold',             fullName: 'times-bold', style: 'Bold' },
-    { family: 'Mono (Courier)',          fullName: 'cour',      style: 'Regular' },
-    { family: 'Mono Bold',              fullName: 'cour-bold', style: 'Bold' },
-];
+// Fontes Base-14 embutidas no PDF foram removidas conforme regra do catálogo estrito
 
-// Carrega fontes do sistema via Local Font Access API (Chrome 103+).
-// forceRequest = true → ignora estado anterior e pede permissão novamente.
-async function loadSystemFonts(forceRequest = false) {
-    if (!state_fonts.catalogo || !state_fonts.catalogo.length) {
-        loadCatalogoFontes();
-    }
-    if (state_fonts.loading) return;
-    // Se já carregou da API real, não precisa recarregar (a menos que forçado)
-    if (state_fonts.loadedFromAPI && !forceRequest) return;
-    state_fonts.loading = true;
-    state_fonts.permissionDenied = false;
-
-    try {
-        if ('queryLocalFonts' in window) {
-            // Esta chamada dispara o prompt de permissão do Chrome (requer gesto do usuário
-            // ou permissão prévia concedida). Lança NotAllowedError se negada.
-            const fonts = await window.queryLocalFonts();
-
-            // Deduplica por família + estilo normalizado
-            const seen = new Set();
-            const systemFonts = [];
-            for (const f of fonts) {
-                const key = `${f.family}|${f.style}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-
-                const isBold   = /bold/i.test(f.style);
-                const isItalic = /italic|oblique/i.test(f.style);
-                const tags = [isBold && 'bold', isItalic && 'italic'].filter(Boolean);
-                const value = `system:${f.family}${tags.length ? '|' + tags.join('|') : ''}`;
-                systemFonts.push({ family: f.family, fullName: value, style: f.style });
-            }
-
-            // Ordenar por família A→Z, depois por estilo
-            systemFonts.sort((a, b) => {
-                const fc = a.family.localeCompare(b.family);
-                return fc !== 0 ? fc : a.style.localeCompare(b.style);
-            });
-
-            state_fonts.system       = [...BUILTIN_FONTS, ...systemFonts];
-            state_fonts.loadedFromAPI = true;  // ✅ API real usada com sucesso
-            console.info(`[Fonts] ${systemFonts.length} fontes do sistema carregadas via API.`);
-        } else {
-            throw new Error('queryLocalFonts não disponível neste navegador');
-        }
-    } catch (e) {
-        if (e.name === 'NotAllowedError') {
-            state_fonts.permissionDenied = true;
-            console.warn('[Fonts] Permissão negada pelo usuário.');
-        } else {
-            console.info('[Fonts] queryLocalFonts indisponível. Usando lista curada.');
-        }
-
-        // Fallback: lista curada de fontes comuns Windows + Mac
-        if (!state_fonts.loadedFromAPI) {
-            const COMMON = [
-                'Arial', 'Arial Black', 'Arial Narrow', 'Arial Rounded MT Bold',
-                'Bahnschrift', 'Calibri', 'Calibri Light', 'Cambria', 'Candara',
-                'Century Gothic', 'Comic Sans MS', 'Consolas', 'Constantia', 'Corbel',
-                'Courier New', 'Ebrima', 'Franklin Gothic Medium', 'Gabriola', 'Gadugi',
-                'Garamond', 'Georgia', 'Impact', 'Ink Free', 'Javanese Text',
-                'Leelawadee UI', 'Lucida Console', 'Lucida Sans Unicode',
-                'Malgun Gothic', 'Marlett', 'Microsoft Sans Serif', 'Mongolian Baiti',
-                'MV Boli', 'Myanmar Text', 'Palatino Linotype', 'Segoe Print',
-                'Segoe Script', 'Segoe UI', 'Segoe UI Black', 'Segoe UI Historic',
-                'Segoe UI Emoji', 'Sylfaen', 'Symbol', 'Tahoma', 'Times New Roman',
-                'Trebuchet MS', 'Verdana', 'Webdings', 'Wingdings',
-                'Helvetica Neue', 'San Francisco', 'Apple Chancery', 'Futura',
-            ];
-            const fallback = COMMON.flatMap(f => [
-                { family: f, fullName: `system:${f}`,             style: 'Regular' },
-                { family: f, fullName: `system:${f}|bold`,        style: 'Bold' },
-                { family: f, fullName: `system:${f}|italic`,      style: 'Italic' },
-                { family: f, fullName: `system:${f}|bold|italic`, style: 'Bold Italic' },
-            ]);
-            state_fonts.system = [...BUILTIN_FONTS, ...fallback];
-        }
-    }
-
-    state_fonts.loaded  = true;
-    state_fonts.loading = false;
-}
-
-// ⚠️ NÃO pré-carregamos em background:
-// queryLocalFonts() sem gesto do usuário pode não mostrar o prompt de permissão
-// no Chrome, resultando em NotAllowedError silencioso e bloqueando futuras tentativas.
-// O carregamento é feito sob demanda ao abrir o font picker pela primeira vez.
 
 
 
@@ -495,21 +410,16 @@ function createFontPicker(elId, currentValue, onChange) {
     const BUILTIN_IDS = ['helv','helv-bold','times','times-bold','cour','cour-bold'];
 
     const getLabelForValue = (v) => {
-        if (!v || v === 'helv') return 'Sans-Serif (Helvetica)';
-        if (v === 'helv-bold') return 'Sans-Serif Bold';
-        if (v === 'times') return 'Serif (Times)';
-        if (v === 'times-bold') return 'Serif Bold';
-        if (v === 'cour') return 'Mono (Courier)';
-        if (v === 'cour-bold') return 'Mono Bold';
-        if (v.startsWith('system:')) {
-            const parts = v.slice(7).split('|');
-            const style = parts.slice(1).join(' ');
-            return parts[0] + (style ? ` -- ${style}` : '');
-        }
+        if (!v) return 'Selecione uma fonte...';
         return v;
     };
 
     const buildTriggerHTML = (v) => {
+        const label = getLabelForValue(v);
+        const css   = getFontCSS(v);
+        const fam   = css.replace(/^(bold |italic )*/, '');
+        return `<span class="fp-preview" style="font-family:${fam}">${label}</span><span class="fp-arrow">▾</span>`;
+    };
         const label = getLabelForValue(v);
         const css   = getFontCSS(v);
         const fam   = css.replace(/^(bold |italic )*/, '');
@@ -535,19 +445,11 @@ function createFontPicker(elId, currentValue, onChange) {
     const searchInput = wrap.querySelector(`#fps-${elId}`);
     const list        = wrap.querySelector(`#fpl-${elId}`);
 
-    let currentFont = currentValue || 'helv';
-    let allFonts    = [];
-
-    // Declarado antes de renderList (que o referencia), definido logo após.
-    let doReloadFonts;
+    let currentFont = currentValue || '';
 
     const renderList = (filter = '') => {
 
-        const q        = filter.toLowerCase().trim();
-        const builtins = allFonts.filter(f =>  BUILTIN_IDS.includes(f.fullName));
-        const system   = allFonts.filter(f => !BUILTIN_IDS.includes(f.fullName));
-        const match    = f => !q || f.family.toLowerCase().includes(q) || (f.style || '').toLowerCase().includes(q);
-
+        const q = filter.toLowerCase().trim();
         let html = '';
 
         // - Fontes do Catálogo Web (Gráfica) -
@@ -564,62 +466,14 @@ function createFontPicker(elId, currentValue, onChange) {
                         <span class="fp-style-tag" style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);">Oficial</span>
                     </div>`;
                 }
+            } else {
+                html = `<div class="font-picker-loading">Nenhuma fonte encontrada para "${filter}"</div>`;
             }
-        }
-
-        // - Fontes embutidas -
-        const bFiltered = builtins.filter(match);
-        if (bFiltered.length) {
-            html += `<div class="font-picker-group-label">Fontes Embutidas (PDF)</div>`;
-            for (const f of bFiltered) {
-                const sel = f.fullName === currentFont ? 'selected' : '';
-                const css = getFontCSS(f.fullName);
-                const fam = css.replace(/^(bold |italic )*/, '');
-                html += `<div class="font-picker-opt ${sel}" data-value="${f.fullName}">
-                    <span class="fp-sample" style="font-family:${fam};${css.includes('bold')?'font-weight:700;':''}${css.includes('italic')?'font-style:italic;':''}">AaBbCc 123</span>
-                    <span class="fp-name">${f.family}</span>
-                    <span class="fp-style-tag">${f.style || 'Regular'}</span>
-                </div>`;
-            }
-        }
-
-        // - Fontes do sistema -
-        const sFiltered = system.filter(match);
-        if (sFiltered.length) {
-            const apiLabel = ('queryLocalFonts' in window) ? `Fontes do PC (${sFiltered.length})` : `Fontes Comuns (${sFiltered.length})`;
-            html += `<div class="font-picker-group-label">${apiLabel}</div>`;
-            for (const f of sFiltered) {
-                const sel  = f.fullName === currentFont ? 'selected' : '';
-                const bld  = /bold/i.test(f.style)    ? 'font-weight:700;'   : '';
-                const itl  = /italic/i.test(f.style)  ? 'font-style:italic;' : '';
-                html += `<div class="font-picker-opt ${sel}" data-value="${f.fullName}">
-                    <span class="fp-sample" style="font-family:'${f.family}',sans-serif;${bld}${itl}">${f.family}</span>
-                    <span class="fp-style-tag">${f.style || 'Regular'}</span>
-                </div>`;
-            }
-        }
-
-        // - Botão para carregar/recarregar fontes do PC -
-        if ('queryLocalFonts' in window && !state_fonts.permissionDenied) {
-            const btnLabel = state_fonts.loadedFromAPI
-                ? '🔄 Recarregar fontes do PC'
-                : '🖥️ Carregar fontes instaladas no PC';
-            html += `<div class="fp-permission-row"><button class="fp-reload-btn" data-fp-reload="1">${btnLabel}</button></div>`;
-        } else if (!('queryLocalFonts' in window)) {
-            html += `<div class="fp-permission-row fp-tip">💡 Use o Chrome para acessar fontes instaladas no PC</div>`;
-        } else if (state_fonts.permissionDenied) {
-            html += `<div class="fp-permission-row fp-tip">⚠️ Permissão negada. Clique no ícone 🔒 na barra de endereço do Chrome e libere "Fontes locais".</div>`;
-        }
-
-        if (!bFiltered.length && !sFiltered.length) {
-            html = `<div class="font-picker-loading">Nenhuma fonte encontrada para "${filter}"</div>` + (html || '');
+        } else {
+            html = `<div class="font-picker-loading">Catálogo de fontes vazio. Cadastre em Configurações > Fontes.</div>`;
         }
 
         list.innerHTML = html;
-
-        // Bind do botão de reload (usa o closure doReloadFonts deste picker)
-        const reloadBtn = list.querySelector('[data-fp-reload]');
-        if (reloadBtn) reloadBtn.addEventListener('mousedown', e => { e.preventDefault(); doReloadFonts(); });
 
 
         list.querySelectorAll('.font-picker-opt').forEach(opt => {
@@ -637,32 +491,12 @@ function createFontPicker(elId, currentValue, onChange) {
         if (sel) sel.scrollIntoView({ block: 'nearest' });
     };
 
-    // Reload de fontes: closure por instância (não global sobrescrito)
-    // Isso garante que cada picker aponte para seu próprio `list` e `searchInput`.
-    doReloadFonts = async () => {
-        state_fonts.loadedFromAPI = false; // forçar nova tentativa com a API
-        list.innerHTML = `<div class="font-picker-loading">🔄 Solicitando acesso às fontes do PC...</div>`;
-        await loadSystemFonts(true);
-        allFonts = state_fonts.system;
-        renderList(searchInput.value);
-    };
-    // Expõe no elemento wrap para o onclick inline do botão encontrar o closure certo
-    wrap._reloadFonts = doReloadFonts;
-
     const openDropdown = async () => {
         trigger.classList.add('open');
         dropdown.classList.add('open');
         searchInput.value = '';
         searchInput.focus();
 
-        const needLoad = !state_fonts.loadedFromAPI && ('queryLocalFonts' in window) && !state_fonts.permissionDenied;
-        const firstTime = !state_fonts.loaded;
-
-        if (firstTime || needLoad) {
-            list.innerHTML = `<div class="font-picker-loading">🔄 Carregando fontes do PC...</div>`;
-            await loadSystemFonts();
-        }
-        allFonts = state_fonts.system;
         renderList('');
     };
 

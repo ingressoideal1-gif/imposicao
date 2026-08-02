@@ -540,74 +540,29 @@ class ImpositionEngine:
             else:
                 family = raw_font_name
                 fam_lower = family.lower()
-                is_bold = "bold" in fam_lower or el.get("font_weight") == "bold" or el.get("bold") is True
-                is_italic = "italic" in fam_lower or el.get("font_style") == "italic"
+            is_bold = el.get("font_weight") == "bold" or el.get("bold") is True
+            is_italic = el.get("font_style") == "italic"
 
-            if family.lower() in ("helv", "hebo", "cour", "times", "helvetica", "arial", "courier", "times new roman") and not el.get("_font_data"):
-                font_name = font_map.get(family.lower(), "hebo" if is_bold else "helv")
-                font_file = None
-            else:
-                font_name = family
-                font_file = None
+            font_name = font_map.get(raw_font_name, "hebo" if is_bold else "helv")
+            font_file = None
 
-                # 1. Tentar ler fonte embutida em Base64 se presente no elemento
-                if el.get("_font_data"):
-                    import base64, tempfile
+            # 1. Tentar ler fonte embutida em Base64 se presente no elemento
+            if el.get("_font_data"):
+                import base64, tempfile
+                try:
+                    font_bytes = base64.b64decode(el["_font_data"])
+                    tmp_font = tempfile.NamedTemporaryFile(delete=False, suffix=".ttf")
+                    tmp_font.write(font_bytes)
+                    tmp_font.close()
+                    font_file = tmp_font.name
+                except Exception as ex:
+                    print(f"[engine] Erro ao usar fonte embutida: {ex}")
+
+            # 2. Tentar baixar a fonte do Catálogo Web se URL fornecida
+            if not font_file:
+                font_url = el.get("arquivo_url") or el.get("font_url")
+                if font_url:
                     try:
-                        font_bytes = base64.b64decode(el["_font_data"])
-                        tmp_font = tempfile.NamedTemporaryFile(delete=False, suffix=".ttf")
-                        tmp_font.write(font_bytes)
-                        tmp_font.close()
-                        font_file = tmp_font.name
-                        print(f"[engine] Fonte embutida usada: '{family}' ({len(el['_font_data'])} chars b64)")
-                    except Exception as ex:
-                        print(f"[engine] Erro ao usar fonte embutida '{family}': {ex}")
-
-                # 2. Se não tinha _font_data, buscar recursivamente no sistema
-                if not font_file:
-                    import glob as _glob
-                    font_dirs = [
-                        "C:/Windows/Fonts",
-                        os.path.expanduser("~/AppData/Local/Microsoft/Windows/Fonts"),
-                        os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts"),
-                        "/usr/share/fonts",
-                        "/usr/local/share/fonts",
-                        "/System/Library/Fonts",
-                        os.path.expanduser("~/Library/Fonts"),
-                        "~/.fonts"
-                    ]
-                    family_clean = family.lower().replace(" ", "").replace("-", "").replace("_", "")
-                    found_file = None
-                    for fdir in font_dirs:
-                        expanded = os.path.expanduser(fdir)
-                        if not os.path.isdir(expanded):
-                            continue
-                        for ext in ("**/*.ttf", "**/*.otf", "**/*.TTF", "**/*.OTF"):
-                            for fpath in _glob.glob(os.path.join(expanded, ext), recursive=True):
-                                base = os.path.splitext(os.path.basename(fpath))[0].lower().replace(" ", "").replace("-", "").replace("_", "")
-                                bold_match = ("bold" in base) == is_bold
-                                italic_match = ("italic" in base or "oblique" in base) == is_italic
-                                if (base == family_clean or base.startswith(family_clean)) and bold_match and italic_match:
-                                    found_file = fpath
-                                    break
-                                if family_clean in base and not found_file:
-                                    if bold_match and italic_match:
-                                        found_file = fpath
-                            if found_file:
-                                break
-                        if found_file:
-                            break
-
-                    if found_file:
-                        font_name = family
-                        font_file = found_file
-                        _font_log_key = f"{family}|{found_file}"
-                        if _font_log_key not in _font_log_cache:
-                            _font_log_cache.add(_font_log_key)
-                            print(f"[engine] Fonte do sistema encontrada: '{family}' -> {found_file}")
-                    else:
-                        # 3. Tentar baixar a fonte do Catálogo Web se URL fornecida
-                        font_url = el.get("arquivo_url") or el.get("font_url")
                         if font_url:
                             try:
                                 import urllib.request, re

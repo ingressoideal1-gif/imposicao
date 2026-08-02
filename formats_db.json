@@ -165,6 +165,2534 @@
             "arquivo_url": "http://test.com",
             "ativo": true,
             "id": "00547833-07ff-464f-990e-2a6851784110"
+        },
+        {
+            "nome": "Roboto",
+            "font_family": "Roboto",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbVmUiA8.ttf",
+            "ativo": true,
+            "id": "ebe677de-a49e-4e7b-bd9d-33a4fefa428b"
+        },
+        {
+            "nome": "Open Sans",
+            "font_family": "Open Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVc.ttf",
+            "ativo": true,
+            "id": "f444086c-2492-45f8-bf5e-3073c5668ada"
+        },
+        {
+            "nome": "Lato",
+            "font_family": "Lato",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wWw.ttf",
+            "ativo": true,
+            "id": "142b7d24-39e4-4ee5-9038-30688b3d2713"
+        },
+        {
+            "nome": "Montserrat",
+            "font_family": "Montserrat",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aX8.ttf",
+            "ativo": true,
+            "id": "2000a736-0de9-4b2b-9b3d-0dfa0e75e94b"
+        },
+        {
+            "nome": "Poppins",
+            "font_family": "Poppins",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrJJfedw.ttf",
+            "ativo": true,
+            "id": "6a55b722-6148-46a2-9f84-71e02e99d7df"
+        },
+        {
+            "nome": "Inter",
+            "font_family": "Inter",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hjQ.ttf",
+            "ativo": true,
+            "id": "60c88035-0a50-4c43-917a-f7da3eb67743"
+        },
+        {
+            "nome": "Oswald",
+            "font_family": "Oswald",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUZiYA.ttf",
+            "ativo": true,
+            "id": "1a467d29-6235-4858-b0c8-fc11b5480855"
+        },
+        {
+            "nome": "Raleway",
+            "font_family": "Raleway",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf",
+            "ativo": true,
+            "id": "1a0288d4-7d63-4358-8768-ad811b8f46e6"
+        },
+        {
+            "nome": "Noto Sans",
+            "font_family": "Noto Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/notosans/v42/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf",
+            "ativo": true,
+            "id": "c2c74813-fa60-4475-a5c9-d48726ef83b3"
+        },
+        {
+            "nome": "Ubuntu",
+            "font_family": "Ubuntu",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/ubuntu/v21/4iCs6KVjbNBYlgoKfw7z.ttf",
+            "ativo": true,
+            "id": "ed78b361-cbdf-4725-94ac-c66f511f04c1"
+        },
+        {
+            "nome": "Playfair Display",
+            "font_family": "Playfair Display",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdFvXDXbtY.ttf",
+            "ativo": true,
+            "id": "4159a37e-271f-45b2-b072-8a7f4ccac4a7"
+        },
+        {
+            "nome": "Merriweather",
+            "font_family": "Merriweather",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDr3icaFF3w.ttf",
+            "ativo": true,
+            "id": "fab2af96-b28a-4a6f-8a04-9387c360b616"
+        },
+        {
+            "nome": "Roboto Mono",
+            "font_family": "Roboto Mono",
+            "categoria": "Monospace",
+            "arquivo_url": "https://fonts.gstatic.com/s/robotomono/v31/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW9.ttf",
+            "ativo": true,
+            "id": "5b11d2d1-d9f8-4894-a406-d70bec820c44"
+        },
+        {
+            "nome": "PT Sans",
+            "font_family": "PT Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/ptsans/v18/jizaRExUiTo99u79D0KEwA.ttf",
+            "ativo": true,
+            "id": "3bbedd1c-c52a-4f65-811d-e60d91338589"
+        },
+        {
+            "nome": "Rubik",
+            "font_family": "Rubik",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/rubik/v31/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-B4iFV0Uw.ttf",
+            "ativo": true,
+            "id": "9198a622-7eb7-45be-af64-0becf0031335"
+        },
+        {
+            "nome": "Lora",
+            "font_family": "Lora",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/lora/v37/0QI6MX1D_JOuGQbT0gvTJPa787weuxJBkqg.ttf",
+            "ativo": true,
+            "id": "b1880f1d-f47f-41e1-b3d7-ccdc1856c8ca"
+        },
+        {
+            "nome": "Work Sans",
+            "font_family": "Work Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/worksans/v24/QGY_z_wNahGAdqQ43RhVcIgYT2Xz5u32K0nXBi8Jow.ttf",
+            "ativo": true,
+            "id": "6a5c655a-1d2a-4b71-b2e8-37683e7ee4d7"
+        },
+        {
+            "nome": "Fira Sans",
+            "font_family": "Fira Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/firasans/v18/va9E4kDNxMZdWfMOD5Vvl4jO.ttf",
+            "ativo": true,
+            "id": "e6955da5-dac3-4851-bb3d-5eb09aff466a"
+        },
+        {
+            "nome": "Mulish",
+            "font_family": "Mulish",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/mulish/v18/1Ptyg83HX_SGhgqO0yLcmjzUAuWexZNR8aevHg.ttf",
+            "ativo": true,
+            "id": "8044d07e-b87b-4ed8-95d1-167844f507e8"
+        },
+        {
+            "nome": "Quicksand",
+            "font_family": "Quicksand",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/quicksand/v37/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58a-xw.ttf",
+            "ativo": true,
+            "id": "77bc8469-6bf4-45e0-9ede-2dd73dce9e48"
+        },
+        {
+            "nome": "Inconsolata",
+            "font_family": "Inconsolata",
+            "categoria": "Monospace",
+            "arquivo_url": "https://fonts.gstatic.com/s/inconsolata/v37/QldgNThLqRwH-OJ1UHjlKENVzkWGVkL3GZQmAwLYxYWI2qfdm7Lpp4U8WR32kg.ttf",
+            "ativo": true,
+            "id": "841546c3-204d-4816-a401-886ab1f65172"
+        },
+        {
+            "nome": "Barlow",
+            "font_family": "Barlow",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/barlow/v13/7cHpv4kjgoGqM7E_DMs8.ttf",
+            "ativo": true,
+            "id": "553ef931-36b7-478e-a47d-99c619255be2"
+        },
+        {
+            "nome": "Nunito",
+            "font_family": "Nunito",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshdTQ3ig.ttf",
+            "ativo": true,
+            "id": "66527398-e449-41a2-a734-01a091675eab"
+        },
+        {
+            "nome": "Titillium Web",
+            "font_family": "Titillium Web",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/titilliumweb/v19/NaPecZTIAOhVxoMyOr9n_E7fdMPmCA.ttf",
+            "ativo": true,
+            "id": "8888a316-d7c6-4015-b150-cab6e149af2f"
+        },
+        {
+            "nome": "Heebo",
+            "font_family": "Heebo",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/heebo/v28/NGSpv5_NC0k9P_v6ZUCbLRAHxK1EiSysdUmj.ttf",
+            "ativo": true,
+            "id": "f1119a74-97d2-4e54-94c1-44a14da99d7d"
+        },
+        {
+            "nome": "Josefin Sans",
+            "font_family": "Josefin Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/josefinsans/v34/Qw3PZQNVED7rKGKxtqIqX5E-AVSJrOCfjY46_DjQbMZhKg.ttf",
+            "ativo": true,
+            "id": "2480275a-59d6-42b7-b3bb-24a64f38aed2"
+        },
+        {
+            "nome": "Cabin",
+            "font_family": "Cabin",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/cabin/v35/u-4X0qWljRw-PfU81xCKCpdpbgZJl6XFpfEd7eA9BIxxkV2EH7alwg.ttf",
+            "ativo": true,
+            "id": "8fb4d25c-dfce-4c82-a3a3-e6983607ad7e"
+        },
+        {
+            "nome": "Libre Baskerville",
+            "font_family": "Libre Baskerville",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/librebaskerville/v24/kmKUZrc3Hgbbcjq75U4uslyuy4kn0olVQ-LglH6T17uj8Q4iDgNK.ttf",
+            "ativo": true,
+            "id": "640eed70-6f34-4b22-acb4-515629298725"
+        },
+        {
+            "nome": "Anton",
+            "font_family": "Anton",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/anton/v27/1Ptgg87LROyAm3Kz-Co.ttf",
+            "ativo": true,
+            "id": "4c8dbc1f-207c-4a69-a1a3-30cfda454de3"
+        },
+        {
+            "nome": "Bitter",
+            "font_family": "Bitter",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/bitter/v42/raxhHiqOu8IVPmnRc6SY1KXhnF_Y8fbfOLjOWA.ttf",
+            "ativo": true,
+            "id": "d77d1a5a-45dc-4684-9d59-cf316fd79843"
+        },
+        {
+            "nome": "Pacifico",
+            "font_family": "Pacifico",
+            "categoria": "Handwriting",
+            "arquivo_url": "https://fonts.gstatic.com/s/pacifico/v23/FwZY7-Qmy14u9lezJ-6H6Mw.ttf",
+            "ativo": true,
+            "id": "98d6c339-0d03-4097-aa17-a073f9bc9eca"
+        },
+        {
+            "nome": "Dancing Script",
+            "font_family": "Dancing Script",
+            "categoria": "Handwriting",
+            "arquivo_url": "https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3Sup5.ttf",
+            "ativo": true,
+            "id": "1bbf9da1-a371-42b6-8f4e-0bbe5b6fba44"
+        },
+        {
+            "nome": "Dosis",
+            "font_family": "Dosis",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/dosis/v34/HhyJU5sn9vOmLxNkIwRSjTVNWLEJN7Ml2xMB.ttf",
+            "ativo": true,
+            "id": "0712e197-bde3-4a1e-9532-068a92064e6b"
+        },
+        {
+            "nome": "Varela Round",
+            "font_family": "Varela Round",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/varelaround/v21/w8gdH283Tvk__Lua32TysjIfp8uK.ttf",
+            "ativo": true,
+            "id": "bbdef9ed-28ed-4890-bf95-c1f5e7a41762"
+        },
+        {
+            "nome": "Arimo",
+            "font_family": "Arimo",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/arimo/v36/P5sfzZCDf9_T_3cV7NCUECyoxNk37cxcABrE.ttf",
+            "ativo": true,
+            "id": "4f65f219-2490-411e-992c-e5d326e3166e"
+        },
+        {
+            "nome": "Asap",
+            "font_family": "Asap",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/asap/v34/KFOOCniXp96a4Tc2DaTeuDAoKsE617JFc49knOIYdjTYkqUcKWmT.ttf",
+            "ativo": true,
+            "id": "a890addb-4045-4651-bbf7-fe13e0ec53cd"
+        },
+        {
+            "nome": "Oxygen",
+            "font_family": "Oxygen",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/oxygen/v16/2sDfZG1Wl4LcnbuKjk0j.ttf",
+            "ativo": true,
+            "id": "b2665562-7d78-4fd6-91d4-38926ffc63c4"
+        },
+        {
+            "nome": "Mukta",
+            "font_family": "Mukta",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/mukta/v17/iJWKBXyXfDDVXbnBrXk.ttf",
+            "ativo": true,
+            "id": "4e2c1dbd-0ce1-454a-81a1-99e9b3daed12"
+        },
+        {
+            "nome": "Fjalla One",
+            "font_family": "Fjalla One",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/fjallaone/v16/Yq6R-LCAWCX3-6Ky7FAFrOF6lw.ttf",
+            "ativo": true,
+            "id": "f2c04993-d457-4803-bdd0-4bcf8fdc8ade"
+        },
+        {
+            "nome": "Bebas Neue",
+            "font_family": "Bebas Neue",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/bebasneue/v16/JTUSjIg69CK48gW7PXoo9Wlhzg.ttf",
+            "ativo": true,
+            "id": "b8ac9b92-acde-4772-ae11-03b9c7a543db"
+        },
+        {
+            "nome": "Exo 2",
+            "font_family": "Exo 2",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/exo2/v26/7cH1v4okm5zmbvwkAx_sfcEuiD8jvvKsOdC6.ttf",
+            "ativo": true,
+            "id": "afb1585e-eb30-406d-82ef-fe5109cfd401"
+        },
+        {
+            "nome": "Righteous",
+            "font_family": "Righteous",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/righteous/v18/1cXxaUPXBpj2rGoU7C9WiHGA.ttf",
+            "ativo": true,
+            "id": "03eebe99-2f60-4d50-a7a5-1af578ea47e8"
+        },
+        {
+            "nome": "Comfortaa",
+            "font_family": "Comfortaa",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/comfortaa/v47/1Pt_g8LJRfWJmhDAuUsSQamb1W0lwk4S4WjMDrMfJQ.ttf",
+            "ativo": true,
+            "id": "7612f530-1494-45d0-9023-4a6b92f7a812"
+        },
+        {
+            "nome": "Lobster",
+            "font_family": "Lobster",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/lobster/v32/neILzCirqoswsqX9zoKmNg.ttf",
+            "ativo": true,
+            "id": "c54c551f-eca7-4af1-af33-ed04bbfb199f"
+        },
+        {
+            "nome": "Abril Fatface",
+            "font_family": "Abril Fatface",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/abrilfatface/v25/zOL64pLDlL1D99S8g8PtiKchq-dmiA.ttf",
+            "ativo": true,
+            "id": "ecaccbdd-c4cb-4f0c-a035-577aee43f6e0"
+        },
+        {
+            "nome": "Bungee",
+            "font_family": "Bungee",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/bungee/v17/N0bU2SZBIuF2PU_0DXRw.ttf",
+            "ativo": true,
+            "id": "956ea3b9-03f8-4925-abbe-450da04286cc"
+        },
+        {
+            "nome": "Alfa Slab One",
+            "font_family": "Alfa Slab One",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/alfaslabone/v21/6NUQ8FmMKwSEKjnm5-4v-4Jh2dJhfg.ttf",
+            "ativo": true,
+            "id": "d35ef855-c0ce-46d2-9cce-52a601cdb459"
+        },
+        {
+            "nome": "Roboto",
+            "font_family": "Roboto",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbVmUiA8.ttf",
+            "ativo": true,
+            "id": "b019c406-31b0-458b-aa33-8139d8cf4d8c"
+        },
+        {
+            "nome": "Open Sans",
+            "font_family": "Open Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVc.ttf",
+            "ativo": true,
+            "id": "bfcc84b5-7096-4b2f-a8d2-3e776fd07ae1"
+        },
+        {
+            "nome": "Lato",
+            "font_family": "Lato",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wWw.ttf",
+            "ativo": true,
+            "id": "8c73c738-36ec-41f2-a2dd-ab6dbc0a82e1"
+        },
+        {
+            "nome": "Montserrat",
+            "font_family": "Montserrat",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aX8.ttf",
+            "ativo": true,
+            "id": "fa451dc5-7300-4ccb-9cc0-9208a8825eed"
+        },
+        {
+            "nome": "Poppins",
+            "font_family": "Poppins",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrJJfedw.ttf",
+            "ativo": true,
+            "id": "99b07fb7-b750-4656-9aba-80689f4f7357"
+        },
+        {
+            "nome": "Inter",
+            "font_family": "Inter",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hjQ.ttf",
+            "ativo": true,
+            "id": "e539fd76-96f4-46d4-b61f-77e323c989e5"
+        },
+        {
+            "nome": "Oswald",
+            "font_family": "Oswald",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUZiYA.ttf",
+            "ativo": true,
+            "id": "3bd278d5-3bc2-4731-9263-64c48a8136ec"
+        },
+        {
+            "nome": "Raleway",
+            "font_family": "Raleway",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf",
+            "ativo": true,
+            "id": "73caad51-5b28-4977-b089-bd2bcaadeca6"
+        },
+        {
+            "nome": "Noto Sans",
+            "font_family": "Noto Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/notosans/v42/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf",
+            "ativo": true,
+            "id": "457b333a-fded-4c17-a556-150c4d728d33"
+        },
+        {
+            "nome": "Ubuntu",
+            "font_family": "Ubuntu",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/ubuntu/v21/4iCs6KVjbNBYlgoKfw7z.ttf",
+            "ativo": true,
+            "id": "2c112bbb-e3f9-4523-9572-9d9efdcacf67"
+        },
+        {
+            "nome": "Playfair Display",
+            "font_family": "Playfair Display",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdFvXDXbtY.ttf",
+            "ativo": true,
+            "id": "2659eada-99c8-4c97-9534-b3897f917995"
+        },
+        {
+            "nome": "Merriweather",
+            "font_family": "Merriweather",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDr3icaFF3w.ttf",
+            "ativo": true,
+            "id": "43f8ac25-b238-4b95-874b-1d97d5cb5589"
+        },
+        {
+            "nome": "Roboto Mono",
+            "font_family": "Roboto Mono",
+            "categoria": "Monospace",
+            "arquivo_url": "https://fonts.gstatic.com/s/robotomono/v31/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW9.ttf",
+            "ativo": true,
+            "id": "94c3b45e-e598-4f9d-88be-e4cc79798edc"
+        },
+        {
+            "nome": "PT Sans",
+            "font_family": "PT Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/ptsans/v18/jizaRExUiTo99u79D0KEwA.ttf",
+            "ativo": true,
+            "id": "d09c9ed1-9086-4f85-8ae5-05fbb18f08df"
+        },
+        {
+            "nome": "Rubik",
+            "font_family": "Rubik",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/rubik/v31/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-B4iFV0Uw.ttf",
+            "ativo": true,
+            "id": "37421bf5-952c-4486-b3b5-dfda27e7eb27"
+        },
+        {
+            "nome": "Lora",
+            "font_family": "Lora",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/lora/v37/0QI6MX1D_JOuGQbT0gvTJPa787weuxJBkqg.ttf",
+            "ativo": true,
+            "id": "8c32b679-2eca-483b-b8f0-39e294bdfe6f"
+        },
+        {
+            "nome": "Work Sans",
+            "font_family": "Work Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/worksans/v24/QGY_z_wNahGAdqQ43RhVcIgYT2Xz5u32K0nXBi8Jow.ttf",
+            "ativo": true,
+            "id": "7a9d137a-166f-4d82-8366-a38f0528bed0"
+        },
+        {
+            "nome": "Fira Sans",
+            "font_family": "Fira Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/firasans/v18/va9E4kDNxMZdWfMOD5Vvl4jO.ttf",
+            "ativo": true,
+            "id": "01a167da-919d-4456-80a8-4aa6dff6f16c"
+        },
+        {
+            "nome": "Mulish",
+            "font_family": "Mulish",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/mulish/v18/1Ptyg83HX_SGhgqO0yLcmjzUAuWexZNR8aevHg.ttf",
+            "ativo": true,
+            "id": "5dfe4c58-044b-4bc9-b966-4b8e37a09f74"
+        },
+        {
+            "nome": "Quicksand",
+            "font_family": "Quicksand",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/quicksand/v37/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58a-xw.ttf",
+            "ativo": true,
+            "id": "292a9872-2eeb-44c9-be28-68bb2acd1952"
+        },
+        {
+            "nome": "Inconsolata",
+            "font_family": "Inconsolata",
+            "categoria": "Monospace",
+            "arquivo_url": "https://fonts.gstatic.com/s/inconsolata/v37/QldgNThLqRwH-OJ1UHjlKENVzkWGVkL3GZQmAwLYxYWI2qfdm7Lpp4U8WR32kg.ttf",
+            "ativo": true,
+            "id": "ab0fe0ee-5286-4008-a0f5-56d515fe79b9"
+        },
+        {
+            "nome": "Barlow",
+            "font_family": "Barlow",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/barlow/v13/7cHpv4kjgoGqM7E_DMs8.ttf",
+            "ativo": true,
+            "id": "d5395411-1485-47c0-8d7b-bc3fc1d82246"
+        },
+        {
+            "nome": "Nunito",
+            "font_family": "Nunito",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshdTQ3ig.ttf",
+            "ativo": true,
+            "id": "eaefb1a3-5a6a-48f6-82ff-9f853c125760"
+        },
+        {
+            "nome": "Titillium Web",
+            "font_family": "Titillium Web",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/titilliumweb/v19/NaPecZTIAOhVxoMyOr9n_E7fdMPmCA.ttf",
+            "ativo": true,
+            "id": "2efb8d51-33cd-4bbf-87c9-18d33421fe1d"
+        },
+        {
+            "nome": "Heebo",
+            "font_family": "Heebo",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/heebo/v28/NGSpv5_NC0k9P_v6ZUCbLRAHxK1EiSysdUmj.ttf",
+            "ativo": true,
+            "id": "060ca463-1761-415a-ae7c-2fc458e9ca69"
+        },
+        {
+            "nome": "Josefin Sans",
+            "font_family": "Josefin Sans",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/josefinsans/v34/Qw3PZQNVED7rKGKxtqIqX5E-AVSJrOCfjY46_DjQbMZhKg.ttf",
+            "ativo": true,
+            "id": "9e3433f1-3108-4e81-b408-60121385dede"
+        },
+        {
+            "nome": "Cabin",
+            "font_family": "Cabin",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/cabin/v35/u-4X0qWljRw-PfU81xCKCpdpbgZJl6XFpfEd7eA9BIxxkV2EH7alwg.ttf",
+            "ativo": true,
+            "id": "7479fa1e-3374-48ae-926e-1572b1b905fc"
+        },
+        {
+            "nome": "Libre Baskerville",
+            "font_family": "Libre Baskerville",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/librebaskerville/v24/kmKUZrc3Hgbbcjq75U4uslyuy4kn0olVQ-LglH6T17uj8Q4iDgNK.ttf",
+            "ativo": true,
+            "id": "cc909833-2141-4096-874c-8971e8c2fdff"
+        },
+        {
+            "nome": "Anton",
+            "font_family": "Anton",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/anton/v27/1Ptgg87LROyAm3Kz-Co.ttf",
+            "ativo": true,
+            "id": "a0043ad8-5f76-4414-b670-d2ed71631c35"
+        },
+        {
+            "nome": "Bitter",
+            "font_family": "Bitter",
+            "categoria": "Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/bitter/v42/raxhHiqOu8IVPmnRc6SY1KXhnF_Y8fbfOLjOWA.ttf",
+            "ativo": true,
+            "id": "89952e93-d68a-4082-bacb-627ea1dfce4e"
+        },
+        {
+            "nome": "Pacifico",
+            "font_family": "Pacifico",
+            "categoria": "Handwriting",
+            "arquivo_url": "https://fonts.gstatic.com/s/pacifico/v23/FwZY7-Qmy14u9lezJ-6H6Mw.ttf",
+            "ativo": true,
+            "id": "fcc0b986-d9ab-4f45-940e-ba6a3105c690"
+        },
+        {
+            "nome": "Dancing Script",
+            "font_family": "Dancing Script",
+            "categoria": "Handwriting",
+            "arquivo_url": "https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3Sup5.ttf",
+            "ativo": true,
+            "id": "fd48cbd4-37c0-4fa2-94ef-0917f5e46c45"
+        },
+        {
+            "nome": "Dosis",
+            "font_family": "Dosis",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/dosis/v34/HhyJU5sn9vOmLxNkIwRSjTVNWLEJN7Ml2xMB.ttf",
+            "ativo": true,
+            "id": "f7feb2f8-4b22-47ca-a38b-a84b4393c3d6"
+        },
+        {
+            "nome": "Varela Round",
+            "font_family": "Varela Round",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/varelaround/v21/w8gdH283Tvk__Lua32TysjIfp8uK.ttf",
+            "ativo": true,
+            "id": "01f9e9b7-d2b3-496d-b15b-caec9b271e3d"
+        },
+        {
+            "nome": "Arimo",
+            "font_family": "Arimo",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/arimo/v36/P5sfzZCDf9_T_3cV7NCUECyoxNk37cxcABrE.ttf",
+            "ativo": true,
+            "id": "c0566532-a76e-4992-bc38-d9e5fa730c7e"
+        },
+        {
+            "nome": "Asap",
+            "font_family": "Asap",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/asap/v34/KFOOCniXp96a4Tc2DaTeuDAoKsE617JFc49knOIYdjTYkqUcKWmT.ttf",
+            "ativo": true,
+            "id": "a1174eac-3e68-4cfa-b127-d5c634205431"
+        },
+        {
+            "nome": "Oxygen",
+            "font_family": "Oxygen",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/oxygen/v16/2sDfZG1Wl4LcnbuKjk0j.ttf",
+            "ativo": true,
+            "id": "71fc2c33-fd22-4df9-9891-b47e6cbedf8d"
+        },
+        {
+            "nome": "Mukta",
+            "font_family": "Mukta",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/mukta/v17/iJWKBXyXfDDVXbnBrXk.ttf",
+            "ativo": true,
+            "id": "9decfa3a-13da-413e-ac3c-2d33e83a2102"
+        },
+        {
+            "nome": "Fjalla One",
+            "font_family": "Fjalla One",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/fjallaone/v16/Yq6R-LCAWCX3-6Ky7FAFrOF6lw.ttf",
+            "ativo": true,
+            "id": "ac77e3fc-5f47-40cf-a903-06b69b15f8fb"
+        },
+        {
+            "nome": "Bebas Neue",
+            "font_family": "Bebas Neue",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/bebasneue/v16/JTUSjIg69CK48gW7PXoo9Wlhzg.ttf",
+            "ativo": true,
+            "id": "5dce07eb-a82d-4c3f-9184-9403526d4c07"
+        },
+        {
+            "nome": "Exo 2",
+            "font_family": "Exo 2",
+            "categoria": "Sans Serif",
+            "arquivo_url": "https://fonts.gstatic.com/s/exo2/v26/7cH1v4okm5zmbvwkAx_sfcEuiD8jvvKsOdC6.ttf",
+            "ativo": true,
+            "id": "e33cb137-7d9f-405e-8ec3-1743001ef179"
+        },
+        {
+            "nome": "Righteous",
+            "font_family": "Righteous",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/righteous/v18/1cXxaUPXBpj2rGoU7C9WiHGA.ttf",
+            "ativo": true,
+            "id": "f5cc0320-e78f-4dc9-b244-ebdbc2914493"
+        },
+        {
+            "nome": "Comfortaa",
+            "font_family": "Comfortaa",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/comfortaa/v47/1Pt_g8LJRfWJmhDAuUsSQamb1W0lwk4S4WjMDrMfJQ.ttf",
+            "ativo": true,
+            "id": "c829b4e6-3bfa-4f3e-a125-9dc4ebc255f8"
+        },
+        {
+            "nome": "Lobster",
+            "font_family": "Lobster",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/lobster/v32/neILzCirqoswsqX9zoKmNg.ttf",
+            "ativo": true,
+            "id": "2cebfd66-5828-452a-b29a-9686576831c7"
+        },
+        {
+            "nome": "Abril Fatface",
+            "font_family": "Abril Fatface",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/abrilfatface/v25/zOL64pLDlL1D99S8g8PtiKchq-dmiA.ttf",
+            "ativo": true,
+            "id": "9042915a-00c4-4375-a5c8-a07a0c00e080"
+        },
+        {
+            "nome": "Bungee",
+            "font_family": "Bungee",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/bungee/v17/N0bU2SZBIuF2PU_0DXRw.ttf",
+            "ativo": true,
+            "id": "ae579185-9d98-4563-b05b-b98cbbae081e"
+        },
+        {
+            "nome": "Alfa Slab One",
+            "font_family": "Alfa Slab One",
+            "categoria": "Display",
+            "arquivo_url": "https://fonts.gstatic.com/s/alfaslabone/v21/6NUQ8FmMKwSEKjnm5-4v-4Jh2dJhfg.ttf",
+            "ativo": true,
+            "id": "8514230f-2b50-4ebc-ae66-42ac0bc35f62"
+        },
+        {
+            "nome": "Embassy BT",
+            "font_family": "Embassy BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Embassy BT.ttf",
+            "ativo": true,
+            "id": "4aa1ddf5-86b4-4d91-b19f-1e3b5346ae78"
+        },
+        {
+            "nome": "Exotc350 DmBd BT Demi-Bold",
+            "font_family": "Exotc350 DmBd BT Demi-Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Exotc350 DmBd BT Demi-Bold.ttf",
+            "ativo": true,
+            "id": "54a93d7a-e6d3-48ae-8951-0af6e516106d"
+        },
+        {
+            "nome": "ebrima",
+            "font_family": "ebrima",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/ebrima.ttf",
+            "ativo": true,
+            "id": "e5b4de85-fd1a-4c18-9e0a-3a71a2828643"
+        },
+        {
+            "nome": "phagspab",
+            "font_family": "phagspab",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/phagspab.ttf",
+            "ativo": true,
+            "id": "fa1a285f-4a2a-4986-bbbc-e17d9303ca0b"
+        },
+        {
+            "nome": "segmdl2",
+            "font_family": "segmdl2",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segmdl2.ttf",
+            "ativo": true,
+            "id": "d70e00cc-eb66-47de-a43c-fab791c17231"
+        },
+        {
+            "nome": "NewsGoth BT Roman",
+            "font_family": "NewsGoth BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NewsGoth BT Roman.ttf",
+            "ativo": true,
+            "id": "b13f2d13-e009-41d1-a8dd-da903ec1b9e9"
+        },
+        {
+            "nome": "segoeuiz",
+            "font_family": "segoeuiz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoeuiz.ttf",
+            "ativo": true,
+            "id": "96dea5d1-8943-4087-b100-2c11af9d769d"
+        },
+        {
+            "nome": "Swis721 WGL4 BT Bold",
+            "font_family": "Swis721 WGL4 BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 WGL4 BT Bold.ttf",
+            "ativo": true,
+            "id": "12cd1c2c-0738-4f37-9d2e-bf51eeb2230b"
+        },
+        {
+            "nome": "GeoSlab703 MdCn BT Medium",
+            "font_family": "GeoSlab703 MdCn BT Medium",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/GeoSlab703 MdCn BT Medium.ttf",
+            "ativo": true,
+            "id": "4f0a5c28-cf7f-45fc-a940-9572b7509676"
+        },
+        {
+            "nome": "segoescb",
+            "font_family": "segoescb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoescb.ttf",
+            "ativo": true,
+            "id": "d372c259-8df3-4c28-b193-582972f7367b"
+        },
+        {
+            "nome": "Square721 Cn BT Bold",
+            "font_family": "Square721 Cn BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Square721 Cn BT Bold.ttf",
+            "ativo": true,
+            "id": "f5f779d7-10a0-4621-af97-ae10c30bd635"
+        },
+        {
+            "nome": "seguisb",
+            "font_family": "seguisb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguisb.ttf",
+            "ativo": true,
+            "id": "689c0383-7771-460f-9bfa-ff9e6bf13e9f"
+        },
+        {
+            "nome": "corbelli",
+            "font_family": "corbelli",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/corbelli.ttf",
+            "ativo": true,
+            "id": "bbb78683-f7fc-401d-8b18-a80a0d1e7ef6"
+        },
+        {
+            "nome": "constani",
+            "font_family": "constani",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/constani.ttf",
+            "ativo": true,
+            "id": "59b874df-fe01-4762-8f0c-905756494628"
+        },
+        {
+            "nome": "arialbd",
+            "font_family": "arialbd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/arialbd.ttf",
+            "ativo": true,
+            "id": "3d875857-7b44-428a-abad-912c55b948fc"
+        },
+        {
+            "nome": "consola",
+            "font_family": "consola",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/consola.ttf",
+            "ativo": true,
+            "id": "13f7f14e-8273-423e-9339-feabc9c2778e"
+        },
+        {
+            "nome": "segoeuil",
+            "font_family": "segoeuil",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoeuil.ttf",
+            "ativo": true,
+            "id": "0deba771-2a5c-4ad8-a9df-397cedba98ae"
+        },
+        {
+            "nome": "consolai",
+            "font_family": "consolai",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/consolai.ttf",
+            "ativo": true,
+            "id": "7559c8e9-8ef3-4e49-9bd2-1f07681fb2b9"
+        },
+        {
+            "nome": "Swis721 LtEx BT Light",
+            "font_family": "Swis721 LtEx BT Light",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 LtEx BT Light.ttf",
+            "ativo": true,
+            "id": "3f2d47e8-0776-4255-a6aa-a98643df1cff"
+        },
+        {
+            "nome": "Kaufmann BT",
+            "font_family": "Kaufmann BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Kaufmann BT.ttf",
+            "ativo": true,
+            "id": "456c981d-9545-4338-89a0-72c117e8150c"
+        },
+        {
+            "nome": "GeoSlab703 MdCn BT Bold",
+            "font_family": "GeoSlab703 MdCn BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/GeoSlab703 MdCn BT Bold.ttf",
+            "ativo": true,
+            "id": "c6ab205e-9e81-4050-9266-6f9221347bed"
+        },
+        {
+            "nome": "Century751 BT Roman",
+            "font_family": "Century751 BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century751 BT Roman.ttf",
+            "ativo": true,
+            "id": "1ebde952-ff32-4d2b-85bc-699f7fbb1c1c"
+        },
+        {
+            "nome": "comicbd",
+            "font_family": "comicbd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/comicbd.ttf",
+            "ativo": true,
+            "id": "bc6ac6d3-34a3-4d4d-b1d8-b77bed0392e5"
+        },
+        {
+            "nome": "News701 BT Italic",
+            "font_family": "News701 BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/News701 BT Italic.ttf",
+            "ativo": true,
+            "id": "d1f921b7-642b-4dc5-a8ad-21c4ce4faf6b"
+        },
+        {
+            "nome": "verdanaz",
+            "font_family": "verdanaz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/verdanaz.ttf",
+            "ativo": true,
+            "id": "5e3e4ff6-96f7-4c2f-9657-faa9b5a6df13"
+        },
+        {
+            "nome": "Century751 No2 BT Roman",
+            "font_family": "Century751 No2 BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century751 No2 BT Roman.ttf",
+            "ativo": true,
+            "id": "846e811a-75aa-46d9-97f8-b66129885f3f"
+        },
+        {
+            "nome": "Exotc350 Bd BT Bold",
+            "font_family": "Exotc350 Bd BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Exotc350 Bd BT Bold.ttf",
+            "ativo": true,
+            "id": "6f8c4a6a-4f85-4e7f-bf47-ffba162852ed"
+        },
+        {
+            "nome": "DeVinne Txt BT",
+            "font_family": "DeVinne Txt BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/DeVinne Txt BT.ttf",
+            "ativo": true,
+            "id": "17667fa6-a47d-4628-9b1c-84b665be9b4b"
+        },
+        {
+            "nome": "palai",
+            "font_family": "palai",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/palai.ttf",
+            "ativo": true,
+            "id": "3c6d9094-8361-4ebf-8cce-46716140aa5f"
+        },
+        {
+            "nome": "segoeuii",
+            "font_family": "segoeuii",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoeuii.ttf",
+            "ativo": true,
+            "id": "1b935499-add3-41b2-a8a9-545dc6e3d7e9"
+        },
+        {
+            "nome": "HarmonyOS_Sans_SC_Regular",
+            "font_family": "HarmonyOS_Sans_SC_Regular",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/HarmonyOS_Sans_SC_Regular.ttf",
+            "ativo": true,
+            "id": "b9d87e0d-9c7e-4a02-81d9-3c0c8f3d321d"
+        },
+        {
+            "nome": "Humanst521 BT Roman",
+            "font_family": "Humanst521 BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humanst521 BT Roman.ttf",
+            "ativo": true,
+            "id": "f5e8af7c-ef72-4a56-a6c1-0aeae5cfe84e"
+        },
+        {
+            "nome": "NanumGothic-Bold",
+            "font_family": "NanumGothic-Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NanumGothic-Bold.ttf",
+            "ativo": true,
+            "id": "aa6dd157-b30a-45e1-a79e-5d26be22acc8"
+        },
+        {
+            "nome": "comic",
+            "font_family": "comic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/comic.ttf",
+            "ativo": true,
+            "id": "7a9553a6-d468-4a4a-a0cb-9975501b3237"
+        },
+        {
+            "nome": "NewsGoth BT Bold Italic",
+            "font_family": "NewsGoth BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NewsGoth BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "6bc66445-c5fa-4ec4-b99f-30b7ba14dad1"
+        },
+        {
+            "nome": "verdanab",
+            "font_family": "verdanab",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/verdanab.ttf",
+            "ativo": true,
+            "id": "04ea58a0-2d8a-4830-b543-f874e6a04174"
+        },
+        {
+            "nome": "arialbi",
+            "font_family": "arialbi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/arialbi.ttf",
+            "ativo": true,
+            "id": "0d32c7ee-fa6d-4369-807b-49ebd1c40317"
+        },
+        {
+            "nome": "Swis721 WGL4 BT Roman",
+            "font_family": "Swis721 WGL4 BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 WGL4 BT Roman.ttf",
+            "ativo": true,
+            "id": "57f293e5-aafd-4229-adec-7b3151c7da73"
+        },
+        {
+            "nome": "calibri",
+            "font_family": "calibri",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/calibri.ttf",
+            "ativo": true,
+            "id": "6dc6998e-34a5-40e8-8835-ff5f00bbcdbe"
+        },
+        {
+            "nome": "Square721 Cn BT Roman",
+            "font_family": "Square721 Cn BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Square721 Cn BT Roman.ttf",
+            "ativo": true,
+            "id": "502e1ad7-a707-45a2-b58c-bebdb2062487"
+        },
+        {
+            "nome": "times",
+            "font_family": "times",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/times.ttf",
+            "ativo": true,
+            "id": "f9cc381d-1ef5-4347-9f1f-e210e71afaaf"
+        },
+        {
+            "nome": "tahomabd",
+            "font_family": "tahomabd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/tahomabd.ttf",
+            "ativo": true,
+            "id": "74607deb-dfe6-41a5-b794-10658249af6b"
+        },
+        {
+            "nome": "Futura Md BT Bold Italic",
+            "font_family": "Futura Md BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Futura Md BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "eecda416-5f0b-4bd4-8dd4-d008def76d46"
+        },
+        {
+            "nome": "trebucit",
+            "font_family": "trebucit",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/trebucit.ttf",
+            "ativo": true,
+            "id": "d9b810f2-f08b-4c19-9a78-eb6500d04aa1"
+        },
+        {
+            "nome": "segoeuisl",
+            "font_family": "segoeuisl",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoeuisl.ttf",
+            "ativo": true,
+            "id": "daf87134-c9ac-4735-8c1d-47565a107535"
+        },
+        {
+            "nome": "Schadow BT Roman",
+            "font_family": "Schadow BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Schadow BT Roman.ttf",
+            "ativo": true,
+            "id": "6f21941d-c7f9-491c-82f1-bd87b80bc506"
+        },
+        {
+            "nome": "Candarab",
+            "font_family": "Candarab",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Candarab.ttf",
+            "ativo": true,
+            "id": "d00a3a37-642f-41e7-9a42-422d9577aaed"
+        },
+        {
+            "nome": "sylfaen",
+            "font_family": "sylfaen",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/sylfaen.ttf",
+            "ativo": true,
+            "id": "de3a0b1c-780c-4219-931f-bb25c4d453fa"
+        },
+        {
+            "nome": "himalaya",
+            "font_family": "himalaya",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/himalaya.ttf",
+            "ativo": true,
+            "id": "f2f6c46c-9de3-4ec6-afdb-7f800e2223cb"
+        },
+        {
+            "nome": "Swis721 WGL4 BT Bold Italic",
+            "font_family": "Swis721 WGL4 BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 WGL4 BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "4e7df706-5467-4b66-819b-19329514aa73"
+        },
+        {
+            "nome": "cambriab",
+            "font_family": "cambriab",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/cambriab.ttf",
+            "ativo": true,
+            "id": "ce51e135-4f40-4c06-bbd1-03a66f4f862e"
+        },
+        {
+            "nome": "ZWAdobeF",
+            "font_family": "ZWAdobeF",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/ZWAdobeF.TTF",
+            "ativo": true,
+            "id": "e455b63f-ef1a-461a-928e-8c998625b3b8"
+        },
+        {
+            "nome": "trebuc",
+            "font_family": "trebuc",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/trebuc.ttf",
+            "ativo": true,
+            "id": "78d7a627-3703-48c1-acf1-226eaea12e5a"
+        },
+        {
+            "nome": "Century725 Cn BT",
+            "font_family": "Century725 Cn BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century725 Cn BT.ttf",
+            "ativo": true,
+            "id": "91ae7be6-e873-4b4d-bcf4-c18d65464c36"
+        },
+        {
+            "nome": "segoeprb",
+            "font_family": "segoeprb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoeprb.ttf",
+            "ativo": true,
+            "id": "6e2fc676-33c2-48c9-83b3-e6fab71436d4"
+        },
+        {
+            "nome": "ariblk",
+            "font_family": "ariblk",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/ariblk.ttf",
+            "ativo": true,
+            "id": "13be8b4e-cbc1-4cdc-9723-e15bc56ddf77"
+        },
+        {
+            "nome": "Swis721 WGL4 BT Italic",
+            "font_family": "Swis721 WGL4 BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 WGL4 BT Italic.ttf",
+            "ativo": true,
+            "id": "2345abf8-4760-476f-bb5c-3d6ac67cfd19"
+        },
+        {
+            "nome": "Century751 No2 BT Bold Italic",
+            "font_family": "Century751 No2 BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century751 No2 BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "f096cc52-489f-475d-9bf2-85a43f0aa8e7"
+        },
+        {
+            "nome": "Nirmala",
+            "font_family": "Nirmala",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Nirmala.ttf",
+            "ativo": true,
+            "id": "cbff19f3-2f82-4632-a32e-2bdd7860bf5d"
+        },
+        {
+            "nome": "arial",
+            "font_family": "arial",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/arial.ttf",
+            "ativo": true,
+            "id": "3c533d64-dabe-4671-8428-bf7869178f81"
+        },
+        {
+            "nome": "NewsGoth Lt BT Light",
+            "font_family": "NewsGoth Lt BT Light",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NewsGoth Lt BT Light.ttf",
+            "ativo": true,
+            "id": "11dc0d4e-ef1c-406f-9557-9c15f58d44af"
+        },
+        {
+            "nome": "taile",
+            "font_family": "taile",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/taile.ttf",
+            "ativo": true,
+            "id": "4cc3f21c-ced8-4818-8066-acf31d579665"
+        },
+        {
+            "nome": "Candarali",
+            "font_family": "Candarali",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Candarali.ttf",
+            "ativo": true,
+            "id": "2bfdf0c1-f955-4a0f-9801-dfe2704b09c8"
+        },
+        {
+            "nome": "Century751 BT Italic",
+            "font_family": "Century751 BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century751 BT Italic.ttf",
+            "ativo": true,
+            "id": "d33e7776-78e6-463e-83ba-f30227bfdbb2"
+        },
+        {
+            "nome": "Gabriola",
+            "font_family": "Gabriola",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Gabriola.ttf",
+            "ativo": true,
+            "id": "a645cc2d-5f5d-419e-b9d9-65838986714d"
+        },
+        {
+            "nome": "NewsGoth BT Bold",
+            "font_family": "NewsGoth BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NewsGoth BT Bold.ttf",
+            "ativo": true,
+            "id": "e59ea3f0-522c-441f-9cb7-00b61b0e307c"
+        },
+        {
+            "nome": "seguisym",
+            "font_family": "seguisym",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguisym.ttf",
+            "ativo": true,
+            "id": "da906e77-a114-4f94-83a9-c1eb8a75c591"
+        },
+        {
+            "nome": "timesi",
+            "font_family": "timesi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/timesi.ttf",
+            "ativo": true,
+            "id": "16373a19-b8c4-48cf-91ad-a168bb962828"
+        },
+        {
+            "nome": "couri",
+            "font_family": "couri",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/couri.ttf",
+            "ativo": true,
+            "id": "b28cf84c-c485-47a1-b7ca-16fabbba0e5a"
+        },
+        {
+            "nome": "Candaraz",
+            "font_family": "Candaraz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Candaraz.ttf",
+            "ativo": true,
+            "id": "bf0db886-916d-4c4f-a18a-180dad8070b6"
+        },
+        {
+            "nome": "webdings",
+            "font_family": "webdings",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/webdings.ttf",
+            "ativo": true,
+            "id": "c92cf820-47af-43c5-ad32-2730d597d4e7"
+        },
+        {
+            "nome": "pala",
+            "font_family": "pala",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/pala.ttf",
+            "ativo": true,
+            "id": "ae5b750a-282b-4be1-9de6-116733de42b5"
+        },
+        {
+            "nome": "corbelb",
+            "font_family": "corbelb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/corbelb.ttf",
+            "ativo": true,
+            "id": "4201b1ef-811f-4fb0-85e7-a49d03107456"
+        },
+        {
+            "nome": "seguiemj",
+            "font_family": "seguiemj",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguiemj.ttf",
+            "ativo": true,
+            "id": "8d935d90-f8ac-4301-a382-221d0cdb6854"
+        },
+        {
+            "nome": "cour",
+            "font_family": "cour",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/cour.ttf",
+            "ativo": true,
+            "id": "9666ae15-f23c-4ca5-88f1-1c9bd63d22da"
+        },
+        {
+            "nome": "Geometr415 Blk BT Black",
+            "font_family": "Geometr415 Blk BT Black",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Geometr415 Blk BT Black.ttf",
+            "ativo": true,
+            "id": "4cbaf937-0fec-4e3b-b251-ba0aa0382ebe"
+        },
+        {
+            "nome": "corbell",
+            "font_family": "corbell",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/corbell.ttf",
+            "ativo": true,
+            "id": "ec272643-2e64-4a73-9aa6-6f6c76d2ea96"
+        },
+        {
+            "nome": "constanz",
+            "font_family": "constanz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/constanz.ttf",
+            "ativo": true,
+            "id": "631dfa41-8b98-4cf6-a6c5-ff69a4e29420"
+        },
+        {
+            "nome": "CentSchbkCyrill BT Bold",
+            "font_family": "CentSchbkCyrill BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/CentSchbkCyrill BT Bold.ttf",
+            "ativo": true,
+            "id": "e66117eb-fbad-4b11-a4ce-131a0b948c6e"
+        },
+        {
+            "nome": "Geometr706 BlkCn BT Black",
+            "font_family": "Geometr706 BlkCn BT Black",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Geometr706 BlkCn BT Black.ttf",
+            "ativo": true,
+            "id": "fe2255a9-f5fd-43e3-95fb-089076e4e60f"
+        },
+        {
+            "nome": "GeoSlab703 Md BT Medium Italic",
+            "font_family": "GeoSlab703 Md BT Medium Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/GeoSlab703 Md BT Medium Italic.ttf",
+            "ativo": true,
+            "id": "042b8428-dbbd-4191-927d-865f0c2a1c75"
+        },
+        {
+            "nome": "Inkfree",
+            "font_family": "Inkfree",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Inkfree.ttf",
+            "ativo": true,
+            "id": "50359490-88fa-467f-aa7c-4bfa52317905"
+        },
+        {
+            "nome": "Candaral",
+            "font_family": "Candaral",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Candaral.ttf",
+            "ativo": true,
+            "id": "822c498f-c55a-48d0-a7b1-ad00bc9d6a79"
+        },
+        {
+            "nome": "palab",
+            "font_family": "palab",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/palab.ttf",
+            "ativo": true,
+            "id": "1b896b62-2ba3-46d6-95ac-37f3bbe5e44b"
+        },
+        {
+            "nome": "impact",
+            "font_family": "impact",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/impact.ttf",
+            "ativo": true,
+            "id": "0f15d3e7-260d-4445-8f49-0c98691482aa"
+        },
+        {
+            "nome": "NirmalaB",
+            "font_family": "NirmalaB",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NirmalaB.ttf",
+            "ativo": true,
+            "id": "73fea909-8b54-4380-bdf8-7cd88dfca099"
+        },
+        {
+            "nome": "Candara",
+            "font_family": "Candara",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Candara.ttf",
+            "ativo": true,
+            "id": "dd00a5c6-2ae3-4817-8000-a92d2c52ea60"
+        },
+        {
+            "nome": "NewsGoth BT Italic",
+            "font_family": "NewsGoth BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NewsGoth BT Italic.ttf",
+            "ativo": true,
+            "id": "c53a6a49-8c78-4313-9579-de9b04ce455d"
+        },
+        {
+            "nome": "Swis721 Hv BT Heavy",
+            "font_family": "Swis721 Hv BT Heavy",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 Hv BT Heavy.ttf",
+            "ativo": true,
+            "id": "5f6b7372-e7c4-483f-a40f-858a8535b943"
+        },
+        {
+            "nome": "corbelz",
+            "font_family": "corbelz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/corbelz.ttf",
+            "ativo": true,
+            "id": "73c64410-37f6-4682-8de6-d28aee540fc4"
+        },
+        {
+            "nome": "CentSchbkCyrill BT Italic",
+            "font_family": "CentSchbkCyrill BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/CentSchbkCyrill BT Italic.ttf",
+            "ativo": true,
+            "id": "994968d7-805a-4ab1-917d-53dfc1aa9aa9"
+        },
+        {
+            "nome": "Swis721 Cn BT Italic",
+            "font_family": "Swis721 Cn BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 Cn BT Italic.ttf",
+            "ativo": true,
+            "id": "00a86658-84ed-43ee-a517-0a1bcd60f0ec"
+        },
+        {
+            "nome": "comicz",
+            "font_family": "comicz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/comicz.ttf",
+            "ativo": true,
+            "id": "3f0613b0-3d4a-4c28-91ec-60d734b2715b"
+        },
+        {
+            "nome": "LeelaUIb",
+            "font_family": "LeelaUIb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/LeelaUIb.ttf",
+            "ativo": true,
+            "id": "fea20f0c-ba5b-4e1c-bb50-8405127331d4"
+        },
+        {
+            "nome": "malgunbd",
+            "font_family": "malgunbd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/malgunbd.ttf",
+            "ativo": true,
+            "id": "a3480c0a-0485-4786-8046-0c899dabac49"
+        },
+        {
+            "nome": "javatext",
+            "font_family": "javatext",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/javatext.ttf",
+            "ativo": true,
+            "id": "b2c741b7-b4fd-41bd-b70b-22e44274c77e"
+        },
+        {
+            "nome": "News701 BT Bold",
+            "font_family": "News701 BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/News701 BT Bold.ttf",
+            "ativo": true,
+            "id": "e6a19bef-2d26-4857-b70a-e56df84f96f0"
+        },
+        {
+            "nome": "calibril",
+            "font_family": "calibril",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/calibril.ttf",
+            "ativo": true,
+            "id": "b4090af0-798e-484f-9fb4-5870012065e8"
+        },
+        {
+            "nome": "Century751 SeBd BT Semi Bold",
+            "font_family": "Century751 SeBd BT Semi Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century751 SeBd BT Semi Bold.ttf",
+            "ativo": true,
+            "id": "dca16406-894d-4ed3-a08f-f3997d40ba9e"
+        },
+        {
+            "nome": "Swis721 BT Bold Italic",
+            "font_family": "Swis721 BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "e5e6c8b6-940d-4318-8f8b-a31ca785ba92"
+        },
+        {
+            "nome": "Swis721 BT Italic",
+            "font_family": "Swis721 BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 BT Italic.ttf",
+            "ativo": true,
+            "id": "415c06aa-92fd-42d9-9d8e-58609be99610"
+        },
+        {
+            "nome": "Swis721 Lt BT Light",
+            "font_family": "Swis721 Lt BT Light",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 Lt BT Light.ttf",
+            "ativo": true,
+            "id": "bd1cdceb-ffc5-4e6e-9810-984ae8f78226"
+        },
+        {
+            "nome": "trebucbd",
+            "font_family": "trebucbd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/trebucbd.ttf",
+            "ativo": true,
+            "id": "9814155f-a11f-4d00-a926-737ec2838df4"
+        },
+        {
+            "nome": "framdit",
+            "font_family": "framdit",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/framdit.ttf",
+            "ativo": true,
+            "id": "12023999-83dc-46be-898a-0311e2c3f7a0"
+        },
+        {
+            "nome": "ebrimabd",
+            "font_family": "ebrimabd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/ebrimabd.ttf",
+            "ativo": true,
+            "id": "9f570211-94b3-42eb-87cf-43eb46cc7ac8"
+        },
+        {
+            "nome": "simsunb",
+            "font_family": "simsunb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/simsunb.ttf",
+            "ativo": true,
+            "id": "79b33a77-8038-4623-8dab-30d24267a264"
+        },
+        {
+            "nome": "calibrib",
+            "font_family": "calibrib",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/calibrib.ttf",
+            "ativo": true,
+            "id": "1171ea80-6463-4952-a369-9dcbf520cfa4"
+        },
+        {
+            "nome": "Humnst777 BT Roman",
+            "font_family": "Humnst777 BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humnst777 BT Roman.ttf",
+            "ativo": true,
+            "id": "5a382f06-8fdc-437a-b9ba-47492d718b72"
+        },
+        {
+            "nome": "tahoma",
+            "font_family": "tahoma",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/tahoma.ttf",
+            "ativo": true,
+            "id": "0e05b6c2-6963-410d-987c-d7cb9ee9f587"
+        },
+        {
+            "nome": "NirmalaS",
+            "font_family": "NirmalaS",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NirmalaS.ttf",
+            "ativo": true,
+            "id": "f48a682a-b86e-46d3-a6a9-10882a402a75"
+        },
+        {
+            "nome": "ntailu",
+            "font_family": "ntailu",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/ntailu.ttf",
+            "ativo": true,
+            "id": "017736fc-b079-489a-a342-1b58f9b78459"
+        },
+        {
+            "nome": "Humanst521 Lt BT Light Italic",
+            "font_family": "Humanst521 Lt BT Light Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humanst521 Lt BT Light Italic.ttf",
+            "ativo": true,
+            "id": "2e975601-266b-4860-9690-f01a90b64993"
+        },
+        {
+            "nome": "NanumGothic-Regular",
+            "font_family": "NanumGothic-Regular",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/NanumGothic-Regular.ttf",
+            "ativo": true,
+            "id": "f683e0f4-ac3d-4b2f-9eec-f0eb0b35e4c6"
+        },
+        {
+            "nome": "framd",
+            "font_family": "framd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/framd.ttf",
+            "ativo": true,
+            "id": "ff60edfa-a883-4f8d-863f-96617ceb59d6"
+        },
+        {
+            "nome": "georgiaz",
+            "font_family": "georgiaz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/georgiaz.ttf",
+            "ativo": true,
+            "id": "2bb39b9f-0eae-498e-bf4d-d882750c72bf"
+        },
+        {
+            "nome": "micross",
+            "font_family": "micross",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/micross.ttf",
+            "ativo": true,
+            "id": "be6a14a9-7a1f-4515-b4d9-f5243eec0004"
+        },
+        {
+            "nome": "ntailub",
+            "font_family": "ntailub",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/ntailub.ttf",
+            "ativo": true,
+            "id": "8f66695c-e14a-4c57-b640-a3d24fbf0a91"
+        },
+        {
+            "nome": "cambriai",
+            "font_family": "cambriai",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/cambriai.ttf",
+            "ativo": true,
+            "id": "b5da018f-cd01-4c1c-a46a-98bf0200ed0a"
+        },
+        {
+            "nome": "Humnst777 Cn BT Bold",
+            "font_family": "Humnst777 Cn BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humnst777 Cn BT Bold.ttf",
+            "ativo": true,
+            "id": "267f0a6a-5721-47fa-8c27-bf795434fd37"
+        },
+        {
+            "nome": "Futura Md BT Medium Italic",
+            "font_family": "Futura Md BT Medium Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Futura Md BT Medium Italic.ttf",
+            "ativo": true,
+            "id": "31cb99b6-cd79-4ef3-9725-5f88cd53d5f1"
+        },
+        {
+            "nome": "Swis721 Lt BT Light Italic",
+            "font_family": "Swis721 Lt BT Light Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 Lt BT Light Italic.ttf",
+            "ativo": true,
+            "id": "c1bce11b-fe43-4370-8f82-319ba700aaff"
+        },
+        {
+            "nome": "Geometr212 BkCn BT Heavy",
+            "font_family": "Geometr212 BkCn BT Heavy",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Geometr212 BkCn BT Heavy.ttf",
+            "ativo": true,
+            "id": "eae1a848-4445-4c99-807d-daa180e58b51"
+        },
+        {
+            "nome": "LeelawUI",
+            "font_family": "LeelawUI",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/LeelawUI.ttf",
+            "ativo": true,
+            "id": "cdaf267e-74b2-4234-a337-abeb66fea30b"
+        },
+        {
+            "nome": "corbeli",
+            "font_family": "corbeli",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/corbeli.ttf",
+            "ativo": true,
+            "id": "3aa2d446-dfae-4fae-a988-ce9b7c25bd3a"
+        },
+        {
+            "nome": "consolaz",
+            "font_family": "consolaz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/consolaz.ttf",
+            "ativo": true,
+            "id": "ab82ef6d-3313-4110-8f90-4c99628bef2f"
+        },
+        {
+            "nome": "GeoSlab703 Md BT Medium",
+            "font_family": "GeoSlab703 Md BT Medium",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/GeoSlab703 Md BT Medium.ttf",
+            "ativo": true,
+            "id": "090c5130-5d91-401f-843e-feb87033c515"
+        },
+        {
+            "nome": "Swis721 Cn BT Roman",
+            "font_family": "Swis721 Cn BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 Cn BT Roman.ttf",
+            "ativo": true,
+            "id": "fbf4b609-34ab-46d3-8161-63024745f06c"
+        },
+        {
+            "nome": "CentSchbkCyrill BT Roman",
+            "font_family": "CentSchbkCyrill BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/CentSchbkCyrill BT Roman.ttf",
+            "ativo": true,
+            "id": "c0b20367-5938-4087-8cf9-a79886f232e2"
+        },
+        {
+            "nome": "seguibl",
+            "font_family": "seguibl",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguibl.ttf",
+            "ativo": true,
+            "id": "9405ddcc-381d-4a04-bef6-3f8011f7d97f"
+        },
+        {
+            "nome": "Futura Md BT Bold",
+            "font_family": "Futura Md BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Futura Md BT Bold.ttf",
+            "ativo": true,
+            "id": "f2d9879a-db4d-4154-8e50-d787e6355b9e"
+        },
+        {
+            "nome": "taileb",
+            "font_family": "taileb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/taileb.ttf",
+            "ativo": true,
+            "id": "1f2c0b96-a01c-451d-9e64-6a5cc065fb2c"
+        },
+        {
+            "nome": "Swis721 Cn BT Bold",
+            "font_family": "Swis721 Cn BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 Cn BT Bold.ttf",
+            "ativo": true,
+            "id": "0fa3b6c2-4e03-4a2b-9354-3875feaa251e"
+        },
+        {
+            "nome": "News706 BT Bold",
+            "font_family": "News706 BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/News706 BT Bold.ttf",
+            "ativo": true,
+            "id": "4860ca5f-0205-4954-a2dd-35c6987c133d"
+        },
+        {
+            "nome": "symbol",
+            "font_family": "symbol",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/symbol.ttf",
+            "ativo": true,
+            "id": "10ee5a1a-b061-47fa-9614-c1291628dab3"
+        },
+        {
+            "nome": "Humnst777 Lt BT Light",
+            "font_family": "Humnst777 Lt BT Light",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humnst777 Lt BT Light.ttf",
+            "ativo": true,
+            "id": "14713dd3-cdb2-4866-b143-7dc760edd8e1"
+        },
+        {
+            "nome": "TypoUpright BT",
+            "font_family": "TypoUpright BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/TypoUpright BT.ttf",
+            "ativo": true,
+            "id": "54236f1b-2b60-43ca-90b5-fcdb07d97b51"
+        },
+        {
+            "nome": "seguisbi",
+            "font_family": "seguisbi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguisbi.ttf",
+            "ativo": true,
+            "id": "1bb8667e-5c81-4368-8dfa-719f7fdc77b3"
+        },
+        {
+            "nome": "phagspa",
+            "font_family": "phagspa",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/phagspa.ttf",
+            "ativo": true,
+            "id": "30a53cf3-5405-435b-970e-e639ee25c0e4"
+        },
+        {
+            "nome": "GeoSlab703 Md BT Bold",
+            "font_family": "GeoSlab703 Md BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/GeoSlab703 Md BT Bold.ttf",
+            "ativo": true,
+            "id": "80c2ef83-1001-4fad-b118-13532548a6c2"
+        },
+        {
+            "nome": "seguibli",
+            "font_family": "seguibli",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguibli.ttf",
+            "ativo": true,
+            "id": "d26dcfff-0420-4a38-8a43-0e6914d0cb85"
+        },
+        {
+            "nome": "Square721 BT Roman",
+            "font_family": "Square721 BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Square721 BT Roman.ttf",
+            "ativo": true,
+            "id": "3c7ad3e7-b479-47ae-a631-d68f0798b4b3"
+        },
+        {
+            "nome": "constan",
+            "font_family": "constan",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/constan.ttf",
+            "ativo": true,
+            "id": "ac6109e8-df09-4779-8cf7-69185a69c9da"
+        },
+        {
+            "nome": "EngraversGothic BT",
+            "font_family": "EngraversGothic BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/EngraversGothic BT.ttf",
+            "ativo": true,
+            "id": "c96d072a-13a2-4fc3-9044-7714901f5fff"
+        },
+        {
+            "nome": "Futura Md BT Medium",
+            "font_family": "Futura Md BT Medium",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Futura Md BT Medium.ttf",
+            "ativo": true,
+            "id": "e3280262-019f-43ce-896a-7e73112acb53"
+        },
+        {
+            "nome": "Geometr212 BkCn BT Book",
+            "font_family": "Geometr212 BkCn BT Book",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Geometr212 BkCn BT Book.ttf",
+            "ativo": true,
+            "id": "eedebb68-4651-425d-b721-ea852c2f3383"
+        },
+        {
+            "nome": "Humanst521 BT Bold",
+            "font_family": "Humanst521 BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humanst521 BT Bold.ttf",
+            "ativo": true,
+            "id": "2e54aec6-e4c1-48bd-b8d0-9d166c9d6944"
+        },
+        {
+            "nome": "Bodoni Bd BT Bold Italic",
+            "font_family": "Bodoni Bd BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Bodoni Bd BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "18b90965-24cc-4a6b-81cd-35dd0f3f2eb3"
+        },
+        {
+            "nome": "mvboli",
+            "font_family": "mvboli",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/mvboli.ttf",
+            "ativo": true,
+            "id": "2b98d6af-15c9-4cc7-a03b-b24d87840bd2"
+        },
+        {
+            "nome": "Freehand521 BT",
+            "font_family": "Freehand521 BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Freehand521 BT.ttf",
+            "ativo": true,
+            "id": "a1727f2d-8450-46df-928b-ccf6bf28e568"
+        },
+        {
+            "nome": "gadugi",
+            "font_family": "gadugi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/gadugi.ttf",
+            "ativo": true,
+            "id": "36d0e24d-7939-4d2d-a193-9936fab519e4"
+        },
+        {
+            "nome": "timesbi",
+            "font_family": "timesbi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/timesbi.ttf",
+            "ativo": true,
+            "id": "38d3e3bb-626f-4fe0-8b07-be142f9eafda"
+        },
+        {
+            "nome": "segoeui",
+            "font_family": "segoeui",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoeui.ttf",
+            "ativo": true,
+            "id": "8d318230-158f-49fe-8306-619c53a9cc04"
+        },
+        {
+            "nome": "Century751 No2 BT Bold",
+            "font_family": "Century751 No2 BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century751 No2 BT Bold.ttf",
+            "ativo": true,
+            "id": "ca4705b8-15b1-493d-9138-c16a4e679260"
+        },
+        {
+            "nome": "malgun",
+            "font_family": "malgun",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/malgun.ttf",
+            "ativo": true,
+            "id": "48125d32-6b50-4fd0-bf17-1a62dadf73c4"
+        },
+        {
+            "nome": "Swis721 BT Roman",
+            "font_family": "Swis721 BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 BT Roman.ttf",
+            "ativo": true,
+            "id": "2fb1894c-115f-49fd-88f9-78afa8ea040a"
+        },
+        {
+            "nome": "Century751 No2 BT Italic",
+            "font_family": "Century751 No2 BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century751 No2 BT Italic.ttf",
+            "ativo": true,
+            "id": "04e07802-37b4-4990-8f1d-0d9fb17d1c93"
+        },
+        {
+            "nome": "georgia",
+            "font_family": "georgia",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/georgia.ttf",
+            "ativo": true,
+            "id": "14af138c-f6e7-4ecb-b0fa-31afa036958d"
+        },
+        {
+            "nome": "GeoSlab703 Md BT Bold Italic",
+            "font_family": "GeoSlab703 Md BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/GeoSlab703 Md BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "bea82962-1975-4896-9684-18772cd2f632"
+        },
+        {
+            "nome": "Humnst777 Cn BT",
+            "font_family": "Humnst777 Cn BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humnst777 Cn BT.ttf",
+            "ativo": true,
+            "id": "d9cb9679-6b1a-49ff-9fd7-fe3984c30a58"
+        },
+        {
+            "nome": "Futura Bk BT Book",
+            "font_family": "Futura Bk BT Book",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Futura Bk BT Book.ttf",
+            "ativo": true,
+            "id": "3c085962-5a47-4e25-89bd-78acde9e10c2"
+        },
+        {
+            "nome": "HarmonyOS_Sans_SC_Bold",
+            "font_family": "HarmonyOS_Sans_SC_Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/HarmonyOS_Sans_SC_Bold.ttf",
+            "ativo": true,
+            "id": "7fc65de3-8645-4d52-8b4b-63ca7d18eaa5"
+        },
+        {
+            "nome": "LeelUIsl",
+            "font_family": "LeelUIsl",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/LeelUIsl.ttf",
+            "ativo": true,
+            "id": "092f8e28-3259-45a2-8bb6-2e0c71f47146"
+        },
+        {
+            "nome": "timesbd",
+            "font_family": "timesbd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/timesbd.ttf",
+            "ativo": true,
+            "id": "de6cb46e-a4eb-490d-a8eb-c03b771316a5"
+        },
+        {
+            "nome": "seguili",
+            "font_family": "seguili",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguili.ttf",
+            "ativo": true,
+            "id": "d2b575ef-2f6a-4555-9bb2-c2034995456b"
+        },
+        {
+            "nome": "calibrii",
+            "font_family": "calibrii",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/calibrii.ttf",
+            "ativo": true,
+            "id": "20798f69-c93c-4740-9020-f8864429a02d"
+        },
+        {
+            "nome": "Swis721 BlkCn BT Black",
+            "font_family": "Swis721 BlkCn BT Black",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 BlkCn BT Black.ttf",
+            "ativo": true,
+            "id": "90e934ce-d01e-4044-aa9d-ed1730333c0d"
+        },
+        {
+            "nome": "Clarendon Blk BT Black",
+            "font_family": "Clarendon Blk BT Black",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Clarendon Blk BT Black.ttf",
+            "ativo": true,
+            "id": "d2010945-b366-4ff3-a85a-c355bdeaa4c0"
+        },
+        {
+            "nome": "Bodoni Bd BT Bold",
+            "font_family": "Bodoni Bd BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Bodoni Bd BT Bold.ttf",
+            "ativo": true,
+            "id": "753f54cc-306e-4aa4-bb89-3d40b156dd07"
+        },
+        {
+            "nome": "Candarai",
+            "font_family": "Candarai",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Candarai.ttf",
+            "ativo": true,
+            "id": "84da028f-56f7-4d92-809c-627d9f0edd15"
+        },
+        {
+            "nome": "bahnschrift",
+            "font_family": "bahnschrift",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/bahnschrift.ttf",
+            "ativo": true,
+            "id": "b98cc768-eb0f-42e3-afab-55dc5b81a243"
+        },
+        {
+            "nome": "constanb",
+            "font_family": "constanb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/constanb.ttf",
+            "ativo": true,
+            "id": "531f5e4b-1553-4722-99a2-8618578f38ab"
+        },
+        {
+            "nome": "holomdl2",
+            "font_family": "holomdl2",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/holomdl2.ttf",
+            "ativo": true,
+            "id": "f88bb737-ac9b-47a6-9d93-012a24fa8047"
+        },
+        {
+            "nome": "ariali",
+            "font_family": "ariali",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/ariali.ttf",
+            "ativo": true,
+            "id": "b1a7aa19-1db8-4852-9d49-0a872d280053"
+        },
+        {
+            "nome": "Humanst521 BT Bold Italic",
+            "font_family": "Humanst521 BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humanst521 BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "56afc4a0-c3b4-48a8-bcde-6f62b647be0b"
+        },
+        {
+            "nome": "palabi",
+            "font_family": "palabi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/palabi.ttf",
+            "ativo": true,
+            "id": "f82ae632-3e70-4d97-b95a-190218dadaa8"
+        },
+        {
+            "nome": "Square721 BT Bold",
+            "font_family": "Square721 BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Square721 BT Bold.ttf",
+            "ativo": true,
+            "id": "ef84c233-1ec5-445e-bb42-3b9ac93a8c87"
+        },
+        {
+            "nome": "georgiai",
+            "font_family": "georgiai",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/georgiai.ttf",
+            "ativo": true,
+            "id": "e2578c2d-b0b1-4e88-8652-4a79d3a92263"
+        },
+        {
+            "nome": "seguihis",
+            "font_family": "seguihis",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguihis.ttf",
+            "ativo": true,
+            "id": "0d2d72c2-cd96-40a8-89dd-5039b2b495fe"
+        },
+        {
+            "nome": "Humnst777 Blk BT Black Italic",
+            "font_family": "Humnst777 Blk BT Black Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humnst777 Blk BT Black Italic.ttf",
+            "ativo": true,
+            "id": "b0eedcca-a03f-42ba-8318-a2e312da128f"
+        },
+        {
+            "nome": "corbel",
+            "font_family": "corbel",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/corbel.ttf",
+            "ativo": true,
+            "id": "dd6ca231-aa99-4a9c-9dec-008d626c7700"
+        },
+        {
+            "nome": "Swis721 Blk BT Black",
+            "font_family": "Swis721 Blk BT Black",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 Blk BT Black.ttf",
+            "ativo": true,
+            "id": "0dd51807-fed7-44f8-bd1b-0e322aaa0942"
+        },
+        {
+            "nome": "cambriaz",
+            "font_family": "cambriaz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/cambriaz.ttf",
+            "ativo": true,
+            "id": "93c16355-ecc9-4819-8ead-972dd6dd1295"
+        },
+        {
+            "nome": "georgiab",
+            "font_family": "georgiab",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/georgiab.ttf",
+            "ativo": true,
+            "id": "46fd7693-72d4-41bd-83ab-651f1d86a21e"
+        },
+        {
+            "nome": "courbd",
+            "font_family": "courbd",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/courbd.ttf",
+            "ativo": true,
+            "id": "13d12a7a-567b-4a56-9363-189956ea98a5"
+        },
+        {
+            "nome": "l_10646",
+            "font_family": "l_10646",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/l_10646.ttf",
+            "ativo": true,
+            "id": "da4f04aa-70e8-4f75-bd4b-24a514ce64b6"
+        },
+        {
+            "nome": "mmrtextb",
+            "font_family": "mmrtextb",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/mmrtextb.ttf",
+            "ativo": true,
+            "id": "0a32b42a-e3cb-4716-a683-ecc7303db17b"
+        },
+        {
+            "nome": "OCR-A BT",
+            "font_family": "OCR-A BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/OCR-A BT.ttf",
+            "ativo": true,
+            "id": "dc6478f6-126e-4414-9cb5-cac17559ac4b"
+        },
+        {
+            "nome": "calibrili",
+            "font_family": "calibrili",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/calibrili.ttf",
+            "ativo": true,
+            "id": "9a9653df-ffe8-4e10-a945-3842b2fddf52"
+        },
+        {
+            "nome": "Clarendon BT Bold",
+            "font_family": "Clarendon BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Clarendon BT Bold.ttf",
+            "ativo": true,
+            "id": "af531503-0872-4bc7-94cb-6c9cb0bca899"
+        },
+        {
+            "nome": "marlett",
+            "font_family": "marlett",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/marlett.ttf",
+            "ativo": true,
+            "id": "f6481c65-433f-4aa9-b586-97078d4ce3d5"
+        },
+        {
+            "nome": "Clarendon BT Roman",
+            "font_family": "Clarendon BT Roman",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Clarendon BT Roman.ttf",
+            "ativo": true,
+            "id": "f2e13ead-012b-4a84-bf56-248125d84a8e"
+        },
+        {
+            "nome": "Bodoni Bk BT Book",
+            "font_family": "Bodoni Bk BT Book",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Bodoni Bk BT Book.ttf",
+            "ativo": true,
+            "id": "b89dfc74-fb03-41d4-89ef-5563bc423289"
+        },
+        {
+            "nome": "trebucbi",
+            "font_family": "trebucbi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/trebucbi.ttf",
+            "ativo": true,
+            "id": "71732ed0-b8f8-41b3-9331-f401465831cd"
+        },
+        {
+            "nome": "Swis721 BT Bold",
+            "font_family": "Swis721 BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 BT Bold.ttf",
+            "ativo": true,
+            "id": "7a799e71-ae5a-4ce0-80f6-9324b26dc568"
+        },
+        {
+            "nome": "Humanst521 Lt BT Light",
+            "font_family": "Humanst521 Lt BT Light",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humanst521 Lt BT Light.ttf",
+            "ativo": true,
+            "id": "60dac32e-6df2-4bc3-bd98-3c661f593c06"
+        },
+        {
+            "nome": "lucon",
+            "font_family": "lucon",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/lucon.ttf",
+            "ativo": true,
+            "id": "ba441a75-ef23-4d09-85e8-2ebb040e45b6"
+        },
+        {
+            "nome": "monbaiti",
+            "font_family": "monbaiti",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/monbaiti.ttf",
+            "ativo": true,
+            "id": "42623bb5-3939-4b72-821e-ab666e9c08fc"
+        },
+        {
+            "nome": "calibriz",
+            "font_family": "calibriz",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/calibriz.ttf",
+            "ativo": true,
+            "id": "a5f6bc50-7878-49fc-ae05-89b9a3468936"
+        },
+        {
+            "nome": "Humanst521 BT Italic",
+            "font_family": "Humanst521 BT Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humanst521 BT Italic.ttf",
+            "ativo": true,
+            "id": "bb24d522-6e96-4e5e-afb6-2ec8372b7138"
+        },
+        {
+            "nome": "comici",
+            "font_family": "comici",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/comici.ttf",
+            "ativo": true,
+            "id": "8d0a9529-5632-4e89-9420-0022215b7af6"
+        },
+        {
+            "nome": "segoepr",
+            "font_family": "segoepr",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoepr.ttf",
+            "ativo": true,
+            "id": "bcaf7f84-361b-4bbb-a1d7-91a446655b74"
+        },
+        {
+            "nome": "OCR-B 10 BT",
+            "font_family": "OCR-B 10 BT",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/OCR-B 10 BT.ttf",
+            "ativo": true,
+            "id": "9ddefbf6-074e-4995-a037-df0d00e04227"
+        },
+        {
+            "nome": "msyi",
+            "font_family": "msyi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/msyi.ttf",
+            "ativo": true,
+            "id": "2ba09d24-97c8-4f09-90aa-d6c15447dfde"
+        },
+        {
+            "nome": "Bodoni Bk BT Book Italic",
+            "font_family": "Bodoni Bk BT Book Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Bodoni Bk BT Book Italic.ttf",
+            "ativo": true,
+            "id": "d5512810-f35d-4123-bd3c-983b530bad2f"
+        },
+        {
+            "nome": "Humnst777 BlkCn BT Black",
+            "font_family": "Humnst777 BlkCn BT Black",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Humnst777 BlkCn BT Black.ttf",
+            "ativo": true,
+            "id": "e3f9bb63-76e7-4072-9a6a-b11ae00a4fb4"
+        },
+        {
+            "nome": "wingding",
+            "font_family": "wingding",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/wingding.ttf",
+            "ativo": true,
+            "id": "441f25ac-2143-4c57-b60b-056c0427b741"
+        },
+        {
+            "nome": "courbi",
+            "font_family": "courbi",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/courbi.ttf",
+            "ativo": true,
+            "id": "ba6cad5f-8e4b-44f1-a0c3-3e294ec4a240"
+        },
+        {
+            "nome": "malgunsl",
+            "font_family": "malgunsl",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/malgunsl.ttf",
+            "ativo": true,
+            "id": "6941433b-c87b-464e-bfd0-321eb1097e28"
+        },
+        {
+            "nome": "mmrtext",
+            "font_family": "mmrtext",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/mmrtext.ttf",
+            "ativo": true,
+            "id": "6c0d4924-9a4c-4ebd-a83d-66a3203ca7bf"
+        },
+        {
+            "nome": "verdana",
+            "font_family": "verdana",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/verdana.ttf",
+            "ativo": true,
+            "id": "c7ef05d9-5207-4cc9-9f1c-86ad3de46630"
+        },
+        {
+            "nome": "Swis721 Cn BT Bold Italic",
+            "font_family": "Swis721 Cn BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Swis721 Cn BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "ce9cb0b1-1961-49a7-883b-0eb7eb60a561"
+        },
+        {
+            "nome": "segoeuib",
+            "font_family": "segoeuib",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoeuib.ttf",
+            "ativo": true,
+            "id": "081422d8-5940-4385-aad7-049e45f0b20c"
+        },
+        {
+            "nome": "consolab",
+            "font_family": "consolab",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/consolab.ttf",
+            "ativo": true,
+            "id": "289c1f59-0d21-467d-b975-1f7aaa06cce6"
+        },
+        {
+            "nome": "Century751 SeBd BT Semi Bold Italic",
+            "font_family": "Century751 SeBd BT Semi Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Century751 SeBd BT Semi Bold Italic.ttf",
+            "ativo": true,
+            "id": "54c3748e-0442-4e5c-8268-dd9896047b10"
+        },
+        {
+            "nome": "segoesc",
+            "font_family": "segoesc",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/segoesc.ttf",
+            "ativo": true,
+            "id": "ef70eecb-dc77-4be1-938b-33a319233cf4"
+        },
+        {
+            "nome": "seguisli",
+            "font_family": "seguisli",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/seguisli.ttf",
+            "ativo": true,
+            "id": "c3b29500-522a-4b79-a769-7d522eb7791a"
+        },
+        {
+            "nome": "verdanai",
+            "font_family": "verdanai",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/verdanai.ttf",
+            "ativo": true,
+            "id": "3ef04b2f-bbb0-4954-8b67-cda68646f217"
+        },
+        {
+            "nome": "Futura Bk BT Book Italic",
+            "font_family": "Futura Bk BT Book Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Futura Bk BT Book Italic.ttf",
+            "ativo": true,
+            "id": "3343e7e6-b8f6-4c5e-a59e-10824f67d1b6"
+        },
+        {
+            "nome": "Schadow BT Bold",
+            "font_family": "Schadow BT Bold",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Schadow BT Bold.ttf",
+            "ativo": true,
+            "id": "e12864a4-22ea-41b9-903f-384b08a29d21"
+        },
+        {
+            "nome": "Clarendon Lt BT Light",
+            "font_family": "Clarendon Lt BT Light",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/Clarendon Lt BT Light.ttf",
+            "ativo": true,
+            "id": "0c23aa17-cd38-4aae-8409-c890fcdc0fd6"
+        },
+        {
+            "nome": "gadugib",
+            "font_family": "gadugib",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/gadugib.ttf",
+            "ativo": true,
+            "id": "aac0f310-49b0-4da1-b177-15fbaeb747f7"
+        },
+        {
+            "nome": "CentSchbkCyrill BT Bold Italic",
+            "font_family": "CentSchbkCyrill BT Bold Italic",
+            "categoria": "Sistema",
+            "arquivo_url": "/fonts_local/CentSchbkCyrill BT Bold Italic.ttf",
+            "ativo": true,
+            "id": "6458c32c-a85d-4b95-8b56-876a0e096a1b"
         }
     ]
 }

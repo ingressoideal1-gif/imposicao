@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition"
 
@@ -32,7 +32,7 @@ $producaoFile = "frontend\producao.html"
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."
 git add -A
-git commit -m "fix: correcao da paginacao e VDP de ingressos combinados com ticket_qtd > 1 (v$nextV)"
+git commit -m "feat: load all fonts and fix frontend list empty bug (v$nextV)"
 git push origin main
 
 # 4. Vercel deploy

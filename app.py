@@ -432,80 +432,62 @@ def _embed_system_fonts(numeracao_obj):
     que funcionem independentemente do ambiente de deploy."""
     if not numeracao_obj or "elements" not in numeracao_obj:
         return
-    import glob as _glob
     import base64
-    font_cache = {}  # cache_key -> base64 data
-    font_dirs = [
-        "C:/Windows/Fonts",
-        os.path.expanduser("~/AppData/Local/Microsoft/Windows/Fonts"),
-        "/usr/share/fonts",
-        "/System/Library/Fonts",
-        os.path.expanduser("~/Library/Fonts"),
-    ]
-    standard_fonts = ("helv", "hebo", "cour", "times", "helvetica", "arial", "courier", "times new roman")
+    import urllib.request
+    
+    # Busca o catálogo de fontes do banco de dados (restrito e exclusivo)
+    fontes_catalogo = db.get_catalogo_fontes()
+    fontes_map = {f.get("font_family", "").lower().strip(): f for f in fontes_catalogo if f.get("font_family")}
+    
+    font_cache = {}  # url -> base64 data
+
     for el in numeracao_obj.get("elements", []):
         raw_fn = (el.get("font_name") or el.get("font_family") or "").strip()
         if not raw_fn:
             continue
+            
+        # Limpar prefixo "system:" caso ainda venha do frontend por cache antigo
         if raw_fn.startswith("system:"):
             parts = raw_fn[7:].split("|")
             family = parts[0]
-            is_bold = "bold" in parts[1:]
-            is_italic = "italic" in parts[1:]
         else:
             family = raw_fn
-            is_bold = "bold" in family.lower() or el.get("font_weight") == "bold" or el.get("bold") is True
-            is_italic = "italic" in family.lower() or el.get("font_style") == "italic"
+            
+        family_lower = family.lower()
 
-        if family.lower() in standard_fonts and not el.get("_font_data"):
-            continue
         if el.get("_font_data"):
             continue
 
-        cache_key = f"{family.lower()}|{'b' if is_bold else ''}|{'i' if is_italic else ''}"
-        if cache_key in font_cache:
-            el["_font_data"] = font_cache[cache_key]
+        if family_lower not in fontes_map:
+            print(f"[impose] ALERTA: Fonte '{family}' solicitada, mas não está no Catálogo Web. Será feito fallback.")
             continue
-        family_lower = family.lower().replace(" ", "")
-        fam_norm = family_lower.replace("-", "").replace("_", "")
-        found_file = None
-        
-        search_dirs = [
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts"),
-            "C:/Windows/Fonts",
-            "/usr/share/fonts",
-            "/usr/local/share/fonts",
-            "~/.fonts"
-        ]
-
-
-        for search_dir in search_dirs:
-            if not os.path.isdir(os.path.expanduser(search_dir)):
-                continue
-            for ext in ("**/*.ttf", "**/*.otf", "**/*.TTF", "**/*.OTF"):
-                for fpath in _glob.glob(os.path.join(os.path.expanduser(search_dir), ext), recursive=True):
-                    base = os.path.splitext(os.path.basename(fpath))[0].lower().replace(" ", "").replace("-", "").replace("_", "")
-                    bold_match = ("bold" in base) == is_bold
-                    italic_match = ("italic" in base or "oblique" in base) == is_italic
-                    if base.startswith(fam_norm) and bold_match and italic_match:
-                        found_file = fpath
-                        break
-                    if fam_norm in base and not found_file:
-                        if bold_match and italic_match:
-                            found_file = fpath
-                if found_file:
-                    break
-            if found_file:
-                break
-        if found_file:
-            try:
-                with open(found_file, "rb") as f:
+            
+        fonte_info = fontes_map[family_lower]
+        url = fonte_info.get("arquivo_url")
+        if not url:
+            continue
+            
+        if url in font_cache:
+            el["_font_data"] = font_cache[url]
+            continue
+            
+        try:
+            if url.startswith("/"):
+                import os
+                # O diretório do frontend é C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition\frontend
+                local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", url.lstrip("/"))
+                with open(local_path, "rb") as f:
                     font_bytes = base64.b64encode(f.read()).decode("ascii")
-                    el["_font_data"] = font_bytes
-                    font_cache[cache_key] = font_bytes
-                    print(f"[impose] Fonte embutida: {family} -> {found_file} ({len(font_bytes)} chars b64)")
-            except Exception as ex:
-                print(f"[impose] Erro ao embutir fonte {family}: {ex}")
+            else:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    font_bytes = base64.b64encode(response.read()).decode("ascii")
+                    
+            el["_font_data"] = font_bytes
+            font_cache[url] = font_bytes
+            print(f"[impose] Fonte embutida: {family} -> {url} ({len(font_bytes)} chars b64)")
+        except Exception as ex:
+            print(f"[impose] Erro ao embutir fonte {family} de {url}: {ex}")
 
 # ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
 
