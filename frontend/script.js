@@ -19813,73 +19813,84 @@ function snapshotAmostraSync(idx, osId, item, canvas, face) {
 // Força a regeneração de TODOS os snapshots de uma OS usando canvas offscreen
 // Garante que a imagem do link do cliente seja idêntica à janela combinada do editor
 async function forceRegenerateSnapshots(osId) {
-    // Garantir que os itens da OS estão carregados —
     // SEMPRE recarregar do banco para pegar a arte mais recente (após alterações)
     if (typeof loadOSItens === 'function') {
-        try {
-            await loadOSItens(osId);
-        } catch (e) {
-            console.warn('[Snapshot] Erro ao carregar itens da OS:', e);
-        }
+        try { await loadOSItens(osId); } catch (e) { console.warn('[Snapshot] Erro ao carregar itens:', e); }
     }
     const itens = state.osItens[osId] || [];
-    if (!itens.length) {
-        console.log('[Snapshot] Nenhum item carregado para OS', osId);
-        return;
-    }
+    if (!itens.length) { console.log('[Snapshot] Nenhum item para OS', osId); return; }
 
-    // Garantir que cores, numerações e formatos estão no state (necessário fora do editor)
-    if (!state.cores || !state.cores.length) {
-        try { const { data } = await supabaseClient.from('producao_cores').select('*'); if (data) state.cores = data; } catch(e) {}
-    }
-    if (!state.numeracoes || !state.numeracoes.length) {
-        try { const { data } = await supabaseClient.from('producao_numeracoes').select('*'); if (data) state.numeracoes = data; } catch(e) {}
-    }
-    if (!state.formatos || !state.formatos.length) {
-        try { const { data } = await supabaseClient.from('producao_formatos').select('*'); if (data) state.formatos = data; } catch(e) {}
-    }
+    // Garantir lookup tables carregadas (necessário quando chamado fora do editor)
+    if (!state.cores  || !state.cores.length)         try { const { data } = await supabaseClient.from('producao_cores').select('*');       if (data) state.cores = data;       } catch(e) {}
+    if (!state.numeracoes || !state.numeracoes.length) try { const { data } = await supabaseClient.from('producao_numeracoes').select('*'); if (data) state.numeracoes = data; } catch(e) {}
+    if (!state.formatos || !state.formatos.length)     try { const { data } = await supabaseClient.from('producao_formatos').select('*');   if (data) state.formatos = data;   } catch(e) {}
 
-    // Escala idêntica à usada na janela combinada do editor (150 DPI)
-    const S = 150 / 25.4;
+    const S = 150 / 25.4; // 150 DPI — escala idêntica à janela combinada do editor
 
     for (let idx = 0; idx < itens.length; idx++) {
         const item = itens[idx];
-
-        // Pular items em modo PDF (usam viewer dedicado)
         if (item.modo_pdf) continue;
 
-        // Resolver cor e numeração a partir dos IDs salvos no item
-        // REGRA: Idêntico à janela combinada — usar amostra_cor_id e amostra_num_id do item
-        const corId = item.amostra_cor_id || '';
-        const numId = item.amostra_num_id || '';
-        const hasArteUrl = !!(item.arte_url || item.verso_arte_url);
-        const hasAmostraExistente = !!(item.amostra_arte_base64);
+        const corId      = item.amostra_cor_id || '';
+        const numId      = item.amostra_num_id || '';
+        const hasArteUrl  = !!(item.arte_url);
+        const hasVersoUrl = !!(item.verso_arte_url);
 
-        // Só pular se não tiver absolutamente nada para compor
-        if (!corId && !numId && !hasArteUrl && !hasAmostraExistente) {
-            console.log(`[Snapshot] Item ${idx} sem configuração visual, pulando.`);
+        if (!corId && !numId && !hasArteUrl && !hasVersoUrl) {
+            console.log(`[Snapshot] Item ${idx} sem camadas, pulando.`);
             continue;
         }
 
+        console.log(`[Snapshot] Item ${idx} — cor:${corId||'—'} num:${numId||'—'} arte:${hasArteUrl} verso:${hasVersoUrl}`);
+
+        // ════════════════════════════════════════════════════════════════
+        // CAMINHO RÁPIDO: só tem arte_url — sem cor nem numeração
+        // Copia a URL diretamente para amostra_arte_base64 no banco
+        // (evita falha silenciosa de preload de elementos do DOM)
+        // ════════════════════════════════════════════════════════════════
+        if (!corId && !numId) {
+            try {
+                const updates = {};
+                if (hasArteUrl)  { updates.amostra_arte_base64       = item.arte_url;       item.amostra_arte_base64       = item.arte_url; }
+                if (hasVersoUrl) { updates.verso_amostra_arte_base64 = item.verso_arte_url; item.verso_amostra_arte_base64 = item.verso_arte_url; }
+                if (Object.keys(updates).length > 0 && typeof saveAmostraToDB === 'function') {
+                    await saveAmostraToDB(item.id, osId, updates);
+                    console.log(`[Snapshot] Item ${idx} — URL da arte copiada diretamente (sem canvas).`);
+                }
+            } catch(e) { console.warn(`[Snapshot] Item ${idx} fast-path erro:`, e); }
+            continue;
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        // CAMINHO COMPOSTO: tem cor e/ou numeração — compor as camadas via canvas
+        // ════════════════════════════════════════════════════════════════
         const cor = corId ? (state.cores || []).find(c => c.id === corId) : null;
         const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
 
-        // Aguardar preload de PDFs/SVGs da numeração antes de renderizar
-        if (num && num.elements && num.elements.length > 0) {
-            if (typeof preloadAmostraItemPdfElements === 'function') {
-                preloadAmostraItemPdfElements(num, idx, osId);
-                await new Promise(r => setTimeout(r, 350));
+        // Preload SVG/PDF e aguardar carregamento real dos elementos
+        if (num && num.elements && num.elements.length > 0 && typeof preloadAmostraItemPdfElements === 'function') {
+            preloadAmostraItemPdfElements(num, idx, osId);
+            const svgEls = num.elements.filter(e => e && (e.type === 'SVG' || e.type === 'PDF'));
+            if (svgEls.length > 0) {
+                await new Promise(resolve => {
+                    let waited = 0;
+                    const check = setInterval(() => {
+                        waited += 100;
+                        const allReady = svgEls.every(e => e._svgImage || e._pdfCanvas || waited >= 3000);
+                        if (allReady) { clearInterval(check); resolve(); }
+                    }, 100);
+                });
+            } else {
+                await new Promise(r => setTimeout(r, 300));
             }
         }
 
-        // Resolver formato: 1) da cor, 2) da numeração, 3) primeiro do state, 4) fallback
+        // Resolver formato: cor > num > primeiro do state > fallback
         let fmt = null;
-        if (cor && cor.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(cor.formato_id));
+        if (cor && cor.formato_id)  fmt = (state.formatos || []).find(f => String(f.id) === String(cor.formato_id));
         if (!fmt && num && num.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(num.formato_id));
         if (!fmt && state.formatos && state.formatos.length > 0) fmt = state.formatos[0];
         if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
-
-        console.log(`[Snapshot] Item ${idx} (OS ${osId}): cor=${corId||'—'}, num=${numId||'—'}, arte=${hasArteUrl}, fmt=${fmt.width_mm}x${fmt.height_mm}mm`);
 
         try {
             // ── FRENTE ──
@@ -19887,21 +19898,19 @@ async function forceRegenerateSnapshots(osId) {
             await drawAmostraFace(item, 'front', canvasFront, null, fmt, cor, num, idx, osId, S);
             if (canvasFront.width > 0 && canvasFront.height > 0) {
                 await snapshotAmostraSync(idx, osId, item, canvasFront, 'frente');
+                console.log(`[Snapshot] Item ${idx} FRENTE composto e salvo.`);
             }
-
-            // ── VERSO (somente se item duplex) ──
-            if (item.verso) {
+            // ── VERSO ──
+            if (item.verso || hasVersoUrl) {
                 const canvasBack = document.createElement('canvas');
                 await drawAmostraFace(item, 'back', canvasBack, null, fmt, cor, num, idx, osId, S);
                 if (canvasBack.width > 0 && canvasBack.height > 0) {
                     await snapshotAmostraSync(idx, osId, item, canvasBack, 'verso');
+                    console.log(`[Snapshot] Item ${idx} VERSO composto e salvo.`);
                 }
             }
-        } catch (e) {
-            console.warn(`[Snapshot] Erro ao gerar snapshot do item ${idx}:`, e);
-        }
+        } catch (e) { console.warn(`[Snapshot] Item ${idx} composite erro:`, e); }
     }
-
     console.log(`[Snapshot] Regeneração concluída para OS ${osId}`);
 }
 window.forceRegenerateSnapshots = forceRegenerateSnapshots;
