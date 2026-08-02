@@ -270,6 +270,18 @@ async function loadCatalogoFontes() {
             if (badge) {
                 badge.textContent = state_fonts.catalogo.length;
             }
+            // Popula o <select> de fontes do editor de arte (Criar Arte)
+            const fontSelect = document.getElementById('prop-font-family');
+            if (fontSelect) {
+                fontSelect.innerHTML = '';
+                for (const f of state_fonts.catalogo) {
+                    const opt = document.createElement('option');
+                    opt.value = f.font_family || f.nome;
+                    opt.textContent = f.nome;
+                    opt.style.fontFamily = `'${f.font_family}', sans-serif`;
+                    fontSelect.appendChild(opt);
+                }
+            }
         }
     } catch (e) {
         console.warn('[Fonts] Não foi possível carregar o catálogo de fontes web:', e);
