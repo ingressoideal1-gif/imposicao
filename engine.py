@@ -565,13 +565,27 @@ class ImpositionEngine:
                     try:
                         import urllib.request, re
                         safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', family) + ".ttf"
-                        fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
-                        os.makedirs(fonts_dir, exist_ok=True)
+                        # Em ambientes serverless (Vercel), o FS raiz é read-only; usar /tmp
+                        _base_dir = os.path.dirname(os.path.abspath(__file__))
+                        fonts_dir = os.path.join(_base_dir, "fonts")
+                        try:
+                            os.makedirs(fonts_dir, exist_ok=True)
+                            # Testar se é gravável
+                            _test_file = os.path.join(fonts_dir, ".write_test")
+                            with open(_test_file, "w") as _tf:
+                                _tf.write("ok")
+                            os.remove(_test_file)
+                        except (OSError, PermissionError):
+                            fonts_dir = os.path.join("/tmp", "imposicao_fonts")
+                            os.makedirs(fonts_dir, exist_ok=True)
                         dest = os.path.join(fonts_dir, safe_name)
                         if not os.path.exists(dest):
                             print(f"[engine] Baixando fonte do catálogo web: {family} -> {font_url}")
-                            urllib.request.urlretrieve(font_url, dest)
-                        if os.path.exists(dest):
+                            req = urllib.request.Request(font_url, headers={'User-Agent': 'Mozilla/5.0'})
+                            with urllib.request.urlopen(req, timeout=15) as resp:
+                                with open(dest, "wb") as out:
+                                    out.write(resp.read())
+                        if os.path.exists(dest) and os.path.getsize(dest) > 100:
                             font_name = family
                             font_file = dest
                     except Exception as _dl_err:

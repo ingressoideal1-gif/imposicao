@@ -8650,6 +8650,27 @@ window.runImposition = async function (mode, returnBlob = false) {
         payloadNumeracao.csv_data = state.csvData;
     }
 
+    // Injetar arquivo_url (URL TTF) nos elementos de numeração para que o engine
+    // Python possa baixar fontes web mesmo sem acesso à tabela catalogo_fontes.
+    function _injectFontUrls(numObj) {
+        if (!numObj || !numObj.elements || !state_fonts.catalogo) return;
+        const catMap = {};
+        for (const f of state_fonts.catalogo) {
+            if (f.arquivo_url && f.font_family) {
+                catMap[f.font_family.toLowerCase().trim()] = f.arquivo_url;
+                if (f.nome) catMap[f.nome.toLowerCase().trim()] = f.arquivo_url;
+            }
+        }
+        for (const el of numObj.elements) {
+            if (el.arquivo_url || el.font_url || el._font_data) continue; // já tem
+            const fn = (el.font_name || '').trim().toLowerCase();
+            if (fn && catMap[fn]) {
+                el.arquivo_url = catMap[fn];
+            }
+        }
+    }
+    _injectFontUrls(payloadNumeracao);
+
     const payload = {
 
         formato_id: fmtId,
@@ -8672,7 +8693,12 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         numeracao: payloadNumeracao,
 
-        numeracao_2: num2,
+        numeracao_2: (() => {
+            if (!num2) return null;
+            const copy = JSON.parse(JSON.stringify(num2));
+            _injectFontUrls(copy);
+            return copy;
+        })(),
 
         seq_start: start,
 
