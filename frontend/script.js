@@ -21613,41 +21613,40 @@ async function gerarLinkCliente(osId, numero) {
             os.status_calculado = novoStatus;
         }
 
-        // 2. URL de fallback imediata
+        // 2. Obter/Criar o link oficial registrado no banco
+        toast('⏳ Gerando link...', 'info');
+        const linkUrl = await getOrCreateLinkCliente(osId, numero);
         const host = window.location.origin;
-        const fallbackUrl = `${host}/cliente.html?os=${osId}`;
+        const finalUrl = linkUrl || `${host}/cliente/${numero}`;
 
-        // 3. ABRIR MODAL DE NOTIFICAÇÃO DO CLIENTE IMEDIATAMENTE (SEM AGUARDAR REDE)!
-        console.log('[LinkDebug] Chamando abrirModalEnviarEmailCliente...');
-        abrirModalEnviarEmailCliente(osId, numero, fallbackUrl);
-
-        // 4. Atualizar no Supabase em segundo plano
+        // 3. Atualizar no Supabase em segundo plano
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             if (osId.startsWith('vibe_')) {
-                await supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId);
+                supabaseClient.from('pedidos_links_cliente').update({ status_arte: novoStatus }).eq('os_id', osId).then(() => {});
             } else {
-                await supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId);
+                supabaseClient.from('producao_ordens_servico').update({ status: novoStatus }).eq('id', osId).then(() => {});
             }
         }
 
-        // 5. Obter/Criar o link oficial registrado no banco
-        const linkUrl = await getOrCreateLinkCliente(osId, numero) || fallbackUrl;
-
-        // Atualizar campo de link no modal se o oficial for retornado
-        const elLink = document.getElementById('modal-email-link-display');
-        if (elLink) elLink.textContent = linkUrl;
-
+        // 4. Copiar link para clipboard
         try {
-            await navigator.clipboard.writeText(linkUrl);
-            toast(`Link copiado! 📋 ${linkUrl}`, 'success');
+            await navigator.clipboard.writeText(finalUrl);
+            toast(`✅ Link copiado! ${finalUrl}`, 'success');
         } catch (clipErr) {
-            console.warn('[Gerar Link] Não foi possível copiar para o clipboard:', clipErr);
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = finalUrl; document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+            toast(`✅ Link gerado e copiado!`, 'success');
         }
+
+        // 5. Mostrar ícone de email na linha do pedido (sem abrir modal)
+        _mostrarIconeEmailNaLinha(osId, numero, finalUrl);
 
         // 6. Recarregar lista
         loadOrdens();
 
-        // 7. Regenerar snapshots em segundo plano (sem travar o modal)
+        // 7. Regenerar snapshots/imagens em segundo plano
         forceRegenerateSnapshots(osId).catch(snapErr => {
             console.warn('[Gerar Link] Erro ao regenerar snapshots:', snapErr);
         });
@@ -21656,6 +21655,58 @@ async function gerarLinkCliente(osId, numero) {
         console.error('Erro ao gerar link do cliente:', e);
         toast('Erro ao gerar o link: ' + e.message, 'error');
     }
+}
+
+// Exibe o ícone de email flutuante próximo ao botão do pedido clicado
+function _mostrarIconeEmailNaLinha(osId, numero, linkUrl) {
+    // Remover qualquer ícone email anterior
+    const anterior = document.getElementById('email-icon-popup-' + osId);
+    if (anterior) anterior.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'email-icon-popup-' + osId;
+    popup.style.cssText = `
+        position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+        background: linear-gradient(135deg, #1e293b, #0f172a);
+        border: 1px solid rgba(59,130,246,0.4);
+        border-radius: 14px; padding: 14px 18px;
+        display: flex; align-items: center; gap: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        animation: slideInRight 0.3s ease;
+        max-width: 360px;
+    `;
+    popup.innerHTML = `
+        <style>
+            @keyframes slideInRight {
+                from { transform: translateX(120%); opacity: 0; }
+                to   { transform: translateX(0);    opacity: 1; }
+            }
+        </style>
+        <div style="font-size:1.8rem; flex-shrink:0;">📋</div>
+        <div style="flex:1; min-width:0;">
+            <div style="font-size:0.82rem; font-weight:700; color:#e2e8f0; margin-bottom:4px;">Link copiado — Pedido #${numero}</div>
+            <div style="font-size:0.73rem; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${linkUrl}</div>
+        </div>
+        <button onclick="abrirModalEnviarEmailCliente('${osId}', '${numero}', '${linkUrl.replace(/'/g, "\\'")}')"
+                title="Enviar por e-mail"
+                style="flex-shrink:0; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.4);
+                       color:#60a5fa; border-radius:8px; width:38px; height:38px; cursor:pointer;
+                       font-size:1.2rem; display:flex; align-items:center; justify-content:center;
+                       transition:all .2s;"
+                onmouseenter="this.style.background='rgba(59,130,246,0.3)'"
+                onmouseleave="this.style.background='rgba(59,130,246,0.15)'">
+            ✉️
+        </button>
+        <button onclick="document.getElementById('email-icon-popup-${osId}').remove()"
+                style="flex-shrink:0; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+                       color:#64748b; border-radius:8px; width:28px; height:28px; cursor:pointer;
+                       font-size:0.85rem; display:flex; align-items:center; justify-content:center;">
+            ✕
+        </button>
+    `;
+    document.body.appendChild(popup);
+    // Auto-fechar após 8 segundos
+    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 8000);
 }
 
 function ensureModalEmailElement() {

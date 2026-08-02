@@ -754,7 +754,10 @@ async function initClientePage(numero, token) {
                         verso: itemVerso,
                         verso_tipo: itemVerso ? (item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE' ? item.verso_tipo : 'FRENTE E VERSO') : (item.verso_tipo || 'SÓ FRENTE'),
                         amostra_obs: item.observacao_arte || item.amostra_obs || '',
-                        amostra_status: statusFrontend
+                        amostra_status: statusFrontend,
+                        // Garantir que a imagem de aprovacao esteja sempre populada
+                        amostra_arte_base64: item.amostra_arte_base64 || item.arte_url || '',
+                        verso_amostra_arte_base64: item.verso_amostra_arte_base64 || item.verso_arte_url || ''
                     };
                 });
             }
