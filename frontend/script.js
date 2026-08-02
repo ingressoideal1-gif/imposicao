@@ -15313,8 +15313,9 @@ function renderOrdens() {
                                     btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);border-radius:6px;cursor:pointer;" title="Regenerar imagem e reenviar link com arte corrigida">⚠️ Reenviar Link</button>`);
                                 } else if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
-                                        <button onclick="abrirLinkClienteEAtualizarStatus('${os.id}', '${os.numero}', '${linkSalvo}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir Link">🔗</button>
-                                        <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar Link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
+                                        <button onclick="window.open('${linkSalvo}','_blank')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
+                                        <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
+                                        <button class="btn btn-sm" onclick="abrirModalEnviarEmailCliente('${os.id}', '${os.numero}', '${linkSalvo}')" title="Enviar por e-mail" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
                                     </div>`);
                                 } else if (isAguardando || isEntregaAlterada) {
                                     const btnColor = isEntregaAlterada ? 'background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);' : 'background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);';
@@ -21610,8 +21611,8 @@ async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
     const host = window.location.origin;
     const finalUrl = linkUrl || `${host}/cliente.html?os=${osId}`;
 
-    // 1. ABRIR MODAL DE E-MAIL E PÁGINA DO CLIENTE IMEDIATAMENTE!
-    abrirModalEnviarEmailCliente(osId, numero, finalUrl);
+    // Apenas abre o link na nova aba — modal de email é aberto SOMENTE quando o
+    // usuário clicar no ícone ✉️ separado na linha do pedido (não automaticamente)
     window.open(finalUrl, '_blank');
 
     // 2. Atualizar status e recarregar em segundo plano
@@ -24702,4 +24703,4 @@ window.admDeleteImage = async function(name, btnEl) {
         toast('Erro ao excluir: ' + err.message, 'error');
         if (btnEl) { btnEl.disabled = false; btnEl.textContent = '🗑️'; }
     }
-};
+};
