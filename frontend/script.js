@@ -13463,7 +13463,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte, status_impressao, status_producao, quantidade, ordem, modelo, modelo_nome, amostra_arte_base64, arte_url')
+                .select('id, id_int, status_arte, status_impressao, status_producao, quantidade, ordem, nome_modelo, amostra_arte_base64, arte_url')
                 .in('id_int', chunk);
                 
             if (error) throw error;
@@ -13479,7 +13479,7 @@ async function carregarModelosGlobais() {
             m.amostra_arte_base64 = m.amostra_arte_base64 || '';
             m.arte_url = m.arte_url || '';
             m.ordem = m.ordem !== undefined ? m.ordem : null;
-            m.modelo = m.modelo || m.modelo_nome || '';
+            m.modelo = m.nome_modelo || '';
             state.modelosGlobais[m.id_int].push(m);
         });
         console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
