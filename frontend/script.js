@@ -15071,7 +15071,19 @@ function renderOrdens() {
                     : osItensList.reduce((acc, item) => acc + (parseInt(item.quantidade || item.qtd || 0)), 0);
 
                 // Frete (forma de envio)
-                const frete = (state.freteMap && state.freteMap[os.numero]) || 'Retirar';
+                const freteRaw = (state.freteMap && state.freteMap[os.numero]) || 'Retirada Local';
+                const FRETE_IMGS = {
+                    'Sedex':                    'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293785_Sedex.png',
+                    'Transportadora S\u00e3o Miguel': 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293565_Sao-Miguel.png',
+                    'Motoboy':                  'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293109_Motoboy.png',
+                    'Retirada Local':           'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
+                    'Retirar':                  'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/app-imagens/1785678293377_Retira.png',
+                };
+                const freteImgUrl = FRETE_IMGS[freteRaw];
+                const freteHtml = freteImgUrl
+                    ? `<img src="${freteImgUrl}" alt="${freteRaw}" title="${freteRaw}" style="height:28px; max-width:80px; object-fit:contain; display:block; margin:0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='';">
+                       <span style="display:none; font-size:0.78rem; color:var(--text-dim);">${freteRaw}</span>`
+                    : `<span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text); border:1px solid rgba(255,255,255,0.1);">${freteRaw}</span>`;
 
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
                 let nomeEventoHtml = '';
@@ -15097,7 +15109,7 @@ function renderOrdens() {
                         <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td><span class="badge">${totalItens} ${totalItens === 1 ? 'modelo' : 'modelos'}</span></td>
                         <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
-                        <td><span class="badge" style="background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1);">${frete}</span></td>
+                        <td style="text-align:center; vertical-align:middle;">${freteHtml}</td>
                         <td>${getStatusImpressaoBadge(statusImpressaoPedido)}</td>
                     </tr>
                 `;
