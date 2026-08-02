@@ -485,9 +485,8 @@ function createFontPicker(elId, currentValue, onChange) {
                     const fullName = f.nome;
                     const sel = fullName === currentFont ? 'selected' : '';
                     html += `<div class="font-picker-opt ${sel}" data-value="${fullName}">
-                        <span class="fp-sample" style="font-family:'${f.font_family}',sans-serif; font-weight:700;">Aa 123</span>
-                        <span class="fp-name">${f.nome}</span>
-                        <span class="fp-style-tag" style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);">Oficial</span>
+                        <span class="fp-name" style="flex:1; font-size:0.85rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${f.nome}</span>
+                        <span class="fp-sample" style="font-family:'${f.font_family}',sans-serif; font-size:0.75rem; color:#64748b; flex-shrink:0;">Aa</span>
                     </div>`;
                 }
             } else {
