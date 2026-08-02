@@ -13256,13 +13256,8 @@ async function loadOrdens() {
                 // Passamos os produtos já carregados em paralelo para o loadOrdensFromVibecode
                 const loaded = await loadOrdensFromVibecode(pedidosComerciais, produtos);
                 if (loaded) {
-                    // Renderiza a lista de OS imediatamente para liberar a UI
+                    await carregarModelosGlobais().catch(e => console.warn('Erro ao carregar modelos globais:', e));
                     renderOrdens();
-                    
-                    // Executa as sincronizações pesadas em background sem travar a navegação
-                    carregarModelosGlobais().then(() => {
-                        renderOrdens();
-                    }).catch(e => console.warn('Erro ao carregar modelos globais:', e));
                     
                     sincronizarStatusOrdensDinamico().then(() => {
                         renderOrdens();
@@ -15024,7 +15019,7 @@ function renderOrdens() {
                 // Preview da arte do modelo de número mais baixo
                 const numOsPreview = parseInt(os.numero);
                 const modelosGlobaisPreview = (state.modelosGlobais && state.modelosGlobais[numOsPreview]) ? state.modelosGlobais[numOsPreview] : [];
-                const listaCandidatos = (modelosGlobaisPreview.length > 0 ? modelosGlobaisPreview : osItensList).concat(osItensList || []);
+                const todosCandidatos = [...modelosGlobaisPreview, ...osItensList];
                 
                 const getModeloNumSort = (item) => {
                     if (item && typeof item.ordem === 'number' && !isNaN(item.ordem)) return item.ordem;
@@ -15034,8 +15029,10 @@ function renderOrdens() {
                     return m ? parseInt(m[0], 10) : 999999;
                 };
 
-                const modelosOrdenados = [...listaCandidatos].sort((a, b) => getModeloNumSort(a) - getModeloNumSort(b));
-                const modeloPreviewItem = modelosOrdenados.find(m => m && (m.amostra_arte_base64 || m.arte_url || m.pdf_url)) || modelosOrdenados[0];
+                const candidatosComImagem = todosCandidatos.filter(m => m && (m.amostra_arte_base64 || m.arte_url || m.pdf_url));
+                candidatosComImagem.sort((a, b) => getModeloNumSort(a) - getModeloNumSort(b));
+
+                const modeloPreviewItem = candidatosComImagem[0];
                 let previewSrc = modeloPreviewItem ? (modeloPreviewItem.amostra_arte_base64 || modeloPreviewItem.arte_url || modeloPreviewItem.pdf_url || '') : '';
                 if (!previewSrc && state.todasArtes) {
                     const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(numOsPreview));
