@@ -32,7 +32,7 @@ $producaoFile = "frontend\producao.html"
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."
 git add -A
-git commit -m "fix: merge local fonts with supabase (v$nextV)"
+git commit -m "fix: proxy api to render + load fonts on view-fontes (v$nextV)"
 git push origin main
 
 # 4. Vercel deploy

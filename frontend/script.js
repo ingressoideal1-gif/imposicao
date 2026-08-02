@@ -16799,6 +16799,9 @@ window.showView = function(viewId) {
         const impPreview = document.getElementById('imp-preview-card-container');
         if (impPreview) impPreview.style.display = 'block';
     }
+    if (viewId === 'view-fontes') {
+        loadCatalogoFontes().then(() => renderCatFontesUI());
+    }
     if (viewId === 'view-pedido') {
         if (state.activeOSItem) {
             const { osId, itemId } = state.activeOSItem;
