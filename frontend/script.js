@@ -9071,6 +9071,8 @@ window.runImposition = async function (mode, returnBlob = false) {
                                     // Verificar se o agente está desatualizado em relação à nuvem
                                     const localVer = checkData.version;
                                     if (localVer) {
+                                        const verEl = document.getElementById('newprod-version-display');
+                                        if (verEl) verEl.textContent = localVer;
                                         fetch('/api/version')
                                             .then(r => r.ok ? r.json() : null)
                                             .then(cloudData => {
@@ -9125,12 +9127,12 @@ window.runImposition = async function (mode, returnBlob = false) {
             if (!dot || !text) return;
 
             if (localActive) {
-                const verName = version || "NewProd 1.0";
-                text.textContent = verName.includes("NewProd") ? verName : `NewProd 1.0 (${verName})`;
+                const verName = version || "NewProd 1.1";
+                text.textContent = verName.includes("NewProd") ? verName : `NewProd 1.1 (${verName})`;
                 dot.style.background = "#22c55e";
                 dot.style.boxShadow = "0 0 8px #22c55e";
             } else {
-                text.textContent = "NewProd 1.0 (Offline)";
+                text.textContent = "NewProd 1.1 (Offline)";
                 dot.style.background = "#f43f5e";
                 dot.style.boxShadow = "0 0 8px #f43f5e";
             }
@@ -13237,7 +13239,7 @@ async function loadOrdens() {
         if (typeof vibeClient !== 'undefined' && vibeClient) {
             vibeProdutosPromise = vibeClient
                 .from('produtos_proposta')
-                .select('id, id_int, id_produto, nome_produto, modelo_descri, qtd, created_at, updated_at, amostra_cor_id, amostra_num_id, amostra_status, amostra_obs')
+                .select('id, id_int, id_produto, nome_produto, modelo_descri, qtd, created_at, updated_at, amostra_cor_id, amostra_num_id, amostra_status, amostra_obs, amostra_arte_base64, arte_url')
                 .order('created_at', { ascending: false });
             promises.push(vibeProdutosPromise);
         }
@@ -13466,7 +13468,7 @@ async function carregarModelosGlobais() {
             const chunk = todosNumeros.slice(i, i + chunkSize);
             const { data, error } = await supabaseClient
                 .from('pedidos_modelos')
-                .select('id, id_int, status_arte, status_impressao, status_producao, quantidade')
+                .select('id, id_int, status_arte, status_impressao, status_producao, quantidade, ordem, modelo, modelo_nome, amostra_arte_base64, arte_url')
                 .in('id_int', chunk);
                 
             if (error) throw error;
@@ -13479,6 +13481,10 @@ async function carregarModelosGlobais() {
             m.impressao = normalizarStatusImpressao(m.status_impressao || m.status_producao);
             m.quantidade = parseInt(m.quantidade || 0);
             m.amostra_status = m.status_arte || m.amostra_status || '';
+            m.amostra_arte_base64 = m.amostra_arte_base64 || '';
+            m.arte_url = m.arte_url || '';
+            m.ordem = m.ordem !== undefined ? m.ordem : null;
+            m.modelo = m.modelo || m.modelo_nome || '';
             state.modelosGlobais[m.id_int].push(m);
         });
         console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
@@ -13672,6 +13678,8 @@ function mapVibecodeProdutoToOSItem(p, osId) {
         q_cam: p.Q_CAM || p.q_cam || p.qtd_locais || p.qtd_cam || 0,
         l_cam: p.L_CAM || p.l_cam || p.lotacao_cam || p.lotacao || p.lotacao_por_local || 1,
         observacoes: p.modelo_descri || p.nome_produto || '',
+        amostra_arte_base64: p.amostra_arte_base64 || p.arte_url || '',
+        arte_url: p.arte_url || p.amostra_arte_base64 || '',
         created_at: p.created_at,
         updated_at: p.updated_at || p.created_at,
         
@@ -15013,26 +15021,47 @@ function renderOrdens() {
                     </div>
                 `;
 
-                // Preview da arte do 1º modelo
-                const primeiroItem = osItensList[0];
+                // Preview da arte do modelo de número mais baixo
+                const numOsPreview = parseInt(os.numero);
+                const modelosGlobaisPreview = (state.modelosGlobais && state.modelosGlobais[numOsPreview]) ? state.modelosGlobais[numOsPreview] : [];
+                const listaCandidatos = (modelosGlobaisPreview.length > 0 ? modelosGlobaisPreview : osItensList).concat(osItensList || []);
+                
+                const getModeloNumSort = (item) => {
+                    if (item && typeof item.ordem === 'number' && !isNaN(item.ordem)) return item.ordem;
+                    if (item && typeof item.modelo === 'number' && !isNaN(item.modelo)) return item.modelo;
+                    const str = String(item ? (item.modelo || item.modelo_nome || item.modelo_descri || item.nome || item.id || '') : '');
+                    const m = str.match(/\d+/);
+                    return m ? parseInt(m[0], 10) : 999999;
+                };
+
+                const modelosOrdenados = [...listaCandidatos].sort((a, b) => getModeloNumSort(a) - getModeloNumSort(b));
+                const modeloPreviewItem = modelosOrdenados.find(m => m && (m.amostra_arte_base64 || m.arte_url || m.pdf_url)) || modelosOrdenados[0];
+                let previewSrc = modeloPreviewItem ? (modeloPreviewItem.amostra_arte_base64 || modeloPreviewItem.arte_url || modeloPreviewItem.pdf_url || '') : '';
+                if (!previewSrc && state.todasArtes) {
+                    const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(numOsPreview));
+                    if (arteGlobal && (arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64)) {
+                        previewSrc = arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64;
+                    }
+                }
+
                 let previewHtml = `
                     <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: var(--text-dim); font-size: 1.1rem; margin: 0 auto;" title="Sem arte cadastrada">
                         🖼️
                     </div>
                 `;
-                if (primeiroItem && primeiroItem.amostra_arte_base64) {
-                    const isPdf = primeiroItem.amostra_arte_base64.startsWith('data:application/pdf') || primeiroItem.amostra_arte_base64.includes('JVBERi');
+                if (previewSrc) {
+                    const isPdf = previewSrc.startsWith('data:application/pdf') || previewSrc.includes('JVBERi') || previewSrc.toLowerCase().endsWith('.pdf');
                     if (isPdf) {
                         previewHtml = `
-                            <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${primeiroItem.amostra_arte_base64}', '_blank')">
+                            <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: rgba(59,130,246,0.1); border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); color: var(--blue); font-size: 1.2rem; cursor: pointer; margin: 0 auto;" title="Arte em PDF (clique para abrir)" onclick="event.stopPropagation(); window.open('${previewSrc}', '_blank')">
                                 📄
                             </div>
                         `;
                     } else {
                         previewHtml = `
-                            <img src="${primeiroItem.amostra_arte_base64}" 
+                            <img src="${previewSrc}" 
                                  style="width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
-                                 onclick="event.stopPropagation(); openClienteLightbox('${primeiroItem.amostra_arte_base64}')" 
+                                 onclick="event.stopPropagation(); openClienteLightbox('${previewSrc}')" 
                                  title="Clique para ampliar a arte" />
                         `;
                     }
@@ -23346,10 +23375,10 @@ window.setFiltroStatus = setFiltroStatus;
 window.setFiltroSetorArte = setFiltroSetorArte;
 window.setFiltroStatusArte = setFiltroStatusArte;
 
-// - ROUTER: Garantir que a página principal da aplicação seja a Lista de Arte (ao entrar e no F5) -
+// - ROUTER: Garantir que a página principal da aplicação seja o Painel de Produção (ao entrar e no F5) -
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof window.showView === 'function') {
-        setTimeout(() => window.showView('view-lista-arte'), 50);
+        setTimeout(() => window.showView('view-lista-impressao'), 50);
     }
 });
 

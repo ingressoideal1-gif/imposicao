@@ -74,7 +74,7 @@ for _candidate in [
 if _FRONTEND_DIR:
     app.mount("/app", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
 
-LOCAL_AGENT_VERSION = "NewProd 1.0"
+LOCAL_AGENT_VERSION = "NewProd 1.1"
 
 @app.get("/", include_in_schema=False)
 def root_redirect():
