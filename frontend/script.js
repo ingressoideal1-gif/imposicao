@@ -19808,6 +19808,7 @@ function snapshotAmostraSync(idx, osId, item, canvas, face) {
 // Força a regeneração de TODOS os snapshots de uma OS usando canvas offscreen
 // Garante que a imagem do link do cliente seja idêntica à janela combinada do editor
 async function forceRegenerateSnapshots(osId) {
+    // Garantir que os itens da OS estão carregados
     if ((!state.osItens[osId] || !state.osItens[osId].length) && typeof loadOSItens === 'function') {
         try {
             await loadOSItens(osId);
@@ -19821,6 +19822,18 @@ async function forceRegenerateSnapshots(osId) {
         return;
     }
 
+    // Garantir que cores, numerações e formatos estão no state (necessário fora do editor)
+    if (!state.cores || !state.cores.length) {
+        try { const { data } = await supabaseClient.from('producao_cores').select('*'); if (data) state.cores = data; } catch(e) {}
+    }
+    if (!state.numeracoes || !state.numeracoes.length) {
+        try { const { data } = await supabaseClient.from('producao_numeracoes').select('*'); if (data) state.numeracoes = data; } catch(e) {}
+    }
+    if (!state.formatos || !state.formatos.length) {
+        try { const { data } = await supabaseClient.from('producao_formatos').select('*'); if (data) state.formatos = data; } catch(e) {}
+    }
+
+    // Escala idêntica à usada na janela combinada do editor (150 DPI)
     const S = 150 / 25.4;
 
     for (let idx = 0; idx < itens.length; idx++) {
@@ -19829,43 +19842,61 @@ async function forceRegenerateSnapshots(osId) {
         // Pular items em modo PDF (usam viewer dedicado)
         if (item.modo_pdf) continue;
 
+        // Resolver cor e numeração a partir dos IDs salvos no item
+        // REGRA: Idêntico à janela combinada — usar amostra_cor_id e amostra_num_id do item
         const corId = item.amostra_cor_id || '';
         const numId = item.amostra_num_id || '';
-        const hasArteUrl = !!item.arte_url;
+        const hasArteUrl = !!(item.arte_url || item.verso_arte_url);
+        const hasAmostraExistente = !!(item.amostra_arte_base64);
 
-        // Pular items sem configuração visual
-        if (!corId && !numId && !hasArteUrl) continue;
-
-        const cor = corId ? state.cores.find(c => c.id === corId) : null;
-        const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
-
-        // Preload PDF elements na numeração se necessário
-        if (num) {
-            preloadAmostraItemPdfElements(num, idx, osId);
+        // Só pular se não tiver absolutamente nada para compor
+        if (!corId && !numId && !hasArteUrl && !hasAmostraExistente) {
+            console.log(`[Snapshot] Item ${idx} sem configuração visual, pulando.`);
+            continue;
         }
 
-        let fmt = null;
-        if (cor && cor.formato_id) fmt = state.formatos.find(f => String(f.id) === String(cor.formato_id));
-        if (!fmt && num && num.formato_id) fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
-        if (!fmt && state.formatos.length > 0) fmt = state.formatos[0];
-        if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+        const cor = corId ? (state.cores || []).find(c => c.id === corId) : null;
+        const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
 
-        // Renderizar e snapshot da FRENTE (canvas offscreen)
-        const canvasFront = document.createElement('canvas');
-        await drawAmostraFace(item, 'front', canvasFront, null, fmt, cor, num, idx, osId, S);
-        if (canvasFront.width > 0 && canvasFront.height > 0) {
-            await snapshotAmostraSync(idx, osId, item, canvasFront, 'frente');
-        }
-
-        // Renderizar e snapshot do VERSO (se duplex)
-        if (item.verso) {
-            const canvasBack = document.createElement('canvas');
-            await drawAmostraFace(item, 'back', canvasBack, null, fmt, cor, num, idx, osId, S);
-            if (canvasBack.width > 0 && canvasBack.height > 0) {
-                await snapshotAmostraSync(idx, osId, item, canvasBack, 'verso');
+        // Aguardar preload de PDFs/SVGs da numeração antes de renderizar
+        if (num && num.elements && num.elements.length > 0) {
+            if (typeof preloadAmostraItemPdfElements === 'function') {
+                preloadAmostraItemPdfElements(num, idx, osId);
+                await new Promise(r => setTimeout(r, 350));
             }
         }
+
+        // Resolver formato: 1) da cor, 2) da numeração, 3) primeiro do state, 4) fallback
+        let fmt = null;
+        if (cor && cor.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(cor.formato_id));
+        if (!fmt && num && num.formato_id) fmt = (state.formatos || []).find(f => String(f.id) === String(num.formato_id));
+        if (!fmt && state.formatos && state.formatos.length > 0) fmt = state.formatos[0];
+        if (!fmt) fmt = { width_mm: 180, height_mm: 50 };
+
+        console.log(`[Snapshot] Item ${idx} (OS ${osId}): cor=${corId||'—'}, num=${numId||'—'}, arte=${hasArteUrl}, fmt=${fmt.width_mm}x${fmt.height_mm}mm`);
+
+        try {
+            // ── FRENTE ──
+            const canvasFront = document.createElement('canvas');
+            await drawAmostraFace(item, 'front', canvasFront, null, fmt, cor, num, idx, osId, S);
+            if (canvasFront.width > 0 && canvasFront.height > 0) {
+                await snapshotAmostraSync(idx, osId, item, canvasFront, 'frente');
+            }
+
+            // ── VERSO (somente se item duplex) ──
+            if (item.verso) {
+                const canvasBack = document.createElement('canvas');
+                await drawAmostraFace(item, 'back', canvasBack, null, fmt, cor, num, idx, osId, S);
+                if (canvasBack.width > 0 && canvasBack.height > 0) {
+                    await snapshotAmostraSync(idx, osId, item, canvasBack, 'verso');
+                }
+            }
+        } catch (e) {
+            console.warn(`[Snapshot] Erro ao gerar snapshot do item ${idx}:`, e);
+        }
     }
+
+    console.log(`[Snapshot] Regeneração concluída para OS ${osId}`);
 }
 window.forceRegenerateSnapshots = forceRegenerateSnapshots;
 
