@@ -13,8 +13,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://imposicao.onrender.com/api/:match*"
+      "source": "/api/(.*)",
+      "destination": "https://imposicao.onrender.com/api/$1"
     },
     {
       "source": "/cliente/:match*",
