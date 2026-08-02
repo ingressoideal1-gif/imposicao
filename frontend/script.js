@@ -13397,7 +13397,7 @@ async function loadOrdens() {
             }
         }
         await sincronizarStatusOrdensDinamico();
-        // await carregarLinksExistentes(); // Movido para o topo da funo
+        carregarModelosGlobais().then(() => renderOrdens()).catch(e => console.warn('Erro modelos globais:', e));
         renderOrdens();
     } catch (e) {
         console.error('Erro ao carregar OS:', e);
