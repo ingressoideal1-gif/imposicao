@@ -150,6 +150,11 @@
                 Usuários
             </button>
 
+            <button class="nav-btn admin-only" data-view="view-adm" id="nav-adm" style="display:none;">
+                <span class="nav-icon">⚙️</span>
+                ADM
+            </button>
+
             <div style="flex-grow: 1;"></div>
             <div class="user-profile-bar" id="user-profile-bar" style="margin-top:auto; padding: 12px 0; border-top: 1px solid var(--border); display:none;">
                 <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="user-email-display">—</div>
@@ -2304,7 +2309,125 @@
             </section>
 
 
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: ADM - Configurações Gerais                              -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <section id="view-adm" class="view-section">
+
+                <!-- Header -->
+                <div class="page-header" style="margin-bottom: 0;">
+                    <div class="page-header-text">
+                        <h1>⚙️ ADM — Configurações Gerais</h1>
+                        <p>Gerencie recursos e configurações globais da aplicação.</p>
+                    </div>
+                </div>
+
+                <!-- Menu de abas horizontal -->
+                <div id="adm-tab-bar" style="
+                    display: flex;
+                    gap: 4px;
+                    padding: 8px 0 0 0;
+                    border-bottom: 2px solid var(--border);
+                    margin-bottom: 28px;
+                    flex-wrap: wrap;
+                ">
+                    <button class="adm-tab-btn active" data-adm-tab="imagens" onclick="switchAdmTab('imagens')" style="
+                        background: none; border: none; cursor: pointer;
+                        padding: 10px 22px; font-size: 0.92rem; font-weight: 600;
+                        color: var(--blue); border-bottom: 2.5px solid var(--blue);
+                        margin-bottom: -2px; border-radius: 6px 6px 0 0;
+                        transition: all .2s;
+                    ">🖼️ Imagens</button>
+                    <!-- Futuras abas serão adicionadas aqui -->
+                </div>
+
+                <!-- ── ABA: IMAGENS ────────────────────────────────────────── -->
+                <div id="adm-tab-imagens" class="adm-tab-content">
+
+                    <!-- Zona de Upload -->
+                    <div class="card" style="margin-bottom: 24px;">
+                        <div class="card-header">
+                            <span class="card-title"><span class="icon">⬆️</span> Upload de Imagens</span>
+                        </div>
+                        <div style="padding: 20px;">
+                            <p style="color: var(--text-dim); font-size: 0.88rem; margin: 0 0 16px 0;">
+                                Faça upload das imagens que serão utilizadas na aplicação (logos, fundos, ícones, etc.).<br>
+                                Formatos aceitos: <strong>PNG, JPG, JPEG, SVG, WEBP, GIF</strong>. Tamanho máximo: 5 MB por arquivo.
+                            </p>
+
+                            <!-- Drop Zone -->
+                            <div id="adm-img-dropzone" onclick="document.getElementById('adm-img-input').click()" style="
+                                border: 2px dashed var(--blue);
+                                border-radius: 12px;
+                                padding: 40px 20px;
+                                text-align: center;
+                                cursor: pointer;
+                                background: rgba(59,130,246,0.05);
+                                transition: all .2s;
+                                position: relative;
+                            "
+                            ondragover="event.preventDefault(); this.style.background='rgba(59,130,246,0.12)'; this.style.borderColor='#60a5fa';"
+                            ondragleave="this.style.background='rgba(59,130,246,0.05)'; this.style.borderColor='var(--blue)';"
+                            ondrop="handleAdmImgDrop(event)">
+                                <div style="font-size: 2.5rem; margin-bottom: 10px;">🖼️</div>
+                                <div style="font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 6px;">
+                                    Clique ou arraste imagens aqui
+                                </div>
+                                <div style="font-size: 0.82rem; color: var(--text-dim);">PNG, JPG, SVG, WEBP, GIF — até 5 MB</div>
+                                <input type="file" id="adm-img-input" accept="image/*" multiple style="display:none;" onchange="handleAdmImgSelect(event)">
+                            </div>
+
+                            <!-- Barra de progresso de upload -->
+                            <div id="adm-img-upload-progress" style="display:none; margin-top: 16px;">
+                                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span id="adm-img-progress-label" style="font-size: 0.85rem; color: var(--text-dim);">Enviando...</span>
+                                    <span id="adm-img-progress-pct" style="font-size: 0.85rem; font-weight: 700; color: var(--blue);">0%</span>
+                                </div>
+                                <div style="background: var(--border); border-radius: 99px; height: 6px; overflow: hidden;">
+                                    <div id="adm-img-progress-bar" style="height: 100%; background: linear-gradient(90deg, var(--blue), #818cf8); border-radius: 99px; width: 0%; transition: width .3s;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Galeria de imagens -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-title"><span class="icon">📂</span> Imagens Cadastradas</span>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input type="text" id="adm-img-search" placeholder="Buscar por nome..." class="form-control" style="width:220px; height:32px; font-size:0.85rem;" oninput="filterAdmImages()">
+                                <button class="btn btn-secondary btn-sm" onclick="loadAdmImages()">🔄 Atualizar</button>
+                            </div>
+                        </div>
+                        <div style="padding: 20px;">
+                            <!-- Loading state -->
+                            <div id="adm-img-loading" style="text-align:center; color: var(--text-dim); padding: 40px;">
+                                <div style="font-size: 1.5rem; margin-bottom: 8px;">⏳</div>
+                                Carregando imagens...
+                            </div>
+                            <!-- Empty state -->
+                            <div id="adm-img-empty" style="display:none; text-align:center; color: var(--text-dim); padding: 40px;">
+                                <div style="font-size: 2rem; margin-bottom: 8px;">📭</div>
+                                Nenhuma imagem cadastrada ainda.
+                            </div>
+                            <!-- Gallery grid -->
+                            <div id="adm-img-gallery" style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                                gap: 16px;
+                            "></div>
+                        </div>
+                    </div>
+
+                </div>
+                <!-- fim aba imagens -->
+
+            </section>
+            <!-- fim view-adm -->
+
+
             <!-- MODAL GERENCIAMENTO DE ARTES -->
+
             <div id="modal-artes" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
                 <div class="modal-content" style="background: var(--bg-card); width: 90%; max-width: 800px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh;">
                     <div class="modal-header" style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">

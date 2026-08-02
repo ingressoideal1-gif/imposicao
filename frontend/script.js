@@ -10703,7 +10703,7 @@ const PERM_NAV_MAP = {
     perm_producao_view:    ['nav-lista-impressao'],
     perm_lista_arte_view:  ['nav-lista-arte'],
     perm_impressoras_view: ['nav-impressoras'],
-    perm_admin_view:       ['nav-admin'],
+    perm_admin_view:       ['nav-admin', 'nav-adm'],
 };
 
 // Definição dos módulos para renderizar permissões no painel admin
@@ -10746,11 +10746,12 @@ function applyPermissions(perms) {
     const configLabels = document.querySelectorAll('.nav-group-label');
     if (configLabels[0]) configLabels[0].style.display = hasConfig ? '' : 'none';
 
-    // Admin label + button
+    // Admin label + buttons
     const adminLabel = document.querySelector('.nav-group-label.admin-only');
     if (adminLabel) adminLabel.style.display = perms.perm_admin_view ? '' : 'none';
-    const adminBtn = document.querySelector('.nav-btn.admin-only');
-    if (adminBtn) adminBtn.style.display = perms.perm_admin_view ? '' : 'none';
+    document.querySelectorAll('.nav-btn.admin-only').forEach(btn => {
+        btn.style.display = perms.perm_admin_view ? '' : 'none';
+    });
 }
 
 
@@ -24326,3 +24327,245 @@ function showAgentUpdateWarning(baseUrl, latestVersion) {
 }
 
 window.showAgentUpdateWarning = showAgentUpdateWarning;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VIEW ADM — Configurações Gerais
+// ══════════════════════════════════════════════════════════════════════════════
+
+const ADM_IMG_BUCKET = 'app-imagens';
+let _admImages = []; // cache de imagens carregadas
+
+// ── Troca de aba horizontal ────────────────────────────────────────────────
+window.switchAdmTab = function(tabId) {
+    // Esconder todos os conteúdos de aba
+    document.querySelectorAll('.adm-tab-content').forEach(el => el.style.display = 'none');
+    // Desativar todos os botões
+    document.querySelectorAll('.adm-tab-btn').forEach(btn => {
+        btn.style.color = 'var(--text-dim)';
+        btn.style.borderBottom = '2.5px solid transparent';
+    });
+    // Mostrar aba selecionada
+    const tab = document.getElementById('adm-tab-' + tabId);
+    if (tab) tab.style.display = '';
+    // Ativar botão da aba
+    const btn = document.querySelector(`.adm-tab-btn[data-adm-tab="${tabId}"]`);
+    if (btn) {
+        btn.style.color = 'var(--blue)';
+        btn.style.borderBottom = '2.5px solid var(--blue)';
+    }
+    // Carregar dados se necessário
+    if (tabId === 'imagens') loadAdmImages();
+};
+
+// Inicializa a view ADM ao entrar nela (hook no showView)
+const _origShowViewForAdm = window.showView;
+window.showView = function(viewId) {
+    if (_origShowViewForAdm) _origShowViewForAdm(viewId);
+    if (viewId === 'view-adm') {
+        // Garantir que a aba imagens esteja ativa
+        document.querySelectorAll('.adm-tab-content').forEach(el => el.style.display = 'none');
+        const tabImg = document.getElementById('adm-tab-imagens');
+        if (tabImg) tabImg.style.display = '';
+        loadAdmImages();
+    }
+};
+
+// ── Upload via input (seleção de arquivo) ─────────────────────────────────
+window.handleAdmImgSelect = async function(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    await uploadAdmImages(files);
+    event.target.value = '';
+};
+
+// ── Upload via drag-and-drop ───────────────────────────────────────────────
+window.handleAdmImgDrop = async function(event) {
+    event.preventDefault();
+    const dz = document.getElementById('adm-img-dropzone');
+    if (dz) { dz.style.background = 'rgba(59,130,246,0.05)'; dz.style.borderColor = 'var(--blue)'; }
+    const files = Array.from(event.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+    if (!files.length) { toast('Apenas imagens são aceitas.', 'warning'); return; }
+    await uploadAdmImages(files);
+};
+
+// ── Lógica de upload central ───────────────────────────────────────────────
+async function uploadAdmImages(files) {
+    if (!supabaseClient) { toast('Supabase não disponível.', 'error'); return; }
+
+    const progressWrap = document.getElementById('adm-img-upload-progress');
+    const progressBar  = document.getElementById('adm-img-progress-bar');
+    const progressPct  = document.getElementById('adm-img-progress-pct');
+    const progressLbl  = document.getElementById('adm-img-progress-label');
+
+    const maxSize = 5 * 1024 * 1024;
+    const validFiles = files.filter(f => {
+        if (f.size > maxSize) { toast(`${f.name} excede 5 MB — ignorado.`, 'warning'); return false; }
+        return true;
+    });
+    if (!validFiles.length) return;
+
+    if (progressWrap) progressWrap.style.display = '';
+    let done = 0;
+
+    for (const file of validFiles) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `${Date.now()}_${safeName}`;
+        if (progressLbl) progressLbl.textContent = `Enviando: ${file.name}`;
+
+        try {
+            const { error } = await supabaseClient.storage
+                .from(ADM_IMG_BUCKET)
+                .upload(path, file, { upsert: true, contentType: file.type });
+
+            if (error) throw error;
+            done++;
+            const pct = Math.round((done / validFiles.length) * 100);
+            if (progressBar) progressBar.style.width = pct + '%';
+            if (progressPct) progressPct.textContent = pct + '%';
+            toast(`✅ ${file.name} enviada com sucesso!`, 'success');
+        } catch (err) {
+            toast(`Erro ao enviar ${file.name}: ${err.message}`, 'error');
+        }
+    }
+
+    setTimeout(() => {
+        if (progressWrap) progressWrap.style.display = 'none';
+        if (progressBar)  progressBar.style.width = '0%';
+    }, 1500);
+
+    await loadAdmImages();
+}
+
+// ── Listar imagens do bucket ───────────────────────────────────────────────
+window.loadAdmImages = async function() {
+    const loading = document.getElementById('adm-img-loading');
+    const empty   = document.getElementById('adm-img-empty');
+    const gallery = document.getElementById('adm-img-gallery');
+    if (!gallery) return;
+
+    if (loading) loading.style.display = '';
+    if (empty)   empty.style.display   = 'none';
+    gallery.innerHTML = '';
+
+    if (!supabaseClient) {
+        if (loading) loading.style.display = 'none';
+        if (empty)   empty.style.display = '';
+        return;
+    }
+
+    try {
+        const { data, error } = await supabaseClient.storage
+            .from(ADM_IMG_BUCKET)
+            .list('', { limit: 500, sortBy: { column: 'created_at', order: 'desc' } });
+
+        if (error) throw error;
+
+        const files = (data || []).filter(f => f.name && !f.name.startsWith('.'));
+        _admImages = files;
+
+        if (loading) loading.style.display = 'none';
+
+        if (!files.length) {
+            if (empty) empty.style.display = '';
+            return;
+        }
+
+        renderAdmGallery(files);
+    } catch (err) {
+        if (loading) loading.style.display = 'none';
+        toast('Erro ao carregar imagens: ' + err.message, 'error');
+    }
+};
+
+// ── Renderizar grade de imagens ────────────────────────────────────────────
+function renderAdmGallery(files) {
+    const gallery = document.getElementById('adm-img-gallery');
+    if (!gallery) return;
+
+    gallery.innerHTML = files.map(file => {
+        const { data } = supabaseClient.storage.from(ADM_IMG_BUCKET).getPublicUrl(file.name);
+        const url = data?.publicUrl || '';
+        const sizeKB = file.metadata?.size ? (file.metadata.size / 1024).toFixed(0) + ' KB' : '';
+        const nameSafe = file.name.replace(/'/g, "\\'");
+        const urlSafe  = url.replace(/'/g, "\\'");
+
+        return `
+        <div class="adm-img-card" style="
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow .2s, transform .2s;
+            cursor: pointer;
+        "
+        onmouseenter="this.style.boxShadow='0 4px 20px rgba(59,130,246,0.2)'; this.style.transform='translateY(-2px)'"
+        onmouseleave="this.style.boxShadow=''; this.style.transform=''">
+            <!-- Preview da imagem -->
+            <div style="width:100%; aspect-ratio:16/10; overflow:hidden; background:rgba(0,0,0,0.2);"
+                 onclick="openClienteLightbox('${urlSafe}')">
+                <img src="${url}" alt="${file.name}"
+                     loading="lazy"
+                     style="width:100%; height:100%; object-fit:cover; transition: transform .3s;"
+                     onmouseenter="this.style.transform='scale(1.05)'"
+                     onmouseleave="this.style.transform=''"
+                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'padding:20px; text-align:center; color:var(--text-dim);\\'>🖼️</div>'">
+            </div>
+            <!-- Info e ações -->
+            <div style="padding: 10px 12px; flex:1; display:flex; flex-direction:column; gap:4px;">
+                <div style="font-size:0.78rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${file.name}">${file.name}</div>
+                ${sizeKB ? `<div style="font-size:0.72rem; color:var(--text-dim);">${sizeKB}</div>` : ''}
+                <div style="display:flex; gap:6px; margin-top:6px;">
+                    <button onclick="event.stopPropagation(); admCopyUrl('${urlSafe}')"
+                            style="flex:1; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); color:var(--blue); border-radius:6px; padding:4px 0; font-size:0.75rem; cursor:pointer; transition:all .2s;"
+                            title="Copiar URL">🔗 URL</button>
+                    <button onclick="event.stopPropagation(); admDeleteImage('${nameSafe}', this)"
+                            style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#f87171; border-radius:6px; padding:4px 8px; font-size:0.75rem; cursor:pointer; transition:all .2s;"
+                            title="Excluir imagem">🗑️</button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ── Filtrar galeria por nome ───────────────────────────────────────────────
+window.filterAdmImages = function() {
+    const q = (document.getElementById('adm-img-search')?.value || '').toLowerCase().trim();
+    const filtered = q ? _admImages.filter(f => f.name.toLowerCase().includes(q)) : _admImages;
+    const empty = document.getElementById('adm-img-empty');
+    if (!filtered.length && q) {
+        const gallery = document.getElementById('adm-img-gallery');
+        if (gallery) gallery.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--text-dim); padding:30px;">Nenhuma imagem encontrada para "<strong>${q}</strong>"</div>`;
+        if (empty) empty.style.display = 'none';
+    } else {
+        if (empty) empty.style.display = filtered.length ? 'none' : '';
+        renderAdmGallery(filtered);
+    }
+};
+
+// ── Copiar URL da imagem ───────────────────────────────────────────────────
+window.admCopyUrl = function(url) {
+    navigator.clipboard.writeText(url).then(() => toast('URL copiada!', 'success')).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = url; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        toast('URL copiada!', 'success');
+    });
+};
+
+// ── Excluir imagem ────────────────────────────────────────────────────────
+window.admDeleteImage = async function(name, btnEl) {
+    if (!confirm(`Excluir a imagem "${name}"? Esta ação não pode ser desfeita.`)) return;
+    if (!supabaseClient) return;
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳'; }
+    try {
+        const { error } = await supabaseClient.storage.from(ADM_IMG_BUCKET).remove([name]);
+        if (error) throw error;
+        toast('Imagem excluída.', 'success');
+        await loadAdmImages();
+    } catch (err) {
+        toast('Erro ao excluir: ' + err.message, 'error');
+        if (btnEl) { btnEl.disabled = false; btnEl.textContent = '🗑️'; }
+    }
+};
