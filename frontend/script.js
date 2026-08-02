@@ -18817,7 +18817,7 @@ window.colarArte = async function(idx, osId, itemId, face = 'frente') {
         if (input) input.value = '';
         
         const osItems = state.osItens[osId];
-        const item = osItems.find(i => String(i.id) === String(itemId));
+        const item = osItems ? osItems.find(i => String(i.id) === String(itemId)) : null;
         if (item) {
             if (face === 'verso') {
                 item.verso_arte_url = sourceUrl;
@@ -18826,10 +18826,26 @@ window.colarArte = async function(idx, osId, itemId, face = 'frente') {
             }
         }
         
-        renderItemAmostraCombinada(idx, osId);
-        
+        // CRITICAL: Montar payload preservando explicitamente cor e numeração já cadastradas.
+        // Uma colagem de arte NUNCA deve zerar amostra_cor_id/amostra_num_id —
+        // apenas a URL da arte é alterada; cor e num permanecem intactos.
         const dbField = face === 'verso' ? 'verso_arte_url' : 'arte_url';
-        await saveAmostraToDB(itemId, osId, { [dbField]: sourceUrl });
+        const payload = { [dbField]: sourceUrl };
+        if (item && item.amostra_cor_id) payload.amostra_cor_id = item.amostra_cor_id;
+        if (item && item.amostra_num_id) payload.amostra_num_id = item.amostra_num_id;
+
+        await saveAmostraToDB(itemId, osId, payload);
+
+        // Só re-renderizar a janela combinada se os canvases estiverem no DOM
+        // (evita renderAmostrasOSItens fora do editor, que dispara onItemCorSelect
+        // e pode salvar amostra_cor_id/amostra_num_id = null por engano)
+        const containerId = state.amostrasContainerId || 'amostras-itens-container';
+        const hasCanvas = !!(document.getElementById(`amostra-item-canvas-${idx}`) ||
+                             document.querySelector(`#${containerId} canvas[id*="amostra-item-canvas-${idx}"]`));
+        if (hasCanvas) {
+            renderItemAmostraCombinada(idx, osId);
+        }
+
         toast('Arte vinculada com sucesso!', 'success');
     } catch (e) {
         console.error('Falha ao colar arte:', e);
