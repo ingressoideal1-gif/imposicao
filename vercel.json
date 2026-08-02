@@ -13,16 +13,16 @@
   ],
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "https://imposicao.onrender.com/api/$1"
+      "source": "/api/:path*",
+      "destination": "https://imposicao.onrender.com/api/:path*"
     },
     {
       "source": "/cliente/:match*",
       "destination": "/frontend/cliente.html"
     },
     {
-      "source": "/(.*)",
-      "destination": "/frontend/$1"
+      "source": "/:path*",
+      "destination": "/frontend/:path*"
     }
   ]
 }

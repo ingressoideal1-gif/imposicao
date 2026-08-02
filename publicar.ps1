@@ -32,7 +32,7 @@ $producaoFile = "frontend\producao.html"
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."
 git add -A
-git commit -m "fix: correct vercel rewrite syntax for api proxy (v$nextV)"
+git commit -m "fix: use vercel native path wildcard syntax for api proxy (v$nextV)"
 git push origin main
 
 # 4. Vercel deploy
