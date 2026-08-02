@@ -18788,6 +18788,20 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         delete dbData.arte_json;
         delete dbData.verso_arte_json;
 
+        // GUARD: Quando salvando arte (arte_url, amostra_arte_base64), SEMPRE preservar
+        // amostra_cor_id e amostra_num_id se já existirem no item local.
+        // Isso previne que qualquer save de arte zere a associação de cor/numeração.
+        const isArteSave = ('arte_url' in dbData || 'amostra_arte_base64' in dbData || 
+                            'verso_arte_url' in dbData || 'verso_amostra_arte_base64' in dbData);
+        if (isArteSave) {
+            if (!('amostra_cor_id' in dbData) && itemLocal.amostra_cor_id) {
+                dbData.amostra_cor_id = itemLocal.amostra_cor_id;
+            }
+            if (!('amostra_num_id' in dbData) && itemLocal.amostra_num_id) {
+                dbData.amostra_num_id = itemLocal.amostra_num_id;
+            }
+        }
+
         // Se não sobrou nenhum campo para atualizar, evita fazer a requisição
         if (Object.keys(dbData).length === 0) {
             return;

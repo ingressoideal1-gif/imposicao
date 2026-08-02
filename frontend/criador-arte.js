@@ -1311,6 +1311,11 @@ async function salvarArteDoEditor() {
             arte_json: jsonStructure
         };
 
+        // CRITICAL: Preservar amostra_cor_id e amostra_num_id já cadastrados —
+        // uma atualização de arte NUNCA deve zerar a cor/numeração associada ao modelo.
+        if (item.amostra_cor_id) dataToSave.amostra_cor_id = item.amostra_cor_id;
+        if (item.amostra_num_id) dataToSave.amostra_num_id = item.amostra_num_id;
+
         if (typeof saveAmostraToDB === 'function') {
             await saveAmostraToDB(item.id, osId, dataToSave);
         }

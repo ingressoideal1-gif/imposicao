@@ -32,7 +32,7 @@ $producaoFile = "frontend\producao.html"
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."
 git add -A
-git commit -m "fix: font picker shows name first, preview second for readability (v$nextV)"
+git commit -m "fix: preserve amostra_cor_id/num_id during art save - dual guard in editor + saveAmostraToDB (v$nextV)"
 git push origin main
 
 # 4. Vercel deploy
