@@ -13789,8 +13789,10 @@ async function loadOSItens(osId) {
                             amostra_num_id: resolvedNumId || null,
                             amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
                             verso_amostra_arte_base64: item.verso_amostra_arte_base64 || (prop ? prop.verso_amostra_arte_base64 : null),
-                            arte_url: item.arte_url || (prop ? prop.arte_url : null),
-                            verso_arte_url: item.verso_arte_url || (prop ? prop.verso_arte_url : null),
+                            arte_url: item.arte_url || item.url_arquivo_arte || item.url_arquivo || (prop ? (prop.arte_url || prop.url_arquivo_arte || prop.url_arquivo) : null),
+                            verso_arte_url: item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo || (prop ? (prop.verso_arte_url || prop.url_arquivo_arte_verso || prop.verso_url_arquivo) : null),
+                            url_arquivo_arte: item.url_arquivo_arte || item.arte_url || (prop ? (prop.url_arquivo_arte || prop.arte_url) : null),
+                            url_arquivo_arte_verso: item.url_arquivo_arte_verso || item.verso_arte_url || (prop ? (prop.url_arquivo_arte_verso || prop.verso_arte_url) : null),
                             amostra_obs: item.observacao_arte || item.amostra_obs || (prop ? prop.observacao_arte : null) || '',
                             os_id: osId,
                             _pedidoModeloId: item.id,
@@ -18884,6 +18886,16 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             dbData.observacao_arte = dbData.amostra_obs;
         }
 
+        // Garantir sincronia de colunas de arte (arte_url ↔ url_arquivo_arte ↔ url_arquivo)
+        if (dbData.arte_url) {
+            dbData.url_arquivo_arte = dbData.arte_url;
+            dbData.url_arquivo = dbData.arte_url;
+        }
+        if (dbData.verso_arte_url) {
+            dbData.url_arquivo_arte_verso = dbData.verso_arte_url;
+            dbData.verso_url_arquivo = dbData.verso_arte_url;
+        }
+
         // Garantir que padrao e gabarito_operacional estão preenchidos para pedidos_modelos
         if (!dbData.padrao && dbData.cor) {
             dbData.padrao = dbData.cor;
@@ -18932,6 +18944,21 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         const propData = {};
         if ('amostra_cor_id' in dataToUpdate) propData.amostra_cor_id = dataToUpdate.amostra_cor_id;
         if ('amostra_num_id' in dataToUpdate) propData.amostra_num_id = dataToUpdate.amostra_num_id;
+        if ('arte_url' in dataToUpdate) {
+            propData.arte_url = dataToUpdate.arte_url;
+            propData.url_arquivo = dataToUpdate.arte_url;
+            propData.url_arquivo_arte = dataToUpdate.arte_url;
+        }
+        if ('verso_arte_url' in dataToUpdate) {
+            propData.verso_arte_url = dataToUpdate.verso_arte_url;
+            propData.verso_url_arquivo = dataToUpdate.verso_arte_url;
+            propData.url_arquivo_arte_verso = dataToUpdate.verso_arte_url;
+        }
+        if ('amostra_arte_base64' in dataToUpdate) propData.amostra_arte_base64 = dataToUpdate.amostra_arte_base64;
+        if ('verso_amostra_arte_base64' in dataToUpdate) propData.verso_amostra_arte_base64 = dataToUpdate.verso_amostra_arte_base64;
+        if ('arte_json' in dataToUpdate) propData.arte_json = dataToUpdate.arte_json;
+        if ('verso_arte_json' in dataToUpdate) propData.verso_arte_json = dataToUpdate.verso_arte_json;
+
         const valCor = dataToUpdate.padrao || dataToUpdate.cor;
         if (valCor) {
             propData.padrao = valCor;
@@ -18974,6 +19001,16 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
                     }
                 }
             }
+        }
+
+        Object.assign(itemLocal, dataToUpdate);
+        if (dataToUpdate.arte_url) {
+            itemLocal.url_arquivo_arte = dataToUpdate.arte_url;
+            itemLocal.url_arquivo = dataToUpdate.arte_url;
+        }
+        if (dataToUpdate.verso_arte_url) {
+            itemLocal.url_arquivo_arte_verso = dataToUpdate.verso_arte_url;
+            itemLocal.verso_url_arquivo = dataToUpdate.verso_arte_url;
         }
 
         Object.assign(itemLocal, dataToUpdate);

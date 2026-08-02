@@ -1277,12 +1277,16 @@ async function salvarArteDoEditor() {
         if (face === 'verso') {
             item.verso_amostra_arte_base64 = base64PngUrl;
             item.verso_arte_url = pdfUrlOrData;
+            item.url_arquivo_arte_verso = pdfUrlOrData;
+            item.verso_url_arquivo = pdfUrlOrData;
             item.verso_arte_json = jsonStructure;
             if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_verso`, pdfUrlOrData);
             localStorage.setItem(`ideal_arte_url_${osId}_${itemIdx}_verso`, pdfUrlOrData);
         } else {
             item.amostra_arte_base64 = base64PngUrl;
             item.arte_url = pdfUrlOrData;
+            item.url_arquivo_arte = pdfUrlOrData;
+            item.url_arquivo = pdfUrlOrData;
             item.arte_json = jsonStructure;
             if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_frente`, pdfUrlOrData);
             localStorage.setItem(`ideal_arte_url_${osId}_${itemIdx}_frente`, pdfUrlOrData);
@@ -1301,14 +1305,18 @@ async function salvarArteDoEditor() {
         if (nameLabel) nameLabel.textContent = 'Arte Criada (PDF)';
         if (removeBtn) removeBtn.style.display = 'inline-block';
 
-        // 5. Salvar no Supabase / Banco de Dados
+        // 5. Salvar no Supabase / Banco de Dados (pedidos_modelos + produtos_proposta)
         const dataToSave = face === 'verso' ? {
             verso_amostra_arte_base64: base64PngUrl,
             verso_arte_url: pdfUrlOrData,
+            url_arquivo_arte_verso: pdfUrlOrData,
+            verso_url_arquivo: pdfUrlOrData,
             verso_arte_json: jsonStructure
         } : {
             amostra_arte_base64: base64PngUrl,
             arte_url: pdfUrlOrData,
+            url_arquivo_arte: pdfUrlOrData,
+            url_arquivo: pdfUrlOrData,
             arte_json: jsonStructure
         };
 
