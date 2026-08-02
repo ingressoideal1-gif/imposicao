@@ -18940,6 +18940,8 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             if (!overrides[cacheKey]) overrides[cacheKey] = {};
             Object.assign(overrides[cacheKey], dataToUpdate);
             localStorage.setItem('vibe_item_amostra_overrides', JSON.stringify(overrides));
+        }
+        
         let updatedCount = 0;
 
         // A) Tentar update por _pedidoModeloId ou ID do item
