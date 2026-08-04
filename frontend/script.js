@@ -17527,29 +17527,29 @@ function renderAmostrasOSItens(osId) {
                             ⚙️ Configurações da Amostra
                         </h3>
                         <div style="display: flex; flex-direction: column; gap: 14px;">
-                            <div id="amostra-item-config-cornum-${idx}" style="display: ${item.modo_pdf ? 'none' : 'flex'}; flex-direction: column; gap: 14px;">
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
-                                <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
-                                    <option value="">-- Selecione uma Cor --</option>
-                                    ${corsOpts}
-                                </select>
-                            </div>
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
-                                    ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
-                                        <div style="display: flex; gap: 4px; align-items: center;">
-                                            <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
-                                            <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
-                                        </div>
-                                    `}
+                            <div style="display: flex; flex-direction: column; gap: 14px;">
+                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
+                                    <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
+                                    <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
+                                        <option value="">-- Selecione uma Cor --</option>
+                                        ${corsOpts}
+                                    </select>
                                 </div>
-                                <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
-                                    <option value="">-- Selecione uma Numeração --</option>
-                                    ${numOpts}
-                                </select>
-                            </div>
+                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                        <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
+                                        ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
+                                            <div style="display: flex; gap: 4px; align-items: center;">
+                                                <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
+                                                <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
+                                            </div>
+                                        `}
+                                    </div>
+                                    <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
+                                        <option value="">-- Selecione uma Numeração --</option>
+                                        ${numOpts}
+                                    </select>
+                                </div>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
@@ -19030,10 +19030,10 @@ async function toggleModoPdf(idx, osId, itemId) {
     
     // Re-renderiza o card completo
     renderAmostrasOSItens(osId);
-    toast(item.modo_pdf ? '📄 Modo PDF ativado — cor e numeração desconsideradas' : '🎨 Modo padrão restaurado', 'info');
+    toast(item.modo_pdf ? '📄 Modo PDF ativado — numeração mantida' : '🎨 Modo padrão restaurado', 'info');
 }
 
-async function initPdfViewer(idx, pdfUrl) {
+async function initPdfViewer(idx, pdfUrl, osId = null) {
     if (!pdfUrl) return;
     
     try {
@@ -19060,7 +19060,8 @@ async function initPdfViewer(idx, pdfUrl) {
         pdfViewerState[idx] = {
             pdf: pdf,
             currentPage: 1,
-            totalPages: pdf.numPages
+            totalPages: pdf.numPages,
+            osId: osId
         };
         
         await renderPdfViewerPage(idx, 1);
@@ -19068,6 +19069,103 @@ async function initPdfViewer(idx, pdfUrl) {
         console.error('[PDF Viewer] Erro ao carregar PDF:', err);
         toast('Erro ao carregar PDF para visualização', 'error');
     }
+}
+
+function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight) {
+    if (!ctx || !num || !num.elements || !num.elements.length) return;
+
+    let fmt = null;
+    if (num.formato_id && state.formatos) {
+        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
+    }
+    const width_mm = (fmt && fmt.width_mm) ? fmt.width_mm : 180;
+    const height_mm = (fmt && fmt.height_mm) ? fmt.height_mm : 50;
+
+    const Sx = canvasWidth / width_mm;
+    const Sy = canvasHeight / height_mm;
+    const S = Sx;
+
+    const seqStart = parseInt(
+        item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1
+    ) || 1;
+
+    num.elements.forEach(el => {
+        if (el.face === 'back') return;
+
+        const x = el.x_mm * Sx;
+        const y = el.y_mm * Sy;
+        const color = el.color || '#000000';
+        const rot = (el.rotation || 0) * Math.PI / 180;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rot);
+
+        if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
+            const fs = (el.font_size || 12) * S / 2.8346;
+            ctx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+            ctx.fillStyle = color;
+
+            let label = '';
+            if (el.type === 'FIXED') {
+                label = el.fixed_value || 'TEXTO';
+            } else if (el.type === 'TEATRO_FILA') {
+                const _fVal = (state.csvData && state.csvData[pageNum - 1]) ? state.csvData[pageNum - 1].Fila || 'A' : 'A';
+                label = `${el.prefix || ''}${_fVal}`;
+            } else if (el.type === 'TEATRO_LUGAR') {
+                const _lVal = (state.csvData && state.csvData[pageNum - 1]) ? state.csvData[pageNum - 1].Numero || String(pageNum) : String(pageNum);
+                label = `${el.prefix || ''}${_lVal}`;
+            } else if (el.type === 'TEATRO_COMBO') {
+                const _fVal = (state.csvData && state.csvData[pageNum - 1]) ? state.csvData[pageNum - 1].Fila || 'A' : 'A';
+                const _lVal = (state.csvData && state.csvData[pageNum - 1]) ? state.csvData[pageNum - 1].Numero || String(pageNum) : String(pageNum);
+                const fila = `${el.prefix_fila || ''}${_fVal}`;
+                const lugar = `${el.prefix_lugar || ''}${_lVal}`;
+                label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+            } else if (el.type === 'CAMAROTE_LOCAL') {
+                const _cIni = parseInt(item?.c_ini || item?.C_INI || 1);
+                label = `${el.prefix || ''}${_cIni}`;
+            } else if (el.type === 'CAMAROTE_PESSOA') {
+                label = `${el.prefix || ''}${pageNum}`;
+            } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                const _lCamB = parseInt(item?.l_cam || item?.L_CAM || 5);
+                label = `${el.prefix || ''}${pageNum}/${_lCamB}`;
+            } else if (el.source === 'database') {
+                const colName = el.csv_column || '';
+                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+                const csvRow = (csvData && csvData[pageNum - 1]) ? csvData[pageNum - 1] : null;
+                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                } else {
+                    label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                }
+            } else {
+                const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 6;
+                let current_val = seqStart + (pageNum - 1);
+                if (num && num.tipo === "TICKET") {
+                    const pos = parseInt(el.ticket_pos) || 1;
+                    const ticketQtd = parseInt(num.ticket_qtd) || 1;
+                    current_val = seqStart + ((pageNum - 1) * ticketQtd) + (pos - 1);
+                }
+                label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
+            }
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            if (label.includes('\n')) {
+                const lines = label.split('\n');
+                const lineHeight = fs * 1.2;
+                const totalH = lines.length * lineHeight;
+                const blockTop = -totalH / 2;
+                lines.forEach((line, i) => {
+                    const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
+                    ctx.fillText(line, 0, lineCenter);
+                });
+            } else {
+                ctx.fillText(label, 0, 0);
+            }
+        }
+        ctx.restore();
+    });
 }
 
 async function renderPdfViewerPage(idx, pageNum) {
@@ -19088,6 +19186,20 @@ async function renderPdfViewerPage(idx, pageNum) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+        // Estampar numeração cadastrada sobre a página do PDF se houver numeração selecionada
+        const containerId = state.amostrasContainerId || 'amostras-itens-container';
+        const container = document.getElementById(containerId);
+        const numSelect = container ? container.querySelector(`#amostra-item-num-${idx}`) : null;
+        const osId = viewerState.osId;
+        const items = (osId && state.osItens[osId]) ? state.osItens[osId] : [];
+        const item = items[idx];
+        const numId = numSelect ? numSelect.value : (item ? item.amostra_num_id : null);
+        const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+
+        if (num && num.elements && num.elements.length > 0) {
+            drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
+        }
         
         canvas.style.display = 'block';
         
@@ -19182,7 +19294,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         // Inicializar o PDF viewer se tiver arte
         const pdfUrl = face === 'back' ? itemForPdf.verso_arte_url : itemForPdf.arte_url;
         if (pdfUrl && !pdfViewerState[idx]) {
-            initPdfViewer(idx, pdfUrl);
+            initPdfViewer(idx, pdfUrl, osId);
         }
         return;
     }
