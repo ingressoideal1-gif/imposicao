@@ -17350,6 +17350,12 @@ function renderAmostrasOSItens(osId) {
     }
     const itens = state.osItens[targetOSId] || state.osItens[osId] || [];
 
+    if (typeof pdfViewerState !== 'undefined') {
+        Object.keys(pdfViewerState).forEach(k => {
+            if (k.startsWith(`${targetOSId}_`) || k.startsWith(`${osId}_`)) delete pdfViewerState[k];
+        });
+    }
+
     // Mostrar banner, esconder card avulso se for painel interno
     if (banner) {
         banner.style.display = 'flex';
@@ -19037,7 +19043,7 @@ async function toggleModoPdf(idx, osId, itemId) {
     toast(item.modo_pdf ? '📄 Modo PDF ativado — numeração mantida' : '🎨 Modo padrão restaurado', 'info');
 }
 
-async function initPdfViewer(idx, pdfUrl, osId = null) {
+async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
     if (!pdfUrl) return;
     
     try {
@@ -19061,17 +19067,22 @@ async function initPdfViewer(idx, pdfUrl, osId = null) {
         
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         
-        pdfViewerState[idx] = {
+        const stateObj = {
             pdf: pdf,
+            pdfUrl: pdfUrl,
             currentPage: 1,
             totalPages: pdf.numPages,
-            osId: osId
+            osId: osId,
+            idx: idx
         };
+        pdfViewerState[key] = stateObj;
+        pdfViewerState[idx] = stateObj;
         
-        await renderPdfViewerPage(idx, 1);
+        await renderPdfViewerPage(key, 1, idx);
     } catch (err) {
         console.error('[PDF Viewer] Erro ao carregar PDF:', err);
-        toast('Erro ao carregar PDF para visualização', 'error');
+        delete pdfViewerState[key];
+        delete pdfViewerState[idx];
     }
 }
 
@@ -19342,14 +19353,29 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     if (!canvas) return;
 
     // Se modo PDF ativo, não compor multicamada — usar PDF viewer dedicado
-    const itemForPdf = (state.osItens[osId] || [])[idx];
+    const itemForPdf = (state.osItens[osId] || [])[idx] || item;
     if (itemForPdf && itemForPdf.modo_pdf) {
         if (canvas) canvas.style.display = 'none';
-        if (empty) empty.style.display = 'none';
-        // Inicializar o PDF viewer se tiver arte
-        const pdfUrl = face === 'back' ? itemForPdf.verso_arte_url : itemForPdf.arte_url;
-        if (pdfUrl && !pdfViewerState[idx]) {
-            initPdfViewer(idx, pdfUrl, osId);
+        
+        // Pega a URL do PDF (arte_url, amostra_arte_base64, ou url_arquivo_arte)
+        const pdfUrl = face === 'back' 
+            ? (itemForPdf.verso_arte_url || itemForPdf.verso_amostra_arte_base64 || itemForPdf.url_arquivo_arte_verso) 
+            : (itemForPdf.arte_url || itemForPdf.amostra_arte_base64 || itemForPdf.url_arquivo_arte);
+            
+        if (pdfUrl) {
+            if (empty) empty.style.display = 'none';
+            const key = `${osId}_${idx}`;
+            const existing = pdfViewerState[key] || pdfViewerState[idx];
+            if (!existing || existing.pdfUrl !== pdfUrl) {
+                initPdfViewer(key, pdfUrl, osId, idx);
+            } else {
+                pdfViewerState[key] = existing;
+                pdfViewerState[key].osId = osId;
+                renderPdfViewerPage(key, existing.currentPage || 1, idx);
+            }
+        } else {
+            // Sem arte/PDF enviado ainda: mostra o estado vazio do modo PDF
+            if (empty) empty.style.display = 'block';
         }
         return;
     }
