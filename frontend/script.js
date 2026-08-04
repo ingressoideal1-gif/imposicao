@@ -18605,11 +18605,14 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
             const item = osItems?.find(i => String(i.id) === String(itemId));
             if (item) {
                 item._needsSnapshot = true;
+                const faceKey = face === 'verso' ? 'verso' : 'frente';
                 if (face === 'verso') {
                     item.verso_arte_url = publicUrl;
                 } else {
                     item.arte_url = publicUrl;
                 }
+                if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_${faceKey}`, publicUrl);
+                localStorage.setItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`, publicUrl);
             }
 
             // Se modo PDF, gerar snapshot da primeira página e inicializar viewer
@@ -19043,6 +19046,73 @@ async function toggleModoPdf(idx, osId, itemId) {
     toast(item.modo_pdf ? '📄 Modo PDF ativado — numeração mantida' : '🎨 Modo padrão restaurado', 'info');
 }
 
+function getPdfUrlForItem(item, face, osId, idx) {
+    if (!item) return null;
+    const faceKey = face === 'back' ? 'verso' : 'frente';
+    
+    let candidate = face === 'back'
+        ? (item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo)
+        : (item.arte_url || item.url_arquivo_arte || item.url_arquivo);
+        
+    if (!candidate) {
+        candidate = (item.id ? localStorage.getItem(`ideal_arte_url_${item.id}_${faceKey}`) : null) ||
+                    localStorage.getItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`);
+    }
+    
+    if (!candidate) {
+        candidate = face === 'back' ? item.verso_amostra_arte_base64 : item.amostra_arte_base64;
+    }
+    
+    return candidate || null;
+}
+
+async function renderImageModeInPdfViewer(idx, imgUrl, item, osId) {
+    const canvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
+    if (!canvas) return;
+    
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    await new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = resolve;
+        img.src = imgUrl;
+    });
+    
+    if (img.width > 0 && img.height > 0) {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        
+        // Estampar numeração sobre a imagem
+        const containerId = state.amostrasContainerId || 'amostras-itens-container';
+        const container = document.getElementById(containerId);
+        const numSelect = container ? container.querySelector(`#amostra-item-num-${idx}`) : null;
+        const numId = (numSelect && numSelect.value) ? numSelect.value : (item ? (item.amostra_num_id || item.numeracao_id || item.numeracao || item.gabarito_operacional) : null);
+        let num = null;
+        if (numId && state.numeracoes) {
+            const numIdStr = String(numId).trim().toLowerCase();
+            num = state.numeracoes.find(n => 
+                String(n.id) === String(numId) || 
+                String(n.name).trim().toLowerCase() === numIdStr || 
+                String(n.tipo).trim().toLowerCase() === numIdStr
+            );
+        }
+        if (num && num.elements && num.elements.length > 0) {
+            drawNumeracaoElementsOverCanvas(ctx, num, item, 1, canvas.width, canvas.height);
+        }
+        
+        canvas.style.display = 'block';
+        
+        const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
+        if (nav) nav.style.display = 'none';
+        
+        const empty = document.getElementById(`amostra-item-empty-${idx}`);
+        if (empty) empty.style.display = 'none';
+    }
+}
+
 async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
     if (!pdfUrl) return;
     
@@ -19083,6 +19153,12 @@ async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
         console.error('[PDF Viewer] Erro ao carregar PDF:', err);
         delete pdfViewerState[key];
         delete pdfViewerState[idx];
+
+        // Fallback: se houver imagem (amostra_arte_base64), renderizar como imagem
+        const item = (osId && state.osItens && state.osItens[osId]) ? state.osItens[osId][idx] : null;
+        if (item && item.amostra_arte_base64) {
+            renderImageModeInPdfViewer(idx, item.amostra_arte_base64, item, osId);
+        }
     }
 }
 
