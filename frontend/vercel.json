@@ -8,6 +8,10 @@
     {
       "source": "/cliente/:match*",
       "destination": "/cliente.html"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
     }
   ],
   "headers": [
