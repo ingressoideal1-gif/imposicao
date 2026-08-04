@@ -4,9 +4,77 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.3.0 (v408)** — 2026-07-29
+## Versão atual: **v1.4.0 (v454)** — 2026-08-04
 
 ---
+
+## [v1.4.0 (v454) — 2026-08-04] — Correção Crítica: Fontes Web nas Numerações
+
+### Resumo
+Correção do bug onde fontes carregadas do catálogo web (Roboto, Open Sans, Montserrat, etc.) eram substituídas por **Helvetica** na geração de PDF pelo motor Python. Fontes web agora renderizam corretamente em numerações (TEXT, FIXED, CAMAROTE_*, TEATRO_*) tanto em modo simples quanto multi-artes.
+
+### Implementações Aplicadas
+
+| # | Módulo / Função | O que mudou |
+|---|---|---|
+| 1 | `engine.py` — Resolução de Fontes (`v454`) | **Bug principal**: Ao usar `_font_data` (Base64 do TTF embutido), o engine criava o arquivo temporário mas mantinha `font_name = "helv"` (fallback Base-14). O PyMuPDF registrava o buffer da fonte Roboto com alias de Helvetica. **Fix**: Adicionado `font_name = family` no Step 1, idêntico ao que já existia no Step 2 (download por URL). |
+| 2 | `script.js` — Multi-Artes (`v454`) | A função `_injectFontUrls()` injetava `arquivo_url` (URL do TTF) para `payloadNumeracao` e `numeracao_2`, mas **não** para os itens dentro de `payloadMultiArtes`. **Fix**: Adicionado loop de injeção para cada item de multi-artes. |
+| 3 | Restrição do Catálogo (v453) | Confirmada remoção dos botões "Fontes do PC" e "Digitar Nome" no Criador de Arte. `populateFontFamilySelect()` agora usa exclusivamente `state_fonts.catalogo` (fontes hospedadas). |
+
+### Diagnóstico Detalhado
+
+O bug foi rastreado através de 5 hipóteses documentadas em `fontes_numeracao_debug.md`. A causa raiz confirmada:
+
+```
+engine.py linha 546:
+  font_name = font_map.get("Roboto", "helv")  → "helv" (Roboto não é Base-14)
+
+engine.py linha 557 (ANTES):
+  font_file = tmp_font.name   ← arquivo OK, mas font_name continua "helv"
+
+engine.py linha 614:
+  page.insert_font(fontname="helv", fontbuffer=<bytes_da_Roboto>)  ← ERRADO!
+```
+
+**Após a correção:**
+```
+engine.py linha 558 (AGORA):
+  font_name = family           ← "Roboto"
+
+engine.py linha 615:
+  page.insert_font(fontname="Roboto", fontbuffer=<bytes_da_Roboto>)  ← CORRETO!
+```
+
+---
+
+## [v455 — 2026-08-04] — Pipeline de Impressão Vetorial (PDF RAW)
+
+### Resumo
+Refatoração do pipeline de impressão para enviar o PDF **diretamente** ao spooler como dados RAW, preservando 100% das fontes embutidas. O método anterior rasterizava cada página como imagem PNG/JPEG, destruindo as fontes e perdendo qualidade vetorial.
+
+### O que mudou
+
+| Aspecto | Antes (GDI Raster) ❌ | Agora (PDF RAW) ✅ |
+|---------|----------------------|-------------------|
+| Texto | Pixels (imagem) | Vetorial (TrueType) |
+| Fontes web | Perdidas na rasterização | Preservadas intactas |
+| Qualidade | Limitada ao DPI | Infinita (vetor) |
+| Tamanho spool | ~50-100 MB por job | ~2-5 MB (tamanho real do PDF) |
+| Velocidade | Lenta (rasterização) | Instantânea (envio direto) |
+
+### Modos de impressão disponíveis
+
+O `print_service.py` agora suporta 4 modos selecionáveis via `options["print_mode"]`:
+
+| Modo | Descrição |
+|------|-----------|
+| `pdf_raw` (padrão) | Envia PDF direto ao spooler — requer impressora com interpretador PDF |
+| `ghostscript` | Converte PDF→PS vetorial via Ghostscript — qualquer impressora PostScript |
+| `gdi` | Rasteriza para imagem via GDI/PIL — fallback universal |
+| `auto` | Cascata: pdf_raw → ghostscript → gdi |
+
+---
+
 
 ## [v1.3.0 (v408) — 2026-07-29] — Suporte aos Modos de Impressão Reversa e Folha a Folha, Cores e Ajustes de Fila do Pedido
 

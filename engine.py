@@ -555,6 +555,7 @@ class ImpositionEngine:
                     tmp_font.write(font_bytes)
                     tmp_font.close()
                     font_file = tmp_font.name
+                    font_name = family  # Usar o nome real da fonte, não o fallback Base-14
                 except Exception as ex:
                     print(f"[engine] Erro ao usar fonte embutida: {ex}")
 
@@ -1806,11 +1807,25 @@ class ImpositionEngine:
                 v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
                 v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
                 
+                
                 # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding, com C_INI como início
                 if getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
                     camarote_num = cfg.c_ini + (bloco_num - 1)
                     bloco_str = f"Camarote {camarote_num:02d}"
                     sufixo_str = f" - de 1 a {cfg.l_cam}"
+                elif getattr(cfg, 'num_tipo', '') == 'TICKET':
+                    # TICKET: v_start/v_end são valores de "folha" — multiplicar por ticket_qtd
+                    tq = int(getattr(cfg, 'ticket_qtd', 1) or 1)
+                    if tq > 1:
+                        t_v_start = (v_start - 1) * tq + 1  # folha 1 → ingresso 1
+                        t_v_end = v_end * tq                  # folha 50 → ingresso 100
+                    else:
+                        t_v_start = v_start
+                        t_v_end = v_end
+                    t_v_start_str = str(t_v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_start).zfill(4)
+                    t_v_end_str = str(t_v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_end).zfill(4)
+                    bloco_str = f"Bloco {bloco_num:02d}"
+                    sufixo_str = f" - de {t_v_start_str} a {t_v_end_str}"
                 else:
                     bloco_str = f"Bloco {bloco_num:02d}"
                     sufixo_str = f" - de {v_start_str} a {v_end_str}"
@@ -2232,11 +2247,27 @@ class ImpositionEngine:
                 v_start_str = str(v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_start).zfill(4)
                 v_end_str = str(v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(v_end).zfill(4)
 
+
                 # CAMAROTE: usar "Camarote XX - de 1 a L_CAM" sem zero-padding, com C_INI como início
                 if getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
                     camarote_num = cfg.c_ini + (bloco_num - 1)
                     bloco_str = f"Camarote {camarote_num:02d}"
                     sufixo_str = f" - de 1 a {cfg.l_cam}"
+                elif getattr(cfg, 'num_tipo', '') == 'TICKET':
+                    # TICKET: v_start/v_end são valores de "folha", não de ingresso
+                    # Cada folha contém ticket_qtd ingressos
+                    # v_start=1, v_end=50 com ticket_qtd=2 → range real = 0001 a 0100
+                    tq = int(getattr(cfg, 'ticket_qtd', 1) or 1)
+                    if tq > 1:
+                        t_v_start = (v_start - 1) * tq + 1  # folha 1 → ingresso 1
+                        t_v_end = v_end * tq                  # folha 50 → ingresso 100
+                    else:
+                        t_v_start = v_start
+                        t_v_end = v_end
+                    t_v_start_str = str(t_v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_start).zfill(4)
+                    t_v_end_str = str(t_v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_end).zfill(4)
+                    bloco_str = f"Bloco {bloco_num:02d}"
+                    sufixo_str = f" - de {t_v_start_str} a {t_v_end_str}"
                 else:
                     bloco_str = f"Bloco {bloco_num:02d}"
                     sufixo_str = f" - de {v_start_str} a {v_end_str}"

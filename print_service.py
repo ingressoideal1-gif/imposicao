@@ -1,6 +1,8 @@
 import os
 import base64
 import json
+import subprocess
+import tempfile
 import fitz  # PyMuPDF
 from ppd_parser import PPDParser
 
@@ -312,19 +314,166 @@ def _apply_devmode_options(printer_name, options):
 
 
 
-def send_print_job_windows(printer_name, pdf_path, options, job_title="Ideal Imposition Job"):
+def _find_ghostscript():
+    """Localiza o executável do Ghostscript no sistema."""
+    # Tentar no PATH primeiro
+    for gs_name in ["gswin64c", "gswin32c", "gs"]:
+        try:
+            result = subprocess.run([gs_name, "--version"], capture_output=True, timeout=5)
+            if result.returncode == 0:
+                print(f"[print] Ghostscript encontrado no PATH: {gs_name} v{result.stdout.decode().strip()}")
+                return gs_name
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+
+    # Buscar em diretórios padrão
+    search_dirs = [
+        r"C:\Program Files\gs",
+        r"C:\Program Files (x86)\gs",
+    ]
+    for search_dir in search_dirs:
+        if os.path.isdir(search_dir):
+            for root, dirs, files in os.walk(search_dir):
+                for fname in files:
+                    if fname.lower() in ("gswin64c.exe", "gswin32c.exe"):
+                        full_path = os.path.join(root, fname)
+                        print(f"[print] Ghostscript encontrado: {full_path}")
+                        return full_path
+    return None
+
+
+def _send_pdf_raw(printer_name, pdf_path, devmode, job_title):
     """
-    Envia PDF via GDI/PIL para o driver Windows.
-    O driver PS da KONICA converte a imagem para PostScript e envia via TCP/IP.
+    Envia o PDF diretamente ao spooler como dados RAW.
+    A impressora precisa ter interpretador PDF embutido (Konica, Xerox, Canon, Ricoh modernas).
+    Preserva 100% das fontes embutidas — zero conversão.
     """
-    import subprocess
+    if not HAS_WIN32:
+        print(f"[print][PDF-RAW][MOCK] Job: {job_title} | Printer: {printer_name}")
+        return True, "[MOCK] PDF RAW simulado com sucesso."
+
+    try:
+        hPrinter = win32print.OpenPrinter(printer_name)
+        try:
+            # Aplicar DEVMODE (duplex, bandeja, papel) via SetPrinter antes do job
+            if devmode:
+                try:
+                    info = win32print.GetPrinter(hPrinter, 2)
+                    info["pDevMode"] = devmode
+                    win32print.SetPrinter(hPrinter, 2, info, 0)
+                except Exception as dm_err:
+                    print(f"[print][PDF-RAW] Aviso ao aplicar DEVMODE: {dm_err}")
+
+            hJob = win32print.StartDocPrinter(hPrinter, 1, (job_title, None, "RAW"))
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                with open(pdf_path, "rb") as f:
+                    pdf_bytes = f.read()
+                win32print.WritePrinter(hPrinter, pdf_bytes)
+                win32print.EndPagePrinter(hPrinter)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
+
+        size_mb = os.path.getsize(pdf_path) / (1024 * 1024)
+        print(f"[print][PDF-RAW] Job enviado: {size_mb:.1f} MB para '{printer_name}'")
+        return True, f"PDF enviado diretamente (RAW) para '{printer_name}' ({size_mb:.1f} MB)."
+    except Exception as e:
+        err = f"Erro no envio PDF RAW: {e}"
+        print(f"[print][PDF-RAW] {err}")
+        return False, err
+
+
+def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title):
+    """
+    Converte PDF → PostScript via Ghostscript preservando fontes como Type 42 (vetorial).
+    Funciona com qualquer impressora PostScript.
+    """
+    gs_exe = _find_ghostscript()
+    if not gs_exe:
+        return False, "Ghostscript nao encontrado no sistema."
 
     if not HAS_WIN32:
-        print(f"[print][MOCK] Job: {job_title} | Printer: {printer_name} | PDF: {pdf_path}")
-        return True, "[MOCK] Impressao simulada com sucesso."
+        print(f"[print][GS-PS][MOCK] Job: {job_title} | Printer: {printer_name}")
+        return True, "[MOCK] Ghostscript PS simulado com sucesso."
 
-    # Obter DEVMODE com as opcoes do usuario (duplex, bandeja, papel, etc.)
-    devmode = _apply_devmode_options(printer_name, options)
+    ps_path = None
+    try:
+        # Converter PDF → PostScript via Ghostscript
+        ps_fd, ps_path = tempfile.mkstemp(suffix=".ps")
+        os.close(ps_fd)
+
+        cmd = [
+            gs_exe, "-q", "-dNOPAUSE", "-dBATCH", "-dSAFER",
+            "-sDEVICE=ps2write",
+            f"-sOutputFile={ps_path}",
+            "-dEmbedAllFonts=true",
+            "-dSubsetFonts=true",
+            "-dCompressFonts=true",
+            pdf_path
+        ]
+        print(f"[print][GS-PS] Convertendo PDF -> PS: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
+
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="replace")
+            return False, f"Ghostscript falhou (code {result.returncode}): {stderr[:300]}"
+
+        if not os.path.exists(ps_path) or os.path.getsize(ps_path) < 100:
+            return False, "Ghostscript gerou arquivo PS vazio ou invalido."
+
+        ps_size_mb = os.path.getsize(ps_path) / (1024 * 1024)
+        print(f"[print][GS-PS] PS gerado: {ps_size_mb:.1f} MB")
+
+        # Enviar PS para o spooler como RAW
+        hPrinter = win32print.OpenPrinter(printer_name)
+        try:
+            if devmode:
+                try:
+                    info = win32print.GetPrinter(hPrinter, 2)
+                    info["pDevMode"] = devmode
+                    win32print.SetPrinter(hPrinter, 2, info, 0)
+                except Exception as dm_err:
+                    print(f"[print][GS-PS] Aviso ao aplicar DEVMODE: {dm_err}")
+
+            hJob = win32print.StartDocPrinter(hPrinter, 1, (job_title, None, "RAW"))
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                with open(ps_path, "rb") as f:
+                    win32print.WritePrinter(hPrinter, f.read())
+                win32print.EndPagePrinter(hPrinter)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
+
+        print(f"[print][GS-PS] Job enviado com sucesso para '{printer_name}'")
+        return True, f"PDF convertido para PostScript (Ghostscript) e enviado para '{printer_name}' ({ps_size_mb:.1f} MB)."
+
+    except subprocess.TimeoutExpired:
+        return False, "Ghostscript timeout (>120s) na conversao PDF->PS."
+    except Exception as e:
+        import traceback
+        err = f"Erro na impressao via Ghostscript: {e}\n{traceback.format_exc()}"
+        print(f"[print][GS-PS] {err}")
+        return False, err
+    finally:
+        if ps_path and os.path.exists(ps_path):
+            try:
+                os.remove(ps_path)
+            except OSError:
+                pass
+
+
+def _send_gdi_raster(printer_name, pdf_path, devmode, job_title):
+    """
+    Fallback: Envia PDF via GDI/PIL rasterizando para imagem.
+    Funciona com qualquer impressora mas perde qualidade vetorial das fontes.
+    """
+    if not HAS_WIN32:
+        print(f"[print][GDI][MOCK] Job: {job_title} | Printer: {printer_name}")
+        return True, "[MOCK] GDI raster simulado com sucesso."
 
     try:
         import win32gui, win32ui, win32con
@@ -347,7 +496,7 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="Ideal Imp
 
                 doc = fitz.open(pdf_path)
                 total_pages = len(doc)
-                print(f"[print] GDI: {total_pages} pagina(s) @ {render_dpi} DPI para '{printer_name}'")
+                print(f"[print][GDI] {total_pages} pagina(s) @ {render_dpi} DPI para '{printer_name}' (raster fallback)")
 
                 for page_num in range(total_pages):
                     page = doc[page_num]
@@ -371,19 +520,77 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="Ideal Imp
                     dib = ImageWin.Dib(img)
                     dib.draw(hdc, (dx, dy, dx + draw_w, dy + draw_h))
                     dc.EndPage()
-                    print(f"[print] GDI: pagina {page_num + 1}/{total_pages} enviada")
+                    print(f"[print][GDI] pagina {page_num + 1}/{total_pages} enviada")
 
                 dc.EndDoc()
                 doc.close()
-                print(f"[print] GDI: job concluido com sucesso")
+                print(f"[print][GDI] job concluido (raster)")
             finally:
                 dc.DeleteDC()
         finally:
             win32print.ClosePrinter(hPrinter)
 
-        return True, f"PDF enviado via GDI para '{printer_name}'."
+        return True, f"PDF enviado via GDI (raster) para '{printer_name}'."
     except Exception as e:
         import traceback
         err = f"Erro na impressao GDI: {e}\n{traceback.format_exc()}"
         print(err)
         return False, err
+
+
+def send_print_job_windows(printer_name, pdf_path, options, job_title="Ideal Imposition Job"):
+    """
+    Pipeline de impressão com suporte a múltiplas estratégias.
+    Padrão: PDF RAW direto (preserva fontes embutidas, sem conversão).
+
+    O usuário pode selecionar o modo via options["print_mode"]:
+      - "pdf_raw" (padrão) → envia PDF direto ao spooler (requer impressora com interpretador PDF)
+      - "ghostscript" → converte PDF→PS vetorial via Ghostscript (qualquer impressora PS)
+      - "gdi" → rasteriza para imagem via GDI (fallback, perde qualidade vetorial)
+      - "auto" → tenta pdf_raw → ghostscript → gdi em cascata
+    """
+    if not HAS_WIN32:
+        print(f"[print][MOCK] Job: {job_title} | Printer: {printer_name} | PDF: {pdf_path}")
+        return True, "[MOCK] Impressao simulada com sucesso."
+
+    # Obter DEVMODE com as opcoes do usuario (duplex, bandeja, papel, etc.)
+    devmode = _apply_devmode_options(printer_name, options)
+
+    print_mode = options.get("print_mode", "pdf_raw").lower().strip()
+    print(f"[print] Modo de impressao: '{print_mode}' para '{printer_name}'")
+
+    # Modo forçado
+    if print_mode == "pdf_raw":
+        return _send_pdf_raw(printer_name, pdf_path, devmode, job_title)
+    elif print_mode == "ghostscript":
+        return _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title)
+    elif print_mode == "gdi":
+        return _send_gdi_raster(printer_name, pdf_path, devmode, job_title)
+
+    # Modo automático: PDF RAW → Ghostscript PS → GDI Raster
+    errors = []
+
+    # Estratégia 1: PDF RAW (mais rápido, preserva fontes)
+    print("[print] Tentando estrategia 1: PDF RAW direto...")
+    ok, msg = _send_pdf_raw(printer_name, pdf_path, devmode, job_title)
+    if ok:
+        return True, msg
+    errors.append(f"PDF-RAW: {msg}")
+    print(f"[print] PDF RAW falhou, tentando Ghostscript...")
+
+    # Estratégia 2: Ghostscript PS (vetorial, universal)
+    ok, msg = _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title)
+    if ok:
+        return True, msg
+    errors.append(f"GS-PS: {msg}")
+    print(f"[print] Ghostscript falhou, usando GDI raster (fallback)...")
+
+    # Estratégia 3: GDI Raster (fallback seguro)
+    ok, msg = _send_gdi_raster(printer_name, pdf_path, devmode, job_title)
+    if ok:
+        return True, f"{msg} (AVISO: modo raster - fontes nao vetoriais)"
+    errors.append(f"GDI: {msg}")
+
+    all_errors = " | ".join(errors)
+    return False, f"Todas as estrategias de impressao falharam: {all_errors}"
+

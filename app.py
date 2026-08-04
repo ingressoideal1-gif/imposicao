@@ -98,7 +98,7 @@ def health_check():
     """Endpoint de health check — usado pelo frontend para pré-aquecer o servidor."""
     return {"status": "ok"}
 
-LOCAL_AGENT_VERSION = "NewProd 1.1"
+LOCAL_AGENT_VERSION = "NewProd 1.2.1"
 
 @app.get("/api/status")
 def read_root():

@@ -6949,7 +6949,7 @@ function drawPreview() {
                         const start_idx = (bloco_num - 1) * cell_stack_size;
                         const end_idx = start_idx + cell_stack_size - 1;
                         const v_start = seqStart + start_idx * ticket_qtd;
-                        const v_end = seqStart + end_idx * ticket_qtd;
+                        const v_end = seqStart + (end_idx + 1) * ticket_qtd - 1;
                         
                         const vStartStr = String(v_start).padStart(4, '0');
                         const vEndStr = String(v_end).padStart(4, '0');
@@ -8670,6 +8670,11 @@ window.runImposition = async function (mode, returnBlob = false) {
         }
     }
     _injectFontUrls(payloadNumeracao);
+    // Injetar arquivo_url nas numerações de multi-artes para fontes web
+    for (const ma of payloadMultiArtes) {
+        if (ma.numeracao) _injectFontUrls(ma.numeracao);
+        if (ma.numeracao_2) _injectFontUrls(ma.numeracao_2);
+    }
 
     const payload = {
 
