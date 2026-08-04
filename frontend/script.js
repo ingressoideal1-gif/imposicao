@@ -18555,6 +18555,10 @@ function onItemNumSelect(idx, osId, itemId) {
     } else {
         renderItemAmostraCombinada(idx, osId);
     }
+
+    if (item && item.modo_pdf && pdfViewerState[idx]) {
+        renderPdfViewerPage(idx, pdfViewerState[idx].currentPage || 1);
+    }
 }
 
 async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
@@ -19163,6 +19167,48 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             } else {
                 ctx.fillText(label, 0, 0);
             }
+        } else if (el.type === 'QR') {
+            const sz = (el.size_mm || 15) * S;
+            let qrText = '';
+            if (el.fixed) {
+                qrText = el.fixed_value || '';
+            } else if (el.source === 'database') {
+                const colName = el.csv_column || '';
+                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+                const csvRow = (csvData && csvData[pageNum - 1]) ? csvData[pageNum - 1] : null;
+                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                } else {
+                    qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                }
+            } else {
+                const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                let current_val = seqStart + (pageNum - 1);
+                const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
+                qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
+            }
+            if (typeof renderQRCodeOnCtx === 'function') {
+                renderQRCodeOnCtx(ctx, qrText, 0, 0, sz, color);
+            }
+        } else if (el.type === 'BARCODE') {
+            const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
+            const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
+            const hbw = bw / 2, hbh = bh / 2;
+            ctx.fillStyle = color;
+            const barW = bw / 40;
+            const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
+            for (let i = 0; i < pattern.length; i++) {
+                if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
+            }
+        } else if (el.type === 'PICOTE') {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.0;
+            ctx.setLineDash([6, 3]);
+            ctx.beginPath();
+            ctx.moveTo(0, -y);
+            ctx.lineTo(0, canvasHeight - y);
+            ctx.stroke();
+            ctx.setLineDash([]);
         }
         ctx.restore();
     });
@@ -19192,10 +19238,19 @@ async function renderPdfViewerPage(idx, pageNum) {
         const container = document.getElementById(containerId);
         const numSelect = container ? container.querySelector(`#amostra-item-num-${idx}`) : null;
         const osId = viewerState.osId;
-        const items = (osId && state.osItens[osId]) ? state.osItens[osId] : [];
-        const item = items[idx];
-        const numId = numSelect ? numSelect.value : (item ? item.amostra_num_id : null);
-        const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+        const items = (osId && state.osItens && state.osItens[osId]) ? state.osItens[osId] : [];
+        const item = items[idx] || (state.activeOSItem ? state.activeOSItem : null);
+
+        let numId = (numSelect && numSelect.value) ? numSelect.value : (item ? (item.amostra_num_id || item.numeracao_id || item.numeracao || item.gabarito_operacional) : null);
+        let num = null;
+        if (numId && state.numeracoes) {
+            const numIdStr = String(numId).trim().toLowerCase();
+            num = state.numeracoes.find(n => 
+                String(n.id) === String(numId) || 
+                String(n.name).trim().toLowerCase() === numIdStr || 
+                String(n.tipo).trim().toLowerCase() === numIdStr
+            );
+        }
 
         if (num && num.elements && num.elements.length > 0) {
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
