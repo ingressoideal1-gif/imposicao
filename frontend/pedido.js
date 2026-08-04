@@ -1291,7 +1291,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         const start_idx = (bloco_num - 1) * cell_stack_size;
                         const end_idx = start_idx + cell_stack_size - 1;
                         const v_start = seqStart + start_idx * item_ticket_qtd;
-                        const v_end = seqStart + end_idx * item_ticket_qtd;
+                        const v_end = seqStart + (end_idx + 1) * item_ticket_qtd - 1;
                         
                         const vStartStr = String(v_start).padStart(4, '0');
                         const vEndStr = String(v_end).padStart(4, '0');
