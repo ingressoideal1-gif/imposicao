@@ -20055,6 +20055,14 @@ async function renderItemAmostraCombinada(idx, osId) {
 
 async function snapshotAmostraAndUpload(idx, osId, item, canvas, face = 'frente') {
     if (!supabaseClient) return;
+    if (!canvas || typeof canvas.toBlob !== 'function') {
+        const pdfCanvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
+        if (pdfCanvas && typeof pdfCanvas.toBlob === 'function' && pdfCanvas.width > 0) {
+            canvas = pdfCanvas;
+        } else {
+            return;
+        }
+    }
     try {
         canvas.toBlob(async (blob) => {
             if (!blob) return;
@@ -20088,7 +20096,16 @@ async function snapshotAmostraAndUpload(idx, osId, item, canvas, face = 'frente'
 // Versão promisificada do snapshot — aguarda upload completar antes de resolver
 function snapshotAmostraSync(idx, osId, item, canvas, face) {
     return new Promise((resolve) => {
-        if (!supabaseClient || !canvas || canvas.width === 0 || canvas.height === 0) {
+        if (!canvas || canvas.width === 0 || canvas.height === 0) {
+            const pdfCanvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
+            if (pdfCanvas && pdfCanvas.width > 0) {
+                canvas = pdfCanvas;
+            } else {
+                resolve();
+                return;
+            }
+        }
+        if (!supabaseClient) {
             resolve();
             return;
         }
