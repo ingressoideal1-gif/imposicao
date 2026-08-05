@@ -18069,7 +18069,7 @@ function renderAmostrasOSItens(osId) {
                                   localStorage.getItem(`ideal_arte_url_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_url_${osId}_${idx}_verso`) ||
                                   localStorage.getItem(`ideal_arte_json_${osId}_${idx}_frente`) || localStorage.getItem(`ideal_arte_json_${osId}_${idx}_verso`);
 
-            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.arte_url || item.verso_arte_url || item.arte_json || item.verso_arte_json || hasSavedLocal || hasSelectValue) {
+            if (item.modo_pdf || item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.arte_url || item.verso_arte_url || item.arte_json || item.verso_arte_json || hasSavedLocal || hasSelectValue) {
                 await renderItemAmostraCombinada(idx, osId);
                 // Pequena pausa para permitir renderização fluida da UI sem travar o browser
                 await new Promise(r => setTimeout(r, 20));
@@ -18974,15 +18974,6 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             propData.arte_url = dataToUpdate.arte_url;
         }
         if ('amostra_arte_base64' in dataToUpdate) propData.amostra_arte_base64 = dataToUpdate.amostra_arte_base64;
-
-        const valCor = dataToUpdate.padrao || dataToUpdate.cor;
-        if (valCor) {
-            propData.padrao = valCor;
-        }
-        const valNum = dataToUpdate.gabarito_operacional || dataToUpdate.numeracao || dataToUpdate.tipo_numeracao;
-        if (valNum) {
-            propData.gabarito_operacional = valNum;
-        }
 
         if (Object.keys(propData).length > 0) {
             const propId = itemLocal.id_produto_proposta_origem || (typeof itemLocal.id === 'number' || (!isNaN(parseInt(itemLocal.id)) && !String(itemLocal.id).includes('vibe')) ? parseInt(itemLocal.id) : null);
