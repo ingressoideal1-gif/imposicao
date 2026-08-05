@@ -13832,7 +13832,10 @@ async function loadOSItens(osId) {
                     if (!artesError && artes && artes.length > 0) {
                         state.osItens[osId].forEach(item => {
                             // Encontrar artes vinculadas a este item
-                            const artesDoItem = artes.filter(a => a.id_modelo === item.id);
+                            const artesDoItem = artes.filter(a => 
+                                String(a.id_modelo) === String(item.id) || 
+                                (item._pedidoModeloId && String(a.id_modelo) === String(item._pedidoModeloId))
+                            );
                             if (artesDoItem.length > 0) {
                                 // Ordenar por versão decrescente para pegar a mais recente
                                 artesDoItem.sort((a, b) => b.versao - a.versao);
