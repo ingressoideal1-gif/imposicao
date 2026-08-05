@@ -17653,7 +17653,7 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
-                        ${item.modo_pdf && item.arte_url ? `
+                        ${item.modo_pdf ? `
                         <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
                             <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
                             <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
@@ -17661,9 +17661,10 @@ function renderAmostrasOSItens(osId) {
                                 <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
                                 <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
                             </div>
-                            <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: none;">
+                            <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.arte_url ? 'none' : 'block'}">
                                  <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
                                  <p style="font-size: 0.85rem; font-weight: 600;">PDF Multi-Página</p>
+                                 <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">Faça upload de um PDF acima para visualizar.</p>
                             </div>
                         </div>
                         ` : `
@@ -19067,8 +19068,27 @@ async function toggleModoPdf(idx, osId, itemId) {
         }
     }
     
-    // Re-renderiza apenas o card, sem reconstruir a tela inteira
-    await renderItemAmostraCombinada(idx, osId);
+    // Re-renderiza a tela (necessário para criar/remover o canvas do DOM)
+    // Preservar a arte_url e pdfViewerState antes do render
+    const savedArteUrl = item.arte_url;
+    const pdfKey = `${osId}_${idx}`;
+    const savedViewerState = pdfViewerState[pdfKey] || pdfViewerState[idx];
+    
+    renderAmostrasOSItens(osId);
+    
+    // Após o DOM ser reconstruído, restaurar o viewer se havia PDF
+    if (novoModoPdf && savedArteUrl) {
+        setTimeout(async () => {
+            if (savedViewerState && savedViewerState.pdfUrl === savedArteUrl) {
+                pdfViewerState[pdfKey] = savedViewerState;
+                pdfViewerState[idx] = savedViewerState;
+                await renderPdfViewerPage(pdfKey, savedViewerState.currentPage || 1, idx);
+            } else {
+                await initPdfViewer(pdfKey, savedArteUrl, osId, idx);
+            }
+        }, 50);
+    }
+    
     toast(item.modo_pdf ? '📄 Modo PDF ativado — numeração mantida' : '🎨 Modo padrão restaurado', 'info');
 }
 
