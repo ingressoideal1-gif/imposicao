@@ -18683,7 +18683,7 @@ function onItemArteRemove(idx, osId, itemId, face = 'frente') {
     renderItemAmostraCombinada(idx, osId);
 
     const dbField = face === 'verso' ? 'verso_arte_url' : 'arte_url';
-    saveAmostraToDB(itemId, osId, { [dbField]: null })
+    saveAmostraToDB(itemId, osId, { [dbField]: null, _isExplicitRemove: true })
         .then(() => toast('Arte removida do banco!', 'success'))
         .catch(() => toast('Falha ao remover arte.', 'error'));
 }
@@ -18834,6 +18834,14 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         delete dbData.verso_url_arquivo;
         delete dbData.arte_json;
         delete dbData.verso_arte_json;
+
+        // GUARD: Nunca zerar arte_url/verso_arte_url se já existir no item local, a menos que seja uma remoção explícita
+        if ('arte_url' in dbData && dbData.arte_url === null && itemLocal.arte_url && !dataToUpdate._isExplicitRemove) {
+            delete dbData.arte_url;
+        }
+        if ('verso_arte_url' in dbData && dbData.verso_arte_url === null && itemLocal.verso_arte_url && !dataToUpdate._isExplicitRemove) {
+            delete dbData.verso_arte_url;
+        }
 
         // GUARD: Quando salvando arte (arte_url, amostra_arte_base64), SEMPRE preservar
         // amostra_cor_id e amostra_num_id se já existirem no item local.
