@@ -16964,15 +16964,15 @@ async function navigateToAmostrasFromOS(osId) {
         const realOSId = os.id || osId;
         console.log('[Nav] Usando realOSId:', realOSId, '| numero:', os.numero);
 
-        // Garantir que os itens estejam carregados com todos os dados
-        const needsFullLoad = !state.osItens[realOSId] || state.osItens[realOSId].length === 0 || state.osItens[realOSId].some(i => i._dbLoaded !== true);
-        if (needsFullLoad) {
-            console.log('[Nav] Carregando itens da OS...');
-            try {
-                await loadOSItens(realOSId);
-            } catch (e) {
-                console.warn('[Nav] Erro ao carregar itens:', e);
-            }
+        // Sempre recarregar do banco ao abrir a OS para garantir arte_url/modo_pdf atualizados
+        if (state.osItens && state.osItens[realOSId]) {
+            state.osItens[realOSId] = state.osItens[realOSId].map(i => ({ ...i, _dbLoaded: false }));
+        }
+        console.log('[Nav] Carregando itens da OS...');
+        try {
+            await loadOSItens(realOSId);
+        } catch (e) {
+            console.warn('[Nav] Erro ao carregar itens:', e);
         }
         console.log('[Nav] Itens carregados:', (state.osItens[realOSId] || []).length);
 
@@ -17355,7 +17355,13 @@ function renderAmostrasOSItens(osId) {
 
     if (typeof pdfViewerState !== 'undefined') {
         Object.keys(pdfViewerState).forEach(k => {
-            if (k.startsWith(`${targetOSId}_`) || k.startsWith(`${osId}_`)) delete pdfViewerState[k];
+            // Preservar estado do PDF viewer para itens em modo_pdf que já têm arte carregada,
+            // para evitar que o leitor suma ao clicar em MARCAR PRONTO ou navegar de volta.
+            if (k.startsWith(`${targetOSId}_`) || k.startsWith(`${osId}_`)) {
+                const vs = pdfViewerState[k];
+                if (vs && vs.pdfUrl) return; // manter estado ativo
+                delete pdfViewerState[k];
+            }
         });
     }
 
@@ -20575,6 +20581,13 @@ async function decisionAmostraItem(itemId, osId, status) {
             msg = `Status atualizado para ${status}`;
         }
         toast(msg, toastType);
+
+        // Recarregar itens do banco antes de re-renderizar para garantir que arte_url
+        // e modo_pdf estejam atualizados no state (evita sumiço do PDF no modo PDF)
+        if (state.osItens && state.osItens[osId]) {
+            state.osItens[osId] = state.osItens[osId].map(i => ({ ...i, _dbLoaded: false }));
+        }
+        try { await loadOSItens(osId); } catch (e) { console.warn('[decisionAmostraItem] loadOSItens err:', e); }
         renderAmostrasOSItens(osId);
 
         // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
