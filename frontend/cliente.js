@@ -345,7 +345,7 @@ function renderAmostrasOSItens(osId) {
                         <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
-                                ${item.modo_pdf && item.arte_url ? `
+                                ${item.modo_pdf ? `
                                 <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
                                     <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
                                     <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
@@ -353,11 +353,15 @@ function renderAmostrasOSItens(osId) {
                                         <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
                                         <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
                                     </div>
+                                    <div id="amostra-item-empty-pdf-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.arte_url ? 'none' : 'block'};">
+                                         <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">📄</div>
+                                         <p style="font-size: 0.85rem; font-weight: 600;">PDF Multi-Página</p>
+                                    </div>
                                 </div>
                                 ` : `
                                 <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
                                 `}
-                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 || (item.modo_pdf && item.arte_url) ? 'none' : 'block'};">
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 || item.modo_pdf ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Sem Frente</p>
                                 </div>
@@ -372,7 +376,7 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
-                        ${item.modo_pdf && item.arte_url ? `
+                        ${item.modo_pdf ? `
                         <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
                             <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
                             <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
@@ -380,11 +384,16 @@ function renderAmostrasOSItens(osId) {
                                 <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem;">Página 1 / 1</span>
                                 <button class="btn btn-sm btn-secondary" onclick="pdfViewerNextPage(${idx})">▶</button>
                             </div>
+                            <div id="amostra-item-empty-pdf-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.arte_url ? 'none' : 'block'};">
+                                 <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                                 <p style="font-size: 0.85rem; font-weight: 600;">PDF Multi-Página</p>
+                                 <p style="font-size: 0.82rem; opacity: 0.7; margin-top: 4px;">Aguardando upload do PDF.</p>
+                            </div>
                         </div>
                         ` : `
                         <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
                         `}
-                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 || (item.modo_pdf && item.arte_url) ? 'none' : 'block'};">
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 || item.modo_pdf ? 'none' : 'block'};">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Aguardando visualização da Arte...</p>
                         </div>
@@ -572,7 +581,7 @@ function renderAmostrasOSItens(osId) {
             const numSelect = document.getElementById(`amostra-item-num-${idx}`);
             const hasSelectValue = (corSelect && corSelect.value) || (numSelect && numSelect.value);
             
-            if (item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.verso_amostra_arte_base64 || hasSelectValue) {
+            if (item.modo_pdf || item.arte_url || item.verso_arte_url || item.amostra_cor_id || item.amostra_num_id || item.amostra_arte_base64 || item.verso_amostra_arte_base64 || hasSelectValue) {
                 renderItemAmostraCombinada(idx, osId);
             }
         });
@@ -1887,7 +1896,53 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
 }
 
 async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
-    if (!canvas) return;
+    // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
+    // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
+    const itemForPdf = (state.osItens[osId] || [])[idx] || item;
+    if (!canvas && !(itemForPdf && itemForPdf.modo_pdf)) return;
+
+    // Se modo PDF ativo, usar PDF viewer dedicado em vez de composição canvas
+    if (itemForPdf && itemForPdf.modo_pdf) {
+        if (canvas) canvas.style.display = 'none';
+        
+        const pdfUrl = face === 'back' ? (itemForPdf.verso_arte_url || null) : (itemForPdf.arte_url || null);
+        
+        if (pdfUrl) {
+            if (empty) empty.style.display = 'none';
+            // Esconder empty state do PDF também
+            const emptyPdf = document.getElementById(`amostra-item-empty-pdf-${idx}`);
+            if (emptyPdf) emptyPdf.style.display = 'none';
+            
+            const isImage = typeof pdfUrl === 'string' && (
+                pdfUrl.startsWith('data:image/') || 
+                (pdfUrl.includes('amostras_renderizadas') && !pdfUrl.endsWith('.pdf'))
+            );
+            
+            if (isImage) {
+                // Fallback: mostrar como imagem
+                const imgEl = document.getElementById(`amostra-item-img-${idx}`);
+                if (imgEl) {
+                    imgEl.src = pdfUrl;
+                    imgEl.style.display = 'block';
+                }
+            } else {
+                // Inicializar PDF viewer
+                const existing = pdfViewerState[idx];
+                if (!existing || existing.pdfUrl !== pdfUrl) {
+                    pdfViewerState[idx] = { pdfUrl: pdfUrl };
+                    await initPdfViewer(idx, pdfUrl);
+                } else {
+                    await renderPdfViewerPage(idx, existing.currentPage || 1);
+                }
+            }
+        } else {
+            // Sem arte/PDF enviado: mostrar estado vazio
+            if (empty) empty.style.display = 'none';
+            const emptyPdf = document.getElementById(`amostra-item-empty-pdf-${idx}`);
+            if (emptyPdf) emptyPdf.style.display = 'block';
+        }
+        return;
+    }
 
     // Determinar se tem arte selecionada ou salva para esta face
     const inputId = face === 'back' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
