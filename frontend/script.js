@@ -18642,13 +18642,19 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
                 } catch (snapErr) {
                     console.warn('[PDF MODE] Erro ao gerar snapshot da página 1:', snapErr);
                 }
-                // Salvar URL no banco
+                // Salvar URL no banco E no state local ANTES de qualquer re-render
                 const dbField = face === 'verso' ? 'verso_arte_url' : 'arte_url';
+                if (face === 'verso') { item.verso_arte_url = publicUrl; }
+                else { item.arte_url = publicUrl; }
                 await saveAmostraToDB(itemId, osId, { [dbField]: publicUrl });
-                // Limpar viewer state antigo e re-renderizar
+                // Limpar viewer state antigo — re-renderizar apenas o card (não a tela toda)
+                const pdfKey = `${osId}_${idx}`;
+                delete pdfViewerState[pdfKey];
                 delete pdfViewerState[idx];
-                renderAmostrasOSItens(osId);
-                setTimeout(() => initPdfViewer(idx, publicUrl), 100);
+                // Renderizar o card com arte_url já no state para garantir que o viewer apareça
+                await renderItemAmostraCombinada(idx, osId);
+                // Inicializar o viewer após o DOM estar pronto
+                await initPdfViewer(pdfKey, publicUrl, osId, idx);
             } else {
                 // Renderizar IMEDIATAMENTE a arte (modo padrão)
                 renderItemAmostraCombinada(idx, osId);
@@ -19041,7 +19047,8 @@ async function toggleModoPdf(idx, osId, itemId) {
     const item = items.find(i => String(i.id) === String(itemId));
     if (!item) return;
     
-    item.modo_pdf = !item.modo_pdf;
+    const novoModoPdf = !item.modo_pdf;
+    item.modo_pdf = novoModoPdf;
     
     // Persiste no banco
     try {
@@ -19050,8 +19057,18 @@ async function toggleModoPdf(idx, osId, itemId) {
         console.error('[PDF MODE] Erro ao salvar modo_pdf:', e);
     }
     
-    // Re-renderiza o card completo
-    renderAmostrasOSItens(osId);
+    // Ao desativar modo PDF: zerar a arte_url explicitamente
+    if (!novoModoPdf && item.arte_url) {
+        item.arte_url = null;
+        try {
+            await saveAmostraToDB(itemId, osId, { arte_url: null, _isExplicitRemove: true });
+        } catch (e) {
+            console.warn('[PDF MODE] Erro ao limpar arte_url:', e);
+        }
+    }
+    
+    // Re-renderiza apenas o card, sem reconstruir a tela inteira
+    await renderItemAmostraCombinada(idx, osId);
     toast(item.modo_pdf ? '📄 Modo PDF ativado — numeração mantida' : '🎨 Modo padrão restaurado', 'info');
 }
 
