@@ -593,7 +593,7 @@ function renderAmostrasOSItens(osId) {
     setTimeout(() => {
         itens.forEach((item, idx) => {
             if (item.modo_pdf && item.arte_url) {
-                initPdfViewer(idx, item.arte_url);
+                initPdfViewer(idx, item.arte_url, osId);
             }
         });
     }, 200);
@@ -1929,8 +1929,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 // Inicializar PDF viewer
                 const existing = pdfViewerState[idx];
                 if (!existing || existing.pdfUrl !== pdfUrl) {
-                    pdfViewerState[idx] = { pdfUrl: pdfUrl };
-                    await initPdfViewer(idx, pdfUrl);
+                    pdfViewerState[idx] = { pdfUrl: pdfUrl, osId: osId };
+                    await initPdfViewer(idx, pdfUrl, osId);
                 } else {
                     await renderPdfViewerPage(idx, existing.currentPage || 1);
                 }
@@ -2487,7 +2487,7 @@ window.saveAmostraItemObs = saveAmostraItemObs;
 // ========== MODO PDF MULTI-PÁGINA (Cliente) ==========
 const pdfViewerState = {};
 
-async function initPdfViewer(idx, pdfUrl) {
+async function initPdfViewer(idx, pdfUrl, osId) {
     if (!pdfUrl) return;
     try {
         let arrayBuffer;
@@ -2507,7 +2507,7 @@ async function initPdfViewer(idx, pdfUrl) {
             arrayBuffer = await proxyResponse.arrayBuffer();
         }
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        pdfViewerState[idx] = { pdf, currentPage: 1, totalPages: pdf.numPages };
+        pdfViewerState[idx] = { pdf, currentPage: 1, totalPages: pdf.numPages, pdfUrl, osId: osId || clienteState.osId };
         await renderPdfViewerPage(idx, 1);
     } catch (err) {
         console.error('[PDF Viewer Cliente] Erro:', err);
@@ -2527,6 +2527,25 @@ async function renderPdfViewerPage(idx, pageNum) {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         await page.render({ canvasContext: ctx, viewport }).promise;
+
+        // Estampar numeração sobre a página do PDF (igual ao painel interno)
+        const osId = vs.osId || clienteState.osId;
+        const items = (osId && state.osItens && state.osItens[osId]) ? state.osItens[osId] : [];
+        const item = items[idx] || null;
+        let numId = item ? (item.amostra_num_id || item.numeracao_id || item.numeracao || item.gabarito_operacional) : null;
+        let num = null;
+        if (numId && state.numeracoes) {
+            const numIdStr = String(numId).trim().toLowerCase();
+            num = state.numeracoes.find(n => 
+                String(n.id) === String(numId) || 
+                String(n.name).trim().toLowerCase() === numIdStr || 
+                String(n.tipo).trim().toLowerCase() === numIdStr
+            );
+        }
+        if (num && num.elements && num.elements.length > 0) {
+            drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
+        }
+
         canvas.style.display = 'block';
         const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
         if (nav) nav.style.display = 'flex';
@@ -2534,6 +2553,8 @@ async function renderPdfViewerPage(idx, pageNum) {
         if (info) info.textContent = `Página ${pageNum} / ${vs.totalPages}`;
         const empty = document.getElementById(`amostra-item-empty-${idx}`);
         if (empty) empty.style.display = 'none';
+        const emptyPdf = document.getElementById(`amostra-item-empty-pdf-${idx}`);
+        if (emptyPdf) emptyPdf.style.display = 'none';
         vs.currentPage = pageNum;
     } catch (err) {
         console.error('[PDF Viewer Cliente] Erro página:', err);
@@ -2550,4 +2571,144 @@ function pdfViewerNextPage(idx) {
     const vs = pdfViewerState[idx];
     if (!vs || vs.currentPage >= vs.totalPages) return;
     renderPdfViewerPage(idx, vs.currentPage + 1);
+}
+
+// ========== NUMERAÇÃO OVERLAY SOBRE PDF (Cliente) ==========
+function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, canvasHeight) {
+    if (!ctx || !num || !num.elements || !num.elements.length) return;
+
+    let fmt = null;
+    if (num.formato_id && state.formatos) {
+        fmt = state.formatos.find(f => String(f.id) === String(num.formato_id));
+    }
+    const width_mm = (fmt && fmt.width_mm) ? fmt.width_mm : 180;
+    const height_mm = (fmt && fmt.height_mm) ? fmt.height_mm : 50;
+
+    const Sx = canvasWidth / width_mm;
+    const Sy = canvasHeight / height_mm;
+    const S = Sx;
+
+    const seqStart = parseInt(
+        item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1
+    ) || 1;
+
+    num.elements.forEach(el => {
+        if (el.face === 'back') return;
+
+        const x = el.x_mm * Sx;
+        const y = el.y_mm * Sy;
+        const color = el.color || '#000000';
+        const rot = (el.rotation || 0) * Math.PI / 180;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rot);
+
+        if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
+            const fs = (el.font_size || 12) * S / 2.8346;
+            ctx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+            ctx.fillStyle = color;
+
+            let label = '';
+            if (el.type === 'FIXED') {
+                label = el.fixed_value || 'TEXTO';
+            } else if (el.type === 'TEATRO_FILA') {
+                const _fVal = (state.csvData && state.csvData[pageNum - 1]) ? state.csvData[pageNum - 1].Fila || 'A' : 'A';
+                label = `${el.prefix || ''}${_fVal}`;
+            } else if (el.type === 'TEATRO_LUGAR') {
+                const _lVal = (state.csvData && state.csvData[pageNum - 1]) ? state.csvData[pageNum - 1].Numero || String(pageNum) : String(pageNum);
+                label = `${el.prefix || ''}${_lVal}`;
+            } else if (el.type === 'TEATRO_COMBO') {
+                const _fVal = (state.csvData && state.csvData[pageNum - 1]) ? state.csvData[pageNum - 1].Fila || 'A' : 'A';
+                const _lVal = (state.csvData && state.csvData[pageNum - 1]) ? state.csvData[pageNum - 1].Numero || String(pageNum) : String(pageNum);
+                const fila = `${el.prefix_fila || ''}${_fVal}`;
+                const lugar = `${el.prefix_lugar || ''}${_lVal}`;
+                label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
+            } else if (el.type === 'CAMAROTE_LOCAL') {
+                const _cIni = parseInt(item?.c_ini || item?.C_INI || 1);
+                label = `${el.prefix || ''}${_cIni}`;
+            } else if (el.type === 'CAMAROTE_PESSOA') {
+                label = `${el.prefix || ''}${pageNum}`;
+            } else if (el.type === 'CAMAROTE_PESSOA_TOTAL') {
+                const _lCamB = parseInt(item?.l_cam || item?.L_CAM || 5);
+                label = `${el.prefix || ''}${pageNum}/${_lCamB}`;
+            } else if (el.source === 'database') {
+                const colName = el.csv_column || '';
+                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+                const csvRow = (csvData && csvData[pageNum - 1]) ? csvData[pageNum - 1] : null;
+                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                } else {
+                    label = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                }
+            } else {
+                const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 6;
+                let current_val = seqStart + (pageNum - 1);
+                if (num && num.tipo === "TICKET") {
+                    const pos = parseInt(el.ticket_pos) || 1;
+                    const ticketQtd = parseInt(num.ticket_qtd) || 1;
+                    current_val = seqStart + ((pageNum - 1) * ticketQtd) + (pos - 1);
+                }
+                label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
+            }
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            if (label.includes('\n')) {
+                const lines = label.split('\n');
+                const lineHeight = fs * 1.2;
+                const totalH = lines.length * lineHeight;
+                const blockTop = -totalH / 2;
+                lines.forEach((line, i) => {
+                    const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
+                    ctx.fillText(line, 0, lineCenter);
+                });
+            } else {
+                ctx.fillText(label, 0, 0);
+            }
+        } else if (el.type === 'QR') {
+            const sz = (el.size_mm || 15) * S;
+            let qrText = '';
+            if (el.fixed) {
+                qrText = el.fixed_value || '';
+            } else if (el.source === 'database') {
+                const colName = el.csv_column || '';
+                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+                const csvRow = (csvData && csvData[pageNum - 1]) ? csvData[pageNum - 1] : null;
+                if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
+                    qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
+                } else {
+                    qrText = `${el.prefix || ''}[${colName || 'coluna'}]${el.suffix || ''}`;
+                }
+            } else {
+                const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
+                let current_val = seqStart + (pageNum - 1);
+                const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
+                qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
+            }
+            if (typeof renderQRCodeOnCtx === 'function') {
+                renderQRCodeOnCtx(ctx, qrText, 0, 0, sz, color);
+            }
+        } else if (el.type === 'BARCODE') {
+            const bw = (el.barcode_width_mm || el.width_mm || 30) * S;
+            const bh = (el.barcode_height_mm || el.height_mm || 8) * S;
+            const hbw = bw / 2, hbh = bh / 2;
+            ctx.fillStyle = color;
+            const barW = bw / 40;
+            const pattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1];
+            for (let i = 0; i < pattern.length; i++) {
+                if (pattern[i]) ctx.fillRect(-hbw + i * barW, -hbh, barW * 0.7, bh);
+            }
+        } else if (el.type === 'PICOTE') {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.0;
+            ctx.setLineDash([6, 3]);
+            ctx.beginPath();
+            ctx.moveTo(0, -y);
+            ctx.lineTo(0, canvasHeight - y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        ctx.restore();
+    });
 }
