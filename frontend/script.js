@@ -19508,10 +19508,12 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
 }
 
 async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
-    if (!canvas) return;
+    // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
+    // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
+    const itemForPdf = (state.osItens[osId] || [])[idx] || item;
+    if (!canvas && !(itemForPdf && itemForPdf.modo_pdf)) return;
 
     // Se modo PDF ativo, não compor multicamada — usar PDF viewer dedicado
-    const itemForPdf = (state.osItens[osId] || [])[idx] || item;
     if (itemForPdf && itemForPdf.modo_pdf) {
         if (canvas) canvas.style.display = 'none';
         
