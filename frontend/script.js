@@ -18842,6 +18842,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         if ('verso_arte_url' in dbData && dbData.verso_arte_url === null && itemLocal.verso_arte_url && !dataToUpdate._isExplicitRemove) {
             delete dbData.verso_arte_url;
         }
+        delete dbData._isExplicitRemove;
 
         // GUARD: Quando salvando arte (arte_url, amostra_arte_base64), SEMPRE preservar
         // amostra_cor_id e amostra_num_id se já existirem no item local.
