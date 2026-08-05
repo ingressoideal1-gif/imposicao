@@ -19061,15 +19061,33 @@ function getPdfUrlForItem(item, face, osId, idx) {
     if (!item) return null;
     const faceKey = face === 'back' ? 'verso' : 'frente';
     
+    // 1. Procurar em campos diretos de URL de PDF do item
     let candidate = face === 'back'
         ? (item.verso_arte_url || item.url_arquivo_arte_verso || item.verso_url_arquivo)
         : (item.arte_url || item.url_arquivo_arte || item.url_arquivo);
         
+    // 2. Se não achou no item, procurar no localStorage local da máquina
     if (!candidate) {
         candidate = (item.id ? localStorage.getItem(`ideal_arte_url_${item.id}_${faceKey}`) : null) ||
                     localStorage.getItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`);
     }
     
+    // 3. Se ainda não achou, procurar em pedidos_artes no state global
+    if (!candidate && typeof state !== 'undefined' && state.todasArtes && state.todasArtes.length > 0) {
+        const queryNum = parseInt(String(osId).replace('vibe_', ''));
+        if (!isNaN(queryNum)) {
+            const artesDoItem = state.todasArtes.filter(a => 
+                (a.id_int === queryNum || String(a.id_int) === String(queryNum)) && 
+                (String(a.id_modelo) === String(item.id) || (item._pedidoModeloId && String(a.id_modelo) === String(item._pedidoModeloId)))
+            );
+            if (artesDoItem.length > 0) {
+                artesDoItem.sort((a, b) => (b.versao || 0) - (a.versao || 0));
+                candidate = face === 'back' ? artesDoItem[0].verso_url_arquivo : artesDoItem[0].url_arquivo;
+            }
+        }
+    }
+
+    // 4. Fallback de imagem snapshot se não houver PDF
     if (!candidate) {
         candidate = face === 'back' ? item.verso_amostra_arte_base64 : item.amostra_arte_base64;
     }
@@ -19462,21 +19480,30 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     if (itemForPdf && itemForPdf.modo_pdf) {
         if (canvas) canvas.style.display = 'none';
         
-        // Pega a URL do PDF (arte_url, amostra_arte_base64, ou url_arquivo_arte)
-        const pdfUrl = face === 'back' 
-            ? (itemForPdf.verso_arte_url || itemForPdf.verso_amostra_arte_base64 || itemForPdf.url_arquivo_arte_verso) 
-            : (itemForPdf.arte_url || itemForPdf.amostra_arte_base64 || itemForPdf.url_arquivo_arte);
+        // Pega a URL do PDF (com busca em 4 níveis)
+        const pdfUrl = getPdfUrlForItem(itemForPdf, face, osId, idx);
             
         if (pdfUrl) {
             if (empty) empty.style.display = 'none';
             const key = `${osId}_${idx}`;
-            const existing = pdfViewerState[key] || pdfViewerState[idx];
-            if (!existing || existing.pdfUrl !== pdfUrl) {
-                initPdfViewer(key, pdfUrl, osId, idx);
+            
+            const isImage = typeof pdfUrl === 'string' && (
+                pdfUrl.startsWith('data:image/') || 
+                (pdfUrl.includes('amostras_renderizadas') && !pdfUrl.endsWith('.pdf'))
+            );
+            
+            if (isImage) {
+                renderImageModeInPdfViewer(idx, pdfUrl, itemForPdf, osId);
             } else {
-                pdfViewerState[key] = existing;
-                pdfViewerState[key].osId = osId;
-                renderPdfViewerPage(key, existing.currentPage || 1, idx);
+                const existing = pdfViewerState[key] || pdfViewerState[idx];
+                if (!existing || existing.pdfUrl !== pdfUrl) {
+                    initPdfViewer(key, pdfUrl, osId, idx);
+                } else {
+                    pdfViewerState[key] = existing;
+                    pdfViewerState[key].osId = osId;
+                    pdfViewerState[key].idx = idx;
+                    renderPdfViewerPage(key, existing.currentPage || 1, idx);
+                }
             }
         } else {
             // Sem arte/PDF enviado ainda: mostra o estado vazio do modo PDF
