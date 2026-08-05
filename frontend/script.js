@@ -19312,9 +19312,22 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
     });
 }
 
-async function renderPdfViewerPage(idx, pageNum) {
-    const viewerState = pdfViewerState[idx];
+async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
+    const viewerState = pdfViewerState[keyOrIdx] || pdfViewerState[idxParam];
     if (!viewerState || !viewerState.pdf) return;
+    
+    // Extrair SEMPRE o índice numérico real do card na DOM (0, 1, 2...)
+    let idx = (idxParam !== null && idxParam !== undefined) ? idxParam : viewerState.idx;
+    if (idx === undefined || idx === null || isNaN(parseInt(idx))) {
+        if (typeof keyOrIdx === 'string' && keyOrIdx.includes('_')) {
+            const parts = keyOrIdx.split('_');
+            idx = parseInt(parts[parts.length - 1]);
+            if (isNaN(idx)) idx = 0;
+        } else {
+            idx = parseInt(keyOrIdx);
+            if (isNaN(idx)) idx = 0;
+        }
+    }
     
     try {
         const page = await viewerState.pdf.getPage(pageNum);
@@ -19322,7 +19335,10 @@ async function renderPdfViewerPage(idx, pageNum) {
         const viewport = page.getViewport({ scale });
         
         const canvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
-        if (!canvas) return;
+        if (!canvas) {
+            console.warn(`[PDF Viewer] Canvas #amostra-pdf-canvas-${idx} não encontrado no DOM (keyOrIdx=${keyOrIdx}).`);
+            return;
+        }
         
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -19374,15 +19390,17 @@ async function renderPdfViewerPage(idx, pageNum) {
 }
 
 function pdfViewerPrevPage(idx) {
-    const viewerState = pdfViewerState[idx];
+    const key = (state.activeOSId ? `${state.activeOSId}_${idx}` : idx);
+    const viewerState = pdfViewerState[key] || pdfViewerState[idx];
     if (!viewerState || viewerState.currentPage <= 1) return;
-    renderPdfViewerPage(idx, viewerState.currentPage - 1);
+    renderPdfViewerPage(key in pdfViewerState ? key : idx, viewerState.currentPage - 1, idx);
 }
 
 function pdfViewerNextPage(idx) {
-    const viewerState = pdfViewerState[idx];
+    const key = (state.activeOSId ? `${state.activeOSId}_${idx}` : idx);
+    const viewerState = pdfViewerState[key] || pdfViewerState[idx];
     if (!viewerState || viewerState.currentPage >= viewerState.totalPages) return;
-    renderPdfViewerPage(idx, viewerState.currentPage + 1);
+    renderPdfViewerPage(key in pdfViewerState ? key : idx, viewerState.currentPage + 1, idx);
 }
 
 /**
