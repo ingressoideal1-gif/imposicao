@@ -63,7 +63,7 @@ Write-Host "`nEtapa 1/2: Compilando XML (.wxs -> .wixobj)..." -ForegroundColor G
 
 # 4. Enlincar .wixobj -> NewProd_Setup_v1.0.msi
 Write-Host "Etapa 2/2: Gerando pacote final MSI (.wixobj -> .msi)..." -ForegroundColor Green
-$msiOutput = "dist\NewProd_Setup_v1.2.msi"
+$msiOutput = "dist\NewProd_Setup_v1.2.3.msi"
 & $wixLight -ext WixUIExtension -nologo -sval "dist\agent_installer.wixobj" -out $msiOutput
 
 if (Test-Path $msiOutput) {

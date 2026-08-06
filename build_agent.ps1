@@ -14,8 +14,8 @@ if (Test-Path "venv\Scripts\Activate.ps1") {
 
 # 2. Instalar dependências necessárias do PyInstaller se ausente
 Write-Host "Verificando dependências de empacotamento..." -ForegroundColor Green
-python -m pip install --upgrade pip
-python -m pip install pyinstaller pystray pillow fastapi uvicorn PyMuPDF qrcode python-barcode pywin32 anyio
+# python -m pip install --upgrade pip
+# python -m pip install pyinstaller pystray pillow fastapi uvicorn PyMuPDF qrcode python-barcode pywin32 anyio
 
 # 3. Limpar pastas de build anteriores
 Write-Host "Limpando diretórios de compilação antigos..." -ForegroundColor Green
