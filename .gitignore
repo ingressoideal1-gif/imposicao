@@ -1,6 +1,11 @@
 venv/
 __pycache__/
 *.pyc
+
+# Segredos — nunca versionar. db.py le .env.local em tempo de execucao.
+.env
+.env.*
+!.env.example
 *.pdf
 .firebase/
 .firebaserc
