@@ -19,6 +19,14 @@
 
     <MediaTemplate EmbedCab="yes" />
 
+    <!-- Sem isto o Windows trata cada versao como produto novo (Product Id="*"
+         gera ProductCode diferente a cada build), acumulando entradas em
+         Adicionar/Remover Programas. Com MajorUpgrade a versao anterior e
+         desinstalada automaticamente antes de instalar a nova. -->
+    <MajorUpgrade
+        DowngradeErrorMessage="Uma versao mais recente do NewProd Agent ja esta instalada."
+        Schedule="afterInstallInitialize" />
+
     <!-- ─── Diretórios de Instalação (Pasta do Usuário / LocalAppData) ────── -->
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="LocalAppDataFolder">
