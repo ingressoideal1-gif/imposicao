@@ -13925,7 +13925,7 @@ function getStatusBadge(status) {
         'Arte APROVADA':       { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'ARTE_APROVADA':       { icon: '✅', bg: '#22c55e', label: 'Aprovada' },
         'Enviar ARTE':         { icon: '📤', bg: '#f59e0b', label: 'Enviar Arte' },
-        'AGUARDANDO_APROVACAO':{ icon: '⏳', bg: '#f97316', label: 'Aguard. Aprovação' },
+        'AGUARDANDO_APROVACAO':{ icon: '⏳', bg: '#8b5cf6', label: 'Aguard. Aprovação' },
     };
     const s = map[status] || { icon: '❓', bg: '#6b7280', label: status || '—' };
     return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;padding:3px 10px;border-radius:12px;background:${s.bg}22;color:${s.bg};font-weight:600;border:1px solid ${s.bg}44;">${s.icon} ${s.label}</span>`;
@@ -14686,10 +14686,10 @@ function renderOrdens() {
 
         if (isApprovedCalculado) {
             os.status_calculado = 'Aprovada';
-        } else if (isEmAlteracaoCalculado) {
-            os.status_calculado = 'Em Alteração';
         } else if (isEnviarArteCalculado) {
             os.status_calculado = 'Enviar Arte';
+        } else if (isEmAlteracaoCalculado) {
+            os.status_calculado = 'Em Alteração';
         } else if (osStatus === 'AGUARD. APROVAÇÃO' || osStatus === 'AGUARDANDO_APROVACAO' || globalStatus === 'AGUARD. APROVAÇÃO' || globalStatus === 'AGUARDANDO_APROVACAO' || temLinkGerado || validAprovacaoList.includes(osStatus) || validAprovacaoList.includes(globalStatus)) {
             os.status_calculado = 'Aguard. Aprovação';
         } else {
