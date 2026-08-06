@@ -18679,29 +18679,70 @@ function onItemArteRemove(idx, osId, itemId, face = 'frente') {
     const inputId = face === 'verso' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
     const nameLabelId = face === 'verso' ? `amostra-item-arte-verso-name-${idx}` : `amostra-item-arte-name-${idx}`;
     const removeBtnId = face === 'verso' ? `btn-remove-amostra-arte-verso-${idx}` : `btn-remove-amostra-arte-${idx}`;
+    const copyBtnId = face === 'verso' ? `btn-copy-amostra-arte-verso-${idx}` : `btn-copy-amostra-arte-${idx}`;
 
     const input = document.getElementById(inputId);
     const nameLabel = document.getElementById(nameLabelId);
     const removeBtn = document.getElementById(removeBtnId);
+    const copyBtn = document.getElementById(copyBtnId);
     
     if (input) input.value = '';
     if (nameLabel) nameLabel.textContent = '';
     if (removeBtn) removeBtn.style.display = 'none';
+    if (copyBtn) copyBtn.style.display = 'none';
     
-    const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
+    const osItems = state.osItens[osId];
+    const item = osItems ? osItems.find(i => String(i.id) === String(itemId)) : null;
     if (item) {
+        item._needsSnapshot = true;
         if (face === 'verso') {
             item.verso_arte_url = null;
+            item.verso_amostra_arte_base64 = null;
+            item.url_arquivo_arte_verso = null;
+            item.verso_url_arquivo = null;
+            item.verso_arte_json = null;
         } else {
             item.arte_url = null;
+            item.amostra_arte_base64 = null;
+            item.url_arquivo_arte = null;
+            item.url_arquivo = null;
+            item.arte_json = null;
         }
+
+        // Limpar do localStorage
+        const faceKey = face === 'verso' ? 'verso' : 'frente';
+        if (item.id) {
+            localStorage.removeItem(`ideal_arte_url_${item.id}_${faceKey}`);
+            localStorage.removeItem(`ideal_arte_json_${item.id}_${faceKey}`);
+        }
+        localStorage.removeItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`);
+        localStorage.removeItem(`ideal_arte_json_${osId}_${idx}_${faceKey}`);
     }
+
+    // Limpar cache de PDF viewer se houver
+    const pdfKey = `${osId}_${idx}`;
+    if (typeof pdfViewerState !== 'undefined') {
+        delete pdfViewerState[pdfKey];
+        delete pdfViewerState[idx];
+    }
+
+    // Re-renderizar imediatamente a janela combinada sem a camada de arte
     renderItemAmostraCombinada(idx, osId);
 
-    const dbField = face === 'verso' ? 'verso_arte_url' : 'arte_url';
-    saveAmostraToDB(itemId, osId, { [dbField]: null, _isExplicitRemove: true })
-        .then(() => toast('Arte removida do banco!', 'success'))
-        .catch(() => toast('Falha ao remover arte.', 'error'));
+    // Salvar no banco zerando tanto a URL quanto o base64
+    const payload = face === 'verso' ? {
+        verso_arte_url: null,
+        verso_amostra_arte_base64: null,
+        _isExplicitRemove: true
+    } : {
+        arte_url: null,
+        amostra_arte_base64: null,
+        _isExplicitRemove: true
+    };
+
+    saveAmostraToDB(itemId, osId, payload)
+        .then(() => toast('Arte removida do banco com sucesso!', 'success'))
+        .catch((err) => toast('Falha ao remover arte: ' + (err.message || err), 'error'));
 }
 
 // Funções globais de Copiar/Colar links de arte entre modelos
@@ -18924,12 +18965,18 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         delete dbData.arte_json;
         delete dbData.verso_arte_json;
 
-        // GUARD: Nunca zerar arte_url/verso_arte_url se já existir no item local, a menos que seja uma remoção explícita
+        // GUARD: Nunca zerar arte_url/verso_arte_url/amostra_arte_base64 se já existir no item local, a menos que seja uma remoção explícita
         if ('arte_url' in dbData && dbData.arte_url === null && itemLocal.arte_url && !dataToUpdate._isExplicitRemove) {
             delete dbData.arte_url;
         }
+        if ('amostra_arte_base64' in dbData && dbData.amostra_arte_base64 === null && itemLocal.amostra_arte_base64 && !dataToUpdate._isExplicitRemove) {
+            delete dbData.amostra_arte_base64;
+        }
         if ('verso_arte_url' in dbData && dbData.verso_arte_url === null && itemLocal.verso_arte_url && !dataToUpdate._isExplicitRemove) {
             delete dbData.verso_arte_url;
+        }
+        if ('verso_amostra_arte_base64' in dbData && dbData.verso_amostra_arte_base64 === null && itemLocal.verso_amostra_arte_base64 && !dataToUpdate._isExplicitRemove) {
+            delete dbData.verso_amostra_arte_base64;
         }
         delete dbData._isExplicitRemove;
 
@@ -19094,16 +19141,14 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
 
         Object.assign(itemLocal, dataToUpdate);
-        if (dataToUpdate.arte_url) {
+        if ('arte_url' in dataToUpdate) {
             itemLocal.url_arquivo_arte = dataToUpdate.arte_url;
             itemLocal.url_arquivo = dataToUpdate.arte_url;
         }
-        if (dataToUpdate.verso_arte_url) {
+        if ('verso_arte_url' in dataToUpdate) {
             itemLocal.url_arquivo_arte_verso = dataToUpdate.verso_arte_url;
             itemLocal.verso_url_arquivo = dataToUpdate.verso_arte_url;
         }
-
-        Object.assign(itemLocal, dataToUpdate);
     } catch (e) {
         console.error('[SAVE] Erro em saveAmostraToDB:', e);
         throw e;
