@@ -3,6 +3,16 @@ import os
 
 block_cipher = None
 
+# MEDICAO: bundle do frontend sem fonts_local (222 TTF, ~140 MB dos 254 MB).
+# Este build NAO serve para release — as 222 fontes com arquivo_url relativo
+# (/fonts_local/...) deixam de existir em disco e o agente falharia ao embuti-las.
+# So vale depois que as fontes forem hospedadas e o catalogo migrado para URL absoluta.
+_frontend_datas = []
+for _raiz, _dirs, _arqs in os.walk('frontend'):
+    _dirs[:] = [d for d in _dirs if d != 'fonts_local']
+    for _a in _arqs:
+        _frontend_datas.append((os.path.join(_raiz, _a), os.path.relpath(_raiz, '.')))
+
 a = Analysis(
     ['agent_tray.py'],
     pathex=['.'],
@@ -12,8 +22,7 @@ a = Analysis(
         ('agent_icon.ico', '.'),
         ('Logo Ideal Dark.png', '.'),
         ('ppds', 'ppds'),
-        ('frontend', 'frontend'),
-    ],
+    ] + _frontend_datas,
     hiddenimports=[
         'uvicorn.logging',
         'uvicorn.loops',
@@ -58,6 +67,7 @@ a = Analysis(
         'local_print_agent',
         'agent_worker',
         'security_config',
+        'font_cache',
     ],
     hookspath=[],
     hooksconfig={},

@@ -47,6 +47,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Ideal Imposition API", description="Sistema de Imposição Gráfica com Dados Variáveis", lifespan=lifespan)
 
 import security_config
+# alias: dentro de _embed_system_fonts ja existe um dict local chamado font_cache
+import font_cache as font_cache_local
 
 # allow_private_network permanece ligado: é o que autoriza a página HTTPS do
 # Vercel a falar com o agente local em 127.0.0.1:9000.
@@ -105,7 +107,7 @@ def health_check():
     """Endpoint de health check — usado pelo frontend para pré-aquecer o servidor."""
     return {"status": "ok"}
 
-LOCAL_AGENT_VERSION = "NewProd 1.2.4"
+LOCAL_AGENT_VERSION = "NewProd 1.2.5"
 
 @app.get("/api/status")
 def read_root():
@@ -496,9 +498,7 @@ def _embed_system_fonts(numeracao_obj):
                 print(f"[impose] INFO: Fonte '{family}' não encontrada no catálogo do backend, mas arquivo_url do frontend presente: {fallback_url}")
                 # Usar a URL do frontend para embutir
                 try:
-                    req = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0'})
-                    with urllib.request.urlopen(req, timeout=15) as response:
-                        font_bytes = base64.b64encode(response.read()).decode("ascii")
+                    font_bytes = base64.b64encode(font_cache_local.obter_bytes(fallback_url)).decode("ascii")
                     el["_font_data"] = font_bytes
                     font_cache[fallback_url] = font_bytes
                     print(f"[impose] Fonte embutida via fallback frontend: {family} -> {fallback_url} ({len(font_bytes)} chars b64)")
@@ -522,15 +522,15 @@ def _embed_system_fonts(numeracao_obj):
         try:
             if url.startswith("/"):
                 import os
-                # O diretório do frontend é C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition\frontend
+                # Caminho relativo (legado): fonte empacotada junto do agente.
                 local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", url.lstrip("/"))
                 with open(local_path, "rb") as f:
                     font_bytes = base64.b64encode(f.read()).decode("ascii")
             else:
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    font_bytes = base64.b64encode(response.read()).decode("ascii")
-                    
+                # Baixa uma vez por maquina e reusa do disco — sem isto, queda de
+                # internet impediria a imposicao com as fontes do catalogo.
+                font_bytes = base64.b64encode(font_cache_local.obter_bytes(url)).decode("ascii")
+
             el["_font_data"] = font_bytes
             font_cache[url] = font_bytes
             print(f"[impose] Fonte embutida: {family} -> {url} ({len(font_bytes)} chars b64)")
