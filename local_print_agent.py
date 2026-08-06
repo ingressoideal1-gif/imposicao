@@ -19,6 +19,7 @@ import print_service
 import ppd_parser
 from engine import ImpositionConfig, ImpositionEngine
 import db
+import security_config
 
 app = FastAPI(title="Local Print Agent", description="Agente local para impressao direta e imposicao de PDFs.")
 
@@ -47,8 +48,9 @@ def _get_cached_art_path(content_bytes: bytes, ext: str) -> str:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=security_config.ALLOWED_ORIGINS,
+    allow_origin_regex=security_config.ALLOWED_ORIGIN_REGEX,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_private_network=True,
@@ -314,12 +316,18 @@ async def impose_file(
 
 @app.post("/api/update")
 async def trigger_update(request: Request):
+    data = await request.json()
+    download_url = data.get("download_url")
+    if not download_url:
+        raise HTTPException(status_code=400, detail="download_url não informado")
+
+    # Ver security_config: sem allowlist, qualquer origem faz o agente baixar e
+    # executar um binário arbitrário.
+    if not security_config.is_allowed_update_url(download_url):
+        print(f"[Update] BLOQUEADO: origem de download não autorizada: {download_url!r}")
+        raise HTTPException(status_code=403, detail="URL de atualização não autorizada.")
+
     try:
-        data = await request.json()
-        download_url = data.get("download_url")
-        if not download_url:
-            raise HTTPException(status_code=400, detail="download_url não informado")
-            
         import urllib.request
         import subprocess
         import sys
@@ -369,10 +377,14 @@ del "%~f0"
         print("[Update] Encerrando processo atual...")
         os._exit(0)
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[Update] Falha na atualização: {e}")
         raise HTTPException(status_code=500, detail=f"Falha na atualização: {str(e)}")
 
 if __name__ == "__main__":
-    print("Iniciando Local Print Agent na porta 9000...")
-    uvicorn.run("local_print_agent:app", host="0.0.0.0", port=9000, reload=True, reload_excludes=["venv/*"])
+    # 127.0.0.1: cada operador imprime apenas na própria máquina, então o agente
+    # não precisa ficar exposto à LAN.
+    print("Iniciando Local Print Agent na porta 9000 (somente localhost)...")
+    uvicorn.run("local_print_agent:app", host="127.0.0.1", port=9000, reload=True, reload_excludes=["venv/*"])

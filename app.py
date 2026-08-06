@@ -46,10 +46,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Ideal Imposition API", description="Sistema de Imposição Gráfica com Dados Variáveis", lifespan=lifespan)
 
+import security_config
+
+# allow_private_network permanece ligado: é o que autoriza a página HTTPS do
+# Vercel a falar com o agente local em 127.0.0.1:9000.
+# allow_credentials=False porque nenhuma chamada do frontend usa cookies/sessão
+# (não há credentials:'include'); com "*" o navegador já ignorava esta flag.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=security_config.ALLOWED_ORIGINS,
+    allow_origin_regex=security_config.ALLOWED_ORIGIN_REGEX,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_private_network=True,
@@ -111,12 +118,22 @@ def version_info():
 
 @app.post("/api/update")
 async def trigger_update(request: Request):
+    # Na nuvem o deploy é por git — este endpoint só faz sentido no agente local.
+    if security_config.is_cloud_runtime():
+        raise HTTPException(status_code=404, detail="Não disponível neste ambiente.")
+
+    data = await request.json()
+    download_url = data.get("download_url")
+    if not download_url:
+        raise HTTPException(status_code=400, detail="download_url não informado")
+
+    # Sem esta allowlist, qualquer origem consegue fazer o agente baixar e
+    # executar um binário arbitrário na máquina da gráfica.
+    if not security_config.is_allowed_update_url(download_url):
+        log_diag(f"[Update] BLOQUEADO: origem de download não autorizada: {download_url!r}")
+        raise HTTPException(status_code=403, detail="URL de atualização não autorizada.")
+
     try:
-        data = await request.json()
-        download_url = data.get("download_url")
-        if not download_url:
-            raise HTTPException(status_code=400, detail="download_url não informado")
-            
         import urllib.request
         import subprocess
         import sys
@@ -165,6 +182,8 @@ del "%~f0"
         print("[Update] Encerrando processo atual...")
         os._exit(0)
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[Update] Falha na atualização: {e}")
         raise HTTPException(status_code=500, detail=f"Falha na atualização: {str(e)}")
@@ -180,8 +199,15 @@ def favicon():
 async def proxy_url(url: str):
     import requests
     from fastapi.responses import Response
+
+    # Sem allowlist este endpoint é um SSRF: alcança a rede interna do Render
+    # e, no agente, a LAN da gráfica. Só o Storage do Supabase é legítimo aqui.
+    if not security_config.is_allowed_proxy_url(url):
+        log_diag(f"[proxy] BLOQUEADO: host fora da allowlist: {url!r}")
+        raise HTTPException(status_code=403, detail="URL não autorizada para proxy.")
+
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=10, allow_redirects=False)
         return Response(content=r.content, media_type=r.headers.get("content-type", "application/pdf"))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

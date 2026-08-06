@@ -90,7 +90,10 @@ def run_server():
     # Evita conflito com o loop do pystray/Win32 no thread principal
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    config = uvicorn.Config(app, host="0.0.0.0", port=9000, log_level="warning", loop="asyncio")
+    # 127.0.0.1 e não 0.0.0.0: cada operador imprime apenas na própria máquina,
+    # então o agente não precisa aceitar conexões da LAN. Isso remove de uma vez
+    # a exposição de /api/update, /api/proxy e dos endpoints de impressão para a rede.
+    config = uvicorn.Config(app, host="127.0.0.1", port=9000, log_level="warning", loop="asyncio")
     server = uvicorn.Server(config)
     loop.run_until_complete(server.serve())
 
@@ -171,11 +174,16 @@ def is_port_in_use(port=9000):
         except socket.error:
             return False
 
-def add_firewall_rule():
+def remove_firewall_rule():
+    """Remove a regra de firewall criada pelas versões anteriores do agente.
+
+    O agente agora escuta apenas em 127.0.0.1, então a porta 9000 não precisa
+    estar aberta na rede. Fazer a limpeza aqui evita ter que rodar netsh
+    manualmente em cada máquina já instalada.
+    """
     try:
         import subprocess
-        # Adiciona regra para liberar a porta 9000 no Windows Defender Firewall
-        cmd = 'netsh advfirewall firewall add rule name="NewProd Agent" dir=in action=allow protocol=TCP localport=9000 profile=any enable=yes'
+        cmd = 'netsh advfirewall firewall delete rule name="NewProd Agent" protocol=TCP localport=9000'
         subprocess.run(cmd, shell=True, capture_output=True)
     except Exception:
         pass
@@ -186,8 +194,8 @@ def main():
         webbrowser.open("http://127.0.0.1:9000/app/index.html")
         sys.exit(0)
 
-    # Tenta liberar a porta 9000 no Firewall para permitir que outros computadores da rede local acessem
-    add_firewall_rule()
+    # Limpa a regra de firewall das versões antigas — o agente é local-only agora
+    remove_firewall_rule()
 
     try:
         import pystray

@@ -57,6 +57,7 @@ a = Analysis(
         'print_service',
         'local_print_agent',
         'agent_worker',
+        'security_config',
     ],
     hookspath=[],
     hooksconfig={},

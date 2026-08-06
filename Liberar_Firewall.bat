@@ -1,7 +1,14 @@
 @echo off
 echo =======================================================
-echo Liberando porta 9000 no Windows Firewall (modo Admin)...
+echo Removendo a regra de firewall da porta 9000 (modo Admin)
 echo =======================================================
-netsh advfirewall firewall add rule name="NewProd Agent" dir=in action=allow protocol=TCP localport=9000 profile=any enable=yes
-echo Porta 9000 liberada com sucesso!
+echo.
+echo O NewProd Agent passou a escutar apenas em 127.0.0.1
+echo (cada operador imprime na propria maquina), entao a
+echo porta 9000 nao precisa mais ficar aberta na rede.
+echo.
+netsh advfirewall firewall delete rule name="NewProd Agent" protocol=TCP localport=9000
+echo.
+echo Regra removida. O agente continua funcionando normalmente
+echo pelo navegador em http://127.0.0.1:9000
 pause
