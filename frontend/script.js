@@ -13714,6 +13714,8 @@ async function loadOSItens(osId) {
                             })() || item.setor || 'PVC',
                             _dbLoaded: true
                         };
+                        resolveItemCorNumIds(mapped);
+                        return mapped;
                     });
                     // DEBUG: mostrar campos de cor de cada item
                     state.osItens[osId].forEach(it => {
@@ -18615,6 +18617,7 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
             const item = osItems?.find(i => String(i.id) === String(itemId));
             if (item) {
                 item._needsSnapshot = true;
+                resolveItemCorNumIds(item, idx);
                 const faceKey = face === 'verso' ? 'verso' : 'frente';
                 if (face === 'verso') {
                     item.verso_arte_url = publicUrl;
@@ -18797,6 +18800,70 @@ window.colarArte = async function(idx, osId, itemId, face = 'frente') {
     }
 };
 
+/**
+ * Auto-resolve os IDs de Cor (amostra_cor_id) e Numeração (amostra_num_id) de um modelo
+ * lendo dos selects do DOM, do objeto do item ou por correspondência de texto em state.cores / state.numeracoes.
+ */
+function resolveItemCorNumIds(item, itemIdx = null) {
+    if (!item) return { corId: null, numId: null };
+
+    let corId = item.amostra_cor_id || item.id_cor || item.cor_id || null;
+    let numId = item.amostra_num_id || item.numeracao_id || null;
+
+    // 1. Tentar ler dos selects no DOM se os IDs não estiverem preenchidos no objeto
+    let idx = itemIdx;
+    if (idx === null && typeof state !== 'undefined' && state.osItens && item.os_id) {
+        const itemsList = state.osItens[item.os_id] || [];
+        const foundIdx = itemsList.findIndex(i => String(i.id) === String(item.id));
+        if (foundIdx >= 0) idx = foundIdx;
+    }
+    if (idx !== null && idx >= 0) {
+        if (!corId) {
+            const corSel = document.getElementById(`amostra-item-cor-${idx}`) || document.getElementById('amostra-cor-select');
+            if (corSel && corSel.value) corId = corSel.value;
+        }
+        if (!numId) {
+            const numSel = document.getElementById(`amostra-item-num-${idx}`) || document.getElementById('amostra-num-select');
+            if (numSel && numSel.value) numId = numSel.value;
+        }
+    }
+
+    const normStr = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+    // 2. Tentar resolver ID da COR por busca textual em state.cores se ainda nulo
+    if (!corId && typeof state !== 'undefined' && state.cores && state.cores.length > 0) {
+        const corNome = item.cor || item.padrao || item._rawCor;
+        if (corNome && corNome !== '--' && corNome !== 'STD') {
+            const targetNorm = normStr(corNome);
+            const foundCor = state.cores.find(c => {
+                const cName = normStr(c.name || c.padrao || c.cor || c.nome);
+                return cName === targetNorm || (targetNorm.length >= 3 && (cName.includes(targetNorm) || targetNorm.includes(cName)));
+            });
+            if (foundCor) corId = foundCor.id;
+        }
+    }
+
+    // 3. Tentar resolver ID da NUMERAÇÃO por busca textual em state.numeracoes se ainda nulo
+    if (!numId && typeof state !== 'undefined' && state.numeracoes && state.numeracoes.length > 0) {
+        const numNome = item.gabarito_operacional || item.numeracao || item.tipo_numeracao;
+        if (numNome && numNome !== '--') {
+            const targetNorm = normStr(numNome);
+            const foundNum = state.numeracoes.find(n => {
+                const nName = normStr(n.name || n.tipo);
+                return nName === targetNorm || (targetNorm.length >= 3 && (nName.includes(targetNorm) || targetNorm.includes(nName)));
+            });
+            if (foundNum) numId = foundNum.id;
+        }
+    }
+
+    // Persistir os IDs resolvidos no objeto em memória
+    if (corId) item.amostra_cor_id = corId;
+    if (numId) item.amostra_num_id = numId;
+
+    return { corId, numId };
+}
+window.resolveItemCorNumIds = resolveItemCorNumIds;
+
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
 
@@ -18811,6 +18878,15 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     try {
         const dbData = { ...dataToUpdate };
         
+        // Auto-resolver amostra_cor_id e amostra_num_id se ausentes no payload ou no item
+        const resolved = resolveItemCorNumIds(itemLocal);
+        if (resolved.corId && !('amostra_cor_id' in dbData)) {
+            dbData.amostra_cor_id = resolved.corId;
+        }
+        if (resolved.numId && !('amostra_num_id' in dbData)) {
+            dbData.amostra_num_id = resolved.numId;
+        }
+
         // Mapear amostra_status para status_arte (coluna oficial do Supabase)
         if (dbData.amostra_status) {
             if (dbData.amostra_status === 'PRONTO') {
@@ -18857,18 +18933,12 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
         delete dbData._isExplicitRemove;
 
-        // GUARD: Quando salvando arte (arte_url, amostra_arte_base64), SEMPRE preservar
-        // amostra_cor_id e amostra_num_id se já existirem no item local.
-        // Isso previne que qualquer save de arte zere a associação de cor/numeração.
-        const isArteSave = ('arte_url' in dbData || 'amostra_arte_base64' in dbData || 
-                            'verso_arte_url' in dbData || 'verso_amostra_arte_base64' in dbData);
-        if (isArteSave) {
-            if (!('amostra_cor_id' in dbData) && itemLocal.amostra_cor_id) {
-                dbData.amostra_cor_id = itemLocal.amostra_cor_id;
-            }
-            if (!('amostra_num_id' in dbData) && itemLocal.amostra_num_id) {
-                dbData.amostra_num_id = itemLocal.amostra_num_id;
-            }
+        // GUARD: Quando salvando qualquer dado do modelo, SEMPRE preservar/garantir amostra_cor_id e amostra_num_id
+        if (!('amostra_cor_id' in dbData) && itemLocal.amostra_cor_id) {
+            dbData.amostra_cor_id = itemLocal.amostra_cor_id;
+        }
+        if (!('amostra_num_id' in dbData) && itemLocal.amostra_num_id) {
+            dbData.amostra_num_id = itemLocal.amostra_num_id;
         }
 
         // Se não sobrou nenhum campo para atualizar, evita fazer a requisição
@@ -20255,6 +20325,7 @@ async function forceRegenerateSnapshots(osId) {
         const item = itens[idx];
         if (item.modo_pdf) continue;
 
+        resolveItemCorNumIds(item, idx);
         const corId      = item.amostra_cor_id || '';
         const numId      = item.amostra_num_id || '';
         const hasArteUrl  = !!(item.arte_url);
