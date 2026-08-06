@@ -29,25 +29,24 @@ ALLOWED_ORIGIN_REGEX = (
 
 
 # ─── Auto-atualização do agente local ─────────────────────────────────────────
-# O frontend envia sempre a mesma URL fixa (frontend/script.js), então esta
-# allowlist não altera o comportamento do botão "Atualizar Agora".
-UPDATE_ALLOWED_HOSTS = {
-    "ideal-imposition.vercel.app",
-    "imposicao.vercel.app",
-}
+# Modelo pull: o agente consulta este manifesto sozinho, num endereço fixo
+# compilado no binário. Nada externo escolhe o que ele baixa — foi justamente
+# a URL vinda de fora que tornava o /api/update uma porta de execução remota.
+#
+# A URL do projeto fica literal de propósito: se viesse de variável de
+# ambiente, quem controlasse o ambiente controlaria a origem da atualização.
+SUPABASE_PROJETO = "https://vwbtitjlpelrcnsytzqw.supabase.co"
+RELEASES_BASE_URL = f"{SUPABASE_PROJETO}/storage/v1/object/public/agent-releases/"
+MANIFEST_URL = RELEASES_BASE_URL + "latest.json"
 
 
-def is_allowed_update_url(url: str) -> bool:
-    """Aceita apenas HTTPS, host da nossa distribuição e caminho de executável."""
-    try:
-        parsed = urlparse(url or "")
-    except Exception:
-        return False
-    return (
-        parsed.scheme == "https"
-        and (parsed.hostname or "").lower() in UPDATE_ALLOWED_HOSTS
-        and parsed.path.lower().endswith(".exe")
-    )
+def is_allowed_release_url(url: str) -> bool:
+    """Confere que o instalador apontado pelo manifesto está no nosso bucket.
+
+    Segunda barreira: mesmo que o manifesto seja adulterado, o download só
+    acontece se continuar dentro de agent-releases.
+    """
+    return (url or "").lower().startswith(RELEASES_BASE_URL.lower())
 
 
 # ─── Proxy de arquivos (/api/proxy) ───────────────────────────────────────────

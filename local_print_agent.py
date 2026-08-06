@@ -76,7 +76,8 @@ for _candidate in [
 if _FRONTEND_DIR:
     app.mount("/app", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
 
-LOCAL_AGENT_VERSION = "NewProd 1.1"
+from agent_version import AGENT_VERSION
+LOCAL_AGENT_VERSION = f"NewProd {AGENT_VERSION}"
 
 @app.get("/", include_in_schema=False)
 def root_redirect():
@@ -315,73 +316,23 @@ async def impose_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/update")
-async def trigger_update(request: Request):
-    data = await request.json()
-    download_url = data.get("download_url")
-    if not download_url:
-        raise HTTPException(status_code=400, detail="download_url não informado")
+async def trigger_update():
+    """Dispara agora a checagem de atualizacao (modelo pull).
 
-    # Ver security_config: sem allowlist, qualquer origem faz o agente baixar e
-    # executar um binário arbitrário.
-    if not security_config.is_allowed_update_url(download_url):
-        print(f"[Update] BLOQUEADO: origem de download não autorizada: {download_url!r}")
-        raise HTTPException(status_code=403, detail="URL de atualização não autorizada.")
+    Nao recebe parametro algum: a origem do download vem do manifesto de URL
+    fixa em security_config, conferida por sha256 no agent_worker. Antes este
+    endpoint aceitava um download_url do corpo da requisicao — qualquer site
+    aberto no navegador do operador conseguia mandar o agente baixar e executar
+    um binario arbitrario.
+    """
+    if security_config.is_cloud_runtime():
+        raise HTTPException(status_code=404, detail="Nao disponivel neste ambiente.")
 
-    try:
-        import urllib.request
-        import subprocess
-        import sys
-        import os
-        
-        is_compiled = getattr(sys, 'frozen', False)
-        exe_path = sys.executable
-        
-        # Pasta do executável
-        target_dir = os.path.dirname(exe_path)
-        temp_exe = os.path.join(target_dir, "ideal-imposition-agent.new")
-        
-        # Baixar o novo executável
-        print(f"[Update] Baixando atualização de {download_url}...")
-        req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=60) as response:
-            with open(temp_exe, "wb") as f_out:
-                f_out.write(response.read())
-        print(f"[Update] Download concluído. Salvo em {temp_exe}")
-        
-        if not is_compiled:
-            # Em modo de desenvolvimento, apenas removemos o temp e simulamos
-            if os.path.exists(temp_exe):
-                os.remove(temp_exe)
-            return {"status": "success", "message": "[DEV MODE] Simulação de atualização realizada com sucesso."}
-            
-        # Escrever script batch de atualização
-        bat_path = os.path.join(target_dir, "update.bat")
-        with open(bat_path, "w", encoding="utf-8") as f_bat:
-            f_bat.write(f"""@echo off
-chcp 65001 > nul
-echo Aguardando o encerramento do agente...
-timeout /t 2 /nobreak > nul
-echo Substituindo executável antigo...
-move /y "{temp_exe}" "{exe_path}"
-echo Inicializando nova versão...
-start "" "{exe_path}"
-echo Atualização concluída.
-del "%~f0"
-""")
-            
-        # Executar bat de forma assíncrona desanexada
-        print(f"[Update] Executando script de atualização {bat_path}...")
-        subprocess.Popen([bat_path], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        
-        # Forçar o encerramento imediato do processo atual
-        print("[Update] Encerrando processo atual...")
-        os._exit(0)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"[Update] Falha na atualização: {e}")
-        raise HTTPException(status_code=500, detail=f"Falha na atualização: {str(e)}")
+    import threading
+    import agent_worker
+    threading.Thread(target=agent_worker.verificar_atualizacao,
+                     kwargs={"forcado": True}, daemon=True).start()
+    return {"status": "checking", "message": "Verificacao de atualizacao iniciada."}
 
 if __name__ == "__main__":
     # 127.0.0.1: cada operador imprime apenas na própria máquina, então o agente

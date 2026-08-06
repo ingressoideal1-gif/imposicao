@@ -171,21 +171,112 @@ def process_queue():
     except Exception as e:
         print(f"[agent_worker] Erro fatal no process_queue: {e}", flush=True)
 
+INTERVALO_UPDATE_S = 6 * 3600
+
+
+def verificar_atualizacao(forcado: bool = False):
+    """Consulta o manifesto e instala a versao nova, se houver.
+
+    Modelo pull: a URL do manifesto e fixa (security_config), o instalador
+    precisa estar no bucket de releases e o sha256 tem que bater. Nenhuma
+    entrada externa decide o que e baixado.
+    """
+    import hashlib
+    import subprocess
+    import security_config
+    from agent_version import AGENT_VERSION, como_tupla
+
+    if not getattr(sys, "frozen", False):
+        if forcado:
+            print("[update] Modo desenvolvimento: atualizacao ignorada.", flush=True)
+        return
+
+    try:
+        req = urllib.request.Request(security_config.MANIFEST_URL,
+                                     headers={"User-Agent": "NewProd Agent"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            manifesto = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"[update] Manifesto indisponivel: {e}", flush=True)
+        return
+
+    versao_nova = manifesto.get("version")
+    url_msi = manifesto.get("url")
+    sha_esperado = (manifesto.get("sha256") or "").lower()
+
+    if como_tupla(versao_nova) <= como_tupla(AGENT_VERSION):
+        if forcado:
+            print(f"[update] Ja esta na versao mais recente ({AGENT_VERSION}).", flush=True)
+        return
+
+    if not security_config.is_allowed_release_url(url_msi):
+        print(f"[update] BLOQUEADO: instalador fora do bucket de releases: {url_msi!r}", flush=True)
+        return
+    if len(sha_esperado) != 64:
+        print("[update] Manifesto sem sha256 valido — atualizacao abortada.", flush=True)
+        return
+
+    print(f"[update] Versao {versao_nova} disponivel (atual {AGENT_VERSION}). Baixando...", flush=True)
+    destino = os.path.join(tempfile.gettempdir(), f"NewProd_Setup_{versao_nova}.msi")
+    try:
+        req = urllib.request.Request(url_msi, headers={"User-Agent": "NewProd Agent"})
+        with urllib.request.urlopen(req, timeout=600) as resp, open(destino, "wb") as f:
+            f.write(resp.read())
+    except Exception as e:
+        print(f"[update] Falha no download: {e}", flush=True)
+        return
+
+    sha_obtido = hashlib.sha256(open(destino, "rb").read()).hexdigest()
+    if sha_obtido != sha_esperado:
+        print(f"[update] BLOQUEADO: sha256 divergente "
+              f"(esperado {sha_esperado[:12]}, obtido {sha_obtido[:12]}). Arquivo descartado.", flush=True)
+        try:
+            os.remove(destino)
+        except Exception:
+            pass
+        return
+
+    # O MSI nao consegue substituir o exe enquanto ele roda, e o pacote nao tem
+    # CloseApplication configurado — por isso um script solto encerra o agente,
+    # instala em silencio e sobe a versao nova.
+    exe_path = sys.executable
+    bat_path = os.path.join(tempfile.gettempdir(), "newprod_update.bat")
+    with open(bat_path, "w", encoding="utf-8") as f:
+        f.write(f"""@echo off
+timeout /t 3 /nobreak > nul
+taskkill /IM "{os.path.basename(exe_path)}" /F > nul 2>&1
+msiexec /i "{destino}" /qn
+start "" "{exe_path}"
+del "{destino}" > nul 2>&1
+del "%~f0"
+""")
+
+    print(f"[update] sha256 conferido. Instalando {versao_nova} e reiniciando...", flush=True)
+    subprocess.Popen([bat_path], shell=True,
+                     creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+
+
 def run_loop():
     print(f"Iniciando Agent Worker (Cloud Relay) - ID: {AGENT_ID}", flush=True)
     heartbeat_timer = 0
+    update_timer = 60  # primeira checagem 1 min apos subir
     while True:
         try:
             if heartbeat_timer <= 0:
                 sync_heartbeat()
                 heartbeat_timer = 30
+            if update_timer <= 0:
+                verificar_atualizacao()
+                update_timer = INTERVALO_UPDATE_S
             process_queue()
             time.sleep(5)
             heartbeat_timer -= 5
+            update_timer -= 5
         except Exception as e:
             print(f"[agent_worker] Erro no loop principal: {e}", flush=True)
             time.sleep(5)
             heartbeat_timer -= 5 # Garantir decremento
+            update_timer -= 5
 
 
 if __name__ == "__main__":

@@ -68,6 +68,7 @@ a = Analysis(
         'agent_worker',
         'security_config',
         'font_cache',
+        'agent_version',
     ],
     hookspath=[],
     hooksconfig={},
