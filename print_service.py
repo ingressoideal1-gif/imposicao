@@ -556,7 +556,7 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="Ideal Imp
     # Obter DEVMODE com as opcoes do usuario (duplex, bandeja, papel, etc.)
     devmode = _apply_devmode_options(printer_name, options)
 
-    print_mode = options.get("print_mode", "pdf_raw").lower().strip()
+    print_mode = options.get("print_mode", "gdi").lower().strip()
     print(f"[print] Modo de impressao: '{print_mode}' para '{printer_name}'")
 
     # Modo forçado

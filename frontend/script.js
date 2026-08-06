@@ -23483,6 +23483,7 @@ function getPedPrintOptions() {
         color: parseInt(document.getElementById('ped-print-color')?.value) || 2,
         copies: parseInt(document.getElementById('ped-print-copies')?.value) || 1,
         orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1,
+        print_mode: document.getElementById('ped-print-engine-mode')?.value || 'gdi',
         impressao_reversa: document.getElementById('ped-print-reverse')?.checked === true,
         folha_a_folha: document.getElementById('ped-print-sheet-by-sheet')?.checked === true
     };
@@ -23721,6 +23722,7 @@ async function savePrintConfigForProduct() {
         color: parseInt(document.getElementById('ped-print-color')?.value) || 2,
         copies: parseInt(document.getElementById('ped-print-copies')?.value) || 1,
         orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1,
+        print_mode: document.getElementById('ped-print-engine-mode')?.value || 'gdi',
         impressao_reversa: document.getElementById('ped-print-reverse')?.checked === true,
         folha_a_folha: document.getElementById('ped-print-sheet-by-sheet')?.checked === true,
         updated_at: new Date().toISOString()
@@ -23880,6 +23882,10 @@ async function _applyPrintConfig(config) {
                 if (config.orientation != null) {
                     const orientSel = document.getElementById('ped-print-orientation');
                     if (orientSel) orientSel.value = String(config.orientation);
+                }
+                if (config.print_mode != null) {
+                    const engineSel = document.getElementById('ped-print-engine-mode');
+                    if (engineSel) engineSel.value = String(config.print_mode);
                 }
                 const chkReverse = document.getElementById('ped-print-reverse');
                 if (chkReverse) chkReverse.checked = !!(config.impressao_reversa || config.reverse_print);
