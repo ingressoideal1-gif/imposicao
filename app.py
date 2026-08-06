@@ -544,8 +544,10 @@ async def impose_file(
                 print(f"[impose] {_num_label} tem {len(_num_obj['elements'])} elements")
                 for _i, _el in enumerate(_num_obj["elements"]):
                     _t = _el.get("type", "?")
-                    if _t in ("TEXT", "FIXED") or _t.startswith("TEATRO_"):
-                        print(f"[impose] {_num_label} el[{_i}]: type={_t} font_name={_el.get('font_name')!r} font_size={_el.get('font_size')!r} color={_el.get('color')!r} x_mm={_el.get('x_mm')!r} y_mm={_el.get('y_mm')!r}")
+                    if _t in ("TEXT", "FIXED") or _t.startswith("TEATRO_") or _t.startswith("CAMAROTE_"):
+                        _has_fd = "YES" if _el.get("_font_data") else "NO"
+                        _has_url = _el.get("arquivo_url", "N/A")
+                        print(f"[impose] {_num_label} el[{_i}]: type={_t} font_name={_el.get('font_name')!r} _font_data={_has_fd} arquivo_url={_has_url!r} font_size={_el.get('font_size')!r} color={_el.get('color')!r}")
                     elif _t == "PDF":
                         _pc = _el.get("pdf_content", "")
                         _preview = (_pc[:80] + "...") if len(_pc) > 80 else _pc
