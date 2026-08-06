@@ -437,7 +437,12 @@ def _embed_system_fonts(numeracao_obj):
     
     # Busca o catálogo de fontes do banco de dados (restrito e exclusivo)
     fontes_catalogo = db.get_catalogo_fontes()
-    fontes_map = {f.get("font_family", "").lower().strip(): f for f in fontes_catalogo if f.get("font_family")}
+    fontes_map = {}
+    for f in fontes_catalogo:
+        if f.get("font_family"):
+            fontes_map[f["font_family"].lower().strip()] = f
+        if f.get("nome"):
+            fontes_map[f["nome"].lower().strip()] = f
     
     font_cache = {}  # url -> base64 data
 
@@ -459,7 +464,24 @@ def _embed_system_fonts(numeracao_obj):
             continue
 
         if family_lower not in fontes_map:
-            print(f"[impose] ALERTA: Fonte '{family}' solicitada, mas não está no Catálogo Web. Será feito fallback.")
+            # Fallback: talvez o frontend já tenha injetado o arquivo_url via _injectFontUrls
+            fallback_url = el.get("arquivo_url") or el.get("font_url")
+            if fallback_url:
+                print(f"[impose] INFO: Fonte '{family}' não encontrada no catálogo do backend, mas arquivo_url do frontend presente: {fallback_url}")
+                # Usar a URL do frontend para embutir
+                try:
+                    req = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        font_bytes = base64.b64encode(response.read()).decode("ascii")
+                    el["_font_data"] = font_bytes
+                    font_cache[fallback_url] = font_bytes
+                    print(f"[impose] Fonte embutida via fallback frontend: {family} -> {fallback_url} ({len(font_bytes)} chars b64)")
+                except Exception as ex:
+                    print(f"[impose] Erro ao embutir fonte via fallback: {ex}")
+            else:
+                base14 = {"helv","helv-bold","hebo","times","tiro","times-bold","tibo","cour","cobo","cour-bold"}
+                if family_lower not in base14:
+                    print(f"[impose] ALERTA: Fonte '{family}' solicitada, mas não está no Catálogo Web e sem arquivo_url. Fallback Helvetica. Chaves disponíveis: {list(fontes_map.keys())[:10]}")
             continue
             
         fonte_info = fontes_map[family_lower]
