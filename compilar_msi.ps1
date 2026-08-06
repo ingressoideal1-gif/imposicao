@@ -61,9 +61,12 @@ Write-Host "  Light:  $wixLight" -ForegroundColor Gray
 Write-Host "`nEtapa 1/2: Compilando XML (.wxs -> .wixobj)..." -ForegroundColor Green
 & $wixCandle -ext WixUIExtension -nologo "agent_installer.wxs" -out "dist\agent_installer.wixobj"
 
-# 4. Enlincar .wixobj -> NewProd_Setup_v1.0.msi
+# 4. Enlincar .wixobj -> NewProd_Setup_v<versao>.msi
+# A versao precisa bater com Version= em agent_installer.wxs e com
+# LOCAL_AGENT_VERSION em app.py — o MSI usa esse campo para decidir se o
+# upgrade se aplica, e o frontend compara o valor reportado pelo agente.
 Write-Host "Etapa 2/2: Gerando pacote final MSI (.wixobj -> .msi)..." -ForegroundColor Green
-$msiOutput = "dist\NewProd_Setup_v1.2.3.msi"
+$msiOutput = "dist\NewProd_Setup_v1.2.4.msi"
 & $wixLight -ext WixUIExtension -nologo -sval "dist\agent_installer.wixobj" -out $msiOutput
 
 if (Test-Path $msiOutput) {
