@@ -18676,6 +18676,9 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
 }
 
 function onItemArteRemove(idx, osId, itemId, face = 'frente') {
+    const confirmMsg = "Tem certeza que deseja excluir a arte deste modelo?\n\nNão será possível reverter a ação...";
+    if (!confirm(confirmMsg)) return;
+
     const inputId = face === 'verso' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
     const nameLabelId = face === 'verso' ? `amostra-item-arte-verso-name-${idx}` : `amostra-item-arte-name-${idx}`;
     const removeBtnId = face === 'verso' ? `btn-remove-amostra-arte-verso-${idx}` : `btn-remove-amostra-arte-${idx}`;
