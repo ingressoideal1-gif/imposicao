@@ -2735,13 +2735,13 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                     toast('PDFs gerados! Configure e envie para a impressora.', 'success');
                 } else {
                     // Fallback: enviar para API local diretamente
+                    const { printerName, options } = typeof getPedPrintOptions === 'function' ? getPedPrintOptions() : { printerName: (document.getElementById('ped-print-printer')?.value || ''), options: { print_mode: 'gdi' } };
                     const formData = new FormData();
                     formData.append('file', finalBlob, 'impressao_multipla.pdf');
-                    const sel = document.getElementById('print-direct-printer');
-                    const printerName = sel ? sel.value : '';
-                    const options = {};
+                    formData.append('printer_name', printerName || document.getElementById('ped-print-printer')?.value || '');
+                    formData.append('options', JSON.stringify(options || { print_mode: 'gdi' }));
                     try {
-                        const res = await fetch(`http://localhost:9000/api/print/submit`, {
+                        const res = await fetch(`/api/print/submit`, {
                             method: "POST",
                             body: formData
                         });
@@ -3911,7 +3911,7 @@ window.runPedImposition = async function (mode) {
 
         if (!localApiActive) {
             // Testa / e /api/status para compatibilidade com todas as versoes do exe
-            const agentBases = ["http://127.0.0.1:9000", "http://localhost:9000"];
+            const agentBases = [window.location.origin, "http://127.0.0.1:9000", "http://localhost:9000"];
             outerLoop:
             for (const base of agentBases) {
                 for (const path of ["/api/status", "/"]) {

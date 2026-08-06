@@ -8950,7 +8950,7 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         if (!localApiActive) {
             // Testa / e /api/status para compatibilidade com todas as versoes do exe
-            const agentBases = ["http://127.0.0.1:9000", "http://localhost:9000"];
+            const agentBases = [window.location.origin, "http://127.0.0.1:9000", "http://localhost:9000"];
             if (window._activeAgentData && window._activeAgentData.printers_json && window._activeAgentData.printers_json.local_ip) {
                 const rip = `http://${window._activeAgentData.printers_json.local_ip}:9000`;
                 if (!agentBases.includes(rip)) {
