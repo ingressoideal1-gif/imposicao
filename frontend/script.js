@@ -18711,10 +18711,11 @@ function onItemArteRemove(idx, osId, itemId, face = 'frente') {
 
         // Limpar do localStorage
         const faceKey = face === 'verso' ? 'verso' : 'frente';
-        if (item.id) {
-            localStorage.removeItem(`ideal_arte_url_${item.id}_${faceKey}`);
-            localStorage.removeItem(`ideal_arte_json_${item.id}_${faceKey}`);
-        }
+        const itemIds = [item.id, item._pedidoModeloId, item.id_produto_proposta_origem].filter(Boolean);
+        itemIds.forEach(id => {
+            localStorage.removeItem(`ideal_arte_url_${id}_${faceKey}`);
+            localStorage.removeItem(`ideal_arte_json_${id}_${faceKey}`);
+        });
         localStorage.removeItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`);
         localStorage.removeItem(`ideal_arte_json_${osId}_${idx}_${faceKey}`);
     }
@@ -18729,14 +18730,16 @@ function onItemArteRemove(idx, osId, itemId, face = 'frente') {
     // Re-renderizar imediatamente a janela combinada sem a camada de arte
     renderItemAmostraCombinada(idx, osId);
 
-    // Salvar no banco zerando tanto a URL quanto o base64
+    // Salvar no banco zerando URL, base64 e JSON vetorial
     const payload = face === 'verso' ? {
         verso_arte_url: null,
         verso_amostra_arte_base64: null,
+        verso_arte_json: null,
         _isExplicitRemove: true
     } : {
         arte_url: null,
         amostra_arte_base64: null,
+        arte_json: null,
         _isExplicitRemove: true
     };
 

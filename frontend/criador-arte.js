@@ -209,20 +209,38 @@ async function setupEditorWorkspace() {
         }
 
         // Tentar recarregar estrutura vetorial JSON salva (memória ou localStorage)
-        let savedJson = face === 'verso' ? item.verso_arte_json : item.arte_json;
-        if (!savedJson && item.id) {
-            savedJson = localStorage.getItem(`ideal_arte_json_${item.id}_${face}`);
-        }
-        if (!savedJson) {
-            savedJson = localStorage.getItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`);
-        }
+        // CRITICAL: Se a arte do modelo foi removida, NUNCA carregar resíduos do localStorage!
+        const hasArteOnItem = face === 'verso' ? 
+            !!(item.verso_arte_url || item.verso_amostra_arte_base64 || item.verso_arte_json) : 
+            !!(item.arte_url || item.amostra_arte_base64 || item.arte_json);
 
-        let rawArteSource = face === 'verso' ? 
-            (item.verso_arte_url || item.verso_amostra_arte_base64) : 
-            (item.arte_url || item.amostra_arte_base64);
+        let savedJson = null;
+        let rawArteSource = null;
+
+        if (hasArteOnItem) {
+            savedJson = face === 'verso' ? item.verso_arte_json : item.arte_json;
+            if (!savedJson && item.id) {
+                savedJson = localStorage.getItem(`ideal_arte_json_${item.id}_${face}`);
+            }
+            if (!savedJson) {
+                savedJson = localStorage.getItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`);
+            }
+
+            rawArteSource = face === 'verso' ? 
+                (item.verso_arte_url || item.verso_amostra_arte_base64) : 
+                (item.arte_url || item.amostra_arte_base64);
+        } else {
+            // Arte foi excluída — purgar qualquer resíduo legado do localStorage
+            if (item.id) {
+                localStorage.removeItem(`ideal_arte_json_${item.id}_${face}`);
+                localStorage.removeItem(`ideal_arte_url_${item.id}_${face}`);
+            }
+            localStorage.removeItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`);
+            localStorage.removeItem(`ideal_arte_url_${osId}_${itemIdx}_${face}`);
+        }
 
         // Se não tiver fonte salva no objeto item, buscar se há um arquivo selecionado no input file do DOM
-        if (!rawArteSource) {
+        if (!rawArteSource && hasArteOnItem) {
             const inputId = face === 'verso' ? `amostra-item-arte-verso-${itemIdx}` : `amostra-item-arte-${itemIdx}`;
             const containerId = state.amostrasContainerId || 'amostras-itens-container';
             const container = document.getElementById(containerId) || document;
