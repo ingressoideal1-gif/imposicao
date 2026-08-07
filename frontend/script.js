@@ -14589,6 +14589,101 @@ window.setFiltroFilaArte = setFiltroFilaArte;
 // state.prodSort ausente/null = ordem padrão, exatamente como antes.
 // -------------------------------------------------------------------------------
 
+// -------------------------------------------------------------------------------
+// FILTRO POR PRAZO DE ENTREGA (Para Hoje / Atrasados / Geral)
+// Eixo próprio: combina com busca, setor e estágio sem interferir neles.
+// Sempre há um selecionado; o padrão é 'geral'.
+// -------------------------------------------------------------------------------
+
+/** Prazo do pedido como Date, ou null se ausente/inválido. */
+function _prazoDoPedido(os) {
+    if (!os || !os.prazo_entrega) return null;
+    const prazo = new Date(os.prazo_entrega);
+    return isNaN(prazo.getTime()) ? null : prazo;
+}
+
+/** Atrasado = data E hora anteriores ao momento atual. */
+function pedidoEstaAtrasado(os) {
+    const prazo = _prazoDoPedido(os);
+    return !!prazo && prazo.getTime() < Date.now();
+}
+
+/** Para hoje = mesmo dia do calendário, independente da hora. */
+function pedidoEhParaHoje(os) {
+    const prazo = _prazoDoPedido(os);
+    if (!prazo) return false;
+    const agora = new Date();
+    return prazo.getFullYear() === agora.getFullYear()
+        && prazo.getMonth() === agora.getMonth()
+        && prazo.getDate() === agora.getDate();
+}
+
+/** Decide se o pedido entra na lista conforme o filtro de prazo escolhido. */
+function pedidoPassaFiltroPrazo(os) {
+    const filtro = state.filtroPrazo || 'geral';
+    if (filtro === 'geral') return true;
+    // Sem prazo não há como comparar: fica só no Geral
+    if (filtro === 'atrasados') return pedidoEstaAtrasado(os);
+    return pedidoEhParaHoje(os);
+}
+
+// Estilo inline pelo mesmo motivo dos cabeçalhos: garante o destaque
+// sem depender da cascata da folha de estilos.
+const PRAZO_BTN_BASE = 'padding:0.5rem 1.1rem; border-radius:0.5rem; font-size:0.75rem;'
+    + ' font-weight:700; text-transform:uppercase; letter-spacing:0.03em; cursor:pointer;'
+    + ' white-space:nowrap; transition:background 0.15s ease, border-color 0.15s ease, color 0.15s ease;';
+const PRAZO_BTN_OFF = {
+    background: '#334155',
+    border: '1px solid transparent',
+    color: '#d1d5db',
+    boxShadow: 'none'
+};
+const PRAZO_BTN_ON = {
+    background: 'rgba(59,130,246,0.2)',
+    border: '1px solid #3b82f6',
+    color: '#60a5fa',
+    boxShadow: '0 0 8px rgba(59,130,246,0.3)'
+};
+// Alerta: só quando "Para Hoje" está selecionado e existe pedido atrasado escondido
+const PRAZO_BTN_ALERTA = {
+    background: 'rgba(239,68,68,0.22)',
+    border: '1px solid #ef4444',
+    color: '#f87171',
+    boxShadow: '0 0 10px rgba(239,68,68,0.45)'
+};
+
+/** Marca visualmente qual dos três botões está ativo. */
+function updateFiltroPrazoBotoes() {
+    const atual = state.filtroPrazo || 'geral';
+    // Alerta apenas nesta condição: vendo "Para Hoje" e havendo atrasados fora da lista
+    const alertarAtrasados = (atual === 'hoje') && !!state.temPedidosAtrasados;
+
+    document.querySelectorAll('#filtro-prazo-grupo button[data-prazo]').forEach(btn => {
+        const ativo = btn.dataset.prazo === atual;
+        btn.classList.toggle('active', ativo);
+
+        let estado = ativo ? PRAZO_BTN_ON : PRAZO_BTN_OFF;
+        if (!ativo && btn.dataset.prazo === 'atrasados' && alertarAtrasados) {
+            estado = PRAZO_BTN_ALERTA;
+        }
+        btn.style.cssText = PRAZO_BTN_BASE;
+        btn.style.background = estado.background;
+        btn.style.border = estado.border;
+        btn.style.color = estado.color;
+        btn.style.boxShadow = estado.boxShadow;
+    });
+}
+window.updateFiltroPrazoBotoes = updateFiltroPrazoBotoes;
+
+/** Clique nos botões Para Hoje / Atrasados / Geral. */
+function setFiltroPrazo(valor) {
+    state.filtroPrazo = (valor === 'hoje' || valor === 'atrasados') ? valor : 'geral';
+    // renderOrdens recalcula state.temPedidosAtrasados; pintar depois dele
+    renderOrdens();
+    updateFiltroPrazoBotoes();
+}
+window.setFiltroPrazo = setFiltroPrazo;
+
 // Colunas numéricas abrem do MAIOR para o MENOR; as de tipo (texto), agrupadas de A a Z.
 const PROD_SORT_COLUNAS = {
     numero:     { tipo: 'num',   dirInicial: 'desc' },
@@ -14745,14 +14840,17 @@ function updateProdSortHeaders() {
 }
 window.updateProdSortHeaders = updateProdSortHeaders;
 
-// Garantir o visual de botão já no primeiro paint, antes do 1º renderOrdens
+// Garantir o visual dos botões já no primeiro paint, antes do 1º renderOrdens
 document.addEventListener('DOMContentLoaded', () => {
     try { updateProdSortHeaders(); } catch (e) {}
+    try { updateFiltroPrazoBotoes(); } catch (e) {}
 });
 
-/** Botão ATUALIZAR do Painel de Produção: zera a ordenação e recarrega a lista. */
+/** Botão ATUALIZAR do Painel de Produção: volta ao padrão e recarrega a lista. */
 function atualizarPainelProducao() {
     state.prodSort = null;
+    state.filtroPrazo = 'geral';
+    updateFiltroPrazoBotoes();
     return loadOrdens();
 }
 window.atualizarPainelProducao = atualizarPainelProducao;
@@ -14823,7 +14921,9 @@ function renderOrdens() {
     if (statPedidosConcluidosEl) statPedidosConcluidosEl.textContent = totalPedidosConcluidos;
 
     // --- Aplicar Filtros (Busca, Setor e Status) ---
-    let filteredImpressao = ordensImpressao.filter(os => {
+    // O eixo de prazo fica de fora aqui de propósito: precisamos saber se existe
+    // pedido atrasado no recorte atual mesmo quando a lista está em "Para Hoje".
+    const filteredImpressaoSemPrazo = ordensImpressao.filter(os => {
         const itens = state.osItens[os.id] || [];
 
         // 1. Busca textual
@@ -14860,6 +14960,15 @@ function renderOrdens() {
 
         return true;
     });
+
+    // Existe pedido atrasado na fila INTEIRA? Alimenta o alerta vermelho do botão
+    // "Atrasados" quando a lista está filtrada em "Para Hoje".
+    // De propósito sobre ordensImpressao, e não sobre a lista já filtrada: o alerta
+    // é global, não muda conforme setor, estágio ou busca.
+    state.temPedidosAtrasados = ordensImpressao.some(os => pedidoEstaAtrasado(os));
+
+    // 4. Filtro de Prazo de Entrega (Para Hoje / Atrasados / Geral)
+    let filteredImpressao = filteredImpressaoSemPrazo.filter(os => pedidoPassaFiltroPrazo(os));
 
     // Fila 2: Arte vs Fila de Aprovação vs Fila de Aprovados
     let ordensFilaArte = [];
@@ -15111,6 +15220,7 @@ function renderOrdens() {
         // Ordenação escolhida nos cabeçalhos (não altera filtros nem contadores)
         filteredImpressao = aplicarProdSort(filteredImpressao);
         updateProdSortHeaders();
+        updateFiltroPrazoBotoes();
 
         if (!filteredImpressao.length) {
             tbodyImpressao.innerHTML = '';

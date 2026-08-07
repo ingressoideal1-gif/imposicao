@@ -19,3 +19,7 @@ node_modules/
 build/
 dist/
 .vercel
+
+# Configuracao de impressao da estacao (db.py grava ao lado do executavel).
+# E de cada maquina, nunca do repositorio.
+print_configs.json

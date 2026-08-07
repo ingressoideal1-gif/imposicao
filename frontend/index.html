@@ -1791,10 +1791,15 @@
                     <div class="prod-main-area">
                         <!-- Top bar (Search, Filters, Sectors) -->
                         <div class="prod-top-bar">
-                            <div class="prod-top-header">
+                            <div class="prod-top-header" style="position: relative;">
                                 <h2 class="prod-title">
                                     Fila de Produção:
                                 </h2>
+                                <div id="filtro-prazo-grupo" style="position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 8px;">
+                                    <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo="hoje" onclick="setFiltroPrazo('hoje')" title="Pedidos com prazo de entrega no dia de hoje">Para Hoje</button>
+                                    <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo="atrasados" onclick="setFiltroPrazo('atrasados')" title="Pedidos com prazo de entrega já vencido (data e hora)">Atrasados</button>
+                                    <button type="button" class="prod-btn-dark filter-btn-pill active" data-prazo="geral" onclick="setFiltroPrazo('geral')" title="Todos os pedidos, sem filtrar por prazo">Geral</button>
+                                </div>
                                 <button class="prod-btn-dark filter-btn-pill active" id="btn-filtro-todos-setores" onclick="setFiltroSetor('')" style="width: auto;">
                                     Todos os Setores
                                 </button>
@@ -2494,7 +2499,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
     <script src="mapas.js?v=2"></script>
-    <script src="script.js?v=477"></script>
+    <script src="script.js?v=480"></script>
     <script src="criador-arte.js?v=1"></script>
     <script src="/pedido.js?v=477"></script>
 

@@ -1,4 +1,18 @@
-﻿$ErrorActionPreference = "Stop"
+﻿# Publica o frontend: bumpa a versao dos scripts, commita, empurra e faz o
+# deploy de producao na Vercel.
+#
+# Uso:
+#   .\publicar.ps1 "fix(painel): corrigir ordenacao da fila"
+#
+# A versao (vNNN) e acrescentada ao final da mensagem automaticamente.
+param(
+    [Parameter(Mandatory = $true, Position = 0,
+               HelpMessage = "Mensagem do commit, ex: 'fix(painel): corrigir ordenacao da fila'")]
+    [ValidateNotNullOrEmpty()]
+    [string]$Mensagem
+)
+
+$ErrorActionPreference = "Stop"
 
 Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition"
 
@@ -32,8 +46,16 @@ $producaoFile = "frontend\producao.html"
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."
 git add -A
-git commit -m "fix: preserve amostra_cor_id/num_id during art save - dual guard in editor + saveAmostraToDB (v$nextV)"
+git commit -m "$Mensagem (v$nextV)"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Commit nao realizado (nada a commitar ou erro). Abortando antes do push/deploy."
+    exit 1
+}
 git push origin main
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Push falhou. Abortando antes do deploy."
+    exit 1
+}
 
 # 4. Vercel deploy
 Write-Host "Fazendo deploy na Vercel..."
