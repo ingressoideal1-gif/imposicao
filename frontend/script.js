@@ -17632,11 +17632,11 @@ function renderAmostrasOSItens(osId) {
                                         </label>
                                         <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                             onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
-                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
-                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
+                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
                                         <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
                                         <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página">📄 PDF</button>
-                                        <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.arte_url || item.amostra_arte_base64 ? '(Salva)' : ''}</span>
+                                        <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${itemTemArte(item, 'frente') ? '(Salva)' : ''}</span>
                                     </div>
                                     <div style="display:${item.modo_pdf ? 'none' : 'flex'}; gap:10px; align-items: center; flex-wrap: wrap;">
                                         <span class="badge badge-amber" style="font-size: 0.7rem; font-weight: 700; width: 60px; text-align: center;">VERSO</span>
@@ -17646,10 +17646,10 @@ function renderAmostrasOSItens(osId) {
                                         </label>
                                         <input type="file" id="amostra-item-arte-verso-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                             onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'verso')">
-                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" style="${item.verso_arte_url || item.verso_amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')">✕ Remover</button>
-                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-verso-${idx}" style="${item.verso_arte_url || item.verso_amostra_arte_base64 ? '' : 'display:none;'}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="Copiar Link da Arte Verso"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" style="${itemTemArte(item, 'verso') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')">✕ Remover</button>
+                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-verso-${idx}" style="${itemTemArte(item, 'verso') ? '' : 'display:none;'}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="Copiar Link da Arte Verso"><i class="fa-regular fa-copy"></i> Copiar</button>
                                         <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="Colar Link da Arte Verso"><i class="fa-regular fa-paste"></i> Colar</button>
-                                        <span id="amostra-item-arte-verso-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.verso_arte_url || item.verso_amostra_arte_base64 ? '(Salva)' : ''}</span>
+                                        <span id="amostra-item-arte-verso-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${itemTemArte(item, 'verso') ? '(Salva)' : ''}</span>
                                     </div>
                                     <div style="display: flex; justify-content: flex-end;">
                                         <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.95rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
@@ -17666,11 +17666,11 @@ function renderAmostrasOSItens(osId) {
                                     </label>
                                     <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                         onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
-                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
-                                    <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${item.arte_url || item.amostra_arte_base64 ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
+                                    <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
                                     <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
                                     <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página">📄 PDF</button>
-                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${item.arte_url || item.amostra_arte_base64 ? '(Arte Salva)' : ''}</span>
+                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${itemTemArte(item, 'frente') ? '(Arte Salva)' : ''}</span>
                                     <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 0.95rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
                                         <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
                                         <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
@@ -18726,6 +18726,26 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
         }
     }
 }
+
+// ──── "Este item tem arte?" ────────────────────────────────────────────────
+// O campo amostra_arte_base64 guarda DUAS coisas: a arte do modelo e, quando um
+// snapshot e gerado, a URL da previa composta (cor+arte+numeracao) no bucket
+// amostras_renderizadas. Para saber se ha ARTE, o render nao vale — senao o
+// botao Remover aparece em item sem arte, e o editor abre a previa como se fosse
+// a arte. A previa continua sendo usada onde ela e o que interessa: as imagens
+// de visualizacao e o resumo enviado ao cliente.
+function ehRenderComposto(v) {
+    return typeof v === 'string' && v.includes('/amostras_renderizadas/');
+}
+
+function itemTemArte(item, face = 'frente') {
+    if (!item) return false;
+    const url  = face === 'verso' ? item.verso_arte_url  : item.arte_url;
+    const json = face === 'verso' ? item.verso_arte_json : item.arte_json;
+    const b64  = face === 'verso' ? item.verso_amostra_arte_base64 : item.amostra_arte_base64;
+    return !!(url || json || (b64 && !ehRenderComposto(b64)));
+}
+window.itemTemArte = itemTemArte;
 
 function onItemArteRemove(idx, osId, itemId, face = 'frente') {
     const confirmMsg = "Tem certeza que deseja excluir a arte deste modelo?\n\nNão será possível reverter a ação...";
