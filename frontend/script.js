@@ -9206,11 +9206,8 @@ window.runImposition = async function (mode, returnBlob = false) {
                 }
             }
 
+            // Gerar/salvar PDF não altera o status de impressão
             toast('Processo de imposição concluído e arquivos salvos!', 'success');
-            if (state.activeOSItem && state.activeOSItem.itemId) {
-                await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
-            }
             return;
         }
 
@@ -9249,12 +9246,8 @@ window.runImposition = async function (mode, returnBlob = false) {
                     }
                 }
                 
+                // Gerar/salvar PDF não altera o status de impressão
                 toast('Arquivos de imposição salvos na pasta com sucesso!', 'success');
-                
-                if (state.activeOSItem && state.activeOSItem.itemId) {
-                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
-                }
                 return;
             }
         }
@@ -9269,12 +9262,8 @@ window.runImposition = async function (mode, returnBlob = false) {
                 await writable.write(blob);
                 await writable.close();
 
+                // Gerar/salvar PDF não altera o status de impressão
                 toast('PDF salvo com sucesso!', 'success');
-
-                if (state.activeOSItem && state.activeOSItem.itemId) {
-                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
-                }
                 return;
             } catch (errSave) {
                 console.error("Falha ao salvar PDF na pasta escolhida, usando fallback:", errSave);
@@ -9287,11 +9276,8 @@ window.runImposition = async function (mode, returnBlob = false) {
                 const writable = await fileHandle.createWritable();
                 await writable.write(blob);
                 await writable.close();
+                // Gerar/salvar PDF não altera o status de impressão
                 toast('PDF salvo com sucesso!', 'success');
-                if (state.activeOSItem && state.activeOSItem.itemId) {
-                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
-                }
                 return;
             } catch (err) {
                 console.error("Falha ao salvar no arquivo escolhido previamente, usando fallback:", err);
@@ -9303,6 +9289,11 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         // Modo impressao direta: abrir modal em vez de download
         if (mode === 'print' && _printerAgentActive) {
+            // O status só vira IMPRESSO depois que o operador confirmar, no popup
+            // exibido ao final do envio para a impressora
+            if (typeof marcarConfirmacaoPendente === 'function' && state.activeOSItem && state.activeOSItem.itemId) {
+                marcarConfirmacaoPendente([{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]);
+            }
             openPrintModal(blob);
             toast('PDF gerado! Selecione a impressora.', 'success');
             return;
@@ -9334,13 +9325,8 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         document.body.removeChild(a);
 
+        // Gerar/baixar PDF não altera o status de impressão
         toast('PDF baixado com sucesso!', 'success');
-
-        // Auto-atualizar status de impressao do item ativo da OS
-        if (state.activeOSItem && state.activeOSItem.itemId) {
-            await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-            if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
-        }
 
     } catch (err) {
 
@@ -14596,6 +14582,181 @@ window.setFiltroFilaArte = setFiltroFilaArte;
 /**
  * Renderiza as tabelas de OS (Fila de Impressão e Fila de Arte) na view
  */
+// -------------------------------------------------------------------------------
+// ORDENAÇÃO DA LISTA "PEDIDOS LIBERADOS" (Painel de Produção)
+// Só muda a ordem de exibição da tabela. Não mexe em filtros, dados, contadores
+// nem no comportamento das linhas (clique, preview, badges).
+// state.prodSort ausente/null = ordem padrão, exatamente como antes.
+// -------------------------------------------------------------------------------
+
+// Colunas numéricas abrem do MAIOR para o MENOR; as de tipo (texto), agrupadas de A a Z.
+const PROD_SORT_COLUNAS = {
+    numero:     { tipo: 'num',   dirInicial: 'desc' },
+    progresso:  { tipo: 'num',   dirInicial: 'desc' },
+    itens:      { tipo: 'num',   dirInicial: 'desc' },
+    quantidade: { tipo: 'num',   dirInicial: 'desc' },
+    frete:      { tipo: 'texto', dirInicial: 'asc'  },
+    status:     { tipo: 'texto', dirInicial: 'asc'  }
+};
+
+// Ordem de fluxo de produção para a coluna Status (mais útil que alfabética)
+const PROD_STATUS_ORDEM = { 'Aguardando': 1, 'Parcial': 2, 'Impresso': 3, 'Revisão': 4 };
+
+/**
+ * Valor de ordenação de cada coluna. Espelha exatamente o que a linha exibe
+ * (mesmas fórmulas usadas na montagem do <tr> em renderOrdens).
+ */
+function getProdSortValue(os, campo) {
+    const osItensList = state.osItens[os.id] || [];
+    const numOs = parseInt(os.numero);
+    const modelosGlobais = (state.modelosGlobais && state.modelosGlobais[numOs]) ? state.modelosGlobais[numOs] : [];
+    const totalItens = modelosGlobais.length > 0 ? modelosGlobais.length : (osItensList.length || 1);
+
+    switch (campo) {
+        case 'numero':
+            return parseInt(os.numero) || 0;
+
+        case 'itens':
+            return totalItens;
+
+        case 'progresso': {
+            const impressosCount = modelosGlobais.length > 0
+                ? modelosGlobais.filter(m => normalizarStatusImpressao(m.impressao) === 'Impresso').length
+                : osItensList.filter(item => normalizarStatusImpressao(item.impressao) === 'Impresso').length;
+            return totalItens > 0 ? (impressosCount / totalItens) : 0;
+        }
+
+        case 'quantidade':
+            return modelosGlobais.length > 0
+                ? modelosGlobais.reduce((acc, m) => acc + (m.quantidade || 0), 0)
+                : osItensList.reduce((acc, item) => acc + (parseInt(item.quantidade || item.qtd || 0)), 0);
+
+        case 'frete':
+            return ((os.frete_escolhido || '').trim() || 'Retirada Local').toUpperCase();
+
+        case 'status': {
+            const modelosParaStatus = modelosGlobais.length > 0 ? modelosGlobais : osItensList;
+            const st = calcularStatusImpressaoPedido(modelosParaStatus);
+            // Prefixo numérico mantém a ordem do fluxo (Aguardando → Parcial → Impresso → Revisão)
+            return `${PROD_STATUS_ORDEM[st] || 9}_${st || ''}`;
+        }
+    }
+    return '';
+}
+
+/** Devolve a lista ordenada. Sem coluna escolhida, devolve a ordem original intacta. */
+function aplicarProdSort(lista) {
+    const sort = state.prodSort;
+    if (!sort || !PROD_SORT_COLUNAS[sort.campo]) return lista;
+
+    const tipo = PROD_SORT_COLUNAS[sort.campo].tipo;
+    const fator = sort.dir === 'asc' ? 1 : -1;
+
+    // slice() para não reordenar o array de origem
+    return lista.slice().sort((a, b) => {
+        const va = getProdSortValue(a, sort.campo);
+        const vb = getProdSortValue(b, sort.campo);
+
+        let cmp = tipo === 'num'
+            ? (va || 0) - (vb || 0)
+            : String(va).localeCompare(String(vb), 'pt-BR');
+
+        // Empate: desempata pelo nº do pedido para a ordem não "dançar" entre renders
+        if (cmp === 0) cmp = (parseInt(a.numero) || 0) - (parseInt(b.numero) || 0);
+        return cmp * fator;
+    });
+}
+
+/** Clique no cabeçalho: 1º clique aplica a ordem inicial da coluna, 2º inverte. */
+function setProdSort(campo) {
+    if (!PROD_SORT_COLUNAS[campo]) return;
+    const atual = state.prodSort;
+    state.prodSort = (atual && atual.campo === campo)
+        ? { campo, dir: atual.dir === 'asc' ? 'desc' : 'asc' }
+        : { campo, dir: PROD_SORT_COLUNAS[campo].dirInicial };
+    renderOrdens();
+}
+window.setProdSort = setProdSort;
+
+// Estilo aplicado inline: o CSS externo não estava vencendo a cascata nesta
+// tabela, e inline é o que comprovadamente pinta dentro do <th> sticky.
+const PROD_TH_BTN_BASE = 'display:inline-flex; align-items:center; justify-content:center; gap:6px;'
+    + ' padding:7px 14px; border-radius:8px; font-size:0.75rem; font-weight:800;'
+    + ' text-transform:uppercase; letter-spacing:0.03em; white-space:nowrap; cursor:pointer;'
+    + ' transition:background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;';
+
+const PROD_TH_BTN_OFF = {
+    background: '#334155',
+    border: '1px solid rgba(255,255,255,0.22)',
+    color: '#cbd5e1',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.35)'
+};
+const PROD_TH_BTN_HOVER = {
+    background: '#475569',
+    border: '1px solid rgba(255,255,255,0.45)',
+    color: '#ffffff',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.45)'
+};
+const PROD_TH_BTN_ON = {
+    background: 'linear-gradient(135deg,#3b82f6,#2563eb)',
+    border: '1px solid #93c5fd',
+    color: '#ffffff',
+    boxShadow: '0 0 0 2px rgba(59,130,246,0.35), 0 4px 12px rgba(59,130,246,0.5)'
+};
+
+function _aplicarEstiloThBtn(btn, estado) {
+    btn.style.cssText = PROD_TH_BTN_BASE;
+    btn.style.background = estado.background;
+    btn.style.border = estado.border;
+    btn.style.color = estado.color;
+    btn.style.boxShadow = estado.boxShadow;
+}
+
+/** Destaca o cabeçalho ativo e mostra a seta do sentido da ordenação. */
+function updateProdSortHeaders() {
+    const sort = state.prodSort;
+    document.querySelectorAll('#table-impressao th[data-sort]').forEach(th => {
+        const ativo = !!(sort && sort.campo === th.dataset.sort);
+        th.classList.toggle('active', ativo);
+        th.style.cursor = 'pointer';
+        th.style.userSelect = 'none';
+
+        const btn = th.querySelector('.prod-th-btn');
+        if (btn) {
+            _aplicarEstiloThBtn(btn, ativo ? PROD_TH_BTN_ON : PROD_TH_BTN_OFF);
+
+            // Hover só uma vez por elemento
+            if (!btn.dataset.hoverOn) {
+                btn.dataset.hoverOn = '1';
+                btn.addEventListener('mouseenter', () => {
+                    const sel = state.prodSort && state.prodSort.campo === th.dataset.sort;
+                    if (!sel) _aplicarEstiloThBtn(btn, PROD_TH_BTN_HOVER);
+                });
+                btn.addEventListener('mouseleave', () => {
+                    const sel = state.prodSort && state.prodSort.campo === th.dataset.sort;
+                    _aplicarEstiloThBtn(btn, sel ? PROD_TH_BTN_ON : PROD_TH_BTN_OFF);
+                });
+            }
+        }
+
+        const seta = th.querySelector('.prod-sort-arrow');
+        if (seta) seta.textContent = ativo ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+    });
+}
+window.updateProdSortHeaders = updateProdSortHeaders;
+
+// Garantir o visual de botão já no primeiro paint, antes do 1º renderOrdens
+document.addEventListener('DOMContentLoaded', () => {
+    try { updateProdSortHeaders(); } catch (e) {}
+});
+
+/** Botão ATUALIZAR do Painel de Produção: zera a ordenação e recarrega a lista. */
+function atualizarPainelProducao() {
+    state.prodSort = null;
+    return loadOrdens();
+}
+window.atualizarPainelProducao = atualizarPainelProducao;
+
 function renderOrdens() {
     const tbodyImpressao = document.getElementById('tbody-impressao');
     const tbodyArte = document.getElementById('tbody-arte');
@@ -14946,6 +15107,10 @@ function renderOrdens() {
     if (tbodyImpressao) {
         const emptyImpressao = document.getElementById('empty-impressao');
         const tableImpressao = document.getElementById('table-impressao');
+
+        // Ordenação escolhida nos cabeçalhos (não altera filtros nem contadores)
+        filteredImpressao = aplicarProdSort(filteredImpressao);
+        updateProdSortHeaders();
 
         if (!filteredImpressao.length) {
             tbodyImpressao.innerHTML = '';
@@ -15637,6 +15802,120 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
 }
 
 // -------------------------------------------------------------------------------
+// CONFIRMAÇÃO DE IMPRESSÃO
+// Imprimir não marca mais o modelo como IMPRESSO sozinho: o status só muda
+// depois que o operador confirmar no popup que a impressão saiu.
+// -------------------------------------------------------------------------------
+
+function escHtmlSimples(txt) {
+    return String(txt === null || txt === undefined ? '' : txt)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+/**
+ * Popup de confirmação no estilo do painel.
+ * Resolve true se o usuário confirmar, false se cancelar, fechar ou apertar Esc.
+ */
+function confirmarPopup({ titulo = 'Confirmar', mensagem = '', detalhe = '', textoOk = 'Confirmar', textoCancelar = 'Cancelar' } = {}) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.72); z-index:100000; display:flex; align-items:center; justify-content:center; padding:20px;';
+        overlay.innerHTML = `
+            <div style="background:#1e293b; border:1px solid rgba(148,163,184,0.25); border-radius:12px; box-shadow:0 24px 60px rgba(0,0,0,0.6); width:100%; max-width:470px; overflow:hidden;">
+                <div style="padding:18px 22px; border-bottom:1px solid rgba(148,163,184,0.2);">
+                    <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:#e2e8f0;">${titulo}</h3>
+                </div>
+                <div style="padding:22px; color:#e2e8f0; font-size:1rem; line-height:1.5;">
+                    <div>${mensagem}</div>
+                    ${detalhe ? `<div style="margin-top:12px; color:#94a3b8; font-size:0.88rem; line-height:1.45;">${detalhe}</div>` : ''}
+                </div>
+                <div style="padding:16px 22px; border-top:1px solid rgba(148,163,184,0.2); display:flex; justify-content:flex-end; gap:10px;">
+                    <button type="button" data-role="cancel" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:10px 18px; font-size:0.95rem; font-weight:600; cursor:pointer;">${textoCancelar}</button>
+                    <button type="button" data-role="ok" style="border:none; background:linear-gradient(135deg,#34d399,#059669); color:#fff; border-radius:8px; padding:10px 18px; font-size:0.95rem; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(5,150,105,0.35);">${textoOk}</button>
+                </div>
+            </div>`;
+
+        let encerrado = false;
+        const finalizar = (valor) => {
+            if (encerrado) return;
+            encerrado = true;
+            document.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+            resolve(valor);
+        };
+        const onKey = (ev) => {
+            if (ev.key === 'Escape') { ev.preventDefault(); finalizar(false); }
+            else if (ev.key === 'Enter') { ev.preventDefault(); finalizar(true); }
+        };
+
+        overlay.querySelector('[data-role="ok"]').addEventListener('click', () => finalizar(true));
+        overlay.querySelector('[data-role="cancel"]').addEventListener('click', () => finalizar(false));
+        overlay.addEventListener('click', (ev) => { if (ev.target === overlay) finalizar(false); });
+        document.addEventListener('keydown', onKey, true);
+
+        document.body.appendChild(overlay);
+        setTimeout(() => {
+            const btnOk = overlay.querySelector('[data-role="ok"]');
+            if (btnOk) btnOk.focus();
+        }, 30);
+    });
+}
+window.confirmarPopup = confirmarPopup;
+
+/**
+ * Pergunta se a impressão saiu e só então marca os modelos como IMPRESSO.
+ * alvos: [{ itemId, osId }]
+ */
+async function confirmarImpressaoModelos(alvos) {
+    const lista = (alvos || []).filter(a => a && a.itemId);
+    if (!lista.length) return false;
+
+    const nomes = lista.map(a => {
+        const itens = state.osItens[a.osId] || [];
+        const it = itens.find(i => String(i.id) === String(a.itemId));
+        return (it && (it.modelo || it.nome)) || `Modelo ${a.itemId}`;
+    });
+
+    const umSo = lista.length === 1;
+    const confirmou = await confirmarPopup({
+        titulo: '🖨️ Confirmar impressão',
+        mensagem: umSo
+            ? `A impressão de <strong>${escHtmlSimples(nomes[0])}</strong> foi concluída?`
+            : `A impressão dos <strong>${lista.length} modelos</strong> foi concluída?`,
+        detalhe: (umSo ? '' : escHtmlSimples(nomes.join('  •  ')) + '<br><br>')
+            + 'Confira o material na impressora antes de confirmar. O status só muda para IMPRESSO depois da sua confirmação.',
+        textoOk: '✅ Sim, marcar como Impresso',
+        textoCancelar: 'Ainda não'
+    });
+
+    if (!confirmou) {
+        toast('Impressão não confirmada — o status do modelo não foi alterado.', 'info');
+        return false;
+    }
+
+    for (const a of lista) {
+        await updateItemImpressao(a.itemId, a.osId, 'IMPRESSO');
+    }
+    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+    if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
+    return true;
+}
+window.confirmarImpressaoModelos = confirmarImpressaoModelos;
+
+/**
+ * Guarda os modelos que aguardam confirmação quando a impressão passa pelo modal
+ * de seleção de impressora (o envio só acontece quando o usuário clica em Enviar).
+ */
+function marcarConfirmacaoPendente(alvos) {
+    window._printConfirmTargets = (alvos || []).filter(a => a && a.itemId);
+}
+window.marcarConfirmacaoPendente = marcarConfirmacaoPendente;
+
+// -------------------------------------------------------------------------------
 // MATCHING INTELIGENTE -- OS → Catálogo do Imposition
 // -------------------------------------------------------------------------------
 
@@ -16189,19 +16468,11 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
     const realOsId = osObj ? osObj.id : osId;
 
-    const itens = state.osItens[realOsId] || state.osItens[osId] || [];
+    const itens = (typeof getOSItens === 'function' ? getOSItens(realOsId) : null)
+        || state.osItens[realOsId] || state.osItens[osId] || [];
     if (!itens.length) {
         return toast('Esta OS não possui itens.', 'error');
     }
-
-    // Não selecionar modelo/item por padrão
-    state.activeOSItem = { itemId: null, osId: realOsId };
-
-    // Ocultar as janelas de visualização do pedido por padrão até que um modelo seja clicado
-    const pedPreview = document.getElementById('ped-preview-card-container');
-    if (pedPreview) pedPreview.style.display = 'none';
-    const impPreview = document.getElementById('imp-preview-card-container');
-    if (impPreview) impPreview.style.display = 'none';
 
     // Limpar seleções múltiplas de artes anteriores, e variáveis de arte
     if (state.selectedOSItems) state.selectedOSItems = [];
@@ -16210,14 +16481,51 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     state.impArtFile = null;
     state.impArtPdfDoc = null;
 
-    // Renderizar a fila de modelos do pedido (agora abrirá sem nenhum selecionado)
+    // Abrir sempre com o primeiro modelo do pedido já selecionado
+    const primeiro = getPrimeiroModeloDaOS(itens);
+    state.activeOSItem = { itemId: primeiro.id, osId: realOsId };
+
+    // IMPORTANTE: desenhar a fila ANTES de carregar o modelo.
+    // renderPedOSQueue/renderImpOSQueue aplicam o formato padrão do produto em
+    // item.formato_id; sem isso enviarParaImposicao acha o formato vazio, cai no
+    // fallback do primeiro formato do sistema e a cor do modelo se perde.
     if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
     if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
 
-    // Navegar para a view de Pedido
+    if (typeof enviarParaPedido === 'function') {
+        // enviarParaPedido carrega o modelo (formato/saída/numeração/arte),
+        // redesenha a fila e já navega para a view de Pedido
+        await enviarParaPedido(primeiro.id, realOsId);
+        return;
+    }
+
+    // Fallback caso pedido.js não esteja carregado
+    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+
     const navBtn = document.querySelector('[data-view="view-pedido"]');
     if (navBtn) navBtn.click();
 }
+
+/**
+ * Devolve o primeiro modelo do pedido seguindo a mesma ordem em que a fila é
+ * desenhada (agrupada por produto -- ver renderPedOSQueue), para que o modelo
+ * pré-selecionado seja o primeiro que o operador enxerga na tela.
+ */
+function getPrimeiroModeloDaOS(itens) {
+    if (!itens || !itens.length) return null;
+
+    const groups = {};
+    itens.forEach(item => {
+        const prodId = item._vibe_id_produto || 'sem_produto';
+        if (!groups[prodId]) groups[prodId] = [];
+        groups[prodId].push(item);
+    });
+
+    const primeiroGrupo = Object.keys(groups)[0];
+    return groups[primeiroGrupo][0];
+}
+window.getPrimeiroModeloDaOS = getPrimeiroModeloDaOS;
 
 // -------------------------------------------------------------------------------
 // PAINEL DE ITENS OS PENDENTES -- na view de Imposição
@@ -16801,8 +17109,7 @@ function impQueueUpdateField(itemId, osId, field, value) {
 async function impQueueGerarPDF(itemId, osId) {
     // Carregar o item na imposição primeiro
     await enviarParaImposicao(itemId, osId);
-    // Definir status como IMPRESSO
-    impQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
+    // Gerar PDF não altera o status de impressão
     // Aguardar renderização e então acionar o botão de gerar PDF
     setTimeout(() => {
         const btnGerar = document.getElementById('btn-gerar-pdf') || document.querySelector('[onclick*="gerarPDF"]') || document.querySelector('[onclick*="generatePDF"]');
@@ -16821,8 +17128,8 @@ async function impQueueGerarPDF(itemId, osId) {
 /** Imprimir o item específico */
 async function impQueueImprimir(itemId, osId) {
     await enviarParaImposicao(itemId, osId);
-    // Definir status como IMPRESSO
-    impQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
+    // O status NÃO muda aqui. Só vira IMPRESSO depois que o operador confirmar
+    // no popup exibido ao final do envio para a impressora.
     setTimeout(() => {
         const btnImprimir = document.getElementById('btn-imprimir') || document.querySelector('[onclick*="imprimir"]') || document.querySelector('[onclick*="print"]');
         if (btnImprimir) {
@@ -23242,6 +23549,8 @@ function closePrintModal() {
     if (modal) modal.style.display = 'none';
     _printBlobQueue = [];
     _printQueueIndex = 0;
+    // Modal fechado sem enviar: descartar a confirmação pendente
+    window._printConfirmTargets = null;
 }
 
 // Recarregar lista de impressoras manualmente
@@ -23471,7 +23780,15 @@ async function sendPrintJob() {
     if (failCount === 0) {
         if (statusText) statusText.textContent = `✓ Todos os ${successCount} arquivo(s) enviados para "${printerName}"!`;
         toast(`${successCount} arquivo(s) enviado(s) para "${printerName}" com sucesso!`, 'success');
-        setTimeout(() => closePrintModal(), 1500);
+        // Guardar antes de fechar o modal (closePrintModal limpa a pendência)
+        const alvosConfirmacao = window._printConfirmTargets;
+        setTimeout(async () => {
+            closePrintModal();
+            // O status só vira IMPRESSO depois que o operador confirmar
+            if (alvosConfirmacao && alvosConfirmacao.length && typeof confirmarImpressaoModelos === 'function') {
+                await confirmarImpressaoModelos(alvosConfirmacao);
+            }
+        }, 1500);
     } else {
         if (statusText) statusText.textContent = `${successCount} enviado(s), ${failCount} com erro.`;
         if (btnSend) { btnSend.disabled = false; btnSend.style.opacity = '1'; }

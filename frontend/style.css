@@ -2287,3 +2287,48 @@ input[type=number] {
     z-index: 100 !important;
     pointer-events: none !important;
 }
+
+/* ─── Cabeçalhos ordenáveis da fila "Pedidos Liberados" (Painel de Produção) ─── */
+.prod-table th.prod-th-sort {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    padding: 0.5rem 0.75rem;
+}
+.prod-table th.prod-th-sort .prod-th-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: #334155;
+    color: #cbd5e1;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.prod-table th.prod-th-sort:hover .prod-th-btn {
+    background: #475569;
+    border-color: rgba(255, 255, 255, 0.45);
+    color: #ffffff;
+}
+.prod-table th.prod-th-sort:active .prod-th-btn {
+    transform: translateY(1px);
+}
+.prod-table th.prod-th-sort.active .prod-th-btn {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-color: #93c5fd;
+    color: #ffffff;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35), 0 4px 12px rgba(59, 130, 246, 0.5);
+}
+.prod-table th.prod-th-sort .prod-sort-arrow {
+    font-size: 0.7rem;
+    line-height: 1;
+    opacity: 0.9;
+}

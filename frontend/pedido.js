@@ -2642,9 +2642,11 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
     if (overlay) overlay.classList.add('active');
     if (sub) sub.textContent = `Gerando ${state.selectedOSItems.length} modelos selecionados...`;
 
-    const originalActive = state.activeOSItem; 
+    const originalActive = state.activeOSItem;
     const blobs = [];
-    
+    // Quando é impressão, o status só muda depois da confirmação do operador
+    const alvosImpressao = state.selectedOSItems.map(s => ({ itemId: s.itemId, osId: s.osId }));
+
     try {
         if (state.selectedOSItems.length > 1) {
             if (sub) sub.textContent = `Processando modelos combinados...`;
@@ -2680,25 +2682,15 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
             }
             
             const blob = await runImposition('', true);
-            if (blob) {
-                blobs.push(blob);
-                for (const sel of state.selectedOSItems) {
-                    if (typeof pedQueueUpdateField === 'function') {
-                        pedQueueUpdateField(sel.itemId, sel.osId, 'status_impressao', 'IMPRESSO');
-                    }
-                }
-            }
+            // O status não muda aqui: gerar PDF não altera status e imprimir
+            // só altera depois da confirmação do operador
+            if (blob) blobs.push(blob);
         } else {
             const sel = state.selectedOSItems[0];
             state.activeOSItem = { osId: sel.osId, itemId: sel.itemId };
             if (sub) sub.textContent = `Processando modelo 1 de 1...`;
             const blob = await runImposition('', true);
-            if (blob) {
-                blobs.push(blob);
-                if (typeof pedQueueUpdateField === 'function') {
-                    pedQueueUpdateField(sel.itemId, sel.osId, 'status_impressao', 'IMPRESSO');
-                }
-            }
+            if (blob) blobs.push(blob);
         }
         
         state.activeOSItem = originalActive;
@@ -2731,6 +2723,8 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                 // Abrir o modal de impressão com o blob final
                 if (typeof openPrintModal === 'function') {
                     if (overlay) overlay.classList.remove('active');
+                    // O popup de confirmação aparece após o envio no modal
+                    if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvosImpressao);
                     openPrintModal(finalBlob);
                     toast('PDFs gerados! Configure e envie para a impressora.', 'success');
                 } else {
@@ -2747,6 +2741,9 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                         });
                         if (res.ok) {
                             toast('Enviado para a impressora local!', 'success');
+                            if (typeof confirmarImpressaoModelos === 'function') {
+                                await confirmarImpressaoModelos(alvosImpressao);
+                            }
                         } else {
                             throw new Error('Falha na API local');
                         }
@@ -4088,23 +4085,22 @@ window.runPedImposition = async function (mode) {
             if (mode === 'print' && printBlobQueue.length > 0) {
                 if (overlay) overlay.classList.remove('active');
                 toast(`Imposição concluída. Enviando ${printBlobQueue.length} arquivo(s) para a impressora...`, 'info');
+                const alvoImpressao = (state.activeOSItem && state.activeOSItem.itemId)
+                    ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
+                    : [];
                 if (typeof sendPrintJobDirect === 'function') {
                     const ok = await sendPrintJobDirect(printBlobQueue);
-                    if (ok && state.activeOSItem && state.activeOSItem.itemId) {
-                        await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                        if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
-                    }
+                    // Não marca sozinho: pergunta ao operador antes de mudar o status
+                    if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                 } else {
+                    if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvoImpressao);
                     await openPrintModalQueue(printBlobQueue);
                 }
                 return;
             }
 
+            // Gerar/salvar PDF não altera o status de impressão
             toast('Processo de imposição concluído e arquivos salvos!', 'success');
-            if (state.activeOSItem && state.activeOSItem.itemId) {
-                await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
-            }
             return;
         }
 
@@ -4123,13 +4119,15 @@ window.runPedImposition = async function (mode) {
                 if (mode === 'print') {
                     if (overlay) overlay.classList.remove('active');
                     toast(`Imposição concluída. Enviando ${multiBlobs.length} arquivo(s) para a impressora...`, 'info');
+                    const alvoImpressao = (state.activeOSItem && state.activeOSItem.itemId)
+                        ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
+                        : [];
                     if (typeof sendPrintJobDirect === 'function') {
                         const ok = await sendPrintJobDirect(multiBlobs);
-                        if (ok && state.activeOSItem && state.activeOSItem.itemId) {
-                            await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                            if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
-                        }
+                        // Não marca sozinho: pergunta ao operador antes de mudar o status
+                        if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                     } else {
+                        if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvoImpressao);
                         await openPrintModalQueue(multiBlobs);
                     }
                     return;
@@ -4158,11 +4156,8 @@ window.runPedImposition = async function (mode) {
                         await new Promise(r => setTimeout(r, 500));
                     }
                 }
+                // Gerar/salvar PDF não altera o status de impressão
                 toast('Arquivos de imposição salvos com sucesso!', 'success');
-                if (state.activeOSItem && state.activeOSItem.itemId) {
-                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
-                }
                 return;
             }
         }
@@ -4172,14 +4167,16 @@ window.runPedImposition = async function (mode) {
         // Modo impressão direta: usar painel lateral sem abrir modal
         if (mode === 'print') {
             if (overlay) overlay.classList.remove('active');
+            const alvoImpressao = (state.activeOSItem && state.activeOSItem.itemId)
+                ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
+                : [];
             if (typeof sendPrintJobDirect === 'function') {
                 const queue = [{ name: defaultFilename, blob }];
                 const ok = await sendPrintJobDirect(queue);
-                if (ok && state.activeOSItem && state.activeOSItem.itemId) {
-                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
-                }
+                // Não marca sozinho: pergunta ao operador antes de mudar o status
+                if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
             } else {
+                if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvoImpressao);
                 await openPrintModal(blob);
             }
             return;
@@ -4193,12 +4190,8 @@ window.runPedImposition = async function (mode) {
                 await writable.write(blob);
                 await writable.close();
 
+                // Gerar/salvar PDF não altera o status de impressão
                 toast('PDF salvo com sucesso!', 'success');
-
-                if (state.activeOSItem && state.activeOSItem.itemId) {
-                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
-                }
                 return;
             } catch (errSave) {
                 console.error("Falha ao salvar PDF na pasta escolhida, usando fallback:", errSave);
@@ -4211,11 +4204,8 @@ window.runPedImposition = async function (mode) {
                 const writable = await fileHandle.createWritable();
                 await writable.write(blob);
                 await writable.close();
+                // Gerar/salvar PDF não altera o status de impressão
                 toast('PDF salvo com sucesso!', 'success');
-                if (state.activeOSItem && state.activeOSItem.itemId) {
-                    await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-                    if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
-                }
                 return;
             } catch (err) {
                 console.error("Falha ao salvar no arquivo escolhido previamente, usando fallback:", err);
@@ -4265,13 +4255,8 @@ window.runPedImposition = async function (mode) {
 
         document.body.removeChild(a);
 
+        // Gerar/baixar PDF não altera o status de impressão
         toast('PDF baixado com sucesso!', 'success');
-
-        // Auto-atualizar status de impressao do item ativo da OS
-        if (state.activeOSItem && state.activeOSItem.itemId) {
-            await updateItemImpressao(state.activeOSItem.itemId, state.activeOSItem.osId, 'IMPRESSO');
-            if (typeof renderImpOSQueue === 'function') renderPedOSQueue();
-        }
 
     } catch (err) {
 
@@ -4335,8 +4320,7 @@ window.toggleBox = function(bodyId, arrowId) {
 // Helpers para gerar PDF e imprimir a partir da fila de itens no menu Pedido
 async function pedQueueGerarPDF(itemId, osId) {
     await enviarParaPedido(itemId, osId);
-    // Definir status como IMPRESSO
-    pedQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
+    // Gerar PDF não altera o status de impressão
     setTimeout(() => {
         // Clicar no botão da aba Pedido (ped-btn-impose)
         const btnGerar = document.getElementById('ped-btn-impose');
@@ -4350,8 +4334,8 @@ async function pedQueueGerarPDF(itemId, osId) {
 
 async function pedQueueImprimir(itemId, osId) {
     await enviarParaPedido(itemId, osId);
-    // Definir status como IMPRESSO
-    pedQueueUpdateField(itemId, osId, 'status_impressao', 'IMPRESSO');
+    // O status NÃO muda aqui. Só vira IMPRESSO depois que o operador confirmar
+    // no popup exibido ao final do envio para a impressora.
     setTimeout(() => {
         // Clicar no botão de Imprimir da aba Pedido (ped-btn-impose-print)
         const btnImprimir = document.getElementById('ped-btn-impose-print');
