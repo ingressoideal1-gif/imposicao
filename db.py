@@ -1077,38 +1077,99 @@ def _headers():
         "Authorization": f"Bearer {SUPABASE_KEY}"
     }
 
-def get_print_config(produto_id):
-    """Busca config de impressora salva para um produto."""
+# ─── Configuracao de impressao por produto ────────────────────────────────────
+# Fica em disco, nesta maquina, e nao no banco compartilhado: nome de impressora,
+# IDs de bandeja e tamanhos de papel sao propriedades fisicas da estacao. Guardar
+# isso no Supabase fazia duas estacoes disputarem a mesma linha (a chave era so
+# produto_id), e a ultima a salvar sobrescrevia a outra.
+#
+# Fica ao lado do executavel, como o formats_db.json, entao sobrevive a
+# atualizacao do agente — o MSI substitui apenas o NewProd.exe.
+PRINT_CONFIG_FILE = os.path.join(DB_DIR, "print_configs.json")
+
+
+def _semear_print_configs() -> dict:
+    """Na primeira vez, herda do Supabase o que pertencer a esta maquina.
+
+    Nao ha como saber a qual estacao cada linha antiga pertence — as tabelas
+    nunca tiveram identificacao de agente. O criterio possivel e a impressora:
+    se ela existe nesta maquina, a configuracao era daqui.
+    """
     if not IS_SUPABASE_ACTIVE:
-        return None
+        return {}
     try:
-        url = f"{SUPABASE_URL}/rest/v1/producao_config_impressora?produto_id=eq.{produto_id}&select=*"
-        req = urllib.request.Request(url, headers=_headers(), method='GET')
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            return data[0] if data else None
+        import print_service
+        locais = {p.lower() for p in print_service.get_printers()}
+    except Exception:
+        return {}
+
+    herdadas = {}
+    for tabela in ("producao_print_config", "producao_config_impressora"):
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/{tabela}?select=*"
+            req = urllib.request.Request(url, headers=_headers(), method='GET')
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                linhas = json.loads(resp.read().decode('utf-8'))
+        except Exception:
+            continue
+        for linha in linhas:
+            impressora = (linha.get("printer_name") or "").lower()
+            pid = str(linha.get("produto_id") or "")
+            if pid and impressora in locais and pid not in herdadas:
+                herdadas[pid] = linha
+
+    if herdadas:
+        print(f"[db] print_configs: {len(herdadas)} config(s) herdada(s) do Supabase "
+              f"(impressora presente nesta maquina)")
+        _salvar_print_configs(herdadas)
+    return herdadas
+
+
+def _carregar_print_configs() -> dict:
+    if not os.path.exists(PRINT_CONFIG_FILE):
+        return _semear_print_configs()
+    try:
+        with open(PRINT_CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f) or {}
     except Exception as e:
-        print(f"[db] get_print_config erro: {e}")
-        return None
+        print(f"[db] print_configs ilegivel ({e}); recomecando vazio")
+        return {}
+
+
+def _salvar_print_configs(configs: dict):
+    tmp = PRINT_CONFIG_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(configs, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, PRINT_CONFIG_FILE)   # troca atomica: nunca meio arquivo
+
+
+def get_print_config(produto_id):
+    """Config de impressao deste produto, nesta maquina."""
+    return _carregar_print_configs().get(str(produto_id))
+
 
 def upsert_print_config(data):
-    """Salva/atualiza config de impressora para um produto (upsert por produto_id)."""
-    if not IS_SUPABASE_ACTIVE:
+    """Grava a config do produto. Todos os campos enviados sao preservados."""
+    pid = str(data.get("produto_id") or "").strip()
+    if not pid:
+        print("[db] upsert_print_config: produto_id ausente")
         return False
     try:
+        configs = _carregar_print_configs()
         data['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        body = json.dumps(data).encode('utf-8')
-        url = f"{SUPABASE_URL}/rest/v1/producao_config_impressora"
-        headers = _headers()
-        headers['Content-Type'] = 'application/json'
-        headers['Prefer'] = 'resolution=merge-duplicates'
-        req = urllib.request.Request(url, data=body, headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            print(f"[db] upsert_print_config: {resp.status}")
-            return True
+        configs[pid] = data
+        _salvar_print_configs(configs)
+        print(f"[db] print_config salva para o produto {pid} "
+              f"({data.get('printer_name')})")
+        return True
     except Exception as e:
         print(f"[db] upsert_print_config erro: {e}")
         return False
+
+
+def list_print_configs():
+    """Todas as configs desta maquina — util para diagnostico."""
+    return _carregar_print_configs()
 
 
 def get_user_permissions(user_id):

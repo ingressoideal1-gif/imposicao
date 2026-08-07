@@ -6246,6 +6246,17 @@ async function loadImpArtFile(file) {
 
 function drawPreview() {
 
+    // Fontes web ainda não baixadas fariam o canvas desenhar com uma genérica e
+    // ficar assim — canvas não redesenha sozinho. Desenha já com o que houver e
+    // repete uma vez quando as fontes chegarem.
+    try {
+        const _nomes = fontesDosElementos(state.elements)
+            .filter(n => !_fontesJaCarregadas.has(n));
+        if (_nomes.length) {
+            garantirFontesCarregadas(_nomes).then(() => drawPreview());
+        }
+    } catch (_) { /* nunca impedir o desenho por causa disto */ }
+
     let fmtId = document.getElementById('imp-formato')?.value || '';
     let numId = document.getElementById('imp-numeracao')?.value || document.getElementById('ped-numeracao')?.value || '';
     let saiId = document.getElementById('imp-saida')?.value || '';
@@ -9004,13 +9015,16 @@ window.runImposition = async function (mode, returnBlob = false) {
                                     if (localVer) {
                                         const verEl = document.getElementById('newprod-version-display');
                                         if (verEl) verEl.textContent = localVer;
-                                        fetch('/api/version')
+                                        // Comparar com o manifesto, não com '/api/version'
+                                        // relativa: no painel servido pelo agente aquilo
+                                        // resolvia para ele mesmo e nunca acusava diferença.
+                                        fetch(`${MANIFESTO_AGENTE}?t=${Date.now()}`, { cache: 'no-store' })
                                             .then(r => r.ok ? r.json() : null)
-                                            .then(cloudData => {
-                                                if (cloudData && cloudData.version && cloudData.version !== localVer) {
-                                                    console.warn(`[Agent Update] Agente Local desatualizado: ${localVer} -> ${cloudData.version}`);
+                                            .then(manifesto => {
+                                                if (manifesto && manifesto.version && _versaoMaior(manifesto.version, localVer)) {
+                                                    console.warn(`[Agent Update] Agente Local desatualizado: ${localVer} -> ${manifesto.version}`);
                                                     if (typeof showAgentUpdateWarning === 'function') {
-                                                        showAgentUpdateWarning(base, cloudData.version);
+                                                        showAgentUpdateWarning(base, manifesto.version);
                                                     }
                                                 }
                                             })
@@ -19667,6 +19681,12 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
 }
 
 async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
+    // Esperar as fontes da numeração antes de desenhar. Aqui dá para aguardar
+    // de verdade (função async), então não há redesenho: sai certo de primeira.
+    try {
+        await garantirFontesCarregadas(fontesDosElementos(num && num.elements));
+    } catch (_) { /* seguir mesmo assim */ }
+
     // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
     // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
     const itemForPdf = (state.osItens[osId] || [])[idx] || item;
@@ -23883,6 +23903,10 @@ function _updateSaveButtonLabel() {
     if (section) section.style.display = 'block';
 }
 
+// URL do agente desta maquina. Sempre 127.0.0.1: a configuracao de impressao e
+// fisica da estacao, entao nao pode vir do Render nem do Supabase compartilhado.
+const AGENTE_LOCAL_URL = 'http://127.0.0.1:9000';
+
 async function savePrintConfigForProduct() {
     const info = _getActiveProductInfo();
     if (!info) return toast('Nenhum produto ativo para salvar.', 'warning');
@@ -23914,45 +23938,29 @@ async function savePrintConfigForProduct() {
     // 2. Salvar no localStorage (fallback offline)
     try { localStorage.setItem(`printConfig_${info.prodId}`, JSON.stringify(config)); } catch(e) {}
 
-    // 3. Salvar no Supabase (tabela producao_print_config)
+    // 3. Gravar no agente desta máquina.
+    //    Sempre no agente local, nunca em API_BASE_URL: no painel da nuvem aquilo
+    //    aponta para o Render, que não tem — nem deve ter — a configuração da
+    //    estação. Impressora, bandeja e papel são físicos desta máquina.
     const btn = document.getElementById('ped-print-save-btn');
     if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
     try {
-        const sb = typeof getSupabase === 'function' ? getSupabase() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-        let savedInSupabase = false;
+        const resp = await fetch(`${AGENTE_LOCAL_URL}/api/print-config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.detail || 'o agente recusou a gravação');
 
-        if (sb) {
-            const { error } = await sb.from('producao_print_config').upsert(config, { onConflict: 'produto_id' });
-            if (!error) {
-                savedInSupabase = true;
-                toast(`✅ Config de impressão salva no banco para "${info.prodNome}"`, 'success');
-            } else {
-                console.warn('[printConfig] Aviso/Erro ao salvar no Supabase (producao_print_config):', error);
-            }
-        }
-
-        if (!savedInSupabase) {
-            // Tentar endpoint API se houver backend
-            try {
-                const resp = await fetch(`${API_BASE_URL}/api/print-config`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-                const data = await resp.json();
-                if (data.ok) {
-                    savedInSupabase = true;
-                    toast(`✅ Config de impressão salva no backend para "${info.prodNome}"`, 'success');
-                }
-            } catch (e) {}
-        }
-
-        if (!savedInSupabase) {
-            toast(`Config salva localmente para "${info.prodNome}"`, 'info');
-        }
+        toast(`✅ Configuração salva nesta estação para "${info.prodNome}"`, 'success');
     } catch (e) {
-        console.warn('[printConfig] save error (usando localStorage):', e);
-        toast(`Config salva localmente para "${info.prodNome}"`, 'info');
+        // Falha aqui era engolida num console.warn e o operador via "salva
+        // localmente", achando que tinha dado certo — some ao trocar de pedido.
+        console.error('[printConfig] falha ao salvar no agente:', e);
+        toast(`Não foi possível salvar: o agente local respondeu "${e.message}". ` +
+              `A configuração vale só neste navegador até o agente voltar.`, 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
     }
@@ -23968,34 +23976,22 @@ async function loadPrintConfigForProduct(produtoId) {
         return;
     }
 
-    // 2. Tentar carregar do Supabase (producao_print_config)
-    const sb = typeof getSupabase === 'function' ? getSupabase() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-    if (sb) {
-        try {
-            const { data, error } = await sb.from('producao_print_config').select('*').eq('produto_id', prodId).maybeSingle();
-            if (data && !error) {
-                _printConfigCache[prodId] = data;
-                try { localStorage.setItem(`printConfig_${prodId}`, JSON.stringify(data)); } catch(e) {}
-                await _applyPrintConfig(data);
+    // 2. Perguntar ao agente desta máquina (fonte da verdade).
+    //    Não consulta o Supabase: a configuração é da estação, e a tabela
+    //    compartilhada fazia duas máquinas disputarem a mesma linha.
+    try {
+        const resp = await fetch(`${AGENTE_LOCAL_URL}/api/print-config/${encodeURIComponent(prodId)}`);
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.ok && data.config) {
+                _printConfigCache[prodId] = data.config;
+                try { localStorage.setItem(`printConfig_${prodId}`, JSON.stringify(data.config)); } catch(e) {}
+                await _applyPrintConfig(data.config);
                 return;
             }
-        } catch (e) {
-            console.warn('[printConfig] Erro ao carregar do Supabase:', e);
-        }
-    }
-
-    // 3. Tentar backend API
-    try {
-        const resp = await fetch(`${API_BASE_URL}/api/print-config/${encodeURIComponent(prodId)}`);
-        const data = await resp.json();
-        if (data.ok && data.config) {
-            _printConfigCache[prodId] = data.config;
-            try { localStorage.setItem(`printConfig_${prodId}`, JSON.stringify(data.config)); } catch(e) {}
-            await _applyPrintConfig(data.config);
-            return;
         }
     } catch (e) {
-        console.warn('[printConfig] load from backend error:', e);
+        console.warn('[printConfig] agente local não respondeu:', e);
     }
 
     // 4. Fallback localStorage
@@ -25314,10 +25310,31 @@ window.admDeleteImage = async function(name, btnEl) {
 // Render, que responde {"status":"running"} com a versão do backend — o rodapé
 // passaria a exibir a versão da nuvem como se fosse a da estação.
 // A detecção que já existia só roda durante uma imposição; esta roda ao abrir.
+// Manifesto de releases: endereço fixo, a mesma fonte que o agente consulta.
+// Comparar com ele — e não com o que a nuvem reporta — é o que faz o aviso
+// funcionar em qualquer painel.
+const MANIFESTO_AGENTE = 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/latest.json';
+
+function _versaoComoTupla(texto) {
+    const n = String(texto || '').match(/\d+/g) || ['0'];
+    return n.slice(0, 4).map(Number);
+}
+
+function _versaoMaior(a, b) {
+    const [x, y] = [_versaoComoTupla(a), _versaoComoTupla(b)];
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+        const d = (x[i] || 0) - (y[i] || 0);
+        if (d) return d > 0;
+    }
+    return false;
+}
+
 async function atualizarVersaoAgenteRodape() {
     const el = document.getElementById('newprod-version-display');
     if (!el) return;
 
+    let versaoLocal = null;
+    let baseAgente = null;
     for (const base of ['http://127.0.0.1:9000', 'http://localhost:9000']) {
         try {
             const ctrl = new AbortController();
@@ -25327,17 +25344,39 @@ async function atualizarVersaoAgenteRodape() {
             if (!resp.ok) continue;
             const dados = await resp.json();
             if (dados && dados.version) {
+                versaoLocal = dados.version;
+                baseAgente = base;
                 el.textContent = dados.version;
                 el.style.color = '#eab308';
                 el.title = `Agente local ativo em ${base}`;
-                return;
+                break;
             }
         } catch (_) { /* agente ausente nesta base: tenta a próxima */ }
     }
 
-    el.textContent = 'Agente offline';
-    el.style.color = '#64748b';
-    el.title = 'Nenhum agente local respondendo em 127.0.0.1:9000';
+    if (!versaoLocal) {
+        el.textContent = 'Agente offline';
+        el.style.color = '#64748b';
+        el.title = 'Nenhum agente local respondendo em 127.0.0.1:9000';
+        return;
+    }
+
+    // Avisar sobre versão nova. Antes isto usava fetch('/api/version') com URL
+    // relativa: no painel servido pelo próprio agente, ele comparava a versão
+    // dele com a dele mesma — dava sempre igual e o banner nunca aparecia.
+    try {
+        const resp = await fetch(`${MANIFESTO_AGENTE}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!resp.ok) return;
+        const manifesto = await resp.json();
+        if (manifesto.version && _versaoMaior(manifesto.version, versaoLocal)) {
+            console.warn(`[Agent Update] Agente desatualizado: ${versaoLocal} -> ${manifesto.version}`);
+            if (typeof showAgentUpdateWarning === 'function') {
+                showAgentUpdateWarning(baseAgente, manifesto.version);
+            }
+        }
+    } catch (e) {
+        console.warn('[Agent Update] Não foi possível ler o manifesto:', e);
+    }
 }
 
 if (document.readyState === 'loading') {
@@ -25422,3 +25461,43 @@ async function verificarAtualizacaoAgente(instalar = false) {
     }
 }
 window.verificarAtualizacaoAgente = verificarAtualizacaoAgente;
+
+// ──── Garantir que as fontes web cheguem antes de desenhar no canvas ─────
+// Canvas é raster: se `ctx.font` referencia uma fonte que ainda não baixou, o
+// navegador desenha com uma genérica e NÃO redesenha quando a fonte chega —
+// diferente de texto em HTML, que reflui sozinho.
+//
+// A corrida sempre existiu, mas era invisível enquanto as fontes vinham de
+// /fonts_local servido pelo próprio agente, em milissegundos. Com o catálogo no
+// Supabase o tempo de chegada cresceu e o defeito passou a aparecer em máquinas
+// sem cache do navegador — em quem já tinha as fontes carregadas, continuava
+// funcionando, o que mascarou o problema.
+const _fontesJaCarregadas = new Set();
+
+async function garantirFontesCarregadas(nomes) {
+    if (!document.fonts || !nomes || !nomes.length) return;
+
+    const pendentes = [];
+    for (const bruto of nomes) {
+        const nome = String(bruto || '').trim();
+        if (!nome || _fontesJaCarregadas.has(nome)) continue;
+        _fontesJaCarregadas.add(nome);
+        // A string precisa ser um shorthand de font válido, senão load() rejeita
+        const spec = buildCanvasFont(16, nome);
+        pendentes.push(
+            document.fonts.load(spec).catch(e =>
+                console.warn(`[Fonts] não carregou ${nome}:`, e && e.message))
+        );
+    }
+    if (pendentes.length) await Promise.all(pendentes);
+}
+
+// Extrai os nomes de fonte de uma lista de elementos de numeração.
+function fontesDosElementos(elementos) {
+    const nomes = new Set();
+    for (const el of (elementos || [])) {
+        const n = el && (el.font_name || el.font_family);
+        if (n) nomes.add(n);
+    }
+    return [...nomes];
+}
