@@ -110,9 +110,24 @@ def health_check():
 from agent_version import AGENT_VERSION
 LOCAL_AGENT_VERSION = f"NewProd {AGENT_VERSION}"
 
+def _agent_id_local():
+    """ID deste agente, para o frontend achar o registro certo em print_agents.
+
+    Sem isto o frontend pegava o agente com heartbeat mais recente do banco
+    inteiro — o operador de uma estacao podia mandar o job para a impressora
+    de outra sala.
+    """
+    try:
+        import agent_worker
+        return agent_worker.AGENT_ID
+    except Exception:
+        return None
+
+
 @app.get("/api/status")
 def read_root():
-    return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
+    return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION,
+            "agent_id": _agent_id_local(), "capabilities": ["impose", "print"]}
 
 @app.get("/api/version")
 def version_info():

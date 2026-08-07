@@ -22918,19 +22918,39 @@ async function checkPrinterAgent() {
 
     if (typeof supabaseClient !== 'undefined' && supabaseClient) {
         try {
-            // Considerar online quem deu heartbeat nos ultimos 2 minutos
+            // Descobrir QUAL agente é o desta máquina. Antes pegava-se o de
+            // heartbeat mais recente do banco inteiro (.limit(1) sem filtro por
+            // máquina): com várias estações online, o operador de uma podia
+            // mandar o job para a impressora de outra sala.
+            const idLocal = await descobrirAgentIdLocal();
+
+            // Online = heartbeat nos últimos 2 minutos
             const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-            const { data } = await supabaseClient
+            let consulta = supabaseClient
                 .from('print_agents')
                 .select('*')
                 .eq('status', 'online')
-                .gte('last_seen', twoMinutesAgo)
-                .order('last_seen', { ascending: false })
-                .limit(1);
+                .gte('last_seen', twoMinutesAgo);
 
-            if (data && data.length > 0) {
-                _printerAgentActive = true;
-                window._activeAgentData = data[0];
+            if (idLocal) {
+                consulta = consulta.eq('id', idLocal);
+            } else {
+                // Sem agente local respondendo, não há para onde imprimir nesta
+                // máquina. Não cair no agente de outra estação.
+                console.warn('[Agente] Nenhum agente local em 127.0.0.1:9000 — impressão local indisponível.');
+                _printerAgentActive = false;
+                window._activeAgentData = null;
+                consulta = null;
+            }
+
+            if (consulta) {
+                const { data } = await consulta.limit(1);
+                if (data && data.length > 0) {
+                    _printerAgentActive = true;
+                    window._activeAgentData = data[0];
+                } else {
+                    console.warn(`[Agente] Agente local ${idLocal} não tem heartbeat recente no Supabase.`);
+                }
             }
         } catch (e) {
             console.error('Erro ao checar print_agents no Supabase:', e);
@@ -25288,3 +25308,37 @@ if (document.readyState === 'loading') {
     atualizarVersaoAgenteRodape();
 }
 setInterval(atualizarVersaoAgenteRodape, 60000);
+
+// ──── Identidade do agente desta máquina ──────────────────────────────────
+// Pergunta ao agente local qual é o AGENT_ID dele. É o que permite escolher o
+// registro certo em print_agents em vez do heartbeat mais recente do banco.
+// Consulta só o loopback: window.location.origin, na nuvem, é reescrito para o
+// Render, que responderia sem agent_id.
+let _agentIdLocalCache = null;
+let _agentIdLocalEm = 0;
+
+async function descobrirAgentIdLocal() {
+    // cache curto: esta função roda a cada checagem de agente
+    if (_agentIdLocalCache && (Date.now() - _agentIdLocalEm) < 60000) {
+        return _agentIdLocalCache;
+    }
+    for (const base of ['http://127.0.0.1:9000', 'http://localhost:9000']) {
+        try {
+            const ctrl = new AbortController();
+            const prazo = setTimeout(() => ctrl.abort(), 2000);
+            const resp = await fetch(`${base}/api/status`, { mode: 'cors', signal: ctrl.signal });
+            clearTimeout(prazo);
+            if (!resp.ok) continue;
+            const dados = await resp.json();
+            if (dados && dados.agent_id) {
+                _agentIdLocalCache = dados.agent_id;
+                _agentIdLocalEm = Date.now();
+                return _agentIdLocalCache;
+            }
+            // Agente antigo (< 1.2.8) não expõe agent_id
+            console.warn('[Agente] Agente local sem agent_id — atualize para 1.2.8+.');
+            return null;
+        } catch (_) { /* tenta a próxima base */ }
+    }
+    return null;
+}

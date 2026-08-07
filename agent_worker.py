@@ -13,18 +13,34 @@ import db
 import print_service
 import ppd_parser
 
-# Garante que o agent_config.json fique sempre ao lado do .exe ou do script
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
-CONFIG_FILE = os.path.join(_SCRIPT_DIR, "agent_config.json")
-AGENT_ID = None
+# O config fica num caminho fixo por maquina, nao ao lado do executavel: antes,
+# rodar do codigo-fonte ou reinstalar em outra pasta gerava um AGENT_ID novo e
+# uma linha nova em print_agents. Uma unica maquina chegou a acumular 21
+# registros, todos com status "online", porque nada nunca os remove.
+_APPDATA = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+_CONFIG_DIR = os.path.join(_APPDATA, "NewProd Agent")
+try:
+    os.makedirs(_CONFIG_DIR, exist_ok=True)
+except Exception:
+    _CONFIG_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+CONFIG_FILE = os.path.join(_CONFIG_DIR, "agent_config.json")
 
-if os.path.exists(CONFIG_FILE):
-    try:
-        with open(CONFIG_FILE, "r") as f:
-            cfg = json.load(f)
-            AGENT_ID = cfg.get("agent_id")
-    except Exception:
-        pass
+# Caminho antigo, para herdar o ID de quem ja estava instalado em vez de
+# aparecer como agente novo depois da atualizacao.
+_CONFIG_ANTIGO = os.path.join(
+    os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)),
+    "agent_config.json")
+
+AGENT_ID = None
+for _origem in (CONFIG_FILE, _CONFIG_ANTIGO):
+    if AGENT_ID:
+        break
+    if os.path.exists(_origem):
+        try:
+            with open(_origem, "r") as f:
+                AGENT_ID = json.load(f).get("agent_id")
+        except Exception:
+            pass
 
 if not AGENT_ID:
     AGENT_ID = str(uuid.uuid4())
