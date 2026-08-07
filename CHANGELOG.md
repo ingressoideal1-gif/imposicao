@@ -4,7 +4,85 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.4.0 (v454)** — 2026-08-04
+## Versão atual: **v1.5.0 (v480)** — 2026-08-07
+
+---
+
+## [v1.5.0 (v480) — 2026-08-07] — Painel de Produção: ordenação, filtros de prazo e confirmação de impressão
+
+### Resumo
+Quatro mudanças no Painel de Produção e no fluxo de impressão. A mais importante em termos de operação: **imprimir não marca mais o modelo como IMPRESSO sozinho** — passa por confirmação do operador. As demais são de navegação e leitura da fila.
+
+### 1. Confirmação de impressão
+
+Antes, o status virava `IMPRESSO` automaticamente assim que o job era despachado — em alguns caminhos, *antes* mesmo de imprimir. Agora aparece um popup ao fim do envio e o status só muda no "Sim".
+
+| Caminho | Comportamento antigo |
+|---|---|
+| Botão Imprimir da linha (`pedQueueImprimir`) | marcava IMPRESSO **antes** de imprimir |
+| `runPedImposition('print')` — 3 ramos | marcava assim que o agente aceitava o job |
+| 🖨️ Imp. Sel. (`pedQueueGerarPDFMulti`) | marcava logo após gerar o PDF, antes do modal abrir |
+| Imprimir da fila da view Imposição (`impQueueImprimir`) | marcava antes de imprimir |
+
+Quando a impressão passa pelo modal de seleção de impressora, a confirmação fica pendente (`marcarConfirmacaoPendente`) e dispara após o envio bem-sucedido; `closePrintModal` descarta a pendência se o modal for fechado sem enviar.
+
+**Ações de PDF não alteram status nem pedem confirmação.** Removida a marcação automática de `IMPRESSO` de todos os caminhos de gerar/salvar/baixar PDF, em `pedido.js` e `script.js`. A única escrita automática restante é a de `confirmarImpressaoModelos`, sempre atrás do popup.
+
+### 2. Pedido abre com o primeiro modelo selecionado
+
+`abrirImposicaoDoPedido` selecionava `itemId: null` de propósito. Agora escolhe o primeiro modelo e delega para `enviarParaPedido`.
+
+O "primeiro" é calculado por `getPrimeiroModeloDaOS`, que repete o agrupamento por produto de `renderPedOSQueue` — pegar `itens[0]` daria outro modelo, porque o JavaScript reordena chaves numéricas de objeto.
+
+**Armadilha encontrada no caminho:** `renderPedOSQueue` não é só desenho — ela grava o formato padrão do produto em `item.formato_id`. Chamando `enviarParaPedido` sem essa render antes, `enviarParaImposicao` encontrava o formato vazio, descia toda a cadeia de matching e caía no fallback do primeiro formato do sistema; o `ped-formato` recebia o formato errado e a **cor do modelo se perdia**. A fila passou a ser desenhada antes de carregar o modelo.
+
+> Bug pré-existente relacionado, **não corrigido**: `enviarParaImposicao` procura o produto por `item.id_produto`, enquanto a fila usa `item._vibe_id_produto`. Campos diferentes — esse matching provavelmente nunca acerta. Só não aparece porque a render sempre roda antes e preenche o formato.
+
+### 3. Ordenação por coluna na lista "Pedidos Liberados"
+
+Os títulos viraram botões. O ativo fica destacado com seta do sentido.
+
+| Coluna | 1º clique | 2º clique |
+|---|---|---|
+| Nº Pedido, Itens, Quantidade, Progresso | maior → menor | inverte |
+| Frete | agrupa por tipo (A→Z) | inverte |
+| Status | ordem do fluxo: Aguardando → Parcial → Impresso → Revisão | inverte |
+
+Sem coluna escolhida, a lista mantém exatamente a ordem anterior. O botão **ATUALIZAR** do painel zera a ordenação; os demais chamadores de `loadOrdens()` ficaram intactos, para a escolha não sumir ao voltar de um pedido. `aplicarProdSort` usa `slice()` — reordenar o array de origem embaralharia o `state` para as outras telas.
+
+### 4. Filtros por Prazo de Entrega
+
+Três botões centralizados no topo do box, à esquerda de "Todos os Setores", sempre com um selecionado:
+
+- **Para Hoje** — prazo no dia corrente, qualquer hora
+- **Atrasados** — data **e hora** anteriores ao momento atual
+- **Geral** — sem filtro (padrão; ATUALIZAR volta para ele)
+
+Combinam com busca, setor e estágio sem interferir neles. Pedido sem prazo aparece só no Geral.
+
+**Alerta:** com "Para Hoje" selecionado e havendo atrasado na fila, o botão "Atrasados" fica vermelho. Só nessa condição. O alerta olha `ordensImpressao` — a fila inteira, antes de qualquer filtro — de propósito: é sinal global, não muda com setor, estágio ou busca. Para isso o eixo de prazo saiu do mesmo `filter` dos demais; com a lista já recortada em "Para Hoje" não haveria como enxergar os atrasados.
+
+### Nota técnica: estilos aplicados inline
+
+Os botões de cabeçalho e os de prazo têm o estilo aplicado por JS em `element.style`, não pela folha de estilos. As regras equivalentes foram escritas no `style.css` e **não venciam a cascata** dentro do `<th>` sticky — verificado que o arquivo chegava íntegro ao navegador (chaves e comentários balanceados, servido com o conteúdo certo) sem que a causa fosse identificada. As regras seguem no `style.css` como rede de segurança.
+
+### Ferramental
+
+| Arquivo | O que mudou |
+|---|---|
+| `.gitignore` | `print_configs.json` — configuração de impressão da estação, gravada em runtime pelo `db.py`, nunca deve ir para o repositório |
+| `publicar.ps1` | mensagem de commit virou parâmetro obrigatório, no lugar de um texto fixo sobre `amostra_cor_id` que se repetia em toda publicação. Cada etapa passou a checar `$LASTEXITCODE`: `$ErrorActionPreference` não interrompe comandos nativos, então um commit falho seguia para o push e para o deploy assim mesmo |
+
+### ⚠️ Pendência conhecida: o Prazo de Entrega é sintético
+
+Consultando o Supabase em 2026-08-07: a tabela `propostas` **não tem** coluna `prazo_entrega` nem `prazo`, e `prazo_operacional` está `null` em todos os registros amostrados. Por isso `loadOrdensFromVibecode` sempre cai em `getFallbackPrazo(created_at, numero)`, que devolve `created_at + (3 + numero % 5)` dias.
+
+Consequência: a coluna Prazo Entrega e os filtros "Para Hoje" / "Atrasados" operam sobre uma fórmula derivada da data de criação, não sobre um prazo real. É por isso que praticamente todo pedido aparece como "(Atrasado)". **Definir o campo real ficou pendente com o usuário**; o ponto de mudança é a linha que monta `prazo_entrega` em `loadOrdensFromVibecode` — `pedidoPassaFiltroPrazo` e `formatPrazoDestaque` acompanham automaticamente.
+
+### Commits
+
+- `6e07d43` — ordenação por coluna, confirmação de impressão e abertura com o 1º modelo
+- `7cfafa4` — filtros por prazo de entrega, `.gitignore` e `publicar.ps1`
 
 ---
 
