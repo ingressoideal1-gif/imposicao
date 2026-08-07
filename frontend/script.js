@@ -10837,26 +10837,37 @@ window.handleGoogleLogin = async function() {
 
 // ──── Inicialização de auth (DOMContentLoaded) ────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+    // Antes, qualquer acesso por localhost/127.0.0.1 pulava o login e recebia
+    // admin total — inclusive o painel da estação, servido pelo próprio agente.
+    // Como o cliente Supabase é inicializado ali do mesmo jeito, as gravações
+    // chegavam ao banco como anon: era isso que impedia fechar a escrita por RLS
+    // sem quebrar a estação.
+    // O bypass agora vale apenas para file://, onde o fluxo de autenticação não
+    // roda por falta de origem. O modo offline explícito continua coberto logo
+    // abaixo, quando não há cliente Supabase.
+    const isLocal = window.location.protocol === 'file:';
 
-    if (isLocal) {
-        // ── Modo local/EXE → bypass total ──
-        console.log('[auth] Modo local — bypass de autenticação');
+    const liberarUICompleta = () => {
         const profileBar = document.getElementById('user-profile-bar');
         if (profileBar) profileBar.style.display = 'none';
-
-        // Admin total em modo local
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
         document.querySelectorAll('.nav-btn').forEach(el => el.style.display = '');
         document.querySelectorAll('.nav-group-label').forEach(el => el.style.display = '');
+    };
 
+    if (isLocal) {
+        console.log('[auth] file:// — bypass de autenticação');
+        liberarUICompleta();
         loadAll();
         return;
     }
 
     // ── Modo online → verificar sessão Supabase Auth ──
     if (!supabaseClient || !supabaseClient.auth) {
-        console.warn('[auth] Supabase não disponível — sem autenticação');
+        // Modo offline explícito (?offline=true ou localStorage): sem banco, não
+        // há o que proteger — a UI segue liberada como antes.
+        console.warn('[auth] Supabase não disponível — modo offline, sem autenticação');
+        liberarUICompleta();
         loadAll();
         return;
     }
