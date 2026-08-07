@@ -208,11 +208,29 @@ async function setupEditorWorkspace() {
             }
         }
 
+        // O campo amostra_arte_base64 guarda duas coisas diferentes: a arte do
+        // modelo e, quando um snapshot e gerado, a URL da PREVIA COMPOSTA
+        // (cor + arte + numeracao) no bucket amostras_renderizadas. Essa previa
+        // interessa ao portal do cliente, nunca ao editor.
+        //
+        // Sem esta distincao: ao excluir a arte, o snapshot agendado 2s depois
+        // regrava o campo com a previa, e o editor a carregava como se fosse a
+        // arte do modelo — a arte "excluida" reaparecia.
+        const ehRenderComposto = (v) => typeof v === 'string' && v.includes('/amostras_renderizadas/');
+        const arteDoItem = (it, f) => {
+            const base64 = f === 'verso' ? it.verso_amostra_arte_base64 : it.amostra_arte_base64;
+            return {
+                url:  f === 'verso' ? it.verso_arte_url : it.arte_url,
+                json: f === 'verso' ? it.verso_arte_json : it.arte_json,
+                // so vale como arte se NAO for a previa renderizada
+                base64: ehRenderComposto(base64) ? null : base64
+            };
+        };
+
         // Tentar recarregar estrutura vetorial JSON salva (memória ou localStorage)
         // CRITICAL: Se a arte do modelo foi removida, NUNCA carregar resíduos do localStorage!
-        const hasArteOnItem = face === 'verso' ? 
-            !!(item.verso_arte_url || item.verso_amostra_arte_base64 || item.verso_arte_json) : 
-            !!(item.arte_url || item.amostra_arte_base64 || item.arte_json);
+        const _arte = arteDoItem(item, face);
+        const hasArteOnItem = !!(_arte.url || _arte.base64 || _arte.json);
 
         let savedJson = null;
         let rawArteSource = null;
@@ -226,9 +244,7 @@ async function setupEditorWorkspace() {
                 savedJson = localStorage.getItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`);
             }
 
-            rawArteSource = face === 'verso' ? 
-                (item.verso_arte_url || item.verso_amostra_arte_base64) : 
-                (item.arte_url || item.amostra_arte_base64);
+            rawArteSource = _arte.url || _arte.base64;
         } else {
             // Arte foi excluída — purgar qualquer resíduo legado do localStorage
             if (item.id) {

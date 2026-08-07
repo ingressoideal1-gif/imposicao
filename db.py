@@ -345,10 +345,45 @@ def _migrar_fontes_para_storage(data: dict) -> bool:
     return alterou
 
 
+def _banco_empacotado() -> dict | None:
+    """Le o formats_db.json que veio DENTRO do executavel (pasta _MEIPASS).
+
+    Nao e o mesmo arquivo do DB_FILE: aquele fica ao lado do .exe e persiste
+    entre versoes; este vem no pacote e traz o catalogo de fabrica.
+    """
+    if getattr(sys, "frozen", False):
+        base = getattr(sys, "_MEIPASS", "")
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    if not base:
+        return None
+    caminho = os.path.join(base, "formats_db.json")
+    if not os.path.isfile(caminho):
+        return None
+    if os.path.abspath(caminho) == os.path.abspath(DB_FILE):
+        return None   # em desenvolvimento sao o mesmo arquivo
+    try:
+        with open(caminho, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[db] Nao consegui ler o banco empacotado: {e}")
+        return None
+
+
 def init_db():
     if not os.path.exists(DB_FILE):
-        _save_db(DEFAULT_DB)
-        return
+        # Semear do arquivo empacotado, nao do DEFAULT_DB: o DEFAULT_DB nao tem
+        # catalogo_fontes, entao toda instalacao limpa ficava com ZERO fontes —
+        # sem @font-face no navegador e com o engine caindo em Helvetica. Foi o
+        # que aconteceu nas estacoes da grafica, onde as fontes nunca
+        # funcionaram; nas maquinas com instalacao antiga o arquivo ja existia e
+        # o defeito passava despercebido.
+        empacotado = _banco_empacotado()
+        _save_db(empacotado or DEFAULT_DB)
+        if empacotado:
+            print(f"[db] {DB_FILE} criado a partir do banco empacotado no agente "
+                  f"({len(empacotado.get('catalogo_fontes', []))} fontes)")
+
     with open(DB_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -356,6 +391,16 @@ def init_db():
     if "input_formats" in data or "formatos" not in data:
         data = _migrate_old_db(data)
         mudou = True
+
+    # Reparo para quem ja ficou com o catalogo vazio antes desta correcao.
+    if not data.get("catalogo_fontes"):
+        empacotado = _banco_empacotado()
+        if empacotado and empacotado.get("catalogo_fontes"):
+            data["catalogo_fontes"] = empacotado["catalogo_fontes"]
+            print(f"[db] Catalogo de fontes estava vazio; "
+                  f"{len(data['catalogo_fontes'])} fontes restauradas do pacote")
+            mudou = True
+
     if _migrar_fontes_para_storage(data):
         print(f"[db] Catalogo de fontes migrado para o Storage em {DB_FILE}")
         mudou = True
