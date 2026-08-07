@@ -118,7 +118,8 @@ def sync_heartbeat():
             "capabilities": capabilities,
             "local_ip": get_local_ip(),
             "version": AGENT_VERSION,
-            "fontes": diagnostico_fontes()
+            "fontes": diagnostico_fontes(),
+            "ultimo_update": ultimo_update()
         }
         
         # Formato UTC explícito com timezone, exigido pelo Supabase
@@ -303,6 +304,42 @@ def _sincronizar_fontes_em_thread():
     threading.Thread(target=sincronizar_fontes, daemon=True, name="SyncFontes").start()
 
 
+# Registro da ultima tentativa de atualizacao, EM DISCO.
+# Precisa sobreviver ao reinicio: se o msiexec falhar, o .bat reinicia o agente na
+# versao antiga e um registro em memoria se perderia — justamente no caso que
+# interessa diagnosticar. Fica ao lado do agent_config.json.
+_ARQUIVO_UPDATE = os.path.join(_CONFIG_DIR, "ultimo_update.json")
+
+
+def _registrar_update(etapa: str, versao_alvo=None, erro=None):
+    """Grava em que ponto a atualizacao parou, para o heartbeat reportar."""
+    from agent_version import AGENT_VERSION
+    registro = {
+        "quando": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "versao_no_momento": AGENT_VERSION,
+        "versao_alvo": versao_alvo,
+        "etapa": etapa,
+        "erro": (str(erro)[:200] if erro else None),
+    }
+    try:
+        with open(_ARQUIVO_UPDATE, "w", encoding="utf-8") as f:
+            json.dump(registro, f, ensure_ascii=False)
+    except Exception:
+        pass
+    return registro
+
+
+def ultimo_update() -> dict:
+    """Le o registro da ultima tentativa; entra no heartbeat."""
+    try:
+        if os.path.isfile(_ARQUIVO_UPDATE):
+            with open(_ARQUIVO_UPDATE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
 def consultar_manifesto() -> dict:
     """Le o manifesto e compara com a versao local, sem baixar nada.
 
@@ -361,6 +398,7 @@ def verificar_atualizacao(forcado: bool = False):
             manifesto = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
         print(f"[update] Manifesto indisponivel: {e}", flush=True)
+        _registrar_update("manifesto_indisponivel", erro=e)
         return
 
     versao_nova = manifesto.get("version")
@@ -370,13 +408,16 @@ def verificar_atualizacao(forcado: bool = False):
     if como_tupla(versao_nova) <= como_tupla(AGENT_VERSION):
         if forcado:
             print(f"[update] Ja esta na versao mais recente ({AGENT_VERSION}).", flush=True)
+        _registrar_update("sem_atualizacao", versao_alvo=versao_nova)
         return
 
     if not security_config.is_allowed_release_url(url_msi):
         print(f"[update] BLOQUEADO: instalador fora do bucket de releases: {url_msi!r}", flush=True)
+        _registrar_update("url_bloqueada", versao_alvo=versao_nova, erro=url_msi)
         return
     if len(sha_esperado) != 64:
         print("[update] Manifesto sem sha256 valido — atualizacao abortada.", flush=True)
+        _registrar_update("sha_ausente", versao_alvo=versao_nova)
         return
 
     print(f"[update] Versao {versao_nova} disponivel (atual {AGENT_VERSION}). Baixando...", flush=True)
@@ -387,6 +428,7 @@ def verificar_atualizacao(forcado: bool = False):
             f.write(resp.read())
     except Exception as e:
         print(f"[update] Falha no download: {e}", flush=True)
+        _registrar_update("download_falhou", versao_alvo=versao_nova, erro=e)
         return
 
     sha_obtido = hashlib.sha256(open(destino, "rb").read()).hexdigest()
@@ -397,6 +439,8 @@ def verificar_atualizacao(forcado: bool = False):
             os.remove(destino)
         except Exception:
             pass
+        _registrar_update("sha_divergente", versao_alvo=versao_nova,
+                          erro=f"esperado {sha_esperado[:12]} obtido {sha_obtido[:12]}")
         return
 
     # O MSI nao consegue substituir o exe enquanto ele roda, e o pacote nao tem
@@ -414,6 +458,9 @@ del "{destino}" > nul 2>&1
 del "%~f0"
 """)
 
+    # Marcado ANTES de disparar o .bat: se o msiexec falhar, o agente reinicia na
+    # versao antiga e este registro sobrevive, mostrando que chegou ate a instalacao.
+    _registrar_update("instalando", versao_alvo=versao_nova)
     print(f"[update] sha256 conferido. Instalando {versao_nova} e reiniciando...", flush=True)
     subprocess.Popen([bat_path], shell=True,
                      creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
