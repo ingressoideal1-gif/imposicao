@@ -134,6 +134,19 @@ def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
     return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4"}
 
+@app.get("/api/update/check")
+def consultar_atualizacao():
+    """Diz se ha versao nova, sem baixar nada.
+
+    Separado do POST /api/update para a interface poder informar antes de
+    disparar um download de 47 MB e um reinicio do agente.
+    """
+    if security_config.is_cloud_runtime():
+        raise HTTPException(status_code=404, detail="Nao disponivel neste ambiente.")
+    import agent_worker
+    return agent_worker.consultar_manifesto()
+
+
 @app.post("/api/update")
 async def trigger_update():
     """Dispara agora a checagem de atualizacao (modelo pull).

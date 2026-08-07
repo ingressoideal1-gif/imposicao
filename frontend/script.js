@@ -25380,3 +25380,45 @@ async function descobrirAgentIdLocal() {
     }
     return null;
 }
+
+// ──── Verificar / instalar atualização do agente (painel da estação) ──────
+// Duas operações separadas de propósito: consultar é barato e informa; instalar
+// baixa ~47 MB e reinicia o agente. O operador decide entre uma e outra.
+async function verificarAtualizacaoAgente(instalar = false) {
+    const base = 'http://127.0.0.1:9000';
+    const aviso = (msg, tipo) => (typeof toast === 'function' ? toast(msg, tipo) : alert(msg));
+
+    let info;
+    try {
+        const resp = await fetch(`${base}/api/update/check`, { mode: 'cors' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        info = await resp.json();
+    } catch (e) {
+        aviso('Agente local não respondeu. Ele está em execução?', 'error');
+        return;
+    }
+
+    if (info.erro) {
+        aviso(`Não foi possível verificar: ${info.erro}`, 'error');
+        return;
+    }
+    if (!info.ha_atualizacao) {
+        aviso(`Agente já está na versão mais recente (${info.versao_atual}).`, 'success');
+        return;
+    }
+    if (!instalar) {
+        const querInstalar = confirm(
+            `Versão ${info.versao_disponivel} disponível (atual ${info.versao_atual}).\n\n` +
+            `${info.notas || ''}\n\nInstalar agora? O agente será reiniciado.`);
+        if (!querInstalar) return;
+    }
+
+    try {
+        await fetch(`${base}/api/update`, { method: 'POST' });
+        aviso(`Baixando a versão ${info.versao_disponivel}. O agente vai reiniciar sozinho.`, 'success');
+    } catch (e) {
+        // O agente encerra durante a instalação, então falha de rede aqui é esperada
+        aviso('Atualização iniciada. O agente vai reiniciar.', 'success');
+    }
+}
+window.verificarAtualizacaoAgente = verificarAtualizacaoAgente;

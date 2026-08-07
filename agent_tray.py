@@ -209,12 +209,60 @@ def main():
 
     tray_image = create_tray_image()
 
+    from agent_version import AGENT_VERSION
+
+    def _notificar(icone, titulo, mensagem):
+        """Balao da bandeja; se o backend nao suportar, cai no console."""
+        try:
+            icone.notify(mensagem, titulo)
+        except Exception:
+            print(f"[{titulo}] {mensagem}", flush=True)
+
+    def verificar_atualizacao_menu(icone, item):
+        """Consulta o manifesto e informa. Nao baixa nada."""
+        def tarefa():
+            try:
+                r = agent_worker.consultar_manifesto()
+                if r.get("erro"):
+                    _notificar(icone, "NewProd Agent", f"Nao foi possivel verificar: {r['erro']}")
+                elif r.get("ha_atualizacao"):
+                    _notificar(icone, "Atualizacao disponivel",
+                               f"Versao {r['versao_disponivel']} disponivel "
+                               f"(atual {r['versao_atual']}).\n"
+                               "Use 'Atualizar agora' no menu para instalar.")
+                else:
+                    _notificar(icone, "NewProd Agent",
+                               f"Ja esta na versao mais recente ({r['versao_atual']}).")
+            except Exception as e:
+                _notificar(icone, "NewProd Agent", f"Erro ao verificar: {e}")
+        threading.Thread(target=tarefa, daemon=True, name="VerificaUpdate").start()
+
+    def atualizar_agora_menu(icone, item):
+        """Baixa, confere o sha256 e instala. O agente reinicia sozinho."""
+        def tarefa():
+            r = agent_worker.consultar_manifesto()
+            if r.get("erro"):
+                _notificar(icone, "NewProd Agent", f"Nao foi possivel verificar: {r['erro']}")
+                return
+            if not r.get("ha_atualizacao"):
+                _notificar(icone, "NewProd Agent",
+                           f"Ja esta na versao mais recente ({r['versao_atual']}).")
+                return
+            _notificar(icone, "Atualizando",
+                       f"Baixando a versao {r['versao_disponivel']}. "
+                       "O agente vai reiniciar sozinho.")
+            agent_worker.verificar_atualizacao(forcado=True)
+        threading.Thread(target=tarefa, daemon=True, name="AtualizaAgora").start()
+
     menu = pystray.Menu(
-        pystray.MenuItem("NewProd Agent", None, enabled=False),
+        pystray.MenuItem(f"NewProd Agent {AGENT_VERSION}", None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(f"Ativo - Cloud Relay", None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Abrir Web App", open_panel),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Verificar atualizacoes", verificar_atualizacao_menu),
+        pystray.MenuItem("Atualizar agora", atualizar_agora_menu),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Iniciar com o Windows", add_to_startup),
         pystray.MenuItem("Remover do Inicio", remove_from_startup),

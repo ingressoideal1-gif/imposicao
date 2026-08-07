@@ -239,6 +239,34 @@ def _sincronizar_fontes_em_thread():
     threading.Thread(target=sincronizar_fontes, daemon=True, name="SyncFontes").start()
 
 
+def consultar_manifesto() -> dict:
+    """Le o manifesto e compara com a versao local, sem baixar nada.
+
+    Separado de verificar_atualizacao() para que a interface possa perguntar
+    "tem versao nova?" de forma barata, sem disparar um download de 47 MB.
+    """
+    import security_config
+    from agent_version import AGENT_VERSION, como_tupla
+
+    resultado = {"versao_atual": AGENT_VERSION, "versao_disponivel": None,
+                 "ha_atualizacao": False, "erro": None}
+    try:
+        url = f"{security_config.MANIFEST_URL}?t={int(time.time())}"
+        req = urllib.request.Request(url, headers={"User-Agent": "NewProd Agent",
+                                                   "Cache-Control": "no-cache"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            manifesto = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        resultado["erro"] = f"Manifesto indisponivel: {e}"
+        return resultado
+
+    remota = manifesto.get("version")
+    resultado["versao_disponivel"] = remota
+    resultado["notas"] = manifesto.get("notes")
+    resultado["ha_atualizacao"] = como_tupla(remota) > como_tupla(AGENT_VERSION)
+    return resultado
+
+
 def verificar_atualizacao(forcado: bool = False):
     """Consulta o manifesto e instala a versao nova, se houver.
 
