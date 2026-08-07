@@ -25249,3 +25249,42 @@ window.admDeleteImage = async function(name, btnEl) {
         if (btnEl) { btnEl.disabled = false; btnEl.textContent = '🗑️'; }
     }
 };
+
+// ──── Versão do agente local no rodapé ────────────────────────────────────
+// Lê direto do agente em 127.0.0.1:9000, e só de lá. Não consulta
+// window.location.origin de propósito: na nuvem esse caminho é reescrito para o
+// Render, que responde {"status":"running"} com a versão do backend — o rodapé
+// passaria a exibir a versão da nuvem como se fosse a da estação.
+// A detecção que já existia só roda durante uma imposição; esta roda ao abrir.
+async function atualizarVersaoAgenteRodape() {
+    const el = document.getElementById('newprod-version-display');
+    if (!el) return;
+
+    for (const base of ['http://127.0.0.1:9000', 'http://localhost:9000']) {
+        try {
+            const ctrl = new AbortController();
+            const prazo = setTimeout(() => ctrl.abort(), 2000);
+            const resp = await fetch(`${base}/api/status`, { mode: 'cors', signal: ctrl.signal });
+            clearTimeout(prazo);
+            if (!resp.ok) continue;
+            const dados = await resp.json();
+            if (dados && dados.version) {
+                el.textContent = dados.version;
+                el.style.color = '#eab308';
+                el.title = `Agente local ativo em ${base}`;
+                return;
+            }
+        } catch (_) { /* agente ausente nesta base: tenta a próxima */ }
+    }
+
+    el.textContent = 'Agente offline';
+    el.style.color = '#64748b';
+    el.title = 'Nenhum agente local respondendo em 127.0.0.1:9000';
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', atualizarVersaoAgenteRodape);
+} else {
+    atualizarVersaoAgenteRodape();
+}
+setInterval(atualizarVersaoAgenteRodape, 60000);

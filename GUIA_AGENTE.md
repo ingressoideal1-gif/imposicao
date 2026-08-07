@@ -120,6 +120,17 @@ Formato do manifesto:
 **Ordem obrigatória:** subir o MSI → conferir o sha256 baixando pela URL pública → só então
 publicar o `latest.json`. Assim o manifesto nunca aponta para um arquivo ausente ou corrompido.
 
+> ⚠️ **Nunca reaproveite o nome do arquivo.** O Storage fica atrás do CDN da Cloudflare: se
+> você reconstruir e subir de novo com o mesmo nome, a borda continua servindo o binário
+> anterior por um tempo (`cf-cache-status: HIT`), enquanto a origem já tem o novo. O manifesto
+> apontaria um sha256 que não bate com o que os agentes baixam, e **todos recusariam a
+> instalação**. Precisou refazer o build? **Suba a versão.**
+>
+> Pelo mesmo motivo o agente busca o `latest.json` com `?t=<timestamp>`: sem isso ele ficaria
+> cego a um release novo até a borda expirar. O MSI não precisa, desde que o nome mude a cada
+> versão. A conferência do MSI é feita pela URL **simples**, de propósito — é a que o agente
+> usa, e é ela que precisa bater.
+
 > **Limite de 50 MB.** O teto de upload do projeto é 50 MB. O instalador tem ~47 MB — folga de
 > apenas 3 MB. Se uma dependência nova estourar isso, as saídas são enxugar o pacote
 > (`ppds` ~5 MB, `cryptography` ~10 MB), subir o teto do plano, ou baixar em partes.

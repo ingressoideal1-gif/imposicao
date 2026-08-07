@@ -91,10 +91,17 @@ def sync_heartbeat():
         for p in printers:
             capabilities[p] = print_service.get_printer_capabilities(p)
             
+        from agent_version import AGENT_VERSION
+
+        # A versao vai dentro do printers_json (JSONB) e nao numa coluna propria
+        # para nao exigir migracao na tabela print_agents — o local_ip ja segue
+        # essa pratica. Sem isto nao ha como saber remotamente qual estacao
+        # rodava qual versao.
         printers_json = {
             "printers": printers,
             "capabilities": capabilities,
-            "local_ip": get_local_ip()
+            "local_ip": get_local_ip(),
+            "version": AGENT_VERSION
         }
         
         # Formato UTC explícito com timezone, exigido pelo Supabase
@@ -191,9 +198,15 @@ def verificar_atualizacao(forcado: bool = False):
             print("[update] Modo desenvolvimento: atualizacao ignorada.", flush=True)
         return
 
+    # O Storage fica atras do CDN da Cloudflare: mesmo com cache-control no-cache
+    # na origem, a borda serve HIT com o manifesto anterior por um tempo apos a
+    # publicacao. Sem o parametro variavel o agente ficaria cego ao release novo.
+    # O MSI nao precisa disto — o nome do arquivo ja muda a cada versao.
+    url_manifesto = f"{security_config.MANIFEST_URL}?t={int(time.time())}"
     try:
-        req = urllib.request.Request(security_config.MANIFEST_URL,
-                                     headers={"User-Agent": "NewProd Agent"})
+        req = urllib.request.Request(url_manifesto,
+                                     headers={"User-Agent": "NewProd Agent",
+                                              "Cache-Control": "no-cache"})
         with urllib.request.urlopen(req, timeout=20) as resp:
             manifesto = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
