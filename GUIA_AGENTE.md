@@ -38,6 +38,55 @@ Em modo desenvolvimento o auto-update é ignorado (só roda no executável compi
 
 ---
 
+## ⚠️ O que persiste na estação (leia antes de "corrigir" um dado)
+
+Estes arquivos ficam **ao lado do executável**, em `%LOCALAPPDATA%\NewProd Agent\`,
+e o MSI **nunca os substitui** — ele instala apenas o `NewProd.exe`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `formats_db.json` | catálogo de formatos, numerações, cores **e fontes** |
+| `print_configs.json` | configuração de impressão por produto, desta estação |
+| `agent_config.json` | identidade do agente (`AGENT_ID`) |
+| `fonts_cache/` | fontes baixadas do Storage |
+
+**Corrigir o arquivo no repositório não corrige o agente instalado.** Uma migração
+de dado só chega à estação se for **código que roda lá** — ver
+`_migrar_fontes_para_storage()` em `db.py`, chamada no `init_db()`.
+
+Isso já causou uma regressão em produção: as fontes foram migradas para o Storage
+no repositório, mas as estações continuaram com o catálogo antigo apontando para
+`/fonts_local`, pasta que deixara de ser empacotada. O sintoma foi fonte errada na
+tela e no PDF, sem erro visível.
+
+---
+
+## 🩺 Diagnóstico remoto
+
+O heartbeat leva o estado da estação em `print_agents.printers_json`:
+
+```json
+"version": "1.2.17",
+"fontes": { "cache_arquivos": 270, "cache_mb": 142.8,
+            "catalogo_total": 316, "catalogo_relativas": 0,
+            "catalogo_gstatic": 0, "catalogo_storage": 316,
+            "storage_alcancavel": true }
+```
+
+Como ler:
+
+| Sinal | Significa |
+|---|---|
+| `catalogo_relativas` ou `catalogo_gstatic` > 0 | a migração não rodou naquela máquina |
+| `cache_arquivos` muito abaixo do catálogo | sync incompleto, ou em andamento |
+| `storage_alcancavel: false` | **a rede daquela estação não alcança o Supabase** |
+| `version` desatualizada | ver a seção de auto-update |
+
+Para investigar na própria máquina, existe o `Diagnostico_Fontes.ps1` na raiz do
+projeto — só consulta, não altera nada.
+
+---
+
 ## 🔢 Versão: quatro pontos que precisam bater
 
 Este é o erro mais fácil de cometer. O número aparece em quatro lugares e **todos** precisam
@@ -158,6 +207,29 @@ O `.bat` é necessário porque o MSI não substitui o executável em uso e o pac
 O endpoint `POST /api/update` **não aceita parâmetro** — apenas dispara a checagem
 imediatamente. O botão "Atualizar Agora" do frontend continua funcionando: o corpo que ele
 envia é ignorado.
+
+### Formas de forçar a atualização
+
+| Caminho | Quando usar |
+|---|---|
+| Menu da bandeja → "Verificar atualizacoes" / "Atualizar agora" | a partir da 1.2.13 |
+| Botão ao lado da versão no rodapé do painel | a partir da 1.2.13 |
+| Banner "Atualizar Agora" ao abrir o painel | a partir da 1.2.15 |
+| Reiniciar o agente | qualquer versão — ele checa 60 s após subir |
+| Abrir `https://ideal-imposition.vercel.app` na estação | quando o painel local é antigo demais |
+
+O intervalo automático é de **30 minutos** (`INTERVALO_UPDATE_S`). Era 6 h, e num dia
+de correção cinco versões saíram dentro de uma única janela — as estações ficaram
+cegas a todas.
+
+> O banner comparava com `fetch('/api/version')`, URL **relativa**: servida pelo próprio
+> agente, ela resolvia para ele mesmo e o aviso nunca aparecia na estação. Hoje a
+> comparação é com o manifesto. Se mexer nisso, não volte a usar caminho relativo.
+
+### Não tem auto-update quem está abaixo da 1.2.5
+
+Estações em versões anteriores **precisam do MSI instalado à mão** uma vez. Não há
+caminho remoto: o agente antigo escuta em `0.0.0.0` mas não conhece o manifesto.
 
 > **Histórico:** até a 1.2.3 esse endpoint recebia a URL de download no corpo da requisição.
 > Qualquer site aberto no navegador do operador podia mandar o agente baixar e executar um

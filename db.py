@@ -330,6 +330,18 @@ def _migrar_fontes_para_storage(data: dict) -> bool:
         elif "gstatic.com" in url:
             fonte["arquivo_url"] = FONTES_BUCKET_URL + _nome_objeto_fonte_google(url)
             alterou = True
+
+    # Registro de teste que sobrou no catalogo e aparece na lista do operador
+    # como se fosse fonte. O alvo e exato de proposito — nao remover por heuristica.
+    antes = len(data.get("catalogo_fontes", []))
+    data["catalogo_fontes"] = [
+        f for f in data.get("catalogo_fontes", [])
+        if (f.get("arquivo_url") or "").rstrip("/") != "http://test.com"
+    ]
+    if len(data["catalogo_fontes"]) != antes:
+        print("[db] catalogo: removida a entrada de teste 'http://test.com'")
+        alterou = True
+
     return alterou
 
 
@@ -1018,16 +1030,30 @@ def delete_mapa_teatro(mapa_id: str):
         db["mapas_teatro"] = [m for m in db["mapas_teatro"] if m["id"] != mapa_id]
         _save_db(db)
 
+# A tabela catalogo_fontes nunca foi criada no Supabase (o schema_catalogo_fontes.sql
+# nao chegou a ser aplicado). Sem esta trava, toda consulta ao catalogo gastava uma
+# requisicao para receber 404 e cair no arquivo local — varias vezes por imposicao.
+# Ao primeiro 404 paramos de tentar ate o proximo reinicio; se a tabela for criada,
+# basta reiniciar o agente.
+_CATALOGO_FONTES_REMOTO = True
+
+
 def get_catalogo_fontes() -> list:
     """Retorna lista de fontes do catálogo centralizado, mesclando Supabase e local."""
+    global _CATALOGO_FONTES_REMOTO
     supa_fonts = []
-    if IS_SUPABASE_ACTIVE:
+    if IS_SUPABASE_ACTIVE and _CATALOGO_FONTES_REMOTO:
         try:
-            res = _supabase_request("GET", "catalogo_fontes?order=nome.asc") or []
+            res = _supabase_request("GET", "catalogo_fontes?order=nome.asc")
             if res:
                 supa_fonts = res
+            else:
+                _CATALOGO_FONTES_REMOTO = False
+                print("[db] catalogo_fontes indisponivel no Supabase; "
+                      "usando apenas o catalogo local (nao tentarei de novo)")
         except Exception as e:
-            print(f"[db] Erro ao carregar catalogo_fontes no Supabase: {e}")
+            _CATALOGO_FONTES_REMOTO = False
+            print(f"[db] catalogo_fontes indisponivel ({e}); usando apenas o local")
             
     db = _get_db()
     local_fonts = db.get("catalogo_fontes", [])

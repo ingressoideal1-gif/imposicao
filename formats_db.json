@@ -159,14 +159,6 @@
   ],
   "catalogo_fontes": [
     {
-      "nome": "Test",
-      "font_family": "Test",
-      "categoria": "Geral",
-      "arquivo_url": "http://test.com",
-      "ativo": true,
-      "id": "00547833-07ff-464f-990e-2a6851784110"
-    },
-    {
       "nome": "Roboto",
       "font_family": "Roboto",
       "categoria": "Sans Serif",
