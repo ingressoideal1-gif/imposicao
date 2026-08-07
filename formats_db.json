@@ -170,7 +170,7 @@
       "nome": "Roboto",
       "font_family": "Roboto",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbVmUiA8.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/c29b10834c390f65.ttf",
       "ativo": true,
       "id": "ebe677de-a49e-4e7b-bd9d-33a4fefa428b"
     },
@@ -178,7 +178,7 @@
       "nome": "Open Sans",
       "font_family": "Open Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVc.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/bd757f1ad06c84be.ttf",
       "ativo": true,
       "id": "f444086c-2492-45f8-bf5e-3073c5668ada"
     },
@@ -186,7 +186,7 @@
       "nome": "Lato",
       "font_family": "Lato",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wWw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/4ba165ae1d701de6.ttf",
       "ativo": true,
       "id": "142b7d24-39e4-4ee5-9038-30688b3d2713"
     },
@@ -194,7 +194,7 @@
       "nome": "Montserrat",
       "font_family": "Montserrat",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aX8.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/f3504655a78a9207.ttf",
       "ativo": true,
       "id": "2000a736-0de9-4b2b-9b3d-0dfa0e75e94b"
     },
@@ -202,7 +202,7 @@
       "nome": "Poppins",
       "font_family": "Poppins",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrJJfedw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/c74e082a80e7adb7.ttf",
       "ativo": true,
       "id": "6a55b722-6148-46a2-9f84-71e02e99d7df"
     },
@@ -210,7 +210,7 @@
       "nome": "Inter",
       "font_family": "Inter",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hjQ.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/7c761112b2acce3b.ttf",
       "ativo": true,
       "id": "60c88035-0a50-4c43-917a-f7da3eb67743"
     },
@@ -218,7 +218,7 @@
       "nome": "Oswald",
       "font_family": "Oswald",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUZiYA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/3c60ac93bf8ad49c.ttf",
       "ativo": true,
       "id": "1a467d29-6235-4858-b0c8-fc11b5480855"
     },
@@ -226,7 +226,7 @@
       "nome": "Raleway",
       "font_family": "Raleway",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/2908991aa99feda8.ttf",
       "ativo": true,
       "id": "1a0288d4-7d63-4358-8768-ad811b8f46e6"
     },
@@ -234,7 +234,7 @@
       "nome": "Noto Sans",
       "font_family": "Noto Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/notosans/v42/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/5b050e0ec8a809e6.ttf",
       "ativo": true,
       "id": "c2c74813-fa60-4475-a5c9-d48726ef83b3"
     },
@@ -242,7 +242,7 @@
       "nome": "Ubuntu",
       "font_family": "Ubuntu",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/ubuntu/v21/4iCs6KVjbNBYlgoKfw7z.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/5133a6dd79c9b9d3.ttf",
       "ativo": true,
       "id": "ed78b361-cbdf-4725-94ac-c66f511f04c1"
     },
@@ -250,7 +250,7 @@
       "nome": "Playfair Display",
       "font_family": "Playfair Display",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdFvXDXbtY.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/839397f5a36280b0.ttf",
       "ativo": true,
       "id": "4159a37e-271f-45b2-b072-8a7f4ccac4a7"
     },
@@ -258,7 +258,7 @@
       "nome": "Merriweather",
       "font_family": "Merriweather",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDr3icaFF3w.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/e033b43e95c28859.ttf",
       "ativo": true,
       "id": "fab2af96-b28a-4a6f-8a04-9387c360b616"
     },
@@ -266,7 +266,7 @@
       "nome": "Roboto Mono",
       "font_family": "Roboto Mono",
       "categoria": "Monospace",
-      "arquivo_url": "https://fonts.gstatic.com/s/robotomono/v31/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW9.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/a0333021807e3775.ttf",
       "ativo": true,
       "id": "5b11d2d1-d9f8-4894-a406-d70bec820c44"
     },
@@ -274,7 +274,7 @@
       "nome": "PT Sans",
       "font_family": "PT Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/ptsans/v18/jizaRExUiTo99u79D0KEwA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/8e6560d4e575a68d.ttf",
       "ativo": true,
       "id": "3bbedd1c-c52a-4f65-811d-e60d91338589"
     },
@@ -282,7 +282,7 @@
       "nome": "Rubik",
       "font_family": "Rubik",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/rubik/v31/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-B4iFV0Uw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/243f7cd8e05196b7.ttf",
       "ativo": true,
       "id": "9198a622-7eb7-45be-af64-0becf0031335"
     },
@@ -290,7 +290,7 @@
       "nome": "Lora",
       "font_family": "Lora",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/lora/v37/0QI6MX1D_JOuGQbT0gvTJPa787weuxJBkqg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/d5da044799bae725.ttf",
       "ativo": true,
       "id": "b1880f1d-f47f-41e1-b3d7-ccdc1856c8ca"
     },
@@ -298,7 +298,7 @@
       "nome": "Work Sans",
       "font_family": "Work Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/worksans/v24/QGY_z_wNahGAdqQ43RhVcIgYT2Xz5u32K0nXBi8Jow.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/b31068ff59a222ec.ttf",
       "ativo": true,
       "id": "6a5c655a-1d2a-4b71-b2e8-37683e7ee4d7"
     },
@@ -306,7 +306,7 @@
       "nome": "Fira Sans",
       "font_family": "Fira Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/firasans/v18/va9E4kDNxMZdWfMOD5Vvl4jO.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/0252b47fc31f1d7e.ttf",
       "ativo": true,
       "id": "e6955da5-dac3-4851-bb3d-5eb09aff466a"
     },
@@ -314,7 +314,7 @@
       "nome": "Mulish",
       "font_family": "Mulish",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/mulish/v18/1Ptyg83HX_SGhgqO0yLcmjzUAuWexZNR8aevHg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/3e6f85d167854de6.ttf",
       "ativo": true,
       "id": "8044d07e-b87b-4ed8-95d1-167844f507e8"
     },
@@ -322,7 +322,7 @@
       "nome": "Quicksand",
       "font_family": "Quicksand",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/quicksand/v37/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58a-xw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/89d97d79cd9a2dd8.ttf",
       "ativo": true,
       "id": "77bc8469-6bf4-45e0-9ede-2dd73dce9e48"
     },
@@ -330,7 +330,7 @@
       "nome": "Inconsolata",
       "font_family": "Inconsolata",
       "categoria": "Monospace",
-      "arquivo_url": "https://fonts.gstatic.com/s/inconsolata/v37/QldgNThLqRwH-OJ1UHjlKENVzkWGVkL3GZQmAwLYxYWI2qfdm7Lpp4U8WR32kg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/8d84a0eabdba34fa.ttf",
       "ativo": true,
       "id": "841546c3-204d-4816-a401-886ab1f65172"
     },
@@ -338,7 +338,7 @@
       "nome": "Barlow",
       "font_family": "Barlow",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/barlow/v13/7cHpv4kjgoGqM7E_DMs8.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/f492d0b64d5ee8e4.ttf",
       "ativo": true,
       "id": "553ef931-36b7-478e-a47d-99c619255be2"
     },
@@ -346,7 +346,7 @@
       "nome": "Nunito",
       "font_family": "Nunito",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshdTQ3ig.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/fa742548398d2e62.ttf",
       "ativo": true,
       "id": "66527398-e449-41a2-a734-01a091675eab"
     },
@@ -354,7 +354,7 @@
       "nome": "Titillium Web",
       "font_family": "Titillium Web",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/titilliumweb/v19/NaPecZTIAOhVxoMyOr9n_E7fdMPmCA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/6f7f0593e9962a2d.ttf",
       "ativo": true,
       "id": "8888a316-d7c6-4015-b150-cab6e149af2f"
     },
@@ -362,7 +362,7 @@
       "nome": "Heebo",
       "font_family": "Heebo",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/heebo/v28/NGSpv5_NC0k9P_v6ZUCbLRAHxK1EiSysdUmj.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/13b02c1e3442f693.ttf",
       "ativo": true,
       "id": "f1119a74-97d2-4e54-94c1-44a14da99d7d"
     },
@@ -370,7 +370,7 @@
       "nome": "Josefin Sans",
       "font_family": "Josefin Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/josefinsans/v34/Qw3PZQNVED7rKGKxtqIqX5E-AVSJrOCfjY46_DjQbMZhKg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/4bb2e04eedd32c3e.ttf",
       "ativo": true,
       "id": "2480275a-59d6-42b7-b3bb-24a64f38aed2"
     },
@@ -378,7 +378,7 @@
       "nome": "Cabin",
       "font_family": "Cabin",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/cabin/v35/u-4X0qWljRw-PfU81xCKCpdpbgZJl6XFpfEd7eA9BIxxkV2EH7alwg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/c9b5f251df80f3f8.ttf",
       "ativo": true,
       "id": "8fb4d25c-dfce-4c82-a3a3-e6983607ad7e"
     },
@@ -386,7 +386,7 @@
       "nome": "Libre Baskerville",
       "font_family": "Libre Baskerville",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/librebaskerville/v24/kmKUZrc3Hgbbcjq75U4uslyuy4kn0olVQ-LglH6T17uj8Q4iDgNK.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/22d8247508185453.ttf",
       "ativo": true,
       "id": "640eed70-6f34-4b22-acb4-515629298725"
     },
@@ -394,7 +394,7 @@
       "nome": "Anton",
       "font_family": "Anton",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/anton/v27/1Ptgg87LROyAm3Kz-Co.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/51e877d7792df173.ttf",
       "ativo": true,
       "id": "4c8dbc1f-207c-4a69-a1a3-30cfda454de3"
     },
@@ -402,7 +402,7 @@
       "nome": "Bitter",
       "font_family": "Bitter",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/bitter/v42/raxhHiqOu8IVPmnRc6SY1KXhnF_Y8fbfOLjOWA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/42ebf37fbf2bdd5c.ttf",
       "ativo": true,
       "id": "d77d1a5a-45dc-4684-9d59-cf316fd79843"
     },
@@ -410,7 +410,7 @@
       "nome": "Pacifico",
       "font_family": "Pacifico",
       "categoria": "Handwriting",
-      "arquivo_url": "https://fonts.gstatic.com/s/pacifico/v23/FwZY7-Qmy14u9lezJ-6H6Mw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/a840c6524b802730.ttf",
       "ativo": true,
       "id": "98d6c339-0d03-4097-aa17-a073f9bc9eca"
     },
@@ -418,7 +418,7 @@
       "nome": "Dancing Script",
       "font_family": "Dancing Script",
       "categoria": "Handwriting",
-      "arquivo_url": "https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3Sup5.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/11ac06400ddf83fb.ttf",
       "ativo": true,
       "id": "1bbf9da1-a371-42b6-8f4e-0bbe5b6fba44"
     },
@@ -426,7 +426,7 @@
       "nome": "Dosis",
       "font_family": "Dosis",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/dosis/v34/HhyJU5sn9vOmLxNkIwRSjTVNWLEJN7Ml2xMB.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/669075590af7c8db.ttf",
       "ativo": true,
       "id": "0712e197-bde3-4a1e-9532-068a92064e6b"
     },
@@ -434,7 +434,7 @@
       "nome": "Varela Round",
       "font_family": "Varela Round",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/varelaround/v21/w8gdH283Tvk__Lua32TysjIfp8uK.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/3284c8e2d18c3537.ttf",
       "ativo": true,
       "id": "bbdef9ed-28ed-4890-bf95-c1f5e7a41762"
     },
@@ -442,7 +442,7 @@
       "nome": "Arimo",
       "font_family": "Arimo",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/arimo/v36/P5sfzZCDf9_T_3cV7NCUECyoxNk37cxcABrE.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/edc0d514107bf515.ttf",
       "ativo": true,
       "id": "4f65f219-2490-411e-992c-e5d326e3166e"
     },
@@ -450,7 +450,7 @@
       "nome": "Asap",
       "font_family": "Asap",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/asap/v34/KFOOCniXp96a4Tc2DaTeuDAoKsE617JFc49knOIYdjTYkqUcKWmT.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/514323edd548e1f7.ttf",
       "ativo": true,
       "id": "a890addb-4045-4651-bbf7-fe13e0ec53cd"
     },
@@ -458,7 +458,7 @@
       "nome": "Oxygen",
       "font_family": "Oxygen",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/oxygen/v16/2sDfZG1Wl4LcnbuKjk0j.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/8140c2f451aad79e.ttf",
       "ativo": true,
       "id": "b2665562-7d78-4fd6-91d4-38926ffc63c4"
     },
@@ -466,7 +466,7 @@
       "nome": "Mukta",
       "font_family": "Mukta",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/mukta/v17/iJWKBXyXfDDVXbnBrXk.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/d46aa223ba3bb805.ttf",
       "ativo": true,
       "id": "4e2c1dbd-0ce1-454a-81a1-99e9b3daed12"
     },
@@ -474,7 +474,7 @@
       "nome": "Fjalla One",
       "font_family": "Fjalla One",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/fjallaone/v16/Yq6R-LCAWCX3-6Ky7FAFrOF6lw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/1b1a021d9ac10178.ttf",
       "ativo": true,
       "id": "f2c04993-d457-4803-bdd0-4bcf8fdc8ade"
     },
@@ -482,7 +482,7 @@
       "nome": "Bebas Neue",
       "font_family": "Bebas Neue",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/bebasneue/v16/JTUSjIg69CK48gW7PXoo9Wlhzg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/fd6c9f49d65a23c5.ttf",
       "ativo": true,
       "id": "b8ac9b92-acde-4772-ae11-03b9c7a543db"
     },
@@ -490,7 +490,7 @@
       "nome": "Exo 2",
       "font_family": "Exo 2",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/exo2/v26/7cH1v4okm5zmbvwkAx_sfcEuiD8jvvKsOdC6.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/5c399c5ea12a7c9d.ttf",
       "ativo": true,
       "id": "afb1585e-eb30-406d-82ef-fe5109cfd401"
     },
@@ -498,7 +498,7 @@
       "nome": "Righteous",
       "font_family": "Righteous",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/righteous/v18/1cXxaUPXBpj2rGoU7C9WiHGA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/5cfd98f418fccf12.ttf",
       "ativo": true,
       "id": "03eebe99-2f60-4d50-a7a5-1af578ea47e8"
     },
@@ -506,7 +506,7 @@
       "nome": "Comfortaa",
       "font_family": "Comfortaa",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/comfortaa/v47/1Pt_g8LJRfWJmhDAuUsSQamb1W0lwk4S4WjMDrMfJQ.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/438bbb72952c1815.ttf",
       "ativo": true,
       "id": "7612f530-1494-45d0-9023-4a6b92f7a812"
     },
@@ -514,7 +514,7 @@
       "nome": "Lobster",
       "font_family": "Lobster",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/lobster/v32/neILzCirqoswsqX9zoKmNg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/89434ffa32f6c994.ttf",
       "ativo": true,
       "id": "c54c551f-eca7-4af1-af33-ed04bbfb199f"
     },
@@ -522,7 +522,7 @@
       "nome": "Abril Fatface",
       "font_family": "Abril Fatface",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/abrilfatface/v25/zOL64pLDlL1D99S8g8PtiKchq-dmiA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/93b3e6b42db2b231.ttf",
       "ativo": true,
       "id": "ecaccbdd-c4cb-4f0c-a035-577aee43f6e0"
     },
@@ -530,7 +530,7 @@
       "nome": "Bungee",
       "font_family": "Bungee",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/bungee/v17/N0bU2SZBIuF2PU_0DXRw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/a3059fae81db4f55.ttf",
       "ativo": true,
       "id": "956ea3b9-03f8-4925-abbe-450da04286cc"
     },
@@ -538,7 +538,7 @@
       "nome": "Alfa Slab One",
       "font_family": "Alfa Slab One",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/alfaslabone/v21/6NUQ8FmMKwSEKjnm5-4v-4Jh2dJhfg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/58468a7419243c1e.ttf",
       "ativo": true,
       "id": "d35ef855-c0ce-46d2-9cce-52a601cdb459"
     },
@@ -546,7 +546,7 @@
       "nome": "Roboto",
       "font_family": "Roboto",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbVmUiA8.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/c29b10834c390f65.ttf",
       "ativo": true,
       "id": "b019c406-31b0-458b-aa33-8139d8cf4d8c"
     },
@@ -554,7 +554,7 @@
       "nome": "Open Sans",
       "font_family": "Open Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVc.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/bd757f1ad06c84be.ttf",
       "ativo": true,
       "id": "bfcc84b5-7096-4b2f-a8d2-3e776fd07ae1"
     },
@@ -562,7 +562,7 @@
       "nome": "Lato",
       "font_family": "Lato",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wWw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/4ba165ae1d701de6.ttf",
       "ativo": true,
       "id": "8c73c738-36ec-41f2-a2dd-ab6dbc0a82e1"
     },
@@ -570,7 +570,7 @@
       "nome": "Montserrat",
       "font_family": "Montserrat",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aX8.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/f3504655a78a9207.ttf",
       "ativo": true,
       "id": "fa451dc5-7300-4ccb-9cc0-9208a8825eed"
     },
@@ -578,7 +578,7 @@
       "nome": "Poppins",
       "font_family": "Poppins",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrJJfedw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/c74e082a80e7adb7.ttf",
       "ativo": true,
       "id": "99b07fb7-b750-4656-9aba-80689f4f7357"
     },
@@ -586,7 +586,7 @@
       "nome": "Inter",
       "font_family": "Inter",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hjQ.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/7c761112b2acce3b.ttf",
       "ativo": true,
       "id": "e539fd76-96f4-46d4-b61f-77e323c989e5"
     },
@@ -594,7 +594,7 @@
       "nome": "Oswald",
       "font_family": "Oswald",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUZiYA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/3c60ac93bf8ad49c.ttf",
       "ativo": true,
       "id": "3bd278d5-3bc2-4731-9263-64c48a8136ec"
     },
@@ -602,7 +602,7 @@
       "nome": "Raleway",
       "font_family": "Raleway",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/2908991aa99feda8.ttf",
       "ativo": true,
       "id": "73caad51-5b28-4977-b089-bd2bcaadeca6"
     },
@@ -610,7 +610,7 @@
       "nome": "Noto Sans",
       "font_family": "Noto Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/notosans/v42/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/5b050e0ec8a809e6.ttf",
       "ativo": true,
       "id": "457b333a-fded-4c17-a556-150c4d728d33"
     },
@@ -618,7 +618,7 @@
       "nome": "Ubuntu",
       "font_family": "Ubuntu",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/ubuntu/v21/4iCs6KVjbNBYlgoKfw7z.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/5133a6dd79c9b9d3.ttf",
       "ativo": true,
       "id": "2c112bbb-e3f9-4523-9572-9d9efdcacf67"
     },
@@ -626,7 +626,7 @@
       "nome": "Playfair Display",
       "font_family": "Playfair Display",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdFvXDXbtY.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/839397f5a36280b0.ttf",
       "ativo": true,
       "id": "2659eada-99c8-4c97-9534-b3897f917995"
     },
@@ -634,7 +634,7 @@
       "nome": "Merriweather",
       "font_family": "Merriweather",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDr3icaFF3w.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/e033b43e95c28859.ttf",
       "ativo": true,
       "id": "43f8ac25-b238-4b95-874b-1d97d5cb5589"
     },
@@ -642,7 +642,7 @@
       "nome": "Roboto Mono",
       "font_family": "Roboto Mono",
       "categoria": "Monospace",
-      "arquivo_url": "https://fonts.gstatic.com/s/robotomono/v31/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vq_ROW9.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/a0333021807e3775.ttf",
       "ativo": true,
       "id": "94c3b45e-e598-4f9d-88be-e4cc79798edc"
     },
@@ -650,7 +650,7 @@
       "nome": "PT Sans",
       "font_family": "PT Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/ptsans/v18/jizaRExUiTo99u79D0KEwA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/8e6560d4e575a68d.ttf",
       "ativo": true,
       "id": "d09c9ed1-9086-4f85-8ae5-05fbb18f08df"
     },
@@ -658,7 +658,7 @@
       "nome": "Rubik",
       "font_family": "Rubik",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/rubik/v31/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-B4iFV0Uw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/243f7cd8e05196b7.ttf",
       "ativo": true,
       "id": "37421bf5-952c-4486-b3b5-dfda27e7eb27"
     },
@@ -666,7 +666,7 @@
       "nome": "Lora",
       "font_family": "Lora",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/lora/v37/0QI6MX1D_JOuGQbT0gvTJPa787weuxJBkqg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/d5da044799bae725.ttf",
       "ativo": true,
       "id": "8c32b679-2eca-483b-b8f0-39e294bdfe6f"
     },
@@ -674,7 +674,7 @@
       "nome": "Work Sans",
       "font_family": "Work Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/worksans/v24/QGY_z_wNahGAdqQ43RhVcIgYT2Xz5u32K0nXBi8Jow.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/b31068ff59a222ec.ttf",
       "ativo": true,
       "id": "7a9d137a-166f-4d82-8366-a38f0528bed0"
     },
@@ -682,7 +682,7 @@
       "nome": "Fira Sans",
       "font_family": "Fira Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/firasans/v18/va9E4kDNxMZdWfMOD5Vvl4jO.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/0252b47fc31f1d7e.ttf",
       "ativo": true,
       "id": "01a167da-919d-4456-80a8-4aa6dff6f16c"
     },
@@ -690,7 +690,7 @@
       "nome": "Mulish",
       "font_family": "Mulish",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/mulish/v18/1Ptyg83HX_SGhgqO0yLcmjzUAuWexZNR8aevHg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/3e6f85d167854de6.ttf",
       "ativo": true,
       "id": "5dfe4c58-044b-4bc9-b966-4b8e37a09f74"
     },
@@ -698,7 +698,7 @@
       "nome": "Quicksand",
       "font_family": "Quicksand",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/quicksand/v37/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58a-xw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/89d97d79cd9a2dd8.ttf",
       "ativo": true,
       "id": "292a9872-2eeb-44c9-be28-68bb2acd1952"
     },
@@ -706,7 +706,7 @@
       "nome": "Inconsolata",
       "font_family": "Inconsolata",
       "categoria": "Monospace",
-      "arquivo_url": "https://fonts.gstatic.com/s/inconsolata/v37/QldgNThLqRwH-OJ1UHjlKENVzkWGVkL3GZQmAwLYxYWI2qfdm7Lpp4U8WR32kg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/8d84a0eabdba34fa.ttf",
       "ativo": true,
       "id": "ab0fe0ee-5286-4008-a0f5-56d515fe79b9"
     },
@@ -714,7 +714,7 @@
       "nome": "Barlow",
       "font_family": "Barlow",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/barlow/v13/7cHpv4kjgoGqM7E_DMs8.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/f492d0b64d5ee8e4.ttf",
       "ativo": true,
       "id": "d5395411-1485-47c0-8d7b-bc3fc1d82246"
     },
@@ -722,7 +722,7 @@
       "nome": "Nunito",
       "font_family": "Nunito",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshdTQ3ig.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/fa742548398d2e62.ttf",
       "ativo": true,
       "id": "eaefb1a3-5a6a-48f6-82ff-9f853c125760"
     },
@@ -730,7 +730,7 @@
       "nome": "Titillium Web",
       "font_family": "Titillium Web",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/titilliumweb/v19/NaPecZTIAOhVxoMyOr9n_E7fdMPmCA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/6f7f0593e9962a2d.ttf",
       "ativo": true,
       "id": "2efb8d51-33cd-4bbf-87c9-18d33421fe1d"
     },
@@ -738,7 +738,7 @@
       "nome": "Heebo",
       "font_family": "Heebo",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/heebo/v28/NGSpv5_NC0k9P_v6ZUCbLRAHxK1EiSysdUmj.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/13b02c1e3442f693.ttf",
       "ativo": true,
       "id": "060ca463-1761-415a-ae7c-2fc458e9ca69"
     },
@@ -746,7 +746,7 @@
       "nome": "Josefin Sans",
       "font_family": "Josefin Sans",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/josefinsans/v34/Qw3PZQNVED7rKGKxtqIqX5E-AVSJrOCfjY46_DjQbMZhKg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/4bb2e04eedd32c3e.ttf",
       "ativo": true,
       "id": "9e3433f1-3108-4e81-b408-60121385dede"
     },
@@ -754,7 +754,7 @@
       "nome": "Cabin",
       "font_family": "Cabin",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/cabin/v35/u-4X0qWljRw-PfU81xCKCpdpbgZJl6XFpfEd7eA9BIxxkV2EH7alwg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/c9b5f251df80f3f8.ttf",
       "ativo": true,
       "id": "7479fa1e-3374-48ae-926e-1572b1b905fc"
     },
@@ -762,7 +762,7 @@
       "nome": "Libre Baskerville",
       "font_family": "Libre Baskerville",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/librebaskerville/v24/kmKUZrc3Hgbbcjq75U4uslyuy4kn0olVQ-LglH6T17uj8Q4iDgNK.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/22d8247508185453.ttf",
       "ativo": true,
       "id": "cc909833-2141-4096-874c-8971e8c2fdff"
     },
@@ -770,7 +770,7 @@
       "nome": "Anton",
       "font_family": "Anton",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/anton/v27/1Ptgg87LROyAm3Kz-Co.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/51e877d7792df173.ttf",
       "ativo": true,
       "id": "a0043ad8-5f76-4414-b670-d2ed71631c35"
     },
@@ -778,7 +778,7 @@
       "nome": "Bitter",
       "font_family": "Bitter",
       "categoria": "Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/bitter/v42/raxhHiqOu8IVPmnRc6SY1KXhnF_Y8fbfOLjOWA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/42ebf37fbf2bdd5c.ttf",
       "ativo": true,
       "id": "89952e93-d68a-4082-bacb-627ea1dfce4e"
     },
@@ -786,7 +786,7 @@
       "nome": "Pacifico",
       "font_family": "Pacifico",
       "categoria": "Handwriting",
-      "arquivo_url": "https://fonts.gstatic.com/s/pacifico/v23/FwZY7-Qmy14u9lezJ-6H6Mw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/a840c6524b802730.ttf",
       "ativo": true,
       "id": "fcc0b986-d9ab-4f45-940e-ba6a3105c690"
     },
@@ -794,7 +794,7 @@
       "nome": "Dancing Script",
       "font_family": "Dancing Script",
       "categoria": "Handwriting",
-      "arquivo_url": "https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSo3Sup5.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/11ac06400ddf83fb.ttf",
       "ativo": true,
       "id": "fd48cbd4-37c0-4fa2-94ef-0917f5e46c45"
     },
@@ -802,7 +802,7 @@
       "nome": "Dosis",
       "font_family": "Dosis",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/dosis/v34/HhyJU5sn9vOmLxNkIwRSjTVNWLEJN7Ml2xMB.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/669075590af7c8db.ttf",
       "ativo": true,
       "id": "f7feb2f8-4b22-47ca-a38b-a84b4393c3d6"
     },
@@ -810,7 +810,7 @@
       "nome": "Varela Round",
       "font_family": "Varela Round",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/varelaround/v21/w8gdH283Tvk__Lua32TysjIfp8uK.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/3284c8e2d18c3537.ttf",
       "ativo": true,
       "id": "01f9e9b7-d2b3-496d-b15b-caec9b271e3d"
     },
@@ -818,7 +818,7 @@
       "nome": "Arimo",
       "font_family": "Arimo",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/arimo/v36/P5sfzZCDf9_T_3cV7NCUECyoxNk37cxcABrE.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/edc0d514107bf515.ttf",
       "ativo": true,
       "id": "c0566532-a76e-4992-bc38-d9e5fa730c7e"
     },
@@ -826,7 +826,7 @@
       "nome": "Asap",
       "font_family": "Asap",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/asap/v34/KFOOCniXp96a4Tc2DaTeuDAoKsE617JFc49knOIYdjTYkqUcKWmT.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/514323edd548e1f7.ttf",
       "ativo": true,
       "id": "a1174eac-3e68-4cfa-b127-d5c634205431"
     },
@@ -834,7 +834,7 @@
       "nome": "Oxygen",
       "font_family": "Oxygen",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/oxygen/v16/2sDfZG1Wl4LcnbuKjk0j.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/8140c2f451aad79e.ttf",
       "ativo": true,
       "id": "71fc2c33-fd22-4df9-9891-b47e6cbedf8d"
     },
@@ -842,7 +842,7 @@
       "nome": "Mukta",
       "font_family": "Mukta",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/mukta/v17/iJWKBXyXfDDVXbnBrXk.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/d46aa223ba3bb805.ttf",
       "ativo": true,
       "id": "9decfa3a-13da-413e-ac3c-2d33e83a2102"
     },
@@ -850,7 +850,7 @@
       "nome": "Fjalla One",
       "font_family": "Fjalla One",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/fjallaone/v16/Yq6R-LCAWCX3-6Ky7FAFrOF6lw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/1b1a021d9ac10178.ttf",
       "ativo": true,
       "id": "ac77e3fc-5f47-40cf-a903-06b69b15f8fb"
     },
@@ -858,7 +858,7 @@
       "nome": "Bebas Neue",
       "font_family": "Bebas Neue",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/bebasneue/v16/JTUSjIg69CK48gW7PXoo9Wlhzg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/fd6c9f49d65a23c5.ttf",
       "ativo": true,
       "id": "5dce07eb-a82d-4c3f-9184-9403526d4c07"
     },
@@ -866,7 +866,7 @@
       "nome": "Exo 2",
       "font_family": "Exo 2",
       "categoria": "Sans Serif",
-      "arquivo_url": "https://fonts.gstatic.com/s/exo2/v26/7cH1v4okm5zmbvwkAx_sfcEuiD8jvvKsOdC6.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/5c399c5ea12a7c9d.ttf",
       "ativo": true,
       "id": "e33cb137-7d9f-405e-8ec3-1743001ef179"
     },
@@ -874,7 +874,7 @@
       "nome": "Righteous",
       "font_family": "Righteous",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/righteous/v18/1cXxaUPXBpj2rGoU7C9WiHGA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/5cfd98f418fccf12.ttf",
       "ativo": true,
       "id": "f5cc0320-e78f-4dc9-b244-ebdbc2914493"
     },
@@ -882,7 +882,7 @@
       "nome": "Comfortaa",
       "font_family": "Comfortaa",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/comfortaa/v47/1Pt_g8LJRfWJmhDAuUsSQamb1W0lwk4S4WjMDrMfJQ.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/438bbb72952c1815.ttf",
       "ativo": true,
       "id": "c829b4e6-3bfa-4f3e-a125-9dc4ebc255f8"
     },
@@ -890,7 +890,7 @@
       "nome": "Lobster",
       "font_family": "Lobster",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/lobster/v32/neILzCirqoswsqX9zoKmNg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/89434ffa32f6c994.ttf",
       "ativo": true,
       "id": "2cebfd66-5828-452a-b29a-9686576831c7"
     },
@@ -898,7 +898,7 @@
       "nome": "Abril Fatface",
       "font_family": "Abril Fatface",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/abrilfatface/v25/zOL64pLDlL1D99S8g8PtiKchq-dmiA.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/93b3e6b42db2b231.ttf",
       "ativo": true,
       "id": "9042915a-00c4-4375-a5c8-a07a0c00e080"
     },
@@ -906,7 +906,7 @@
       "nome": "Bungee",
       "font_family": "Bungee",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/bungee/v17/N0bU2SZBIuF2PU_0DXRw.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/a3059fae81db4f55.ttf",
       "ativo": true,
       "id": "ae579185-9d98-4563-b05b-b98cbbae081e"
     },
@@ -914,7 +914,7 @@
       "nome": "Alfa Slab One",
       "font_family": "Alfa Slab One",
       "categoria": "Display",
-      "arquivo_url": "https://fonts.gstatic.com/s/alfaslabone/v21/6NUQ8FmMKwSEKjnm5-4v-4Jh2dJhfg.ttf",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/google/58468a7419243c1e.ttf",
       "ativo": true,
       "id": "8514230f-2b50-4ebc-ae66-42ac0bc35f62"
     },

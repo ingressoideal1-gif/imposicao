@@ -297,14 +297,28 @@ def _nome_objeto_fonte(nome_arquivo: str) -> str:
     return "".join(c if (c.isalnum() or c in "._-") else "_" for c in base)
 
 
+def _nome_objeto_fonte_google(url: str) -> str:
+    """Nome do objeto para uma fonte que vinha do fonts.gstatic.com.
+
+    Derivado APENAS da URL de origem, que e o que a estacao tem guardado — assim
+    o calculo aqui bate com o que foi usado no envio, sem tabela de conversao.
+    """
+    import hashlib
+    return "google/" + hashlib.sha1(url.encode("utf-8")).hexdigest()[:16] + ".ttf"
+
+
 def _migrar_fontes_para_storage(data: dict) -> bool:
-    """Converte arquivo_url relativo (/fonts_local/...) para a URL do Storage.
+    """Aponta todo o catalogo para o Storage: nenhuma fonte de origem externa.
 
     Necessario porque este arquivo e PERSISTENTE ao lado do executavel: o MSI
     instala apenas o NewProd.exe e nunca o substitui. Estacoes atualizadas
-    continuavam com o catalogo antigo apontando para /fonts_local, pasta que
-    deixou de ser empacotada — as fontes falhavam tanto na imposicao quanto na
-    visualizacao em tela, sem erro visivel para o operador.
+    continuavam com o catalogo antigo, e as fontes falhavam tanto na imposicao
+    quanto na tela, sem erro visivel para o operador.
+
+    Dois casos:
+      /fonts_local/...      -> pasta que deixou de ser empacotada na 1.2.5
+      fonts.gstatic.com/... -> a rede da grafica alcanca o Supabase mas nao o
+                               Google, entao as 94 fontes web tambem migraram
     """
     alterou = False
     for fonte in data.get("catalogo_fontes", []):
@@ -312,6 +326,9 @@ def _migrar_fontes_para_storage(data: dict) -> bool:
         if url.startswith("/fonts_local/"):
             nome = url.split("/fonts_local/")[-1]
             fonte["arquivo_url"] = FONTES_BUCKET_URL + _nome_objeto_fonte(nome)
+            alterou = True
+        elif "gstatic.com" in url:
+            fonte["arquivo_url"] = FONTES_BUCKET_URL + _nome_objeto_fonte_google(url)
             alterou = True
     return alterou
 
