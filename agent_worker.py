@@ -117,7 +117,8 @@ def sync_heartbeat():
             "printers": printers,
             "capabilities": capabilities,
             "local_ip": get_local_ip(),
-            "version": AGENT_VERSION
+            "version": AGENT_VERSION,
+            "fontes": diagnostico_fontes()
         }
         
         # Formato UTC explícito com timezone, exigido pelo Supabase
@@ -204,6 +205,61 @@ INTERVALO_UPDATE_S = 30 * 60
 INTERVALO_FONTES_S = 6 * 3600
 
 
+# Resultado do ultimo teste de alcance ao Storage. Fica em memoria porque a
+# sondagem custa uma requisicao de rede e o heartbeat roda a cada 30s.
+_STORAGE_ALCANCAVEL = None
+
+
+def _testar_alcance_storage():
+    """A estacao consegue baixar fonte do Supabase? Preenchido pelo sync."""
+    global _STORAGE_ALCANCAVEL
+    import security_config
+    alvo = (security_config.SUPABASE_PROJETO +
+            "/storage/v1/object/public/fontes/comic.ttf")
+    try:
+        req = urllib.request.Request(alvo, method="HEAD",
+                                     headers={"User-Agent": "NewProd Agent"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            _STORAGE_ALCANCAVEL = (r.status == 200)
+    except Exception as e:
+        _STORAGE_ALCANCAVEL = False
+        print(f"[fontes] Storage inalcancavel desta estacao: {e}", flush=True)
+    return _STORAGE_ALCANCAVEL
+
+
+def diagnostico_fontes():
+    """Estado das fontes nesta maquina, enviado junto do heartbeat.
+
+    Existe porque nem sempre ha acesso fisico as estacoes da grafica: sem isto,
+    diagnosticar um problema de fonte depende de alguem ir ate la rodar comandos.
+    Os campos locais sao baratos (listagem de pasta); o alcance ao Storage vem da
+    ultima sondagem feita no sync, para nao gastar rede a cada 30s.
+    """
+    try:
+        import font_cache
+        pasta = font_cache._pasta_cache()
+        arquivos = os.listdir(pasta) if os.path.isdir(pasta) else []
+        bytes_totais = 0
+        for a in arquivos:
+            try:
+                bytes_totais += os.path.getsize(os.path.join(pasta, a))
+            except OSError:
+                pass
+
+        urls = [(f.get("arquivo_url") or "") for f in db.get_catalogo_fontes()]
+        return {
+            "cache_arquivos": len(arquivos),
+            "cache_mb": round(bytes_totais / 1048576, 1),
+            "catalogo_total": len(urls),
+            "catalogo_relativas": sum(1 for u in urls if u.startswith("/fonts_local")),
+            "catalogo_gstatic": sum(1 for u in urls if "gstatic" in u),
+            "catalogo_storage": sum(1 for u in urls if "supabase.co" in u),
+            "storage_alcancavel": _STORAGE_ALCANCAVEL,
+        }
+    except Exception as e:
+        return {"erro": str(e)[:140]}
+
+
 def sincronizar_fontes():
     """Baixa para o cache local toda fonte do catalogo que ainda nao esteja la.
 
@@ -217,6 +273,8 @@ def sincronizar_fontes():
     """
     try:
         import font_cache
+        _testar_alcance_storage()   # alimenta o diagnostico do heartbeat
+
         fontes = db.get_catalogo_fontes()
         urls = [f.get("arquivo_url") or "" for f in fontes]
         urls = sorted({u for u in urls if u.startswith("http")})
