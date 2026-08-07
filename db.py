@@ -286,15 +286,53 @@ def _migrate_old_db(data: dict) -> dict:
         })
     return new_db
 
+FONTES_BUCKET_URL = "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/"
+
+
+def _nome_objeto_fonte(nome_arquivo: str) -> str:
+    """Mesma normalizacao usada ao enviar as fontes para o Storage."""
+    import unicodedata
+    base = unicodedata.normalize("NFKD", nome_arquivo)
+    base = base.encode("ascii", "ignore").decode("ascii")
+    return "".join(c if (c.isalnum() or c in "._-") else "_" for c in base)
+
+
+def _migrar_fontes_para_storage(data: dict) -> bool:
+    """Converte arquivo_url relativo (/fonts_local/...) para a URL do Storage.
+
+    Necessario porque este arquivo e PERSISTENTE ao lado do executavel: o MSI
+    instala apenas o NewProd.exe e nunca o substitui. Estacoes atualizadas
+    continuavam com o catalogo antigo apontando para /fonts_local, pasta que
+    deixou de ser empacotada — as fontes falhavam tanto na imposicao quanto na
+    visualizacao em tela, sem erro visivel para o operador.
+    """
+    alterou = False
+    for fonte in data.get("catalogo_fontes", []):
+        url = fonte.get("arquivo_url") or ""
+        if url.startswith("/fonts_local/"):
+            nome = url.split("/fonts_local/")[-1]
+            fonte["arquivo_url"] = FONTES_BUCKET_URL + _nome_objeto_fonte(nome)
+            alterou = True
+    return alterou
+
+
 def init_db():
     if not os.path.exists(DB_FILE):
         _save_db(DEFAULT_DB)
         return
     with open(DB_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
+
+    mudou = False
     if "input_formats" in data or "formatos" not in data:
-        migrated = _migrate_old_db(data)
-        _save_db(migrated)
+        data = _migrate_old_db(data)
+        mudou = True
+    if _migrar_fontes_para_storage(data):
+        print(f"[db] Catalogo de fontes migrado para o Storage em {DB_FILE}")
+        mudou = True
+
+    if mudou:
+        _save_db(data)
 
 def _get_db() -> dict:
     init_db()

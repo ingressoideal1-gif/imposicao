@@ -486,8 +486,16 @@ def _embed_system_fonts(numeracao_obj):
                 import os
                 # Caminho relativo (legado): fonte empacotada junto do agente.
                 local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", url.lstrip("/"))
-                with open(local_path, "rb") as f:
-                    font_bytes = base64.b64encode(f.read()).decode("ascii")
+                if os.path.isfile(local_path):
+                    with open(local_path, "rb") as f:
+                        font_bytes = base64.b64encode(f.read()).decode("ascii")
+                else:
+                    # A pasta fonts_local nao e mais empacotada. Se o catalogo
+                    # persistente ainda tiver caminho relativo, buscar no Storage
+                    # em vez de falhar calado e cair para Helvetica.
+                    url_storage = db.FONTES_BUCKET_URL + db._nome_objeto_fonte(os.path.basename(url))
+                    print(f"[impose] Fonte relativa sem arquivo local; usando Storage: {url_storage}")
+                    font_bytes = base64.b64encode(font_cache_local.obter_bytes(url_storage)).decode("ascii")
             else:
                 # Baixa uma vez por maquina e reusa do disco — sem isto, queda de
                 # internet impediria a imposicao com as fontes do catalogo.

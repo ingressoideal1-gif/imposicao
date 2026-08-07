@@ -10842,10 +10842,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Como o cliente Supabase é inicializado ali do mesmo jeito, as gravações
     // chegavam ao banco como anon: era isso que impedia fechar a escrita por RLS
     // sem quebrar a estação.
-    // O bypass agora vale apenas para file://, onde o fluxo de autenticação não
-    // roda por falta de origem. O modo offline explícito continua coberto logo
-    // abaixo, quando não há cliente Supabase.
-    const isLocal = window.location.protocol === 'file:';
+    // ADIADO: o bypass volta a valer para localhost/127.0.0.1 até que as contas
+    // dos operadores existam. Exigir login na estação é pré-requisito da fase 1
+    // do RLS (senão as gravações da estação, feitas como anon, falhariam em
+    // silêncio) — mas foi separado da correção de fontes 1.2.10 para não somar
+    // duas mudanças de comportamento durante uma regressão em produção.
+    // Para reativar: deixar apenas `window.location.protocol === 'file:'`.
+    const isLocal = window.location.hostname === 'localhost'
+        || window.location.hostname === '127.0.0.1'
+        || window.location.protocol === 'file:';
 
     const liberarUICompleta = () => {
         const profileBar = document.getElementById('user-profile-bar');
