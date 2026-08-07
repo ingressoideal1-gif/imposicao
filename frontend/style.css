@@ -1865,7 +1865,13 @@ body.not-logged-in .app-shell {
 .prod-table th { padding: 0.75rem; color: #6b7280; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; background-color: #1e293b; position: sticky; top: 0; border-bottom: 1px solid rgba(255,255,255,0.15); z-index: 10; white-space: nowrap; }
 .prod-table td { padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.15); white-space: nowrap; }
 .prod-table tr:hover td { background-color: rgba(255,255,255,0.05); }
-.prod-side-metrics { width: 18rem; display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0; }
+.prod-side-metrics { width: 18rem; display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0;
+    /* A classe custom-scroll no HTML so estiliza a barra; sem overflow a coluna
+       nunca rolava e o conteudo que passava da altura era cortado pelo
+       overflow:hidden do .prod-panel-container. Em 1366x768 a versao do agente
+       ficava 46px abaixo do pai, invisivel. min-height:0 e necessario para um
+       filho flex poder encolher e rolar. */
+    overflow-y: auto; min-height: 0; }
 .prod-metrics-title { padding: 0.25rem; font-size: 0.75rem; text-transform: uppercase; font-weight: 900; letter-spacing: 0.1em; color: #9ca3af; margin:0; }
 .prod-metrics-subtitle { font-size: 0.625rem; text-transform: lowercase; color: #6b7280; font-weight: 400; margin:0; }
 .prod-metric-card { background-color: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 0.75rem; padding: 1rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
@@ -2060,7 +2066,13 @@ input[type=number] {
 .prod-table th { padding: 0.75rem; color: #6b7280; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; background-color: #1e293b; position: sticky; top: 0; border-bottom: 1px solid rgba(255,255,255,0.15); z-index: 10; white-space: nowrap; }
 .prod-table td { padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.15); white-space: nowrap; }
 .prod-table tr:hover td { background-color: rgba(255,255,255,0.05); }
-.prod-side-metrics { width: 18rem; display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0; }
+.prod-side-metrics { width: 18rem; display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0;
+    /* A classe custom-scroll no HTML so estiliza a barra; sem overflow a coluna
+       nunca rolava e o conteudo que passava da altura era cortado pelo
+       overflow:hidden do .prod-panel-container. Em 1366x768 a versao do agente
+       ficava 46px abaixo do pai, invisivel. min-height:0 e necessario para um
+       filho flex poder encolher e rolar. */
+    overflow-y: auto; min-height: 0; }
 .prod-metrics-title { padding: 0.25rem; font-size: 0.75rem; text-transform: uppercase; font-weight: 900; letter-spacing: 0.1em; color: #9ca3af; margin:0; }
 .prod-metrics-subtitle { font-size: 0.625rem; text-transform: lowercase; color: #6b7280; font-weight: 400; margin:0; }
 .prod-metric-card { background-color: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 0.75rem; padding: 1rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
