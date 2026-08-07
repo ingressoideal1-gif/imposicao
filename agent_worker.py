@@ -195,6 +195,48 @@ def process_queue():
         print(f"[agent_worker] Erro fatal no process_queue: {e}", flush=True)
 
 INTERVALO_UPDATE_S = 6 * 3600
+INTERVALO_FONTES_S = 6 * 3600
+
+
+def sincronizar_fontes():
+    """Baixa para o cache local toda fonte do catalogo que ainda nao esteja la.
+
+    Deixa a estacao autonoma: depois do primeiro sync o agente serve as fontes
+    de disco (/api/fonte), entao tanto a imposicao quanto a tela funcionam sem
+    depender da rede. Tambem e o que faz uma fonte nova aparecer sozinha, sem
+    reinstalar o agente.
+
+    Roda numa thread propria: sao ~140 MB na primeira vez e nao pode segurar a
+    fila de impressao.
+    """
+    try:
+        import font_cache
+        fontes = db.get_catalogo_fontes()
+        urls = [f.get("arquivo_url") or "" for f in fontes]
+        urls = sorted({u for u in urls if u.startswith("http")})
+
+        pasta = font_cache._pasta_cache()
+        novas = falhas = 0
+        for url in urls:
+            destino = os.path.join(pasta, font_cache._nome_em_cache(url))
+            if os.path.isfile(destino) and os.path.getsize(destino) > 0:
+                continue
+            try:
+                font_cache.obter_bytes(url)
+                novas += 1
+            except Exception:
+                falhas += 1
+
+        if novas or falhas:
+            print(f"[fontes] Sync: {novas} nova(s) em cache, {falhas} falha(s), "
+                  f"{len(urls)} no catalogo", flush=True)
+    except Exception as e:
+        print(f"[fontes] Erro na sincronizacao: {e}", flush=True)
+
+
+def _sincronizar_fontes_em_thread():
+    import threading
+    threading.Thread(target=sincronizar_fontes, daemon=True, name="SyncFontes").start()
 
 
 def verificar_atualizacao(forcado: bool = False):
@@ -288,7 +330,8 @@ del "%~f0"
 def run_loop():
     print(f"Iniciando Agent Worker (Cloud Relay) - ID: {AGENT_ID}", flush=True)
     heartbeat_timer = 0
-    update_timer = 60  # primeira checagem 1 min apos subir
+    update_timer = 60   # primeira checagem 1 min apos subir
+    fontes_timer = 20   # sync de fontes logo no inicio
     while True:
         try:
             if heartbeat_timer <= 0:
@@ -297,15 +340,20 @@ def run_loop():
             if update_timer <= 0:
                 verificar_atualizacao()
                 update_timer = INTERVALO_UPDATE_S
+            if fontes_timer <= 0:
+                _sincronizar_fontes_em_thread()
+                fontes_timer = INTERVALO_FONTES_S
             process_queue()
             time.sleep(5)
             heartbeat_timer -= 5
             update_timer -= 5
+            fontes_timer -= 5
         except Exception as e:
             print(f"[agent_worker] Erro no loop principal: {e}", flush=True)
             time.sleep(5)
             heartbeat_timer -= 5 # Garantir decremento
             update_timer -= 5
+            fontes_timer -= 5
 
 
 if __name__ == "__main__":

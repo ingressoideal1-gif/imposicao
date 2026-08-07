@@ -247,13 +247,35 @@ async function loadCatalogoFontes() {
                 document.head.appendChild(styleEl);
             }
             
+            // Cadeia de origens, na ordem em que o navegador tenta:
+            //   1. local()  — fonte já instalada no Windows: instantânea e offline.
+            //                 É por isso que a tela funcionava em máquinas com as
+            //                 fontes instaladas e falhava nas da gráfica.
+            //   2. agente   — só quando a página é servida pelo próprio agente
+            //                 (porta 9000): ele entrega do cache em disco, então
+            //                 a tela não depende de alcançar o Supabase a cada
+            //                 carregamento. Na nuvem seria mixed content e o
+            //                 navegador bloquearia, por isso o condicional.
+            //   3. Supabase — origem de verdade, usada na primeira vez.
+            const servidoPeloAgente = window.location.port === '9000';
+            const escapaAspas = (s) => String(s).replace(/'/g, "\\'");
+
             let cssText = '';
             for (const f of state_fonts.catalogo) {
                 if (f.arquivo_url && f.font_family) {
+                    const origens = [`local('${escapaAspas(f.font_family)}')`];
+                    if (f.nome && f.nome !== f.font_family) {
+                        origens.push(`local('${escapaAspas(f.nome)}')`);
+                    }
+                    if (servidoPeloAgente && f.arquivo_url.startsWith('http')) {
+                        origens.push(`url('/api/fonte?url=${encodeURIComponent(f.arquivo_url)}')`);
+                    }
+                    origens.push(`url('${f.arquivo_url}')`);
+
                     cssText += `
                     @font-face {
-                        font-family: '${f.font_family}';
-                        src: url('${f.arquivo_url}');
+                        font-family: '${escapaAspas(f.font_family)}';
+                        src: ${origens.join(', ')};
                         font-display: swap;
                     }\n`;
                 }

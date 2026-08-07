@@ -400,6 +400,33 @@ def delete_mapa_teatro(mapa_id: str, user: dict = Depends(get_current_user)):
 
 # ─── CATALOGO DE FONTES WEB ───────────────────────────────────────────────────
 
+@app.get("/api/fonte")
+def servir_fonte_do_cache(url: str):
+    """Serve uma fonte a partir do cache local do agente.
+
+    Sem isto, a estacao depende de alcancar o Supabase A CADA carregamento de
+    pagina para desenhar texto na tela — o motor de imposicao ja funcionava
+    offline pelo cache, mas o navegador nao. Aqui o agente entrega os bytes que
+    ja tem em disco, e so vai a rede na primeira vez.
+
+    A mesma allowlist do /api/proxy vale: o parametro so pode apontar para o
+    Storage. Nao e um proxy generico.
+    """
+    from fastapi.responses import Response
+
+    if not security_config.is_allowed_proxy_url(url):
+        log_diag(f"[fonte] BLOQUEADO: fora da allowlist: {url!r}")
+        raise HTTPException(status_code=403, detail="URL de fonte nao autorizada.")
+
+    try:
+        dados = font_cache_local.obter_bytes(url)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Falha ao obter a fonte: {e}")
+
+    return Response(content=dados, media_type="font/ttf",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/api/fontes")
 def list_fontes():
     return db.get_catalogo_fontes()
