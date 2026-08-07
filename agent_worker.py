@@ -194,7 +194,13 @@ def process_queue():
     except Exception as e:
         print(f"[agent_worker] Erro fatal no process_queue: {e}", flush=True)
 
-INTERVALO_UPDATE_S = 6 * 3600
+# 30 min, nao 6h: num dia de correcao chegamos a publicar 5 versoes dentro de uma
+# unica janela de 6h, e as estacoes ficaram cegas a todas elas. O custo e baixo —
+# o manifesto tem ~300 bytes, entao sao 2 requisicoes por hora por estacao.
+INTERVALO_UPDATE_S = 30 * 60
+
+# O sync de fontes continua em 6h: sao ~140 MB na primeira vez e depois so o que
+# faltar. Fonte nova no catalogo demora ate 6h para aparecer, o que e aceitavel.
 INTERVALO_FONTES_S = 6 * 3600
 
 
