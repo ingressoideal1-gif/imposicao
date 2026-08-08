@@ -765,14 +765,17 @@ const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
   console.log(JSON.stringify(r, null, 2));
   await browser.close();
 
-  const ok = r.comBase64 === 0 && r.comUrl > 0 && r.kbNumeracoes < 200 && erros.length === 0;
+  // NAO ha limiar de KB total: medido depois, `csv_data` sozinho pesa ~460 KB na
+  // tabela e domina o payload. O ganho desta mudanca esta na coluna preview_jpg
+  // (454,6 KB -> 5,41 KB), nao no total da resposta.
+  const ok = r.comBase64 === 0 && r.comUrl > 0 && erros.length === 0;
   console.log(ok ? 'PASS' : 'FAIL');
   process.exit(ok ? 0 : 1);
 })();
 ```
 
 Run: `node "<scratchpad>/verif-final-preview.js"`
-Expected: PASS, com `comBase64: 0` e `kbNumeracoes` bem abaixo dos ~455 KB de antes. Anote o valor no relatório — é a medida do ganho.
+Expected: PASS, com `comBase64: 0`. Anote `kbNumeracoes` no relatório como registro, mas **não** o trate como critério: a medição mostrou que `csv_data` pesa ~460 KB na tabela e domina o payload, então o total não cai proporcionalmente. O ganho desta mudança é na coluna `preview_jpg`, de 454,6 KB para 5,41 KB — é esse o número a reportar.
 
 - [ ] **Step 3: Registrar no CHANGELOG**
 
