@@ -17,6 +17,7 @@
 - **Puppeteer precisa de caminho absoluto** quando o script driver está fora do repo: `require(path.join(REPO, 'node_modules', 'puppeteer'))`.
 - **Estilo do arquivo:** `frontend/script.js` usa linhas em branco entre statements e comentários em português. Siga o que estiver ao redor do ponto que você editar.
 - **Ausência de erro no console não é prova de que rodou.** Toda verificação precisa confirmar um efeito positivo — um valor preenchido, um rótulo que mudou.
+- **`window.state` NÃO é o state do editor.** `frontend/script.js:47` declara `const state = { ... }` — um binding léxico global, alcançável dentro de `page.evaluate` pelo nome nu `state`, mas **ausente** de `window`. O `window.state` que existe na página é outro objeto, criado por `frontend/mapas.js:6`. Nos scripts de verificação, use sempre `state` nu no corpo do `page.evaluate`, e ancore o `waitForFunction` numa função que `script.js` de fato exporta (por exemplo `typeof window.clearBgImage === 'function'`) — nunca em `window.state`, que existe desde o `mapas.js` e por isso resolve antes de `script.js` terminar de carregar.
 - **Erros de console pré-existentes e não relacionados:** `Erro ao checar print_agents no Supabase` e `favicon.ico` 404. Não são regressão.
 
 ## File Structure
@@ -376,7 +377,7 @@ const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
   const browser = await puppeteer.launch({ headless: 'new' });
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:9123/app/index.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.pdfjsLib && window.state);
+  await page.waitForFunction(() => window.pdfjsLib && typeof window.clearBgImage === 'function');
 
   const r = await page.evaluate(async (b64) => {
     state.numFormato = { id: 'f1', width_mm: 180, height_mm: 50 };
@@ -455,7 +456,7 @@ const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
   const browser = await puppeteer.launch({ headless: 'new' });
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:9123/app/index.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.state);
+  await page.waitForFunction(() => typeof window.clearBgImage === 'function');
 
   const r = await page.evaluate(() => {
     if (typeof window.resolveCorDoFormatoBase !== 'function') return { existe: false };
@@ -614,7 +615,7 @@ const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
   const browser = await puppeteer.launch({ headless: 'new' });
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:9123/app/index.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.state && window.pdfjsLib);
+  await page.waitForFunction(() => window.pdfjsLib && typeof window.clearBgImage === 'function');
 
   const r = await page.evaluate(async (b64) => {
     if (typeof window.autoLoadCorBg !== 'function') return { existe: false };
