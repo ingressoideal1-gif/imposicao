@@ -4486,6 +4486,58 @@ window.clearBgImage = function () {
 
 
 
+// Rasteriza a página 1 de um PDF e devolve um HTMLImageElement pronto para o canvas.
+// Os campos originalPdfWidthPt / originalPdfHeightPt são obrigatórios: drawCanvasFace
+// escala o fundo por eles, e sem isso a arte entraria com o tamanho do bitmap (2x).
+window.rasterizePdfToImage = async function (arrayBuffer) {
+
+    if (typeof pdfjsLib === 'undefined') {
+
+        throw new Error('PDF.js não disponível.');
+
+    }
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    const page = await pdf.getPage(1);
+
+    const vp = page.getViewport({ scale: 2 });
+
+    const off = document.createElement('canvas');
+
+    const octx = off.getContext('2d');
+
+    off.width = Math.round(vp.width);
+
+    off.height = Math.round(vp.height);
+
+    octx.fillStyle = '#ffffff';
+
+    octx.fillRect(0, 0, off.width, off.height);
+
+    await page.render({ canvasContext: octx, viewport: vp }).promise;
+
+    const img = new Image();
+
+    img.src = off.toDataURL('image/png');
+
+    const vpOrig = page.getViewport({ scale: 1 });
+
+    img.originalPdfWidthPt = vpOrig.width;
+
+    img.originalPdfHeightPt = vpOrig.height;
+
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+
+    return img;
+
+};
+
+
+
 async function loadBgImage(file) {
 
     if (!state.numFormato) return;
@@ -4494,7 +4546,7 @@ async function loadBgImage(file) {
 
     try {
 
-        const img = new Image();
+        let img;
 
         if (ext === 'pdf') {
 
@@ -4504,63 +4556,31 @@ async function loadBgImage(file) {
 
             }
 
-            pdfjsLib.GlobalWorkerOptions.workerSrc =
-
-                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
             const arrayBuffer = await file.arrayBuffer();
 
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-            const page = await pdf.getPage(1);
-
-            
-
-            // Renderizar em alta qualidade (escala 2) sem redimensionar ao tamanho do formato aqui
-
-            const vp = page.getViewport({ scale: 2 });
-
-            const off = document.createElement('canvas');
-
-            const octx = off.getContext('2d');
-
-            off.width = Math.round(vp.width);
-
-            off.height = Math.round(vp.height);
-
-            octx.fillStyle = '#ffffff';
-
-            octx.fillRect(0, 0, off.width, off.height);
-
-            await page.render({ canvasContext: octx, viewport: vp }).promise;
-
-            img.src = off.toDataURL('image/png');
-
-            
-
-            // Guardar dimensões originais do PDF (em pontos / scale=1) para que drawCanvas possa escalar corretamente
-
-            const vpOrig = page.getViewport({ scale: 1 });
-
-            img.originalPdfWidthPt = vpOrig.width;
-
-            img.originalPdfHeightPt = vpOrig.height;
+            img = await window.rasterizePdfToImage(arrayBuffer);
 
         } else {
+
+            img = new Image();
 
             img.src = URL.createObjectURL(file);
 
             // Obter o DPI da imagem a partir dos metadados e salvar na img
 
-            const dpi = await getDpi(file);
+            img.dpiValue = await getDpi(file);
 
-            img.dpiValue = dpi;
+            await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
 
         }
 
-        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-
         state.bgImage = img;
+
+        // O botão governa só a frente: descartar o verso que tenha vindo de uma cor,
+
+        // senão o canvas duplex mostraria duas artes diferentes.
+
+        state.bgImageVerso = null;
 
         const btn = document.getElementById('btn-remove-bg');
 
