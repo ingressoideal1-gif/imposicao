@@ -3231,6 +3231,19 @@ window.onFormatoSelect = function (clearElements = true) {
     initCanvas();
     renderElementsList();
     drawCanvas();
+
+    // Numeração nova: trazer a arte da cor mais antiga do formato base.
+    // #num-id vazio distingue criação de edição — editNumeracao() preenche esse
+    // campo antes de chamar onFormatoSelect(false), e sem esta guarda a arte
+    // carregaria duas vezes. E só carregamos quando não há fundo, para que trocar
+    // o formato depois deixe em paz o que já está na tela.
+    const ehNumeracaoNova = !(document.getElementById('num-id')?.value || '');
+
+    if (ehNumeracaoNova && !state.bgImage) {
+
+        window.autoLoadCorBg(fmtId);
+
+    }
 };
 
 
