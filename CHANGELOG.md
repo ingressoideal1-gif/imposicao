@@ -27,6 +27,11 @@ As 42 linhas que já estavam em base64 foram convertidas de uma vez, com backup 
 
 O mesmo fallback também dispara se o navegador simplesmente não tiver `supabaseClient` — modo offline (`?offline=true`, `localStorage.offline_mode`) ou o CDN do supabase-js não carregando. Nesse caso não há upload a falhar: o preview já nasce em base64. Pelo backend, se `db.py` estiver com Supabase ativo (o caso normal na estação), esse base64 chega à mesma `producao_numeracoes` de produção — o navegador se declarar offline não implica que o backend esteja. Reexecutar `migrar_previews_para_storage.py` limpa o que voltar a acumular assim.
 
+E agora esse fallback avisa: quando o valor volta em base64, o save emite um toast de alerta e um `console.error`. Antes ele era mudo — se alguém apertasse o RLS do bucket `artes`, todo save voltaria a gravar base64 e a coluna regrediria sem uma linha de log.
+
+### Corrigido de quebra: todos os avisos do app mostravam "undefined"
+`toast()` tinha ícones para `success`, `error` e `info`, mas não para `warning` — e o app já chamava `toast(..., 'warning')` em 43 lugares. O usuário lia literalmente `undefined Mensagem...`, e sem cor própria, porque o `style.css` também não tinha `.toast-warning`. Foram adicionados o ícone ⚠️, a regra de CSS em âmbar, e um fallback para o ícone de informação, de modo que um tipo novo que apareça no futuro nunca mais renderize `undefined`.
+
 ---
 
 ## [v486 — 2026-08-08] — Arte de Fundo carrega sozinha a cor do formato base

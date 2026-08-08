@@ -602,7 +602,10 @@ function mountFontPickers() {
 
 function toast(msg, type = 'info') {
 
-    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    // 'warning' faltava aqui e o app já o usava em dezenas de chamadas: icons[type]
+    // vinha undefined e o usuário lia "undefined Mensagem...". O fallback cobre
+    // qualquer tipo novo que apareça sem passar por aqui.
+    const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
 
     const tc = document.getElementById('toast-container');
 
@@ -610,7 +613,7 @@ function toast(msg, type = 'info') {
 
     el.className = `toast toast-${type}`;
 
-    el.innerHTML = `<span>${icons[type]}</span> ${msg}`;
+    el.innerHTML = `<span>${icons[type] || icons.info}</span> ${msg}`;
 
     tc.appendChild(el);
 
