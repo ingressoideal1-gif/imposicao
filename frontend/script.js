@@ -5892,8 +5892,8 @@ async function uploadToStorage(content, fileName, path, opts = {}) {
     });
 }
 
-// Alias para os scripts de verificação: uploadToStorage é função de módulo e não
-// seria alcançável de dentro de um page.evaluate.
+// Alias para os scripts de verificação: dá um nome estável para chamar de dentro
+// de page.evaluate, independente de futuras refatorações de uploadToStorage.
 window.__uploadToStorageTeste = uploadToStorage;
 
 
@@ -5914,7 +5914,33 @@ window.saveNumeracao = async function () {
 
     if (!fmtId) return toast('Selecione um formato.', 'error');
 
+    // O id de destino precisa ser conhecido ANTES do upload: o preview vai para o
+    // Storage com o nome do registro. São três caminhos de gravação — editar,
+    // substituir uma numeração homônima, ou criar — e os três têm que apontar para
+    // o mesmo id que o arquivo no bucket.
+    const temSupabase = typeof supabaseClient !== 'undefined' && !!supabaseClient;
 
+    const homonima = id ? null : state.numeracoes.find(
+
+        n => n.name.trim().toLowerCase() === name.toLowerCase()
+
+    );
+
+    const gerarUuid = () => (typeof crypto !== 'undefined' && crypto.randomUUID)
+
+        ? crypto.randomUUID()
+
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+
+            return v.toString(16);
+
+        });
+
+    // Sem Supabase o app roda offline: deixa o id em branco para que api() use o
+    // esquema local dela, e o preview cai no fallback base64 de uploadToStorage.
+    const numeracaoId = id || (homonima ? homonima.id : (temSupabase ? gerarUuid() : ''));
 
     toast('Fazendo upload e salvando (isso pode demorar alguns segundos)...', 'info');
 
@@ -5986,6 +6012,26 @@ window.saveNumeracao = async function () {
             previewJpgBase64 = previewCanvas.toDataURL('image/jpeg', 0.85);
         }
 
+        // Preview para o Storage: nome estável pelo id do registro, com upsert, para
+        // que salvar de novo sobrescreva em vez de deixar um órfão no bucket.
+        let previewValor = previewJpgBase64;
+
+        if (previewJpgBase64 && numeracaoId) {
+
+            previewValor = await uploadToStorage(
+
+                previewJpgBase64,
+
+                numeracaoId + '.jpg',
+
+                '',
+
+                { buckets: ['artes'], objectPath: 'previews-numeracoes/' + numeracaoId + '.jpg' }
+
+            );
+
+        }
+
         const svgUrl = await uploadToStorage(state.numSvgContent, state.numSvgFilename || 'arquivo.svg', 'uploads_svg');
 
         const pdfUrl = await uploadToStorage(state.numPdfContent, state.numPdfFilename || 'arquivo.pdf', 'uploads_pdf');
@@ -6006,7 +6052,7 @@ window.saveNumeracao = async function () {
             
             tipo,
 
-            preview_jpg: previewJpgBase64,
+            preview_jpg: previewValor,
 
             // Coletar todos os formatos marcados nos checkboxes
             formato_ids: (() => {
@@ -6065,27 +6111,17 @@ window.saveNumeracao = async function () {
 
             toast('Numeração atualizada!', 'success');
 
+        } else if (homonima) {
+
+            await api('PUT', `/numeracoes/${homonima.id}`, data);
+
+            toast('Numeração substituída!', 'success');
+
         } else {
 
-            const existing = state.numeracoes.find(
+            await api('POST', '/numeracoes', numeracaoId ? { id: numeracaoId, ...data } : data);
 
-                n => n.name.trim().toLowerCase() === name.toLowerCase()
-
-            );
-
-            if (existing) {
-
-                await api('PUT', `/numeracoes/${existing.id}`, data);
-
-                toast('Numeração substituída!', 'success');
-
-            } else {
-
-                await api('POST', '/numeracoes', data);
-
-                toast('Numeração salva!', 'success');
-
-            }
+            toast('Numeração salva!', 'success');
 
         }
 
