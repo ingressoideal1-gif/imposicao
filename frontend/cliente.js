@@ -753,7 +753,14 @@ async function initClientePage(numero, token) {
                     const resolvedNumId = item.amostra_num_id || (prop ? prop.amostra_num_id : null);
                     const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
                     const numIsDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(matchedNum) : !!(matchedNum && (matchedNum.print_mode === 'duplex' || (matchedNum.elements && matchedNum.elements.some(e => e && e.face === 'back'))));
-                    const itemVerso = !!(item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE') || numIsDuplex;
+                    // 'Frente' faltava nesta lista: o operador grava exatamente esse
+                    // valor ao trocar para uma numeração só frente, e sem ele o
+                    // cliente continuava vendo o bloco de verso.
+                    const _semVerso = (vt) => {
+                        const v = String(vt || '').trim().toUpperCase();
+                        return !v || v === 'FRENTE' || v === 'SÓ FRENTE' || v === 'SO FRENTE';
+                    };
+                    const itemVerso = !_semVerso(item.verso_tipo) || numIsDuplex;
                     return {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',
@@ -761,7 +768,7 @@ async function initClientePage(numero, token) {
                         id_produto: prop ? prop.id_produto : (item.id_produto || null),
                         os_id: osId,
                         verso: itemVerso,
-                        verso_tipo: itemVerso ? (item.verso_tipo && item.verso_tipo !== 'SÓ FRENTE' && item.verso_tipo !== 'SO FRENTE' ? item.verso_tipo : 'FRENTE E VERSO') : (item.verso_tipo || 'SÓ FRENTE'),
+                        verso_tipo: itemVerso ? (!_semVerso(item.verso_tipo) ? item.verso_tipo : 'FRENTE E VERSO') : (item.verso_tipo || 'SÓ FRENTE'),
                         amostra_obs: item.observacao_arte || item.amostra_obs || '',
                         amostra_status: statusFrontend,
                         // Garantir que a imagem de aprovacao esteja sempre populada

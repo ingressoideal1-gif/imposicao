@@ -4,7 +4,72 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.5.0 (v480)** — 2026-08-07
+## Versão atual: **v1.5.1 (v481)** — 2026-08-08
+
+---
+
+## [v481 — 2026-08-08] — Amostra de verso some ao voltar para numeração só Frente
+
+### Resumo
+Na Lista de Arte, trocar a numeração de FxVerso para uma só Frente deixava a amostra do verso viva no banco, e o cliente continuava vendo o verso no link de aprovação.
+
+### O que acontecia
+
+`onItemNumSelect` já ajustava `item.verso = false` e `verso_tipo = 'Frente'`, mas o payload salvo só levava `amostra_num_id`, `gabarito_operacional`, `tipo_numeracao` e `verso_tipo`. A coluna `verso_amostra_arte_base64` de `pedidos_modelos` nunca era tocada.
+
+O fluxo inverso (Frente → FxVerso, que abre a segunda janela combinada e grava a amostra do verso) está correto e **não foi alterado**.
+
+### Correção
+
+**1. Zerar a amostra ao trocar para numeração só Frente** — `onItemNumSelect` passa a enviar:
+
+```js
+dataToSave.verso_amostra_arte_base64 = null;
+dataToSave._isExplicitRemove = true;
+```
+
+A flag é obrigatória: `saveAmostraToDB` tem um guard que **descarta em silêncio** um `verso_amostra_arte_base64: null` quando o item local ainda tem valor, a menos que a remoção seja explícita. Sem ela a alteração não teria efeito algum, e sem erro. O guard só afeta as chaves presentes no payload, então a flag não põe em risco `arte_url` / `amostra_arte_base64`.
+
+Preserva de propósito `verso_arte_url` e `verso_arte_json` — a arte enviada pelo operador continua no banco e pode ser recomposta se a numeração voltar a ser FxVerso. Limpar o select (sem numeração escolhida) não apaga nada; a regra vale para a troca por outra numeração.
+
+**2. `cliente.js` reconhecer `'Frente'`** — a decisão de exibir o bloco de verso testava apenas `!== 'SÓ FRENTE' && !== 'SO FRENTE'`, mas o valor gravado pelo operador é `'Frente'`. Como a montagem do item no cliente faz `verso_amostra_arte_base64 || verso_arte_url`, o cliente voltaria a ver o verso pela URL da arte mesmo com a amostra zerada. Alinhado com a convenção que o `script.js` já usa nos demais pontos.
+
+---
+
+## [v1.5.1 (v481) — 2026-08-08] — Matching de produto: aceitar `_vibe_id_produto`
+
+### Resumo
+Correção de um bug pré-existente na resolução do formato a partir do produto, e **retificação** do que a entrada v480 afirmava sobre ele.
+
+### O que havia de errado
+
+Os itens de uma OS existem em dois formatos diferentes:
+
+| Origem | Quando | Campos de id de produto |
+|---|---|---|
+| `mapVibecodeProdutoToOSItem` (pré-carga, aplicada a todas as ordens ao abrir a lista) | sempre | **só** `_vibe_id_produto` |
+| mapeamento de `pedidos_modelos` em `loadOSItens` | ao abrir uma OS | `id_produto` **e** `_vibe_id_produto`, com o mesmo valor |
+
+Dois consumidores liam apenas `item.id_produto || item.produto_id`:
+
+- `enviarParaImposicao` — resolve formato/saída ao carregar um modelo
+- `renderAmostrasOSItens` — resolve o formato para filtrar as cores da tela de Amostras
+
+Recebendo um item da pré-carga, `prodId` era `undefined`, a busca por ID era pulada **em silêncio** e sobrava o matching por nome/apelido. Falhando esse, `enviarParaImposicao` caía em `formatoId = state.formatos[0].id` — o primeiro formato do sistema — aplicava-o ao `ped-formato` e a cor do modelo se perdia junto.
+
+### Retificação da entrada v480
+
+A nota de v480 dizia que esse matching "provavelmente nunca acerta". **Está errado.** No fluxo normal (abrir um pedido dispara `loadOSItens` antes de `enviarParaImposicao`) os itens já são os de `pedidos_modelos`, que têm `id_produto` preenchido — ali o matching funciona. A falha ocorre só quando um item da pré-carga chega a esses consumidores: `loadOSItens` falhando, ou OS sem linhas em `pedidos_modelos`.
+
+### Correção
+
+Ordem tolerante nos dois pontos, a mesma que `_getActiveProductInfo` e `initPedPrintPanel` já usavam:
+
+```js
+const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
+```
+
+Continua mascarado no dia a dia pela correção de v480 (a fila desenha antes e preenche `item.formato_id`), mas o caminho deixa de depender disso.
 
 ---
 
@@ -36,7 +101,7 @@ O "primeiro" é calculado por `getPrimeiroModeloDaOS`, que repete o agrupamento 
 
 **Armadilha encontrada no caminho:** `renderPedOSQueue` não é só desenho — ela grava o formato padrão do produto em `item.formato_id`. Chamando `enviarParaPedido` sem essa render antes, `enviarParaImposicao` encontrava o formato vazio, descia toda a cadeia de matching e caía no fallback do primeiro formato do sistema; o `ped-formato` recebia o formato errado e a **cor do modelo se perdia**. A fila passou a ser desenhada antes de carregar o modelo.
 
-> Bug pré-existente relacionado, **não corrigido**: `enviarParaImposicao` procura o produto por `item.id_produto`, enquanto a fila usa `item._vibe_id_produto`. Campos diferentes — esse matching provavelmente nunca acerta. Só não aparece porque a render sempre roda antes e preenche o formato.
+> Bug pré-existente relacionado — **corrigido em v481, ver abaixo**. A nota original desta entrada dizia que o matching por produto "provavelmente nunca acerta"; isso estava errado e foi retificado na entrada seguinte.
 
 ### 3. Ordenação por coluna na lista "Pedidos Liberados"
 

@@ -16312,7 +16312,12 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
 
     // Tentar encontrar o formato atrelado ao produto no banco de dados (via ID ou Nome)
     if (!formatoId && state.produtosGlobais) {
-        const prodId = item.id_produto || item.produto_id;
+        // _vibe_id_produto primeiro: e o unico id de produto presente nos itens
+        // da pre-carga (mapVibecodeProdutoToOSItem), que nao tem id_produto nem
+        // produto_id. Sem ele, a busca por ID era pulada em silencio nesses itens
+        // e o fallback aplicava o primeiro formato do sistema.
+        // Mesma ordem tolerante usada em _getActiveProductInfo.
+        const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
         let produtoObj = null;
         if (prodId) {
             produtoObj = state.produtosGlobais.find(p => String(p.id) === String(prodId) || String(p.id_produto) === String(prodId));
@@ -17875,7 +17880,9 @@ function renderAmostrasOSItens(osId) {
         // Determinar o formato ID do item da OS (via formato_id do banco, via produto ou via nome do formato)
         let itemFormatoId = item.formato_id;
         if (!itemFormatoId && state.produtosGlobais) {
-            const prodId = item.id_produto || item.produto_id;
+            // Mesma ordem tolerante de enviarParaImposicao: os itens da pre-carga
+            // so tem _vibe_id_produto.
+            const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
             let produtoObj = null;
             if (prodId) {
                 produtoObj = state.produtosGlobais.find(p => String(p.id) === String(prodId) || String(p.id_produto) === String(prodId));
@@ -18986,6 +18993,7 @@ function onItemNumSelect(idx, osId, itemId) {
     const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
     
     let versoStateChanged = false;
+    let limparAmostraVerso = false;
     if (item) {
         item.amostra_num_id = numId || null;
         item.gabarito_operacional = numNome || null;
@@ -19008,6 +19016,16 @@ function onItemNumSelect(idx, osId, itemId) {
             } else {
                 item.verso = !!(item.verso_tipo && item.verso_tipo !== 'Frente');
             }
+
+            // Numeração só Frente: a amostra de verso que o cliente veria deixa de
+            // fazer sentido e precisa sair do banco. A arte enviada pelo operador
+            // (verso_arte_url / verso_arte_json) é preservada de propósito, para
+            // poder ser recomposta se a numeração voltar a ser FxVerso.
+            // Só quando há uma numeração escolhida: limpar o select não apaga nada.
+            if (numObj && item.verso_amostra_arte_base64) {
+                item.verso_amostra_arte_base64 = null;
+                limparAmostraVerso = true;
+            }
         }
         if (oldVerso !== item.verso) {
             versoStateChanged = true;
@@ -19021,6 +19039,13 @@ function onItemNumSelect(idx, osId, itemId) {
     };
     if (item && item.verso_tipo) {
         dataToSave.verso_tipo = item.verso_tipo;
+    }
+    if (limparAmostraVerso) {
+        // _isExplicitRemove é obrigatório: sem ele o guard do saveAmostraToDB
+        // descarta o null em silêncio e a amostra continuaria no banco.
+        // Só afeta as chaves presentes neste payload.
+        dataToSave.verso_amostra_arte_base64 = null;
+        dataToSave._isExplicitRemove = true;
     }
 
     saveAmostraToDB(itemId, osId, dataToSave).then(() => {
