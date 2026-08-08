@@ -1,8 +1,7 @@
 # Preview da numeração no Storage, em vez de base64 na tabela
 
 Data: 2026-08-08
-Escopo: `frontend/script.js`, um script de migração novo, e um bucket novo no
-Supabase Storage.
+Escopo: `frontend/script.js` e um script de migração novo. Sem mudança de schema.
 
 ## Problema
 
@@ -18,8 +17,8 @@ rede a cada carregamento de página, para um dado que nada na tela usa.
 
 ## Objetivo
 
-Guardar o preview como um arquivo `.jpg` num bucket do Supabase Storage e deixar
-na coluna apenas a URL pública.
+Guardar o preview como um arquivo `.jpg` no Supabase Storage e deixar na coluna
+apenas a URL pública.
 
 ## Quem consome hoje
 
@@ -31,27 +30,39 @@ convivência entre os dois formatos.
 
 ## O bucket
 
-`previews-numeracoes`, público, criado por API com a `SUPABASE_SERVICE_KEY` que já
-existe no `.env.local` (`POST /storage/v1/bucket`), sem passo manual no painel.
+**Decisão final: bucket `artes`, com os previews sob o prefixo
+`previews-numeracoes/`.** O caminho até aqui importa, porque explica por que não é
+um bucket dedicado.
 
-Público garante **leitura** por URL direta, que é o que o frontend precisa. Não
-garante **escrita**: o upload sai do navegador com a chave anônima e depende de uma
-política de INSERT em `storage.objects`. O bucket `artes` tem essa permissão hoje —
-o SVG e o PDF da numeração já sobem por lá — mas não é possível determinar, sem
-consultar o banco, se a política é global (e o bucket novo já nasce funcionando) ou
-restrita ao `artes`.
+O plano original era um bucket `previews-numeracoes` público e dedicado. Ele foi
+criado por API e existe, público e vazio. Mas público garante **leitura**, não
+**escrita**: o upload sai do navegador com a chave anônima e depende de política de
+INSERT em `storage.objects`. Medido:
 
-Resolução: depois de criar o bucket, tentar um upload real **com a chave anônima**.
-Se passar, está pronto. Se falhar, gerar um `criar_bucket_previews.sql` com a
-política, no padrão dos `alter_*.sql` do repositório (arquivos que instruem
-"Execute no SQL Editor do Supabase"), e avisar o usuário.
+- Upload anônimo em `previews-numeracoes`: **HTTP 400**, `new row violates
+  row-level security policy`.
+- Upload anônimo em `artes`: **HTTP 200**.
+- `storage.objects` tem 34 políticas; as do `artes` liberam a escrita anônima, e
+  não alcançam o bucket novo.
 
-Um upload de teste feito com a service key não prova nada sobre o caminho real e
-não pode ser aceito como verificação.
+O `criar_bucket_previews.sql` com as políticas permissivas foi escrito e executado,
+e o bloqueio permaneceu — indício de política **RESTRICTIVE** discriminando
+buckets, que combina por `AND` e não é destravada por uma permissiva nova. Em vez
+de continuar iterando em SQL de produção, o usuário optou por usar o `artes`, que
+já funciona.
+
+O prefixo `previews-numeracoes/` dentro do `artes` preserva a separação lógica que
+motivou o bucket dedicado: os previews ficam identificáveis e agrupados, sem
+misturar com arte de cliente na raiz. E deixa a mudança futura barata — quando a
+política do bucket dedicado for resolvida, trocar o bucket é alterar uma linha, e o
+prefixo já é o nome certo.
+
+Um upload de teste feito com a service key não prova nada sobre o caminho real: a
+service key ignora RLS. Toda verificação de escrita usa a chave anônima.
 
 ## Nome do objeto
 
-`previews-numeracoes/<id da numeração>.jpg`, com `upsert: true`.
+`artes/previews-numeracoes/<id da numeração>.jpg`, com `upsert: true`.
 
 O id é conhecido no cliente antes da gravação: `api()` faz `let id = body.id` e só
 inventa um UUID quando o corpo não traz um (`frontend/script.js:730`). Portanto
@@ -79,7 +90,8 @@ coisas ao mesmo tempo: o bucket certo **e** um nome sem timestamp. As três cham
 existentes passam três argumentos e não mudam de comportamento.
 
 Em `saveNumeracao()`, a linha `preview_jpg: previewJpgBase64` passa a receber o
-retorno de um `uploadToStorage` apontando para `previews-numeracoes`.
+retorno de um `uploadToStorage` apontando para o bucket `artes` com
+`objectPath: 'previews-numeracoes/<id>.jpg'`.
 
 `db.py` não muda: a coluna segue `TEXT`, apenas com conteúdo diferente. Nenhuma
 migração de schema.
@@ -93,7 +105,7 @@ passos:
    `backup_preview_jpg_<timestamp>.json` na raiz do repositório. Esse padrão entra
    no `.gitignore`: é rede de segurança local, não conteúdo do projeto, e 455 KB de
    base64 não têm por que entrar no histórico do git permanentemente.
-2. **Sobe cada preview** como `previews-numeracoes/<id>.jpg`, com
+2. **Sobe cada preview** como `artes/previews-numeracoes/<id>.jpg`, com
    `content-type: image/jpeg` e `x-upsert: true`.
 3. **Troca a coluna** pela URL pública, linha a linha.
 4. **Confere.** Relê as 42 linhas exigindo que todas comecem com `https://`, e faz
@@ -123,14 +135,15 @@ valor comece com `https://` e que a URL devolva um JPEG.
 O projeto não tem framework de testes de frontend; a verificação é feita no app
 rodando, via skill `rodar-app`, mais consultas diretas ao Supabase:
 
-1. O bucket `previews-numeracoes` existe e é público.
-2. Um upload com a **chave anônima** para esse bucket é aceito.
+1. Um upload com a **chave anônima** para `artes/previews-numeracoes/` é aceito.
+2. A URL pública do objeto responde 200 com `content-type: image/jpeg`.
 3. Salvar uma numeração nova pelo app grava em `preview_jpg` uma URL `https://`, e
-   o objeto `<id>.jpg` existe no bucket.
+   o objeto `previews-numeracoes/<id>.jpg` existe no bucket `artes`.
 4. Salvar de novo a **mesma** numeração sobrescreve o mesmo objeto, sem criar um
    segundo arquivo.
-5. As chamadas existentes de `uploadToStorage` para SVG e PDF continuam indo para o
-   bucket `artes` — o quarto parâmetro é opcional e não muda o padrão.
+5. As chamadas existentes de `uploadToStorage` para SVG e PDF continuam com o nome
+   timestampado na raiz do `artes` — o quarto parâmetro é opcional e não muda o
+   padrão.
 6. Depois da migração, nenhuma das 42 linhas contém `data:image` e todas as URLs
    respondem 200 com `content-type: image/jpeg`.
 7. O payload de `loadAll()` para `producao_numeracoes` encolhe em aproximadamente
