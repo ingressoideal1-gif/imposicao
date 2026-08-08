@@ -4,15 +4,15 @@
 
 **Goal:** Guardar o preview da numeração como um arquivo `.jpg` num bucket do Supabase Storage e deixar na coluna `preview_jpg` apenas a URL pública, migrando as 42 linhas que hoje carregam 454,6 KB de base64.
 
-**Architecture:** Um bucket público novo, `previews-numeracoes`. A função `uploadToStorage` de `frontend/script.js` — que já converte data URL em Blob, sobe e devolve URL pública — ganha um parâmetro de opções para escolher o bucket e o nome exato do objeto. `saveNumeracao` resolve o id de destino do registro **antes** de subir, e grava o preview como `<id>.jpg` com upsert. Um script Python migra as linhas existentes.
+**Architecture:** Os previews vão para o bucket `artes`, sob o prefixo `previews-numeracoes/`. A função `uploadToStorage` de `frontend/script.js` — que já converte data URL em Blob, sobe e devolve URL pública — ganha um parâmetro de opções para escolher o bucket e o nome exato do objeto. `saveNumeracao` resolve o id de destino do registro **antes** de subir, e grava o preview como `previews-numeracoes/<id>.jpg` com upsert. Um script Python migra as linhas existentes.
 
 **Tech Stack:** JavaScript de navegador sem build (`frontend/script.js` carregado direto por `<script>`), Supabase JS v2 já na página como `supabaseClient`, Supabase Storage REST API, Python 3 com `requests` para o script de migração, Puppeteer do `node_modules` do repo para dirigir o navegador.
 
 ## Global Constraints
 
 - **Projeto Supabase:** `https://vwbtitjlpelrcnsytzqw.supabase.co`. As chaves estão em `.env.local` na raiz: `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_KEY`. **Nunca escreva o valor de uma chave em arquivo versionado, em log ou na saída de um comando.** Leia sempre do `.env.local` em tempo de execução.
-- **Nome do bucket, exato:** `previews-numeracoes`. Público.
-- **Nome do objeto, exato:** `<id da numeração>.jpg`, na raiz do bucket, sem prefixo de pasta e sem timestamp.
+- **Bucket, exato:** `artes`. **Caminho do objeto, exato:** `previews-numeracoes/<id da numeração>.jpg` — com o prefixo de pasta e SEM timestamp.
+- **Por que não um bucket dedicado:** o bucket `previews-numeracoes` foi criado e é público, mas o upload com a chave anônima é recusado nele (`new row violates row-level security policy`), enquanto no `artes` passa com HTTP 200. As políticas permissivas foram aplicadas e não destravaram — indício de política RESTRICTIVE discriminando buckets. O usuário decidiu usar o `artes` com prefixo. A Task 1 já está concluída e registra tudo isso; **não tente criar bucket nem mexer em política de Storage**.
 - **A página viva é `frontend/index.html`.** `frontend/producao.html` é a versão antiga e não deve ser tocada.
 - **Não use a porta 9000 para rodar o app.** O `NewProd.exe` instalado na máquina escuta em `127.0.0.1:9000` e serve uma cópia embutida do frontend. Use a **9123**. Não mate o `NewProd.exe`.
 - **Não há framework de testes no projeto.** O ciclo de teste é script Puppeteer (frontend) ou script Python (banco/Storage), executado com `node` / `venv/Scripts/python.exe`. O scratchpad desta sessão é `C:\Users\Junior\AppData\Local\Temp\claude\c--Users-Junior-Projetos-Ingresso-ideal-ideal-imposition\80609424-2b1f-40d6-9ce7-9bc05c977b65\scratchpad`.
@@ -26,7 +26,7 @@
 
 - `frontend/script.js` — todo o frontend do app num arquivo só; é grande e assim já era, e este trabalho não o divide. Duas regiões mudam: a função `uploadToStorage` (por volta da linha 5808) e `window.saveNumeracao` (por volta da 5892).
 - `migrar_previews_para_storage.py` — **criar**, na raiz do repo, no estilo dos `migrate_*.py` que já existem. Responsabilidade única: mover as 42 linhas de base64 para o bucket. É um script de uso único, mas fica versionado como registro do que foi feito.
-- `criar_bucket_previews.sql` — **criar apenas se a Task 1 provar que é necessário**, na raiz, no padrão dos `alter_*.sql` (cabeçalho dizendo "Execute no SQL Editor do Supabase").
+- `criar_bucket_previews.sql` — **já existe** (commit `6466017`), registro da tentativa de bucket dedicado. Não mexa nele.
 - `.gitignore` — uma linha nova para o arquivo de backup.
 - `CHANGELOG.md` — entrada nova.
 
@@ -73,112 +73,20 @@ PID=$(netstat -ano | grep "127.0.0.1:9123" | grep -i listening | awk '{print $5}
 
 ---
 
-### Task 1: Criar o bucket e descobrir se o upload anônimo passa
+### Task 1: CONCLUÍDA — decisão de bucket já tomada
 
-O bucket público garante **leitura** por URL direta. Não garante **escrita**: o upload sai do navegador com a chave anônima e depende de política de INSERT em `storage.objects`. O bucket `artes` tem essa permissão hoje, mas não dá para saber, sem testar, se a política é global ou restrita a ele. Esta tarefa cria o bucket e responde essa pergunta com um teste real.
+Não execute nada nesta tarefa. Ela está registrada aqui só para quem ler o plano em ordem.
 
-**Files:**
-- Create (condicional): `criar_bucket_previews.sql`
-- Test: `<scratchpad>/verif-bucket.sh`
+O que se descobriu, medindo contra o Supabase de produção:
 
-**Interfaces:**
-- Consumes: nada.
-- Produces: o bucket `previews-numeracoes` existente e público, e um fato registrado no relatório: **o upload anônimo é aceito, sim ou não**. As tarefas 2 e 3 dependem desse fato.
+- O bucket `previews-numeracoes` foi criado por API e é público. Está vazio.
+- Upload com a **chave anônima** nesse bucket: **HTTP 400**, `new row violates row-level security policy`.
+- Upload com a **chave anônima** no bucket `artes`: **HTTP 200**.
+- `storage.objects` tem 34 políticas. As políticas permissivas de `criar_bucket_previews.sql` foram aplicadas e o bloqueio permaneceu, o que aponta para uma política RESTRICTIVE discriminando buckets — permissiva nova não destrava restritiva, porque restritivas combinam por `AND`.
 
-- [ ] **Step 1: Confirmar que o bucket ainda não existe**
+**Decisão do usuário:** usar o bucket `artes` com o prefixo `previews-numeracoes/`, que preserva o agrupamento lógico e torna a migração futura para o bucket dedicado uma troca de uma linha.
 
-```bash
-cd "c:/Users/Junior/Projetos Ingresso ideal/ideal-imposition"
-SUPA_URL=$(grep '^NEXT_PUBLIC_SUPABASE_URL=' .env.local | cut -d= -f2-)
-SERVICE=$(grep '^SUPABASE_SERVICE_KEY=' .env.local | cut -d= -f2-)
-curl -s "$SUPA_URL/storage/v1/bucket" -H "apikey: $SERVICE" -H "Authorization: Bearer $SERVICE" \
-  | python -c "import sys,json; [print(b['id'], 'public' if b.get('public') else 'privado') for b in json.load(sys.stdin)]"
-```
-
-Expected: uma lista de buckets **sem** `previews-numeracoes`. Anote no relatório quais buckets existem — é o inventário de antes.
-
-- [ ] **Step 2: Criar o bucket**
-
-```bash
-curl -s -X POST "$SUPA_URL/storage/v1/bucket" \
-  -H "apikey: $SERVICE" -H "Authorization: Bearer $SERVICE" \
-  -H "Content-Type: application/json" \
-  -d '{"id":"previews-numeracoes","name":"previews-numeracoes","public":true}'
-```
-
-Expected: `{"name":"previews-numeracoes"}`. Se vier `Duplicate`, o bucket já existia — siga em frente.
-
-- [ ] **Step 3: Confirmar que existe e é público**
-
-Repita o comando do Step 1. Expected: `previews-numeracoes public` na lista.
-
-- [ ] **Step 4: Testar o upload com a chave ANÔNIMA**
-
-Este é o passo que importa. Use a chave anônima, nunca a service key — a service key ignora RLS e provaria nada sobre o caminho real do app. O repositório tem um `snapshot.jpg` na raiz para servir de carga.
-
-```bash
-ANON=$(grep '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' .env.local | cut -d= -f2-)
-curl -s -w "\nHTTP %{http_code}\n" -X POST \
-  "$SUPA_URL/storage/v1/object/previews-numeracoes/_teste_anon.jpg" \
-  -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
-  -H "Content-Type: image/jpeg" -H "x-upsert: true" \
-  --data-binary @snapshot.jpg
-```
-
-Dois desfechos possíveis, os dois válidos:
-- **HTTP 200** — a política já cobre o bucket novo. Registre isso no relatório, pule o Step 5 e vá para o Step 6.
-- **HTTP 400/403**, tipicamente com `new row violates row-level security policy` — falta política. Vá para o Step 5.
-
-- [ ] **Step 5: (só se o Step 4 falhou) Escrever o SQL da política**
-
-Crie `criar_bucket_previews.sql` na raiz:
-
-```sql
--- ══════════════════════════════════════════════════════════════════
--- POLÍTICAS DE STORAGE: bucket previews-numeracoes
--- Execute no SQL Editor do Supabase (vwbtitjlpelrcnsytzqw)
---
--- O bucket é público, o que já libera a leitura por URL direta. Estas
--- políticas liberam a ESCRITA com a chave anônima, que é como o navegador
--- sobe o preview em saveNumeracao. O upsert exige insert E update.
--- ══════════════════════════════════════════════════════════════════
-
-drop policy if exists "previews_numeracoes_insert" on storage.objects;
-drop policy if exists "previews_numeracoes_update" on storage.objects;
-
-create policy "previews_numeracoes_insert"
-    on storage.objects for insert
-    with check (bucket_id = 'previews-numeracoes');
-
-create policy "previews_numeracoes_update"
-    on storage.objects for update
-    using (bucket_id = 'previews-numeracoes')
-    with check (bucket_id = 'previews-numeracoes');
-```
-
-Depois **PARE e devolva status NEEDS_CONTEXT**, relatando que o usuário precisa rodar esse SQL no SQL Editor antes de a tarefa continuar. Não tente contornar subindo com a service key: isso mascararia o problema e o app quebraria em produção.
-
-- [ ] **Step 6: Confirmar a leitura pública e limpar o objeto de teste**
-
-```bash
-curl -s -o /dev/null -w "leitura anônima: HTTP %{http_code} tipo %{content_type}\n" \
-  "$SUPA_URL/storage/v1/object/public/previews-numeracoes/_teste_anon.jpg"
-
-curl -s -X DELETE "$SUPA_URL/storage/v1/object/previews-numeracoes/_teste_anon.jpg" \
-  -H "apikey: $SERVICE" -H "Authorization: Bearer $SERVICE"
-```
-
-Expected: `HTTP 200 tipo image/jpeg` na leitura, e o DELETE devolvendo `{"message":"Successfully deleted"}`. O bucket termina a tarefa vazio.
-
-- [ ] **Step 7: Commit (só se o Step 5 criou o SQL)**
-
-Se o Step 4 passou, não há nada a commitar nesta tarefa — o bucket vive no Supabase, não no repositório. Registre isso no relatório e siga. Se o SQL foi criado:
-
-```bash
-cd "c:/Users/Junior/Projetos Ingresso ideal/ideal-imposition"
-git add criar_bucket_previews.sql
-git commit -m "chore(storage): politicas de escrita do bucket previews-numeracoes"
-```
+O `criar_bucket_previews.sql` fica no repositório como registro da tentativa (commit `6466017`).
 
 ---
 
@@ -191,7 +99,7 @@ A função hoje tem a lista de buckets fixa em `['artes', 'imposicao-storage']` 
 - Test: `<scratchpad>/verif-upload-opts.js`
 
 **Interfaces:**
-- Consumes: o bucket `previews-numeracoes` criado na Task 1.
+- Consumes: nada. O bucket de destino (`artes`) já aceita upload anônimo hoje.
 - Produces: `uploadToStorage(content, fileName, path, opts)` onde `opts` é um objeto opcional com duas chaves, ambas opcionais:
   - `opts.buckets` — array de nomes de bucket a tentar, na ordem. Sem ela, mantém `['artes', 'imposicao-storage']`.
   - `opts.objectPath` — caminho exato do objeto dentro do bucket. Sem ela, mantém `${path || 'uploads'}/${Date.now()}_${nome saneado}`.
@@ -319,7 +227,7 @@ git commit -m "feat(storage): uploadToStorage aceita bucket e nome de objeto"
 
 **Interfaces:**
 - Consumes: `uploadToStorage(content, fileName, path, opts)` da Task 2; o bucket da Task 1.
-- Produces: `preview_jpg` passa a conter uma URL `https://.../previews-numeracoes/<id>.jpg`.
+- Produces: `preview_jpg` passa a conter uma URL `https://.../object/public/artes/previews-numeracoes/<id>.jpg`.
 
 **A armadilha central desta tarefa.** O fim de `saveNumeracao` tem **três** caminhos, não dois:
 
@@ -406,9 +314,9 @@ function lerEnv() {
   const linha2 = await buscar();
 
   // Quantos objetos existem no bucket com esse id?
-  const listaRes = await fetch(`${SUPA}/storage/v1/object/list/previews-numeracoes`,
+  const listaRes = await fetch(`${SUPA}/storage/v1/object/list/artes`,
     { method: 'POST', headers: { ...cabecalhos, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prefix: '', limit: 100 }) });
+      body: JSON.stringify({ prefix: 'previews-numeracoes/', limit: 100 }) });
   const objetos = await listaRes.json();
 
   let urlOk = 0, tipo = '';
@@ -435,7 +343,7 @@ function lerEnv() {
   await fetch(`${SUPA}/rest/v1/producao_numeracoes?name=eq.${encodeURIComponent(nome)}`,
     { method: 'DELETE', headers: cabecalhos });
   if (linha2 && linha2.id) {
-    await fetch(`${SUPA}/storage/v1/object/previews-numeracoes/${linha2.id}.jpg`,
+    await fetch(`${SUPA}/storage/v1/object/artes/previews-numeracoes/${linha2.id}.jpg`,
       { method: 'DELETE', headers: cabecalhos });
   }
   await browser.close();
@@ -506,7 +414,7 @@ Logo depois da linha `previewJpgBase64 = previewCanvas.toDataURL('image/jpeg', 0
 
                 '',
 
-                { buckets: ['previews-numeracoes'], objectPath: numeracaoId + '.jpg' }
+                { buckets: ['artes'], objectPath: 'previews-numeracoes/' + numeracaoId + '.jpg' }
 
             );
 
@@ -614,7 +522,8 @@ import sys
 
 import requests
 
-BUCKET = "previews-numeracoes"
+BUCKET = "artes"
+PREFIXO = "previews-numeracoes"
 TABELA = "producao_numeracoes"
 
 
@@ -680,7 +589,7 @@ def main():
             falhas.append((num_id, nome, "base64 invalido: %s" % e))
             continue
 
-        objeto = "%s.jpg" % num_id
+        objeto = "%s/%s.jpg" % (PREFIXO, num_id)
         up = requests.post(
             "%s/storage/v1/object/%s/%s" % (url, BUCKET, objeto),
             headers=dict(h_service, **{"Content-Type": "image/jpeg",
@@ -788,7 +697,7 @@ Expected: `A migrar: 0 | ja em URL: N | sem preview: M` e `Nada a fazer.` — se
 ```bash
 cd "c:/Users/Junior/Projetos Ingresso ideal/ideal-imposition"
 git add migrar_previews_para_storage.py .gitignore
-git commit -m "chore(migracao): mover previews de base64 para o bucket previews-numeracoes"
+git commit -m "chore(migracao): mover previews de base64 para o Storage"
 ```
 
 Confirme com `git status --short` que nenhum `backup_preview_jpg_*.json` entrou no commit.
@@ -877,13 +786,13 @@ E insira a entrada nova logo acima de `## [v486 — 2026-08-08]`, seguida de uma
 ## [v487 — 2026-08-08] — Preview da numeração sai da tabela e vai para o Storage
 
 ### Resumo
-O preview de 100 DPI gerado ao salvar uma numeração era gravado como data URL base64 na coluna `preview_jpg` de `producao_numeracoes`. Agora é um arquivo `.jpg` no bucket `previews-numeracoes` e a coluna guarda só a URL pública.
+O preview de 100 DPI gerado ao salvar uma numeração era gravado como data URL base64 na coluna `preview_jpg` de `producao_numeracoes`. Agora é um arquivo `.jpg` no bucket `artes`, sob o prefixo `previews-numeracoes/`, e a coluna guarda só a URL pública.
 
 ### Por que
 Não era só armazenamento. `loadAll()` carrega as numerações com `select *`, então os NNN KB de base64 espalhados por NNN linhas atravessavam a rede a cada carregamento de página — para um dado que nenhuma tela usa. Depois da mudança o mesmo carregamento traz NNN KB.
 
 ### Um preview por numeração
-O arquivo é nomeado com o id do registro (`<id>.jpg`) e sobe com upsert, então salvar a mesma numeração dez vezes sobrescreve o mesmo objeto em vez de deixar dez órfãos no bucket. Para isso o id passou a ser resolvido no início de `saveNumeracao`, antes do upload — inclusive no caminho em que salvar sem id, com um nome que já existe, substitui a numeração homônima em vez de criar outra.
+O arquivo é nomeado com o id do registro (`previews-numeracoes/<id>.jpg`) e sobe com upsert, então salvar a mesma numeração dez vezes sobrescreve o mesmo objeto em vez de deixar dez órfãos no bucket. Para isso o id passou a ser resolvido no início de `saveNumeracao`, antes do upload — inclusive no caminho em que salvar sem id, com um nome que já existe, substitui a numeração homônima em vez de criar outra.
 
 ### Migração
 As NNN linhas que já estavam em base64 foram convertidas de uma vez, com backup local do estado anterior. A conferência não se contentou com o PATCH ter retornado sem erro: cada URL foi baixada exigindo status 200 e `content-type: image/jpeg`.
