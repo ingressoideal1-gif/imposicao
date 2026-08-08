@@ -132,6 +132,26 @@ Somente `frontend/script.js`. Sem alteração de HTML — o rótulo do botão e 
 migração de banco: `producao_cores` já tem `formato_id`, `pdf_base64`, `pdf_url`,
 `pdf_filename`, `pdf_verso_base64` e `created_at`.
 
+## Decisões da revisão final
+
+Duas decisões novas, tomadas na revisão que corrigiu as corridas de `state.bgLoadToken`:
+
+- **A arte própria da numeração vence.** `window.autoLoadCorBg` desiste (devolve
+  `false`) antes de resolver a cor quando `state.numPdfContent` ou
+  `state.numSvgContent` já estiver preenchido. Sem isso, `drawCanvasFace` dava
+  precedência a `state.bgImage` sobre a arte de referência da própria numeração,
+  escondendo-a atrás da arte genérica da cor. A guarda vive dentro de
+  `autoLoadCorBg` para cobrir os dois pontos de chamada (`editNumeracao` e
+  `onFormatoSelect`) de uma vez.
+- **O `preview_jpg` passa a incluir a arte da cor, conscientemente.** O trecho que
+  gera o preview ao salvar já usava `refBg = state.bgImage || state.numPdfImage ||
+  state.numSvgImage`; com o fundo automático, `state.bgImage` passa a estar
+  preenchido com frequência bem maior. Isso não é mais tratado como "nada é
+  persistido" — o preview existe para mostrar como a numeração fica sobre a arte,
+  e persistir a composição com a arte da cor é o comportamento desejado. O que
+  continua não sendo persistido é a arte em si: `producao_numeracoes` não passa a
+  guardar `bgImage`, só o `preview_jpg` derivado dele.
+
 ## Verificação
 
 O comportamento é visual e não há suíte de testes de frontend no projeto, então a

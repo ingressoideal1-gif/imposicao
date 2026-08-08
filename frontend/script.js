@@ -3110,20 +3110,9 @@ function cancelNumEdit() {
 
     state.numFormato = null;
 
-    state.bgImage = null;
-
-
-    const btnRemove = document.getElementById('btn-remove-bg');
-
-    const bgName = document.getElementById('bg-file-name');
-
-    const bgFile = document.getElementById('canvas-bg-file');
-
-    if (btnRemove) btnRemove.style.display = 'none';
-
-    if (bgName) bgName.textContent = '';
-
-    if (bgFile) bgFile.value = '';
+    // Limpa as duas faces do fundo e invalida qualquer autoLoadCorBg em voo da
+    // numeração anterior (window.clearBgImage já incrementa state.bgLoadToken).
+    window.clearBgImage();
 
     document.getElementById('numeracao-editor').style.display = 'none';
 
@@ -4605,6 +4594,14 @@ window.rasterizePdfToImage = async function (arrayBuffer) {
 // PDF: a ausência é situação normal, não falha, e não rende toast.
 window.autoLoadCorBg = async function (formatoId) {
 
+    // A arte específica da numeração (PDF ou SVG de referência dela) tem
+    // precedência sobre a arte genérica da cor: se a numeração já tem a sua
+    // própria arte, drawCanvasFace daria prioridade a state.bgImage mesmo assim,
+    // escondendo a arte de referência da numeração atrás da arte da cor. Desistir
+    // aqui, antes até de resolver a cor, evita isso nos dois pontos de chamada
+    // (editNumeracao e onFormatoSelect).
+    if (state.numPdfContent || state.numSvgContent) return false;
+
     // Token desta chamada: se um clearBgImage() ou outro autoLoadCorBg mais novo
     // rodar antes desta promessa terminar, o token muda e esta desiste sem escrever.
     const meuToken = ++state.bgLoadToken;
@@ -4640,6 +4637,10 @@ window.autoLoadCorBg = async function (formatoId) {
         if (btn) btn.style.display = 'inline-flex';
 
         if (name) name.textContent = '📎 ' + (cor.pdf_filename || cor.name || '');
+
+        // Repintar já com a frente, sem esperar o verso: um verso pesado não pode
+        // deixar o rótulo aparecer com o canvas ainda em branco por vários segundos.
+        drawCanvas();
 
         // O verso entra sempre que existir, sem olhar o print_mode: drawCanvasFace
 
@@ -4692,6 +4693,12 @@ window.autoLoadCorBg = async function (formatoId) {
 async function loadBgImage(file) {
 
     if (!state.numFormato) return;
+
+    // Invalida qualquer autoLoadCorBg em voo: sem isto, um upload manual durante
+    // o carregamento do verso da cor sobrevive à frente mas perde a corrida do
+    // verso, que chega depois e escreve state.bgImageVerso por cima da arte do
+    // operador.
+    state.bgLoadToken++;
 
     const ext = file.name.split('.').pop().toLowerCase();
 

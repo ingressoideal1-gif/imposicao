@@ -16,10 +16,14 @@ No editor de numeração, o botão **🖼️ Arte de Fundo** deixa de exigir upl
 ### Como a cor é escolhida
 Entre as cores cuja coluna `formato_id` aponta para o formato base da numeração, vence a de `created_at` mais antigo. Os formatos compatíveis (`formato_ids`) são ignorados de propósito — só o formato base decide. Formato sem cor, ou cor mais antiga sem PDF, abre a barra vazia, sem erro: a ausência de cor é situação normal.
 
-Nada é persistido. A cor é re-resolvida a cada abertura, então reeditar a cor no catálogo se reflete na próxima vez que a numeração for aberta.
+A arte não é gravada na numeração; a cor é re-resolvida a cada abertura, então reeditar a cor no catálogo se reflete na próxima vez que a numeração for aberta. Ao salvar, o `preview_jpg` gerado para o card do pedido inclui a arte da cor que estiver no canvas — decisão consciente, já que o preview existe justamente para mostrar como a numeração fica sobre a arte.
+
+A arte específica da numeração (o PDF ou SVG de referência dela, quando cadastrado) tem precedência sobre a arte da cor: se ela existir, a arte da cor não é carregada.
 
 ### O que continua igual
 O rótulo com o nome do arquivo, o botão **✕ Remover** e o upload manual por cima. Subir um arquivo sobrescreve a frente e descarta o verso automático, porque o botão governa só a frente e manter o verso de uma cor sob a frente de outra arte mostraria duas artes diferentes no mesmo par de canvas.
+
+Numa numeração nova, trocar o Formato Base com um fundo já carregado não troca a arte — só o primeiro `onchange` carrega. Remover o fundo e só então trocar o formato recarrega, porque a condição "não há fundo" volta a valer.
 
 ### Frente e verso
 Cores cadastradas como frente e verso carregam também a arte do verso, no canvas duplex. O campo `state.bgImageVerso` já era lido por `drawCanvasFace` mas nunca era escrito — era um caminho morto, agora ligado. O **✕ Remover** passa a limpar as duas faces.
