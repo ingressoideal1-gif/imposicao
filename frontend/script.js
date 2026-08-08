@@ -5805,7 +5805,7 @@ function deselectAllCards() {
 
 // - Salvar Numeração -
 
-async function uploadToStorage(content, fileName, path) {
+async function uploadToStorage(content, fileName, path, opts = {}) {
     if (!content) return '';
     if (typeof content === 'string' && content.startsWith('http')) return content; // Já é uma URL HTTP pública
 
@@ -5852,8 +5852,13 @@ async function uploadToStorage(content, fileName, path) {
     }
 
     const safeName = fileName ? fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_') : 'arquivo';
-    const finalPath = `${path || 'uploads'}/${Date.now()}_${safeName}`;
-    const bucketsToTry = ['artes', 'imposicao-storage'];
+
+    // objectPath dá o caminho exato dentro do bucket. Sem ele, o nome recebe um
+    // timestamp — o que é certo para arte de cliente, onde cada envio é um arquivo
+    // novo, e errado para o preview, que deve sobrescrever o do próprio registro.
+    const finalPath = opts.objectPath || `${path || 'uploads'}/${Date.now()}_${safeName}`;
+
+    const bucketsToTry = (opts.buckets && opts.buckets.length) ? opts.buckets : ['artes', 'imposicao-storage'];
 
     for (const bucketName of bucketsToTry) {
         try {
@@ -5886,6 +5891,10 @@ async function uploadToStorage(content, fileName, path) {
         reader.readAsDataURL(blob);
     });
 }
+
+// Alias para os scripts de verificação: uploadToStorage é função de módulo e não
+// seria alcançável de dentro de um page.evaluate.
+window.__uploadToStorageTeste = uploadToStorage;
 
 
 
