@@ -17,7 +17,8 @@
 - **Não use a porta 9000 para rodar o app.** O `NewProd.exe` instalado na máquina escuta em `127.0.0.1:9000` e serve uma cópia embutida do frontend. Use a **9123**. Não mate o `NewProd.exe`.
 - **Não há framework de testes no projeto.** O ciclo de teste é script Puppeteer (frontend) ou script Python (banco/Storage), executado com `node` / `venv/Scripts/python.exe`. O scratchpad desta sessão é `C:\Users\Junior\AppData\Local\Temp\claude\c--Users-Junior-Projetos-Ingresso-ideal-ideal-imposition\80609424-2b1f-40d6-9ce7-9bc05c977b65\scratchpad`.
 - **Puppeteer precisa de caminho absoluto** quando o script está fora do repo: `require(path.join(REPO, 'node_modules', 'puppeteer'))`.
-- **`window.state` NÃO é o state do editor.** `frontend/script.js` declara `const state = {...}`, binding léxico global alcançável dentro de `page.evaluate` pelo nome nu `state`, mas ausente de `window`. O `window.state` da página vem de `frontend/mapas.js:6`. Ancore `waitForFunction` numa função que `script.js` exporta, por exemplo `typeof window.saveNumeracao === 'function'`.
+- **`window.state` e `window.supabaseClient` NÃO existem.** `frontend/script.js` declara `const state = {...}` e `frontend/supabase-config.js` declara `let supabaseClient`; declarações `const`/`let` no topo de um script clássico NÃO viram propriedade de `window`. Dentro de `page.evaluate` use os nomes nus `state` e `supabaseClient`. O `window.state` que existe na página vem de `frontend/mapas.js:6` e é outro objeto. Ancore `waitForFunction` em algo que `script.js` de fato exporta, como `typeof window.saveNumeracao === 'function'`, ou no nome nu.
+- **(nota antiga, mantida)** `window.state` NÃO é o state do editor: `frontend/script.js` declara `const state = {...}`, binding léxico global alcançável dentro de `page.evaluate` pelo nome nu `state`, mas ausente de `window`. O `window.state` da página vem de `frontend/mapas.js:6`. Ancore `waitForFunction` numa função que `script.js` exporta, por exemplo `typeof window.saveNumeracao === 'function'`.
 - **Estilo:** `frontend/script.js` usa linhas em branco entre statements e comentários em português. Siga o que estiver ao redor.
 - **Ausência de erro não é prova de que rodou.** Em especial: `uploadToStorage` devolve o base64 quando o upload falha, então um save "bem-sucedido" pode ter gravado base64. Toda verificação de preview precisa ler a coluna e exigir `https://`.
 - **Erros de console pré-existentes e não relacionados:** `Erro ao checar print_agents no Supabase` e `favicon.ico` 404.
@@ -118,7 +119,7 @@ const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
   const browser = await puppeteer.launch({ headless: 'new' });
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:9123/app/index.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => typeof window.saveNumeracao === 'function' && window.supabaseClient);
+  await page.waitForFunction(() => typeof window.saveNumeracao === 'function' && typeof supabaseClient !== 'undefined' && supabaseClient);
 
   const r = await page.evaluate(async () => {
     // uploadToStorage não é global; espiona-se pelo supabaseClient.storage.
@@ -274,7 +275,7 @@ function lerEnv() {
   const browser = await puppeteer.launch({ headless: 'new' });
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:9123/app/index.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => typeof window.saveNumeracao === 'function' && window.supabaseClient);
+  await page.waitForFunction(() => typeof window.saveNumeracao === 'function' && typeof supabaseClient !== 'undefined' && supabaseClient);
   await page.waitForFunction(() => state.formatos && state.formatos.length > 0, { timeout: 20000 });
 
   const primeiroSave = await page.evaluate(async (nomeNum) => {
