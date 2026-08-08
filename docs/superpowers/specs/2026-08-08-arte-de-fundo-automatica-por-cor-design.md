@@ -80,7 +80,9 @@ estado extra.
 O fundo automático é um fundo comum, sem tratamento especial:
 
 - **✕ Remover** (`clearBgImage()`, `frontend/script.js:4463`) limpa normalmente.
-- Subir um arquivo pelo próprio botão sobrescreve.
+- Subir um arquivo pelo próprio botão sobrescreve a frente e descarta o verso
+  automático. O botão governa só a frente, e manter o verso de uma cor sob a
+  frente de outra arte mostraria duas artes diferentes no mesmo par de canvas.
 - O rótulo `#bg-file-name` mostra `📎 ` seguido do `pdf_filename` da cor, o mesmo
   formato usado no upload manual. Quando a cor não tiver `pdf_filename`, cai para
   o `name` da cor, para nunca exibir um rótulo vazio.
