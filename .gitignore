@@ -23,3 +23,7 @@ dist/
 # Configuracao de impressao da estacao (db.py grava ao lado do executavel).
 # E de cada maquina, nunca do repositorio.
 print_configs.json
+
+# Backup local da migração de preview_jpg — rede de segurança da máquina, não
+# conteúdo do projeto. São centenas de KB de base64 que não devem entrar no git.
+backup_preview_jpg_*.json
