@@ -19073,6 +19073,29 @@ function onItemNumSelect(idx, osId, itemId) {
     }
 }
 
+/**
+ * Um "Upload de Arte" convencional (ou uma colagem de link) substitui a arte do
+ * modelo por um arquivo pronto -- entao a estrutura vetorial da ultima edicao no
+ * Criador de Arte fica obsoleta e PRECISA ser descartada.
+ *
+ * Sem isso, setupEditorWorkspace() prioriza o arte_json e reabre a arte antiga,
+ * ignorando o arquivo recem-enviado.
+ *
+ * O arte_json nao existe no banco (saveAmostraToDB o remove do payload): ele vive
+ * so na memoria e no localStorage -- exatamente os dois lugares limpos aqui.
+ */
+function invalidarArteVetorial(item, osId, idx, faceKey) {
+    if (!item) return;
+
+    if (faceKey === 'verso') item.verso_arte_json = null;
+    else item.arte_json = null;
+
+    const ids = [item.id, item._pedidoModeloId, item.id_produto_proposta_origem].filter(Boolean);
+    ids.forEach(id => localStorage.removeItem(`ideal_arte_json_${id}_${faceKey}`));
+    localStorage.removeItem(`ideal_arte_json_${osId}_${idx}_${faceKey}`);
+}
+window.invalidarArteVetorial = invalidarArteVetorial;
+
 async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
     const inputId = face === 'verso' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
     const nameLabelId = face === 'verso' ? `amostra-item-arte-verso-name-${idx}` : `amostra-item-arte-name-${idx}`;
@@ -19120,6 +19143,10 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
                 }
                 if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_${faceKey}`, publicUrl);
                 localStorage.setItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`, publicUrl);
+
+                // O arquivo enviado agora e a arte do modelo: a estrutura vetorial
+                // da edicao anterior nao vale mais e nao pode reaparecer no editor.
+                invalidarArteVetorial(item, osId, idx, faceKey);
             }
 
             // Se modo PDF, gerar snapshot da primeira página e inicializar viewer
@@ -19332,6 +19359,8 @@ window.colarArte = async function(idx, osId, itemId, face = 'frente') {
             } else {
                 item.arte_url = sourceUrl;
             }
+            // Mesma regra do upload: a arte colada substitui a edicao anterior.
+            invalidarArteVetorial(item, osId, idx, face === 'verso' ? 'verso' : 'frente');
         }
         
         // CRITICAL: Montar payload preservando explicitamente cor e numeração já cadastradas.

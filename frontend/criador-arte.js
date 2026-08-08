@@ -236,12 +236,25 @@ async function setupEditorWorkspace() {
         let rawArteSource = null;
 
         if (hasArteOnItem) {
+            // O arte_json em memoria e sempre da sessao atual (o banco nao guarda
+            // essa coluna), entao vale como esta.
             savedJson = face === 'verso' ? item.verso_arte_json : item.arte_json;
-            if (!savedJson && item.id) {
-                savedJson = localStorage.getItem(`ideal_arte_json_${item.id}_${face}`);
-            }
-            if (!savedJson) {
-                savedJson = localStorage.getItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`);
+
+            // Ja o JSON do localStorage sobrevive entre sessoes e pode ser de uma
+            // edicao que o "Upload de Arte" substituiu depois. O nome do arquivo
+            // diz a origem: o editor sobe "arte_criada_*", o upload sobe "arte_*".
+            // Se a URL atual nao veio do editor, esse JSON e residuo -- usa-lo
+            // reabriria a arte velha e ignoraria o arquivo enviado.
+            const urlAtual = _arte.url || '';
+            const jsonLocalConfiavel = !urlAtual || urlAtual.includes('arte_criada_');
+
+            if (!savedJson && jsonLocalConfiavel) {
+                if (item.id) {
+                    savedJson = localStorage.getItem(`ideal_arte_json_${item.id}_${face}`);
+                }
+                if (!savedJson) {
+                    savedJson = localStorage.getItem(`ideal_arte_json_${osId}_${itemIdx}_${face}`);
+                }
             }
 
             rawArteSource = _arte.url || _arte.base64;
@@ -272,63 +285,22 @@ async function setupEditorWorkspace() {
             }
         }
 
+        // Os dois carregamentos sao aguardados de proposito. O saveEditorHistory()
+        // no fim de setupEditorWorkspace() e o passo 0 do historico; se a arte
+        // entrasse depois dele, o passo 0 seria uma prancha vazia e um Ctrl+Z
+        // logo apos abrir apagaria a arte que acabou de ser carregada.
         if (savedJson) {
             try {
-                fc.loadFromJSON(savedJson, () => {
-                    fc.renderAll();
-                    saveEditorHistory();
-                });
+                await new Promise((resolve) => fc.loadFromJSON(savedJson, resolve));
+                fc.renderAll();
             } catch(e) {
                 console.warn('[Criador de Arte] Erro ao carregar JSON da arte salva:', e);
             }
         } else if (rawArteSource) {
-            // Se não tiver JSON vetorial mas existir arte carregada/enviada, carregar no canvas preenchendo 100%!
-            try {
-                let imgUrl = rawArteSource;
-                if (imgUrl.includes('application/pdf') || imgUrl.toLowerCase().endsWith('.pdf')) {
-                    let bytes;
-                    if (imgUrl.startsWith('data:')) {
-                        const base64Data = imgUrl.split('base64,')[1];
-                        const binStr = atob(base64Data);
-                        bytes = new Uint8Array(binStr.length);
-                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                    } else {
-                        const arrayBuf = await fetch(imgUrl).then(r => r.arrayBuffer());
-                        bytes = new Uint8Array(arrayBuf);
-                    }
-                    if (typeof pdfjsLib !== 'undefined') {
-                        const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
-                        const page = await pdf.getPage(1);
-                        const vp = page.getViewport({ scale: 2.0 });
-                        const offCanvas = document.createElement('canvas');
-                        offCanvas.width = vp.width; offCanvas.height = vp.height;
-                        await page.render({ canvasContext: offCanvas.getContext('2d'), viewport: vp }).promise;
-                        imgUrl = offCanvas.toDataURL();
-                    }
-                }
-
-                const img = new Image();
-                img.crossOrigin = 'Anonymous';
-                img.onload = () => {
-                    const fImg = new fabric.Image(img);
-                    if (fImg && fImg.width > 0 && fImg.height > 0) {
-                        const scale = fc.height / fImg.height;
-                        fImg.set({
-                            scaleX: scale,
-                            scaleY: scale,
-                            left: (fc.width - (fImg.width * scale)) / 2,
-                            top: 0
-                        });
-                        fc.add(fImg);
-                        fc.renderAll();
-                        setTimeout(() => fc.renderAll(), 50);
-                        saveEditorHistory();
-                    }
-                };
-                img.src = imgUrl;
-            } catch (err) {
-                console.warn('[Criador de Arte] Erro ao carregar imagem existente no editor:', err);
-            }
+            // Sem JSON vetorial, mas o modelo tem arte vinda do "Upload de Arte"
+            // convencional (ou colada de outro modelo): ela entra como objeto base
+            // da Camada 3 para a criacao continuar por cima dela.
+            await carregarArteBaseNoCanvas(fc, rawArteSource);
         }
     }
 
@@ -344,6 +316,93 @@ async function setupEditorWorkspace() {
 
     // Salvar snapshot do estado inicial para o historico (passo 0)
     saveEditorHistory();
+}
+
+/**
+ * Rasteriza a arte que o modelo ja possui (PDF ou imagem, URL publica ou base64)
+ * e a insere como objeto base editavel da Camada 3 (Fabric).
+ *
+ * O enquadramento e o mesmo de drawAmostraFace() no script.js -- "contain":
+ * cabe inteira na prancha, proporcao preservada, centralizada nos dois eixos.
+ * Divergir daqui faz o editor mostrar a arte num lugar e o card do pedido noutro.
+ */
+async function carregarArteBaseNoCanvas(fc, rawArteSource) {
+    if (!fc || !rawArteSource || typeof fabric === 'undefined') return false;
+
+    try {
+        let imgUrl = rawArteSource;
+
+        // A deteccao ignora querystring/hash: a URL publica do Supabase pode vir
+        // com ?token=..., e um endsWith('.pdf') cru daria falso negativo -- o PDF
+        // seria carregado como <img> e falharia em silencio.
+        const semQuery = imgUrl.split('?')[0].split('#')[0].toLowerCase();
+        const ehPdf = imgUrl.includes('application/pdf') || semQuery.endsWith('.pdf');
+
+        if (ehPdf) {
+            if (typeof pdfjsLib === 'undefined') {
+                toast('PDF.js indisponível — não foi possível abrir a arte em PDF.', 'error');
+                return false;
+            }
+            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+
+            // fetchPdfBytes (script.js) ja resolve base64, URL e o fallback via
+            // /api/proxy quando o CORS bloqueia o fetch direto.
+            let bytes;
+            if (typeof fetchPdfBytes === 'function') {
+                bytes = new Uint8Array(await fetchPdfBytes(imgUrl));
+            } else if (imgUrl.startsWith('http') || imgUrl.startsWith('/')) {
+                bytes = new Uint8Array(await fetch(imgUrl).then(r => r.arrayBuffer()));
+            } else {
+                const b64 = imgUrl.includes('base64,') ? imgUrl.split('base64,')[1] : imgUrl;
+                const bin = atob(b64);
+                bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            }
+
+            const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+            const page = await pdf.getPage(1);
+            const vp = page.getViewport({ scale: 2.0 });
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = vp.width;
+            offCanvas.height = vp.height;
+            await page.render({ canvasContext: offCanvas.getContext('2d'), viewport: vp }).promise;
+            imgUrl = offCanvas.toDataURL('image/png');
+        }
+
+        const img = await new Promise((resolve, reject) => {
+            const el = new Image();
+            el.crossOrigin = 'Anonymous';
+            el.onload = () => resolve(el);
+            el.onerror = () => reject(new Error('Falha ao carregar a imagem da arte'));
+            el.src = imgUrl;
+        });
+
+        if (!img.width || !img.height) return false;
+
+        const fImg = new fabric.Image(img);
+        const arteRatio = img.width / img.height;
+        const pranchaRatio = fc.width / fc.height;
+        const scale = arteRatio > pranchaRatio ? (fc.width / img.width) : (fc.height / img.height);
+
+        fImg.set({
+            scaleX: scale,
+            scaleY: scale,
+            left: (fc.width - img.width * scale) / 2,
+            top: (fc.height - img.height * scale) / 2
+        });
+
+        fc.add(fImg);
+        fc.renderAll();
+        return true;
+    } catch (err) {
+        // Antes esse caminho so fazia console.warn: a prancha abria vazia e parecia
+        // que o modelo nao tinha arte. Agora o operador e avisado.
+        console.warn('[Criador de Arte] Erro ao carregar a arte existente no editor:', err);
+        toast('Não foi possível carregar no editor a arte já enviada neste modelo.', 'error');
+        return false;
+    }
 }
 
 /**
