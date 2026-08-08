@@ -4486,6 +4486,43 @@ window.clearBgImage = function () {
 
 
 
+// Devolve a cor mais antiga cadastrada para o formato base, ou null.
+// Só a coluna formato_id da cor conta — os formatos compatíveis da numeração
+// (formato_ids) são ignorados de propósito.
+// Cores sem created_at vão para o fim; entre empates a ordem da API é preservada
+// (Array.prototype.sort é estável), então o critério é determinístico.
+window.resolveCorDoFormatoBase = function (formatoId) {
+
+    if (!formatoId) return null;
+
+    const pool = (state.cores || []).filter(c => String(c.formato_id) === String(formatoId));
+
+    if (!pool.length) return null;
+
+    const tempo = c => {
+
+        const t = Date.parse(c.created_at || '');
+
+        return isNaN(t) ? Number.POSITIVE_INFINITY : t;
+
+    };
+
+    return pool.slice().sort((a, b) => {
+
+        const ta = tempo(a);
+
+        const tb = tempo(b);
+
+        // Comparação por sinal: ta - tb daria NaN quando os dois são Infinity.
+
+        return ta === tb ? 0 : (ta < tb ? -1 : 1);
+
+    })[0];
+
+};
+
+
+
 // Rasteriza a página 1 de um PDF e devolve um HTMLImageElement pronto para o canvas.
 // Os campos originalPdfWidthPt / originalPdfHeightPt são obrigatórios: drawCanvasFace
 // escala o fundo por eles, e sem isso a arte entraria com o tamanho do bitmap (2x).
