@@ -4575,6 +4575,75 @@ window.rasterizePdfToImage = async function (arrayBuffer) {
 
 
 
+// Carrega no Arte de Fundo o PDF da cor mais antiga do formato base.
+// Devolve true quando a frente foi carregada. Silencioso quando não há cor ou
+// PDF: a ausência é situação normal, não falha, e não rende toast.
+window.autoLoadCorBg = async function (formatoId) {
+
+    const cor = window.resolveCorDoFormatoBase(formatoId);
+
+    if (!cor) return false;
+
+    // Não cai para a segunda cor: se a mais antiga não tem arte, não há arte.
+
+    const srcFrente = cor.pdf_base64 || cor.pdf_url;
+
+    if (!srcFrente) return false;
+
+    try {
+
+        const bytes = await fetchPdfBytes(srcFrente);
+
+        if (!bytes) return false;
+
+        state.bgImage = await window.rasterizePdfToImage(bytes);
+
+        const btn = document.getElementById('btn-remove-bg');
+
+        const name = document.getElementById('bg-file-name');
+
+        if (btn) btn.style.display = 'inline-flex';
+
+        if (name) name.textContent = '📎 ' + (cor.pdf_filename || cor.name || '');
+
+        // O verso entra sempre que existir, sem olhar o print_mode: drawCanvasFace
+
+        // só desenha a face back em duplex, e assim não dependemos da ordem entre
+
+        // escolher o formato e alternar Frente/FxVerso.
+
+        if (cor.pdf_verso_base64) {
+
+            try {
+
+                const bytesVerso = await fetchPdfBytes(cor.pdf_verso_base64);
+
+                if (bytesVerso) state.bgImageVerso = await window.rasterizePdfToImage(bytesVerso);
+
+            } catch (eVerso) {
+
+                console.warn('[Editor] Erro carregando arte de fundo do verso da cor:', eVerso);
+
+            }
+
+        }
+
+        drawCanvas();
+
+        return true;
+
+    } catch (e) {
+
+        console.warn('[Editor] Erro carregando arte de fundo da cor:', e);
+
+        return false;
+
+    }
+
+};
+
+
+
 async function loadBgImage(file) {
 
     if (!state.numFormato) return;
