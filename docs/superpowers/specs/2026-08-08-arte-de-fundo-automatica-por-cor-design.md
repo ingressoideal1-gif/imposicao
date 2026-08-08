@@ -26,8 +26,9 @@ Remover** e a possibilidade de subir outro arquivo por cima.
 
 - Nenhum seletor de cores novo na barra de ferramentas. A troca continua sendo
   pelo upload de arquivo que já existe.
-- Nada é persistido. A cor é re-resolvida a cada abertura da numeração; o fundo
-  não vai para `producao_numeracoes`.
+- A arte não é gravada na numeração. A cor é re-resolvida a cada abertura, e o
+  `bgImage` não vira coluna de `producao_numeracoes`. O que a composição alcança é
+  o `preview_jpg` derivado, gravado ao salvar — ver "Decisões da revisão final".
 - Formatos compatíveis (`formato_ids` da numeração) são ignorados. Só o formato
   base (`formato_id`) determina a cor.
 
