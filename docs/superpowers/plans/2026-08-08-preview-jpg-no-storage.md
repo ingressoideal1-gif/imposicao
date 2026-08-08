@@ -10,7 +10,8 @@
 
 ## Global Constraints
 
-- **Projeto Supabase:** `https://vwbtitjlpelrcnsytzqw.supabase.co`. As chaves estão em `.env.local` na raiz: `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_KEY`. **Nunca escreva o valor de uma chave em arquivo versionado, em log ou na saída de um comando.** Leia sempre do `.env.local` em tempo de execução.
+- **Projeto Supabase:** `https://vwbtitjlpelrcnsytzqw.supabase.co`. As chaves estão em `.env.local` na raiz. **Nunca escreva o valor de uma chave em arquivo versionado, em log ou na saída de um comando.** Leia sempre do `.env.local` em tempo de execução.
+- **Use a chave ANÔNIMA para tudo.** Medido: a `SUPABASE_SERVICE_KEY` do `.env.local` é rejeitada pelo PostgREST com **HTTP 401** (embora funcione no Storage), enquanto a `NEXT_PUBLIC_SUPABASE_ANON_KEY` responde 200. Além disso a anônima é o caminho que o app usa de verdade, então testar com ela é testar o que importa. Não tente contornar o 401 da service key — está fora do escopo deste plano.
 - **Bucket, exato:** `artes`. **Caminho do objeto, exato:** `previews-numeracoes/<id da numeração>.jpg` — com o prefixo de pasta e SEM timestamp.
 - **Por que não um bucket dedicado:** o bucket `previews-numeracoes` foi criado e é público, mas o upload com a chave anônima é recusado nele (`new row violates row-level security policy`), enquanto no `artes` passa com HTTP 200. As políticas permissivas foram aplicadas e não destravaram — indício de política RESTRICTIVE discriminando buckets. O usuário decidiu usar o `artes` com prefixo. A Task 1 já está concluída e registra tudo isso; **não tente criar bucket nem mexer em política de Storage**.
 - **A página viva é `frontend/index.html`.** `frontend/producao.html` é a versão antiga e não deve ser tocada.
@@ -39,7 +40,6 @@ No bash:
 cd "c:/Users/Junior/Projetos Ingresso ideal/ideal-imposition"
 SUPA_URL=$(grep '^NEXT_PUBLIC_SUPABASE_URL=' .env.local | cut -d= -f2-)
 ANON=$(grep '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' .env.local | cut -d= -f2-)
-SERVICE=$(grep '^SUPABASE_SERVICE_KEY=' .env.local | cut -d= -f2-)
 ```
 
 No Python:
@@ -544,15 +544,16 @@ def main():
     env = ler_env()
     url = env["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/")
     anon = env["NEXT_PUBLIC_SUPABASE_ANON_KEY"]
-    service = env["SUPABASE_SERVICE_KEY"]
 
-    h_service = {"apikey": service, "Authorization": "Bearer " + service}
-    h_json = dict(h_service, **{"Content-Type": "application/json"})
+    # A chave anonima e usada em tudo: a service key deste projeto e rejeitada
+    # pelo PostgREST com 401, e a anonima e o caminho que o app usa de verdade.
+    h = {"apikey": anon, "Authorization": "Bearer " + anon}
+    h_json = dict(h, **{"Content-Type": "application/json"})
 
     # 1. Ler tudo
     res = requests.get(
         url + "/rest/v1/" + TABELA + "?select=id,name,preview_jpg",
-        headers=h_service, timeout=60)
+        headers=h, timeout=60)
     res.raise_for_status()
     linhas = res.json()
     print("Linhas na tabela: %d" % len(linhas))
@@ -593,8 +594,8 @@ def main():
         objeto = "%s/%s.jpg" % (PREFIXO, num_id)
         up = requests.post(
             "%s/storage/v1/object/%s/%s" % (url, BUCKET, objeto),
-            headers=dict(h_service, **{"Content-Type": "image/jpeg",
-                                       "x-upsert": "true"}),
+            headers=dict(h, **{"Content-Type": "image/jpeg",
+                               "x-upsert": "true"}),
             data=binario, timeout=120)
 
         if up.status_code not in (200, 201):
@@ -620,7 +621,7 @@ def main():
     print("\nVerificando...")
     res = requests.get(
         url + "/rest/v1/" + TABELA + "?select=id,name,preview_jpg",
-        headers={"apikey": anon, "Authorization": "Bearer " + anon}, timeout=60)
+        headers=h, timeout=60)
     res.raise_for_status()
 
     restou_base64 = [l for l in res.json()
