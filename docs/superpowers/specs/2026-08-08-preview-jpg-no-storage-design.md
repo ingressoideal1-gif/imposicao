@@ -66,10 +66,17 @@ o mesmo objeto: um preview por numeração.
 
 ## A mudança no código
 
-`uploadToStorage(content, fileName, path)` (`frontend/script.js:5856`) ganha um
-quarto parâmetro opcional com a lista de buckets a tentar, mantendo
-`['artes', 'imposicao-storage']` como padrão para não alterar as chamadas que já
-existem para SVG e PDF.
+`uploadToStorage(content, fileName, path)` (`frontend/script.js:5808`) ganha um
+quarto parâmetro opcional, um objeto de opções com duas chaves:
+
+- `buckets` — lista de buckets a tentar, na ordem. Sem ela, mantém
+  `['artes', 'imposicao-storage']`.
+- `objectPath` — caminho exato do objeto dentro do bucket. Sem ela, mantém
+  `${path}/${Date.now()}_${nome}`.
+
+São duas chaves e não só a lista de buckets porque o nome estável depende das duas
+coisas ao mesmo tempo: o bucket certo **e** um nome sem timestamp. As três chamadas
+existentes passam três argumentos e não mudam de comportamento.
 
 Em `saveNumeracao()`, a linha `preview_jpg: previewJpgBase64` passa a receber o
 retorno de um `uploadToStorage` apontando para `previews-numeracoes`.
