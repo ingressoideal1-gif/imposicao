@@ -1,0 +1,27 @@
+---
+name: editor-de-arte
+description: Leia ANTES de qualquer alteração no Criador de Arte (editor 2D de arte dos modelos) — frontend/criador-arte.js, a view #view-criador-arte, a pilha de camadas do editor no style.css, ou o carregamento/salvamento de arte_url, arte_json e amostra_arte_base64. Cobre as três armadilhas do editor que já causaram bug em produção.
+---
+
+# Antes de mexer no Criador de Arte
+
+Leia **`docs/editor_de_arte.md`** por inteiro antes de escrever código. É curto e existe porque o
+editor tem três comportamentos que o código não revela sozinho, e cada um já causou bug em
+produção:
+
+1. **`drawAmostraFace()` (em `frontend/script.js`) é a especificação do editor.** Ela é o
+   renderizador canônico do card do pedido e do link do cliente. Enquadramento "contain" e fusão
+   multiply saem dela. Divergir faz o editor mostrar uma coisa e a impressão outra.
+
+2. **A estrutura vetorial editável (`arte_json`) não existe no banco.** `saveAmostraToDB()` a
+   remove do payload; ela vive só em memória e no `localStorage`.
+
+3. **A fusão entre as camadas é CSS, não JavaScript.** As camadas são `<canvas>` irmãos, e
+   `globalCompositeOperation` nunca alcança outro elemento — quem funde é `mix-blend-mode` no
+   `.canvas-container`, e só ali, por causa de isolamento de *stacking context*.
+
+O documento traz ainda o modelo de 3 camadas, a escala de 4 px/mm, a ordem de prioridade ao
+carregar arte existente, o fluxo de salvamento, as fragilidades conhecidas e um checklist de
+verificação antes de publicar.
+
+Para subir o app e conferir a mudança no navegador, use a skill `rodar-app`.
