@@ -1389,13 +1389,6 @@ body.not-logged-in .app-shell {
 
 
 
-    z-index: 500;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 240px;
-}
 .font-picker-dropdown.open { display: flex; }
 
 .font-picker-search { padding: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -2050,9 +2043,6 @@ input[type=number] {
     }
 }
 
-/* ===== Modo PDF Multi-Página ===== */
-.btn-pdf-active {
-    background: var(--blue) !important;
 .prod-search-input { width: 100%; background-color: #334155; border: 1px solid rgba(255,255,255,0.15); border-radius: 0.75rem; padding: 0.5rem 1rem 0.5rem 2.5rem; font-size: 0.75rem; color: #e2e8f0; outline: none; }
 .prod-search-input:focus { border-color: #3b82f6; }
 .prod-update-wrapper { width: 33.333%; position: relative; }
@@ -2273,11 +2263,26 @@ input[type=number] {
     pointer-events: none !important;
 }
 
+/* A Camada 3 funde com a Camada 1 (Cor) do mesmo jeito que funde no card do
+   pedido, onde drawAmostraFace() compoe a arte inteira sobre a cor com
+   globalCompositeOperation 'multiply'. Sem isto, uma arte de fundo branco tapa
+   a cor e o operador edita sem enxergar o papel em que vai imprimir.
+
+   Tem de ser mix-blend-mode, e tem de ser AQUI no container: as camadas sao
+   <canvas> irmaos, e o composite de canvas nunca alcanca outro elemento. Posto
+   no .lower-canvas nao funciona -- este container tem position + z-index, o que
+   cria um stacking context, e stacking context isola blending: o filho so
+   fundiria com o que estivesse dentro do proprio container.
+
+   Como o container funde inteiro (inclusive o .upper-canvas, onde o Fabric
+   desenha as alcas), o estilo das alcas e definido no criador-arte.js com
+   cores escuras e opacas, que sobrevivem ao multiply sobre qualquer cor. */
 #editor-canvas-stack .canvas-container {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
     z-index: 10 !important;
+    mix-blend-mode: multiply;
 }
 
 #editor-canvas-stack #editor-canvas-layer2 {

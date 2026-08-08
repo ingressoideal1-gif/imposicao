@@ -156,6 +156,17 @@ async function setupEditorWorkspace() {
     }
 
     if (typeof fabric !== 'undefined') {
+        // A Camada 3 inteira e desenhada com mix-blend-mode: multiply (style.css),
+        // para a arte fundir com a cor do papel como funde no card do pedido. Isso
+        // atinge tambem as alcas de selecao, e o padrao do Fabric (cantos vazados
+        // em azul claro) praticamente some sobre cores fortes. Cantos preenchidos
+        // e escuros sobrevivem ao multiply sobre qualquer cor de papel.
+        fabric.Object.prototype.transparentCorners = false;
+        fabric.Object.prototype.cornerColor = '#0f172a';
+        fabric.Object.prototype.cornerStrokeColor = '#f8fafc';
+        fabric.Object.prototype.borderColor = '#0f172a';
+        fabric.Object.prototype.cornerSize = 10;
+
         const fc = new fabric.Canvas('editor-canvas-layer3', {
             width: canvasW,
             height: canvasH,
@@ -390,7 +401,13 @@ async function carregarArteBaseNoCanvas(fc, rawArteSource) {
             scaleX: scale,
             scaleY: scale,
             left: (fc.width - img.width * scale) / 2,
-            top: (fc.height - img.height * scale) / 2
+            top: (fc.height - img.height * scale) / 2,
+            // A arte do fluxo convencional E uma camada multiply: drawAmostraFace()
+            // sempre a compoe assim sobre a cor (script.js, blocos do PDF e da
+            // imagem). Entrar como source-over perderia essa propriedade -- o
+            // checkbox "Efeito Multiply" abriria desmarcado e um Salvar gravaria
+            // a arte sem a fusao com que ela foi feita para imprimir.
+            globalCompositeOperation: 'multiply'
         });
 
         fc.add(fImg);
