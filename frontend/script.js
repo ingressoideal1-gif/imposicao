@@ -90,6 +90,8 @@ const state = {
 
     bgImage: null,          // HTMLImageElement | null (arte de fundo no canvas)
 
+    bgImageVerso: null,     // HTMLImageElement | null (arte de fundo do verso, em duplex)
+
     impMultiArtes: [],      // array of arts for multi_artes pagination
 
 
@@ -4463,6 +4465,8 @@ window.alignSelectedElement = function (alignment) {
 window.clearBgImage = function () {
 
     state.bgImage = null;
+
+    state.bgImageVerso = null;
 
     const btn = document.getElementById('btn-remove-bg');
 
