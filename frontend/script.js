@@ -23967,11 +23967,26 @@ function switchViewWithPrinterCheck(viewId) {
 }
 
 // Inicializar: verificar agente silenciosamente ao carregar
-(async function initPrinterModule() {
+//
+// O setTimeout(0) e obrigatorio, nao um ajuste de timing. Rodando direto aqui,
+// esta checagem executava no meio da AVALIACAO do script.js: checkPrinterAgent()
+// chama descobrirAgentIdLocal(), que le _agentIdLocalCache -- um `let` declarado
+// ~2000 linhas abaixo (linha 25895). A funcao ja existe (declaracoes de funcao
+// sao hoisted por inteiro), mas o `let` ainda esta na temporal dead zone, entao
+// a leitura lancava ReferenceError a cada carregamento da pagina.
+//
+// O catch de checkPrinterAgent engolia o erro num console.error, e o resultado
+// era _printerAgentActive = false sempre: o indicador so ficava correto depois
+// que o operador abria a aba Impressoras (que chama checkPrinterAgent de novo,
+// ai sim com o script todo avaliado).
+//
+// Adiar para o proximo tick faz a checagem rodar com o arquivo inteiro ja
+// avaliado -- e protege qualquer outra referencia tardia que ela venha a usar.
+setTimeout(async function initPrinterModule() {
     try {
         await checkPrinterAgent();
     } catch (_) {}
-})();
+}, 0);
 
 // Exportar funções globais
 window.checkPrinterAgent = checkPrinterAgent;
