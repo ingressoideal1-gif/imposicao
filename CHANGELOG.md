@@ -4,7 +4,75 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.5.1 (v481)** — 2026-08-08
+## Versão atual: **v1.5.2 (v485)** — 2026-08-08
+
+---
+
+## [v485 — 2026-08-08] — Arte funde com a cor no editor, e o `style.css` estava truncado
+
+### Resumo
+Duas coisas na mesma publicação: a arte carregada no Criador de Arte passa a fundir com a cor do papel (multiply), como já fundia no card do pedido; e a correção de um erro de sintaxe que fazia o navegador **descartar em silêncio as últimas ~290 linhas do `style.css`**.
+
+### 1. A arte não tinha multiply
+
+`drawAmostraFace()` sempre compõe a arte sobre a cor com `globalCompositeOperation = 'multiply'` — ou seja, a arte do fluxo convencional **é** uma camada multiply. Ao ser carregada no editor ela entrava como `source-over`: o checkbox "Efeito Multiply (Fusão)" abria desmarcado e um Salvar gravaria a arte sem a fusão com que ela foi feita para imprimir.
+
+A propriedade sozinha não bastava. `globalCompositeOperation` funde o objeto com o que está no **mesmo** canvas, e as três camadas do editor são elementos `<canvas>` irmãos — composite de canvas não atravessa o DOM. Uma arte de fundo branco continuava tapando a Camada 1 e o operador editava sem ver o papel em que ia imprimir.
+
+A fusão real exige `mix-blend-mode` em CSS, e **no `.canvas-container`**, não no `.lower-canvas`: o container tem `position` + `z-index`, o que cria um stacking context, e stacking context isola blending. Medido no pixel central da prancha: no `.lower-canvas` dá `rgb(255,255,255)`; no container dá exatamente a cor da Camada 1.
+
+Como o container funde inteiro, inclusive o `.upper-canvas` onde o Fabric desenha as alças de seleção, as alças passaram a ser definidas no `criador-arte.js` com cantos preenchidos e escuros — o padrão do Fabric (cantos vazados em azul claro) praticamente somia sobre cores fortes.
+
+### 2. O `style.css` parava de ser lido na linha 2054
+
+A regra `.btn-pdf-active` abria `{`, tinha uma declaração e **nunca fechava**: a linha seguinte emendava direto em `.prod-search-input`. Um bloco de CSS do Painel de Produção havia sido colado no meio da regra. Daí até o fim do arquivo tudo ficava preso num bloco aberto e o navegador descartava.
+
+Havia um segundo dano do mesmo tipo na linha 1392: um `}` órfão de uma duplicata de `.font-picker-dropdown` que perdeu o seletor.
+
+Nos dois casos a cópia íntegra existia em outro ponto do arquivo (linhas 1189-1203 e 2254-2265), então só os fragmentos quebrados foram removidos. O `style.css` foi de 71.460 para 65.499 bytes e as chaves fecham em 454/454.
+
+**Efeito colateral relevante:** ~54 regras que nunca aplicaram entraram em vigor de uma vez, quase todas do Painel de Produção. O painel foi verificado no navegador e renderiza corretamente, mas essa é a mudança visual mais perceptível da publicação.
+
+---
+
+## [v484 — 2026-08-08] — Publicador só bumpava três arquivos
+
+### Resumo
+`publicar.ps1` / `publicar.bat` atualizavam a versão de `script.js`, `pedido.js` e `cliente.js` por uma lista fixa. Todo o resto ficava congelado e suas alterações **não chegavam ao navegador de quem tinha o arquivo em cache**.
+
+| Asset | Estava em | Deveria acompanhar |
+|---|---|---|
+| `style.css` | v=9 / v=7 / v=5 conforme a página | sim |
+| `mapas.js` | v=2 | sim |
+| `criador-arte.js` | v=2 | sim |
+
+### Correção
+A lista fixa deu lugar a uma regra por padrão: bumpar qualquer `.js?v=` ou `.css?v=` em todas as páginas de `frontend/*.html`. Nenhum asset novo cai mais no mesmo buraco, sem precisar editar o publicador. Os CDNs não são afetados — eles fixam versão no caminho (`/3.11.174/pdf.min.js`), nunca em querystring.
+
+Uma armadilha encontrada ao escrever isso, registrada em comentário no código: **`-Path` do `Set-Content` aceita `string[]`**. Na forma posicional o PowerShell engole caminho *e* conteúdo no mesmo array de `-Path`, deixa `-Value` sem ligar e falha com um erro enganoso sobre `'Encoding'`. O script original escapava porque o valor chegava pelo pipeline. `-Path` e `-Value` agora são nomeados.
+
+---
+
+## [v483 — 2026-08-08] — Criador de Arte ignorava a arte do "Upload de Arte"
+
+### Resumo
+Abrir o Criador de Arte num modelo que já tinha arte enviada pelo fluxo convencional reabria a **arte antiga** da última edição, ignorando o arquivo recém-enviado.
+
+### O que acontecia
+
+O editor prioriza `arte_json` (a estrutura vetorial) sobre `arte_url`, e `onItemArteUpload` nunca invalidava o `arte_json` da edição anterior — só o botão *Remover* fazia isso. Num modelo que já passara pelo editor, o JSON residual no `localStorage` vencia a arte nova.
+
+### Correção
+
+**1. Upload e colagem descartam o vetorial obsoleto** — `invalidarArteVetorial()` limpa memória e `localStorage`. O `arte_json` não existe no banco (`saveAmostraToDB` o remove do payload), então esses são os dois únicos lugares.
+
+**2. Desambiguação por origem do arquivo** — o item 1 só resolve uploads futuros; modelos já nesse estado continuariam quebrados. O editor passa a olhar o nome do arquivo: o editor sobe `arte_criada_*`, o upload sobe `arte_*`. Se a URL atual não veio do editor, o JSON do `localStorage` é resíduo e é ignorado.
+
+**3. `carregarArteBaseNoCanvas()`** substituiu o bloco inline, com três correções: a detecção de PDF passa a ignorar querystring (uma URL do Supabase com `?token=...` dava falso negativo e o PDF ia para um `<img>`, falhando em silêncio); usa `fetchPdfBytes()`, que já tem fallback via `/api/proxy` quando o CORS bloqueia; e enquadra em "contain" como o `drawAmostraFace()`, em vez de encaixar só pela altura e ancorar no topo.
+
+**4. Carregamento aguardado** — o `img.onload` era um callback solto, então o passo 0 do histórico era gravado com a prancha vazia e um Ctrl+Z logo após abrir apagava a arte recém-carregada.
+
+Também publicado junto: correção de um `ReferenceError` de temporal dead zone na checagem inicial do agente de impressão (`initPrinterModule` rodava durante a avaliação do `script.js` e lia um `let` declarado ~2000 linhas abaixo). O erro era engolido por um `catch`, e o efeito era o indicador dizer "Agente Local Inativo" em todo carregamento até alguém abrir a aba Impressoras.
 
 ---
 
