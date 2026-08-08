@@ -4,7 +4,28 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.5.2 (v485)** — 2026-08-08
+## Versão atual: **v1.5.3 (v486)** — 2026-08-08
+
+---
+
+## [v486 — 2026-08-08] — Arte de Fundo carrega sozinha a cor do formato base
+
+### Resumo
+No editor de numeração, o botão **🖼️ Arte de Fundo** deixa de exigir upload manual: ao abrir uma numeração para editar — e ao escolher o Formato Base numa numeração nova — o PDF da cor mais antiga cadastrada para aquele formato entra sozinho no canvas.
+
+### Como a cor é escolhida
+Entre as cores cuja coluna `formato_id` aponta para o formato base da numeração, vence a de `created_at` mais antigo. Os formatos compatíveis (`formato_ids`) são ignorados de propósito — só o formato base decide. Formato sem cor, ou cor mais antiga sem PDF, abre a barra vazia, sem erro: a ausência de cor é situação normal.
+
+Nada é persistido. A cor é re-resolvida a cada abertura, então reeditar a cor no catálogo se reflete na próxima vez que a numeração for aberta.
+
+### O que continua igual
+O rótulo com o nome do arquivo, o botão **✕ Remover** e o upload manual por cima. Subir um arquivo sobrescreve a frente e descarta o verso automático, porque o botão governa só a frente e manter o verso de uma cor sob a frente de outra arte mostraria duas artes diferentes no mesmo par de canvas.
+
+### Frente e verso
+Cores cadastradas como frente e verso carregam também a arte do verso, no canvas duplex. O campo `state.bgImageVerso` já era lido por `drawCanvasFace` mas nunca era escrito — era um caminho morto, agora ligado. O **✕ Remover** passa a limpar as duas faces.
+
+### Corrigido
+A arte de fundo de uma numeração vazava para a numeração aberta em seguida: `editNumeracao()` nunca limpava `state.bgImage`, então quem editava a numeração A e abria a B via o canvas de B com a arte da A.
 
 ---
 
