@@ -2787,7 +2787,9 @@ function editNumeracao(id) {
 
     document.getElementById('view-numeracao').classList.add('active');
 
-
+    // Descartar a arte de fundo da numeração aberta antes desta — sem isso,
+    // editar a numeração B logo depois da A mostrava o canvas de B com a arte de A.
+    window.clearBgImage();
 
     document.getElementById('num-id').value = n.id;
 
@@ -2976,6 +2978,10 @@ function editNumeracao(id) {
 
 
     drawCanvas();
+
+    // Trazer a arte da cor mais antiga do formato base. Depois de onFormatoSelect,
+    // que é onde state.numFormato foi resolvido.
+    window.autoLoadCorBg(n.formato_id);
 
     // Pré-carregar _pdfCanvas para cada elemento PDF presente na numeração
     // para garantir renderização correta (respeitando width_mm x height_mm do elemento)
