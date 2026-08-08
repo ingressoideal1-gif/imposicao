@@ -53,9 +53,11 @@ já funciona.
 
 O prefixo `previews-numeracoes/` dentro do `artes` preserva a separação lógica que
 motivou o bucket dedicado: os previews ficam identificáveis e agrupados, sem
-misturar com arte de cliente na raiz. E deixa a mudança futura barata — quando a
-política do bucket dedicado for resolvida, trocar o bucket é alterar uma linha, e o
-prefixo já é o nome certo.
+misturar com arte de cliente na raiz. E deixa o nome já certo para uma mudança
+futura — mas não barata: bucket e prefixo estão fixados de forma independente em
+três lugares (`frontend/script.js`, `migrar_previews_para_storage.py` e
+`criar_bucket_previews.sql`), então trocar o bucket quando a política do bucket
+dedicado for resolvida exige editar os três, não uma linha.
 
 Um upload de teste feito com a service key não prova nada sobre o caminho real: a
 service key ignora RLS. Toda verificação de escrita usa a chave anônima.

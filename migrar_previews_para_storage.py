@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Migra producao_numeracoes.preview_jpg de data URL base64 para arquivo .jpg no
-bucket previews-numeracoes, deixando na coluna apenas a URL publica.
+Migra producao_numeracoes.preview_jpg de data URL base64 para arquivo .jpg em
+artes/previews-numeracoes/, deixando na coluna apenas a URL publica.
 
 Uso:
     venv/Scripts/python.exe migrar_previews_para_storage.py
@@ -70,6 +70,11 @@ def main():
     if not pendentes:
         print("Nada a fazer.")
         return 0
+
+    # Quem for rodar isto por engano precisa ver, sem precisar ler o codigo, contra
+    # qual projeto e quantas linhas isto vai escrever.
+    print("\nProjeto de destino: %s" % url)
+    print("Migrando %d linha(s) para %s/%s/<id>.jpg" % (len(pendentes), BUCKET, PREFIXO))
 
     migradas, falhas = [], []
 

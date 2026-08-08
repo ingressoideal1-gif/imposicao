@@ -5892,12 +5892,6 @@ async function uploadToStorage(content, fileName, path, opts = {}) {
     });
 }
 
-// Alias para os scripts de verificação: dá um nome estável para chamar de dentro
-// de page.evaluate, independente de futuras refatorações de uploadToStorage.
-window.__uploadToStorageTeste = uploadToStorage;
-
-
-
 window.saveNumeracao = async function () {
 
     const id = document.getElementById('num-id').value;
@@ -5938,8 +5932,15 @@ window.saveNumeracao = async function () {
 
         });
 
-    // Sem Supabase o app roda offline: deixa o id em branco para que api() use o
-    // esquema local dela, e o preview cai no fallback base64 de uploadToStorage.
+    // Sem supabaseClient, deixa o id em branco para que api() use o esquema local
+    // dela (fetch para db.py) — mas isso NÃO é "offline" de verdade: supabaseClient
+    // fica nulo quando o navegador está em ?offline=true, localStorage.offline_mode,
+    // ou quando o CDN do supabase-js simplesmente não carrega (supabase-config.js),
+    // e nenhum desses casos garante que db.py também esteja sem Supabase. Se
+    // IS_SUPABASE_ACTIVE estiver ligado em db.py (o caso normal na estação), o
+    // preview sem supabaseClient cai no fallback base64 de uploadToStorage e db.py
+    // repassa esse base64 direto para producao_numeracoes, em produção. Reexecutar
+    // migrar_previews_para_storage.py limpa o que voltar a acumular assim.
     const numeracaoId = id || (homonima ? homonima.id : (temSupabase ? gerarUuid() : ''));
 
     toast('Fazendo upload e salvando (isso pode demorar alguns segundos)...', 'info');
@@ -6029,6 +6030,16 @@ window.saveNumeracao = async function () {
                 { buckets: ['artes'], objectPath: 'previews-numeracoes/' + numeracaoId + '.jpg' }
 
             );
+
+            // Se voltou data: em vez de http, o upload ao Storage falhou e o fallback
+            // de uploadToStorage devolveu base64 — o mesmo caminho que esta tarefa
+            // tirou da coluna. Isso não impede o save (é degradação, não quebra),
+            // mas precisa deixar rastro: se alguém apertar a política de RLS do
+            // bucket 'artes', é assim que isso vai regredir em silêncio sem este aviso.
+            if (typeof previewValor === 'string' && previewValor.startsWith('data:')) {
+                console.error('[Storage] Upload do preview da numeração falhou — caiu no fallback base64 (embutido em preview_jpg) em vez de ir para artes/previews-numeracoes/' + numeracaoId + '.jpg. Verifique as políticas de storage.objects do bucket "artes".');
+                toast('Não foi possível enviar o preview ao Storage — ele foi salvo embutido (base64) na numeração.', 'warning');
+            }
 
         }
 

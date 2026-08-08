@@ -17,13 +17,15 @@ O preview de 100 DPI gerado ao salvar uma numeração era gravado como data URL 
 Não era só armazenamento. `loadAll()` carrega as numerações com `select *`, então os 454,6 KB de base64 espalhados por 42 linhas atravessavam a rede a cada carregamento de página — para um dado que nenhuma tela usa. Depois da mudança a mesma coluna, nas mesmas 42 linhas, soma 5,41 KB — 0 KB em base64, só URLs. Isso é o ganho isolado desta tarefa. O carregamento completo de `producao_numeracoes` continua pesado (por volta de 535 KB por chamada) porque a coluna `csv_data` (426 KB) domina o payload — pré-existente, fora do escopo desta tarefa, e não afetado por ela.
 
 ### Um preview por numeração
-O arquivo é nomeado com o id do registro (`previews-numeracoes/<id>.jpg`) e sobe com upsert, então salvar a mesma numeração dez vezes sobrescreve o mesmo objeto em vez de deixar dez órfãos no bucket. Para isso o id passou a ser resolvido no início de `saveNumeracao`, antes do upload — inclusive no caminho em que salvar sem id, com um nome que já existe, substitui a numeração homônima em vez de criar outra.
+O arquivo é nomeado com o id do registro (`previews-numeracoes/<id>.jpg`) e sobe com upsert, então salvar a mesma numeração dez vezes sobrescreve o mesmo objeto em vez de deixar dez órfãos no bucket. Substituir uma numeração homônima ao salvar sem id já era o comportamento de antes desta tarefa — o que mudou agora é só *onde* esse id é resolvido: antes do upload, no início de `saveNumeracao`, para que o preview suba com o nome definitivo do registro em vez de um provisório.
 
 ### Migração
 As 42 linhas que já estavam em base64 foram convertidas de uma vez, com backup local do estado anterior. A conferência não se contentou com o PATCH ter retornado sem erro: cada URL foi baixada exigindo status 200 e `content-type: image/jpeg`.
 
 ### Se o Storage falhar
 `uploadToStorage` mantém o comportamento antigo de cair para base64 quando o upload não passa. A coluna continua funcionando em vez de ficar vazia — é degradação, não quebra.
+
+O mesmo fallback também dispara se o navegador simplesmente não tiver `supabaseClient` — modo offline (`?offline=true`, `localStorage.offline_mode`) ou o CDN do supabase-js não carregando. Nesse caso não há upload a falhar: o preview já nasce em base64. Pelo backend, se `db.py` estiver com Supabase ativo (o caso normal na estação), esse base64 chega à mesma `producao_numeracoes` de produção — o navegador se declarar offline não implica que o backend esteja. Reexecutar `migrar_previews_para_storage.py` limpa o que voltar a acumular assim.
 
 ---
 

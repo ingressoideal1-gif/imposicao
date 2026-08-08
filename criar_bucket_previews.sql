@@ -1,4 +1,14 @@
 -- ══════════════════════════════════════════════════════════════════
+-- NÃO EXECUTE ESTE ARQUIVO.
+--
+-- Isto é registro de uma tentativa que não funcionou: a escrita anônima em
+-- storage.objects para o bucket 'previews-numeracoes' foi bloqueada por uma
+-- política RESTRICTIVE, e o bucket dedicado nunca chegou a ser usado pelo app.
+-- Os previews de numeração vão para artes/previews-numeracoes/ (bucket 'artes',
+-- que já tem política de escrita liberada), não para um bucket separado.
+-- ══════════════════════════════════════════════════════════════════
+
+-- ══════════════════════════════════════════════════════════════════
 -- POLÍTICAS DE STORAGE: bucket previews-numeracoes
 -- Execute no SQL Editor do Supabase (vwbtitjlpelrcnsytzqw)
 --
