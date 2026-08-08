@@ -32,16 +32,35 @@ Write-Host "Versão atual: v$currentV"
 Write-Host "Nova versão: v$nextV"
 
 # 2. Atualizar arquivos HTML
+#
+# Bumpa TODO asset local versionado (.js?v= e .css?v=) em todas as paginas, em
+# vez de uma lista fixa de arquivos.
+#
+# A lista fixa cobria so script.js, pedido.js e cliente.js. style.css, mapas.js
+# e criador-arte.js nunca eram bumpados: ficaram congelados (style.css em v=9/7/5
+# conforme a pagina, os outros dois em v=2) e suas alteracoes nao chegavam ao
+# navegador de quem ja tinha o arquivo em cache. Qualquer asset novo entraria no
+# mesmo buraco -- por isso a regra agora e por padrao, nao por nome.
+#
+# Os CDNs nao sao afetados: eles fixam versao no caminho (/3.11.174/pdf.min.js),
+# nunca em querystring.
 Write-Host "Atualizando arquivos HTML..."
-(Get-Content -Encoding UTF8 $indexFile) -replace "script\.js\?v=$currentV", "script.js?v=$nextV" | Set-Content -Encoding UTF8 $indexFile
-(Get-Content -Encoding UTF8 $indexFile) -replace "pedido\.js\?v=\d+", "pedido.js?v=$nextV" | Set-Content -Encoding UTF8 $indexFile
-
-$clienteFile = "frontend\cliente.html"
-(Get-Content -Encoding UTF8 $clienteFile) -replace "cliente\.js\?v=\d+", "cliente.js?v=$nextV" | Set-Content -Encoding UTF8 $clienteFile
-
-$producaoFile = "frontend\producao.html"
-(Get-Content -Encoding UTF8 $producaoFile) -replace "script\.js\?v=\d+", "script.js?v=$nextV" | Set-Content -Encoding UTF8 $producaoFile
-(Get-Content -Encoding UTF8 $producaoFile) -replace "pedido\.js\?v=\d+", "pedido.js?v=$nextV" | Set-Content -Encoding UTF8 $producaoFile
+$substituicao = '.$1?v=' + $nextV
+Get-ChildItem "frontend\*.html" | ForEach-Object {
+    $html = Get-Content -Encoding UTF8 $_.FullName -Raw
+    $novo = $html -replace '\.(js|css)\?v=\d+', $substituicao
+    if ($novo -ne $html) {
+        # -Raw + -NoNewline preserva o arquivo byte a byte fora as substituicoes
+        # (o Get-Content/Set-Content por linha normalizava as quebras de linha).
+        #
+        # -Path e -Value NOMEADOS de proposito: -Path aceita string[], entao na
+        # forma posicional o PowerShell engole caminho E conteudo no mesmo array
+        # de -Path, deixa -Value sem ligar e falha com um erro enganoso sobre
+        # 'Encoding'. Nao passe esses dois por posicao.
+        Set-Content -Encoding UTF8 -NoNewline -Path $_.FullName -Value $novo
+        Write-Host "  $($_.Name)"
+    }
+}
 
 # 3. Git commit e push
 Write-Host "Fazendo commit no Git..."

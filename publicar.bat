@@ -43,13 +43,15 @@ echo.
 echo  Commit: !MSG!
 echo.
 
-REM ── 3. Bumpar versão no index.html e outras páginas ──────────────────────────
-echo  Atualizando index.html, cliente.html e producao.html para v%NEXT_V%...
-powershell -NoProfile -Command "(Get-Content '%INDEX%') -replace 'script\.js\?v=%CURRENT_V%', 'script.js?v=%NEXT_V%' | Set-Content '%INDEX%'"
-powershell -NoProfile -Command "(Get-Content '%INDEX%') -replace 'pedido\.js\?v=\d+', 'pedido.js?v=%NEXT_V%' | Set-Content '%INDEX%'"
-powershell -NoProfile -Command "(Get-Content 'frontend\cliente.html') -replace 'cliente\.js\?v=\d+', 'cliente.js?v=%NEXT_V%' | Set-Content 'frontend\cliente.html'"
-powershell -NoProfile -Command "(Get-Content 'frontend\producao.html') -replace 'script\.js\?v=\d+', 'script.js?v=%NEXT_V%' | Set-Content 'frontend\producao.html'"
-powershell -NoProfile -Command "(Get-Content 'frontend\producao.html') -replace 'pedido\.js\?v=\d+', 'pedido.js?v=%NEXT_V%' | Set-Content 'frontend\producao.html'"
+REM ── 3. Bumpar versão de TODOS os assets locais versionados ──────────────────
+REM  Mesma regra do publicar.ps1: bumpa qualquer .js?v= / .css?v= em todas as
+REM  paginas, por padrao e nao por nome. A lista fixa anterior cobria so
+REM  script.js, pedido.js e cliente.js -- style.css, mapas.js e criador-arte.js
+REM  ficavam congelados e suas alteracoes nao chegavam ao navegador.
+echo  Atualizando versao de todos os assets locais para v%NEXT_V%...
+REM  -Path/-Value nomeados: na forma posicional o -Path (string[]) engole
+REM  caminho e conteudo no mesmo array e o Set-Content falha.
+powershell -NoProfile -Command "Get-ChildItem 'frontend\*.html' | ForEach-Object { $html = Get-Content -Encoding UTF8 $_.FullName -Raw; $novo = $html -replace '\.(js|css)\?v=\d+', ('.$1?v=' + %NEXT_V%); if ($novo -ne $html) { Set-Content -Encoding UTF8 -NoNewline -Path $_.FullName -Value $novo; Write-Host ('  ' + $_.Name) } }"
 if errorlevel 1 (
     echo  [ERRO] Falha ao atualizar versão nos arquivos HTML
     goto :fim_erro
