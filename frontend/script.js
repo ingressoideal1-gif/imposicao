@@ -92,6 +92,8 @@ const state = {
 
     bgImageVerso: null,     // HTMLImageElement | null (arte de fundo do verso, em duplex)
 
+    bgLoadToken: 0,         // invalida carregamentos de fundo assíncronos que ficaram para trás
+
     impMultiArtes: [],      // array of arts for multi_artes pagination
 
 
@@ -4474,6 +4476,10 @@ window.clearBgImage = function () {
 
     state.bgImageVerso = null;
 
+    // Invalida qualquer autoLoadCorBg em voo: quando a promessa dele resolver,
+    // o token não vai mais bater e ela desiste sem sobrescrever este estado limpo.
+    state.bgLoadToken++;
+
     const btn = document.getElementById('btn-remove-bg');
 
     const name = document.getElementById('bg-file-name');
@@ -4586,6 +4592,10 @@ window.rasterizePdfToImage = async function (arrayBuffer) {
 // PDF: a ausência é situação normal, não falha, e não rende toast.
 window.autoLoadCorBg = async function (formatoId) {
 
+    // Token desta chamada: se um clearBgImage() ou outro autoLoadCorBg mais novo
+    // rodar antes desta promessa terminar, o token muda e esta desiste sem escrever.
+    const meuToken = ++state.bgLoadToken;
+
     const cor = window.resolveCorDoFormatoBase(formatoId);
 
     if (!cor) return false;
@@ -4600,9 +4610,15 @@ window.autoLoadCorBg = async function (formatoId) {
 
         const bytes = await fetchPdfBytes(srcFrente);
 
+        if (meuToken !== state.bgLoadToken) return false;
+
         if (!bytes) return false;
 
-        state.bgImage = await window.rasterizePdfToImage(bytes);
+        const img = await window.rasterizePdfToImage(bytes);
+
+        if (meuToken !== state.bgLoadToken) return false;
+
+        state.bgImage = img;
 
         const btn = document.getElementById('btn-remove-bg');
 
@@ -4624,7 +4640,17 @@ window.autoLoadCorBg = async function (formatoId) {
 
                 const bytesVerso = await fetchPdfBytes(cor.pdf_verso_base64);
 
-                if (bytesVerso) state.bgImageVerso = await window.rasterizePdfToImage(bytesVerso);
+                if (meuToken !== state.bgLoadToken) return false;
+
+                if (bytesVerso) {
+
+                    const imgVerso = await window.rasterizePdfToImage(bytesVerso);
+
+                    if (meuToken !== state.bgLoadToken) return false;
+
+                    state.bgImageVerso = imgVerso;
+
+                }
 
             } catch (eVerso) {
 
