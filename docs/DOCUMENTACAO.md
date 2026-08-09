@@ -645,7 +645,7 @@ Servidor HTTP mínimo (porta 9000) que expõe o mesmo endpoint `/api/print/submi
 
 ## 14. Deploy (Render / Firebase)
 
-> Documentação detalhada de deploy em: [DEPLOY.md](file:///./DEPLOY.md)
+> Como publicar, como voltar e o que fazer quando dá errado: [PUBLICAR.md](PUBLICAR.md)
 
 ### Backend (Render)
 

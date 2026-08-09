@@ -102,6 +102,10 @@ ser atualizados juntos:
 Se o `Version` do MSI não subir, o Windows entende que já está instalado e **pula a
 atualização**. Se o `AGENT_VERSION` não subir, o auto-update nunca detecta a versão nova.
 
+> O `publicar_agente.ps1` escreve os **três primeiros** automaticamente e falha se não
+> encontrar o padrão esperado em algum deles — errar um em silêncio é pior que parar.
+> O `agent_tray.spec` continua manual: ele só muda quando entra um módulo Python novo.
+
 ---
 
 ## 🛠️ Compilar
@@ -113,8 +117,11 @@ atualização**. Se o `AGENT_VERSION` não subir, o auto-update nunca detecta a 
 
 Gera `dist/NewProd.exe` e `dist/NewProd_Setup_vX.Y.Z.msi` (~47 MB).
 
-> Não use `.\build_agent.ps1 2>&1`: o PyInstaller escreve logs em stderr e, no PowerShell 5.1,
-> a redireção transforma cada linha em erro terminante, abortando o build.
+> **Não redirecione os fluxos de saída do build.** O PyInstaller escreve seus logs em
+> stderr mesmo quando dá tudo certo e, no PowerShell 5.1, qualquer redireção transforma
+> cada linha em erro terminante e aborta o build. Vale para `2>&1`, para `*>` e para
+> `*> arquivo.log` — não só para a forma clássica. Se precisar do log, deixe o comando
+> escrever na tela e copie de lá.
 
 **Módulo Python novo?** Adicione em `hiddenimports` no `agent_tray.spec`. O spec lista os
 módulos locais explicitamente — sem isso o executável quebra com `ImportError` em produção.
@@ -180,9 +187,17 @@ publicar o `latest.json`. Assim o manifesto nunca aponta para um arquivo ausente
 > versão. A conferência do MSI é feita pela URL **simples**, de propósito — é a que o agente
 > usa, e é ela que precisa bater.
 
-> **Limite de 50 MB.** O teto de upload do projeto é 50 MB. O instalador tem ~47 MB — folga de
-> apenas 3 MB. Se uma dependência nova estourar isso, as saídas são enxugar o pacote
-> (`ppds` ~5 MB, `cryptography` ~10 MB), subir o teto do plano, ou baixar em partes.
+> ⛔ **Limite de 50 MB — hoje ESTOURADO.** O teto de upload do projeto é 50 MB. Uma
+> compilação feita em **2026-08-09** produziu um MSI de **51,63 MB**: a folga de 3 MB que
+> existia acabou, e **o próximo release não sobe como está**.
+>
+> O `publicar_agente.ps1` recusa o envio nesse caso, antes de qualquer upload — então o
+> sintoma será o script parando, não um release quebrado. Mas o problema precisa ser
+> resolvido antes da próxima versão do agente.
+>
+> As saídas, em ordem de esforço: enxugar o pacote (`ppds` ~5 MB, `cryptography` ~10 MB
+> são os maiores candidatos), subir o teto do plano do Supabase, ou dividir o download
+> em partes.
 
 ---
 
@@ -268,12 +283,43 @@ A checagem 2 é a decisiva: `0.0.0.0` significa que a versão antiga ainda está
 
 ---
 
-## ✅ Checklist de release
+## ✅ Publicar um release
 
-1. [ ] Subir a versão nos quatro pontos (`agent_version.py`, `.wxs`, `compilar_msi.ps1`, spec se houver módulo novo)
-2. [ ] Compilar exe + MSI
-3. [ ] Conferir a `ProductVersion` dentro do MSI e o tamanho (< 50 MB)
-4. [ ] Publicar MSI e depois `latest.json` no `agent-releases`
-5. [ ] Baixar o manifesto **sem credencial** e conferir que o sha256 bate
-6. [ ] Commitar e fazer merge na `main` — o Render passa a reportar a versão nova, e é a
-       comparação com ela que dispara o banner nas estações
+```powershell
+.\publicar_agente.ps1 1.2.23 -Notas "corrige a fonte no verso"
+```
+
+O script executa a lista inteira e **para** no primeiro passo que falhar:
+
+1. Recusa versão que não seja maior que a atual — com a mesma comparação numérica que o
+   agente usa (`agent_version.como_tupla()`), para que `1.2.9` não passe por maior que
+   `1.2.22`.
+2. Escreve o número em `agent_version.py`, `agent_installer.wxs` e `compilar_msi.ps1`.
+3. Compila o executável e o MSI.
+4. Confere o tamanho (< 50 MB).
+5. Sobe o MSI para o `agent-releases`.
+6. **Baixa de volta pela URL pública** — a mesma que o agente usa — e confere o sha256.
+7. Só então publica o `latest.json`.
+8. Commita, cria a tag `agente-v1.2.23` e empurra.
+
+A ordem 5 → 6 → 7 é a razão de o script existir: invertida, o manifesto aponta para um
+arquivo ausente ou corrompido e **todas** as estações recusam a instalação.
+
+Use `-Simular` para executar tudo menos os envios, o commit e a tag. As seções acima
+continuam descrevendo o processo manual, para quando for preciso entender ou depurar o
+que o script faz.
+
+## ⏮️ Voltar a versão do agente
+
+**Republicar o MSI antigo com o número antigo não faz nada.** O agente só instala versão
+**maior** que a dele, então todas as estações ignoram — e o sintoma é o pior possível:
+nenhum erro, nenhuma mudança, e a impressão de que o release funcionou.
+
+Voltar é compilar o código antigo com um número **novo**:
+
+```powershell
+.\publicar_agente.ps1 1.2.24 -Codigo agente-v1.2.22
+```
+
+O `-Codigo` traz os arquivos do agente daquela tag; o `1.2.24` é o número que faz as
+estações aceitarem. O resultado é a 1.2.22 rodando sob o nome 1.2.24.
