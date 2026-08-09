@@ -6,4 +6,8 @@ python-multipart>=0.0.6
 python-barcode[images]>=0.15.1
 Pillow>=10.0.0
 firebase-admin>=6.2.0
+# Obrigatorias para impor elementos de numeracao do tipo SVG (engine.py).
+# Sem elas o SVG aparece na tela e nao sai no PDF impresso.
+svglib>=1.5.1
+reportlab>=4.0.0
 

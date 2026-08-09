@@ -5,6 +5,20 @@ import fitz       # PyMuPDF
 import qrcode
 from PIL import Image
 
+# svglib/reportlab sao obrigatorios para impor elementos de tipo SVG.
+# O import fica no topo (e nao dentro do try do render) de proposito: ate a v488
+# ele estava dentro do bloco protegido, entao uma dependencia ausente virava um
+# print() no console e o SVG simplesmente nao saia no papel, sem ninguem notar.
+# Aqui o erro fica guardado e vira excecao no momento em que um SVG e imposto.
+try:
+    from svglib.svglib import svg2rlg
+    from reportlab.graphics import renderPDF
+    _SVG_IMPORT_ERROR = None
+except Exception as _svg_imp_ex:   # pragma: no cover - depende do ambiente
+    svg2rlg = None
+    renderPDF = None
+    _SVG_IMPORT_ERROR = _svg_imp_ex
+
 MM2PT = 2.8346   # 1mm em pontos PDF
 
 # Cache para evitar log repetido de resolução de fontes do sistema
@@ -725,11 +739,15 @@ class ImpositionEngine:
                 h_pt = el.get("height_mm", 20) * MM2PT
                 rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
                 py_rotate = (360 - angle) % 360
+
+                if _SVG_IMPORT_ERROR is not None:
+                    raise RuntimeError(
+                        "Nao foi possivel impor o elemento SVG: as bibliotecas 'svglib' e "
+                        f"'reportlab' nao estao disponiveis ({_SVG_IMPORT_ERROR}). "
+                        "Instale-as com: pip install -r requirements.txt"
+                    )
+
                 try:
-                    import io
-                    from svglib.svglib import svg2rlg
-                    from reportlab.graphics import renderPDF
-                    
                     if svg_content.startswith("http"):
                         svg_bytes = self._get_url_bytes(svg_content)
                         svg_data = svg_bytes.decode("utf-8")
@@ -737,19 +755,29 @@ class ImpositionEngine:
                         svg_data = svg_content
 
                     drawing = svg2rlg(io.StringIO(svg_data))
+                    if drawing is None:
+                        raise ValueError("svg2rlg nao conseguiu interpretar o conteudo do SVG")
+                    # Um SVG malformado nao levanta excecao no svglib: ele devolve um
+                    # desenho 0x0 que nao pinta nada. Sem esta checagem o PDF sairia
+                    # sem a arte e sem qualquer aviso.
+                    if not (drawing.width > 0 and drawing.height > 0):
+                        raise ValueError("o SVG resultou num desenho de tamanho zero (arquivo invalido ou vazio)")
                     pdf_bytes = renderPDF.drawToString(drawing)
                     pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                    # keep_proportion=True: o desenho e encaixado na caixa do elemento
+                    # sem distorcao, do mesmo jeito que os canvas do frontend desenham.
                     page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
+                    pdf_doc.close()
                 except Exception as ex:
-                    print(f"Erro ao impor SVG: {ex}")
+                    # Nao engolir: um PDF impresso sem a arte custa papel e tempo.
+                    raise RuntimeError(f"Erro ao impor o elemento SVG '{el.get('id', '?')}': {ex}") from ex
 
         elif t == "PDF":
             pdf_content = el.get("pdf_content") or ""
             if pdf_content:
+                import base64
+                import traceback
                 try:
-                    import base64
-                    import traceback
-                    
                     if not isinstance(pdf_content, str) or not pdf_content.strip():
                         print(f"[engine] Elemento PDF ignorado - pdf_content invalido")
                         return
@@ -771,11 +799,13 @@ class ImpositionEngine:
                         h_pt = pdf_doc[0].rect.height
                     rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
                     py_rotate = (360 - angle) % 360
+                    # keep_proportion=True: encaixa sem distorcer, igual ao canvas.
                     page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
                     pdf_doc.close()
                 except Exception as ex:
-                    print(f"[engine] ERRO ao impor elemento PDF: {ex}")
+                    # Nao engolir: um PDF impresso sem a arte custa papel e tempo.
                     traceback.print_exc()
+                    raise RuntimeError(f"Erro ao impor o elemento PDF '{el.get('id', '?')}': {ex}") from ex
             else:
                 print(f"[engine] Elemento PDF sem pdf_content - ignorado")
 

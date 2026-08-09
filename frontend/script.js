@@ -3633,6 +3633,27 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
     }
 }
 
+/**
+ * Desenha uma imagem (Image ou canvas) encaixada na caixa (x, y, w, h) SEM distorcer,
+ * preservando a proporcao original e centralizando a sobra.
+ *
+ * Este e o equivalente exato, no canvas, do `page.show_pdf_page(..., keep_proportion=True)`
+ * que o `engine.py` usa para elementos SVG e PDF — inclusive quanto a centralizacao,
+ * verificada por medicao. Todo renderizador de elemento SVG/PDF do frontend precisa
+ * passar por aqui: `ctx.drawImage(img, x, y, w, h)` cru estica a arte e faz a tela
+ * divergir do papel.
+ */
+function drawImageContain(ctx, img, x, y, w, h) {
+    const iw = img.naturalWidth || img.width || 0;
+    const ih = img.naturalHeight || img.height || 0;
+    if (!iw || !ih || !(w > 0) || !(h > 0)) return;
+    const escala = Math.min(w / iw, h / ih);
+    const dw = iw * escala;
+    const dh = ih * escala;
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+window.drawImageContain = drawImageContain;
+
 function drawElement(ctx, el, S) {
 
     const x = el.x_mm * S;
@@ -3896,7 +3917,7 @@ function drawElement(ctx, el, S) {
             const imgObj = pdfCanvas || state.numPdfImage;
 
             if (imgObj) {
-                ctx.drawImage(imgObj, -hw, -hh, w, h);
+                drawImageContain(ctx, imgObj, -hw, -hh, w, h);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
@@ -3913,10 +3934,10 @@ function drawElement(ctx, el, S) {
         } else {
 
             // SVG
-            const imgObj = state.numSvgImage;
+            const imgObj = el._svgImage || state.numSvgImage;
 
             if (imgObj) {
-                ctx.drawImage(imgObj, -hw, -hh, w, h);
+                drawImageContain(ctx, imgObj, -hw, -hh, w, h);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
@@ -4810,9 +4831,117 @@ window.clearNumSvgFile = function () {
 
 
 
+// ── Tamanho natural de um SVG ────────────────────────────────────────────────
+// O engine impõe SVG com o svglib, e o svglib lê o tamanho dos atributos
+// `width`/`height` do próprio arquivo (unidade ausente = px a 96 DPI) e, quando
+// eles faltam, das dimensões do `viewBox` tratadas como px. Medir o SVG pelo
+// `img.width` do navegador só coincide com isso quando o arquivo declara um
+// tamanho absoluto: sem `width`/`height`, ou com eles em `%`, o navegador
+// substitui pelo default de 300×150 px, que não tem relação nenhuma com o
+// desenho. Por isso a conta é feita a partir do texto do SVG.
+
+const SVG_UNIDADES_PARA_MM = {
+    px: 25.4 / 96,
+    pt: 25.4 / 72,
+    pc: 25.4 / 6,
+    q: 0.25,
+    mm: 1,
+    cm: 10,
+    in: 25.4
+};
+
+/** Interpreta um comprimento SVG: devolve {mm} para unidades absolutas, {pct} para "N%". */
+function parseSvgLength(valor) {
+    if (valor === null || valor === undefined) return null;
+    const s = String(valor).trim();
+
+    const pct = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+))\s*%$/);
+    if (pct) {
+        const n = parseFloat(pct[1]);
+        return (isFinite(n) && n > 0) ? { pct: n } : null;
+    }
+
+    const m = s.match(/^([+-]?(?:\d+\.?\d*|\.\d+))\s*(px|pt|pc|mm|cm|in|q)?$/i);
+    if (!m) return null;   // "auto", "em", vazio: sem tamanho declarado
+    const n = parseFloat(m[1]);
+    if (!isFinite(n) || n <= 0) return null;
+    const fator = SVG_UNIDADES_PARA_MM[(m[2] || 'px').toLowerCase()];
+    return fator ? { mm: n * fator } : null;
+}
+
+/** Tamanho natural (escala 100%) de um SVG, em mm, ou null se indeterminável. */
+function svgNaturalSizeMm(svgText) {
+    if (!svgText || typeof svgText !== 'string') return null;
+    try {
+        const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+        const svg = doc && doc.documentElement;
+        if (!svg || svg.nodeName.toLowerCase() !== 'svg') return null;
+        if (doc.getElementsByTagName('parsererror').length) return null;
+
+        const vb = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+        const vbOk = vb.length === 4 && isFinite(vb[2]) && isFinite(vb[3]) && vb[2] > 0 && vb[3] > 0;
+        const PX2MM = SVG_UNIDADES_PARA_MM.px;
+        const vbW = vbOk ? vb[2] * PX2MM : null;
+        const vbH = vbOk ? vb[3] * PX2MM : null;
+
+        // Percentual resolve contra o viewBox — é o que o svglib faz no engine.
+        const resolver = (bruto, base) => {
+            if (!bruto) return null;
+            if (bruto.mm) return bruto.mm;
+            return base ? base * bruto.pct / 100 : null;
+        };
+        const w = resolver(parseSvgLength(svg.getAttribute('width')), vbW);
+        const h = resolver(parseSvgLength(svg.getAttribute('height')), vbH);
+
+        if (w && h) return { w, h };
+        if (!vbOk) return null;
+        if (w) return { w, h: w * (vb[3] / vb[2]) };
+        if (h) return { w: h * (vb[2] / vb[3]), h };
+        return { w: vbW, h: vbH };
+    } catch (err) {
+        return null;
+    }
+}
+window.svgNaturalSizeMm = svgNaturalSizeMm;
+
+/** Tamanho natural do SVG de um elemento, em mm. Null quando não dá para saber. */
+function svgTamanhoNaturalDoElemento(el) {
+    const texto = el && el.svg_content;
+    if (texto && !/^https?:/i.test(texto) && !texto.startsWith('data:')) {
+        const nat = svgNaturalSizeMm(texto);
+        if (nat) return nat;
+    }
+    // Depois de salvo, svg_content vira URL: cair no arquivo carregado no editor.
+    if (state.numSvgContent) {
+        const nat = svgNaturalSizeMm(state.numSvgContent);
+        if (nat) return nat;
+    }
+    if (state.numSvgOriginalW > 0 && state.numSvgOriginalH > 0) {
+        return { w: state.numSvgOriginalW, h: state.numSvgOriginalH };
+    }
+    const img = (el && el._svgImage) || state.numSvgImage;
+    if (img && img.width && img.height) {
+        const PX2MM = SVG_UNIDADES_PARA_MM.px;
+        return { w: img.width * PX2MM, h: img.height * PX2MM };
+    }
+    return null;
+}
+
+/** Proporção largura/altura a preservar ao redimensionar um elemento SVG. */
+function svgProporcaoDoElemento(el) {
+    const nat = svgTamanhoNaturalDoElemento(el);
+    if (nat && nat.w > 0 && nat.h > 0) return nat.w / nat.h;
+    const img = (el && el._svgImage) || state.numSvgImage;
+    if (img && img.width && img.height) return img.width / img.height;
+    if (el && el.width_mm > 0 && el.height_mm > 0) return el.width_mm / el.height_mm;
+    return null;
+}
+
 async function loadNumSvgFile(file) {
 
     try {
+
+        const texto = await file.text();
 
         const url = URL.createObjectURL(file);
 
@@ -4828,25 +4957,29 @@ async function loadNumSvgFile(file) {
 
         state.numSvgFilename = file.name;
 
-        // SVG resolution in browsers defaults to 96 DPI. Convert pixels to mm.
+        const nat = svgNaturalSizeMm(texto);
 
-        state.numSvgOriginalW = (img.width / 96) * 25.4;
+        if (nat) {
 
-        state.numSvgOriginalH = (img.height / 96) * 25.4;
+            state.numSvgOriginalW = nat.w;
 
+            state.numSvgOriginalH = nat.h;
 
+        } else {
 
-        const reader = new FileReader();
+            // O arquivo não declara tamanho nem viewBox utilizável: o img.width aqui
+            // é o palpite do navegador (300×150 px), não o desenho.
+            state.numSvgOriginalW = (img.width / 96) * 25.4;
 
-        reader.onload = e => {
+            state.numSvgOriginalH = (img.height / 96) * 25.4;
 
-            state.numSvgContent = e.target.result;
+            toast('Este SVG não declara largura/altura nem viewBox — o tamanho foi estimado pelo navegador e pode não bater com a impressão.', 'warning');
 
-            drawCanvas();
+        }
 
-        };
+        state.numSvgContent = texto;
 
-        reader.readAsText(file);
+        drawCanvas();
 
 
 
@@ -5383,9 +5516,14 @@ function renderElementsList() {
 
             extraFields = `
 
-                <div class="form-group"><label>Largura (mm)</label><input class="form-control" type="number" value="${el.width_mm || 20}" min="5" max="200" step="0.5" onchange="updateEl('${el.id}','width_mm',+this.value)"></div>
+                <div class="form-group"><label>Largura (mm)</label><input class="form-control" type="number" value="${el.width_mm || 20}" min="1" max="1000" step="0.5" onchange="updateElDimensaoSvg('${el.id}','width_mm',+this.value)"></div>
 
-                <div class="form-group"><label>Altura (mm)</label><input class="form-control" type="number" value="${el.height_mm || 20}" min="5" max="200" step="0.5" onchange="updateEl('${el.id}','height_mm',+this.value)"></div>`;
+                <div class="form-group"><label>Altura (mm)</label><input class="form-control" type="number" value="${el.height_mm || 20}" min="1" max="1000" step="0.5" onchange="updateElDimensaoSvg('${el.id}','height_mm',+this.value)"></div>
+
+                <div class="form-group el-full" style="display:flex;align-items:center;gap:8px;">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="resetSvgTamanhoOriginal('${el.id}')">↺ Tamanho original (100%)</button>
+                    <span style="font-size:0.75rem;color:var(--text-dim);">🔒 proporção travada</span>
+                </div>`;
 
         } else if (el.type === 'TEATRO_FILA' || el.type === 'TEATRO_LUGAR') {
             extraFields = `
@@ -5578,6 +5716,54 @@ window.updateEl = function (id, field, value) {
 };
 
 
+
+/**
+ * Redimensiona um elemento SVG mantendo a proporção original — mexer numa das
+ * dimensões ajusta a outra. Distorcer o desenho não é possível pela interface,
+ * e nem adiantaria: o engine impõe com `keep_proportion=True`, então uma caixa
+ * fora de proporção só produziria margem vazia no papel.
+ */
+window.updateElDimensaoSvg = function (id, campo, valor) {
+    const el = state.numElements.find(e => e.id === id);
+    if (!el) return;
+
+    const v = Math.max(0.1, +valor || 0);
+    const prop = svgProporcaoDoElemento(el);
+
+    const arred = n => Math.round(n * 100) / 100;
+
+    if (campo === 'height_mm') {
+        el.height_mm = arred(v);
+        if (prop) el.width_mm = arred(v * prop);
+    } else {
+        el.width_mm = arred(v);
+        if (prop) el.height_mm = arred(v / prop);
+    }
+
+    saveNumHistory();
+    renderElementsList();
+    drawCanvas();
+};
+
+/** Devolve o elemento SVG ao tamanho natural do arquivo (escala 100%). */
+window.resetSvgTamanhoOriginal = function (id) {
+    const el = state.numElements.find(e => e.id === id);
+    if (!el) return;
+
+    const nat = svgTamanhoNaturalDoElemento(el);
+    if (!nat) {
+        toast('Não foi possível determinar o tamanho original deste SVG.', 'warning');
+        return;
+    }
+
+    el.width_mm = Math.round(nat.w * 100) / 100;
+    el.height_mm = Math.round(nat.h * 100) / 100;
+
+    saveNumHistory();
+    renderElementsList();
+    drawCanvas();
+    toast(`Tamanho original restaurado: ${el.width_mm} × ${el.height_mm} mm`, 'success');
+};
 
 window.updateElSource = function (id, value) {
 
@@ -7480,11 +7666,11 @@ function drawPreview() {
                         const sz_h = (el.height_mm || 20) * MM2PT * scale;
                         const hw = sz_w / 2, hh = sz_h / 2;
 
-                        const svgImg = currentNum && currentNum._svgImage;
+                        const svgImg = el._svgImage || (currentNum && currentNum._svgImage);
 
                         if (svgImg) {
 
-                            ctx.drawImage(svgImg, -hw, -hh, sz_w, sz_h);
+                            drawImageContain(ctx, svgImg, -hw, -hh, sz_w, sz_h);
 
                         } else {
 
@@ -7517,7 +7703,7 @@ function drawPreview() {
 
                         if (el._pdfCanvas) {
 
-                            ctx.drawImage(el._pdfCanvas, -hw, -hh, sz_w, sz_h);
+                            drawImageContain(ctx, el._pdfCanvas, -hw, -hh, sz_w, sz_h);
 
                         } else if (el.pdf_content && !el._pdfLoading) {
 
@@ -20844,7 +21030,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 if (el.type === 'PDF') {
                     const imgObj = el._pdfCanvas || null;
                     if (imgObj) {
-                        numCtx.drawImage(imgObj, -hw, -hh_el, w, h);
+                        drawImageContain(numCtx, imgObj, -hw, -hh_el, w, h);
                     } else {
                         numCtx.strokeStyle = color;
                         numCtx.lineWidth = 1;
@@ -20878,7 +21064,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                             }
                         }
                         if (el._svgImage) {
-                            numCtx.drawImage(el._svgImage, -hw, -hh_el, w, h);
+                            drawImageContain(numCtx, el._svgImage, -hw, -hh_el, w, h);
                         } else {
                             numCtx.strokeStyle = color;
                             numCtx.lineWidth = 1;
@@ -25503,11 +25689,11 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
             if (el.type === 'PDF') {
                 const imgObj = el._pdfCanvas || null;
                 if (imgObj) {
-                    numCtx.drawImage(imgObj, -hw, -hh_el, w, h);
+                    drawImageContain(numCtx, imgObj, -hw, -hh_el, w, h);
                 }
             } else {
                 if (el._svgImage) {
-                    numCtx.drawImage(el._svgImage, -hw, -hh_el, w, h);
+                    drawImageContain(numCtx, el._svgImage, -hw, -hh_el, w, h);
                 }
             }
             numCtx.restore();

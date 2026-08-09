@@ -4,7 +4,53 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.5.5 (v488)** — 2026-08-08
+## Versão atual: **v1.5.6 (v489)** — 2026-08-09
+
+---
+
+## [v489 — 2026-08-09] — Elementos PDF e SVG saem no papel, em tamanho original e sem distorção
+
+### Resumo
+Correção dos dois bloqueadores levantados na análise de fluxo dos elementos PDF/SVG (`docs/fluxo_elementos_pdf_svg.md`). Elementos SVG voltaram a existir no PDF impresso, e tela e papel passaram a desenhá-los do mesmo jeito: no tamanho natural do arquivo, escala 100%, sem esticar.
+
+### B1 — o SVG aparecia na tela e não saía no papel
+`svglib` e `reportlab` não estavam instalados nem constavam do `requirements.txt`, e o `import` delas ficava **dentro** do `try` do `_render_element`, cujo `except Exception` apenas imprimia no console do servidor. Resultado medido antes da correção: `Erro ao impor SVG: No module named 'svglib'` e uma página sem desenho nenhum. A imposição terminava com sucesso, sem aviso, e o operador só descobria imprimindo.
+
+As duas bibliotecas entraram no `requirements.txt` e o import subiu para o topo do `engine.py`, guardando a falha em `_SVG_IMPORT_ERROR`. Um elemento SVG imposto sem elas agora levanta `RuntimeError` com a instrução de instalação, e a mensagem chega ao usuário pelo evento de erro de `app.py` em vez de morrer num `print()`.
+
+Os `except` silenciosos dos elementos SVG e PDF passaram a re-levantar. Um PDF impresso sem a arte custa papel e tempo; falhar a geração é mais barato. Também entrou uma checagem para um caso que não levantava exceção nenhuma: o `svglib` aceita um SVG malformado e devolve um desenho de tamanho zero, que não pinta nada — agora isso é erro explícito.
+
+### B2 — a tela esticava, o motor preservava a proporção
+Os renderizadores do frontend desenhavam com `ctx.drawImage(img, x, y, w, h)`, que **estica** para preencher a caixa; o `engine.py` usa `keep_proportion=True`, que **encaixa** preservando a proporção e centraliza a sobra. Enquanto ninguém redimensionava, coincidiam. Ao mudar a proporção da caixa, a tela mostrava a arte preenchendo e o papel saía com ela encolhida e centralizada.
+
+A regra escolhida foi **tamanho original, escala 100%, sem distorção**, e ela vale dos dois lados:
+
+- `drawImageContain()` é o novo equivalente exato, no canvas, do `keep_proportion=True` do PyMuPDF — inclusive na centralização, verificada por medição. Os quatro renderizadores de elemento SVG/PDF passam por ela: editor, janela combinada de arte, preview de imposição e export de gabarito.
+- Os campos Largura/Altura de um elemento SVG ficaram **travados na proporção**: mexer num ajusta o outro. Distorcer pela interface deixou de ser possível — e não adiantaria, já que o motor encaixaria de volta deixando margem vazia. Um botão **Tamanho original (100%)** devolve o elemento ao tamanho do arquivo. Elementos PDF nunca tiveram campos de tamanho, então já entravam em 100%.
+
+### Tamanho natural do SVG
+Para "escala 100%" significar alguma coisa, o tamanho natural precisava estar certo — e não estava. O cálculo era `(img.width / 96) * 25.4`, ou seja, a medida que o **navegador** dá ao SVG. Isso só acerta quando o arquivo declara um tamanho absoluto: sem `width`/`height`, ou com eles em `%`, o navegador substitui pelo default de 300×150 px, que não tem relação nenhuma com o desenho. Um SVG só com `viewBox="0 0 100 50"` entrava com 79,4 × 39,7 mm em vez de 26,46 × 13,23 mm.
+
+`svgNaturalSizeMm()` passa a ler o tamanho do texto do próprio arquivo, reproduzindo a interpretação do `svglib` — que é quem manda, porque é ele que gera o papel. As oito convenções foram medidas nos dois lados e batem:
+
+| SVG | frontend | svglib |
+|---|---|---|
+| `width="100" height="50"` | 26,46 × 13,23 mm | 26,46 × 13,23 mm |
+| só `viewBox="0 0 100 50"` | 26,46 × 13,23 mm | 26,46 × 13,23 mm |
+| `width="100mm"` | 100 × 50 mm | 100 × 50 mm |
+| `width="72pt"` | 25,4 × 12,7 mm | 25,4 × 12,7 mm |
+| `width="10cm"` | 100 × 50 mm | 100 × 50 mm |
+| `width="1in"` | 25,4 × 12,7 mm | 25,4 × 12,7 mm |
+| `width="50%"` (do viewBox) | 13,23 × 6,61 mm | 13,23 × 6,61 mm |
+| sem `width`, sem `viewBox` | indeterminável → aviso | desenho 0×0 → erro |
+
+O último caso é o único que continua sem resposta, e agora é honesto: o upload avisa que o tamanho foi estimado pelo navegador, e a imposição falha com mensagem em vez de gerar papel em branco.
+
+### Como foi verificado
+Medindo, não lendo. No motor, um SVG de 40×20 mm e um PDF de 30×15 mm impostos de verdade: em caixa de tamanho natural saíram 39,86 × 19,76 mm e 30,34 × 15,17 mm; numa caixa 60×60 mm saíram com razão 2,02 e 1,99, encaixados sem distorcer. No navegador, o `drawElement()` do editor com a mesma arte deu 39,50 × 19,50 mm na caixa natural e razão ~2,0 nas caixas fora de proporção. E o `svgNaturalSizeMm()` foi conferido contra o `svglib` nas oito convenções da tabela acima.
+
+### Fica pendente
+As inconsistências estruturais E1–E4 da análise continuam abertas — em especial o preview de imposição, que lê a imagem do SVG de `currentNum._svgImage`, um campo que nada preenche. O preview desenha o placeholder "SVG" em vez da arte; a correção de proporção já está lá e passa a valer assim que a fonte da imagem for unificada.
 
 ---
 

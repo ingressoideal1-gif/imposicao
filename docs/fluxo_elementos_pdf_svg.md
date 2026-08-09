@@ -6,6 +6,11 @@ upload até o papel. Data: 2026-08-08, contra a v488.
 Tudo que está marcado como **medido** foi verificado executando código, não lendo.
 Os comandos estão no fim de cada achado.
 
+> **Estado em 2026-08-09 (v489):** os bloqueadores **B1**, **B2** e **B3** foram
+> corrigidos — ver o CHANGELOG da v489 e as notas "✅ Corrigido" em cada seção
+> abaixo. O texto original de cada achado foi mantido porque descreve o sintoma
+> que se deve saber reconhecer. As inconsistências **E1 a E4** continuam abertas.
+
 ## O caminho, em sete etapas
 
 | # | Etapa | Onde |
@@ -54,6 +59,13 @@ instalar. **Correção correta:** além disso, mover o `import` para fora do `tr
 dependência ausente é erro de instalação, não de conteúdo) e fazer a falha de um
 elemento SVG propagar como erro visível ao usuário em vez de gerar um PDF incompleto.
 
+**✅ Corrigido na v489 pela correção correta.** As duas bibliotecas entraram no
+`requirements.txt`; o import subiu para o topo do `engine.py` e guarda a falha em
+`_SVG_IMPORT_ERROR`; impor um SVG sem elas levanta `RuntimeError` com a instrução de
+instalação. Os `except` de SVG e de PDF re-levantam em vez de imprimir. Entrou também
+uma checagem para o caso que não levantava exceção nenhuma: o `svglib` aceita um SVG
+malformado e devolve um desenho 0×0, que não pinta nada.
+
 ### B2. A tela estica o elemento; o PDF gerado preserva a proporção
 
 Todos os quatro renderizadores do frontend desenham com
@@ -86,25 +98,53 @@ a impressão outra.
 letterbox, como o engine), ou o engine passa a esticar (`keep_proportion=False`,
 como o resto do arquivo). O que não pode é continuar um de cada jeito.
 
-### B3. O tamanho inicial do SVG está errado para as duas convenções mais comuns
+**✅ Corrigido na v489.** A regra escolhida foi **tamanho original, escala 100%, sem
+distorção** — o canvas passou a respeitar a proporção, e o `keep_proportion=True` do
+engine ficou como estava. `drawImageContain()` (`frontend/script.js`) é o equivalente
+exato no canvas, centralização inclusive, e os quatro renderizadores passam por ela.
+Nenhum `ctx.drawImage(img, x, y, w, h)` cru sobrou para elementos SVG/PDF.
+
+Além disso, distorcer deixou de ser possível pela interface: os campos Largura e
+Altura de um elemento SVG ficaram travados na proporção — mexer num ajusta o outro —
+e um botão **Tamanho original (100%)** devolve o elemento ao tamanho do arquivo.
+Elementos PDF nunca tiveram campos de tamanho no painel de propriedades, então já
+entravam e permaneciam em 100%.
+
+Medido depois da correção, com arte natural de 40×20 mm: numa caixa de 60×60 mm o
+engine pinta razão 2,02 e o `drawElement()` do editor pinta razão ~2,0 — os dois
+encaixam, nenhum estica.
+
+### B3. O tamanho inicial do SVG erra quando o arquivo não declara tamanho
 
 `frontend/script.js:4833` deriva os milímetros de `(img.width / 96) * 25.4`, ou
-seja, assume que o SVG declara tamanho em pixels a 96 DPI.
+seja, mede o SVG **pelo navegador** e assume 96 DPI.
 
-**Medido**, com três SVGs que descrevem exatamente o mesmo desenho de 100×50:
+Quem manda no tamanho impresso, porém, é o `svglib` — é ele que transforma o SVG em
+PDF dentro do engine. Ele lê `width`/`height` do próprio arquivo (unidade ausente =
+px a 96 DPI) e, quando faltam, usa as dimensões do `viewBox` como px. Para todo SVG
+que declara um tamanho **absoluto**, a medida do navegador coincide com a do `svglib`
+— foi medido nas duas pontas. O problema aparece nos casos em que o SVG **não tem
+tamanho intrínseco**: sem `width`/`height`, ou com eles em `%`, o navegador substitui
+pelo default de 300×150 px, que não tem relação nenhuma com o desenho.
 
-| SVG | `img.width` | mm calculados |
-|---|---|---|
-| `width="100" height="50"` | 100×50 | **26,5 × 13,2** |
-| só `viewBox="0 0 100 50"` | 300×150 | **79,4 × 39,7** |
-| `width="100mm" height="50mm"` | 378×189 | **100 × 50** ✓ |
+**Medido** (antes da correção), com SVGs que descrevem o mesmo desenho de 100×50:
 
-Só a terceira convenção acerta. A segunda é pior do que parece: 300×150 é o
-**tamanho default do navegador** para SVG sem dimensão intrínseca — o número não tem
-relação nenhuma com o desenho.
+| SVG | `img.width` do navegador | mm calculados | `svglib` diz |
+|---|---|---|---|
+| `width="100" height="50"` | 100×50 | 26,46 × 13,23 | 26,46 × 13,23 ✓ |
+| só `viewBox="0 0 100 50"` | 300×150 | **79,4 × 39,7** | 26,46 × 13,23 ✗ |
+| `width="100mm" height="50mm"` | 378×189 | 100 × 50 | 100 × 50 ✓ |
+| `width="50%" height="50%"` | 300×150 | **79,4 × 39,7** | 13,23 × 6,61 ✗ |
 
 O elemento PDF não tem esse problema: `:4961` usa o viewport real em pontos, com a
 conversão correta de 72 pt/polegada.
+
+**✅ Corrigido na v489.** `svgNaturalSizeMm()` passou a ler o tamanho do texto do
+próprio arquivo, reproduzindo a interpretação do `svglib`, incluindo `pt`, `pc`, `mm`,
+`cm`, `in`, `q` e percentuais resolvidos contra o `viewBox`. As oito convenções foram
+medidas nos dois lados e batem. O único caso que continua sem resposta é o SVG sem
+`width`/`height` **e** sem `viewBox`: o upload avisa que o tamanho foi estimado pelo
+navegador, e a imposição falha com mensagem — o `svglib` produz um desenho 0×0 ali.
 
 ---
 
@@ -194,13 +234,16 @@ em frente do mesmo jeito.
 
 ## Ordem sugerida de ataque
 
-1. **B1** — instalar `svglib`/`reportlab` e colocá-los no `requirements.txt`. É o
-   único achado que faz o produto sair errado do jeito mais caro: papel impresso.
-2. **B2** — decidir entre esticar e preservar, e alinhar os dois lados.
-3. **E1** — unificar a fonte da imagem do SVG em `el._svgImage`, que é a única das
-   quatro que funciona por elemento e já é usada por dois renderizadores.
-4. **B3** — corrigir a derivação de milímetros do SVG, preferindo `viewBox` quando
-   houver, e avisar quando o SVG não declarar dimensão física.
+1. ~~**B1**~~ — feito na v489.
+2. ~~**B2**~~ — feito na v489.
+3. ~~**B3**~~ — feito na v489, junto com o B2 (sem tamanho natural correto, "escala
+   100%" não significa nada).
+4. **E1** — unificar a fonte da imagem do SVG em `el._svgImage`, que é a única das
+   quatro que funciona por elemento e já é usada por dois renderizadores. A v489
+   deixou o caminho meio pronto: o editor e o preview de imposição já preferem
+   `el._svgImage` quando ele existe, mas **nada o preenche** no preview de
+   imposição, então ele continua desenhando o placeholder. Falta o carregamento
+   sob demanda, no mesmo molde do que a janela de arte já faz.
 5. **E3/E2** — decidir se a numeração suporta um ou N arquivos, e fazer o save
    refletir a decisão.
 6. O resto.
