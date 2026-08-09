@@ -102,20 +102,29 @@ reusados), mas é bom saber antes de estranhar arquivos sem dono.
 
 ### Duplicar — `duplicateCatalogNumeracao(id)`
 
-`frontend/script.js:3058`. **Esta é a ação mais perigosa de mexer, porque ela já
-perde campos hoje.** O objeto `clone` copia explicitamente uma lista de campos, e o
-que não está nessa lista simplesmente não é copiado:
+`frontend/script.js:3058`. **É a ação mais delicada de mexer**, porque o objeto
+`clone` copia uma lista **explícita** de campos: o que alguém esquecer de acrescentar
+ali simplesmente não é copiado, em silêncio, e só aparece quando um operador abre a
+cópia e nota que ela está diferente do original.
 
-| Campo | Copiado? | Consequência |
-|---|---|---|
-| `print_mode` | **não** | Duplicar uma numeração **FxVerso** produz uma cópia **Frente**. Piora porque o `METADATA` que também carregava esse dado é removido dos `elements` na leitura (ver abaixo), então não há de onde recuperar. |
-| `ticket_qtd` | **não** | Cai para o default de `db.py:593`, que é `1`. |
-| `ticket_logica` | **não** | Cai para o default de `db.py:594`, que é `PILHA` — e o default do editor é `HORIZONTAL`. A cópia sai diferente do original **e** diferente de uma numeração nova. |
-| `Cli_Num` | não | Proposital: a cópia nasce genérica, não presa ao cliente. |
-| `preview_jpg` | não | Proposital e correto — copiar a URL faria dois registros apontarem para o mesmo arquivo, e salvar um mudaria o preview do outro. A cópia nasce sem preview até ser salva. |
+Foi o que aconteceu até a v487. `print_mode`, `ticket_qtd` e `ticket_logica` não
+estavam na lista, então duplicar uma numeração **FxVerso** produzia uma cópia
+**Frente**, e duplicar uma **TICKET** produzia uma cópia com quantidade `1` e lógica
+`PILHA` — os defaults de `db.py:593-594` — em vez dos valores do original. Corrigido:
+os três agora são copiados, com fallbacks que repetem exatamente como
+`editNumeracao()` interpreta um campo ausente (`'front'`, `1`, `'HORIZONTAL'`), para
+que a cópia abra no editor idêntica ao original.
 
-Se for corrigir a duplicação, corrija os três primeiros juntos; e lembre que
-`print_mode` precisa vir da coluna, não dos `elements`.
+Dois campos continuam **deliberadamente** fora da lista:
+
+| Campo | Por quê |
+|---|---|
+| `Cli_Num` | A cópia nasce genérica, não presa ao cliente do original. |
+| `preview_jpg` | Copiar a URL faria dois registros apontarem para o mesmo arquivo no Storage, e salvar um mudaria o preview do outro. A cópia nasce sem preview até ser salva pela primeira vez. |
+
+Ao acrescentar campo novo a `producao_numeracoes`, lembre de decidir conscientemente
+se ele entra aqui — e note que `print_mode` precisa vir da **coluna**, nunca dos
+`elements`: o `METADATA` que também o carregava é removido na leitura (ver abaixo).
 
 ## `elements` nunca contém `METADATA` na leitura
 
@@ -184,5 +193,6 @@ Cenários que valem cobrir, porque são justamente as armadilhas:
 3. Filtro por um formato que está em `formato_ids` mas não é o `formato_id` exibe a
    numeração sob o cabeçalho do formato base.
 4. Filtro que não casa com nada mostra o estado vazio.
-5. Duplicar preserva (ou não) `print_mode`, `ticket_qtd` e `ticket_logica` —
-   conforme você tenha ou não corrigido isso.
+5. Duplicar uma numeração FxVerso e TICKET preserva `print_mode`, `ticket_qtd` e
+   `ticket_logica`. Dá para verificar sem gravar em produção: intercepte
+   `supabaseClient.from('producao_numeracoes').insert` e inspecione o payload.

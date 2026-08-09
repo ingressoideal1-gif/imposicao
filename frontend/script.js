@@ -3065,6 +3065,19 @@ window.duplicateCatalogNumeracao = async function (id) {
             formato_id: n.formato_id,
             formato_ids: n.formato_ids || [n.formato_id],
             tipo: n.tipo || 'SEQUENCIAL',
+
+            // Frente/verso e os ajustes de TICKET vinham faltando aqui: a cópia de uma
+            // numeração FxVerso nascia Frente, e a de uma TICKET caía nos defaults do
+            // db.py (qtd 1, lógica PILHA). Os fallbacks abaixo repetem exatamente como
+            // editNumeracao() interpreta um campo ausente, para a cópia abrir no editor
+            // igual ao original. print_mode vem da coluna, e não dos elements: o
+            // METADATA que também o carregava é removido na leitura pela api().
+            print_mode: n.print_mode || 'front',
+
+            ticket_qtd: n.ticket_qtd || 1,
+
+            ticket_logica: n.ticket_logica || 'HORIZONTAL',
+
             csv_filename: n.csv_filename || "",
             csv_headers: n.csv_headers || [],
             csv_data: n.csv_data || null,

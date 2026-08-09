@@ -1,6 +1,6 @@
 ---
 name: lista-de-numeracoes
-description: Leia ANTES de qualquer alteração na Lista de Numerações (o Catálogo de Numerações) — a view #view-catalogo em frontend/index.html, a função renderNumeracoes() em frontend/script.js, os filtros de busca/formato/tipo, o badge do menu, ou as ações de duplicar e excluir numeração. Cobre as quatro armadilhas da tela e os campos que a duplicação já perde hoje.
+description: Leia ANTES de qualquer alteração na Lista de Numerações (o Catálogo de Numerações) — a view #view-catalogo em frontend/index.html, a função renderNumeracoes() em frontend/script.js, os filtros de busca/formato/tipo, o badge do menu, ou as ações de duplicar e excluir numeração. Cobre as quatro armadilhas da tela e os campos que a duplicação copia por lista explícita.
 ---
 
 # Antes de mexer na Lista de Numerações
@@ -23,10 +23,11 @@ foi programada para fazer.
    formato base); o filtro de formato usa `formato_ids` (os compatíveis). Filtrar
    por X e ver o registro sob o cabeçalho de Y é o comportamento correto.
 
-4. **Duplicar já perde campos hoje.** `duplicateCatalogNumeracao()` copia uma lista
-   explícita de campos e não inclui `print_mode`, `ticket_qtd` nem `ticket_logica` —
-   duplicar uma numeração FxVerso produz uma cópia Frente, e uma TICKET sai com
-   lógica `PILHA` em vez de `HORIZONTAL`.
+4. **Duplicar copia uma lista explícita de campos.** O que não estiver nessa lista
+   não é copiado, em silêncio. Já custou caro: até a v487 faltavam `print_mode`,
+   `ticket_qtd` e `ticket_logica`, então duplicar uma FxVerso produzia uma cópia
+   Frente. Corrigido — mas ao acrescentar coluna nova em `producao_numeracoes`,
+   decida conscientemente se ela entra em `duplicateCatalogNumeracao()`.
 
 O documento traz ainda: por que `elements` nunca contém `METADATA` na leitura, o que
 a coluna `preview_jpg` guarda desde a v487 e por que ninguém a lê, por que a ordem

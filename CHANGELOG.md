@@ -4,7 +4,25 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.5.4 (v487)** — 2026-08-08
+## Versão atual: **v1.5.5 (v488)** — 2026-08-08
+
+---
+
+## [v488 — 2026-08-08] — Duplicar numeração perdia frente/verso e os ajustes de TICKET
+
+### Resumo
+`duplicateCatalogNumeracao()` monta a cópia a partir de uma lista **explícita** de campos, e três não estavam nela: `print_mode`, `ticket_qtd` e `ticket_logica`. Duplicar uma numeração **FxVerso** produzia uma cópia **Frente**, e duplicar uma **TICKET** produzia uma cópia com quantidade `1` e lógica `PILHA` — os defaults do `db.py` — em vez dos valores do original.
+
+### Por que passava despercebido
+A falha era silenciosa em três camadas ao mesmo tempo: a cópia era criada com sucesso, sem erro nem aviso; a lista do catálogo não mostra nenhuma dessas três propriedades, então a linha nova parecia idêntica; e o `METADATA` que também carregava o `print_mode` é removido dos `elements` na leitura, então nem havia de onde recuperar o valor perdido. Só abrindo a cópia no editor dava para notar que o FxVerso tinha virado Frente.
+
+### O conserto
+Os três campos passaram a ser copiados, com fallbacks que repetem exatamente como `editNumeracao()` interpreta um campo ausente — `'front'`, `1` e `'HORIZONTAL'` — para que a cópia abra no editor idêntica ao original. `print_mode` é lido da coluna, nunca dos `elements`.
+
+`Cli_Num` e `preview_jpg` continuam deliberadamente fora da cópia: o primeiro porque a cópia deve nascer genérica em vez de presa ao cliente do original, o segundo porque copiar a URL faria dois registros apontarem para o mesmo arquivo no Storage, e salvar um mudaria o preview do outro.
+
+### Documentação
+A tela ganhou um documento de referência em `docs/lista_de_numeracoes.md`, com a skill `lista-de-numeracoes` que dispara a leitura antes de qualquer alteração. Ele registra as quatro armadilhas do catálogo — todas confirmadas no app rodando —, entre elas o fato de que numerações com `Cli_Num` são ocultadas da tabela enquanto o badge do menu conta todas, e que uma busca só com dígitos deixa de ser busca por nome e vira filtro por cliente.
 
 ---
 
