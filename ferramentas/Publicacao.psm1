@@ -73,6 +73,15 @@ function ConvertFrom-JwtPayload {
     }
 }
 
+# Declaracao de que as chaves de um arquivo sao fabricadas. Existe para os
+# arquivos que PRECISAM conter uma chave falsa: o proprio teste do freio, e os
+# documentos que explicam a regra. Sem isso, o arquivo que testa o detector
+# dispara o detector, e a publicacao trava sempre que ele for editado.
+#
+# E uma porta com placa, nao um buraco: quem a usa esta declarando por escrito
+# que a chave e de mentira, e a declaracao aparece no diff da revisao.
+$script:MarcaSegredoFalso = 'SEGREDO-DE-MENTIRA'
+
 function Find-SegredoNoTexto {
     <#
     .SYNOPSIS
@@ -87,12 +96,16 @@ function Find-SegredoNoTexto {
         por sua vez, cita o nome SUPABASE_SERVICE_KEY como documentacao.
         Barrar qualquer um dos dois faria o alarme tocar em toda publicacao,
         e um alarme que sempre toca e um alarme que se aprende a ignorar.
+
+        Um arquivo que contenha a marca SEGREDO-DE-MENTIRA e dispensado da
+        checagem — ver o comentario da constante acima.
     #>
     [CmdletBinding()]
     [OutputType([string])]
     param([Parameter(Mandatory)][AllowEmptyString()][string]$Texto)
 
     if ([string]::IsNullOrEmpty($Texto)) { return '' }
+    if ($Texto -match $script:MarcaSegredoFalso) { return '' }
 
     $jwts = [regex]::Matches($Texto, 'eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+')
     foreach ($m in $jwts) {

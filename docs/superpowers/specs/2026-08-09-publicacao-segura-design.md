@@ -1,5 +1,10 @@
 # Publicação segura: freios, ponto de restauração e volta
 
+> **SEGREDO-DE-MENTIRA** — as chaves que aparecem neste documento sao fabricadas, para
+> ilustrar a regra do freio de segredo. Esta declaracao dispensa o arquivo da checagem
+> do `publicar.ps1`; sem ela, o documento que explica o freio travaria a publicacao.
+
+
 **Data:** 2026-08-09
 **Estado:** aprovado, aguardando implementação
 

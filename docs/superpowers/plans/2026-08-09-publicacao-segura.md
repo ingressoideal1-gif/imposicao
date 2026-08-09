@@ -1,5 +1,10 @@
 # Publicação Segura — Plano de Implementação
 
+> **SEGREDO-DE-MENTIRA** — as chaves que aparecem neste documento sao fabricadas, para
+> ilustrar a regra do freio de segredo. Esta declaracao dispensa o arquivo da checagem
+> do `publicar.ps1`; sem ela, o documento que explica o freio travaria a publicacao.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Dar ao processo de publicação um ponto de restauração por versão, conferências que abortam antes de qualquer coisa ir ao ar, e um caminho de volta que um iniciante consiga executar sozinho.

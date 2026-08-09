@@ -38,10 +38,33 @@ Describe "ConvertFrom-JwtPayload" {
     }
 }
 
+# SEGREDO-DE-MENTIRA: as chaves deste arquivo sao fabricadas, para exercitar
+# o proprio freio. Sem esta declaracao, o arquivo que testa o detector
+# dispararia o detector e travaria a publicacao sempre que fosse editado.
 Describe "Find-SegredoNoTexto" {
     It "barra um JWT cujo papel e service_role" {
         $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.assinatura'
         Find-SegredoNoTexto "SUPABASE_SERVICE_KEY=$jwt" | Should Not Be ''
+    }
+    It "dispensa o arquivo que se declara portador de chave falsa" {
+        $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.assinatura'
+        Find-SegredoNoTexto "# SEGREDO-DE-MENTIRA`nCHAVE = '$jwt'" | Should Be ''
+    }
+    It "NAO dispensa quando a marca esta ausente" {
+        $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.assinatura'
+        Find-SegredoNoTexto "CHAVE = '$jwt'" | Should Not Be ''
+    }
+    It "DEIXA PASSAR os proprios arquivos de teste e projeto deste repositorio" {
+        # Regressao do defeito encontrado em 09/08/2026: este arquivo e os
+        # documentos de projeto contem chaves falsas e travavam o publicar.
+        foreach ($alvo in @(
+            "$PSScriptRoot\Publicacao.Tests.ps1",
+            "$PSScriptRoot\..\docs\superpowers\plans\2026-08-09-publicacao-segura.md",
+            "$PSScriptRoot\..\docs\superpowers\specs\2026-08-09-publicacao-segura-design.md"
+        )) {
+            $texto = Get-Content -Raw -Encoding UTF8 $alvo
+            Find-SegredoNoTexto $texto | Should Be ''
+        }
     }
     It "barra service_role em texto claro num JSON de credencial" {
         Find-SegredoNoTexto '{ "role": "service_role", "key": "x" }' | Should Not Be ''

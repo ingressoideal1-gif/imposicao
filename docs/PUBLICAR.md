@@ -5,6 +5,21 @@ velho.
 
 ---
 
+## Conferir se está tudo em ordem
+
+```powershell
+.\ferramentas\conferir.ps1
+```
+
+Só consulta — não altera, não publica, não commita. Pode rodar quando quiser. Ele
+responde seis perguntas: há commits não publicados? há trabalho pendente? o agente está
+em sincronia? há branch ou rascunho acumulando? há segredo em arquivo versionado? os
+testes passam?
+
+Se terminar em **TUDO EM ORDEM**, não há nada esperando por você.
+
+---
+
 ## As três peças
 
 | Peça | O que é | Onde roda |
