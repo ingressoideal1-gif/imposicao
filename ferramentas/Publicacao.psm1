@@ -192,6 +192,58 @@ function Get-TagAnterior {
     return $ordenadas[$i - 1]
 }
 
+# ─── Deploys da Vercel ───────────────────────────────────────────────────────
+function ConvertFrom-VercelLs {
+    <#
+    .SYNOPSIS
+        Extrai os deploys da saida do `vercel ls --prod`, mais recente
+        primeiro.
+    .DESCRIPTION
+        Pura de proposito: recebe o texto, nao chama a CLI. E o que permite
+        testar o parser contra amostras reais sem tocar a rede.
+
+        Lida com as DUAS formas de saida da CLI, e a distincao importa:
+
+        - Canalizada (o nosso caso): a tabela bonita vai para o console e o
+          stdout recebe so as URLs, uma por linha. E o comportamento
+          deliberado da Vercel, para que `vercel ls | head -1` devolva uma
+          URL utilizavel. Nesta forma nao ha idade nem status.
+        - Interativa: a tabela completa, com idade e status por linha.
+
+        Cuidado ao usar o resultado: cada publicacao cria DOIS deploys de
+        producao — um pela integracao Git da Vercel (disparada pelo push) e
+        outro pelo `vercel --prod` do publicar.ps1. Entao o deploy logo
+        abaixo do topo costuma ser o gemeo da MESMA versao, nao a versao
+        anterior. Por isso o voltar.ps1 mostra a lista e deixa a escolha com
+        quem sabe o que foi publicado.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Saida)
+
+    $deploys = @()
+    foreach ($linha in ($Saida -split "`r?`n")) {
+        $mUrl = [regex]::Match($linha, 'https://[A-Za-z0-9._\-]+\.vercel\.app')
+        if (-not $mUrl.Success) { continue }
+
+        # Idade e status so existem na forma interativa; ficam vazios na
+        # canalizada, e o chamador precisa tratar isso.
+        $idade = ''
+        $mIdade = [regex]::Match($linha, '^\s*(\d+[smhd])\s')
+        if ($mIdade.Success) { $idade = $mIdade.Groups[1].Value }
+
+        $status = ''
+        $mStatus = [regex]::Match($linha, 'Ready|Error|Building|Queued|Canceled')
+        if ($mStatus.Success) { $status = $mStatus.Value }
+
+        $deploys += [pscustomobject]@{
+            Idade  = $idade
+            Url    = $mUrl.Value
+            Status = $status
+        }
+    }
+    return $deploys
+}
+
 Export-ModuleMember -Function Test-ArquivoDeRascunho, ConvertFrom-JwtPayload,
     Find-SegredoNoTexto, Get-ProximaVersao, ConvertTo-TuplaVersao,
-    Test-VersaoMaior, Get-TagAnterior
+    Test-VersaoMaior, Get-TagAnterior, ConvertFrom-VercelLs

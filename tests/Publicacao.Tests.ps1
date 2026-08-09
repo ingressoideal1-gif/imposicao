@@ -105,6 +105,54 @@ Describe "Test-VersaoMaior" {
     }
 }
 
+Describe "ConvertFrom-VercelLs" {
+    # FORMA CANALIZADA — a que o voltar.ps1 realmente recebe. Quando a saida
+    # nao e um terminal, a Vercel manda a tabela bonita para o console e
+    # deixa no stdout so as URLs, uma por linha. Descobrir isto foi o que
+    # fez o parser original (que esperava a tabela) devolver lista vazia.
+    $canalizada = @"
+https://ideal-imposition-lc86wrz4p-ingressoideal1-7062s-projects.vercel.app
+https://ideal-imposition-3msyvsuwf-ingressoideal1-7062s-projects.vercel.app
+https://ideal-imposition-nyq7ydemq-ingressoideal1-7062s-projects.vercel.app
+"@
+
+    # FORMA INTERATIVA — a tabela completa, quando a saida e um terminal.
+    $tabela = @"
+Vercel CLI 54.10.3 (Node.js 24.16.0)
+> Production deployments for ingressoideal1-7062s-projects/ideal-imposition [548ms]
+
+  Age     Project                                            Deployment                                                                      Status      Environment     Duration     Username
+  7h      ingressoideal1-7062s-projects/ideal-imposition     https://ideal-imposition-lc86wrz4p-ingressoideal1-7062s-projects.vercel.app     * Ready     Production      6s           ingressoideal1-7062
+  8h      ingressoideal1-7062s-projects/ideal-imposition     https://ideal-imposition-nyq7ydemq-ingressoideal1-7062s-projects.vercel.app     * Ready     Production      5s           ingressoideal1-7062
+"@
+
+    It "le as tres URLs da forma canalizada" {
+        (ConvertFrom-VercelLs $canalizada).Count | Should Be 3
+    }
+    It "preserva a ordem: o primeiro e o que esta no ar" {
+        (ConvertFrom-VercelLs $canalizada)[0].Url |
+            Should Be 'https://ideal-imposition-lc86wrz4p-ingressoideal1-7062s-projects.vercel.app'
+    }
+    It "na forma canalizada nao inventa idade nem status" {
+        (ConvertFrom-VercelLs $canalizada)[0].Idade  | Should Be ''
+        (ConvertFrom-VercelLs $canalizada)[0].Status | Should Be ''
+    }
+    It "le as duas URLs da forma interativa" {
+        (ConvertFrom-VercelLs $tabela).Count | Should Be 2
+    }
+    It "na forma interativa extrai idade e status" {
+        (ConvertFrom-VercelLs $tabela)[0].Idade  | Should Be '7h'
+        (ConvertFrom-VercelLs $tabela)[0].Status | Should Be 'Ready'
+    }
+    It "ignora o cabecalho e o ruido da CLI" {
+        $urls = @(ConvertFrom-VercelLs $tabela | ForEach-Object { $_.Url })
+        ($urls | Where-Object { $_ -notlike 'https://*' }).Count | Should Be 0
+    }
+    It "devolve vazio quando nao ha deploy nenhum" {
+        (ConvertFrom-VercelLs 'nenhum deploy aqui').Count | Should Be 0
+    }
+}
+
 Describe "Get-TagAnterior" {
     $tags = @('v488', 'v489', 'v490', 'v491')
     It "acha a tag imediatamente anterior" {
