@@ -1,4 +1,4 @@
-# Roda UMA VEZ. Reorganiza a raiz do repositorio.
+﻿# Roda UMA VEZ. Reorganiza a raiz do repositorio.
 #
 # Move, nunca apaga: os arquivos continuam no disco (em rascunhos/) e o
 # historico completo segue acessivel pela tag v490. Desfazer e um
