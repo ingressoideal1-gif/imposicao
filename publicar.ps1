@@ -54,19 +54,39 @@ if ($SemFreio) {
     Write-Host "Conferindo antes de publicar..." -ForegroundColor Cyan
 
     # 1. O que vai junto.
+    #
+    # Duas fontes, e as duas contam: arquivos ainda nao commitados, E commits
+    # que ainda nao foram enviados ao GitHub. Olhar so a primeira faria o
+    # script dizer "nada para publicar" no caso mais comum de todos —
+    # commitei ontem, publico hoje.
     $mudados = @(git status --porcelain | ForEach-Object { $_.Substring(3).Trim('"') })
-    if ($mudados.Count -eq 0) {
-        Abortar "Nao ha nada para publicar — nenhum arquivo mudou." `
+
+    $pendentes = @()
+    git rev-parse --verify --quiet refs/remotes/origin/main | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $pendentes = @(git log --oneline 'origin/main..HEAD')
+    }
+
+    if ($mudados.Count -eq 0 -and $pendentes.Count -eq 0) {
+        Abortar "Nao ha nada para publicar — nenhum arquivo mudou e nao ha commit pendente." `
                 "Edite alguma coisa antes de rodar o publicar."
     }
-    Write-Host "  $($mudados.Count) arquivo(s) vao junto:" -ForegroundColor Gray
-    foreach ($f in $mudados) {
-        $aviso = ''
-        if (Test-Path -PathType Leaf $f) {
-            $mb = (Get-Item $f).Length / 1MB
-            if ($mb -gt 1) { $aviso = (" [{0:N1} MB — confira se e proposital]" -f $mb) }
+
+    if ($pendentes.Count -gt 0) {
+        Write-Host "  $($pendentes.Count) commit(s) ja feitos que ainda nao foram publicados:" -ForegroundColor Gray
+        foreach ($c in $pendentes) { Write-Host "    $c" -ForegroundColor Gray }
+    }
+
+    if ($mudados.Count -gt 0) {
+        Write-Host "  $($mudados.Count) arquivo(s) modificados vao junto:" -ForegroundColor Gray
+        foreach ($f in $mudados) {
+            $aviso = ''
+            if (Test-Path -PathType Leaf $f) {
+                $mb = (Get-Item $f).Length / 1MB
+                if ($mb -gt 1) { $aviso = (" [{0:N1} MB — confira se e proposital]" -f $mb) }
+            }
+            Write-Host "    $f$aviso" -ForegroundColor Gray
         }
-        Write-Host "    $f$aviso" -ForegroundColor Gray
     }
 
     # 2. Rascunho.
