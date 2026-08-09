@@ -188,16 +188,45 @@ publicar o `latest.json`. Assim o manifesto nunca aponta para um arquivo ausente
 > usa, e é ela que precisa bater.
 
 > ⛔ **Limite de 50 MB — hoje ESTOURADO.** O teto de upload do projeto é 50 MB. Uma
-> compilação feita em **2026-08-09** produziu um MSI de **51,63 MB**: a folga de 3 MB que
-> existia acabou, e **o próximo release não sobe como está**.
->
-> O `publicar_agente.ps1` recusa o envio nesse caso, antes de qualquer upload — então o
-> sintoma será o script parando, não um release quebrado. Mas o problema precisa ser
-> resolvido antes da próxima versão do agente.
->
-> As saídas, em ordem de esforço: enxugar o pacote (`ppds` ~5 MB, `cryptography` ~10 MB
-> são os maiores candidatos), subir o teto do plano do Supabase, ou dividir o download
-> em partes.
+> compilação de **2026-08-09** produziu um MSI de **50,98 MB**, e **o próximo release não
+> sobe como está**. O `publicar_agente.ps1` recusa o envio antes de tentar, então o
+> sintoma é o script parando, não um release quebrado nas estações.
+
+### De onde vêm os 51 MB
+
+Medido em 2026-08-09 **dentro do executável, já comprimido** — que é o número que conta:
+
+| MB | O quê | Dá para cortar? |
+|---:|---|---|
+| 17,8 | runtime do Python + módulos puros | não |
+| 16,6 | `pymupdf` (fitz) | não — é o motor de PDF |
+| 6,4 | `PIL` | não — usado pelo tray e pelo engine |
+| 3,4 | `cryptography` | **talvez** — ninguém importa direto; vem de `requests`/`jwt` |
+| 3,3 | `lxml` | **não** — vem do `svglib`, obrigatório para impor SVG |
+| 1,8 | `pydantic_core` | não — o FastAPI depende |
+| 0,7 | `frontend` | não |
+
+Duas lições dessa medição, para não repetir tentativas:
+
+- **Tamanho em disco não é tamanho no pacote.** A pasta `ppds/` tinha 5,19 MB de
+  temporários e sua remoção economizou só **0,65 MB** — o conteúdo era altamente
+  compressível. Meça sempre dentro do `.exe`, não na pasta de origem.
+- **`lxml` parece órfão e não é.** Nenhum arquivo do projeto o importa, mas ele chega
+  pelo `svglib`. Removê-lo faria o SVG deixar de sair no papel — a mesma falha silenciosa
+  que já aconteceu antes da v489.
+
+### O que fazer
+
+O único corte com alguma chance é o `cryptography` (~3,4 MB), e ele deixaria apenas
+~2,4 MB de folga — a mesma margem apertada que acabou de estourar. E exige testar que o
+agente continua alcançando o Supabase por HTTPS, porque é `requests`/`urllib3` quem o
+puxa.
+
+**O caminho que resolve de verdade é subir o teto de upload no Supabase.** O limite de
+50 MB é o do plano gratuito; o pacote só cresce, e cada MB economizado compra no máximo
+um release. Alternativa sem mexer no plano: hospedar o MSI fora do Storage e apontar a
+`url` do manifesto para lá — mas isso exige rever a barreira do `is_allowed_release_url()`
+em `security_config.py`, que hoje só aceita o bucket `agent-releases`.
 
 ---
 

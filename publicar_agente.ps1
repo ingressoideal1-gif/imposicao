@@ -181,8 +181,16 @@ if (-not (Test-Path $msi)) { Abortar "Nao achei $msi depois de compilar." }
 $tamanho = (Get-Item $msi).Length
 $mb = [math]::Round($tamanho / 1MB, 2)
 if ($tamanho -ge 50MB) {
+    # Medicao de 2026-08-09 (dentro do exe, ja comprimido): runtime do Python
+    # ~17,8 MB, pymupdf 16,6, PIL 6,4, cryptography 3,4, lxml 3,3,
+    # pydantic_core 1,8, frontend 0,7.
+    #
+    # Nao ha corte grande e seguro a fazer: o pymupdf e o motor de PDF, o PIL
+    # e usado pelo tray e pelo engine, e o lxml vem do svglib, obrigatorio
+    # para impor elementos SVG (ver engine.py). O unico candidato e o
+    # cryptography, e ele sozinho nao da folga que dure.
     Abortar "O MSI tem $mb MB e o teto de upload do projeto e 50 MB." `
-            "Enxugue o pacote (ppds ~5 MB, cryptography ~10 MB), suba o teto do plano, ou baixe em partes."
+            "O caminho que resolve de verdade e subir o teto do plano no Supabase — o pacote so cresce. Ver a secao de limite no GUIA_AGENTE.md."
 }
 Write-Host "  MSI: $mb MB (teto 50 MB)" -ForegroundColor Green
 

@@ -17,11 +17,22 @@ a = Analysis(
     ['agent_tray.py'],
     pathex=['.'],
     binaries=[],
+    # ('ppds', 'ppds') foi removido em 2026-08-09, e nao deve voltar.
+    #
+    # A pasta nunca teve um .ppd: continha 7 temporarios .TMP commitados por
+    # acidente, um deles de 5 MB — 5,19 MB de lixo em cada instalador, o que
+    # levou o MSI a 51,63 MB e estourou o teto de 50 MB do Supabase.
+    #
+    # E o caminho PPD nao e usado pelo executavel distribuido. Quem imprime e
+    # send_print_job_windows() (DEVMODE do driver do Windows), chamada por
+    # app.py e agent_worker.py. A send_print_job(), que injeta codigos PPD em
+    # PostScript, so e chamada por local_print_agent.py — que roda apenas em
+    # desenvolvimento. O print_service.py recria a pasta vazia com makedirs
+    # no import, entao nada quebra sem ela.
     datas=[
         ('formats_db.json', '.'),
         ('agent_icon.ico', '.'),
         ('Logo Ideal Dark.png', '.'),
-        ('ppds', 'ppds'),
     ] + _frontend_datas,
     hiddenimports=[
         'uvicorn.logging',
