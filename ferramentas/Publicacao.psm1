@@ -80,6 +80,12 @@ function ConvertFrom-JwtPayload {
 #
 # E uma porta com placa, nao um buraco: quem a usa esta declarando por escrito
 # que a chave e de mentira, e a declaracao aparece no diff da revisao.
+#
+# CUIDADO AO DOCUMENTAR: a comparacao e por substring, entao escrever o texto
+# da marca em QUALQUER arquivo isenta aquele arquivo inteiro da checagem. Ao
+# explicar a regra em documentacao, cite esta constante pelo nome
+# (MarcaSegredoFalso) em vez de reproduzir o valor — foi assim que o
+# CHANGELOG.md quase se isentou sozinho ao descrever o proprio freio.
 $script:MarcaSegredoFalso = 'SEGREDO-DE-MENTIRA'
 
 function Find-SegredoNoTexto {

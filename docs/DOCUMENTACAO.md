@@ -64,8 +64,14 @@ ideal-imposition/
     ├── DOCUMENTACAO.md             # Esta documentação
     ├── regra_centralizacao.md      # Regra técnica de centralização de PDFs
     ├── walkthrough_recursos_recentes.md
-    └── DEPLOY.md                   # Guia de deploy no Render
+    └── PUBLICAR.md                 # Documento único de publicação (substituiu DEPLOY.md)
 ```
+
+> **Aviso de validade.** Fora da seção 14, este documento descreve o estado do projeto em
+> junho de 2026 e envelheceu em pontos importantes: o banco é o **Supabase**, não o
+> Firestore; o frontend é servido pela **Vercel**, não pelo Firebase Hosting; e o
+> `app.py` local escuta a **porta 9000**, não a 8080. Em caso de divergência, valem
+> [PUBLICAR.md](PUBLICAR.md) e o código.
 
 ### Fluxo de dados
 
@@ -643,21 +649,39 @@ Servidor HTTP mínimo (porta 9000) que expõe o mesmo endpoint `/api/print/submi
 
 ---
 
-## 14. Deploy (Render / Firebase)
+## 14. Deploy (Vercel / Render / Supabase)
 
-> Como publicar, como voltar e o que fazer quando dá errado: [PUBLICAR.md](PUBLICAR.md)
+> **Como publicar, como voltar e o que fazer quando dá errado: [PUBLICAR.md](PUBLICAR.md).**
+> Aquele é o documento único de publicação. Esta seção descreve só onde cada peça roda.
+
+### Frontend (Vercel)
+
+- Projeto `ideal-imposition`, servido em `ideal-imposition.vercel.app`.
+- Publicado por `.\publicar.ps1 "mensagem"`, na raiz do repositório.
 
 ### Backend (Render)
 
 - Arquivo de configuração: `render.yaml`
 - Comando de start: `venv/bin/uvicorn app:app --host 0.0.0.0 --port 10000`
-- O Firestore é usado como banco de dados em produção (via Firebase Admin SDK com ADC).
+- Sobe **no mesmo `git push`** que o site: o Render escuta o mesmo repositório que a Vercel.
 
-### Frontend (Firebase Hosting)
+### Banco de dados e arquivos (Supabase)
 
-- Arquivo de configuração: `firebase.json` e `.firebase/`
-- Regras de segurança do Firestore: `firestore.rules`
-- Deploy: `firebase deploy --only hosting`
+- Projeto `vwbtitjlpelrcnsytzqw`. Substituiu o Firestore; o Firebase não é mais usado em produção.
+- A chave *anônima* em `frontend/supabase-config.js` é pública por natureza — o navegador
+  precisa dela. A chave `service_role` **nunca** vai para arquivo versionado: ela mora no
+  `.env.local`, e o freio de segredo do `publicar.ps1` existe para barrá-la.
+
+### Agente da gráfica (`NewProd.exe`)
+
+- Numeração própria, publicada por `.\publicar_agente.ps1 <versão>`. Instalador no bucket
+  `agent-releases` do Supabase Storage. Funcionamento interno em [GUIA_AGENTE.md](../GUIA_AGENTE.md).
+
+### Conferir se está tudo em ordem
+
+```powershell
+.\ferramentas\conferir.ps1
+```
 
 ### Detecção de ambiente no frontend
 

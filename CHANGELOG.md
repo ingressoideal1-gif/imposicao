@@ -4,7 +4,88 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.5.7 (v490)** — 2026-08-09
+## Versão atual: **v1.6.0 (v493)** — 2026-08-09 | Agente **1.2.23**
+
+---
+
+## [v493 — 2026-08-09] — Conferência de saúde, e o freio de segredo que travava a si mesmo
+
+### Resumo
+`ferramentas\conferir.ps1`: seis perguntas, sempre as mesmas, só consultando. Na primeira execução ele encontrou um defeito no freio de segredo criado na v491.
+
+### O que o conferir pergunta
+Há commits feitos que ainda não foram publicados? Há trabalho pendente na pasta? O agente está em sincronia entre repositório, manifesto publicado e esta máquina? Há branch ou rascunho acumulando? Há segredo em arquivo versionado? Os testes passam?
+
+Não altera, não publica, não commita — pode rodar a qualquer momento, quantas vezes quiser. Existe para que a vigilância não dependa de alguém lembrar os comandos certos. Termina em **TUDO EM ORDEM** ou na lista do que precisa de atenção.
+
+A checagem do agente consulta o manifesto com um cache-buster (`?t=<carimbo>`): o Storage fica atrás de CDN e, sem isso, responderia a versão anterior e faria a conferência acusar divergência onde não há.
+
+### O defeito que ele achou
+Três arquivos do próprio repositório disparavam o detector de `service_role` — o teste que exercita o freio e os dois documentos que explicam a regra, todos com chaves fabricadas. O `publicar.ps1` só varre arquivos **alterados**, então a trava nunca chegou a aparecer; mas qualquer edição nesses três travaria a publicação. Era exatamente o "alarme que sempre toca" que a regra original queria evitar.
+
+A saída é uma declaração explícita: um arquivo que contenha a marca de chave falsa — a constante `MarcaSegredoFalso` em `ferramentas\Publicacao.psm1` — fica dispensado da checagem. É uma porta com placa, não um buraco: quem a usa declara por escrito que a chave é de mentira, e a declaração aparece no diff da revisão. Três testes novos cobrem os dois lados da regra, mais uma regressão que roda o detector contra os arquivos reais do repositório.
+
+O texto exato da marca **não aparece aqui de propósito**. A comparação é por substring, então escrever a marca em qualquer arquivo isenta aquele arquivo — inclusive um changelog que só queria explicá-la. Use a marca apenas em arquivos que de fato precisem conter uma chave fabricada.
+
+### Como foi verificado
+578 arquivos versionados varridos, nenhum segredo. Pester 50/50. Agente em sincronia nos três lugares.
+
+---
+
+## [v492 — 2026-08-09] — O teto do agente: perguntado ao bucket, não gravado no script
+
+### Resumo
+O `NewProd.exe` passou a não caber no limite de upload do Storage, e a investigação achou tanto a causa do crescimento quanto um erro no jeito de tratar o limite. Junto saiu o agente **1.2.23**, o primeiro a se atualizar sozinho de ponta a ponta.
+
+### O pacote cresceu de uma vez, não aos poucos
+A documentação dizia "~47 MB, com 3 MB de folga"; o pacote compilado deu 51,63 MB. Tirar a pasta `ppds/` do executável — 5,19 MB de arquivos — economizou só **0,65 MB**, porque texto comprime quase todo. Foi o primeiro sinal de que a estimativa por tamanho de arquivo não serve: o que importa é o tamanho **comprimido dentro do exe**, medido com o `CArchiveReader` do PyInstaller.
+
+Medindo assim e comparando com o executável publicado da 1.2.22: `lxml` foi de 0,00 para 3,32 MB e o total de 46,54 para 50,74. O culpado é identificável — foi a **imposição de SVG** da v489, que trouxe `svglib`, que traz `lxml`. Não houve crescimento gradual.
+
+> **Não exclua `lxml` do pacote.** Nada no projeto o importa diretamente, então ele parece órfão em qualquer varredura. Ele vem por `svglib`, exigida em `engine.py:14` para impor SVG. Tirá-lo faz o SVG sumir do papel sem erro visível.
+
+### Dois limites, e o menor vence
+O bucket dizia 200 MB, mas um upload de 50,98 MB voltava `EntityTooLarge`. São dois limites independentes: o **global do projeto** e o **por bucket**, e o por bucket nunca ultrapassa o global. No plano Free o global era 50 MB, e era ele que barrava.
+
+Com o global elevado para 300 MB, os testes passaram a aceitar 55 MB e 120 MB e a recusar 250 MB — ou seja, o teto efetivo virou os 200 MB do bucket. Com essa folga, a exclusão do `cryptography` (que dava 47,35 MB) foi **desfeita**: economizar 3,4 MB não paga um risco não verificado no TLS.
+
+A lição virou código: o `publicar_agente.ps1` agora **pergunta o limite ao bucket** antes de subir, em vez de carregar um número gravado que envelhece em silêncio.
+
+### O build que falhava deixava versão pela metade
+Se a compilação quebrasse no meio, os três arquivos de versão já tinham sido reescritos — e a tentativa seguinte com o mesmo número era recusada. Agora o script guarda os arquivos **byte a byte** antes de tocá-los e um `trap` os devolve em qualquer falha, preservando a presença ou ausência de BOM (restaurar com BOM num `.py` ou `.wxs` que não tinha é um estrago silencioso).
+
+### Achado de arrumação
+O bucket `NewProd` não é usado por nada no projeto. O agente publica e lê de `agent-releases`.
+
+---
+
+## [v491 — 2026-08-09] — Publicação segura: freios, ponto de restauração e volta
+
+### Resumo
+Publicar era um `git push` seguido de um `vercel --prod`, sem rede de proteção e sem caminho de volta. Passou a ser um comando com quatro freios antes de qualquer escrita, um ponto de restauração por versão publicada e dois caminhos de volta.
+
+### As três peças, e o que anda junto
+**Site** (Vercel), **motor** (Render) e **agente** (`NewProd.exe` nas estações). Site e motor saem no mesmo `git push`, porque o Render escuta o mesmo repositório que a Vercel — não existe publicar só um dos dois, e é bom que seja assim, porque eles precisam combinar. O agente é separado, tem numeração própria e sai por outro comando.
+
+### `publicar.ps1` — os quatro freios
+Antes do commit, e portanto antes de qualquer coisa ir ao ar: a lista do que vai junto, com aviso em arquivo acima de 1 MB; recusa de rascunho (`scratch_*`, `temp_*`, `test<N>.js` e afins, só na raiz); recusa de segredo; e um teste de que o motor sobe — o freio que evita o pior caso, um erro de digitação derrubar o Render sem ninguém perceber. Se algum falha, o script **para antes do commit**: nada foi ao ar e nada precisa ser desfeito. Ao terminar, grava a tag `vNNN`.
+
+### O freio de segredo procura `service_role`, não "qualquer coisa que pareça chave"
+A chave **anônima** do Supabase também é um JWT e está legitimamente versionada em `frontend/supabase-config.js` — o navegador precisa dela, ela é pública por natureza. Um detector por formato barraria toda alteração naquele arquivo. Por isso o freio **decodifica o payload** do JWT e só barra quando o papel é `service_role`, a chave que dá controle total do banco.
+
+### `voltar.ps1` — dois níveis
+`-Agora` devolve **só o site** em cerca de 30 segundos, promovendo um deploy anterior na Vercel; é curativo, para quando o cliente está vendo erro neste minuto. Sem parâmetro, desfaz por `git revert` e republica site e motor juntos. Nada é apagado: a volta vira registro novo, então dá para voltar da volta.
+
+**Atenção ao escolher na lista:** cada publicação cria **dois** deploys de produção — um pela integração Git da Vercel, outro pelo `vercel --prod` do script. O item 2 costuma ser o gêmeo do item 1, e a versão anterior de verdade costuma ser o item 3.
+
+### `publicar_agente.ps1` — e a armadilha de voltar o agente
+As estações só instalam versão **estritamente maior** que a delas. Republicar o número antigo não faz nada, e não dá erro — cada estação ignora em silêncio, com toda a aparência de ter funcionado. Para voltar o agente, o número precisa ser **novo** com o código antigo: `.\publicar_agente.ps1 1.2.24 -Codigo agente-v1.2.22`.
+
+### Testes e faxina
+`ferramentas\Publicacao.psm1` isola as decisões dos freios em funções puras — nenhuma toca git, rede ou disco —, o que permite exercitá-las com Pester sem publicar nada. A raiz do repositório perdeu os rascunhos versionados, e os testes e SQL foram para as suas pastas.
+
+### Documentação
+`docs/PUBLICAR.md` passou a ser o documento único de publicação. O `docs/DEPLOY.md`, que ainda ensinava a publicar no Firebase, foi removido; o `DEPLOY.md` da raiz virou um ponteiro.
 
 ---
 

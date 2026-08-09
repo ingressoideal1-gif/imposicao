@@ -31,4 +31,7 @@ Implementamos com sucesso uma barra de progresso visual de alta fidelidade e com
 ---
 
 ## 🚀 Publicação e Deploy
+
+> **Histórico.** A branch `master` citada abaixo não existe mais — só há `main`. Desde a
+> v491 publicar é `.\publicar.ps1 "mensagem"`; veja [PUBLICAR.md](PUBLICAR.md).
 * **Commit & Push**: As atualizações foram comitadas e enviadas ao GitHub remoto em ambas as ramificações (`main` e `master`), disparando a atualização da API FastAPI de backend no Render e mantendo o histórico de controle de versão limpo.
