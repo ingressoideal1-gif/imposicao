@@ -7,7 +7,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=489">
+    <link rel="stylesheet" href="/style.css?v=490">
     <script src="pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -469,7 +469,11 @@
                     </div>
                     <div class="divider" style="margin: 16px 0 12px 0;"></div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                    <!-- O upload de PDF e SVG saiu daqui na v490: agora e a box
+                         "Adicionar Pdf e Svg" do painel de elementos, porque cada
+                         elemento passou a ter o proprio arquivo em vez de existir um
+                         arquivo unico por numeracao. -->
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
                         <div class="form-group">
                             <label>Banco de Dados (CSV)</label>
                             <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
@@ -479,28 +483,6 @@
                                 <input type="file" id="num-csv-file" accept=".csv" style="display:none">
                                 <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-csv" style="display:none; padding: 4px 8px;" onclick="clearNumCsvFile()">✕ Remover</button>
                                 <span id="num-csv-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Desenho Vetorial (SVG)</label>
-                            <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
-                                <label class="btn btn-sm btn-secondary" for="num-svg-file" style="margin: 0; cursor: pointer;">
-                                    🎨 Upload SVG
-                                </label>
-                                <input type="file" id="num-svg-file" accept=".svg" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-svg" style="display:none; padding: 4px 8px;" onclick="clearNumSvgFile()">✕ Remover</button>
-                                <span id="num-svg-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Arquivo PDF (Elementos Variáveis)</label>
-                            <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
-                                <label class="btn btn-sm btn-secondary" for="num-pdf-file" style="margin: 0; cursor: pointer;">
-                                    📄 Upload PDF
-                                </label>
-                                <input type="file" id="num-pdf-file" accept=".pdf" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-pdf" style="display:none; padding: 4px 8px;" onclick="clearNumPdfFile()">✕ Remover</button>
-                                <span id="num-pdf-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
                             </div>
                         </div>
                     </div>
@@ -520,8 +502,6 @@
                             <button class="btn btn-sm btn-secondary" onclick="addElement('QR')">📱 QR Code</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('BARCODE')">▌▌ Barcode</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('FIXED')">🔠 Texto Fixo</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('SVG')">🎨 SVG</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('PDF')">📄 PDF</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('PICOTE')">✂️ Picote</button>
                         </div>
                         <div id="num-csv-columns-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
@@ -545,6 +525,21 @@
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_PESSOA')" title="Número da pessoa dentro do local (Cadeira, Lugar…)">👤 Pessoas</button>
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_PESSOA_TOTAL')" title="Número da pessoa / total do local (ex: 1/5)">👥 Pessoas 1/Total</button>
                             </div>
+                        </div>
+
+                        <!-- Box "Adicionar Pdf e Svg".
+                             Cada upload cria um elemento com o proprio arquivo, no tamanho
+                             natural (100%). Da para adicionar quantos quiser, de qualquer
+                             mistura de PDF e SVG. -->
+                        <div id="num-arquivos-box" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
+                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">📎</span> Adicionar Pdf e Svg</span>
+                            <div class="add-elements-bar">
+                                <button class="btn btn-sm btn-secondary" onclick="document.getElementById('num-pdf-file').click()" title="Adiciona um elemento PDF com o arquivo escolhido, em tamanho original">📄 + PDF</button>
+                                <button class="btn btn-sm btn-secondary" onclick="document.getElementById('num-svg-file').click()" title="Adiciona um elemento SVG com o arquivo escolhido, em tamanho original">🎨 + SVG</button>
+                                <input type="file" id="num-pdf-file" accept=".pdf" style="display:none">
+                                <input type="file" id="num-svg-file" accept=".svg" style="display:none">
+                            </div>
+                            <div id="num-arquivos-lista" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
                         </div>
                     </div>
 
@@ -2498,10 +2493,10 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=489"></script>
-    <script src="script.js?v=489"></script>
-    <script src="criador-arte.js?v=489"></script>
-    <script src="/pedido.js?v=489"></script>
+    <script src="mapas.js?v=490"></script>
+    <script src="script.js?v=490"></script>
+    <script src="criador-arte.js?v=490"></script>
+    <script src="/pedido.js?v=490"></script>
 
 
 

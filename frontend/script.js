@@ -2855,113 +2855,13 @@ function editNumeracao(id) {
 
 
 
+    // O arquivo PDF/SVG e do elemento, nao da numeracao (v490). As colunas
+    // svg_content/pdf_content da numeracao continuam existindo por compatibilidade
+    // — em especial porque svg_content e o marcador de CAMAROTE lido por
+    // engine.py:222 —, mas o editor nao carrega mais arte a partir delas. Quem
+    // carrega e o precarregarArtesDosElementos(), la embaixo, elemento por elemento.
     state.numSvgFilename = n.svg_filename || "";
-
-    state.numSvgContent = n.svg_content || "";
-
-    if (state.numSvgContent) {
-
-        const img = new Image();
-
-        img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(state.numSvgContent);
-
-        img.onload = () => {
-
-            state.numSvgImage = img;
-
-            drawCanvas();
-
-        };
-
-        const btn = document.getElementById('btn-remove-num-svg');
-
-        const name = document.getElementById('num-svg-file-name');
-
-        if (btn) btn.style.display = 'inline-flex';
-
-        if (name) name.textContent = '📎 ' + state.numSvgFilename;
-
-    } else {
-
-        window.clearNumSvgFile();
-
-    }
-
-
-
     state.numPdfFilename = n.pdf_filename || "";
-
-    state.numPdfContent = n.pdf_content || "";
-
-    // Fallback: se o pdf_content da numeração estiver vazio mas algum elemento PDF tiver conteúdo,
-    // usar o pdf_content desse elemento como source (evita perder o PDF ao re-salvar sem recarregar)
-    if (!state.numPdfContent) {
-        const pdfEl = (state.numElements || []).find(el => el.type === 'PDF' && el.pdf_content);
-        if (pdfEl) {
-            state.numPdfContent = pdfEl.pdf_content;
-            console.info('[edit] numPdfContent recuperado do elemento PDF:', state.numPdfContent.substring(0, 60));
-        }
-    }
-
-    if (state.numPdfContent) {
-
-        const btn = document.getElementById('btn-remove-num-pdf');
-
-        const name = document.getElementById('num-pdf-file-name');
-
-        if (btn) btn.style.display = 'inline-flex';
-
-        if (name) name.textContent = '📎 ' + state.numPdfFilename;
-
-
-
-        if (typeof pdfjsLib !== 'undefined') {
-
-            fetchPdfBytes(state.numPdfContent).then(async pdfData => {
-
-                if (!pdfData) return;
-
-                const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
-
-                const page = await pdf.getPage(1);
-
-                const vpRender = page.getViewport({ scale: 2 });
-
-                const off = document.createElement('canvas');
-
-                off.width = Math.round(vpRender.width);
-
-                off.height = Math.round(vpRender.height);
-
-                await page.render({ canvasContext: off.getContext('2d'), viewport: vpRender }).promise;
-
-                
-
-                const img = new Image();
-
-                img.src = off.toDataURL('image/png');
-
-                img.onload = () => {
-
-                    state.numPdfImage = img;
-
-                    drawCanvas();
-
-                };
-
-            }).catch(e => {
-
-                console.error('Erro preview PDF carregado:', e);
-
-            });
-
-        }
-
-    } else {
-
-        if (window.clearNumPdfFile) window.clearNumPdfFile();
-
-    }
 
 
 
@@ -2988,41 +2888,13 @@ function editNumeracao(id) {
     // que é onde state.numFormato foi resolvido.
     window.autoLoadCorBg(n.formato_id);
 
-    // Pré-carregar _pdfCanvas para cada elemento PDF presente na numeração
-    // para garantir renderização correta (respeitando width_mm x height_mm do elemento)
-    (async () => {
-        for (const el of state.numElements) {
-            if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
-                el._pdfLoading = true;
-                try {
-                    const pdfData = await fetchPdfBytes(el.pdf_content);
-                    if (pdfData && typeof pdfjsLib !== 'undefined') {
-                        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
-                        const page = await pdf.getPage(1);
-                        const vp = page.getViewport({ scale: 2 });
-                        const offCanvas = document.createElement('canvas');
-                        offCanvas.width = Math.round(vp.width);
-                        offCanvas.height = Math.round(vp.height);
-                        const octx = offCanvas.getContext('2d');
-                        await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
-                        el._pdfCanvas = offCanvas;
-
-                        // Atualizar originalW/H se ainda não definidos
-                        if (!state.numPdfOriginalW) {
-                            const vpOrig = page.getViewport({ scale: 1 });
-                            state.numPdfOriginalW = vpOrig.width * (25.4 / 72);
-                            state.numPdfOriginalH = vpOrig.height * (25.4 / 72);
-                        }
-                    }
-                } catch (err) {
-                    console.warn('[Editor] Erro pré-carregando _pdfCanvas do elemento:', err);
-                } finally {
-                    delete el._pdfLoading;
-                }
-            }
-        }
+    // Carregar a arte de cada elemento PDF/SVG a partir do arquivo do proprio
+    // elemento, e a lista da box "Adicionar Pdf e Svg".
+    precarregarArtesDosElementos(state.numElements).then(() => {
         drawCanvas();
-    })();
+        renderBoxArquivos();
+    });
+    renderBoxArquivos();
 
 }
 
@@ -3134,9 +3006,9 @@ function cancelNumEdit() {
 
     clearNumCsvFile();
 
-    window.clearNumSvgFile();
-
-    if (window.clearNumPdfFile) window.clearNumPdfFile();
+    state.numSvgFilename = "";
+    state.numPdfFilename = "";
+    renderBoxArquivos();
 
 }
 
@@ -3373,17 +3245,13 @@ function drawCanvasFace(canvas, face) {
 
 
 
-    // Determinar qual imagem de fundo usar dependendo da view ativa e face
-    let refBg = null;
-    if (face === 'back') {
-        refBg = state.bgImageVerso || state.numPdfImageVerso;
-    } else {
-        refBg = state.bgImage;
-        const viewNumeracao = document.getElementById('view-numeracao');
-        if (!refBg && viewNumeracao && viewNumeracao.classList.contains('active')) {
-            refBg = state.numPdfImage || state.numSvgImage;
-        }
-    }
+    // Arte de fundo é só a Arte de Fundo (v490).
+    //
+    // Até a v489 o PDF/SVG da numeração entrava aqui como fundo na falta de um
+    // bgImage. Como o mesmo objeto também era a arte dos elementos PDF, reabrir uma
+    // numeração pintava o PDF do elemento por baixo, a 55% de opacidade: o
+    // "fantasma". Agora o arquivo é do elemento e não tem mais nada a ver com o fundo.
+    const refBg = (face === 'back') ? state.bgImageVerso : state.bgImage;
 
 
 
@@ -3914,7 +3782,7 @@ function drawElement(ctx, el, S) {
 
             // Preferir o canvas renderizado pelo PDF.js (mais fiel ao PDF real)
             const pdfCanvas = el._pdfCanvas || null;
-            const imgObj = pdfCanvas || state.numPdfImage;
+            const imgObj = pdfCanvas;
 
             if (imgObj) {
                 drawImageContain(ctx, imgObj, -hw, -hh, w, h);
@@ -3934,7 +3802,7 @@ function drawElement(ctx, el, S) {
         } else {
 
             // SVG
-            const imgObj = el._svgImage || state.numSvgImage;
+            const imgObj = el._svgImage;
 
             if (imgObj) {
                 drawImageContain(ctx, imgObj, -hw, -hh, w, h);
@@ -4631,13 +4499,11 @@ window.rasterizePdfToImage = async function (arrayBuffer) {
 // PDF: a ausência é situação normal, não falha, e não rende toast.
 window.autoLoadCorBg = async function (formatoId) {
 
-    // A arte específica da numeração (PDF ou SVG de referência dela) tem
-    // precedência sobre a arte genérica da cor: se a numeração já tem a sua
-    // própria arte, drawCanvasFace daria prioridade a state.bgImage mesmo assim,
-    // escondendo a arte de referência da numeração atrás da arte da cor. Desistir
-    // aqui, antes até de resolver a cor, evita isso nos dois pontos de chamada
-    // (editNumeracao e onFormatoSelect).
-    if (state.numPdfContent || state.numSvgContent) return false;
+    // Até a v489 havia aqui uma trava — "arte própria vence" — que desistia de
+    // carregar a cor quando a numeração tinha PDF ou SVG. Ela fazia sentido enquanto
+    // o PDF/SVG da numeração servia de arte de fundo; a partir da v490 o arquivo é
+    // do elemento e não disputa mais o fundo, então a cor do formato base carrega
+    // sempre.
 
     // Token desta chamada: se um clearBgImage() ou outro autoLoadCorBg mais novo
     // rodar antes desta promessa terminar, o token muda e esta desiste sem escrever.
@@ -4799,38 +4665,6 @@ async function loadBgImage(file) {
 
 
 
-window.clearNumSvgFile = function () {
-
-    state.numSvgContent = null;
-
-    state.numSvgFilename = "";
-
-    state.numSvgImage = null;
-
-    state.numSvgOriginalW = null;
-
-    state.numSvgOriginalH = null;
-
-    const btn = document.getElementById('btn-remove-num-svg');
-
-    const name = document.getElementById('num-svg-file-name');
-
-    const inp = document.getElementById('num-svg-file');
-
-    if (btn) btn.style.display = 'none';
-
-    if (name) name.textContent = '';
-
-    if (inp) inp.value = '';
-
-
-
-    drawCanvas();
-
-};
-
-
-
 // ── Tamanho natural de um SVG ────────────────────────────────────────────────
 // O engine impõe SVG com o svglib, e o svglib lê o tamanho dos atributos
 // `width`/`height` do próprio arquivo (unidade ausente = px a 96 DPI) e, quando
@@ -4904,233 +4738,198 @@ function svgNaturalSizeMm(svgText) {
 }
 window.svgNaturalSizeMm = svgNaturalSizeMm;
 
-/** Tamanho natural do SVG de um elemento, em mm. Null quando não dá para saber. */
-function svgTamanhoNaturalDoElemento(el) {
-    const texto = el && el.svg_content;
-    if (texto && !/^https?:/i.test(texto) && !texto.startsWith('data:')) {
-        const nat = svgNaturalSizeMm(texto);
-        if (nat) return nat;
+const PT2MM = 25.4 / 72;
+const arred2 = n => Math.round(n * 100) / 100;
+
+/**
+ * Tamanho natural (escala 100%) de um elemento PDF ou SVG, em mm.
+ *
+ * A fonte preferida é `natural_w_mm`/`natural_h_mm`, gravados no elemento quando o
+ * arquivo é adicionado ou pré-carregado — é o único jeito de o botão "Tamanho
+ * original" funcionar sem reabrir o arquivo. Elementos de antes da v490 não têm
+ * esses campos; para SVG dá para recalcular do texto, e para PDF só o
+ * pré-carregador descobre (ele grava ao rasterizar).
+ */
+function tamanhoNaturalDoElemento(el) {
+    if (!el) return null;
+    if (el.natural_w_mm > 0 && el.natural_h_mm > 0) {
+        return { w: el.natural_w_mm, h: el.natural_h_mm };
     }
-    // Depois de salvo, svg_content vira URL: cair no arquivo carregado no editor.
-    if (state.numSvgContent) {
-        const nat = svgNaturalSizeMm(state.numSvgContent);
-        if (nat) return nat;
-    }
-    if (state.numSvgOriginalW > 0 && state.numSvgOriginalH > 0) {
-        return { w: state.numSvgOriginalW, h: state.numSvgOriginalH };
-    }
-    const img = (el && el._svgImage) || state.numSvgImage;
-    if (img && img.width && img.height) {
-        const PX2MM = SVG_UNIDADES_PARA_MM.px;
-        return { w: img.width * PX2MM, h: img.height * PX2MM };
+    if (el.type === 'SVG') {
+        const texto = el.svg_content;
+        if (texto && !/^https?:/i.test(texto) && !texto.startsWith('data:')) {
+            const nat = svgNaturalSizeMm(texto);
+            if (nat) return nat;
+        }
+        if (el._svgImage && el._svgImage.width && el._svgImage.height) {
+            const PX2MM = SVG_UNIDADES_PARA_MM.px;
+            return { w: el._svgImage.width * PX2MM, h: el._svgImage.height * PX2MM };
+        }
     }
     return null;
 }
 
-/** Proporção largura/altura a preservar ao redimensionar um elemento SVG. */
-function svgProporcaoDoElemento(el) {
-    const nat = svgTamanhoNaturalDoElemento(el);
+/** Proporção largura/altura a preservar ao redimensionar um elemento PDF/SVG. */
+function proporcaoDoElementoArte(el) {
+    const nat = tamanhoNaturalDoElemento(el);
     if (nat && nat.w > 0 && nat.h > 0) return nat.w / nat.h;
-    const img = (el && el._svgImage) || state.numSvgImage;
+    const img = el && (el._svgImage || el._pdfCanvas);
     if (img && img.width && img.height) return img.width / img.height;
     if (el && el.width_mm > 0 && el.height_mm > 0) return el.width_mm / el.height_mm;
     return null;
 }
 
-async function loadNumSvgFile(file) {
+/** Fonte de imagem para um conteúdo SVG, seja ele texto cru, data URL ou URL pública. */
+function svgParaSrc(conteudo) {
+    if (!conteudo) return '';
+    if (conteudo.startsWith('http') || conteudo.startsWith('data:')) return conteudo;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(conteudo);
+}
 
+/** Rasteriza a primeira página de um PDF. Devolve o canvas e o tamanho real em mm. */
+async function rasterizarPdfDoElemento(fonte) {
+    if (typeof pdfjsLib === 'undefined') throw new Error('pdf.js não está carregado');
+    const dados = (fonte instanceof ArrayBuffer || fonte instanceof Uint8Array)
+        ? fonte
+        : await fetchPdfBytes(fonte);
+    if (!dados) throw new Error('não foi possível ler os bytes do PDF');
+
+    const pdf = await pdfjsLib.getDocument({ data: dados }).promise;
+    const page = await pdf.getPage(1);
+    const vp = page.getViewport({ scale: 2 });
+    const off = document.createElement('canvas');
+    off.width = Math.round(vp.width);
+    off.height = Math.round(vp.height);
+    // background transparente: sem isso o pdf.js pinta o canvas de branco e o
+    // elemento vira um retângulo opaco por cima da arte de fundo.
+    await page.render({ canvasContext: off.getContext('2d'), viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
+
+    const vpOrig = page.getViewport({ scale: 1 });
+    return { canvas: off, w_mm: vpOrig.width * PT2MM, h_mm: vpOrig.height * PT2MM };
+}
+
+/** Carrega a imagem de um elemento SVG e, se faltar, mede o tamanho natural. */
+async function carregarImagemSvgDoElemento(el) {
+    const img = new Image();
+    img.src = svgParaSrc(el.svg_content);
+    await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = () => rej(new Error('a imagem do SVG não carregou'));
+    });
+    el._svgImage = img;
+
+    if (!(el.natural_w_mm > 0)) {
+        // Depois de salvo o svg_content é uma URL; buscar o texto para medir do
+        // mesmo jeito que o svglib mede no engine.
+        let texto = el.svg_content || '';
+        if (/^https?:/i.test(texto)) {
+            try { texto = await (await fetch(texto)).text(); } catch (e) { texto = ''; }
+        }
+        const nat = svgNaturalSizeMm(texto) || {
+            w: img.width * SVG_UNIDADES_PARA_MM.px,
+            h: img.height * SVG_UNIDADES_PARA_MM.px
+        };
+        el.natural_w_mm = arred2(nat.w);
+        el.natural_h_mm = arred2(nat.h);
+    }
+}
+
+/**
+ * Carrega a arte de todos os elementos PDF/SVG que ainda não têm imagem.
+ * Cada elemento carrega o próprio arquivo — não existe mais um arquivo único da
+ * numeração servindo a todos.
+ */
+async function precarregarArtesDosElementos(elementos) {
+    for (const el of (elementos || [])) {
+        try {
+            if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
+                el._pdfLoading = true;
+                const r = await rasterizarPdfDoElemento(el.pdf_content);
+                el._pdfCanvas = r.canvas;
+                if (!(el.natural_w_mm > 0)) {
+                    el.natural_w_mm = arred2(r.w_mm);
+                    el.natural_h_mm = arred2(r.h_mm);
+                }
+            } else if (el.type === 'SVG' && el.svg_content && !el._svgImage && !el._svgLoading) {
+                el._svgLoading = true;
+                await carregarImagemSvgDoElemento(el);
+            }
+        } catch (err) {
+            console.warn('[Editor] Erro pré-carregando a arte do elemento', el && el.id, err);
+        } finally {
+            delete el._pdfLoading;
+            delete el._svgLoading;
+        }
+    }
+}
+window.precarregarArtesDosElementos = precarregarArtesDosElementos;
+
+/** Adiciona um elemento SVG com o arquivo escolhido, em tamanho original (100%). */
+async function adicionarElementoSvg(file) {
     try {
-
         const texto = await file.text();
 
-        const url = URL.createObjectURL(file);
-
         const img = new Image();
+        img.src = svgParaSrc(texto);
+        await new Promise((res, rej) => {
+            img.onload = res;
+            img.onerror = () => rej(new Error('o navegador não conseguiu renderizar este SVG'));
+        });
 
-        img.src = url;
-
-        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-
-
-
-        state.numSvgImage = img;
-
-        state.numSvgFilename = file.name;
-
-        const nat = svgNaturalSizeMm(texto);
-
-        if (nat) {
-
-            state.numSvgOriginalW = nat.w;
-
-            state.numSvgOriginalH = nat.h;
-
-        } else {
-
+        let nat = svgNaturalSizeMm(texto);
+        if (!nat) {
             // O arquivo não declara tamanho nem viewBox utilizável: o img.width aqui
             // é o palpite do navegador (300×150 px), não o desenho.
-            state.numSvgOriginalW = (img.width / 96) * 25.4;
-
-            state.numSvgOriginalH = (img.height / 96) * 25.4;
-
+            nat = { w: img.width * SVG_UNIDADES_PARA_MM.px, h: img.height * SVG_UNIDADES_PARA_MM.px };
             toast('Este SVG não declara largura/altura nem viewBox — o tamanho foi estimado pelo navegador e pode não bater com a impressão.', 'warning');
-
         }
 
-        state.numSvgContent = texto;
+        addElement('SVG', {
+            svg_content: texto,
+            svg_filename: file.name,
+            width_mm: arred2(nat.w),
+            height_mm: arred2(nat.h),
+            natural_w_mm: arred2(nat.w),
+            natural_h_mm: arred2(nat.h),
+            _svgImage: img
+        });
 
-        drawCanvas();
-
-
-
-        const btn = document.getElementById('btn-remove-num-svg');
-
-        const name = document.getElementById('num-svg-file-name');
-
-        if (btn) btn.style.display = 'inline-flex';
-
-        if (name) name.textContent = '📎 ' + file.name;
-
-
-
-        toast('Arquivo SVG carregado com sucesso!', 'success');
-
+        toast(`SVG adicionado: ${file.name} (${arred2(nat.w)} × ${arred2(nat.h)} mm)`, 'success');
     } catch (err) {
-
         toast('Erro ao processar SVG: ' + err.message, 'error');
-
     }
-
 }
 
 
 
-window.clearNumPdfFile = function () {
-
-    state.numPdfContent = null;
-
-    state.numPdfFilename = "";
-
-    state.numPdfImage = null;
-
-    state.numPdfOriginalW = null;
-
-    state.numPdfOriginalH = null;
-
-    const btn = document.getElementById('btn-remove-num-pdf');
-
-    const name = document.getElementById('num-pdf-file-name');
-
-    const inp = document.getElementById('num-pdf-file');
-
-    if (btn) btn.style.display = 'none';
-
-    if (name) name.textContent = '';
-
-    if (inp) inp.value = '';
-
-    drawCanvas();
-
-};
-
-
-
-async function loadNumPdfFile(file) {
-
+/** Adiciona um elemento PDF com o arquivo escolhido, em tamanho original (100%). */
+async function adicionarElementoPdf(file) {
     try {
+        const bytes = await file.arrayBuffer();
+        // getDocument consome o buffer; a copia preserva os bytes para o data URL.
+        const r = await rasterizarPdfDoElemento(bytes.slice(0));
 
-        state.numPdfFilename = file.name;
+        const dataUrl = await new Promise((res, rej) => {
+            const fr = new FileReader();
+            fr.onload = e => res(e.target.result);
+            fr.onerror = () => rej(new Error('nao foi possivel ler o arquivo'));
+            fr.readAsDataURL(file);
+        });
 
-        
+        addElement('PDF', {
+            pdf_content: dataUrl,
+            pdf_filename: file.name,
+            width_mm: arred2(r.w_mm),
+            height_mm: arred2(r.h_mm),
+            natural_w_mm: arred2(r.w_mm),
+            natural_h_mm: arred2(r.h_mm),
+            _pdfCanvas: r.canvas
+        });
 
-        if (typeof pdfjsLib !== 'undefined') {
-
-            const arrayBuffer = await file.arrayBuffer();
-
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-            const page = await pdf.getPage(1);
-
-            
-
-            const vpRender = page.getViewport({ scale: 2 });
-
-            const off = document.createElement('canvas');
-
-            const octx = off.getContext('2d');
-
-            off.width = Math.round(vpRender.width);
-
-            off.height = Math.round(vpRender.height);
-
-            // background: 'rgba(0,0,0,0)' garante que o PDF.js não preencha o canvas com branco
-
-            await page.render({ canvasContext: octx, viewport: vpRender, background: 'rgba(0,0,0,0)' }).promise;
-
-            
-
-            const img = new Image();
-
-            img.src = off.toDataURL('image/png');
-
-            await new Promise(r => img.onload = r);
-
-            state.numPdfImage = img;
-
-            // Guardar o canvas renderizado para uso direto nos elementos PDF
-            state.numPdfOffCanvas = off;
-
-            // Atualizar o _pdfCanvas de qualquer elemento PDF já existente (ex: ao trocar arquivo)
-            state.numElements.forEach(el => {
-                if (el.type === 'PDF') el._pdfCanvas = off;
-            });
-
-            
-
-            const vpOrig = page.getViewport({ scale: 1 });
-
-            const ptToMm = 25.4 / 72;
-
-            state.numPdfOriginalW = vpOrig.width * ptToMm;
-
-            state.numPdfOriginalH = vpOrig.height * ptToMm;
-
-        }
-
-
-
-        const reader = new FileReader();
-
-        reader.onload = e => {
-
-            state.numPdfContent = e.target.result;
-
-            drawCanvas();
-
-        };
-
-        reader.readAsDataURL(file);
-
-
-
-        const btn = document.getElementById('btn-remove-num-pdf');
-
-        const name = document.getElementById('num-pdf-file-name');
-
-        if (btn) btn.style.display = 'inline-flex';
-
-        if (name) name.textContent = '📎 ' + file.name;
-
-
-
-        toast('Arquivo PDF carregado com sucesso!', 'success');
-
+        toast(`PDF adicionado: ${file.name} (${arred2(r.w_mm)} × ${arred2(r.h_mm)} mm)`, 'success');
     } catch (err) {
-
         toast('Erro ao processar PDF: ' + err.message, 'error');
-
     }
-
 }
 
 
@@ -5153,7 +4952,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (svgInp) svgInp.addEventListener('change', e => {
 
-        if (e.target.files[0]) loadNumSvgFile(e.target.files[0]);
+        if (e.target.files[0]) { adicionarElementoSvg(e.target.files[0]); e.target.value = ''; }
 
     });
 
@@ -5163,7 +4962,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (pdfInp) pdfInp.addEventListener('change', e => {
 
-        if (e.target.files[0]) loadNumPdfFile(e.target.files[0]);
+        if (e.target.files[0]) { adicionarElementoPdf(e.target.files[0]); e.target.value = ''; }
 
     });
 
@@ -5197,7 +4996,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         svgInp.addEventListener('change', e => {
 
-            if (e.target.files[0]) loadNumSvgFile(e.target.files[0]);
+            if (e.target.files[0]) { adicionarElementoSvg(e.target.files[0]); e.target.value = ''; }
 
         });
 
@@ -5213,7 +5012,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         pdfInp.addEventListener('change', e => {
 
-            if (e.target.files[0]) loadNumPdfFile(e.target.files[0]);
+            if (e.target.files[0]) { adicionarElementoPdf(e.target.files[0]); e.target.value = ''; }
 
         });
 
@@ -5227,7 +5026,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // - ELEMENTOS VDP -
 
-window.addElement = function (type) {
+/**
+ * Cria um elemento novo. `extras` sobrepõe os defaults do tipo — é por onde a box
+ * "Adicionar Pdf e Svg" passa o arquivo, o nome e o tamanho natural do elemento.
+ */
+window.addElement = function (type, extras) {
 
     state.numElCounter++;
 
@@ -5272,14 +5075,11 @@ window.addElement = function (type) {
 
     if (type === 'BARCODE') Object.assign(base, { width_mm: 40, height_mm: 10, barcode_format: 'code128', pad: 4, prefix: '', suffix: '' });
 
-    if (type === 'SVG') Object.assign(base, { width_mm: state.numSvgOriginalW || 20, height_mm: state.numSvgOriginalH || 20, svg_content: state.numSvgContent || '' });
+    // SVG e PDF nascem vazios: quem os cria e a box "Adicionar Pdf e Svg", passando
+    // o arquivo e o tamanho natural por `extras`.
+    if (type === 'SVG') Object.assign(base, { width_mm: 20, height_mm: 20, svg_content: '' });
 
-    if (type === 'PDF') Object.assign(base, {
-        width_mm: state.numPdfOriginalW || 20,
-        height_mm: state.numPdfOriginalH || 20,
-        pdf_content: state.numPdfContent || '',
-        _pdfCanvas: state.numPdfOffCanvas || undefined
-    });
+    if (type === 'PDF') Object.assign(base, { width_mm: 20, height_mm: 20, pdf_content: '' });
 
     if (type === 'PICOTE') Object.assign(base, { name: 'Picote' });
     
@@ -5291,7 +5091,7 @@ window.addElement = function (type) {
     if (type === 'CAMAROTE_PESSOA') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Cadeira ' });
     if (type === 'CAMAROTE_PESSOA_TOTAL') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Cadeira ' });
 
-
+    if (extras) Object.assign(base, extras);
 
     state.numElements.push(base);
     saveNumHistory();
@@ -5301,6 +5101,8 @@ window.addElement = function (type) {
     drawCanvas();
 
     selectElId(id, false);
+
+    return base;
 
 };
 
@@ -5512,16 +5314,28 @@ function renderElementsList() {
 
                 <div class="form-group"><label>Sufixo</label><input class="form-control" type="text" value="${el.suffix || ''}" onchange="updateEl('${el.id}','suffix',this.value)"></div>`;
 
-        } else if (el.type === 'SVG') {
+        } else if (el.type === 'SVG' || el.type === 'PDF') {
+
+            // Escala: os dois tipos têm o mesmo controle. Largura e Altura andam
+            // juntas porque o engine impõe com keep_proportion=True — uma caixa fora
+            // de proporção só produziria margem vazia no papel.
+            const nat = tamanhoNaturalDoElemento(el);
+            const natTxt = nat
+                ? `original: ${arred2(nat.w)} × ${arred2(nat.h)} mm`
+                : 'tamanho original ainda não medido';
 
             extraFields = `
 
-                <div class="form-group"><label>Largura (mm)</label><input class="form-control" type="number" value="${el.width_mm || 20}" min="1" max="1000" step="0.5" onchange="updateElDimensaoSvg('${el.id}','width_mm',+this.value)"></div>
+                <div class="form-group el-full" style="font-size:0.75rem;color:var(--text-dim);">
+                    ${el.type === 'PDF' ? '📄' : '🎨'} ${nomeDoArquivoDoElemento(el)} — ${natTxt}
+                </div>
 
-                <div class="form-group"><label>Altura (mm)</label><input class="form-control" type="number" value="${el.height_mm || 20}" min="1" max="1000" step="0.5" onchange="updateElDimensaoSvg('${el.id}','height_mm',+this.value)"></div>
+                <div class="form-group"><label>Largura (mm)</label><input class="form-control" type="number" value="${el.width_mm || 20}" min="1" max="1000" step="0.5" onchange="updateElDimensaoArte('${el.id}','width_mm',+this.value)"></div>
+
+                <div class="form-group"><label>Altura (mm)</label><input class="form-control" type="number" value="${el.height_mm || 20}" min="1" max="1000" step="0.5" onchange="updateElDimensaoArte('${el.id}','height_mm',+this.value)"></div>
 
                 <div class="form-group el-full" style="display:flex;align-items:center;gap:8px;">
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="resetSvgTamanhoOriginal('${el.id}')">↺ Tamanho original (100%)</button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="resetArteTamanhoOriginal('${el.id}')">↺ Tamanho original (100%)</button>
                     <span style="font-size:0.75rem;color:var(--text-dim);">🔒 proporção travada</span>
                 </div>`;
 
@@ -5698,7 +5512,58 @@ function renderElementsList() {
     // Montar os Font Pickers (substitui os placeholders .font-picker-mount por componentes reais)
     requestAnimationFrame(() => mountFontPickers());
 
+    renderBoxArquivos();
+
 }
+
+
+/** Nome de exibição do arquivo de um elemento PDF/SVG. */
+function nomeDoArquivoDoElemento(el) {
+    const explicito = el.type === 'PDF' ? el.pdf_filename : el.svg_filename;
+    if (explicito) return explicito;
+
+    // Elementos de antes da v490 não guardavam o nome: derivar da URL do Storage,
+    // que sobe como "<timestamp>_<nome original>".
+    const conteudo = (el.type === 'PDF' ? el.pdf_content : el.svg_content) || '';
+    if (/^https?:/i.test(conteudo)) {
+        try {
+            const base = decodeURIComponent(new URL(conteudo).pathname.split('/').pop() || '');
+            const limpo = base.replace(/^\d{10,}_/, '');
+            if (limpo) return limpo;
+        } catch (e) { /* cai no default */ }
+    }
+    return el.type === 'PDF' ? 'arquivo.pdf' : 'arquivo.svg';
+}
+
+/** Renderiza a lista da box "Adicionar Pdf e Svg". */
+window.renderBoxArquivos = function () {
+    const cont = document.getElementById('num-arquivos-lista');
+    if (!cont) return;
+
+    const arquivos = (state.numElements || []).filter(el => el.type === 'PDF' || el.type === 'SVG');
+
+    if (!arquivos.length) {
+        cont.innerHTML = '<span style="font-size:0.78rem;color:var(--text-dim);">Nenhum arquivo adicionado.</span>';
+        return;
+    }
+
+    const esc = t => String(t).replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    cont.innerHTML = arquivos.map(el => {
+        const icone = el.type === 'PDF' ? '📄' : '🎨';
+        const nome = esc(nomeDoArquivoDoElemento(el));
+        const w = Math.round((el.width_mm || 0) * 10) / 10;
+        const h = Math.round((el.height_mm || 0) * 10) / 10;
+        const selecionado = (state.selectedElIds || []).includes(el.id);
+        return `<div class="num-arquivo-item${selecionado ? ' selected' : ''}" onclick="selectElId('${el.id}', false)" title="Clique para selecionar este elemento no canvas">
+            <span class="num-arquivo-icone">${icone}</span>
+            <span class="num-arquivo-nome">${nome}</span>
+            <span class="num-arquivo-dim">${w} × ${h} mm</span>
+            <button class="btn btn-sm btn-ghost btn-danger" style="padding:2px 6px;" onclick="event.stopPropagation(); removeEl('${el.id}')" title="Remover este elemento">✕</button>
+        </div>`;
+    }).join('');
+};
 
 
 
@@ -5718,26 +5583,24 @@ window.updateEl = function (id, field, value) {
 
 
 /**
- * Redimensiona um elemento SVG mantendo a proporção original — mexer numa das
- * dimensões ajusta a outra. Distorcer o desenho não é possível pela interface,
+ * Redimensiona um elemento PDF ou SVG mantendo a proporção original — mexer numa
+ * das dimensões ajusta a outra. Distorcer a arte não é possível pela interface,
  * e nem adiantaria: o engine impõe com `keep_proportion=True`, então uma caixa
  * fora de proporção só produziria margem vazia no papel.
  */
-window.updateElDimensaoSvg = function (id, campo, valor) {
+window.updateElDimensaoArte = function (id, campo, valor) {
     const el = state.numElements.find(e => e.id === id);
     if (!el) return;
 
     const v = Math.max(0.1, +valor || 0);
-    const prop = svgProporcaoDoElemento(el);
-
-    const arred = n => Math.round(n * 100) / 100;
+    const prop = proporcaoDoElementoArte(el);
 
     if (campo === 'height_mm') {
-        el.height_mm = arred(v);
-        if (prop) el.width_mm = arred(v * prop);
+        el.height_mm = arred2(v);
+        if (prop) el.width_mm = arred2(v * prop);
     } else {
-        el.width_mm = arred(v);
-        if (prop) el.height_mm = arred(v / prop);
+        el.width_mm = arred2(v);
+        if (prop) el.height_mm = arred2(v / prop);
     }
 
     saveNumHistory();
@@ -5745,19 +5608,19 @@ window.updateElDimensaoSvg = function (id, campo, valor) {
     drawCanvas();
 };
 
-/** Devolve o elemento SVG ao tamanho natural do arquivo (escala 100%). */
-window.resetSvgTamanhoOriginal = function (id) {
+/** Devolve o elemento PDF/SVG ao tamanho natural do arquivo (escala 100%). */
+window.resetArteTamanhoOriginal = function (id) {
     const el = state.numElements.find(e => e.id === id);
     if (!el) return;
 
-    const nat = svgTamanhoNaturalDoElemento(el);
+    const nat = tamanhoNaturalDoElemento(el);
     if (!nat) {
-        toast('Não foi possível determinar o tamanho original deste SVG.', 'warning');
+        toast('Não foi possível determinar o tamanho original deste arquivo — ele ainda pode estar carregando.', 'warning');
         return;
     }
 
-    el.width_mm = Math.round(nat.w * 100) / 100;
-    el.height_mm = Math.round(nat.h * 100) / 100;
+    el.width_mm = arred2(nat.w);
+    el.height_mm = arred2(nat.h);
 
     saveNumHistory();
     renderElementsList();
@@ -6164,8 +6027,9 @@ window.saveNumeracao = async function () {
             pctx.fillStyle = '#ffffff';
             pctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
 
-            // 2. Imagem de fundo (PDF ou SVG se houver)
-            let refBg = state.bgImage || state.numPdfImage || state.numSvgImage;
+            // 2. Arte de fundo. Só a Arte de Fundo: até a v489 o PDF/SVG da numeração
+            // entrava aqui e o fantasma ficava assado dentro do preview_jpg salvo.
+            let refBg = state.bgImage;
             if (refBg) {
                 const MM2PT = 2.8346;
                 let originalW_mm = 0;
@@ -6245,15 +6109,33 @@ window.saveNumeracao = async function () {
 
         }
 
-        const svgUrl = await uploadToStorage(state.numSvgContent, state.numSvgFilename || 'arquivo.svg', 'uploads_svg');
+        // Cada elemento PDF/SVG sobe o próprio arquivo (v490). Os que já são URL —
+        // porque vieram do banco e não foram trocados — são pulados.
+        for (const el of state.numElements) {
+            try {
+                if (el.type === 'SVG' && el.svg_content && !/^https?:/i.test(el.svg_content)) {
+                    el.svg_content = await uploadToStorage(
+                        el.svg_content, el.svg_filename || 'arquivo.svg', 'uploads_svg') || el.svg_content;
+                } else if (el.type === 'PDF' && el.pdf_content && !/^https?:/i.test(el.pdf_content)) {
+                    el.pdf_content = await uploadToStorage(
+                        el.pdf_content, el.pdf_filename || 'arquivo.pdf', 'uploads_pdf') || el.pdf_content;
+                }
+            } catch (errUp) {
+                console.error('[Storage] Falha ao enviar o arquivo do elemento', el.id, errUp);
+                toast(`Não foi possível enviar o arquivo do elemento ${el.id}: ${errUp.message}`, 'error');
+            }
+        }
 
-        const pdfUrl = await uploadToStorage(state.numPdfContent, state.numPdfFilename || 'arquivo.pdf', 'uploads_pdf');
-
-
-
-        state.numSvgContent = svgUrl;
-
-        state.numPdfContent = pdfUrl;
+        // As colunas svg_content/pdf_content da numeração continuam sendo escritas, a
+        // partir do primeiro elemento de cada tipo. Não é redundância: o engine usa
+        // svg_content da numeração como marcador de CAMAROTE (engine.py:222 e mais
+        // três pontos), e o export de gabarito e o db.py também as leem.
+        const primeiroSvg = state.numElements.find(el => el.type === 'SVG' && el.svg_content);
+        const primeiroPdf = state.numElements.find(el => el.type === 'PDF' && el.pdf_content);
+        const svgUrl = primeiroSvg ? primeiroSvg.svg_content : '';
+        const pdfUrl = primeiroPdf ? primeiroPdf.pdf_content : '';
+        state.numSvgFilename = primeiroSvg ? (primeiroSvg.svg_filename || state.numSvgFilename || '') : '';
+        state.numPdfFilename = primeiroPdf ? (primeiroPdf.pdf_filename || state.numPdfFilename || '') : '';
 
 
 
@@ -6286,13 +6168,12 @@ window.saveNumeracao = async function () {
 
             csv_data: state.numCsvData || null,
 
+            // Derivadas do primeiro elemento de cada tipo, por compatibilidade.
             svg_content: svgUrl || "",
 
             svg_filename: state.numSvgFilename || "",
 
-            // pdf_content da numeração: usar pdfUrl se válido, senão manter o conteúdo anterior de state
-            // (que pode ter sido recuperado de um elemento PDF no editNumeracao como fallback)
-            pdf_content: pdfUrl || state.numPdfContent || "",
+            pdf_content: pdfUrl || "",
 
             pdf_filename: state.numPdfFilename || "",
             is_custom: window.customNumeracaoEditState ? true : false,
@@ -6303,12 +6184,10 @@ window.saveNumeracao = async function () {
             elements: [
                 ...state.numElements.map(el => {
                     // Remover propriedades internas do frontend (não serializáveis)
-                    const { _pdfCanvas, _pdfLoading, _svgImage, _pdfPreview, ...e } = el;
+                    const { _pdfCanvas, _pdfLoading, _svgImage, _svgLoading, _pdfPreview, ...e } = el;
                     if (e.type === 'FIXED') e.fixed = true;
-                    if (e.type === 'SVG') e.svg_content = svgUrl || e.svg_content || "";
-                    // Para PDF: usar pdfUrl se válido, senão manter o pdf_content original do elemento
-                    // Isso evita apagar o PDF ao re-editar sem recarregar o arquivo
-                    if (e.type === 'PDF') e.pdf_content = pdfUrl || e.pdf_content || "";
+                    // O conteúdo de cada elemento é dele: nada de achatar todos num
+                    // arquivo só, como acontecia até a v489.
                     return e;
                 }),
                 { id: 'metadata', type: 'METADATA', print_mode: document.getElementById('num-print-mode')?.value || 'front' }
@@ -7666,7 +7545,21 @@ function drawPreview() {
                         const sz_h = (el.height_mm || 20) * MM2PT * scale;
                         const hw = sz_w / 2, hh = sz_h / 2;
 
-                        const svgImg = el._svgImage || (currentNum && currentNum._svgImage);
+                        const svgImg = el._svgImage;
+
+                        if (!svgImg && el.svg_content && !el._svgLoading) {
+                            // Carrega sob demanda, no mesmo molde do elemento PDF logo
+                            // abaixo. Até a v489 este ponto lia `currentNum._svgImage`,
+                            // que nada preenchia, e o preview de imposição sempre
+                            // desenhava o placeholder "SVG" em vez da arte.
+                            el._svgLoading = true;
+                            carregarImagemSvgDoElemento(el)
+                                .then(() => { delete el._svgLoading; drawPreview(); })
+                                .catch(errSvg => {
+                                    console.error('[Preview] Erro ao carregar SVG do elemento VDP:', errSvg);
+                                    delete el._svgLoading;
+                                });
+                        }
 
                         if (svgImg) {
 

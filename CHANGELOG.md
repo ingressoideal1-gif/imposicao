@@ -4,7 +4,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.5.6 (v489)** — 2026-08-09
+## Versão atual: **v1.5.7 (v490)** — 2026-08-09
+
+---
+
+## [v490 — 2026-08-09] — Box "Adicionar Pdf e Svg", arquivo por elemento, e o fim do fantasma
+
+### Resumo
+Três pedidos que, no código, eram o mesmo conserto. Os elementos PDF e SVG ganharam uma box própria onde o upload já cria o elemento; passou a ser possível ter vários, cada um com o seu arquivo; o elemento PDF ganhou controle de escala; e o PDF parou de aparecer como fantasma no lugar da Arte de Fundo.
+
+### O que ligava os três
+Até a v489 o arquivo era **da numeração**, não do elemento. `state.numPdfContent` e `state.numSvgContent` guardavam um arquivo cada, `addElement('PDF')` copiava desse estado global, e `saveNumeracao()` sobrescrevia o conteúdo de **todos** os elementos com esse arquivo único — a inconsistência E3 de `docs/fluxo_elementos_pdf_svg.md`. Um segundo PDF diferente era impossível de manter: sumia no primeiro save.
+
+O fantasma era a mesma confusão vista de outro ângulo. `state.numPdfImage` servia a dois donos: era a arte do elemento **e** a arte de fundo de referência do canvas. Ao reabrir a numeração, `editNumeracao()` recuperava o `pdf_content` do primeiro elemento PDF, ele virava `numPdfImage`, e o canvas o pintava como fundo a 55% de opacidade.
+
+### O arquivo passou a ser do elemento
+Cada elemento PDF/SVG carrega o próprio conteúdo, o próprio nome (`pdf_filename`/`svg_filename`) e o próprio tamanho natural em mm (`natural_w_mm`/`natural_h_mm`, para o botão de 100% funcionar sem reabrir o arquivo). O save sobe o arquivo de cada elemento separadamente, pulando os que já são URL, e não achata mais tudo num arquivo só.
+
+As colunas `svg_content` e `pdf_content` da **numeração** continuam sendo escritas, agora derivadas do primeiro elemento de cada tipo. Não é redundância: `svg_content` da numeração é um marcador de CAMAROTE load-bearing — `engine.py:222` faz `if "CAMAROTE" in str(numeracao.get("svg_content", ""))` para forçar `num_tipo = "CAMAROTE"`, e o mesmo teste aparece em mais três pontos do engine e dois do frontend. Parar de escrever a coluna quebraria a detecção em silêncio.
+
+### A box "Adicionar Pdf e Svg"
+Card novo no painel de elementos, com os botões `📄 + PDF` e `🎨 + SVG` — que abrem o seletor de arquivo e já criam o elemento, no tamanho natural — e a lista do que foi adicionado: ícone, nome, tamanho em mm, remover, e clique para selecionar no canvas. Saíram os botões SVG e PDF de "Adicionar Elementos" e os dois campos de upload do topo do editor.
+
+### Escala do elemento PDF
+O PDF ganhou o mesmo bloco que o SVG tem desde a v489: Largura e Altura em mm travadas na proporção, o botão `↺ Tamanho original (100%)`, e uma linha mostrando o arquivo e o tamanho original. Antes ele não tinha campo de tamanho nenhum. As funções `updateElDimensaoSvg`/`resetSvgTamanhoOriginal` viraram `updateElDimensaoArte`/`resetArteTamanhoOriginal` e atendem aos dois tipos.
+
+### O fantasma
+A arte de fundo passou a ser **só** `state.bgImage`, em três pontos: o canvas do editor, a face verso (que lia `state.numPdfImageVerso`, uma variável que nada no repositório atribuía — já era código morto) e o gerador do `preview_jpg`, onde o fantasma também ficava assado dentro da imagem salva.
+
+Junto saiu a trava de `autoLoadCorBg` — a regra "arte própria vence" da v486 —, que impedia a cor do formato base de carregar quando a numeração tinha PDF ou SVG. Ela fazia sentido enquanto o PDF era o fundo; agora a cor carrega sempre. **Mudança visível:** numerações que usavam o PDF como fundo de referência passam a mostrar a cor do formato base no lugar dele.
+
+### De quebra, o E1
+O preview de imposição lia a imagem do SVG de `currentNum._svgImage`, campo que nada preenchia, e por isso **sempre** desenhava o placeholder "SVG" em vez da arte. Agora ele lê `el._svgImage` e carrega sob demanda, no mesmo molde do elemento PDF ao lado.
+
+### Como foi verificado
+Puppeteer na porta 9123, adicionando dois PDFs diferentes e um SVG pela box: os três elementos entram com conteúdos distintos e no tamanho real de cada arquivo; a lista da box mostra os três; a escala trava a proporção e o botão de 100% devolve o tamanho original nos dois tipos; o payload do save leva três conteúdos distintos, sem nenhum cache de render, e as colunas da numeração vêm do primeiro elemento de cada tipo; e reabrir reconstrói a arte elemento por elemento.
+
+O teste do fantasma tem controle: além de conferir que o canvas novo não pinta **nenhum** pixel de arte fora do elemento, ele repinta do jeito antigo e confirma que o detector enxergaria o fantasma — 1.007.016 pixels na metade direita da folha. Um detector cego passaria no teste sem provar nada.
+
+No engine, os três elementos foram impostos de verdade e medidos no PDF gerado: 40,13 × 20,15 mm, 30,14 × 30,31 mm e 24,89 × 9,99 mm, contra 40×20, 30×30 e 25×10 esperados.
+
+### Compatibilidade
+Numerações existentes abrem sem migração: os elementos já carregam a URL no próprio `pdf_content`/`svg_content` — hoje a mesma para todos, o que continua sendo estado válido. Faltam só `pdf_filename` e `natural_w_mm`; a box mostra o nome derivado da URL e o pré-carregador mede o tamanho natural ao rasterizar. A partir do primeiro save no modelo novo, cada elemento fica com os seus.
 
 ---
 

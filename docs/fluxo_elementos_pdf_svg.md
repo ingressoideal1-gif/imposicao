@@ -6,10 +6,11 @@ upload até o papel. Data: 2026-08-08, contra a v488.
 Tudo que está marcado como **medido** foi verificado executando código, não lendo.
 Os comandos estão no fim de cada achado.
 
-> **Estado em 2026-08-09 (v489):** os bloqueadores **B1**, **B2** e **B3** foram
-> corrigidos — ver o CHANGELOG da v489 e as notas "✅ Corrigido" em cada seção
-> abaixo. O texto original de cada achado foi mantido porque descreve o sintoma
-> que se deve saber reconhecer. As inconsistências **E1 a E4** continuam abertas.
+> **Estado em 2026-08-09 (v490):** os bloqueadores **B1**, **B2** e **B3** foram
+> corrigidos na v489, e as inconsistências **E1**, **E2** e **E3** na v490 — ver o
+> CHANGELOG e as notas "✅ Corrigido" em cada seção abaixo. O texto original de cada
+> achado foi mantido porque descreve o sintoma que se deve saber reconhecer. Segue
+> aberta a **E4** (três comportamentos diferentes quando o arquivo não carregou).
 
 ## O caminho, em sete etapas
 
@@ -174,11 +175,20 @@ vindo de `frontend/mapas.js:6`. `window.state.numeracoes` é `undefined` e
 
 Ver a explicação do `window.state` em `docs/lista_de_numeracoes.md`.
 
+**✅ Corrigido na v490.** A fonte é uma só: `el._svgImage`, no próprio elemento. O
+editor e o preview de imposição passaram a lê-la, e o preview carrega sob demanda com
+`carregarImagemSvgDoElemento()`, no mesmo molde que o elemento PDF ao lado já usava —
+antes ele desenhava o placeholder "SVG" sempre. `state.numSvgImage` e
+`state.numPdfImage` deixaram de existir como fonte de arte de elemento.
+
 ### E2. PDF é por elemento, SVG é global
 
 O elemento PDF carrega seu próprio `_pdfCanvas`; o editor desenha SVG a partir de um
 único `state.numSvgImage`. Dois elementos SVG diferentes na mesma numeração são
 indistinguíveis no editor — os dois mostram a mesma imagem.
+
+**✅ Corrigido na v490.** Os dois tipos são por elemento: cada um tem seu
+`svg_content`/`pdf_content`, seu `_svgImage`/`_pdfCanvas` e seu `natural_w_mm`.
 
 ### E3. O salvamento achata tudo num arquivo só
 
@@ -197,6 +207,11 @@ primeiro save.
 Isso é coerente com E2 e com o `editNumeracao()` (`:2898-2903`), que recupera o
 `pdf_content` da numeração a partir do **primeiro** elemento PDF que encontrar.
 
+**✅ Corrigido na v490.** O save sobe o arquivo de cada elemento separadamente e não
+sobrescreve mais ninguém. As colunas `svg_content`/`pdf_content` da numeração
+continuam sendo escritas, derivadas do primeiro elemento de cada tipo — porque
+`svg_content` é o marcador de CAMAROTE lido por `engine.py:222` e mais três pontos.
+
 ### E4. Três comportamentos diferentes quando o arquivo não carregou
 
 | Renderizador | O que mostra |
@@ -213,6 +228,9 @@ em frente do mesmo jeito.
 ---
 
 ## Detalhes menores
+
+- ~~**`_svgLoading` não é sanitizado.**~~ Corrigido na v490: entrou no
+  destructuring do save. O texto original segue abaixo.
 
 - **`_svgLoading` não é sanitizado.** As duas listas que limpam campos internos —
   `frontend/script.js:9089` (payload da imposição) e os destructurings de `:3091` e
@@ -238,15 +256,10 @@ em frente do mesmo jeito.
 2. ~~**B2**~~ — feito na v489.
 3. ~~**B3**~~ — feito na v489, junto com o B2 (sem tamanho natural correto, "escala
    100%" não significa nada).
-4. **E1** — unificar a fonte da imagem do SVG em `el._svgImage`, que é a única das
-   quatro que funciona por elemento e já é usada por dois renderizadores. A v489
-   deixou o caminho meio pronto: o editor e o preview de imposição já preferem
-   `el._svgImage` quando ele existe, mas **nada o preenche** no preview de
-   imposição, então ele continua desenhando o placeholder. Falta o carregamento
-   sob demanda, no mesmo molde do que a janela de arte já faz.
-5. **E3/E2** — decidir se a numeração suporta um ou N arquivos, e fazer o save
-   refletir a decisão.
-6. O resto.
+4. ~~**E1**~~ — feito na v490.
+5. ~~**E3/E2**~~ — feito na v490: a numeração suporta N arquivos, um por elemento.
+6. **E4** — unificar o comportamento de "arquivo não carregou", em especial o export
+   de gabarito, que não desenha nada e não avisa.
 
 ## Como reproduzir as medições
 
