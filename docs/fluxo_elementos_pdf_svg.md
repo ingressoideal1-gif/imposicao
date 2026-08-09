@@ -12,18 +12,50 @@ Os comandos estão no fim de cada achado.
 > achado foi mantido porque descreve o sintoma que se deve saber reconhecer. Segue
 > aberta a **E4** (três comportamentos diferentes quando o arquivo não carregou).
 
-## O caminho, em sete etapas
+## Como está hoje (v490)
+
+O arquivo é **do elemento**, não da numeração. Cada elemento PDF/SVG carrega:
+
+| Campo | O que é |
+|---|---|
+| `pdf_content` / `svg_content` | o arquivo: texto do SVG, data URL do PDF, ou URL pública depois de salvo |
+| `pdf_filename` / `svg_filename` | o nome, para a box exibir |
+| `natural_w_mm` / `natural_h_mm` | o tamanho natural, para o botão "Tamanho original (100%)" |
+| `width_mm` / `height_mm` | o tamanho em uso, sempre na proporção do natural |
+| `_pdfCanvas` / `_svgImage` | cache de render, nunca persistido |
+
+Dá para ter quantos quiser, de qualquer mistura. Quem os cria é a box **Adicionar
+Pdf e Svg** (`#num-arquivos-box` em `frontend/index.html`): o upload já cria o
+elemento no tamanho natural. Não existe mais upload de PDF/SVG no topo do editor.
+
+As colunas `svg_content` e `pdf_content` da **numeração** continuam sendo escritas,
+derivadas do primeiro elemento de cada tipo. **Não remova isso**: `svg_content` da
+numeração é o marcador de CAMAROTE lido por `engine.py:222` (e `:256`, `:1032`,
+`:1097`, mais `frontend/script.js` e `frontend/pedido.js`), que testa se o **nome do
+arquivo** contém "CAMAROTE". Parar de escrever a coluna quebra a detecção em silêncio.
+
+## O caminho, em oito etapas
+
+Linhas conferidas contra a v490.
 
 | # | Etapa | Onde |
 |---|---|---|
-| 1 | Upload do arquivo | `frontend/script.js:4820` (SVG), `:4940` (PDF) |
-| 2 | Criação do elemento | `frontend/script.js:5142` (SVG), `:5144` (PDF) |
-| 3 | Canvas do editor | `drawElement()`, `frontend/script.js:3879` |
-| 4 | Persistência | `saveNumeracao()`, `frontend/script.js:6062-6125` |
-| 5 | Janela combinada de arte | `renderItemAmostraCombinada()`, `frontend/script.js:20834` |
-| 6 | Preview de imposição | `drawVdpElements()`, `frontend/script.js:7476` |
-| 7 | Geração do PDF | `engine.py:721` (SVG), `:746` (PDF) |
-| 8 | Impressão | `app.py:1024` — só reenvia o PDF do engine ao spooler |
+| 1 | Upload → já cria o elemento | `adicionarElementoSvg()` `:4868`, `adicionarElementoPdf()` `:4906` |
+| 2 | Criação do elemento | `addElement(type, extras)`, `:5033` |
+| 3 | Canvas do editor | `drawElement()`, `:3525` |
+| 4 | Lista da box | `renderBoxArquivos()`, `:5539` |
+| 5 | Persistência | `saveNumeracao()`, `:5960` |
+| 6 | Janela combinada de arte | `renderItemAmostraCombinada()`, `:21005` |
+| 7 | Preview de imposição | `drawVdpElements()`, `:7339` |
+| 8 | Export de gabarito | `exportarPdfGabarito()`, `:25601` |
+| 9 | Geração do PDF | `engine.py:735` (SVG), `:775` (PDF) |
+| 10 | Impressão | `app.py:1024` — só reenvia o PDF do engine ao spooler |
+
+Funções de apoio que todo renderizador novo deve usar: `drawImageContain()` (`:3514`)
+para desenhar sem distorcer, `tamanhoNaturalDoElemento()` (`:4753`) para o tamanho
+100%, `svgNaturalSizeMm()` (`:4707`) para medir um SVG como o `svglib` mede, e
+`precarregarArtesDosElementos()` (`:4842`) para carregar a arte de uma lista de
+elementos vinda do banco.
 
 A impressão não re-renderiza nada: recebe o PDF que o engine gerou e manda para a
 impressora. Logo, **o que o engine faz é o que sai no papel**, e qualquer divergência

@@ -126,6 +126,14 @@ Ao acrescentar campo novo a `producao_numeracoes`, lembre de decidir conscientem
 se ele entra aqui — e note que `print_mode` precisa vir da **coluna**, nunca dos
 `elements`: o `METADATA` que também o carregava é removido na leitura (ver abaixo).
 
+Isso vale para campos da **numeração**. Campos novos de **elemento** — como
+`pdf_filename`, `svg_filename` e `natural_w_mm`, que a v490 acrescentou — vêm de
+graça, porque o `clone` copia o array `elements` inteiro com um `map`. Só cuidado com
+uma consequência: a cópia aponta para os **mesmos arquivos** no Storage que o
+original. Hoje isso é inofensivo, porque o save só reenvia o arquivo de um elemento
+quando o conteúdo ainda não é URL — trocar o arquivo na cópia gera um objeto novo e
+não toca no do original.
+
 ## `elements` nunca contém `METADATA` na leitura
 
 `api()` remove o elemento de tipo `METADATA` de toda numeração assim que ela chega
