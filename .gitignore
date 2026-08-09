@@ -27,3 +27,37 @@ print_configs.json
 # Backup local da migração de preview_jpg — rede de segurança da máquina, não
 # conteúdo do projeto. São centenas de KB de base64 que não devem entrar no git.
 backup_preview_jpg_*.json
+
+# Rascunho de sessão — script escrito para resolver um problema pontual e que
+# não tem mais uso. Fica no disco, fora do controle de versão. Estes padrões
+# são os mesmos do freio do publicar.ps1, que avisa se algum deles for
+# adicionado ao git por engano.
+rascunhos/
+scratch_*
+temp_*
+temp.py
+temp2.py
+patch_*
+patch2.py
+check_*
+fix_*
+diag_engine.py
+diag2.py
+test_debug*.js
+test.js
+test.py
+test[2-5].py
+test-fetch.js
+test_api*.js
+test_browser.js
+test_col.js
+test_final.js
+test_pdf.js
+diff.txt
+build_log.txt
+mangled.txt
+py_out.txt
+test_out.txt
+scratch_func.txt
+snapshot.jpg
+engine_backup.py
