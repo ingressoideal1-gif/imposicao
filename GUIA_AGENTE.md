@@ -187,46 +187,84 @@ publicar o `latest.json`. Assim o manifesto nunca aponta para um arquivo ausente
 > versão. A conferência do MSI é feita pela URL **simples**, de propósito — é a que o agente
 > usa, e é ela que precisa bater.
 
-> ⛔ **Limite de 50 MB — hoje ESTOURADO.** O teto de upload do projeto é 50 MB. Uma
-> compilação de **2026-08-09** produziu um MSI de **50,98 MB**, e **o próximo release não
-> sobe como está**. O `publicar_agente.ps1` recusa o envio antes de tentar, então o
-> sintoma é o script parando, não um release quebrado nas estações.
+> ⚠️ **Limite de 50 MB — resolvido em 2026-08-09, mas com pouca folga.** O build atual
+> gera **47,35 MB**. O `publicar_agente.ps1` recusa o envio acima de 50 MB antes de
+> tentar, então o sintoma de um estouro é o script parando, não um release quebrado nas
+> estações.
 
-### De onde vêm os 51 MB
+### O teto de 50 MB não pode ser aumentado neste plano
 
-Medido em 2026-08-09 **dentro do executável, já comprimido** — que é o número que conta:
+Isso já custou tempo, então fica registrado. O bucket `agent-releases` está configurado
+com **200 MB**, e esse número **não vale**: o limite por bucket nunca pode ultrapassar o
+**limite global** do projeto, e no plano **Free** o global não passa de **50 MB**. Mudar
+o campo no painel não adianta — ele não sobe.
+
+Verificado na prática: um envio de 50,98 MB para o bucket volta
+
+```
+HTTP 400  {"statusCode":"413","error":"Payload too large",
+           "message":"The object exceeded the maximum allowed size",
+           "code":"EntityTooLarge"}
+```
+
+Só o plano Pro (ou acima) permite elevar o limite global.
+
+### O que estourou o orçamento: o SVG
+
+Comparando o `NewProd.exe` **publicado na 1.2.22** com o que a máquina compila hoje
+(medido dentro do executável, já comprimido — que é o número que conta):
+
+| grupo | 1.2.22 | depois do SVG | diferença |
+|---|---:|---:|---:|
+| `lxml` | **0,00** | 3,32 | **+3,32** |
+| runtime + módulos puros | 16,25 | 17,76 | +1,51 |
+| `ppds` | 0,66 | 0,00 | −0,66 |
+| **total** | **46,54** | **50,74** | **+4,19** |
+
+O `lxml` **não existia** até a 1.2.22. Ele entrou com o `svglib`, quando os elementos SVG
+foram implementados. Somado à parte Python do `svglib` no runtime, o recurso custou
+~4,8 MB ao agente — e é isso, e não crescimento gradual, que rompeu o teto.
+
+### Composição atual e o que se pode cortar
 
 | MB | O quê | Dá para cortar? |
 |---:|---|---|
-| 17,8 | runtime do Python + módulos puros | não |
+| 17,5 | runtime do Python + módulos puros | não |
 | 16,6 | `pymupdf` (fitz) | não — é o motor de PDF |
 | 6,4 | `PIL` | não — usado pelo tray e pelo engine |
-| 3,4 | `cryptography` | **talvez** — ninguém importa direto; vem de `requests`/`jwt` |
-| 3,3 | `lxml` | **não** — vem do `svglib`, obrigatório para impor SVG |
+| 3,3 | `lxml` | **NÃO** — vem do `svglib`, obrigatório para impor SVG |
 | 1,8 | `pydantic_core` | não — o FastAPI depende |
 | 0,7 | `frontend` | não |
 
-Duas lições dessa medição, para não repetir tentativas:
+O `cryptography` (3,4 MB) **já foi excluído** no `agent_tray.spec` — foi ele que devolveu
+a folga, de 50,98 para 47,35 MB. É seguro porque nenhum arquivo do projeto o importa e o
+único caminho que o alcançaria em `requests` só roda quando `ssl.HAS_SNI` é falso, o que
+não acontece aqui (`ssl.HAS_SNI = True`, OpenSSL 3.0.20), além de estar dentro de um
+`try/except ImportError`.
+
+> **Ainda assim, na primeira estação que receber um release com essa exclusão, confirme
+> que o agente continua alcançando o Supabase** — uma fonte nova baixando e o heartbeat
+> aparecendo no painel bastam. A análise é sólida, mas TLS quebrado é o tipo de falha que
+> só aparece na máquina do cliente.
+
+### Duas lições, para não repetir tentativas
 
 - **Tamanho em disco não é tamanho no pacote.** A pasta `ppds/` tinha 5,19 MB de
-  temporários e sua remoção economizou só **0,65 MB** — o conteúdo era altamente
-  compressível. Meça sempre dentro do `.exe`, não na pasta de origem.
+  temporários e removê-la economizou só **0,65 MB** — o conteúdo era altamente
+  compressível. Meça dentro do `.exe`, nunca na pasta de origem.
 - **`lxml` parece órfão e não é.** Nenhum arquivo do projeto o importa, mas ele chega
   pelo `svglib`. Removê-lo faria o SVG deixar de sair no papel — a mesma falha silenciosa
-  que já aconteceu antes da v489.
+  corrigida na v489.
 
-### O que fazer
+### Quando a folga acabar de novo
 
-O único corte com alguma chance é o `cryptography` (~3,4 MB), e ele deixaria apenas
-~2,4 MB de folga — a mesma margem apertada que acabou de estourar. E exige testar que o
-agente continua alcançando o Supabase por HTTPS, porque é `requests`/`urllib3` quem o
-puxa.
+Restam 2,65 MB, e não há mais gordura óbvia. As saídas, em ordem de preferência:
 
-**O caminho que resolve de verdade é subir o teto de upload no Supabase.** O limite de
-50 MB é o do plano gratuito; o pacote só cresce, e cada MB economizado compra no máximo
-um release. Alternativa sem mexer no plano: hospedar o MSI fora do Storage e apontar a
-`url` do manifesto para lá — mas isso exige rever a barreira do `is_allowed_release_url()`
-em `security_config.py`, que hoje só aceita o bucket `agent-releases`.
+1. **Plano Pro do Supabase** — eleva o limite global para até 500 GB e encerra o assunto.
+2. **Hospedar o MSI fora do Storage** — exige rever `is_allowed_release_url()` em
+   `security_config.py`. Cuidado: essa barreira está **compilada nos agentes já
+   instalados**, então eles recusariam um manifesto apontando para outro host. Seria
+   preciso reinstalar todas as estações à mão.
 
 ---
 

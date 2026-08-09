@@ -84,7 +84,17 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['firebase_admin', 'google.cloud', 'grpc', 'tkinter'],
+    # 'cryptography' entra na lista em 2026-08-09 para caber no teto de 50 MB
+    # do plano Free do Supabase. Nenhum arquivo do projeto o importa; ele
+    # chegava por caminhos opcionais de requests/urllib3, que usam o modulo
+    # ssl da biblioteca padrao para HTTPS. ANTES DE PUBLICAR um release com
+    # esta exclusao, confirme numa estacao que o agente ainda alcanca o
+    # Supabase (baixar fonte nova e o heartbeat aparecer no painel).
+    #
+    # NAO acrescente 'lxml' aqui: ele parece orfao, mas vem do svglib e e
+    # obrigatorio para impor elementos SVG (ver engine.py). Foi ele, alias,
+    # quem levou o pacote de 46,5 para 50,7 MB quando o SVG foi implementado.
+    excludes=['firebase_admin', 'google.cloud', 'grpc', 'tkinter', 'cryptography'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
