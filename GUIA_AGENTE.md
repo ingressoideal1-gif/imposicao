@@ -187,19 +187,23 @@ publicar o `latest.json`. Assim o manifesto nunca aponta para um arquivo ausente
 > versão. A conferência do MSI é feita pela URL **simples**, de propósito — é a que o agente
 > usa, e é ela que precisa bater.
 
-> ⚠️ **Limite de 50 MB — resolvido em 2026-08-09, mas com pouca folga.** O build atual
-> gera **47,35 MB**. O `publicar_agente.ps1` recusa o envio acima de 50 MB antes de
-> tentar, então o sintoma de um estouro é o script parando, não um release quebrado nas
-> estações.
+> ✅ **Limite de upload: 200 MB** (bucket `agent-releases`), verificado em 2026-08-09. O
+> build atual gera ~51 MB, então há folga larga. O `publicar_agente.ps1` **pergunta o
+> limite ao bucket** antes de compilar — não o tem gravado no código, justamente porque
+> esse número já mudou uma vez.
 
-### O teto de 50 MB não pode ser aumentado neste plano
+### Como o limite funciona (isto já custou tempo)
 
-Isso já custou tempo, então fica registrado. O bucket `agent-releases` está configurado
-com **200 MB**, e esse número **não vale**: o limite por bucket nunca pode ultrapassar o
-**limite global** do projeto, e no plano **Free** o global não passa de **50 MB**. Mudar
-o campo no painel não adianta — ele não sobe.
+São **dois** limites, e o menor vence:
 
-Verificado na prática: um envio de 50,98 MB para o bucket volta
+| Onde | Valor em 2026-08-09 |
+|---|---|
+| Global do projeto (Storage → Settings) | 300 MB |
+| Bucket `agent-releases` | **200 MB** ← o que vale |
+
+O limite por bucket **nunca pode ultrapassar o global**. Enquanto o global esteve em
+50 MB (teto do plano Free), o bucket exibia 200 MB no painel e mesmo assim recusava
+envios acima de 50 MB — a configuração do bucket aparece, mas não vale. O sintoma é:
 
 ```
 HTTP 400  {"statusCode":"413","error":"Payload too large",
@@ -207,7 +211,13 @@ HTTP 400  {"statusCode":"413","error":"Payload too large",
            "code":"EntityTooLarge"}
 ```
 
-Só o plano Pro (ou acima) permite elevar o limite global.
+**Se aparecer esse erro, olhe o global primeiro, não o bucket.** Medido por envios reais
+depois do global subir: 55 MB e 120 MB passam, 250 MB é recusado — coerente com o teto de
+200 MB do bucket.
+
+> Cuidado para não confundir buckets: existe um chamado **`NewProd`**, que **nada no
+> projeto usa**. Os instaladores vão para o **`agent-releases`**. Mudar o limite do
+> `NewProd` não tem efeito nenhum sobre o release do agente.
 
 ### O que estourou o orçamento: o SVG
 
@@ -236,16 +246,23 @@ foram implementados. Somado à parte Python do `svglib` no runtime, o recurso cu
 | 1,8 | `pydantic_core` | não — o FastAPI depende |
 | 0,7 | `frontend` | não |
 
-O `cryptography` (3,4 MB) **já foi excluído** no `agent_tray.spec` — foi ele que devolveu
-a folga, de 50,98 para 47,35 MB. É seguro porque nenhum arquivo do projeto o importa e o
-único caminho que o alcançaria em `requests` só roda quando `ssl.HAS_SNI` é falso, o que
-não acontece aqui (`ssl.HAS_SNI = True`, OpenSSL 3.0.20), além de estar dentro de um
-`try/except ImportError`.
+O `cryptography` (3,4 MB) chegou a ser excluído no `agent_tray.spec` e depois **a exclusão
+foi desfeita**, no mesmo dia, quando o limite subiu para 200 MB. Vale registrar a análise
+para quando o espaço apertar de novo:
 
-> **Ainda assim, na primeira estação que receber um release com essa exclusão, confirme
-> que o agente continua alcançando o Supabase** — uma fonte nova baixando e o heartbeat
-> aparecendo no painel bastam. A análise é sólida, mas TLS quebrado é o tipo de falha que
-> só aparece na máquina do cliente.
+- Nenhum arquivo do projeto importa `cryptography`.
+- O único caminho que o alcançaria, em `requests/__init__.py`, só executa quando
+  `ssl.HAS_SNI` é falso — aqui é `True` (OpenSSL 3.0.20) — e ainda está dentro de um
+  `try/except ImportError`.
+- O `requests/help.py` também protege o import; o `urllib3` usa o módulo `ssl` da
+  biblioteca padrão, e o backend `pyopenssl` é opcional e não é injetado.
+- Medido: a exclusão leva o MSI de 50,98 para **47,35 MB**.
+
+> Se voltar a excluir, **confirme numa estação** que o agente continua alcançando o
+> Supabase — uma fonte nova baixando e o heartbeat aparecendo no painel bastam. A análise
+> é sólida, mas TLS quebrado é o tipo de falha que só aparece na máquina do cliente. Foi
+> por não valer esse risco por 3,4 MB, com ~150 MB de folga disponível, que a exclusão foi
+> desfeita.
 
 ### Duas lições, para não repetir tentativas
 
@@ -256,15 +273,16 @@ não acontece aqui (`ssl.HAS_SNI = True`, OpenSSL 3.0.20), além de estar dentro
   pelo `svglib`. Removê-lo faria o SVG deixar de sair no papel — a mesma falha silenciosa
   corrigida na v489.
 
-### Quando a folga acabar de novo
+### Se a folga acabar de novo
 
-Restam 2,65 MB, e não há mais gordura óbvia. As saídas, em ordem de preferência:
+Com o teto em 200 MB e o pacote em ~51 MB, sobram cerca de 150 MB — não é uma preocupação
+hoje. Se um dia voltar a apertar, na ordem: subir o limite do bucket (o global permite até
+300 MB), depois excluir o `cryptography` conforme a análise acima.
 
-1. **Plano Pro do Supabase** — eleva o limite global para até 500 GB e encerra o assunto.
-2. **Hospedar o MSI fora do Storage** — exige rever `is_allowed_release_url()` em
-   `security_config.py`. Cuidado: essa barreira está **compilada nos agentes já
-   instalados**, então eles recusariam um manifesto apontando para outro host. Seria
-   preciso reinstalar todas as estações à mão.
+**Não** tente hospedar o MSI fora do Storage sem pensar duas vezes: a barreira
+`is_allowed_release_url()` está **compilada nos agentes já instalados**, então eles
+recusariam um manifesto apontando para outro host, e seria preciso reinstalar todas as
+estações à mão.
 
 ---
 

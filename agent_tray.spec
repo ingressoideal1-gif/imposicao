@@ -84,17 +84,18 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    # 'cryptography' entra na lista em 2026-08-09 para caber no teto de 50 MB
-    # do plano Free do Supabase. Nenhum arquivo do projeto o importa; ele
-    # chegava por caminhos opcionais de requests/urllib3, que usam o modulo
-    # ssl da biblioteca padrao para HTTPS. ANTES DE PUBLICAR um release com
-    # esta exclusao, confirme numa estacao que o agente ainda alcanca o
-    # Supabase (baixar fonte nova e o heartbeat aparecer no painel).
+    # 'cryptography' chegou a ser excluido daqui em 2026-08-09, para caber no
+    # teto de 50 MB que o plano do Supabase impunha na epoca. O teto subiu
+    # para 200 MB no bucket agent-releases no mesmo dia, entao a exclusao foi
+    # DESFEITA: ela economizava 3,4 MB num pacote que agora tem ~152 MB de
+    # folga, em troca de um risco pequeno mas nao verificado no TLS das
+    # estacoes. Nao vale a pena — se o espaco voltar a apertar, a analise que
+    # justifica a exclusao esta no GUIA_AGENTE.md.
     #
     # NAO acrescente 'lxml' aqui: ele parece orfao, mas vem do svglib e e
     # obrigatorio para impor elementos SVG (ver engine.py). Foi ele, alias,
     # quem levou o pacote de 46,5 para 50,7 MB quando o SVG foi implementado.
-    excludes=['firebase_admin', 'google.cloud', 'grpc', 'tkinter', 'cryptography'],
+    excludes=['firebase_admin', 'google.cloud', 'grpc', 'tkinter'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

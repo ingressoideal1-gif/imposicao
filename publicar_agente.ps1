@@ -70,6 +70,50 @@ function Test-TemBom {
             $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF)
 }
 
+function Get-ChaveServico {
+    <#
+    .SYNOPSIS
+        Le a SUPABASE_SERVICE_KEY do .env.local. Devolve $null se nao achar.
+    #>
+    param([Parameter(Mandatory)][string]$Raiz)
+    $arquivo = Join-Path $Raiz ".env.local"
+    if (-not (Test-Path $arquivo)) { return $null }
+    foreach ($linha in (Get-Content -Encoding UTF8 $arquivo)) {
+        if ($linha -match '^\s*SUPABASE_SERVICE_KEY\s*=\s*(.+?)\s*$') {
+            return $Matches[1].Trim().Trim('"').Trim("'")
+        }
+    }
+    return $null
+}
+
+function Get-LimiteDoBucket {
+    <#
+    .SYNOPSIS
+        Pergunta ao Supabase qual o limite de upload do agent-releases.
+    .DESCRIPTION
+        Perguntar em vez de fixar no codigo: este numero ja mudou uma vez
+        (50 MB -> 200 MB em 2026-08-09) e um valor gravado a mao vira uma
+        recusa falsa, ou pior, uma passagem indevida.
+
+        Devolve 0 quando nao consegue consultar — o chamador entao usa um
+        piso conservador em vez de deixar passar qualquer coisa.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Projeto,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Chave
+    )
+    if ([string]::IsNullOrWhiteSpace($Chave)) { return 0 }
+    try {
+        $b = Invoke-RestMethod -Uri "$Projeto/storage/v1/bucket/agent-releases" `
+                               -Headers @{ Authorization = "Bearer $Chave"; apikey = $Chave } `
+                               -TimeoutSec 30
+        if ($b.file_size_limit) { return [int64]$b.file_size_limit }
+        return 0
+    } catch {
+        return 0
+    }
+}
+
 function Restore-Versao {
     foreach ($caminho in $script:Backup.Keys) {
         [System.IO.File]::WriteAllBytes($caminho, $script:Backup[$caminho])
@@ -180,19 +224,24 @@ if (-not (Test-Path $msi)) { Abortar "Nao achei $msi depois de compilar." }
 # ─── 5. Conferir o pacote ────────────────────────────────────────────────────
 $tamanho = (Get-Item $msi).Length
 $mb = [math]::Round($tamanho / 1MB, 2)
-if ($tamanho -ge 50MB) {
-    # Medicao de 2026-08-09 (dentro do exe, ja comprimido): runtime do Python
-    # ~17,8 MB, pymupdf 16,6, PIL 6,4, cryptography 3,4, lxml 3,3,
-    # pydantic_core 1,8, frontend 0,7.
-    #
-    # Nao ha corte grande e seguro a fazer: o pymupdf e o motor de PDF, o PIL
-    # e usado pelo tray e pelo engine, e o lxml vem do svglib, obrigatorio
-    # para impor elementos SVG (ver engine.py). O unico candidato e o
-    # cryptography, e ele sozinho nao da folga que dure.
-    Abortar "O MSI tem $mb MB e o teto de upload do projeto e 50 MB." `
-            "O caminho que resolve de verdade e subir o teto do plano no Supabase — o pacote so cresce. Ver a secao de limite no GUIA_AGENTE.md."
+$projeto = (& $python -c "import security_config; print(security_config.SUPABASE_PROJETO)" | Select-Object -Last 1).Trim()
+$limite = Get-LimiteDoBucket -Projeto $projeto -Chave (Get-ChaveServico -Raiz $raiz)
+if ($limite -gt 0) {
+    $limiteMb = [math]::Round($limite / 1MB, 0)
+    $origem = "consultado no bucket"
+} else {
+    # Piso conservador: sem conseguir consultar, e melhor recusar cedo do que
+    # descobrir o estouro depois do upload comecar.
+    $limite = 50MB
+    $limiteMb = 50
+    $origem = "nao consegui consultar o bucket; usando o piso de 50 MB"
 }
-Write-Host "  MSI: $mb MB (teto 50 MB)" -ForegroundColor Green
+
+if ($tamanho -ge $limite) {
+    Abortar "O MSI tem $mb MB e o teto do bucket agent-releases e $limiteMb MB." `
+            "Suba o limite do bucket no painel do Supabase, ou enxugue o pacote. A analise de o que da para cortar (e o que NAO da) esta no GUIA_AGENTE.md."
+}
+Write-Host "  MSI: $mb MB (teto $limiteMb MB — $origem)" -ForegroundColor Green
 
 $sha = (Get-FileHash -Algorithm SHA256 $msi).Hash.ToLower()
 Write-Host "  sha256 local: $sha" -ForegroundColor Gray
@@ -222,12 +271,7 @@ if ([string]::IsNullOrWhiteSpace($baseUrl)) {
     Abortar "Nao consegui ler RELEASES_BASE_URL de security_config.py."
 }
 
-$chave = $null
-foreach ($linha in (Get-Content -Encoding UTF8 "$raiz\.env.local")) {
-    if ($linha -match '^\s*SUPABASE_SERVICE_KEY\s*=\s*(.+?)\s*$') {
-        $chave = $Matches[1].Trim().Trim('"').Trim("'")
-    }
-}
+$chave = Get-ChaveServico -Raiz $raiz
 if (-not $chave) {
     Abortar "SUPABASE_SERVICE_KEY nao esta no .env.local." `
             "Pegue em Project Settings -> API no painel do Supabase. O .env.local e ignorado pelo git."
