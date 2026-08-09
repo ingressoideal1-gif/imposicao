@@ -1,84 +1,190 @@
-﻿# Publica o frontend: bumpa a versao dos scripts, commita, empurra e faz o
-# deploy de producao na Vercel.
-#
-# Uso:
-#   .\publicar.ps1 "fix(painel): corrigir ordenacao da fila"
-#
-# A versao (vNNN) e acrescentada ao final da mensagem automaticamente.
+﻿<#
+.SYNOPSIS
+    Publica o site e o motor: confere, sobe a versao dos assets, commita,
+    empurra, faz o deploy na Vercel e marca a versao com uma tag.
+
+.DESCRIPTION
+    IMPORTANTE: um `git push origin main` publica DUAS coisas — o site na
+    Vercel e o motor no Render, que escuta o mesmo repositorio. Nao existe
+    publicar so o site por aqui.
+
+    Antes de escrever qualquer coisa, roda quatro conferencias. Se alguma
+    falhar, o script para ANTES do commit: nada foi ao ar e nada precisa
+    ser desfeito.
+
+    Ao terminar, grava a tag vNNN — o ponto de restauracao que o voltar.ps1
+    usa como alvo.
+
+.EXAMPLE
+    .\publicar.ps1 "fix(painel): corrigir ordenacao da fila"
+
+.PARAMETER SemFreio
+    Pula as conferencias. So para emergencia — imprime aviso.
+#>
 param(
     [Parameter(Mandatory = $true, Position = 0,
                HelpMessage = "Mensagem do commit, ex: 'fix(painel): corrigir ordenacao da fila'")]
     [ValidateNotNullOrEmpty()]
-    [string]$Mensagem
+    [string]$Mensagem,
+
+    [switch]$SemFreio
 )
 
 $ErrorActionPreference = "Stop"
+$raiz = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $raiz
+Import-Module "$raiz\ferramentas\Publicacao.psm1" -Force
 
-Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition"
-
-# 1. Obter a versão atual do index.html
-$indexFile = "frontend\index.html"
-$content = Get-Content -Encoding UTF8 $indexFile -Raw
-$match = [regex]::Match($content, 'script\.js\?v=(\d+)')
-if ($match.Success) {
-    $currentV = [int]$match.Groups[1].Value
-    $nextV = $currentV + 1
-} else {
-    Write-Host "Não foi possível encontrar a versão atual."
+function Abortar {
+    param([string]$Motivo, [string]$OQueFazer)
+    Write-Host ""
+    Write-Host "  PAROU ANTES DE PUBLICAR" -ForegroundColor Red
+    Write-Host "  $Motivo" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  O que fazer: $OQueFazer" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  Nada foi ao ar. Nada precisa ser desfeito." -ForegroundColor Gray
     exit 1
 }
 
-Write-Host "Versão atual: v$currentV"
-Write-Host "Nova versão: v$nextV"
+# ─── Freios ──────────────────────────────────────────────────────────────────
+if ($SemFreio) {
+    Write-Host "  AVISO: publicando SEM as conferencias (-SemFreio)." -ForegroundColor Yellow
+} else {
+    Write-Host "Conferindo antes de publicar..." -ForegroundColor Cyan
 
-# 2. Atualizar arquivos HTML
-#
-# Bumpa TODO asset local versionado (.js?v= e .css?v=) em todas as paginas, em
-# vez de uma lista fixa de arquivos.
-#
-# A lista fixa cobria so script.js, pedido.js e cliente.js. style.css, mapas.js
-# e criador-arte.js nunca eram bumpados: ficaram congelados (style.css em v=9/7/5
-# conforme a pagina, os outros dois em v=2) e suas alteracoes nao chegavam ao
-# navegador de quem ja tinha o arquivo em cache. Qualquer asset novo entraria no
-# mesmo buraco -- por isso a regra agora e por padrao, nao por nome.
-#
-# Os CDNs nao sao afetados: eles fixam versao no caminho (/3.11.174/pdf.min.js),
-# nunca em querystring.
-Write-Host "Atualizando arquivos HTML..."
-$substituicao = '.$1?v=' + $nextV
-Get-ChildItem "frontend\*.html" | ForEach-Object {
-    $html = Get-Content -Encoding UTF8 $_.FullName -Raw
-    $novo = $html -replace '\.(js|css)\?v=\d+', $substituicao
-    if ($novo -ne $html) {
-        # -Raw + -NoNewline preserva o arquivo byte a byte fora as substituicoes
-        # (o Get-Content/Set-Content por linha normalizava as quebras de linha).
-        #
-        # -Path e -Value NOMEADOS de proposito: -Path aceita string[], entao na
-        # forma posicional o PowerShell engole caminho E conteudo no mesmo array
-        # de -Path, deixa -Value sem ligar e falha com um erro enganoso sobre
-        # 'Encoding'. Nao passe esses dois por posicao.
-        Set-Content -Encoding UTF8 -NoNewline -Path $_.FullName -Value $novo
-        Write-Host "  $($_.Name)"
+    # 1. O que vai junto.
+    $mudados = @(git status --porcelain | ForEach-Object { $_.Substring(3).Trim('"') })
+    if ($mudados.Count -eq 0) {
+        Abortar "Nao ha nada para publicar — nenhum arquivo mudou." `
+                "Edite alguma coisa antes de rodar o publicar."
+    }
+    Write-Host "  $($mudados.Count) arquivo(s) vao junto:" -ForegroundColor Gray
+    foreach ($f in $mudados) {
+        $aviso = ''
+        if (Test-Path -PathType Leaf $f) {
+            $mb = (Get-Item $f).Length / 1MB
+            if ($mb -gt 1) { $aviso = (" [{0:N1} MB — confira se e proposital]" -f $mb) }
+        }
+        Write-Host "    $f$aviso" -ForegroundColor Gray
+    }
+
+    # 2. Rascunho.
+    $rascunhos = @($mudados | Where-Object { Test-ArquivoDeRascunho $_ })
+    if ($rascunhos.Count -gt 0) {
+        Abortar "Arquivo de rascunho no commit: $($rascunhos -join ', ')" `
+                "Mova para rascunhos/ ou, se for codigo de verdade, renomeie."
+    }
+
+    # 3. Segredo. So o conteudo que vai ao ar — arquivo apagado nao tem o
+    #    que ler, e caminho de rename ('old -> new') nao existe no disco.
+    foreach ($f in $mudados) {
+        if (-not (Test-Path -PathType Leaf $f)) { continue }
+        $conteudo = Get-Content -Raw -Encoding UTF8 -ErrorAction SilentlyContinue $f
+        if ($null -eq $conteudo) { continue }
+        $achado = Find-SegredoNoTexto $conteudo
+        if ($achado -ne '') {
+            Abortar "Segredo em '$f': $achado" `
+                    "Tire a chave do arquivo e ponha no .env.local, que o git ignora."
+        }
+    }
+
+    # 4. O motor sobe? Pega erro de sintaxe antes de o Render falhar a build
+    #    — hoje isso passa direto e o motor fica para tras em silencio.
+    Write-Host "  Conferindo se o motor sobe..." -ForegroundColor Gray
+    & "$raiz\venv\Scripts\python.exe" -c "import app, engine, db" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Abortar "O motor nao sobe — ha erro em app.py, engine.py ou db.py." `
+                "Rode: .\venv\Scripts\python.exe -c ""import app, engine, db"" para ver o erro."
+    }
+    Write-Host "  Motor OK." -ForegroundColor Green
+}
+
+# ─── Versao ──────────────────────────────────────────────────────────────────
+$indexFile = "frontend\index.html"
+$proxima = Get-ProximaVersao (Get-Content -Raw -Encoding UTF8 $indexFile)
+if ($proxima -eq 0) {
+    Abortar "Nao achei 'script.js?v=NNN' em $indexFile." "Confira se o index.html esta intacto."
+}
+
+# ─── Confirmacao ─────────────────────────────────────────────────────────────
+if (-not $SemFreio) {
+    Write-Host ""
+    Write-Host "  Mensagem : $Mensagem" -ForegroundColor White
+    Write-Host "  Versao   : v$proxima" -ForegroundColor White
+    Write-Host "  Publica  : o SITE (Vercel) e o MOTOR (Render) — os dois, juntos." -ForegroundColor Yellow
+    Write-Host ""
+    $resp = Read-Host "  Publicar? (s/n)"
+    if ($resp -notmatch '^[sS]') {
+        Write-Host "  Cancelado. Nada foi ao ar." -ForegroundColor Gray
+        exit 0
     }
 }
 
-# 3. Git commit e push
-Write-Host "Fazendo commit no Git..."
-git add -A
-git commit -m "$Mensagem (v$nextV)"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Commit nao realizado (nada a commitar ou erro). Abortando antes do push/deploy."
-    exit 1
+# ─── Bump dos assets ─────────────────────────────────────────────────────────
+# Bumpa TODO asset local versionado (.js?v= e .css?v=) em todas as paginas,
+# por padrao e nao por nome: uma lista fixa deixava style.css, mapas.js e
+# criador-arte.js congelados, e suas alteracoes nao chegavam ao navegador de
+# quem ja tinha o arquivo em cache.
+#
+# Os CDNs nao sao afetados: eles fixam versao no caminho
+# (/3.11.174/pdf.min.js), nunca em querystring.
+Write-Host "Atualizando a versao dos assets para v$proxima..." -ForegroundColor Cyan
+$substituicao = '.$1?v=' + $proxima
+Get-ChildItem "frontend\*.html" | ForEach-Object {
+    $html = Get-Content -Encoding UTF8 -Raw $_.FullName
+    $novo = $html -replace '\.(js|css)\?v=\d+', $substituicao
+    if ($novo -ne $html) {
+        # -Raw + -NoNewline preserva o arquivo byte a byte fora as
+        # substituicoes (o Get-Content/Set-Content por linha normalizava as
+        # quebras de linha).
+        #
+        # -Path e -Value NOMEADOS de proposito: -Path aceita string[], entao
+        # na forma posicional o PowerShell engole caminho E conteudo no mesmo
+        # array de -Path, deixa -Value sem ligar e falha com um erro enganoso
+        # sobre 'Encoding'. Nao passe esses dois por posicao.
+        Set-Content -Encoding UTF8 -NoNewline -Path $_.FullName -Value $novo
+        Write-Host "  $($_.Name)" -ForegroundColor Gray
+    }
 }
+
+# ─── Git ─────────────────────────────────────────────────────────────────────
+Write-Host "Commitando..." -ForegroundColor Cyan
+git add -A
+git commit -m "$Mensagem (v$proxima)"
+if ($LASTEXITCODE -ne 0) {
+    Abortar "O commit falhou." "Rode 'git status' para ver o estado."
+}
+
 git push origin main
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Push falhou. Abortando antes do deploy."
-    exit 1
+    Abortar "O push falhou — o commit ficou so na sua maquina." `
+            "Confira a conexao e rode 'git push origin main' de novo."
 }
 
-# 4. Vercel deploy
-Write-Host "Fazendo deploy na Vercel..."
-Set-Location "C:\Users\Junior\Projetos Ingresso ideal\ideal-imposition\frontend"
-vercel --prod --yes
+# ─── Ponto de restauracao ────────────────────────────────────────────────────
+# Depois do push de proposito: a tag so marca o que ja esta no servidor.
+git tag -a "v$proxima" -m "$Mensagem"
+git push origin "v$proxima"
+Write-Host "  Ponto de restauracao gravado: v$proxima" -ForegroundColor Green
 
-Write-Host "SUCESSO! v$nextV publicada."
+# ─── Vercel ──────────────────────────────────────────────────────────────────
+Write-Host "Publicando o site na Vercel..." -ForegroundColor Cyan
+Push-Location "$raiz\frontend"
+try {
+    vercel --prod --yes
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "  O deploy da Vercel falhou, mas o codigo JA foi empurrado." -ForegroundColor Red
+        Write-Host "  O motor (Render) vai atualizar mesmo assim." -ForegroundColor Red
+        Write-Host "  Rode de novo so o deploy: cd frontend; vercel --prod --yes" -ForegroundColor Yellow
+        exit 1
+    }
+} finally {
+    Pop-Location
+}
+
+Write-Host ""
+Write-Host "  SUCESSO — v$proxima no ar." -ForegroundColor Green
+Write-Host "  https://ideal-imposition.vercel.app" -ForegroundColor Cyan
+Write-Host "  Deu errado? '.\voltar.ps1 -Agora' devolve o site em segundos." -ForegroundColor Gray
