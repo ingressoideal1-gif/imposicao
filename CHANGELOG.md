@@ -4,7 +4,31 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v509)** — 2026-08-10 | Agente **1.2.24**
+## Versão atual: **v1.6.0 (v513)** — 2026-08-10 | Agente **1.2.24**
+
+---
+
+## [v513 — 2026-08-10] — O cache passou a valer: 1,8 MB que deixam de ser baixados
+
+### O que faltava
+A regra de cache foi escrita na v510, mas **não teve efeito** até aqui. Foram três publicações sem mudança nenhuma no cabeçalho, e o motivo eram duas coisas que só o erro ensinou:
+
+1. **O arquivo que vale é o `frontend/vercel.json`, não o da raiz.** O `publicar.ps1` roda `vercel --prod` de dentro de `frontend/`, então é a configuração daquela pasta que a Vercel lê. Existem os dois arquivos no repositório; o da raiz é ignorado.
+2. **Quando mais de uma regra casa, vale a última.** A regra geral estava depois das específicas e as sobrescrevia — sem erro nenhum, apenas sem efeito. Invertida a ordem, funcionou.
+
+O deploy de prévia não serviu para testar: prévia da Vercel fica atrás da proteção de acesso e responde 302 para o SSO, então o cabeçalho que volta é o da tela de login, não o do arquivo.
+
+### O resultado, medido em produção
+| | arquivos JS/CSS | da rede | tempo |
+|---|---|---|---|
+| 1º carregamento | 7 | **1.806 KB** | 3.050 ms |
+| 2º carregamento | 7 (todos do cache) | **0 KB** | 1.487 ms |
+
+Antes, os dois carregamentos baixavam os 1,8 MB. Agora o segundo não baixa nada e leva **metade do tempo**.
+
+Cabeçalhos conferidos um a um em produção: `script.js`, `style.css` e `pedido.js` com `public, max-age=3600`; a raiz e o `app/index.html` seguem `no-cache, no-store, must-revalidate`, que é o que garante que uma publicação nova chegue na hora.
+
+---
 
 ---
 
