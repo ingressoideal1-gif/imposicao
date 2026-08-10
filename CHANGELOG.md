@@ -4,10 +4,19 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v499)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v500)** — 2026-08-10 | Agente **1.2.23**
 
 > As entradas das v494 e v495 ainda não foram escritas; o histórico delas está só nas
 > mensagens de commit.
+
+---
+
+## [v501 — 2026-08-10] *(a publicar)* — O rótulo de página encolhe para um terço
+
+### O ajuste
+O rótulo `p. N` que a v498 pôs em cada pose ficou grande demais: ele é referência de conferência, não conteúdo da folha, e competia visualmente com a arte. O tamanho caiu para **um terço** — o fator sobre a altura da célula foi de `0,13` para `0,043`.
+
+Nas escalas em que a prévia realmente é usada: uma célula de 150 px de altura tinha rótulo de 20 px e passa a ter 6 px; uma de 220 px vai de 29 px para 9 px. O piso subsiste em 5 px, porque abaixo disso o rótulo deixa de ser legível — é o que acontece em folhas com muitas poses pequenas, onde o tamanho anterior também já estava no piso.
 
 ---
 

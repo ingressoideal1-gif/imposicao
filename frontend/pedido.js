@@ -1968,7 +1968,9 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             }
 
             ctx.save();
-            const fs = Math.max(7, Math.round(ch * 0.13));
+            // Um terço do tamanho original (0.13): o rótulo é referência de conferência,
+            // não conteúdo da folha, e competia visualmente com a arte.
+            const fs = Math.max(5, Math.round(ch * 0.043));
             ctx.font = `600 ${fs}px Inter, sans-serif`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
