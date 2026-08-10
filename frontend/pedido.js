@@ -4245,9 +4245,11 @@ window.runPedImposition = async function (mode) {
 
         if (!res.ok) {
 
-            const err = await res.json();
-
-            throw new Error(err.detail || 'Erro no servidor');
+            // A resposta de erro nem sempre é JSON — ver descreverErroHttp() no script.js.
+            // Fazer res.json() aqui trocava a mensagem real por um erro de sintaxe de JSON.
+            throw new Error(typeof descreverErroHttp === 'function'
+                ? await descreverErroHttp(res, `${baseUrl}/api/impose`)
+                : `Erro ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200) || res.statusText}`);
 
         }
 

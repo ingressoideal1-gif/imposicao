@@ -3511,6 +3511,49 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
  * passar por aqui: `ctx.drawImage(img, x, y, w, h)` cru estica a arte e faz a tela
  * divergir do papel.
  */
+/**
+ * Descreve uma resposta HTTP de erro em uma frase que serve ao operador.
+ *
+ * A resposta de erro **nem sempre é JSON**. Entre o navegador e o motor há proxy,
+ * gateway e CDN, e qualquer um deles responde texto puro ("Request Entity Too Large")
+ * ou uma página HTML. Chamar `res.json()` direto nesses casos troca a mensagem de
+ * verdade por um `Unexpected token 'R', "Request En"... is not valid JSON` — que não
+ * diz nada ao operador e ainda esconde a causa de quem for investigar.
+ *
+ * Aqui o corpo é lido como texto uma única vez e, só então, tentado como JSON.
+ * Também registra no console a URL, o status e o começo do corpo: é isso que permite
+ * descobrir QUAL servidor da cadeia recusou, que é a pergunta difícil quando o erro
+ * aparece na gráfica e não na máquina de quem programa.
+ */
+async function descreverErroHttp(res, url) {
+    let bruto = '';
+    try { bruto = await res.text(); } catch (_) { /* corpo já consumido ou vazio */ }
+
+    let detalhe = '';
+    try {
+        const j = JSON.parse(bruto);
+        detalhe = (j && (j.detail || j.message || j.error)) || '';
+        if (detalhe && typeof detalhe !== 'string') detalhe = JSON.stringify(detalhe);
+    } catch (_) {
+        // Não era JSON: usar o texto, sem tags e sem quebras, limitado
+        detalhe = bruto.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    }
+    if (!detalhe) detalhe = res.statusText || 'o servidor não explicou o motivo';
+
+    if (res.status === 413) {
+        detalhe = `o arquivo enviado é grande demais para o servidor (${detalhe}). `
+            + 'Gere em partes menores ou use o agente local, que não passa pela nuvem';
+    }
+
+    console.error('[HTTP] Falha na requisição', {
+        url, status: res.status, statusText: res.statusText,
+        contentType: res.headers.get('content-type'), corpo: bruto.slice(0, 500)
+    });
+
+    return `Erro ${res.status}: ${detalhe}`;
+}
+window.descreverErroHttp = descreverErroHttp;
+
 function drawImageContain(ctx, img, x, y, w, h) {
     const iw = img.naturalWidth || img.width || 0;
     const ih = img.naturalHeight || img.height || 0;
@@ -9478,9 +9521,7 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         if (!res.ok) {
 
-            const err = await res.json();
-
-            throw new Error(err.detail || 'Erro no servidor');
+            throw new Error(await descreverErroHttp(res, `${baseUrl}/api/impose`));
 
         }
 

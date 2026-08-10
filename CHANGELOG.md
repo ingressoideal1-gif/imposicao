@@ -4,10 +4,43 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v497)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v498)** — 2026-08-10 | Agente **1.2.23**
 
 > As entradas das v494 e v495 ainda não foram escritas; o histórico delas está só nas
 > mensagens de commit.
+
+---
+
+## [v499 — 2026-08-10] *(a publicar)* — O erro da imposição volta a dizer o que aconteceu
+
+### O sintoma
+Ao gerar o PDF, a tela mostrava:
+
+> Erro: Unexpected token 'R', "Request En"... is not valid JSON
+
+Uma mensagem que não diz nada ao operador e esconde a causa de quem for investigar.
+
+### A causa
+O tratamento de erro da imposição fazia `await res.json()` direto na resposta. Só que **a resposta de erro nem sempre é JSON**: entre o navegador e o motor há proxy, gateway e CDN, e qualquer um deles responde texto puro — `Request Entity Too Large` — ou uma página HTML de erro. Nesses casos o `res.json()` estoura com um erro de sintaxe, e é esse erro que chega à tela, no lugar da mensagem verdadeira.
+
+Reproduzido no navegador: `new Response('Request Entity Too Large', {status: 413}).json()` produz exatamente `Unexpected token 'R', "Request En"... is not valid JSON`.
+
+### O conserto
+`descreverErroHttp()` lê o corpo **uma vez, como texto**, e só então tenta interpretá-lo como JSON. O `detail` do motor continua aparecendo igual; um texto de proxy vira frase legível; HTML é limpo de tags; corpo vazio cai no `statusText`. Para o 413 há orientação prática — gerar em partes menores ou usar o agente local, que não passa pela nuvem.
+
+E, para a próxima vez, ela registra no console a **URL, o status, o content-type e o começo do corpo**. Essa é a pergunta difícil quando o erro acontece na gráfica e não na máquina de quem programa: *qual servidor da cadeia recusou?*
+
+Corrigido nos dois pontos que tinham o mesmo defeito: a imposição do painel de produção (`pedido.js`) e a da view de Imposição (`script.js`).
+
+### O que ainda não sabemos
+**Não foi possível reproduzir a recusa em si.** Enviando corpos de 5, 10, 20, 30 e 60 MB para `/api/impose` na nuvem, e de 2 a 120 MB para o agente local, **nenhum dos dois recusou** — todos responderam JSON normalmente. Ou seja, o teto não está em nenhum dos dois servidores nas faixas testadas, e o `Request Entity Too Large` veio de outro ponto da cadeia: um proxy da rede, um antivírus que inspeciona upload, ou um job muito maior que os testados.
+
+O conserto não depende dessa resposta — ele vale para qualquer erro não-JSON. Mas a próxima ocorrência vai dizer no console exatamente quem recusou.
+
+### Como foi verificado
+Cinco casos medidos no navegador: 413 em texto puro vira *"Erro 413: o arquivo enviado é grande demais…"*; erro JSON do motor preserva o `detail`; página HTML de gateway vira *"Erro 502: 502 Bad Gateway nginx"*; corpo vazio vira *"Erro 504: Gateway Timeout"*; e o comportamento antigo, reproduzido lado a lado, produz a mensagem exata que o operador viu.
+
+Regressões das v496, v497 e v498 repetidas sem quebra.
 
 ---
 
