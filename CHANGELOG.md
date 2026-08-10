@@ -4,11 +4,11 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v502)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v503)** — 2026-08-10 | Agente **1.2.23**
 
 ---
 
-## [v503 — 2026-08-10] *(a publicar)* — A primeira pose ficava sem numeração por causa de um trabalho anterior
+## [v503 — 2026-08-10] — A primeira pose ficava sem numeração por causa de um trabalho anterior
 
 ### A causa
 O aviso que a v502 acrescentou entregou o caso na primeira ocorrência: gabarito com 2 elementos, 3 poses desenharam, 1 não, regra `pdf_multiple`.
@@ -42,7 +42,7 @@ Regressões das v496 a v502 repetidas sem quebra.
 
 ---
 
-## [v502 — 2026-08-10] *(a publicar)* — A prévia denuncia a pose que ficou sem numeração
+## [v502 — 2026-08-10] — A prévia denuncia a pose que ficou sem numeração
 
 ### Por que existe
 Foi relatado que, numa folha de quatro poses, **só a primeira** aparecia sem a numeração do modelo — sem o QR e sem as guias do gabarito —, enquanto o PDF gerado saía correto. Confirmado que é defeito de tela, não de papel: o primeiro ingresso do PDF impresso tem tudo.
@@ -60,12 +60,9 @@ Isso não conserta o sintoma — conserta a cegueira. A próxima ocorrência diz
 
 ---
 
-> As entradas das v494 e v495 ainda não foram escritas; o histórico delas está só nas
-> mensagens de commit.
-
 ---
 
-## [v501 — 2026-08-10] *(a publicar)* — O rótulo de página encolhe para um terço
+## [v501 — 2026-08-10] — O rótulo de página encolhe para um terço
 
 ### O ajuste
 O rótulo `p. N` que a v498 pôs em cada pose ficou grande demais: ele é referência de conferência, não conteúdo da folha, e competia visualmente com a arte. O tamanho caiu para **um terço** — o fator sobre a altura da célula foi de `0,13` para `0,043`.
@@ -74,7 +71,7 @@ Nas escalas em que a prévia realmente é usada: uma célula de 150 px de altura
 
 ---
 
-## [v500 — 2026-08-10] *(a publicar)* — O upload da imposição para de passar pela Vercel
+## [v500 — 2026-08-10] — O upload da imposição para de passar pela Vercel
 
 ### A causa, agora identificada
 A mensagem clara que a v499 destravou entregou o culpado na primeira ocorrência:
@@ -104,7 +101,7 @@ Regressões das v496 a v499 repetidas sem quebra.
 
 ---
 
-## [v499 — 2026-08-10] *(a publicar)* — O erro da imposição volta a dizer o que aconteceu
+## [v499 — 2026-08-10] — O erro da imposição volta a dizer o que aconteceu
 
 ### O sintoma
 Ao gerar o PDF, a tela mostrava:
@@ -137,7 +134,7 @@ Regressões das v496, v497 e v498 repetidas sem quebra.
 
 ---
 
-## [v498 — 2026-08-10] *(a publicar)* — A janela de imposição passa a paginar o modo PDF
+## [v498 — 2026-08-10] — A janela de imposição passa a paginar o modo PDF
 
 ### O problema
 Um modelo em **modo PDF** tem, como arte, um arquivo de várias páginas em que cada página é um ingresso diferente. Para imprimir certo, a imposição precisa consumir uma página por pose — a regra "Pdf Paginado". Só que nada ligava uma coisa à outra: o modelo chegava na janela com a regra do formato, quase sempre "Sequencial", e a folha saía com **a página 1 repetida em todas as poses**. Silenciosamente.
@@ -173,7 +170,7 @@ O design está em `docs/superpowers/specs/2026-08-10-imposicao-modo-pdf-design.m
 
 ---
 
-## [v497 — 2026-08-10] *(a publicar)* — O modo PDF não desenhava elemento SVG nem PDF
+## [v497 — 2026-08-10] — O modo PDF não desenhava elemento SVG nem PDF
 
 ### O sintoma
 Editando um pedido em arte, com o item em **modo PDF (multipáginas)**, a janela de visualização mostrava todos os elementos da numeração — menos os do tipo **PDF**. Os do tipo **SVG** também sumiam, o que ninguém tinha conferido ainda.
@@ -237,6 +234,76 @@ Medido na prévia de imposição: um elemento PDF de proporção 2:1 numa caixa 
 Com o app rodando e o navegador dirigido por Puppeteer, medindo pixel: papel laranja (249,115,22), arte cinza (128,128,128), tinta da numeração vermelha (255,0,0). A tinta sobre a arte tem de sair **249,0,0** (regra nova) e não 125,0,0 (cascata antiga); o pixel só com arte continua **125,58,11** nos dois casos.
 
 Resultado nos cinco pontos: `drawAmostraFace` 249,0,0 · `cliente.js` 255,0,0 (variante de papel branco) · `renderAmostraCombinada` 249,0,0 · prévia de imposição 249,0,0 · editor 249,0,0 em 11.566 pixels da tela composta. Todos repetidos depois da correção do `drawImageContain`, sem regressão e sem erro de console. Pester 50/50.
+
+---
+
+## [v495 — 2026-08-10] — Escapar dado externo, apagar clientes fictícios e fechar as telas por permissão
+
+> Entrada escrita depois, reconstruída a partir do diff do commit `7659f2c`. O que
+> está descrito aqui é o que o código mostra; não houve registro de verificação
+> na época.
+
+### 1. Dado de fora do sistema entrava cru no HTML
+Nome de cliente, nome de evento, designer, frete, nome de modelo e nome de arquivo vêm do Vibe — sistema parceiro — ou do banco. Não são digitados aqui e não estão sob nosso controle. Eles eram interpolados crus em templates de `innerHTML`, o que significa que **um apóstrofo no nome já quebrava a linha da tabela e um `<` quebrava a tabela inteira**.
+
+Entraram duas funções, com papéis distintos que é importante não confundir:
+
+- **`escapeHtml()`** para texto dentro de uma tag ou de um atributo.
+- **`escapeJsAttr()`** para valor que vai parar **dentro de uma string JS** num `onclick`. Ali são duas camadas de parsing — HTML e depois JS — e escapar só uma não resolve. Ela escapa primeiro para a string JS e depois para o HTML, porque o navegador desfaz a camada HTML ao ler o atributo e entrega ao JS exatamente o texto que ele espera.
+
+O escape que existia antes tratava só o apóstrofo, e só para a camada JS: um nome com aspas ou `<` quebrava os selects de designer e de vendedor.
+
+### 2. Clientes e vendedores fictícios apagados
+`getFallbackCliente()` e `getFallbackVendedor()` escolhiam um nome de uma lista fixa — "Hospital Metropolitano", "Prefeitura Municipal", "Carlos Souza" — pelo resto da divisão do número do pedido, quando a proposta não trazia o dado. O nome aparecia na Lista de Arte **com a mesma cara de um cliente de verdade**, e não havia como distinguir na tela.
+
+Numa gráfica isso é pior do que campo vazio: alguém pode ligar para o "cliente" errado. As duas funções foram removidas e, sem dado real, a coluna mostra `--`.
+
+O `getFallbackPrazo()` continua, e por um motivo declarado: o prazo de entrega ainda não tem campo real, e o filtro "Para Hoje / Atrasados" do Painel de Produção depende dele. Sai quando o campo verdadeiro existir.
+
+### 3. Esconder o botão do menu nunca trancou a porta
+Havia o `PERM_NAV_MAP`, que esconde os botões do menu conforme a permissão. Isso não impedia nada: a `<section>` continua no DOM e `showView()` é chamada de vários pontos do código, não só do menu.
+
+Entrou o `PERM_VIEW_MAP`, que espelha o mapa do menu e associa cada permissão às telas que ela protege, mais um porteiro no `showView()`. Duas decisões de projeto ficaram registradas no código:
+
+- **Enquanto as permissões não carregaram, libera.** Negar durante a inicialização trancaria o usuário para fora da aplicação.
+- **Se o acesso for negado e não houver tela aberta** — o caso do F5 restaurando uma tela cujo acesso o usuário perdeu —, manda para a primeira tela permitida, em vez de deixar a aplicação em branco.
+
+> **Isto é defesa em profundidade, não substitui o RLS no banco.** Enquanto as tabelas do Supabase estiverem sem RLS, quem abrir o console do navegador continua alcançando os dados. O RLS está adiado por decisão registrada.
+
+---
+
+## [v494 — 2026-08-10] — Lista de Arte: cor certa no carregamento, KPIs que dizem algo e o render que gravava no banco
+
+> Entrada escrita depois, reconstruída a partir do diff do commit `434d06f`. O que
+> está descrito aqui é o que o código mostra; não houve registro de verificação
+> na época.
+
+### 1. A função de desenhar a tela gravava no banco
+A regra "pedido cujos modelos estão todos prontos passa a Enviar Arte" existia em **duas cópias**: uma no carregamento, lendo `pedidos_modelos`, e outra dentro do `renderOrdens()`, lendo o `state.osItens` que estivesse carregado. As duas já tinham divergido nos status aceitos como "pronto".
+
+A cópia do render era a pior: como `renderOrdens()` é o `oninput` da caixa de busca, **digitar no filtro disparava UPDATE no Supabase**.
+
+Ficou só a do carregamento, agora em `sincronizarPedidosProntosParaEnvio()`. Ela lê do banco, então cobre todos os pedidos da lista e não apenas aqueles cujos itens por acaso já tinham sido abertos na tela. As gravações eram disparadas com `.then(function(){})` e qualquer falha sumia sem rastro; passaram a ser aguardadas com `Promise.allSettled`, e uma gravação que falha aparece no console em vez de o status divergir do banco em silêncio.
+
+### 2. O status adiantado desta máquina não caducava
+Quando uma estação muda o status de um pedido, ela guarda o valor novo no `localStorage` para a tela refletir a mudança na hora. É um **adiantamento**, não uma fonte de verdade — mas cada entrada valia para sempre, e o `savedStatus || dbStatus` da leitura fazia o valor local vencer o banco indefinidamente naquela estação.
+
+Numa gráfica com várias estações isso significa: a máquina A grava um status, outra máquina muda o pedido depois, e a máquina A **segue mostrando o valor velho, sem nenhum sinal na tela de que está desatualizada**.
+
+As entradas passaram a ter hora e a caducar em 5 minutos — folga confortável sobre a ida ao banco. Entradas no formato antigo (string pura, sem hora) são tratadas como vencidas e apagadas na leitura. As sete gravações espalhadas pelo `script.js` passaram a usar `gravarStatusOverride()`, e o `cliente.js` grava no mesmo formato `{ status, ts }` — se gravasse sem hora, o `script.js` descartaria.
+
+### 3. A cor do pedido anterior era atribuída ao pedido novo
+`resolveItemCorNumIds()` era chamada dentro do `map()` que monta os itens, antes de a lista existir, e lia os selects de amostra que estavam na tela. No carregamento esses selects **ainda são os do pedido anterior** — e a cor errada era atribuída ao pedido novo.
+
+A resolução passou a acontecer depois de a lista estar montada, com um parâmetro explícito que manda **não procurar nos selects da tela**.
+
+### 4. Dois KPIs que não diziam nada
+"Pedidos Concluídos" repetia o valor de "Pedidos Aprovados" — dois cartões, o mesmo número, nenhuma informação nova. Passou a contar os pedidos que saíram da arte para a produção, que é o sinal que `liberarParaProducao()` grava, mais os já finalizados.
+
+E a contagem de itens impressos comparava `item.impressao` com `'IMPRESSO'` em caixa alta, enquanto `normalizarStatusImpressao()` entrega `'Impresso'`. A comparação nunca dava certo, e o KPI ficava travado em zero.
+
+### 5. `producao.html` sincronizado com o `index.html`
+O Painel de Produção tinha ficado para trás: cartões de estatística sem clique, sem o cartão "TODOS", sem "Em Aprovação", e o título da tabela fixo em "Fila de Arte" mesmo quando o filtro mudava. Recebeu o mesmo conjunto do `index.html`, inclusive o `autocomplete="one-time-code"` na caixa de busca, que impede o navegador de oferecer preenchimento automático num campo que não é de formulário.
 
 ---
 
