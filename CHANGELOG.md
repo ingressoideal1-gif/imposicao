@@ -4,14 +4,43 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v495)** — 2026-08-09 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v496)** — 2026-08-10 | Agente **1.2.23**
 
 > As entradas das v494 e v495 ainda não foram escritas; o histórico delas está só nas
 > mensagens de commit.
 
 ---
 
-## [v496 — 2026-08-10] *(a publicar)* — A numeração cobre a arte; o multiply é do grupo
+## [v497 — 2026-08-10] *(a publicar)* — O modo PDF não desenhava elemento SVG nem PDF
+
+### O sintoma
+Editando um pedido em arte, com o item em **modo PDF (multipáginas)**, a janela de visualização mostrava todos os elementos da numeração — menos os do tipo **PDF**. Os do tipo **SVG** também sumiam, o que ninguém tinha conferido ainda.
+
+### A causa
+Nesse modo a janela **não passa por `drawAmostraFace()`**. Ela renderiza a página do PDF e carimba a numeração por cima com `drawNumeracaoElementsOverCanvas()` — um caminho separado, com uma cópia no `script.js` e outra no `cliente.js`.
+
+Essa função tratava `TEXT`/`FIXED`, os tipos de teatro e camarote, `QR`, `BARCODE` e `PICOTE`, e **não tinha ramo algum para `SVG` nem para `PDF`**. O `forEach` caía fora de todos os `else if`, dava `ctx.restore()` e não pintava nada.
+
+Não era falta de dado: medido com a arte já carregada (`el._pdfCanvas` e `el._svgImage` prontos), os dois tipos desenhavam **zero pixel**, enquanto no mesmo gabarito um `FIXED` desenhava 10.349 e um `BARCODE` 4.118. Faltava só desenhar.
+
+### O conserto
+Duas partes, as duas necessárias:
+
+1. O ramo `SVG`/`PDF`, espelhando o de `drawAmostraFace()`: recorte na caixa, `drawImageContain()` — tamanho original, sem distorção — e, sem arte carregada, a caixa com o nome do tipo, o mesmo aviso visual dos outros renderizadores.
+2. `await precarregarArtesDosElementos(num.elements)` antes de desenhar, nos dois pontos de chamada. As funções que chamam são `async`, então dá para esperar de verdade e sair certo de primeira, sem carregar e mandar redesenhar depois.
+
+A `cliente.html` não carrega o `script.js`, então o `cliente.js` ganhou uma `precarregarArtesDosElementos()` própria — que também carrega **SVG**, coisa que a `preloadAmostraItemPdfElements()` de lá não fazia. As duas versões passaram a compartilhar o mesmo carregador em vez de duplicá-lo.
+
+Com isso, a conta de renderizadores de elemento SVG/PDF do projeto fecha em **nove**, não nos quatro que a varredura da v489 encontrou. O `docs/fluxo_elementos_pdf_svg.md` lista todos.
+
+### Como foi verificado
+Teste que falha antes e passa depois, com quatro elementos de cores distintas no mesmo gabarito e contagem de pixels por cor. Antes: `FIXED` 10.349 · `BARCODE` 4.118 · **PDF 0** · **SVG 0**. Depois, nos dois arquivos, com números idênticos entre eles: `FIXED` 10.349 · `BARCODE` 4.118 · **PDF 27.495** · **SVG 27.378**.
+
+As seis verificações da v496 foram repetidas sem regressão: fusão 249,0,0 nos cinco pontos e o elemento PDF 2:1 continuando em proporção 1,89 na caixa quadrada. Sem erros de console.
+
+---
+
+## [v496 — 2026-08-10] — A numeração cobre a arte; o multiply é do grupo
 
 ### Resumo
 A regra de fusão das três camadas mudou. Antes cada camada multiplicava em cascata sobre o resultado acumulado: a arte multiplicava sobre a cor, e a numeração multiplicava sobre cor+arte — então a numeração **escurecia** onde caísse em cima de arte escura. Agora a numeração **cobre** a arte com fusão normal, e é o **grupo arte+numeração** que multiplica, uma vez só, sobre a cor do papel.

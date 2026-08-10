@@ -46,6 +46,7 @@ Linhas conferidas contra a v490.
 | 4 | Lista da box | `renderBoxArquivos()`, `:5539` |
 | 5 | Persistência | `saveNumeracao()`, `:5960` |
 | 6 | Janela combinada de arte | `renderItemAmostraCombinada()`, `:21005` |
+| 6b | Janela em **modo PDF** (multipáginas) | `drawNumeracaoElementsOverCanvas()` — outro caminho, que **não** passa por `drawAmostraFace()` |
 | 7 | Preview de imposição | `drawVdpElements()`, `:7339` — **e a outra**, em `pedido.js` |
 | 8 | Export de gabarito | `exportarPdfGabarito()`, `:25601` |
 | 9 | Geração do PDF | `engine.py:735` (SVG), `:775` (PDF) |
@@ -136,15 +137,18 @@ distorção** — o canvas passou a respeitar a proporção, e o `keep_proportio
 engine ficou como estava. `drawImageContain()` (`frontend/script.js`) é o equivalente
 exato no canvas, centralização inclusive.
 
-**⚠️ A varredura da v489 contou quatro renderizadores, e eram sete.** Três ficaram de
-fora e continuaram esticando até a **v496**, porque estão em arquivos que a busca não
-alcançou:
+**⚠️ A varredura da v489 contou quatro renderizadores, e eram nove.** Cinco ficaram de
+fora, porque estão em arquivos ou caminhos que a busca não alcançou. Três esticavam a
+arte, e foram corrigidos na **v496**:
 
 | Renderizador esquecido | Onde | Tipo |
 |---|---|---|
 | Prévia de imposição do pedido | `pedido.js`, `drawVdpElements()` | SVG e PDF |
 | Link de aprovação do cliente | `cliente.js`, dentro de `drawAmostraFace()` | SVG e PDF |
 | Camada 2 do Criador de Arte | `criador-arte.js`, `renderEditorLayer2Numeracao()` | PDF |
+
+Os outros dois eram piores: **não desenhavam SVG e PDF de jeito nenhum**, corrigidos na
+**v497** — ver "O modo PDF não desenhava elemento SVG nem PDF", abaixo.
 
 Há **duas** `drawVdpElements()` no projeto — uma em `script.js:7339`, que a v489
 corrigiu, e outra em `pedido.js`, que ela não viu. A `cliente.html` não carrega o
@@ -164,6 +168,33 @@ entravam e permaneciam em 100%.
 Medido depois da correção, com arte natural de 40×20 mm: numa caixa de 60×60 mm o
 engine pinta razão 2,02 e o `drawElement()` do editor pinta razão ~2,0 — os dois
 encaixam, nenhum estica.
+
+### B2b. O modo PDF não desenhava elemento SVG nem PDF
+
+**✅ Corrigido na v497.** Quando o item está em **modo PDF (multipáginas)**, a janela de
+visualização não passa por `drawAmostraFace()`: ela renderiza a página do PDF e carimba
+a numeração por cima com **`drawNumeracaoElementsOverCanvas()`** — um décimo caminho,
+com uma cópia em `script.js` e outra em `cliente.js`.
+
+Essa função tratava `TEXT`/`FIXED`, os tipos de teatro e camarote, `QR`, `BARCODE` e
+`PICOTE` — e **não tinha ramo algum para `SVG` nem para `PDF`**. O `forEach` caía fora
+de todos os `else if`, dava `ctx.restore()` e não pintava nada. Não era problema de
+carregamento: medido, `el._pdfCanvas` e `el._svgImage` já estavam prontos e ainda assim
+os dois tipos desenhavam **zero pixel**, enquanto `FIXED` desenhava 10.349 e `BARCODE`
+4.118 no mesmo gabarito.
+
+A correção tem duas partes, e as duas são necessárias:
+
+1. O ramo `SVG`/`PDF`, espelhando o de `drawAmostraFace()`: recorte na caixa,
+   `drawImageContain()` e, sem arte carregada, a caixa com o nome do tipo.
+2. `await precarregarArtesDosElementos(num.elements)` **antes** de desenhar, nos dois
+   pontos de chamada. As duas funções que chamam são `async`, então dá para esperar de
+   verdade e sair certo de primeira, sem carregar e mandar redesenhar depois.
+
+A `cliente.html` não carrega o `script.js`, então a v497 levou para o `cliente.js` uma
+`precarregarArtesDosElementos()` própria — que também carrega **SVG**, coisa que a
+`preloadAmostraItemPdfElements()` de lá não fazia. As duas versões de lá agora
+compartilham o mesmo carregador.
 
 ### B3. O tamanho inicial do SVG erra quando o arquivo não declara tamanho
 

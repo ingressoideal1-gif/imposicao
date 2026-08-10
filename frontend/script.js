@@ -20335,11 +20335,15 @@ async function renderImageModeInPdfViewer(idx, imgUrl, item, osId) {
             );
         }
         if (num && num.elements && num.elements.length > 0) {
+            // A arte dos elementos SVG/PDF precisa estar carregada ANTES de desenhar:
+            // esta funcao e async, entao da para esperar de verdade e sair certo de
+            // primeira, sem o vai-e-volta de carregar e mandar redesenhar.
+            await precarregarArtesDosElementos(num.elements);
             drawNumeracaoElementsOverCanvas(ctx, num, item, 1, canvas.width, canvas.height);
         }
-        
+
         canvas.style.display = 'block';
-        
+
         const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
         if (nav) nav.style.display = 'none';
         
@@ -20531,6 +20535,38 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             ctx.lineTo(0, canvasHeight - y);
             ctx.stroke();
             ctx.setLineDash([]);
+        } else if (el.type === 'SVG' || el.type === 'PDF') {
+            // Sem este ramo, o modo PDF (multipaginas) desenhava todos os outros tipos
+            // e simplesmente pulava SVG e PDF: o forEach caia fora de todos os else-if
+            // e nao pintava nada. A arte ja vinha carregada — quem chama esta funcao
+            // aguarda precarregarArtesDosElementos() —, faltava so desenhar.
+            const w = (el.width_mm || 20) * S;
+            const h = (el.height_mm || 20) * S;
+            const hw = w / 2, hh_el = h / 2;
+            const imgObj = el.type === 'PDF' ? (el._pdfCanvas || null) : (el._svgImage || null);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-hw, -hh_el, w, h);
+            ctx.clip();
+
+            if (imgObj) {
+                // Tamanho original, escala 100%, sem distorcao — como o engine.py impoe
+                drawImageContain(ctx, imgObj, -hw, -hh_el, w, h);
+            } else {
+                // Caixa com o nome do tipo, o mesmo aviso visual dos outros renderizadores
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(-hw, -hh_el, w, h);
+                ctx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                ctx.fillStyle = color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(el.type, 0, 0);
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+            }
+            ctx.restore();
         }
         ctx.restore();
     });
@@ -20591,11 +20627,14 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         }
 
         if (num && num.elements && num.elements.length > 0) {
+            // Ver o comentario em renderImageModeInPdfViewer: a arte dos elementos
+            // SVG/PDF e aguardada aqui, antes de desenhar.
+            await precarregarArtesDosElementos(num.elements);
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
         }
-        
+
         canvas.style.display = 'block';
-        
+
         // Update navigation
         const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
         if (nav) nav.style.display = 'flex';

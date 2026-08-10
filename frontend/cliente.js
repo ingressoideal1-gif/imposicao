@@ -1838,47 +1838,78 @@ function getFontCSS(font_name) {
 
 
 
+/**
+ * Carrega a arte de todos os elementos PDF/SVG de uma lista que ainda não a tenham.
+ *
+ * Equivalente da `precarregarArtesDosElementos()` do `script.js`, que a cliente.html
+ * não carrega. Quem puder esperar deve chamar esta — é o que faz a arte sair certa de
+ * primeira, sem o vai-e-volta de carregar e mandar redesenhar.
+ */
+async function precarregarArtesDosElementos(elementos) {
+    for (const el of (elementos || [])) {
+        try {
+            if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas) {
+                let bytes;
+                if (el.pdf_content.startsWith('http') || el.pdf_content.startsWith('/')) {
+                    bytes = await fetchPdfBytes(el.pdf_content);
+                } else {
+                    const base64Data = el.pdf_content.includes('base64,') ? el.pdf_content.split('base64,')[1] : el.pdf_content;
+                    const binStr = atob(base64Data);
+                    bytes = new Uint8Array(binStr.length);
+                    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                }
+
+                if (!bytes) throw new Error('Falha ao obter os bytes do PDF do elemento');
+
+                const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+                const page = await pdf.getPage(1);
+                const vp = page.getViewport({ scale: 2.0 });
+
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = Math.round(vp.width);
+                offCanvas.height = Math.round(vp.height);
+                const octx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+                await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
+
+                el._pdfCanvas = offCanvas;
+            } else if (el.type === 'SVG' && el.svg_content && !el._svgImage) {
+                const img = new Image();
+                img.src = el.svg_content.startsWith('http') || el.svg_content.startsWith('data:')
+                    ? el.svg_content
+                    : 'data:image/svg+xml;utf8,' + encodeURIComponent(el.svg_content);
+                await new Promise((res, rej) => {
+                    img.onload = res;
+                    img.onerror = () => rej(new Error('a imagem do SVG não carregou'));
+                });
+                el._svgImage = img;
+            }
+        } catch (err) {
+            console.warn('[Amostra Item] Erro pré-carregando a arte do elemento', el && el.id, err);
+        } finally {
+            delete el._pdfLoading;
+            delete el._svgLoading;
+        }
+    }
+}
+
+/** Versão que não pode esperar: dispara o carregamento e manda redesenhar no fim. */
 function preloadAmostraItemPdfElements(numeracao, idx, osId) {
     if (!numeracao || !numeracao.elements) return;
 
-    numeracao.elements.forEach(el => {
-        if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
-            el._pdfLoading = true;
-            (async () => {
-                try {
-                    let bytes;
-                    if (el.pdf_content.startsWith('http') || el.pdf_content.startsWith('/')) {
-                        bytes = await fetchPdfBytes(el.pdf_content);
-                    } else {
-                        const base64Data = el.pdf_content.includes('base64,') ? el.pdf_content.split('base64,')[1] : el.pdf_content;
-                        const binStr = atob(base64Data);
-                        bytes = new Uint8Array(binStr.length);
-                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                    }
+    const pendentes = numeracao.elements.filter(el =>
+        (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) ||
+        (el.type === 'SVG' && el.svg_content && !el._svgImage && !el._svgLoading)
+    );
+    if (!pendentes.length) return;
 
-                    if (!bytes) throw new Error('Falha ao obter os bytes do PDF do elemento');
-
-                    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
-                    const page = await pdf.getPage(1);
-                    const vp = page.getViewport({ scale: 2.0 });
-
-                    const offCanvas = document.createElement('canvas');
-                    offCanvas.width = Math.round(vp.width);
-                    offCanvas.height = Math.round(vp.height);
-                    const octx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
-                    await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
-
-                    el._pdfCanvas = offCanvas;
-                    delete el._pdfLoading;
-
-                    renderItemAmostraCombinada(idx, osId);
-                } catch (err) {
-                    console.error('[Amostra Item] Erro pré-carregando PDF do elemento:', err);
-                    delete el._pdfLoading;
-                }
-            })();
-        }
+    pendentes.forEach(el => {
+        if (el.type === 'PDF') el._pdfLoading = true; else el._svgLoading = true;
     });
+
+    (async () => {
+        await precarregarArtesDosElementos(pendentes);
+        renderItemAmostraCombinada(idx, osId);
+    })();
 }
 
 // ===== QR CODE: usa biblioteca CDN qrcode-generator 1.4.4 (window.qrcode) carregada no HTML =====
@@ -2592,6 +2623,9 @@ async function renderPdfViewerPage(idx, pageNum) {
             );
         }
         if (num && num.elements && num.elements.length > 0) {
+            // A arte dos elementos SVG/PDF e aguardada antes de desenhar: esta funcao
+            // e async, entao sai certo de primeira.
+            await precarregarArtesDosElementos(num.elements);
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
         }
 
@@ -2757,6 +2791,34 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             ctx.lineTo(0, canvasHeight - y);
             ctx.stroke();
             ctx.setLineDash([]);
+        } else if (el.type === 'SVG' || el.type === 'PDF') {
+            // Sem este ramo, o modo PDF (multipaginas) desenhava todos os outros tipos
+            // e pulava SVG e PDF. Espelha o mesmo ramo no script.js.
+            const w = (el.width_mm || 20) * S;
+            const h = (el.height_mm || 20) * S;
+            const hw = w / 2, hh_el = h / 2;
+            const imgObj = el.type === 'PDF' ? (el._pdfCanvas || null) : (el._svgImage || null);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-hw, -hh_el, w, h);
+            ctx.clip();
+
+            if (imgObj) {
+                drawImageContain(ctx, imgObj, -hw, -hh_el, w, h);
+            } else {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(-hw, -hh_el, w, h);
+                ctx.font = `${Math.max(6, h * 0.15)}px Inter, sans-serif`;
+                ctx.fillStyle = color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(el.type, 0, 0);
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+            }
+            ctx.restore();
         }
         ctx.restore();
     });
