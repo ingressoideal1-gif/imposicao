@@ -12390,7 +12390,24 @@ function renderAmostraCombinada() {
 
 
 
-    // 2. Desenhar a Camada 2: Arte com efeito similar ao Photoshop Multiply (lendo a dimensão e centralizando em um canvas intermediário do tamanho da Cor)
+    // GRUPO ARTE + NUMERAÇÃO: a numeração sobrepõe a arte normalmente (sem multiply
+    // entre elas) e são as duas JUNTAS que multiplicam sobre a cor. Por isso as duas
+    // são pintadas neste canvas transparente antes de encostar no ctx, que a esta
+    // altura tem só a cor. Espelha drawAmostraFace().
+
+    const grupoCanvas = document.createElement('canvas');
+
+    grupoCanvas.width = finalWidth;
+
+    grupoCanvas.height = finalHeight;
+
+    const grupoCtx = grupoCanvas.getContext('2d', { colorSpace: 'srgb' });
+
+    let grupoTemConteudo = false;
+
+
+
+    // 2. Desenhar a Camada 2: Arte (lendo a dimensão e centralizando em um canvas intermediário do tamanho da Cor)
 
     if (hasArte && arteCanvas && arteCanvas.width > 0) {
 
@@ -12560,21 +12577,17 @@ function renderAmostraCombinada() {
 
         
 
-        // Aplica o canvas temporário com multiply
+        // A arte entra no grupo, sem multiply — quem multiplica é o grupo inteiro
 
-        ctx.save();
+        grupoCtx.drawImage(tempArteCanvas, 0, 0);
 
-        ctx.globalCompositeOperation = 'multiply';
-
-        ctx.drawImage(tempArteCanvas, 0, 0);
-
-        ctx.restore();
+        grupoTemConteudo = true;
 
     }
 
 
 
-    // 3. Desenhar a Camada 3: Numeração com efeito similar ao Photoshop Multiply (lendo a dimensão e centralizando em um canvas intermediário do tamanho da Cor)
+    // 3. Desenhar a Camada 3: Numeração (lendo a dimensão e centralizando em um canvas intermediário do tamanho da Cor)
 
     if (numId && numCanvas && numCanvas.width > 0) {
 
@@ -12600,13 +12613,25 @@ function renderAmostraCombinada() {
 
         
 
-        // Aplica o canvas temporário com multiply
+        // A numeração entra no grupo, por cima da arte e sem multiply: ela cobre a arte
+
+        grupoCtx.drawImage(tempNumCanvas, 0, 0);
+
+        grupoTemConteudo = true;
+
+    }
+
+
+
+    // Agora sim: o grupo (arte + numeração) multiplica, de uma vez só, sobre a cor
+
+    if (grupoTemConteudo) {
 
         ctx.save();
 
         ctx.globalCompositeOperation = 'multiply';
 
-        ctx.drawImage(tempNumCanvas, 0, 0);
+        ctx.drawImage(grupoCanvas, 0, 0);
 
         ctx.restore();
 
@@ -20791,7 +20816,20 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         ctx.fillRect(0, 0, finalWidth, finalHeight);
     }
 
-    // ====== CAMADA 2: ARTE (imagem ou PDF do upload ou salva, com multiply) ======
+    // ====== GRUPO ARTE + NUMERACAO ======
+    // A numeracao NAO funde com a arte: ela sobrepoe a arte normalmente, e sao as duas
+    // JUNTAS que multiplicam sobre a cor do papel. Por isso as duas camadas sao pintadas
+    // antes num canvas transparente proprio (o grupo) e so no fim esse grupo e composto
+    // sobre o ctx -- que a esta altura tem so a cor -- com 'multiply'. Compor cada camada
+    // direto no ctx faria o multiply em cascata: a numeracao escureceria onde caisse em
+    // cima da arte.
+    const grupoCanvas = document.createElement('canvas');
+    grupoCanvas.width = finalWidth;
+    grupoCanvas.height = finalHeight;
+    const grupoCtx = grupoCanvas.getContext('2d', { colorSpace: 'srgb' });
+    let grupoTemConteudo = false;
+
+    // ====== CAMADA 2: ARTE (imagem ou PDF do upload ou salva) ======
     if (hasArte || hasSavedArte) {
         try {
             let isPdf = false;
@@ -20848,9 +20886,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 const dx = (finalWidth - offCanvas.width) / 2;
                 const dy = (finalHeight - offCanvas.height) / 2;
 
-                ctx.globalCompositeOperation = 'multiply';
-                ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
-                ctx.globalCompositeOperation = 'source-over';
+                grupoCtx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+                grupoTemConteudo = true;
             } else {
                 let url;
                 if (hasArte) {
@@ -20887,9 +20924,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     }
                     tempCtx.drawImage(arteImg, ddx, ddy, dw, dh);
 
-                    ctx.globalCompositeOperation = 'multiply';
-                    ctx.drawImage(tempArte, 0, 0);
-                    ctx.globalCompositeOperation = 'source-over';
+                    grupoCtx.drawImage(tempArte, 0, 0);
+                    grupoTemConteudo = true;
                 }
                 if (hasArte) {
                     URL.revokeObjectURL(url);
@@ -21137,11 +21173,17 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             numCtx.restore();
         });
 
-        // Compor numeração sobre o canvas final (centralizado) em modo multiply
+        // A numeracao entra NO GRUPO, por cima da arte e sem multiply: ela cobre a arte.
         const ndx = (finalWidth - numCanvas.width) / 2;
         const ndy = (finalHeight - numCanvas.height) / 2;
+        grupoCtx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+        grupoTemConteudo = true;
+    }
+
+    // Agora sim: o grupo (arte + numeracao) multiplica, de uma vez so, sobre a cor.
+    if (grupoTemConteudo) {
         ctx.globalCompositeOperation = 'multiply';
-        ctx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+        ctx.drawImage(grupoCanvas, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
     }
 

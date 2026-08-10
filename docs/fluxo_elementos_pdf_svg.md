@@ -46,7 +46,7 @@ Linhas conferidas contra a v490.
 | 4 | Lista da box | `renderBoxArquivos()`, `:5539` |
 | 5 | Persistência | `saveNumeracao()`, `:5960` |
 | 6 | Janela combinada de arte | `renderItemAmostraCombinada()`, `:21005` |
-| 7 | Preview de imposição | `drawVdpElements()`, `:7339` |
+| 7 | Preview de imposição | `drawVdpElements()`, `:7339` — **e a outra**, em `pedido.js` |
 | 8 | Export de gabarito | `exportarPdfGabarito()`, `:25601` |
 | 9 | Geração do PDF | `engine.py:735` (SVG), `:775` (PDF) |
 | 10 | Impressão | `app.py:1024` — só reenvia o PDF do engine ao spooler |
@@ -134,8 +134,26 @@ como o resto do arquivo). O que não pode é continuar um de cada jeito.
 **✅ Corrigido na v489.** A regra escolhida foi **tamanho original, escala 100%, sem
 distorção** — o canvas passou a respeitar a proporção, e o `keep_proportion=True` do
 engine ficou como estava. `drawImageContain()` (`frontend/script.js`) é o equivalente
-exato no canvas, centralização inclusive, e os quatro renderizadores passam por ela.
-Nenhum `ctx.drawImage(img, x, y, w, h)` cru sobrou para elementos SVG/PDF.
+exato no canvas, centralização inclusive.
+
+**⚠️ A varredura da v489 contou quatro renderizadores, e eram sete.** Três ficaram de
+fora e continuaram esticando até a **v496**, porque estão em arquivos que a busca não
+alcançou:
+
+| Renderizador esquecido | Onde | Tipo |
+|---|---|---|
+| Prévia de imposição do pedido | `pedido.js`, `drawVdpElements()` | SVG e PDF |
+| Link de aprovação do cliente | `cliente.js`, dentro de `drawAmostraFace()` | SVG e PDF |
+| Camada 2 do Criador de Arte | `criador-arte.js`, `renderEditorLayer2Numeracao()` | PDF |
+
+Há **duas** `drawVdpElements()` no projeto — uma em `script.js:7339`, que a v489
+corrigiu, e outra em `pedido.js`, que ela não viu. A `cliente.html` não carrega o
+`script.js`, então a `drawImageContain()` nem existia lá: a v496 levou uma cópia
+declarada para o topo do `cliente.js`. Ao mexer numa das duas cópias, mexa na outra.
+
+Hoje nenhum `ctx.drawImage(img, x, y, w, h)` cru sobra para elementos SVG/PDF — o que
+se confere com uma busca por `drawImage(` seguido de `_pdfCanvas`, `_svgImage`,
+`svgImg` ou `imgObj` em `frontend/*.js`, descontando as chamadas de `drawImageContain`.
 
 Além disso, distorcer deixou de ser possível pela interface: os campos Largura e
 Altura de um elemento SVG ficaram travados na proporção — mexer num ajusta o outro —

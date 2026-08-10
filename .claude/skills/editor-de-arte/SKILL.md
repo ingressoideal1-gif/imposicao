@@ -13,6 +13,11 @@ produção:
    renderizador canônico do card do pedido e do link do cliente. Enquadramento "contain" e fusão
    multiply saem dela. Divergir faz o editor mostrar uma coisa e a impressão outra.
 
+   A regra de fusão em vigor: **a numeração cobre a arte com fusão normal, e é o grupo
+   arte+numeração que multiplica, uma vez só, sobre a cor do papel.** Ela vale nos cinco lugares
+   que empilham as três camadas — o editor, o card do pedido, o link do cliente, a tela de
+   Amostras e a prévia de imposição.
+
 2. **A estrutura vetorial editável (`arte_json`) não existe no banco.** `saveAmostraToDB()` a
    remove do payload; ela vive só em memória e no `localStorage`.
 

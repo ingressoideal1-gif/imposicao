@@ -4,7 +4,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v493)** — 2026-08-09 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v495)** — 2026-08-09 | Agente **1.2.23**
+
+> As entradas das v494 e v495 ainda não foram escritas; o histórico delas está só nas
+> mensagens de commit.
+
+---
+
+## [v496 — 2026-08-10] *(a publicar)* — A numeração cobre a arte; o multiply é do grupo
+
+### Resumo
+A regra de fusão das três camadas mudou. Antes cada camada multiplicava em cascata sobre o resultado acumulado: a arte multiplicava sobre a cor, e a numeração multiplicava sobre cor+arte — então a numeração **escurecia** onde caísse em cima de arte escura. Agora a numeração **cobre** a arte com fusão normal, e é o **grupo arte+numeração** que multiplica, uma vez só, sobre a cor do papel.
+
+### Onde a regra vale
+Nos cinco lugares que empilham as três camadas, que precisam concordar entre si para a tela não mostrar uma coisa e o papel outra:
+
+| Onde | Arquivo | Como |
+|---|---|---|
+| Card do pedido / janela combinada | `script.js`, `drawAmostraFace()` | canvas transparente do grupo, composto com `multiply` |
+| Link de aprovação do cliente | `cliente.js` | idem, espelhando a função acima |
+| Tela de Amostras | `script.js`, `renderAmostraCombinada()` | idem |
+| Prévia de imposição | `pedido.js`, `drawPedPreview()` | um grupo por célula, com a mesma matriz e o mesmo clip da folha |
+| Criador de Arte | `style.css` + `criador-arte.js` | `#editor-blend-group` com `isolation: isolate` + `mix-blend-mode: multiply` |
+
+No editor a fusão é CSS, não JavaScript, e por isso exigiu um elemento novo. O `mix-blend-mode` ficava no `.canvas-container` do Fabric, onde ele alcança **só a arte** — a numeração, canvas irmão, ficava de fora do grupo. A `#editor-blend-group` envolve as duas: o `isolation: isolate` faz a numeração compor sobre a arte com fusão normal, e o `mix-blend-mode: multiply` faz o resultado já composto multiplicar contra a cor. As duas propriedades só funcionam em par.
+
+Na prévia de imposição, o grupo é um canvas do tamanho da folha que recebe a mesma matriz de transformação e o mesmo clip da célula — a composição final é pixel a pixel, sem reamostragem, para não distorcer a arte. O nome do modelo (multi-artes) passou a ser desenhado dentro do grupo, para continuar por cima da arte como estava antes.
+
+O `engine.py` não muda: o PDF impresso nunca aplicou blend mode: a numeração já era uma camada por cima da arte. O multiply existe só para simular, na tela, a tinta sobre o papel colorido.
+
+### Junto: três renderizadores de elemento SVG/PDF que ainda esticavam
+A v489 estabeleceu que elemento SVG e PDF vai em **tamanho original, escala 100%, sem distorção**, e mandou todo renderizador passar pela `drawImageContain()`. A varredura contou quatro renderizadores — e eram sete. Três ficaram esticando desde então, porque estão em arquivos que a busca não alcançou:
+
+- **`pedido.js`** — existem **duas** `drawVdpElements()` no projeto; a v489 corrigiu a de `script.js:7339` e não viu a outra.
+- **`cliente.js`** — a `cliente.html` não carrega o `script.js`, então a `drawImageContain()` nem existia ali. Agora há uma cópia declarada no topo do arquivo, com o aviso de que as duas andam juntas.
+- **`criador-arte.js`** — a Camada 2 do editor, no elemento do tipo PDF.
+
+Medido na prévia de imposição: um elemento PDF de proporção 2:1 numa caixa quadrada de 20×20 mm agora ocupa 17×9 px na tela (proporção 1,89) em vez dos 17×17 px que o `drawImage` cru produzia.
+
+### Como foi verificado
+Com o app rodando e o navegador dirigido por Puppeteer, medindo pixel: papel laranja (249,115,22), arte cinza (128,128,128), tinta da numeração vermelha (255,0,0). A tinta sobre a arte tem de sair **249,0,0** (regra nova) e não 125,0,0 (cascata antiga); o pixel só com arte continua **125,58,11** nos dois casos.
+
+Resultado nos cinco pontos: `drawAmostraFace` 249,0,0 · `cliente.js` 255,0,0 (variante de papel branco) · `renderAmostraCombinada` 249,0,0 · prévia de imposição 249,0,0 · editor 249,0,0 em 11.566 pixels da tela composta. Todos repetidos depois da correção do `drawImageContain`, sem regressão e sem erro de console. Pester 50/50.
 
 ---
 

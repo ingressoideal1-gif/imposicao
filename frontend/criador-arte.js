@@ -207,16 +207,38 @@ async function setupEditorWorkspace() {
 
         window.editorState.fabricCanvas = fc;
 
-        // Garantir que a div .canvas-container do Fabric fique em z-index: 10 (acima da cor layer1 e abaixo da numeração layer2)
+        // GRUPO ARTE + NUMERACAO
+        //
+        // A numeracao nao funde com a arte: ela cobre a arte, e sao as duas JUNTAS que
+        // multiplicam sobre a cor (Camada 1). Em CSS isso exige um elemento que envolva
+        // as duas -- e a #editor-blend-group, criada aqui. O style.css lhe da
+        // 'isolation: isolate' (contexto de fusao proprio, onde a numeracao compoe
+        // normalmente sobre a arte) e 'mix-blend-mode: multiply' (o resultado do grupo
+        // inteiro multiplicando contra a camada de baixo).
+        //
+        // A div e movida a cada setup porque o dispose() do Fabric desmonta o container
+        // e o recria: o grupo e reaproveitado pelo id e os dois filhos sao reanexados.
         const stackWrapper = document.getElementById('editor-canvas-stack');
         if (stackWrapper) {
+            let blendGroup = document.getElementById('editor-blend-group');
+            if (!blendGroup) {
+                blendGroup = document.createElement('div');
+                blendGroup.id = 'editor-blend-group';
+                stackWrapper.appendChild(blendGroup);
+            }
+            blendGroup.style.width = canvasW + 'px';
+            blendGroup.style.height = canvasH + 'px';
+
             const fabricWrapper = stackWrapper.querySelector('.canvas-container');
             if (fabricWrapper) {
                 fabricWrapper.style.position = 'absolute';
                 fabricWrapper.style.top = '0px';
                 fabricWrapper.style.left = '0px';
                 fabricWrapper.style.zIndex = '10';
+                blendGroup.appendChild(fabricWrapper);
             }
+            // A numeracao entra no grupo, por cima da arte (z-index 100 no style.css)
+            if (l2) blendGroup.appendChild(l2);
         }
 
         // O campo amostra_arte_base64 guarda duas coisas diferentes: a arte do
@@ -679,7 +701,10 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
             ctx.clip();
 
             if (el.type === 'PDF' && el._pdfCanvas) {
-                ctx.drawImage(el._pdfCanvas, -hw, -hh_el, w, h);
+                // Tamanho original, escala 100%, sem distorcao: o engine.py impoe PDF e
+                // SVG com keep_proportion=True, entao um drawImage cru esticaria na tela
+                // o que o papel vai encaixar.
+                drawImageContain(ctx, el._pdfCanvas, -hw, -hh_el, w, h);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;

@@ -918,6 +918,61 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
+            // ─── GRUPO ARTE + NUMERAÇÃO ────────────────────────────────────────
+            // A numeração NÃO funde com a arte: ela cobre a arte, e são as duas JUNTAS
+            // que multiplicam sobre a cor do papel (a camada "AMOSTRA" acima). Por isso
+            // tudo o que é impresso nesta posição — arte, nome do modelo e elementos
+            // variáveis — é pintado antes neste canvas transparente, e só no fim o
+            // grupo inteiro é composto sobre a folha com 'multiply'. Compor cada camada
+            // direto na folha faria o multiply em cascata: a numeração escureceria onde
+            // caísse em cima da arte. Mesma regra de drawAmostraFace() no script.js.
+            //
+            // O canvas do grupo tem o tamanho da folha inteira e recebe a MESMA matriz
+            // de transformação e o MESMO clip da célula, para as coordenadas de desenho
+            // continuarem idênticas às da folha e a composição final ser pixel a pixel,
+            // sem reamostragem (nada de arte esticada ou meio pixel fora de lugar).
+            if (!window._pedGrupoCanvas || window._pedGrupoCanvas.width !== canvas.width || window._pedGrupoCanvas.height !== canvas.height) {
+                window._pedGrupoCanvas = document.createElement('canvas');
+                window._pedGrupoCanvas.width = canvas.width;
+                window._pedGrupoCanvas.height = canvas.height;
+            }
+            const grupoCanvas = window._pedGrupoCanvas;
+            const gctx = grupoCanvas.getContext('2d');
+
+            // Retângulo desta célula em pixels da folha: limita o clear e a composição
+            // ao pedaço que interessa, em coordenadas inteiras.
+            const _mCel = ctx.getTransform();
+            const _cantos = [[-cw / 2, -ch / 2], [cw / 2, -ch / 2], [cw / 2, ch / 2], [-cw / 2, ch / 2]]
+                .map(([x, y]) => [_mCel.a * x + _mCel.c * y + _mCel.e, _mCel.b * x + _mCel.d * y + _mCel.f]);
+            const gx0 = Math.max(0, Math.floor(Math.min(..._cantos.map(c => c[0]))) - 2);
+            const gy0 = Math.max(0, Math.floor(Math.min(..._cantos.map(c => c[1]))) - 2);
+            const gx1 = Math.min(grupoCanvas.width, Math.ceil(Math.max(..._cantos.map(c => c[0]))) + 2);
+            const gy1 = Math.min(grupoCanvas.height, Math.ceil(Math.max(..._cantos.map(c => c[1]))) + 2);
+            const gw = gx1 - gx0;
+            const gh = gy1 - gy0;
+
+            gctx.setTransform(1, 0, 0, 1, 0, 0);
+            if (gw > 0 && gh > 0) gctx.clearRect(gx0, gy0, gw, gh);
+            gctx.save();
+            gctx.setTransform(_mCel);
+            gctx.beginPath();
+            gctx.rect(-cw / 2, -ch / 2, cw, ch);
+            gctx.clip();
+
+            // Despeja o grupo na folha: uma única multiplicação sobre a cor.
+            let grupoFechado = false;
+            const fecharGrupo = () => {
+                if (grupoFechado) return;
+                grupoFechado = true;
+                gctx.restore();
+                if (gw <= 0 || gh <= 0) return;
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                if (showAmostraCor) ctx.globalCompositeOperation = 'multiply';
+                ctx.drawImage(grupoCanvas, gx0, gy0, gw, gh, gx0, gy0, gw, gh);
+                ctx.restore();
+            };
+
             let activePdfDoc = state.pedArtPdfDoc;
 
             let activeImage = state.pedArtImage;
@@ -1032,11 +1087,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                             if (cachedPage) {
 
-                                if (showAmostraCor) ctx.globalCompositeOperation = 'multiply';
-
-                                ctx.drawImage(cachedPage, offH - dw / 2, offV - dh / 2, dw, dh);
-
-                                if (showAmostraCor) ctx.globalCompositeOperation = 'source-over';
+                                // A arte entra no grupo; quem multiplica é o grupo inteiro
+                                gctx.drawImage(cachedPage, offH - dw / 2, offV - dh / 2, dw, dh);
 
                             } else {
 
@@ -1145,11 +1197,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                             ctx.strokeRect(offH - dw / 2, offV - dh / 2, dw, dh);
 
                         } else {
-                            if (showAmostraCor) ctx.globalCompositeOperation = 'multiply';
-
-                            ctx.drawImage(activeImage, 0, 0, activeImage.width, activeImage.height, offH - dw / 2, offV - dh / 2, dw, dh);
-
-                            if (showAmostraCor) ctx.globalCompositeOperation = 'source-over';
+                            // A arte entra no grupo; quem multiplica é o grupo inteiro
+                            gctx.drawImage(activeImage, 0, 0, activeImage.width, activeImage.height, offH - dw / 2, offV - dh / 2, dw, dh);
                         }
 
                     }
@@ -1189,6 +1238,9 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             // Desenhar Nome da Arte (Multi-Artes)
             
             if (previewPart === 'capa' || previewPart === 'contracapa') {
+                // Capa/contracapa não recebe numeração: o grupo já está fechado aqui, e o
+                // texto de bloco abaixo é anotação da folha, desenhado por cima dele.
+                fecharGrupo();
                 if (previewPart === 'capa' && !isBack) {
                     const color = fmt.cover_font_color || '#000000';
                     const fsPdf = parseInt(fmt.cover_font_size) || 12;
@@ -1304,29 +1356,34 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             }
 
             if (multiArteItem && multiArteItem.nome) {
-                ctx.save();
+                // O nome é impresso junto com a arte, então é desenhado NO GRUPO (gctx),
+                // acima da arte e sem multiply, como a numeração.
+                gctx.save();
                 const nomeTxt = String(multiArteItem.nome).padStart(6, '0');
                 const nomeColor = multiArteItem.nome_color || '#000000';
                 // Fonte: 17pt em pontos PDF, convertido para pixels do canvas
                 const nomeFontSizePx = 14 * scale;
-                ctx.font = `${nomeFontSizePx}px Impact, Arial, sans-serif`;
-                ctx.fillStyle = nomeColor;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
+                gctx.font = `${nomeFontSizePx}px Impact, Arial, sans-serif`;
+                gctx.fillStyle = nomeColor;
+                gctx.textAlign = 'center';
+                gctx.textBaseline = 'middle';
                 // PosiÃ§Ã£o X: 0mm da lateral esquerda da cÃ©lula
                 // ApÃ³s rotação -90Â°, textBaseline='middle' centraliza horizontalmente,
                 // entÃ£o o ponto de translate Ã© o CENTRO do texto rotacionado.
                 // Para a borda esquerda do texto ficar a 0mm: center_x = -cw/2 + fontSize/2
-                ctx.translate(-cw / 2 + nomeFontSizePx / 2, 0);
-                ctx.rotate(-Math.PI / 2);
+                gctx.translate(-cw / 2 + nomeFontSizePx / 2, 0);
+                gctx.rotate(-Math.PI / 2);
                 // textAlign='center' centraliza o texto verticalmente (eixo X pré-rotação = eixo Y pÃ³s-rotação)
-                ctx.fillText(nomeTxt, 0, 0);
-                ctx.restore();
+                gctx.fillText(nomeTxt, 0, 0);
+                gctx.restore();
             }
 
             // Elementos variáveis (VDP) - Suporte a 2 numerações sobrepostas
 
-        const drawVdpElements = (currentNum, source_id) => {
+        // O parametro `ctx` sombreia, de proposito, o contexto da folha dentro de toda
+        // esta funcao: os elementos variaveis sao desenhados no GRUPO (arte + numeracao),
+        // que so depois multiplica sobre a cor. Chame sempre passando gctx.
+        const drawVdpElements = (currentNum, source_id, ctx) => {
 
             if (currentNum && currentNum.elements) {
 
@@ -1349,8 +1406,6 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         numPrintMode = metaEl.print_mode;
                     }
                 }
-
-                if (showAmostraCor) ctx.globalCompositeOperation = 'multiply';
 
                 currentNum.elements.forEach(el => {
 
@@ -1585,7 +1640,10 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                         if (svgImg) {
 
-                            ctx.drawImage(svgImg, -hw, -hh, sz_w, sz_h);
+                            // Tamanho original, escala 100%, sem distorcao: drawImage cru
+                            // esticaria o SVG para dentro da caixa e faria a tela divergir
+                            // do papel, onde o engine.py usa keep_proportion=True.
+                            drawImageContain(ctx, svgImg, -hw, -hh, sz_w, sz_h);
 
                         } else {
 
@@ -1618,7 +1676,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                         if (el._pdfCanvas) {
 
-                            ctx.drawImage(el._pdfCanvas, -hw, -hh, sz_w, sz_h);
+                            // Mesma regra do SVG acima: proporcao preservada, sobra centralizada
+                            drawImageContain(ctx, el._pdfCanvas, -hw, -hh, sz_w, sz_h);
 
                         } else if (el.pdf_content && !el._pdfLoading) {
 
@@ -1724,8 +1783,6 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                 });
 
-                if (showAmostraCor) ctx.globalCompositeOperation = 'source-over';
-
             }
 
         };
@@ -1734,12 +1791,15 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         const artNum1 = multiArteItem ? (multiArteItem.numeracao || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num1_id))) : null;
         const artNum2 = multiArteItem ? (multiArteItem.numeracao_2 || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num2_id))) : null;
         if (multiArteItem) {
-            drawVdpElements(artNum1, 1);
-            drawVdpElements(artNum2, 2);
+            drawVdpElements(artNum1, 1, gctx);
+            drawVdpElements(artNum2, 2, gctx);
         } else {
-            drawVdpElements(num, 1);
-            drawVdpElements(num2, 2);
+            drawVdpElements(num, 1, gctx);
+            drawVdpElements(num2, 2, gctx);
         }
+
+        // Arte + nome + numeração prontos: o grupo multiplica de uma vez só sobre a cor
+        fecharGrupo();
 
 
 

@@ -2264,26 +2264,43 @@ input[type=number] {
     pointer-events: none !important;
 }
 
-/* A Camada 3 funde com a Camada 1 (Cor) do mesmo jeito que funde no card do
-   pedido, onde drawAmostraFace() compoe a arte inteira sobre a cor com
-   globalCompositeOperation 'multiply'. Sem isto, uma arte de fundo branco tapa
-   a cor e o operador edita sem enxergar o papel em que vai imprimir.
+/* GRUPO ARTE + NUMERACAO (#editor-blend-group, montada no criador-arte.js)
 
-   Tem de ser mix-blend-mode, e tem de ser AQUI no container: as camadas sao
-   <canvas> irmaos, e o composite de canvas nunca alcanca outro elemento. Posto
-   no .lower-canvas nao funciona -- este container tem position + z-index, o que
-   cria um stacking context, e stacking context isola blending: o filho so
-   fundiria com o que estivesse dentro do proprio container.
+   A regra de fusao do projeto: a numeracao NAO funde com a arte -- ela cobre a
+   arte normalmente -- e sao as duas JUNTAS que multiplicam sobre a Camada 1
+   (Cor), exatamente como drawAmostraFace() faz no card do pedido, pintando arte
+   e numeracao num canvas transparente e so entao compondo com 'multiply'.
 
-   Como o container funde inteiro (inclusive o .upper-canvas, onde o Fabric
-   desenha as alcas), o estilo das alcas e definido no criador-arte.js com
-   cores escuras e opacas, que sobrevivem ao multiply sobre qualquer cor. */
+   Em CSS isso precisa de um elemento envolvendo as duas camadas:
+
+   - 'isolation: isolate' cria um contexto de fusao proprio dentro do grupo, para
+     a numeracao compor sobre a arte com fusao normal, sem enxergar a cor;
+   - 'mix-blend-mode: multiply' no MESMO elemento faz o resultado ja composto do
+     grupo multiplicar contra o que esta atras dele, que e a Camada 1.
+
+   Tem de ser mix-blend-mode e tem de ser no elemento que agrupa: as camadas sao
+   <canvas> irmaos, e o globalCompositeOperation de um canvas nunca alcanca outro
+   elemento do DOM. E nao pode ficar no .canvas-container do Fabric: dali o
+   multiply pega so a arte, deixando a numeracao fora do grupo (era assim antes,
+   e a numeracao acabava multiplicando por cima do resultado arte+cor).
+
+   Como o grupo funde inteiro (inclusive o .upper-canvas, onde o Fabric desenha
+   as alcas), o estilo das alcas e definido no criador-arte.js com cores escuras
+   e opacas, que sobrevivem ao multiply sobre qualquer cor. */
+#editor-canvas-stack #editor-blend-group {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 10 !important;
+    isolation: isolate;
+    mix-blend-mode: multiply;
+}
+
 #editor-canvas-stack .canvas-container {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
     z-index: 10 !important;
-    mix-blend-mode: multiply;
 }
 
 #editor-canvas-stack #editor-canvas-layer2 {

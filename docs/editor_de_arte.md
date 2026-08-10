@@ -25,8 +25,14 @@ dela. Duas em particular:
 
 1. **Enquadramento "contain"** — a arte cabe inteira na prancha, com proporção preservada e
    centralizada nos **dois** eixos. Não é encaixe pela altura com âncora no topo.
-2. **Multiply** — a arte é sempre composta sobre a cor com `globalCompositeOperation = 'multiply'`.
-   Ou seja: **a arte do fluxo convencional é, por definição, uma camada multiply.**
+2. **Multiply, uma vez só, e do grupo inteiro** — a numeração **não** funde com a arte: ela
+   cobre a arte com fusão normal. Arte e numeração formam um **grupo**, e é o grupo que
+   multiplica sobre a cor do papel. Na prática, `drawAmostraFace()` pinta arte e numeração
+   num canvas transparente à parte e só então compõe esse canvas sobre a cor com
+   `globalCompositeOperation = 'multiply'`.
+
+   Não é o que era antes: até a v496 cada camada multiplicava em cascata sobre o resultado
+   acumulado, e a numeração escurecia onde caísse em cima de arte escura.
 
 Divergir disso produz a classe de bug mais reportada aqui: o editor mostra uma coisa e o
 pedido/impressão mostram outra. Ao implementar qualquer coisa sobre como a arte é carregada,
@@ -40,14 +46,20 @@ O que aparece na tela é o empilhamento de **três elementos `<canvas>` irmãos*
 `#editor-canvas-stack`, todos do mesmo tamanho:
 
 ```
-z-index 100   layer2   🔢 Numeração / Picote    pointer-events: none   ← só visualização
-z-index  10   layer3   🎨 ARTE (Fabric.js)      interativa             ← a ÚNICA editável
-z-index   1   layer1   🎨 Cor (fundo)           pointer-events: none   ← só visualização
+#editor-canvas-stack
+├── layer1        🎨 Cor (fundo)            z-index 1     pointer-events: none
+└── #editor-blend-group    ← isolation: isolate + mix-blend-mode: multiply
+    ├── canvas-container   🎨 ARTE (Fabric.js)   z-index 10    interativa ← a ÚNICA editável
+    └── layer2             🔢 Numeração/Picote   z-index 100   pointer-events: none
 ```
 
 A camada da arte fica **no meio**. Isso é imposto na mão em `setupEditorWorkspace()`, porque o
 Fabric envolve o `<canvas>` numa `div.canvas-container` própria; sem forçar o `z-index` dessa div,
 o empilhamento quebra.
+
+A `#editor-blend-group` também é montada ali, na mão, a cada `setupEditorWorkspace()`: o
+`dispose()` do Fabric desmonta e recria o container, então a div é reaproveitada pelo `id` e os
+dois filhos são reanexados.
 
 **As camadas 1 e 2 são contexto, não conteúdo.** Existem para o operador posicionar a arte sabendo
 onde a numeração vai cair e qual é a cor do papel. Podem ser desligadas nos checkboxes do cabeçalho
@@ -62,13 +74,24 @@ as camadas aqui são elementos irmãos do DOM, composite de canvas **nunca** alc
 baixo. Marcar o objeto como `multiply` no Fabric não faz a arte fundir com a cor — só ajusta a
 fusão dentro da própria Camada 3.
 
-A fusão real vem de `mix-blend-mode: multiply` no `.canvas-container` do Fabric, declarado no
-`style.css`. E **tem de ser no container**: aplicado no `.lower-canvas` não funciona, porque o
-container tem `position` + `z-index`, o que cria um *stacking context*, e stacking context **isola
-blending** — o filho só fundiria com o que estivesse dentro do próprio container. Medido no pixel
-central da prancha: no `.lower-canvas` dá branco; no container dá exatamente a cor da Camada 1.
+A fusão real vem da **`#editor-blend-group`**, a div que envolve a arte e a numeração, declarada
+no `style.css` com duas propriedades que só funcionam em par:
 
-Consequência disso: o container funde **inteiro**, inclusive o `.upper-canvas`, onde o Fabric
+- **`isolation: isolate`** cria um contexto de fusão próprio dentro do grupo. É o que faz a
+  numeração compor sobre a arte com fusão **normal**, sem enxergar a cor que está atrás.
+- **`mix-blend-mode: multiply`** faz o resultado já composto do grupo multiplicar contra o que
+  está atrás dele, que é a Camada 1.
+
+Junto, isso é o equivalente em CSS do que `drawAmostraFace()` faz em canvas: pintar arte e
+numeração numa folha transparente e multiplicar essa folha, inteira, uma vez só.
+
+**Tem de ser no elemento que agrupa.** No `.lower-canvas` não funciona, porque o container do
+Fabric tem `position` + `z-index`, o que cria um *stacking context*, e stacking context **isola
+blending** — o filho só fundiria com o que estivesse dentro do próprio container. E no
+`.canvas-container` (onde ficava até a v496) o multiply pega **só a arte**, deixando a numeração
+fora do grupo: era assim que a numeração acabava multiplicando por cima do resultado arte+cor.
+
+Consequência disso: o grupo funde **inteiro**, inclusive o `.upper-canvas`, onde o Fabric
 desenha as alças de seleção. Por isso `setupEditorWorkspace()` define alças com cantos preenchidos
 e escuros — o padrão do Fabric (cantos vazados em azul claro) praticamente some sobre cores fortes.
 
@@ -99,6 +122,9 @@ Funciona, mas é frágil. No verso, se a cor não tem PDF de verso próprio mas 
 usa a **página 2**.
 
 ## Camada 2 — Numeração
+
+Fica **dentro** da `#editor-blend-group`, acima da arte: cobre a arte com fusão normal e
+multiplica sobre a cor junto com ela, nunca por cima do resultado arte+cor.
 
 `renderEditorLayer2Numeracao()` é um **reimplementador em canvas 2D puro** do gabarito de
 numeração: percorre `num.elements` e desenha cada tipo à mão — `TEXT`/`FIXED`, os tipos de teatro

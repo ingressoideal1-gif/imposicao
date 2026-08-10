@@ -1,4 +1,27 @@
 // --- ARQUIVO DO CLIENTE ISOLADO ---
+
+/**
+ * Desenha uma imagem (Image ou canvas) encaixada na caixa (x, y, w, h) SEM distorcer,
+ * preservando a proporcao original e centralizando a sobra.
+ *
+ * Copia deliberada da drawImageContain() do script.js: a cliente.html nao carrega o
+ * script.js, entao a funcao nao existe aqui. Sao os elementos PDF/SVG da numeracao que
+ * dependem dela — o engine.py impoe os dois com keep_proportion=True, e um
+ * ctx.drawImage(img, x, y, w, h) cru esticaria na tela o que o papel vai encaixar.
+ * A regra do produto e: tamanho original, escala 100%, sem distorcao.
+ *
+ * Se mexer em uma das duas, mexa na outra.
+ */
+function drawImageContain(ctx, img, x, y, w, h) {
+    const iw = img.naturalWidth || img.width || 0;
+    const ih = img.naturalHeight || img.height || 0;
+    if (!iw || !ih || !(w > 0) || !(h > 0)) return;
+    const escala = Math.min(w / iw, h / ih);
+    const dw = iw * escala;
+    const dh = ih * escala;
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+
 let state = {
     osItens: {},
     ordens: [],
@@ -2033,7 +2056,20 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         ctx.fillRect(0, 0, finalWidth, finalHeight);
     }
 
-    // ====== CAMADA 2: ARTE (imagem ou PDF do upload ou salva, com multiply) ======
+    // ====== GRUPO ARTE + NUMERACAO ======
+    // A numeracao NAO funde com a arte: ela sobrepoe a arte normalmente, e sao as duas
+    // JUNTAS que multiplicam sobre a cor do papel. Por isso as duas camadas sao pintadas
+    // antes num canvas transparente proprio (o grupo) e so no fim esse grupo e composto
+    // sobre o ctx -- que a esta altura tem so a cor -- com 'multiply'. Compor cada camada
+    // direto no ctx faria o multiply em cascata: a numeracao escureceria onde caisse em
+    // cima da arte. Espelha drawAmostraFace() do script.js.
+    const grupoCanvas = document.createElement('canvas');
+    grupoCanvas.width = finalWidth;
+    grupoCanvas.height = finalHeight;
+    const grupoCtx = grupoCanvas.getContext('2d', { colorSpace: 'srgb' });
+    let grupoTemConteudo = false;
+
+    // ====== CAMADA 2: ARTE (imagem ou PDF do upload ou salva) ======
     if (hasArte || hasSavedArte) {
         try {
             let isPdf = false;
@@ -2090,9 +2126,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 const dx = (finalWidth - offCanvas.width) / 2;
                 const dy = (finalHeight - offCanvas.height) / 2;
 
-                ctx.globalCompositeOperation = 'multiply';
-                ctx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
-                ctx.globalCompositeOperation = 'source-over';
+                grupoCtx.drawImage(offCanvas, dx, dy, offCanvas.width, offCanvas.height);
+                grupoTemConteudo = true;
             } else {
                 let url;
                 if (hasArte) {
@@ -2129,9 +2164,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     }
                     tempCtx.drawImage(arteImg, ddx, ddy, dw, dh);
 
-                    ctx.globalCompositeOperation = 'multiply';
-                    ctx.drawImage(tempArte, 0, 0);
-                    ctx.globalCompositeOperation = 'source-over';
+                    grupoCtx.drawImage(tempArte, 0, 0);
+                    grupoTemConteudo = true;
                 }
                 if (hasArte) {
                     URL.revokeObjectURL(url);
@@ -2313,7 +2347,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 if (el.type === 'PDF') {
                     const imgObj = el._pdfCanvas || null;
                     if (imgObj) {
-                        numCtx.drawImage(imgObj, -hw, -hh_el, w, h);
+                        drawImageContain(numCtx, imgObj, -hw, -hh_el, w, h);
                     } else {
                         numCtx.strokeStyle = color;
                         numCtx.lineWidth = 1;
@@ -2347,7 +2381,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                             }
                         }
                         if (el._svgImage) {
-                            numCtx.drawImage(el._svgImage, -hw, -hh_el, w, h);
+                            drawImageContain(numCtx, el._svgImage, -hw, -hh_el, w, h);
                         } else {
                             numCtx.strokeStyle = color;
                             numCtx.lineWidth = 1;
@@ -2378,11 +2412,17 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             numCtx.restore();
         });
 
-        // Compor numeração sobre o canvas final (centralizado) em modo multiply
+        // A numeracao entra NO GRUPO, por cima da arte e sem multiply: ela cobre a arte.
         const ndx = (finalWidth - numCanvas.width) / 2;
         const ndy = (finalHeight - numCanvas.height) / 2;
+        grupoCtx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+        grupoTemConteudo = true;
+    }
+
+    // Agora sim: o grupo (arte + numeracao) multiplica, de uma vez so, sobre a cor.
+    if (grupoTemConteudo) {
         ctx.globalCompositeOperation = 'multiply';
-        ctx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
+        ctx.drawImage(grupoCanvas, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
     }
 
