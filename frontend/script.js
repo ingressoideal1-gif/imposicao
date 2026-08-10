@@ -13385,6 +13385,64 @@ if (!state.osItens) state.osItens = {};
 if (!state.osExpandedId) state.osExpandedId = null;
 if (!state.activeOSItem) state.activeOSItem = null;
 
+// -------------------------------------------------------------------------------
+// STATUS ADIANTADO DESTA MÁQUINA (vibe_status_overrides)
+//
+// Quando esta estação muda o status de um pedido, ela guarda o valor novo aqui
+// para a tela refletir a mudança na hora, sem esperar a próxima leitura do banco.
+// É um ADIANTAMENTO, não uma fonte de verdade.
+//
+// Antes cada entrada valia para sempre, e o `savedStatus || dbStatus` da leitura
+// fazia o valor local vencer o banco indefinidamente NESTA estação. Numa gráfica
+// com várias estações isso significava: a máquina A grava um status, outra máquina
+// muda o pedido depois, e a máquina A segue mostrando o valor velho — sem nenhum
+// sinal na tela de que estava desatualizada. O prazo abaixo devolve a palavra final
+// ao banco: passados alguns minutos, o adiantamento caduca sozinho.
+// -------------------------------------------------------------------------------
+const STATUS_OVERRIDE_KEY = 'vibe_status_overrides';
+const STATUS_OVERRIDE_VALIDADE_MS = 5 * 60 * 1000; // 5 min — cobre a ida ao banco com folga
+
+function _lerMapaStatusOverrides() {
+    try {
+        const bruto = JSON.parse(localStorage.getItem(STATUS_OVERRIDE_KEY) || '{}');
+        return (bruto && typeof bruto === 'object') ? bruto : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function _descartarStatusOverride(mapa, osId) {
+    delete mapa[osId];
+    try { localStorage.setItem(STATUS_OVERRIDE_KEY, JSON.stringify(mapa)); } catch (e) {}
+    return null;
+}
+
+/**
+ * Status adiantado por esta máquina para a OS, ou null se não houver ou se já
+ * tiver caducado. Entradas vencidas — e as do formato antigo, que eram string
+ * pura e não dizem quando foram gravadas — são apagadas aqui mesmo, para que o
+ * banco volte a mandar.
+ */
+function lerStatusOverride(osId) {
+    const mapa = _lerMapaStatusOverrides();
+    const entrada = mapa[osId];
+    if (!entrada) return null;
+    if (typeof entrada !== 'object' || !entrada.ts) return _descartarStatusOverride(mapa, osId);
+    if (Date.now() - entrada.ts > STATUS_OVERRIDE_VALIDADE_MS) return _descartarStatusOverride(mapa, osId);
+    return entrada.status || null;
+}
+
+/** Registra, com a hora, o status que esta máquina acabou de gravar. */
+function gravarStatusOverride(osId, status) {
+    if (!osId) return;
+    const mapa = _lerMapaStatusOverrides();
+    mapa[osId] = { status: status, ts: Date.now() };
+    try { localStorage.setItem(STATUS_OVERRIDE_KEY, JSON.stringify(mapa)); } catch (e) {}
+}
+
+window.lerStatusOverride = lerStatusOverride;
+window.gravarStatusOverride = gravarStatusOverride;
+
 /**
  * Sincroniza dinamicamente o status da OS em memória e no banco com base nas decisões de amostra do cliente
  */
@@ -13419,10 +13477,8 @@ async function sincronizarStatusOrdensDinamico() {
             // 1. Atualizar em memória
             os.status = novoStatus;
 
-            // 2. Atualizar no localstorage overrides (comum para ordens Vibecode e Supabase no front)
-            const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-            overrides[osId] = novoStatus;
-            localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+            // 2. Adiantar o status nesta máquina (comum para ordens Vibecode e Supabase no front)
+            gravarStatusOverride(osId, novoStatus);
 
             // 3. Atualizar no banco Supabase (somente se for OS local e não for mock/vibe virtual)
             if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
@@ -13438,60 +13494,77 @@ async function sincronizarStatusOrdensDinamico() {
         }
     }
 
-    // AUTO-SYNC v145: buscar do banco os pedidos onde todos os modelos sao PRONTO mas status nao e Enviar Arte
-    // Faz uma unica query em pedidos_modelos para todas as OS da lista de arte
+    await sincronizarPedidosProntosParaEnvio();
+}
+
+/**
+ * Regra: pedido cujos modelos estão TODOS prontos no banco passa a "Enviar Arte".
+ *
+ * Esta regra já existiu em duas cópias — uma aqui, lendo `pedidos_modelos`, e outra
+ * dentro do `renderOrdens()`, lendo o `state.osItens` que estivesse carregado. As
+ * duas já tinham divergido nos status aceitos como "pronto", e a cópia do render
+ * fazia a função de DESENHAR a tela gravar no banco: como `renderOrdens()` é o
+ * `oninput` da caixa de busca, digitar no filtro disparava UPDATE no Supabase.
+ *
+ * Ficou só esta. Ela lê do banco, então cobre todos os pedidos da lista e não
+ * apenas aqueles cujos itens por acaso já tinham sido abertos na tela.
+ */
+async function sincronizarPedidosProntosParaEnvio() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+
+    // Status que já passaram do ponto: mexer neles seria andar para trás.
+    const IGNORAR = [
+        'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
+        'APROVADO', 'APROVADA_CLIENTE', 'AGUARD. APROVAÇÃO', 'AGUARDANDO_APROVACAO'
+    ];
+    // Status do banco que significam "o designer terminou".
+    const PRONTOS = ['PRONTO', 'AGUARDANDO_CLIENTE'];
+
     try {
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const osParaVerificar = state.ordens.filter(os => {
-                const s = (os.status || '').trim().toUpperCase();
-                const ignorar = [
-                    'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
-                    'APROVADO', 'APROVADA_CLIENTE', 'AGUARD. APROVAÇÃO', 'AGUARDANDO_APROVACAO'
-                ];
+        const osParaVerificar = state.ordens.filter(os => !IGNORAR.includes((os.status || '').trim().toUpperCase()));
+        if (osParaVerificar.length === 0) return;
 
+        const numerosParaVerificar = osParaVerificar.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
+        if (numerosParaVerificar.length === 0) return;
 
-                return !ignorar.includes(s);
-            });
-            if (osParaVerificar.length > 0) {
-                const numerosParaVerificar = osParaVerificar.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
-                if (numerosParaVerificar.length > 0) {
-                    const { data: modelos } = await supabaseClient
-                        .from('pedidos_modelos')
-                        .select('id_int, status_arte')
-                        .in('id_int', numerosParaVerificar);
-                    if (modelos && modelos.length > 0) {
-                        // Agrupar por id_int
-                        const modelosPorPedido = {};
-                        modelos.forEach(function(m) {
-                            if (!modelosPorPedido[m.id_int]) modelosPorPedido[m.id_int] = [];
-                            modelosPorPedido[m.id_int].push(m.status_arte || '');
-                        });
-                        // Verificar cada OS
-                        for (const os of osParaVerificar) {
-                            const num = parseInt(os.numero);
-                            const statusItens = modelosPorPedido[num] || [];
-                            if (statusItens.length === 0) continue;
-                            // Status do banco que significam PRONTO para o designer
-                            const prontos = ['PRONTO', 'AGUARDANDO_CLIENTE'];
-                            const todosProntos = statusItens.every(function(s) { return prontos.indexOf((s || '').toUpperCase()) !== -1; });
-                            if (!todosProntos) continue;
-                            // Corrigir para Enviar Arte
-                            console.log('[AUTO-SYNC-DB] Pedido #' + os.numero + ': todos modelos PRONTO no banco -> Enviar Arte');
-                            os.status = 'Enviar Arte';
-                            const ov = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-                            ov[os.id] = 'Enviar Arte';
-                            localStorage.setItem('vibe_status_overrides', JSON.stringify(ov));
-                            // Atualizar banco em background
-                            if (os.id.startsWith('vibe_')) {
-                                supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'Enviar Arte' }).eq('os_id', os.id).then(function(){});
-                            } else {
-                                supabaseClient.from('producao_ordens_servico').update({ status: 'Enviar Arte' }).eq('id', os.id).then(function(){});
-                            }
-                        }
-                    }
-                }
-            }
+        // Uma única consulta para toda a lista
+        const { data: modelos } = await supabaseClient
+            .from('pedidos_modelos')
+            .select('id_int, status_arte')
+            .in('id_int', numerosParaVerificar);
+        if (!modelos || modelos.length === 0) return;
+
+        const modelosPorPedido = {};
+        modelos.forEach(m => {
+            if (!modelosPorPedido[m.id_int]) modelosPorPedido[m.id_int] = [];
+            modelosPorPedido[m.id_int].push(m.status_arte || '');
+        });
+
+        const gravacoes = [];
+        for (const os of osParaVerificar) {
+            const statusItens = modelosPorPedido[parseInt(os.numero)] || [];
+            if (statusItens.length === 0) continue;
+            if (!statusItens.every(s => PRONTOS.includes((s || '').toUpperCase()))) continue;
+
+            console.log('[AUTO-SYNC-DB] Pedido #' + os.numero + ': todos modelos PRONTO no banco -> Enviar Arte');
+            os.status = 'Enviar Arte';
+            gravarStatusOverride(os.id, 'Enviar Arte');
+
+            gravacoes.push(
+                os.id.startsWith('vibe_')
+                    ? supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'Enviar Arte' }).eq('os_id', os.id)
+                    : supabaseClient.from('producao_ordens_servico').update({ status: 'Enviar Arte' }).eq('id', os.id)
+            );
         }
+
+        // Antes as gravações eram disparadas com `.then(function(){})` e qualquer
+        // falha sumia sem deixar rastro. Agora uma gravação que falhar aparece no
+        // console em vez de o status divergir do banco em silêncio.
+        const resultados = await Promise.allSettled(gravacoes);
+        resultados.forEach((r, i) => {
+            const erro = r.status === 'rejected' ? r.reason : (r.value && r.value.error);
+            if (erro) console.warn('[AUTO-SYNC-DB] Falha ao gravar "Enviar Arte" (gravação ' + i + '):', erro);
+        });
     } catch (syncErr) {
         console.warn('[AUTO-SYNC-DB] Erro na verificacao de status:', syncErr);
     }
@@ -13587,8 +13660,7 @@ async function loadOrdens() {
             }
 
             state.ordens = ordensFiltradas.map(os => {
-                const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-                const savedStatus = vibeStatusOverrides[os.id];
+                const savedStatus = lerStatusOverride(os.id);
                 let dbStatus = os.status;
                 if (dbStatus === 'PRODUÇÃO') dbStatus = 'EM IMPRESSÃO';
                 else if (dbStatus === 'ARTE' || dbStatus === 'NOVO') dbStatus = 'ARTE_EM_ANDAMENTO';
@@ -13830,10 +13902,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             }
 
             if (!grouped[key]) {
-                const vibeStatusOverrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
                 const osId = `vibe_${key}`;
                 const dbStatusArte = state.linksClienteData && state.linksClienteData[osId] && state.linksClienteData[osId].status_arte;
-                const savedStatus = vibeStatusOverrides[osId] || dbStatusArte;
+                const savedStatus = lerStatusOverride(osId) || dbStatusArte;
 
 
                 // Buscar dados reais da proposta
@@ -14047,7 +14118,7 @@ async function loadOSItens(osId) {
                         const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || item.tipo_numeracao || item.numeracao);
                         const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || null);
 
-                        return {
+                        const mapped = {
                             ...item,
                             produto: item.nome_modelo || 'Modelo',
                             nome_produto_real: prop ? prop.nome_produto : null,
@@ -14085,9 +14156,13 @@ async function loadOSItens(osId) {
                             })() || item.setor || 'PVC',
                             _dbLoaded: true
                         };
-                        resolveItemCorNumIds(mapped);
                         return mapped;
                     });
+                    // Resolver amostra_cor_id / amostra_num_id por nome agora que a lista existe.
+                    // -1 = não procurar nos selects da tela: no carregamento os selects de amostra
+                    // ainda são os do pedido anterior, e ler deles atribuiria a cor errada a este.
+                    const SEM_SELECT_NA_TELA = -1;
+                    state.osItens[osId].forEach(it => resolveItemCorNumIds(it, SEM_SELECT_NA_TELA));
                     // DEBUG: mostrar campos de cor de cada item
                     state.osItens[osId].forEach(it => {
                         console.log(`[COR DEBUG] id=${it.id} padrao=${it.padrao} cor=${it.cor} amostra_cor_id=${it.amostra_cor_id} id_cor=${it.id_cor} cor_raw=${it._rawCor}`);
@@ -15225,8 +15300,10 @@ function renderOrdens() {
         const itens = state.osItens[os.id] || [];
         
         itens.forEach(item => {
-            const impStatus = item.impressao || 'AGUARD.';
-            if (impStatus === 'IMPRESSO' || impStatus === 'PARCIAL') {
+            // Normalizar antes de comparar: item.impressao chega como 'Impresso'/'Parcial'
+            // (normalizarStatusImpressao), nunca em caixa alta.
+            const impStatus = normalizarStatusImpressao(item.impressao);
+            if (impStatus === 'Impresso' || impStatus === 'Parcial') {
                 totalItensImpressao++;
             }
             
@@ -15236,7 +15313,7 @@ function renderOrdens() {
             }
         });
 
-        if (itens.length > 0 && itens.every(item => item.impressao === 'IMPRESSO')) {
+        if (itens.length > 0 && itens.every(item => normalizarStatusImpressao(item.impressao) === 'Impresso')) {
             totalPedidosConcluidos++;
         }
     });
@@ -15390,8 +15467,19 @@ function renderOrdens() {
     const statItensAprovadosArteEl = document.getElementById('stat-itens-aprovados-arte');
     if (statItensAprovadosArteEl) statItensAprovadosArteEl.textContent = ordensAprovados.length;
 
+    // "Pedidos Concluídos" = pedidos que já saíram da arte para a produção.
+    // Este card repetia o valor de "Pedidos Aprovados" e por isso nunca dizia nada
+    // de novo. O sinal é o mesmo que liberarParaProducao() grava (EM PRODUCAO),
+    // mais os pedidos já finalizados.
+    const saiuDaArte = ['EM PRODUCAO', 'EM PRODUÇÃO', 'EM IMPRESSAO', 'EM IMPRESSÃO', 'PRODUCAO', 'PRODUÇÃO', 'FINALIZADA'];
+    const totalConcluidosArte = state.ordens.filter(os => {
+        const st = (os.status || '').trim().toUpperCase();
+        const si = (os.status_interno || '').trim().toUpperCase();
+        return saiuDaArte.includes(st) || saiuDaArte.includes(si);
+    }).length;
+
     const statPedidosConcluidosArteEl = document.getElementById('stat-pedidos-concluidos-arte');
-    if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = ordensAprovados.length;
+    if (statPedidosConcluidosArteEl) statPedidosConcluidosArteEl.textContent = totalConcluidosArte;
 
     // Seleção da fila ativa ('fila', 'todos', 'aprovacao' ou 'aprovados')
     const activeFilaTipo = state.filtroFilaTipo || 'fila';
@@ -15717,34 +15805,9 @@ function renderOrdens() {
             if (tableArte) tableArte.style.display = '';
 
 
-            // AUTO-SYNC v144: corrigir OS onde todos os modelos estao PRONTO mas status nao e Enviar Arte
-            filteredArte.forEach(function(autoOs) {
-                var autoItens = state.osItens[autoOs.id] || [];
-                if (autoItens.length === 0) return;
-                var autoStatus = (autoOs.status || '').trim().toUpperCase();
-                // Não sobrescrever se o status já for Enviar Arte, ou se for um status avançado/ação do cliente
-                const ignorar = [
-                    'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
-                    'APROVADO', 'APROVADA_CLIENTE', 'AGUARD. APROVAÇÃO', 'AGUARDANDO_APROVACAO'
-                ];
-
-
-                if (ignorar.includes(autoStatus)) return;
-                var autoTodos = autoItens.every(function(i) { return (i.amostra_status || '').toUpperCase() === 'PRONTO'; });
-                if (!autoTodos) return;
-                autoOs.status = 'Enviar Arte';
-                var autoOv = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-                autoOv[autoOs.id] = 'Enviar Arte';
-                localStorage.setItem('vibe_status_overrides', JSON.stringify(autoOv));
-                console.log('[AUTO-SYNC] Pedido #' + autoOs.numero + ': todos PRONTO -> Enviar Arte');
-                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-                    if (autoOs.id.startsWith('vibe_')) {
-                        supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'Enviar Arte' }).eq('os_id', autoOs.id).then(function(){});
-                    } else {
-                        supabaseClient.from('producao_ordens_servico').update({ status: 'Enviar Arte' }).eq('id', autoOs.id).then(function(){});
-                    }
-                }
-            });
+            // A regra "todos os modelos prontos -> Enviar Arte" ficava aqui e gravava no
+            // banco de dentro da renderização. Mudou para sincronizarPedidosProntosParaEnvio(),
+            // que roda no carregamento: renderOrdens() agora só desenha.
             tbodyArte.innerHTML = filteredArte.map(os => {
                 const itensReais = (state.modelosGlobais && state.modelosGlobais[os.numero]) ? state.modelosGlobais[os.numero] : [];
                 // Se ainda não houver modelos criados no bd para essa OS, ele cai para o número de produtos
@@ -16068,9 +16131,7 @@ function renderOSItens(osId) {
  * Altera o status simulado de uma OS no localStorage
  */
 function changeOSStatus(osId, newStatus) {
-    const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-    overrides[osId] = newStatus;
-    localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+    gravarStatusOverride(osId, newStatus);
 
     // Atualizar no estado local em memória
     const os = state.ordens.find(o => o.id === osId);
@@ -18972,9 +19033,7 @@ async function voltarParaAtendimento() {
         const os = state.ordens.find(o => o.id === osId);
 
         // 1. Atualizar localStorage
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = novoStatus;
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+        gravarStatusOverride(osId, novoStatus);
 
         // 2. Atualizar estado em memória
         if (os) os.status = novoStatus;
@@ -19035,9 +19094,7 @@ async function voltarParaArte() {
         const os = state.ordens.find(o => o.id === osId);
 
         // 1. Atualizar localStorage
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = novoStatus;
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+        gravarStatusOverride(osId, novoStatus);
 
         // 2. Atualizar estado em memória
         if (os) os.status = novoStatus;
@@ -19087,9 +19144,7 @@ window.reprovarArteAdmin = async function(osId) {
         const os = state.ordens.find(o => o.id === osId);
 
         // 1. Atualizar localStorage
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = novoStatus;
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+        gravarStatusOverride(osId, novoStatus);
 
         // 2. Atualizar estado em memória
         if (os) os.status = novoStatus;
@@ -19123,9 +19178,7 @@ window.voltarParaArteFromLista = async function(osId) {
     try {
         const os = state.ordens.find(o => o.id === osId);
 
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = novoStatus;
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+        gravarStatusOverride(osId, novoStatus);
 
         if (os) os.status = novoStatus;
 
@@ -19221,9 +19274,7 @@ window.liberarParaProducao = async function(osId) {
             os.status_interno = 'EM PRODUCAO';
         }
 
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = 'EM PRODUCAO';
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+        gravarStatusOverride(osId, 'EM PRODUCAO');
 
         toast(`Pedido #${os ? os.numero : ''} liberado para PRODUÇÃO! 🖨️`, 'success');
         renderOrdens();
@@ -21644,10 +21695,8 @@ async function decisionAmostraItem(itemId, osId, status) {
                 const novoStatusOS = 'Enviar Arte';
                 const os = state.ordens.find(o => o.id === osId);
                 if (os && os.status !== novoStatusOS) {
-                    // Atualizar localStorage
-                    const ov = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-                    ov[osId] = novoStatusOS;
-                    localStorage.setItem('vibe_status_overrides', JSON.stringify(ov));
+                    // Adiantar nesta máquina
+                    gravarStatusOverride(osId, novoStatusOS);
                     // Atualizar memória
                     os.status = novoStatusOS;
                     // Atualizar banco
@@ -23038,9 +23087,7 @@ async function abrirLinkClienteEAtualizarStatus(osId, numero, linkUrl) {
     if (os && os.status !== 'Aprovada' && os.status !== 'APROVADO') {
         os.status = novoStatus;
         os.status_calculado = novoStatus;
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = novoStatus;
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+        gravarStatusOverride(osId, novoStatus);
 
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             if (osId.startsWith('vibe_')) {
@@ -23084,9 +23131,7 @@ async function gerarLinkCliente(osId, numero) {
         const novoStatus = 'Aguard. Aprovação';
 
         // 1. Atualizar overrides e estado local primeiro
-        const overrides = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-        overrides[osId] = novoStatus;
-        localStorage.setItem('vibe_status_overrides', JSON.stringify(overrides));
+        gravarStatusOverride(osId, novoStatus);
 
         const os = state.ordens ? state.ordens.find(o => o.id === osId) : null;
         if (os) {

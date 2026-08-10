@@ -1731,9 +1731,11 @@ async function decisionAmostraItem(itemId, osId, status) {
                 const novoStatusOS = 'Enviar Arte';
                 const os = state.ordens.find(o => o.id === osId);
                 if (os && os.status !== novoStatusOS) {
-                    // Atualizar localStorage
+                    // Adiantar o status nesta máquina. O formato { status, ts } tem que
+                    // bater com o que o lerStatusOverride() do script.js espera: uma
+                    // entrada sem hora é tratada lá como vencida e descartada.
                     const ov = JSON.parse(localStorage.getItem('vibe_status_overrides') || '{}');
-                    ov[osId] = novoStatusOS;
+                    ov[osId] = { status: novoStatusOS, ts: Date.now() };
                     localStorage.setItem('vibe_status_overrides', JSON.stringify(ov));
                     // Atualizar memória
                     os.status = novoStatusOS;

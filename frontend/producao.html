@@ -7,7 +7,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=493">
+    <link rel="stylesheet" href="/style.css?v=494">
     <script src="pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -1737,7 +1737,7 @@
                     </div>
                     <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <div style="position: relative;">
-                            <input type="text" id="os-search-arte" class="form-control" placeholder="Buscar Pedido, Evento ou Cliente..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;">
+                            <input type="text" id="os-search-arte" class="form-control" placeholder="Buscar Pedido, Evento ou Cliente..." oninput="renderOrdens()" style="padding-left: 32px; width: 180px;" autocomplete="one-time-code">
                             <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; opacity: 0.6;">🔍</span>
                         </div>
                         <select id="os-filter-designer" class="form-control" onchange="onDesignerFilterChange()" style="width: 180px; font-size: 0.85rem;">
@@ -1752,18 +1752,23 @@
 
                 <!-- CARDS DE ESTATÍSTICA (Dinâmicos) -->
                 <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-title">Pedidos em Fila</div>
-                        <div class="stat-card-value blue" id="stat-pedidos-fila-arte">0</div>
-                        <div class="stat-card-icon">📋</div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-todos" onclick="setFiltroFilaArte('todos')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir todos os pedidos pendentes (exceto Aprovados)">
+                        <div class="stat-card-title">TODOS</div>
+                        <div class="stat-card-value cyan" id="stat-pedidos-todos-arte" style="color: #06b6d4;">0</div>
+                        <div class="stat-card-icon">🌐</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-card-title">Aguardando Arte</div>
-                        <div class="stat-card-value purple" id="stat-itens-pendentes-arte">0</div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-fila" onclick="setFiltroFilaArte('fila')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos Em Arte">
+                        <div class="stat-card-title">Em Arte</div>
+                        <div class="stat-card-value blue" id="stat-pedidos-fila-arte">0</div>
                         <div class="stat-card-icon">🎨</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-card-title">Artes Aprovadas</div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-aprovacao" onclick="setFiltroFilaArte('aprovacao')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Aprovação">
+                        <div class="stat-card-title">Em Aprovação</div>
+                        <div class="stat-card-value purple" id="stat-pedidos-aprovacao-arte">0</div>
+                        <div class="stat-card-icon">⏳</div>
+                    </div>
+                    <div class="stat-card clickable-card" id="card-stat-pedidos-aprovados" onclick="setFiltroFilaArte('aprovados')" style="cursor: pointer; transition: all 0.2s ease;" title="Clique para exibir os pedidos na Fila de Aprovados">
+                        <div class="stat-card-title">Pedidos Aprovados</div>
                         <div class="stat-card-value teal" id="stat-itens-aprovados-arte">0</div>
                         <div class="stat-card-icon">✅</div>
                     </div>
@@ -1779,7 +1784,7 @@
                 <!-- Tabela de OS de Arte -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-title"><span class="icon">📋</span> Fila de Arte</span>
+                        <span class="card-title" id="titulo-tabela-arte"><span class="icon">📋</span> Fila de Arte</span>
                         <span class="badge badge-yellow" id="os-arte-count-badge">0 Pedidos</span>
                     </div>
                     <div style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
@@ -2020,10 +2025,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=493"></script>
-    <script src="/script.js?v=493"></script>
-    <script src="/criador-arte.js?v=493"></script>
-    <script src="/pedido.js?v=493"></script>
+    <script src="mapas.js?v=494"></script>
+    <script src="/script.js?v=494"></script>
+    <script src="/criador-arte.js?v=494"></script>
+    <script src="/pedido.js?v=494"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">
