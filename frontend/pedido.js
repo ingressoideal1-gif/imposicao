@@ -128,6 +128,111 @@ function populatePedNumeracoes() {
 }
 window.populatePedNumeracoes = populatePedNumeracoes;
 
+/** Teto de páginas rasterizadas guardadas por documento na prévia. */
+const MAX_PAGINAS_EM_CACHE = 60;
+
+/**
+ * Descarta as páginas rasterizadas mais antigas quando o cache passa do teto.
+ *
+ * Em Pdf Paginado cada pose da folha usa uma página diferente, então uma folha de N
+ * poses rasteriza N páginas. Sem teto, um PDF de centenas de páginas acumula centenas
+ * de canvases em memória à medida que o operador navega pelas folhas.
+ *
+ * O teto é folgado sobre o maior número de poses por folha que o sistema produz, então
+ * a folha visível nunca é despejada — a página descartada é sempre de uma folha que
+ * saiu da tela, e rasterizar de novo custa uma passada do pdf.js.
+ */
+function limitarCachePaginas(pdfDoc) {
+    const cache = pdfDoc && pdfDoc.pagesCache;
+    if (!cache) return;
+    const chaves = Object.keys(cache);
+    if (chaves.length <= MAX_PAGINAS_EM_CACHE) return;
+    // Object.keys preserva a ordem de inserção para chaves não numéricas ("page_12"),
+    // então as primeiras são as mais antigas.
+    for (const chave of chaves.slice(0, chaves.length - MAX_PAGINAS_EM_CACHE)) {
+        delete cache[chave];
+    }
+}
+
+/**
+ * Mostra, acima da prévia, quando a quantidade que será impressa não bate com a
+ * quantidade pedida na OS.
+ *
+ * Em Pdf Paginado quem manda na quantidade é o ARQUIVO: o engine faz
+ * `total_items = nº de páginas` (metade em duplex) e ignora a quantidade do pedido.
+ * Isso é intencional — reimpressão parcial é caso legítimo —, mas era silencioso.
+ * O aviso não bloqueia; só torna a conta visível antes de gastar papel.
+ *
+ * O elemento é criado sob demanda para valer no index.html e no producao.html sem
+ * duplicar marcação.
+ */
+function atualizarAvisoPaginacao(schema, totalItens) {
+    const canvas = document.getElementById('ped-preview-canvas');
+    if (!canvas) return;
+
+    let aviso = document.getElementById('ped-preview-aviso-qtd');
+    if (!aviso) {
+        aviso = document.createElement('div');
+        aviso.id = 'ped-preview-aviso-qtd';
+        aviso.style.cssText = 'display:none; width:100%; box-sizing:border-box; margin-bottom:8px;'
+            + ' padding:8px 12px; border-radius:var(--radius); font-size:0.82rem; font-weight:600;'
+            + ' background:rgba(245,158,11,0.12); border:1px solid var(--amber); color:var(--amber);';
+        canvas.insertAdjacentElement('beforebegin', aviso);
+    }
+
+    const item = state.activeOSItem
+        ? (state.osItens[state.activeOSItem.osId] || []).find(i => String(i.id) === String(state.activeOSItem.itemId))
+        : null;
+    const qtdPedida = item ? parseInt(item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || 0)) || 0 : 0;
+
+    if (schema !== 'pdf_multiple' || !qtdPedida || !totalItens || qtdPedida === totalItens) {
+        aviso.style.display = 'none';
+        return;
+    }
+
+    const paginas = state.pedArtPdfDoc ? state.pedArtPdfDoc.numPages : totalItens;
+    aviso.textContent = `⚠️ O PDF tem ${paginas} página(s) e o pedido pede ${qtdPedida}. `
+        + `Vai imprimir ${totalItens}.`;
+    aviso.style.display = 'block';
+}
+window.atualizarAvisoPaginacao = atualizarAvisoPaginacao;
+
+/**
+ * Trava a Regra de Paginação em "Pdf Paginado" enquanto o modelo estiver em modo PDF.
+ *
+ * Um modelo em modo PDF tem, como arte, um arquivo de várias páginas em que cada página
+ * é um ingresso diferente. Só a regra Pdf Paginado consome uma página por pose; em
+ * qualquer outra o engine repete a página 1 em toda a folha, e o operador só descobre no
+ * papel. Por isso a regra é imposta, e o campo trava com o motivo à vista.
+ *
+ * Para sair, desliga-se o modo PDF na tela de arte, que é onde essa decisão pertence.
+ *
+ * O aviso é criado sob demanda ao lado do campo, para valer no index.html e no
+ * producao.html sem precisar manter a mesma marcação nos dois.
+ */
+function aplicarTravaModoPdf(ativo) {
+    const sel = document.getElementById('ped-schema');
+    if (!sel) return;
+
+    let nota = document.getElementById('ped-schema-lock-note');
+    if (!nota) {
+        nota = document.createElement('span');
+        nota.id = 'ped-schema-lock-note';
+        nota.style.cssText = 'font-size: 0.78rem; color: var(--amber); font-weight: 600; display: none;';
+        nota.textContent = '🔒 Modo PDF: cada página do arquivo é um ingresso';
+        nota.title = 'Para mudar a regra, desligue o Modo PDF na tela de arte do modelo.';
+        sel.insertAdjacentElement('afterend', nota);
+    }
+
+    if (ativo && sel.value !== 'pdf_multiple') {
+        sel.value = 'pdf_multiple';
+        sel.dispatchEvent(new Event('change'));
+    }
+    sel.disabled = !!ativo;
+    nota.style.display = ativo ? 'inline' : 'none';
+}
+window.aplicarTravaModoPdf = aplicarTravaModoPdf;
+
 async function loadPedArtFile(file) {
     state.pedArtFile = file;
 
@@ -319,7 +424,12 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
             end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
             const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
-            schema = fmtObj ? fmtObj.default_schema : 'sequential';
+            // A regra de paginação sai do campo "Regra de Paginação", não do formato:
+            // é o campo que runPedImposition() manda no payload, e portanto é ele que
+            // decide o que sai no papel. Ler o formato aqui fazia a prévia desenhar uma
+            // regra e a impressão usar outra. O formato só entra como recuo.
+            schema = document.getElementById('ped-schema')?.value
+                || (fmtObj ? fmtObj.default_schema : 'sequential');
         }
     } else {
         fmtId = document.getElementById('ped-formato')?.value;
@@ -436,7 +546,30 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     const fmt = state.formatos.find(f => String(f.id) === String(fmtId));
     const sai = state.saidas.find(s => String(s.id) === String(saiId));
 
-    if (!fmt || !sai) return;
+    if (!fmt || !sai) {
+        // Não pode ser um `return` silencioso. A prévia é um canvas que só muda quando
+        // alguém desenha nele: saindo daqui sem desenhar, a folha do desenho ANTERIOR
+        // continua na tela, sem nenhum sinal de que parou de ser atualizada — e o
+        // operador confere uma folha que não corresponde mais ao que está configurado.
+        //
+        // Acontece de verdade quando o cadastro em memória perde o formato ou a saída
+        // referenciados pelo item: uma recarga de catálogo em andamento, um formato
+        // apagado, uma OS aberta antes de o cadastro terminar de carregar.
+        const faltando = (!fmt && !sai) ? 'o formato e a saída' : (!fmt ? 'o formato' : 'a saída');
+        canvas.width = 300;
+        canvas.height = 200;
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, 300, 200);
+        ctx.font = '12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ef4444';
+        ctx.fillText(`Não encontrei ${faltando} no cadastro.`, 150, 92);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('Recarregue a página e abra o pedido de novo.', 150, 112);
+        const badge = document.getElementById('ped-preview-sheet-num');
+        if (badge) badge.textContent = 'Sem Formato';
+        return;
+    }
 
     // Validação estrita das regras de imposição do formato na visualização
     if (!fmt.default_schema || !fmt.default_saida_id) {
@@ -467,8 +600,11 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         }
     }
 
-    // Usar os padrÃµes obrigatórios do formato
-    schema = fmt.default_schema;
+    // Fonte única da regra de paginação: o campo "Regra de Paginação". É o valor que
+    // runPedImposition() envia ao engine, então é o que a prévia tem de desenhar —
+    // senão a tela mostra uma coisa e o papel sai outra. O formato entra como recuo,
+    // e continua mandando na saída, que não faz parte desta escolha.
+    schema = document.getElementById('ped-schema')?.value || fmt.default_schema;
     saiId = fmt.default_saida_id;
 
 
@@ -697,7 +833,15 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         }
     }
 
-    document.getElementById('ped-preview-sheet-num').textContent = sets_needed > 1 ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}` : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
+    const folhaLabel = sets_needed > 1 ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}` : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
+    // Em Pdf Paginado a quantidade sai do ARQUIVO, não do pedido: o engine faz
+    // total_items = nº de páginas (metade em duplex). Dizer isso no cabeçalho é o que
+    // permite ao operador conferir a conta sem abrir o PDF.
+    document.getElementById('ped-preview-sheet-num').textContent =
+        (schema === 'pdf_multiple' && state.pedArtPdfDoc)
+            ? `${folhaLabel} · ${state.pedArtPdfDoc.numPages} páginas do PDF · ${poses_per_sheet} por folha`
+            : folhaLabel;
+    atualizarAvisoPaginacao(schema, total_items);
 
     const isBack = state.previewFace === 'back' || previewPart === 'miolo_verso';
 
@@ -1121,6 +1265,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                                             
 
                                             pagesCache[cacheKey] = off;
+                                            limitarCachePaginas(activePdfDoc);
 
                                             drawPedPreview(); // Redesenhar o preview principal
 
@@ -1800,6 +1945,43 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
         // Arte + nome + numeração prontos: o grupo multiplica de uma vez só sobre a cor
         fecharGrupo();
+
+        // ─── RÓTULO DA PÁGINA (só em Pdf Paginado) ─────────────────────────────
+        // Oito poses de páginas diferentes são visualmente iguais a oito cópias da
+        // mesma página. Sem dizer qual página caiu em cada pose, o operador não tem
+        // como perceber que a paginação deixou de funcionar.
+        //
+        // É anotação de tela, não tinta: desenhada DEPOIS de fecharGrupo(), fora do
+        // grupo arte+numeração, para não multiplicar sobre a cor nem entrar no PDF.
+        if (schema === 'pdf_multiple') {
+            const totalPaginas = state.pedArtPdfDoc ? state.pedArtPdfDoc.numPages : 0;
+            const pFrente = state.printMode === 'duplex' ? (item_index * 2 + 1) : (item_index + 1);
+            let rotulo;
+            if (totalPaginas && pFrente > totalPaginas) {
+                // O engine recua para a primeira página quando a página pedida não existe
+                rotulo = 'p. 1 (repetida)';
+            } else if (state.printMode === 'duplex') {
+                const pVerso = pFrente + 1;
+                rotulo = (totalPaginas && pVerso > totalPaginas) ? `p. ${pFrente}` : `p. ${pFrente} / ${pVerso}`;
+            } else {
+                rotulo = `p. ${pFrente}`;
+            }
+
+            ctx.save();
+            const fs = Math.max(7, Math.round(ch * 0.13));
+            ctx.font = `600 ${fs}px Inter, sans-serif`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            const px = -cw / 2 + fs * 0.4;
+            const py = -ch / 2 + fs * 0.4;
+            // Halo claro para o rótulo sobreviver a arte escura
+            ctx.lineWidth = Math.max(2, fs * 0.28);
+            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+            ctx.strokeText(rotulo, px, py);
+            ctx.fillStyle = '#0284c7';
+            ctx.fillText(rotulo, px, py);
+            ctx.restore();
+        }
 
 
 
@@ -2516,6 +2698,10 @@ async function enviarParaPedido(itemId, osId) {
                 modeSelect.dispatchEvent(new Event('change'));
             }
         }
+        // Modo PDF vence blocos, e por isso vem depois: um PDF multipaginas nao pode ser
+        // Cut & Stack da mesma pagina. Cada pagina do arquivo e um ingresso diferente,
+        // entao a regra so pode ser Pdf Paginado.
+        aplicarTravaModoPdf(!!item.modo_pdf);
         updatePedSummary();
         if (typeof drawPedPreview === 'function') drawPedPreview();
     }, 800);

@@ -6659,11 +6659,31 @@ function drawPreview() {
     const fmt = state.formatos.find(f => String(f.id) === String(fmtId));
     const sai = state.saidas.find(s => String(s.id) === String(saiId));
 
-    if (!fmt || !sai) return;
+    if (!fmt || !sai) {
+        // Ver a explicação em drawPedPreview (pedido.js): sair daqui sem desenhar deixa
+        // a folha anterior na tela como se fosse a atual. Mesma correção, mesma tela.
+        const faltando = (!fmt && !sai) ? 'o formato e a saída' : (!fmt ? 'o formato' : 'a saída');
+        canvas.width = 300;
+        canvas.height = 200;
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, 300, 200);
+        ctx.font = '12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ef4444';
+        ctx.fillText(`Não encontrei ${faltando} no cadastro.`, 150, 92);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('Recarregue a página e abra o pedido de novo.', 150, 112);
+        const badge = document.getElementById('preview-sheet-num');
+        if (badge) badge.textContent = 'Sem Formato';
+        return;
+    }
 
-    // Se estivermos em modo OS ativo, priorizamos os valores padrões do formato (se existirem)
+    // Se estivermos em modo OS ativo, priorizamos os valores padrões do formato (se existirem).
+    // A regra de paginação é a exceção: ela sai do campo "Regra de Paginação", porque é o
+    // campo que vai no payload do engine. Ler o formato aqui fazia a prévia desenhar uma
+    // regra e a impressão usar outra — o mesmo conserto feito no pedido.js.
     if (state.activeOSItem) {
-        if (fmt.default_schema) schema = fmt.default_schema;
+        schema = document.getElementById('imp-schema')?.value || fmt.default_schema || schema;
         if (fmt.default_saida_id) saiId = fmt.default_saida_id;
     } else {
         // Modo manual: usar os valores selecionados no DOM
@@ -16933,6 +16953,15 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
             const schemaSelect = document.getElementById('imp-schema');
             if (schemaSelect) {
                 schemaSelect.value = 'cut_stack';
+                schemaSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        // Modo PDF vence blocos, e por isso vem depois: cada página do arquivo é um
+        // ingresso diferente, então só Pdf Paginado consome uma página por pose.
+        if (item.modo_pdf) {
+            const schemaSelect = document.getElementById('imp-schema');
+            if (schemaSelect && schemaSelect.value !== 'pdf_multiple') {
+                schemaSelect.value = 'pdf_multiple';
                 schemaSelect.dispatchEvent(new Event('change'));
             }
         }

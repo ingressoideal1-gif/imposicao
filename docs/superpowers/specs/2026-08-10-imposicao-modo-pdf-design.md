@@ -1,7 +1,7 @@
 # Imposição de modelos em modo PDF (multipáginas) — design
 
 **Data:** 2026-08-10
-**Estado:** aprovado nas duas decisões de produto; pendente de plano de implementação
+**Estado:** ✅ implementado e verificado na v498. Os números medidos estão no `CHANGELOG.md`.
 
 ## O problema
 

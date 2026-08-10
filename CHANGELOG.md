@@ -4,10 +4,46 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v496)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v497)** — 2026-08-10 | Agente **1.2.23**
 
 > As entradas das v494 e v495 ainda não foram escritas; o histórico delas está só nas
 > mensagens de commit.
+
+---
+
+## [v498 — 2026-08-10] *(a publicar)* — A janela de imposição passa a paginar o modo PDF
+
+### O problema
+Um modelo em **modo PDF** tem, como arte, um arquivo de várias páginas em que cada página é um ingresso diferente. Para imprimir certo, a imposição precisa consumir uma página por pose — a regra "Pdf Paginado". Só que nada ligava uma coisa à outra: o modelo chegava na janela com a regra do formato, quase sempre "Sequencial", e a folha saía com **a página 1 repetida em todas as poses**. Silenciosamente.
+
+Junto veio à tona um defeito maior, que não depende do modo PDF: **a prévia e a impressão liam a regra de paginação de lugares diferentes**. A prévia sobrescrevia com o `default_schema` do formato; o botão que gera lê o campo "Regra de Paginação" e é esse valor que vai ao engine. Quando os dois divergem, a tela mostra uma coisa e o papel sai outra — e isso já acontecia com qualquer item com blocos, cujo formato não fosse Cut & Stack.
+
+O `engine.py` sempre esteve certo e não mudou: página `item_index` na simplex, par `2i`/`2i+1` na duplex. Todo o trabalho foi fazer a tela contar a mesma história.
+
+### O que mudou
+1. **Uma fonte de verdade para a regra de paginação.** As duas prévias — a do painel de produção e a da view de Imposição — passam a desenhar a regra do campo, que é a que o engine recebe. A saída continua vindo do formato, que não faz parte desta escolha.
+2. **Modo PDF liga "Pdf Paginado" sozinho** ao carregar o modelo, e trava o campo com o motivo à vista: *🔒 Modo PDF: cada página do arquivo é um ingresso*. Para sair, desliga-se o modo PDF na tela de arte, que é onde a decisão pertence. **Modo PDF vence blocos** — um PDF multipáginas não pode ser Cut & Stack da mesma página.
+3. **Cada pose mostra sua página** — `p. 12`, ou `p. 11 / 12` em duplex, e `p. 1 (repetida)` quando a página pedida não existe e o engine recua para a primeira. Oito poses de páginas diferentes são visualmente idênticas a oito cópias da mesma; sem o rótulo, não há como perceber que a paginação parou de funcionar. É anotação de tela: desenhada fora do grupo arte+numeração, não multiplica sobre a cor e nunca entra no PDF.
+4. **O cabeçalho mostra a conta**: "Folha 1 de 63 · 500 páginas do PDF · 8 por folha". E, quando o arquivo não bate com a quantidade do pedido, um aviso acima da prévia — *⚠️ O PDF tem 500 página(s) e o pedido pede 5000. Vai imprimir 500*. Avisa, não bloqueia: em Pdf Paginado quem manda na quantidade é o arquivo, e reimpressão parcial é caso legítimo.
+5. **Teto no cache de páginas rasterizadas** (60 por documento, descartando as mais antigas). Uma folha de N poses rasteriza N páginas; sem teto, um PDF de centenas de páginas acumulava centenas de canvases enquanto o operador navegava.
+
+### Junto: a prévia não deixa mais folha velha na tela
+As duas prévias tinham um `if (!fmt || !sai) return;` **silencioso**. Um canvas só muda quando alguém desenha nele, então sair dali sem desenhar deixava **a folha do desenho anterior na tela**, sem nenhum sinal de que ela parou de ser atualizada — e o operador conferia uma folha que já não correspondia ao que estava configurado.
+
+Não é hipotético: apareceu durante a verificação deste trabalho, quando uma recarga de catálogo apagou o formato entre um desenho e outro e a prévia continuou mostrando a face anterior. Também acontece com formato apagado, ou com uma OS aberta antes de o cadastro terminar de carregar.
+
+Agora as duas desenham o aviso — *Não encontrei o formato no cadastro. Recarregue a página e abra o pedido de novo.* — e o selo vira **Sem Formato**.
+
+### Como foi verificado
+Teste que falha antes e passa depois: PDF de 8 páginas, cada uma de uma cor sólida, formato de 8 poses, formato em "Sequencial" e campo em "Pdf Paginado". Antes, **1 das 8 cores** aparecia na folha — a página 1, oito vezes. Depois, **as 8**.
+
+Para a folha velha: desenha-se uma folha, apaga-se o formato do cadastro em memória, redesenha-se e compara-se a assinatura de pixels do canvas. Antes ela ficava idêntica — a folha anterior, intacta. Agora muda para o aviso, nas duas telas.
+
+Mais seis verificações: cabeçalho informando as páginas; aviso silencioso quando a quantidade bate e visível quando não bate, citando os dois números; trava aplicando e soltando com a nota; modo PDF vencendo `cut_stack`; teto do cache cortando 75 entradas para 60 e mantendo as mais novas; e o duplex, medido face a face — **frente consome as páginas 1, 3, 5, 7 e o verso 2, 4, 6, 8**, estável em três execuções seguidas.
+
+As seis verificações das v496 e v497 foram repetidas sem regressão: fusão 249,0,0 nos cinco pontos, `drawImageContain` mantendo a proporção 1,89, e os elementos SVG/PDF aparecendo na janela em modo PDF.
+
+O design está em `docs/superpowers/specs/2026-08-10-imposicao-modo-pdf-design.md`.
 
 ---
 
