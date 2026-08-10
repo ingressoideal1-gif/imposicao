@@ -1572,13 +1572,19 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     }
                 }
 
+                // O checkbox 🎨 AMOSTRA troca o que esta janela promete. Desmarcado,
+                // ela reflete a impressão, e o elemento de Layout fica de fora. Marcado,
+                // ela vira a peça acabada — desenha a camada base da Cor por baixo e,
+                // pela mesma razão, mostra os elementos de Layout. Nada disso muda o que
+                // é impresso: o checkbox é só de visualização, e o payload enviado ao
+                // motor continua sem os elementos de Layout em qualquer um dos dois casos.
+                const mostrarLayout = document.getElementById('ped-preview-toggle-amostra')?.checked === true;
+
                 currentNum.elements.forEach(el => {
 
-                    // Esta janela reflete sempre o que vai sair na impressão: o
-                    // elemento marcado como Layout não aparece aqui, de propósito.
                     // `elementoSoLayout` vem do script.js, que a index.html carrega
                     // antes deste arquivo (mesma dependência da drawImageContain).
-                    if (typeof elementoSoLayout === 'function' && elementoSoLayout(el)) return;
+                    if (!mostrarLayout && typeof elementoSoLayout === 'function' && elementoSoLayout(el)) return;
 
                     const printMode = document.getElementById('ped-print-mode')?.value || 'front';
 

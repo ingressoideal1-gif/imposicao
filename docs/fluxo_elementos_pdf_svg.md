@@ -80,13 +80,30 @@ O critério que decide cada renderizador é **o que aquela tela promete**:
 | `drawAmostraFace()` (`script.js` e `cliente.js`) | **desenha** |
 | `drawNumeracaoElementsOverCanvas()` (modo PDF, nas duas cópias) | **desenha** |
 | `renderEditorLayer2Numeracao()` — Criador de Arte | **desenha** |
-| `drawVdpElements()` — prévia de imposição, **nas duas cópias** | **pula** |
+| `drawVdpElements()` — prévia de imposição, **nas duas cópias** | **pula** — com uma exceção, abaixo |
 | `criarCanvasNumeracaoRasterizada()` — PDF Gabarito | **pula** |
 | `engine.py` | **pula** |
 
 A prévia de imposição é a exceção entre as janelas de tela porque ela promete o
 comportamento da impressão, não a aparência da peça. Ao acrescentar um renderizador
 novo, a pergunta a responder é essa, e não "é canvas ou é PDF".
+
+### O checkbox 🎨 AMOSTRA troca a promessa da janela (v508)
+
+Na prévia do **Painel de Produção** (view Pedido, `pedido.js`), o checkbox
+`#ped-preview-toggle-amostra` desenha a camada base da Cor por baixo e transforma a
+prévia na **peça acabada** em vez da folha da impressora. Marcado, ele também mostra os
+elementos de Layout. Isso não contradiz a regra — aplica a mesma pergunta: mudou o que a
+janela promete, muda o que ela mostra.
+
+Duas coisas a não quebrar:
+
+- **A leitura fica só no `pedido.js`.** O checkbox mora no `index.html`, o mesmo
+  documento da view Imposição. Se a `drawVdpElements()` do `script.js` também o lesse,
+  quem marcasse o checkbox no Painel de Produção veria elementos de Layout na prévia da
+  Imposição, onde esse controle não existe nem aparece.
+- **O payload não muda.** O checkbox é só de visualização; a numeração enviada ao motor
+  continua sem os elementos de Layout nos dois estados.
 
 Os predicados são `elementoSoLayout(el)` e `numeracaoSemElementosDeLayout(num)`, em
 `frontend/script.js` e expostos em `window` — o `pedido.js` usa os dois de lá, como já

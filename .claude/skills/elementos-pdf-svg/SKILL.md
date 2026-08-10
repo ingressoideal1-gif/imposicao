@@ -37,7 +37,10 @@ Desde a v506 existe uma quarta regra: cada elemento PDF/SVG tem uma **Finalidade
 que mostram **como a peça vai ficar** (editor, janela de arte, modo PDF, link do
 cliente, Criador de Arte) e some das que prometem **o comportamento da impressão** —
 a prévia de imposição, o PDF Gabarito e o `engine.py`. Ao acrescentar renderizador
-novo, é essa a pergunta a responder, não "é canvas ou é PDF". Use
+novo, é essa a pergunta a responder, não "é canvas ou é PDF". A única exceção confirma
+a regra: o checkbox 🎨 AMOSTRA da prévia do Painel de Produção troca a promessa daquela
+janela para "peça acabada", e por isso mostra os elementos de Layout — só no
+`pedido.js`, nunca no `script.js`, e sem mexer no payload enviado ao motor. Use
 `elementoSoLayout()` / `numeracaoSemElementosDeLayout()` no frontend e `_so_layout()`
 no `engine.py`, e não remova a filtragem do payload achando que a do engine basta: o
 `NewProd.exe` roda uma cópia congelada do `engine.py`.

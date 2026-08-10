@@ -4,7 +4,42 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v507)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v508)** — 2026-08-10 | Agente **1.2.23**
+
+---
+
+## [v508 — 2026-08-10] — O checkbox 🎨 AMOSTRA passa a mostrar os elementos de Layout
+
+### O que mudou
+Na prévia de imposição do **Painel de Produção** (view Pedido), o checkbox **🎨 AMOSTRA** agora também revela os elementos de numeração marcados como **Layout** — os que a v506 introduziu.
+
+| Checkbox | O que a prévia mostra |
+|---|---|
+| desmarcado | o que vai sair na impressão — elemento de Layout **fica de fora** |
+| marcado | a peça acabada — camada base da Cor por baixo **e** os elementos de Layout |
+
+### Por que isso é coerente, e não uma exceção à regra da v506
+A regra da v506 não é "elemento de Layout nunca aparece": é **cada tela mostra o que ela promete**. O 🎨 AMOSTRA existe justamente para trocar a promessa daquela janela — o próprio `title` do checkbox já dizia *"Adicionar a camada base da COR (Amostra) à visualização da imposição (Apenas visualização, NUNCA é impressa)"*. Marcado, a prévia deixa de ser a folha da impressora e passa a ser a peça pronta; é exatamente onde o elemento de Layout deve aparecer.
+
+Nada do que é impresso muda. O checkbox é só de visualização: o payload enviado ao motor continua sem os elementos de Layout **nos dois estados**, e isso está coberto por asserção no teste.
+
+### O cuidado que isso exigiu
+O checkbox mora no `index.html`, ou seja, no **mesmo documento** que a view Imposição. Se a prévia de lá também lesse o `#ped-preview-toggle-amostra`, quem marcasse o checkbox no Painel de Produção e depois fosse para a Imposição veria elementos de Layout numa tela onde esse controle não existe nem é visível — voltando ao problema que a v506 resolveu. Por isso a leitura ficou **só** no `pedido.js`; a `drawVdpElements` do `script.js` continua estrita.
+
+### Como foi verificado
+Sete asserções na prévia real do Painel de Produção, com o app rodando e uma numeração de dois elementos PDF (um Impressão à esquerda, um Layout à direita):
+
+| Estado | Tinta à esquerda | Tinta à direita |
+|---|---|---|
+| AMOSTRA desmarcado | 6.998 | **598** (só bordas e marcas) |
+| AMOSTRA marcado | 6.998 | **6.998** |
+| controle, os dois em Impressão | 6.998 | 6.998 |
+
+Com o checkbox marcado, a metade direita fica idêntica ao controle — o elemento de Layout aparece inteiro. A metade esquerda não muda em nenhum dos três casos, então o checkbox não mexe no elemento de impressão.
+
+E a asserção que fecha o vazamento: com o 🎨 AMOSTRA **marcado**, a prévia da view Imposição continua com 2.878 de tinta à direita contra 150.334 do controle — ou seja, lá o elemento de Layout segue escondido.
+
+A bateria da v506 e a da v507 foram reexecutadas por inteiro, todas passando.
 
 ---
 
