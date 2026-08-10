@@ -10970,6 +10970,54 @@ const PERM_NAV_MAP = {
     perm_admin_view:       ['nav-admin', 'nav-adm'],
 };
 
+// Mapeamento: permissão _view → IDs das TELAS que ela protege.
+//
+// Espelha o PERM_NAV_MAP acima. Lá esconde o botão do menu; aqui fecha a porta.
+// Esconder o botão nunca impediu de abrir a tela — a <section> continua no DOM
+// e showView() é chamada de vários pontos do código, não só do menu.
+const PERM_VIEW_MAP = {
+    perm_formatos_view:    ['view-formatos', 'view-lista-formatos'],
+    perm_numeracao_view:   ['view-numeracao', 'view-catalogo'],
+    perm_mapas_view:       ['view-mapas'],
+    perm_saidas_view:      ['view-saidas'],
+    perm_cores_view:       ['view-cores', 'view-lista-cores'],
+    perm_fontes_view:      ['view-fontes'],
+    perm_imposicao_view:   ['view-imposicao'],
+    perm_pedidos_view:     ['view-pedido'],
+    perm_amostras_view:    ['view-amostras'],
+    perm_producao_view:    ['view-lista-impressao'],
+    perm_lista_arte_view:  ['view-lista-arte'],
+    perm_impressoras_view: ['view-impressoras'],
+    perm_admin_view:       ['view-admin', 'view-adm'],
+};
+
+// Índice invertido: tela → permissão exigida
+const VIEW_PERM_REQUERIDA = {};
+for (const [permKey, viewIds] of Object.entries(PERM_VIEW_MAP)) {
+    for (const viewId of viewIds) VIEW_PERM_REQUERIDA[viewId] = permKey;
+}
+
+/**
+ * A tela pode ser aberta pelo usuário atual?
+ *
+ * Enquanto as permissões não carregaram (`_currentPerms` ausente), libera:
+ * negar durante a inicialização trancaria o usuário para fora da aplicação.
+ * Tela sem permissão associada também passa — o mapa lista o que é protegido,
+ * não o que existe.
+ *
+ * ATENÇÃO: isto é defesa em profundidade, NÃO substitui o RLS no banco. Quem
+ * abrir o console do navegador continua alcançando os dados enquanto as
+ * tabelas do Supabase estiverem sem RLS.
+ */
+function podeAbrirView(viewId) {
+    const perms = window._currentPerms;
+    if (!perms) return true;
+    const permKey = VIEW_PERM_REQUERIDA[viewId];
+    if (!permKey) return true;
+    return perms[permKey] === true;
+}
+window.podeAbrirView = podeAbrirView;
+
 // Definição dos módulos para renderizar permissões no painel admin
 const PERM_MODULES = [
     { key: 'imposicao',   icon: '🖨️', label: 'Imposição' },
@@ -13677,8 +13725,8 @@ async function loadOrdens() {
                 
                 // Sobrescrever cliente e vendedor usando a tabela propostas
                 const propReal = propostasComerciais.find(pr => String(pr.id_int) === String(osNumeroInt));
-                const clienteProposta = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || os.cliente || getFallbackCliente(osNumeroInt);
-                const vendedorProposta = propReal?.vendedor || propReal?.vendedor_nome || os.vendedor || getFallbackVendedor(osNumeroInt);
+                const clienteProposta = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || os.cliente || '';
+                const vendedorProposta = propReal?.vendedor || propReal?.vendedor_nome || os.vendedor || '';
                 
                 return {
                     ...os,
@@ -13705,8 +13753,8 @@ async function loadOrdens() {
                     const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(osNumeroInt));
                     
                     const propReal = propostasComerciais.find(pr => String(pr.id_int) === String(osNumeroInt));
-                    const clienteProposta = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || os.cliente || getFallbackCliente(osNumeroInt);
-                    const vendedorProposta = propReal?.vendedor || propReal?.vendedor_nome || os.vendedor || getFallbackVendedor(osNumeroInt);
+                    const clienteProposta = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || os.cliente || '';
+                    const vendedorProposta = propReal?.vendedor || propReal?.vendedor_nome || os.vendedor || '';
                     
                     return {
                         ...os,
@@ -13914,8 +13962,8 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(key));
 
                 // Mapear campos com fallbacks determinísticos
-                const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || getFallbackCliente(key);
-                const vendedor = propReal?.vendedor || propReal?.vendedor_nome || getFallbackVendedor(key);
+                const cliente = propReal?.cliente || propReal?.cliente_nome || propReal?.dados_cliente || '';
+                const vendedor = propReal?.vendedor || propReal?.vendedor_nome || '';
                 const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || p.created_at;
                 const prazoEntrega = propReal?.prazo_entrega || propReal?.prazo || getFallbackPrazo(p.created_at, key);
 
@@ -14338,6 +14386,47 @@ function formatDate(dateStr) {
 /**
  * Retorna badge HTML para status
  */
+// -------------------------------------------------------------------------------
+// ESCAPE DE DADO EXTERNO EM HTML
+//
+// Nome de cliente, nome de evento, designer, frete e nome de modelo vêm do Vibe
+// (sistema parceiro) ou do banco — não são digitados aqui e não estão sob nosso
+// controle. Interpolar esses valores crus num template `innerHTML` significa que
+// um apóstrofo já quebra a linha da tabela e um "<" quebra a tabela inteira.
+//
+// Use escapeHtml() para texto dentro de uma tag ou atributo, e escapeJsAttr()
+// para valor que vai PARAR DENTRO de uma string JS num onclick — lá são duas
+// camadas de parsing (HTML e depois JS) e escapar só uma não resolve.
+// -------------------------------------------------------------------------------
+function escapeHtml(valor) {
+    if (valor === null || valor === undefined) return '';
+    return String(valor)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Para `onclick="fn('${escapeJsAttr(v)}')"`. Escapa primeiro para a string JS e
+ * depois para o HTML: o navegador desfaz a camada HTML ao ler o atributo e
+ * entrega ao JS exatamente o texto escapado que ele espera.
+ */
+function escapeJsAttr(valor) {
+    if (valor === null || valor === undefined) return '';
+    return escapeHtml(
+        String(valor)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+    );
+}
+
+window.escapeHtml = escapeHtml;
+window.escapeJsAttr = escapeJsAttr;
+
 function getStatusBadge(status) {
     const map = {
         // ── Status oficiais do fluxo de arte ──────────────────────
@@ -14905,13 +14994,14 @@ function renderDesignerSelect(osId, osNumero) {
     let options = '<option value="">-- Atribuir --</option>';
     [...allDesigners].sort().forEach(d => {
         const selected = d === currentDesigner ? 'selected' : '';
-        const escaped = d.replace(/'/g, "\\'");
-        options += `<option value="${escaped}" ${selected}>${d}</option>`;
+        // O escape antigo tratava só o apóstrofo para a camada JS e deixava o
+        // nome cru na camada HTML — aspas ou "<" no nome quebravam o select.
+        options += `<option value="${escapeHtml(d)}" ${selected}>${escapeHtml(d)}</option>`;
     });
 
-    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
-                onclick="event.stopPropagation()" 
-                onchange="event.stopPropagation(); setOSDesigner('${osId}', this.value)">${options}</select>`;
+    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);"
+                onclick="event.stopPropagation()"
+                onchange="event.stopPropagation(); setOSDesigner('${escapeJsAttr(osId)}', this.value)">${options}</select>`;
 }
 
 /**
@@ -14967,13 +15057,12 @@ function renderVendedorSelect(osId) {
     let options = '<option value="">-- Atribuir --</option>';
     [...allVendedores].sort().forEach(v => {
         const selected = v === currentVendedor ? 'selected' : '';
-        const escaped = v.replace(/'/g, "\\'");
-        options += `<option value="${escaped}" ${selected}>${v}</option>`;
+        options += `<option value="${escapeHtml(v)}" ${selected}>${escapeHtml(v)}</option>`;
     });
 
-    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);" 
-                onclick="event.stopPropagation()" 
-                onchange="event.stopPropagation(); setOSVendedor('${osId}', this.value)">${options}</select>`;
+    return `<select class="form-control" style="font-size: 0.78rem; padding: 4px 6px; min-width: 140px; background: rgba(30,41,59,0.5);"
+                onclick="event.stopPropagation()"
+                onchange="event.stopPropagation(); setOSVendedor('${escapeJsAttr(osId)}', this.value)">${options}</select>`;
 }
 
 /**
@@ -15754,9 +15843,9 @@ function renderOrdens() {
                     if (key) freteImgUrl = FRETE_IMGS[key];
                 }
                 const freteHtml = freteImgUrl
-                    ? `<img src="${freteImgUrl}" alt="${freteRaw}" title="${freteRaw}" style="height:28px; max-width:80px; object-fit:contain; display:block; margin:0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='';">
-                       <span style="display:none; font-size:0.78rem; color:var(--text-dim);">${freteRaw}</span>`
-                    : `<span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text); border:1px solid rgba(255,255,255,0.1); font-size:0.75rem;">${freteRaw}</span>`;
+                    ? `<img src="${escapeHtml(freteImgUrl)}" alt="${escapeHtml(freteRaw)}" title="${escapeHtml(freteRaw)}" style="height:28px; max-width:80px; object-fit:contain; display:block; margin:0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='';">
+                       <span style="display:none; font-size:0.78rem; color:var(--text-dim);">${escapeHtml(freteRaw)}</span>`
+                    : `<span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text); border:1px solid rgba(255,255,255,0.1); font-size:0.75rem;">${escapeHtml(freteRaw)}</span>`;
 
                 const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
                 let nomeEventoHtml = '';
@@ -15764,7 +15853,7 @@ function renderOrdens() {
                 const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
                 const arteComEvento = artesDaOS.find(a => a.nome_evento);
                 if (arteComEvento) {
-                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${arteComEvento.nome_evento}</span>`;
+                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${escapeHtml(arteComEvento.nome_evento)}</span>`;
                 }
 
                 return `
@@ -15774,7 +15863,7 @@ function renderOrdens() {
                         </td>
 
                         <td>
-                            <strong>${os.cliente || '--'}</strong>
+                            <strong>${escapeHtml(os.cliente) || '--'}</strong>
                             ${nomeEventoHtml}
                         </td>
                         <td>${progressBarHtml}</td>
@@ -15873,13 +15962,13 @@ function renderOrdens() {
                 let nomeEventoHtml = '';
                 const arteComEvento = artesDaOS.find(a => a.nome_evento);
                 if (arteComEvento) {
-                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${arteComEvento.nome_evento}</span>`;
+                    nomeEventoHtml = `<br><span style="font-size: 0.82rem; color: #f97316;">${escapeHtml(arteComEvento.nome_evento)}</span>`;
                 }
 
                 let nomeDesignerHtml = '';
                 const desigDaOS = getOSDesigner(os.id, os.numero);
                 if (desigDaOS) {
-                    nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #3b82f6;">${desigDaOS}</span>`;
+                    nomeDesignerHtml = `<br><span style="font-size: 0.82rem; color: #3b82f6;">${escapeHtml(desigDaOS)}</span>`;
                 }
 
                 const osStUp = (os.status_calculado || os.status || '').trim().toUpperCase();
@@ -15908,10 +15997,10 @@ function renderOrdens() {
                         </td>
 
                         <td>
-                            <strong style="color: white;">${os.cliente || '--'}</strong>${nomeEventoHtml}
+                            <strong style="color: white;">${escapeHtml(os.cliente) || '--'}</strong>${nomeEventoHtml}
                         </td>
                         <td>
-                            <strong style="color: white;">${os.vendedor || '--'}</strong>${nomeDesignerHtml}
+                            <strong style="color: white;">${escapeHtml(os.vendedor) || '--'}</strong>${nomeDesignerHtml}
                         </td>
                         <td style="font-size: 0.82rem; color: var(--text-dim);">
                             ${formatDateTime(os.data_liberacao)}
@@ -15952,9 +16041,9 @@ function renderOrdens() {
                                     btns.push(`<button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" style="padding:4px 8px;font-size:0.73rem;background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);border-radius:6px;cursor:pointer;" title="Regenerar imagem e reenviar link com arte corrigida">⚠️ Reenviar Link</button>`);
                                 } else if (linkSalvo) {
                                     btns.push(`<div style="display:flex;gap:4px;">
-                                        <button onclick="window.open('${linkSalvo}','_blank')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
+                                        <button onclick="window.open('${escapeJsAttr(linkSalvo)}','_blank')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
                                         <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}')" title="Copiar link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
-                                        <button class="btn btn-sm" onclick="abrirModalEnviarEmailCliente('${os.id}', '${os.numero}', '${linkSalvo}')" title="Enviar por e-mail" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
+                                        <button class="btn btn-sm" onclick="abrirModalEnviarEmailCliente('${escapeJsAttr(os.id)}', '${escapeJsAttr(os.numero)}', '${escapeJsAttr(linkSalvo)}')" title="Enviar por e-mail" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
                                     </div>`);
                                 } else if (isAguardando || isEntregaAlterada) {
                                     const btnColor = isEntregaAlterada ? 'background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);' : 'background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);';
@@ -16059,17 +16148,17 @@ function renderOSItens(osId) {
         
         if (isImpressao) {
             return `
-            <tr class="hover-row" style="transition: all 0.2s; cursor: pointer;" id="row-item-${item.id}" onclick="typeof enviarParaPedido === 'function' ? enviarParaPedido('${item.id}', '${osId}') : enviarParaImposicao('${item.id}', '${osId}')">
+            <tr class="hover-row" style="transition: all 0.2s; cursor: pointer;" id="row-item-${escapeHtml(item.id)}" onclick="typeof enviarParaPedido === 'function' ? enviarParaPedido('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}') : enviarParaImposicao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}')">
                 <td style="text-align: center; font-weight: bold; color: var(--text-dim);">${indexModelo}</td>
-                <td style="font-family: monospace; font-size: 0.85rem;">${item.modelo || '--'}</td>
-                <td><strong>${item.produto || '--'}</strong></td>
-                <td>${item.cor || 'STD'}</td>
-                <td>${item.numeracao || '--'}</td>
-                <td style="text-align: center;">${item.num_inicial || '--'}</td>
-                <td style="text-align: center;">${item.num_final || '--'}</td>
+                <td style="font-family: monospace; font-size: 0.85rem;">${escapeHtml(item.modelo) || '--'}</td>
+                <td><strong>${escapeHtml(item.produto) || '--'}</strong></td>
+                <td>${escapeHtml(item.cor) || 'STD'}</td>
+                <td>${escapeHtml(item.numeracao) || '--'}</td>
+                <td style="text-align: center;">${escapeHtml(item.num_inicial) || '--'}</td>
+                <td style="text-align: center;">${escapeHtml(item.num_final) || '--'}</td>
                 <td style="text-align: center;">${item.verso ? '✅' : '--'}</td>
                 <td style="text-align: center;" onclick="event.stopPropagation()">
-                    <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
+                    <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                         <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
                         <option value="Parcial" ${normalizarStatusImpressao(item.impressao) === 'Parcial' ? 'selected' : ''}>🔄 Parcial</option>
                         <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
@@ -16082,30 +16171,30 @@ function renderOSItens(osId) {
         
         return `
         <tr>
-            <td>${item.setor || '--'}</td>
-            <td><strong>${item.produto || '--'}</strong></td>
-            <td style="font-family: monospace; font-size: 0.85rem;">${item.modelo || '--'}</td>
-            <td><span class="badge">${item.formato || '--'}</span></td>
-            <td style="text-align: center;"><strong>${item.quantidade || 0}</strong><br><span style="font-size:0.72rem;color:var(--text-dim);">${item.num_inicial}→${item.num_final}</span></td>
-            <td>${item.numeracao || '--'}</td>
-            <td>${item.cor || 'STD'}</td>
+            <td>${escapeHtml(item.setor) || '--'}</td>
+            <td><strong>${escapeHtml(item.produto) || '--'}</strong></td>
+            <td style="font-family: monospace; font-size: 0.85rem;">${escapeHtml(item.modelo) || '--'}</td>
+            <td><span class="badge">${escapeHtml(item.formato) || '--'}</span></td>
+            <td style="text-align: center;"><strong>${escapeHtml(item.quantidade) || 0}</strong><br><span style="font-size:0.72rem;color:var(--text-dim);">${escapeHtml(item.num_inicial)}→${escapeHtml(item.num_final)}</span></td>
+            <td>${escapeHtml(item.numeracao) || '--'}</td>
+            <td>${escapeHtml(item.cor) || 'STD'}</td>
             <td style="text-align: center;">${item.verso ? '✅' : '--'}</td>
-            <td style="text-align: center;">${item.blocos || 'N'}</td>
+            <td style="text-align: center;">${escapeHtml(item.blocos) || 'N'}</td>
             <td>
                 ${getAprovacaoBadge(item.aprovacao)}
                 ${item.nome_arquivo_arte ? `
                     <div style="font-size: 0.72rem; margin-top: 4px; color: var(--text-dim); display: flex; flex-direction: column; gap: 2px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        <span title="${item.nome_arquivo_arte}">
-                            📄 v${item.versao_arte || 1}: ${item.nome_arquivo_arte}
+                        <span title="${escapeHtml(item.nome_arquivo_arte)}">
+                            📄 v${escapeHtml(item.versao_arte) || 1}: ${escapeHtml(item.nome_arquivo_arte)}
                         </span>
                         ${item.url_arquivo_arte ? `
-                            <a href="${item.url_arquivo_arte}" target="_blank" style="color: var(--blue); text-decoration: underline; font-size: 0.68rem;" onclick="event.stopPropagation()">Download</a>
+                            <a href="${escapeHtml(item.url_arquivo_arte)}" target="_blank" style="color: var(--blue); text-decoration: underline; font-size: 0.68rem;" onclick="event.stopPropagation()">Download</a>
                         ` : ''}
                     </div>
                 ` : ''}
             </td>
             <td>
-                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${item.id}', '${osId}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
+                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                     <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
                     <option value="Parcial" ${normalizarStatusImpressao(item.impressao) === 'Parcial' ? 'selected' : ''}>🔄 Parcial</option>
                     <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
@@ -16114,11 +16203,11 @@ function renderOSItens(osId) {
             </td>
             <td style="display: flex; gap: 6px; flex-wrap: wrap;">
                 ${!isImpressao ? `
-                <button class="btn btn-sm btn-secondary" onclick="openArtesModal('${item.id}', '${osId}')" title="Gerenciar Artes do Modelo">
+                <button class="btn btn-sm btn-secondary" onclick="openArtesModal('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}')" title="Gerenciar Artes do Modelo">
                     🎨 Artes
                 </button>
                 ` : ''}
-                <button class="btn btn-sm btn-primary" onclick="typeof enviarParaPedido === 'function' ? enviarParaPedido('${item.id}', '${osId}') : enviarParaImposicao('${item.id}', '${osId}')" title="Enviar para Imposição" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled' : ''}>
+                <button class="btn btn-sm btn-primary" onclick="typeof enviarParaPedido === 'function' ? enviarParaPedido('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}') : enviarParaImposicao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}')" title="Enviar para Imposição" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' ? 'disabled' : ''}>
                     🖨️ Impor
                 </button>
             </td>
@@ -16172,31 +16261,19 @@ function changeOSStatus(osId, newStatus) {
 
 /**
  * Funções auxiliares para dados de propostas e prazos do E-deal (Vibecode)
+ *
+ * Aqui existiam também getFallbackCliente() e getFallbackVendedor(), que
+ * escolhiam um nome de uma lista fixa ("Hospital Metropolitano", "Prefeitura
+ * Municipal", "Carlos Souza"...) pelo resto da divisão do número do pedido
+ * quando a proposta não trazia o dado. O nome aparecia na Lista de Arte com a
+ * mesma cara de um cliente de verdade, e não havia como distinguir na tela.
+ * Numa gráfica isso é pior do que campo vazio: alguém pode ligar para o
+ * "cliente" errado. Sem dado real, agora a coluna mostra "--".
+ *
+ * O getFallbackPrazo abaixo continua: o prazo de entrega ainda não tem campo
+ * real definido, e o filtro "Para Hoje / Atrasados" do Painel de Produção
+ * depende dele para funcionar. Quando o campo verdadeiro existir, ele sai.
  */
-function getFallbackCliente(numero) {
-    const clientes = [
-        "Art & Show Eventos Ltda",
-        "Hospital Metropolitano",
-        "Clube Atlético Ideal",
-        "Arena de Show Brasil",
-        "Prefeitura Municipal",
-        "Cervejaria Artesanal Express",
-        "Associação Atlética Acadêmica"
-    ];
-    return clientes[numero % clientes.length];
-}
-
-function getFallbackVendedor(numero) {
-    const vendedores = [
-        "Carlos Souza",
-        "Ana Júlia Silva",
-        "Marcos Oliveira",
-        "Juliana Ribeiro",
-        "Fernanda Costa"
-    ];
-    return vendedores[numero % vendedores.length];
-}
-
 function getFallbackPrazo(createdAtStr, numero) {
     try {
         const date = new Date(createdAtStr);
@@ -17686,6 +17763,27 @@ window.toggleDrawer = function(show) {
 
 // Função global de navegação entre views
 window.showView = function(viewId) {
+    // Porteiro de permissão. Sem isto, esconder o botão no menu não impedia nada:
+    // bastava um showView() disparado de outro ponto do código para a tela abrir
+    // e carregar os dados.
+    if (!podeAbrirView(viewId)) {
+        console.warn('[perm] Acesso negado à tela', viewId);
+        if (typeof toast === 'function') toast('Você não tem permissão para acessar esta tela.', 'warning');
+
+        // Não deixar a tela em branco. Se já havia uma view aberta, fica onde está.
+        // Se não havia — caso do F5 restaurando uma tela que o usuário perdeu o
+        // acesso — manda para a primeira tela que ele pode ver.
+        if (!document.querySelector('.view-section.active')) {
+            const primeiraPermitida = Object.keys(VIEW_PERM_REQUERIDA)
+                .find(v => v !== viewId && podeAbrirView(v) && document.getElementById(v));
+            if (primeiraPermitida) {
+                localStorage.removeItem('activeView');
+                window.showView(primeiraPermitida);
+            }
+        }
+        return;
+    }
+
     // Fechar o Drawer Menu ao mudar de tela
     if (typeof window.toggleDrawer === 'function') {
         window.toggleDrawer(false);
