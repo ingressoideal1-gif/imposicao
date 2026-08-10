@@ -4,7 +4,47 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v513)** — 2026-08-10 | Agente **1.2.24**
+## Versão atual: **v1.6.0 (v515)** — 2026-08-10 | Agente **1.2.24**
+
+---
+
+## [v515 — 2026-08-10] — Produto sem setor deixa de cair em PVC
+
+### O que acontecia
+Os filtros de setor do Painel de Produção (Flexo, PVC, Têxtil, Laser) já funcionavam pela regra certa: `item.setor` vem de `produtos.setor_pcp`, resolvido pelo `id_produto`, e o teste é um `.some()` sobre os itens — basta **um** produto do pedido pertencer ao setor para ele aparecer ali. Um pedido com produtos de dois setores aparece nos dois filtros ao mesmo tempo, como deve.
+
+O defeito estava no valor padrão. Em três pontos o código fazia:
+
+```js
+let setor = prodObj && prodObj.setor_pcp ? prodObj.setor_pcp : 'PVC';
+```
+
+Produto sem `setor_pcp` cadastrado **virava PVC em silêncio** — uma invenção do código, não o que a coluna diz.
+
+### O tamanho do problema
+
+Consulta ao Supabase em 2026-08-10: `setor_pcp` está vazio em **49 dos 64 produtos**.
+
+| valor | produtos |
+|---|---|
+| *(vazio)* | 49 |
+| LASER | 8 |
+| TEXTIL | 3 |
+| FLEXO | 3 |
+| PVC | 1 |
+
+Na fila de produção do dia, 5 dos 6 pedidos eram LASER (Triband, ColorBand, MOBI) e um era Cordão 30mm, sem setor cadastrado — que aparecia sob **PVC**, para um operador que não tem nada a ver com ele.
+
+### A correção
+Nos três pontos, o padrão passou de `'PVC'` para `''`. Sem `setor_pcp`, sem setor: o pedido aparece apenas em "Todos os Setores". Quem manda é a coluna da tabela.
+
+### O que isso expõe
+O pedido do Cordão some dos quatro botões. É a regra aplicada corretamente, mas o problema de dado deixou de ser mascarado e passou a ser **ausência** — mais silenciosa que um alerta. Conforme entrarem pedidos com os outros 48 produtos sem setor, o mesmo vai acontecer. A correção de verdade é preencher `setor_pcp` na tabela `produtos`.
+
+Vale para a Lista de Arte também: o `filtroSetorArte` usa o mesmo `item.setor`.
+
+### Como foi verificado
+Nove casos sobre os dados reais da fila, incluindo um pedido sintético com produtos de dois setores para confirmar que ele aparece nos dois filtros. Depois da mudança: Laser mostra os 5, PVC fica vazio, o Cordão só aparece em Todos. Não foi verificado na tela.
 
 ---
 

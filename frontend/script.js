@@ -14249,9 +14249,12 @@ function mapVibecodeProdutoToOSItem(p, osId) {
     // Detectar tipo de produto pelo nome
     const nomeProd = (p.nome_produto || '').toUpperCase();
     
-    // Buscar o setor real do produto globalmente cadastrado
+    // Buscar o setor real do produto globalmente cadastrado.
+    // Sem setor_pcp o item fica SEM setor, e não em PVC: quem manda é a coluna
+    // da tabela produtos. O padrão antigo jogava em PVC todo produto ainda não
+    // cadastrado, e o operador de PVC via pedido que não era dele.
     const prodObj = (state.produtosGlobais || []).find(pg => String(pg.id_produto) === String(p.id_produto));
-    let setor = prodObj && prodObj.setor_pcp ? prodObj.setor_pcp : 'PVC';
+    let setor = prodObj && prodObj.setor_pcp ? prodObj.setor_pcp : '';
     
     let produto = nomeProd;
     
@@ -14423,7 +14426,7 @@ async function loadOSItens(osId) {
                                 const vibeProdId = prop ? prop.id_produto : null;
                                 const prodObj = vibeProdId ? (state.produtosGlobais || []).find(pg => String(pg.id_produto) === String(vibeProdId)) : null;
                                 return prodObj ? (prodObj.setor_pcp || '') : '';
-                            })() || item.setor || 'PVC',
+                            })() || item.setor || '',   // sem setor_pcp = sem setor, nunca PVC
                             _dbLoaded: true
                         };
                         return mapped;
@@ -14479,7 +14482,7 @@ async function loadOSItens(osId) {
                                 const vibeProdId = pp.id_produto || null;
                                 const prodObj = vibeProdId ? (state.produtosGlobais || []).find(pg => String(pg.id_produto) === String(vibeProdId)) : null;
                                 return prodObj ? (prodObj.setor_pcp || '') : '';
-                            })() || 'PVC',
+                            })() || '',   // sem setor_pcp = sem setor, nunca PVC
                             _dbLoaded: true
                         };
                     });
