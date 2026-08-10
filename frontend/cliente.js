@@ -612,14 +612,21 @@ function renderAmostrasOSItens(osId) {
         atualizarBarraFinalCliente(osId);
     }, 50);
 
-    // Auto-inicializar PDF viewers para itens em modo PDF
-    setTimeout(() => {
-        itens.forEach((item, idx) => {
-            if (item.modo_pdf && item.arte_url) {
-                initPdfViewer(idx, item.arte_url, osId);
-            }
-        });
-    }, 200);
+    // Não inicialize o PDF viewer aqui. Havia um segundo laço, aos 200 ms, que
+    // chamava `initPdfViewer` para todo item em modo PDF — sem guarda nenhuma,
+    // e para os MESMOS itens que o laço acima já cobre: a condição dele inclui
+    // `item.modo_pdf`, e o `drawAmostraFace` inicializa o viewer no ramo de modo
+    // PDF. Eram duas inicializações concorrentes desenhando no mesmo canvas.
+    //
+    // O sintoma: ao abrir o link, a página 1 saía em escala e orientação erradas
+    // (metade do tamanho, no quadrante superior esquerdo, espelhada), porque o
+    // segundo `renderPdfViewerPage` reatribuía `canvas.width` no meio do desenho
+    // do primeiro — o que zera o canvas e a transformação que o pdf.js tinha
+    // aplicado. O pdf.js reclamava "Cannot use the same canvas during multiple
+    // render() operations", o `catch` engolia num `console.error`, e o cliente
+    // ficava com a arte desconfigurada até navegar de página e voltar, que
+    // redesenha sozinho e sai certo. O painel interno (`script.js`) nunca teve
+    // esse segundo laço.
 }
 
 
@@ -2594,7 +2601,25 @@ async function initPdfViewer(idx, pdfUrl, osId) {
     }
 }
 
-async function renderPdfViewerPage(idx, pageNum) {
+/**
+ * Uma fila de desenho por item. Fica **fora** do `pdfViewerState` de propósito:
+ * o `initPdfViewer` substitui `pdfViewerState[idx]` por um objeto novo, então
+ * uma fila guardada lá dentro não serializaria justamente as duas chamadas que
+ * se atropelam. Dois `page.render()` no mesmo canvas se corrompem — cada um
+ * reatribui `canvas.width`, o que zera o canvas e a transformação do outro.
+ */
+const pdfRenderQueue = {};
+
+function renderPdfViewerPage(idx, pageNum) {
+    const anterior = pdfRenderQueue[idx] || Promise.resolve();
+    const proxima = anterior
+        .catch(() => { /* uma falha anterior não pode travar a fila */ })
+        .then(() => desenharPaginaDoPdf(idx, pageNum));
+    pdfRenderQueue[idx] = proxima;
+    return proxima;
+}
+
+async function desenharPaginaDoPdf(idx, pageNum) {
     const vs = pdfViewerState[idx];
     if (!vs || !vs.pdf) return;
     try {

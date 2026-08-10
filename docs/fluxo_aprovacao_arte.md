@@ -192,6 +192,12 @@ flowchart LR
 
 ### Página do Cliente
 
+> ⚠️ **Esta tabela está desatualizada.** A página do cliente saiu do `script.js` e hoje
+> vive inteira em **`frontend/cliente.js`**, que é o único script que a `cliente.html`
+> carrega (além do pdf.js e do Supabase). Os links e números de linha abaixo apontam
+> para um arquivo onde essas funções **não existem mais** — `checkClienteRoute` e
+> `initClientePage` têm zero ocorrências no `script.js`. Use `cliente.js` como fonte.
+
 | Função | Linha | Descrição |
 |--------|-------|-----------|
 | [checkClienteRoute](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L14016) | ~14016 | Detecta URL `/cliente/{numero}-{token}` e inicia fluxo |
@@ -200,6 +206,40 @@ flowchart LR
 | [clienteAprovarTudo](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L14451) | ~14451 | Atalho para `clienteFinalizarFluxo('APROVAR_TUDO')` |
 | [mostrarResultadoCliente](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L14455) | ~14455 | Exibe tela de resultado (ícone + título + mensagem) |
 | [mapVibecodeProdutoToOSItem](file:///C:/Users/Junior/Projetos%20Ingresso%20ideal/ideal-imposition/frontend/script.js#L11276) | ~11276 | Converte item de `produtos_proposta` para o formato interno `osItem` |
+
+---
+
+## O viewer de PDF multipáginas do link do cliente
+
+Item em **modo PDF** não usa o canvas de composição (`#amostra-item-canvas-N`): ele tem
+um viewer próprio, com `#amostra-pdf-canvas-N` e os botões ◀ ▶. Três coisas a saber
+antes de mexer, todas aprendidas na v507:
+
+**1. Existe um único ponto de entrada, e tem que continuar assim.**
+`renderAmostrasOSItens()` agenda o desenho dos itens aos 50 ms; para item em modo PDF,
+o caminho é `renderItemAmostraCombinada` → `drawAmostraFace` → `initPdfViewer`. Até a
+v506 havia um **segundo** laço, aos 200 ms, chamando `initPdfViewer` de novo para os
+mesmos itens, sem guarda nenhuma. Não acrescente outro: a condição do laço dos 50 ms já
+inclui `item.modo_pdf`, e o painel interno (`script.js`) sempre viveu com um caminho só.
+
+**2. Dois `page.render()` no mesmo canvas se corrompem, e o erro é silencioso.**
+`desenharPaginaDoPdf()` começa reatribuindo `canvas.width`/`height`, o que zera o canvas
+**e a transformação** que o pdf.js aplicou ao contexto. Fazer isso durante outro desenho
+produz `Cannot use the same canvas during multiple render() operations`, que o `catch`
+transforma num `console.error`. O que sobra na tela é a página em escala errada e
+espelhada — foi exatamente o sintoma da v507. Por isso `renderPdfViewerPage()` hoje é só
+um enfileirador: ele encadeia os desenhos por item e delega a `desenharPaginaDoPdf()`.
+
+**3. A fila mora fora do `pdfViewerState`, de propósito.**
+`initPdfViewer` **substitui** `pdfViewerState[idx]` por um objeto novo. Uma fila guardada
+dentro dele nasceria vazia a cada inicialização e não serializaria justamente as duas
+chamadas que se atropelam. Ela vive no mapa `pdfRenderQueue`, à parte. Se algum dia essa
+fila for movida para dentro do estado, o bug da v507 volta.
+
+Como a corrupção depende de como os downloads se intercalam, ela é **intermitente**:
+reproduzir uma vez e ver a tela certa não prova nada. O teste da v507 varre quatro
+atrasos de rede e compara o canvas pixel a pixel contra o mesmo canvas depois de navegar
+e voltar.
 
 ---
 

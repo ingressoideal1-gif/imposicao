@@ -4,7 +4,41 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v506)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v507)** — 2026-08-10 | Agente **1.2.23**
+
+---
+
+## [v507 — 2026-08-10] — Link do cliente: a página 1 do PDF multipáginas abria desconfigurada
+
+### O sintoma
+Ao abrir o link de aprovação de um pedido com item em **modo PDF (multipáginas)**, a visualização vinha errada — a página saía em torno de metade do tamanho, encolhida no quadrante superior esquerdo e espelhada, com o resto do canvas em branco. Bastava navegar para outra página e voltar à 1 para tudo se recompor.
+
+### A causa
+`renderAmostrasOSItens()` do `cliente.js` agendava **dois** temporizadores que inicializavam o mesmo viewer:
+
+| Quando | Caminho |
+|---|---|
+| 50 ms | `renderItemAmostraCombinada` → `drawAmostraFace` → ramo modo PDF → `initPdfViewer` |
+| 200 ms | um segundo laço, **sem guarda nenhuma**, chamando `initPdfViewer` direto |
+
+O segundo laço era redundante desde sempre: a condição do primeiro já inclui `item.modo_pdf`. Os dois baixavam o PDF e chamavam `renderPdfViewerPage(idx, 1)` sobre o **mesmo canvas**.
+
+`renderPdfViewerPage` começa reatribuindo `canvas.width`/`height` — o que zera o canvas **e a transformação** que o pdf.js tinha aplicado ao contexto. Fazendo isso no meio do desenho do outro, o pdf.js levantava `Cannot use the same canvas during multiple render() operations`, o `catch` engolia num `console.error` que ninguém lê, e sobrava no canvas o resultado meio-desenhado com a matriz errada — daí a escala pela metade e o espelhamento.
+
+Navegar de página chama um `renderPdfViewerPage` sozinho, sem concorrência: por isso voltar à página 1 consertava.
+
+O painel interno (`script.js`) **nunca teve** esse segundo laço — o problema era exclusivo do link do cliente.
+
+### O conserto, em duas camadas
+1. **A raiz**: o laço duplicado dos 200 ms saiu. O `drawAmostraFace` já cobre todo item em modo PDF, e é assim que o painel interno sempre funcionou.
+2. **A barreira**: `renderPdfViewerPage` agora enfileira os desenhos por item, um de cada vez. A fila vive num mapa próprio, **fora** do `pdfViewerState` — de propósito: o `initPdfViewer` substitui `pdfViewerState[idx]` por um objeto novo, e uma fila guardada lá dentro não serializaria justamente as duas chamadas que se atropelam.
+
+### Como foi verificado
+Reproduzido primeiro, com o app rodando e o PDF servido com atraso de rede controlado. A trilha instrumentada mostrou `initPdfViewer` entrando **2×** para o mesmo item (t=62 ms e t=216 ms) e dois `renderPdfViewerPage` **simultâneos**, com o erro do pdf.js no console. A imagem do canvas ao abrir ficou salva ao lado da imagem depois de navegar: a primeira, espelhada e em metade da escala; a segunda, correta.
+
+A corrupção é intermitente — depende de como os dois downloads se intercalam. Por isso o teste roda com quatro atrasos de rede (100, 250, 400 e 700 ms) e afirma quatro coisas em cada um: uma única inicialização, nenhum desenho sobreposto, nenhum erro do pdf.js, e o canvas ao abrir **idêntico pixel a pixel** ao canvas depois de navegar e voltar. Antes: falhava. Depois: passa nos quatro.
+
+A fila foi testada à parte, disparando duas inicializações concorrentes de propósito. Com o conserto: nenhum erro. Sem o conserto, o mesmo teste acusa dois erros `same canvas` — a barreira protege algo real.
 
 ---
 
