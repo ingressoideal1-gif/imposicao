@@ -765,6 +765,22 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     const poses_per_sheet = cols * rows;
     let total_sheets = Math.ceil(total_items / poses_per_sheet);
 
+    // ─── A LISTA DE MULTI-ARTES SÓ VALE EM MULTI-ARTES ─────────────────────────
+    // `state.impMultiArtes` é preenchida pelo painel de Multi-Artes e **nunca é
+    // limpa** — não há um único ponto no projeto que a esvazie. Consultá-la fora
+    // desse esquema fazia um trabalho anterior da sessão contaminar o seguinte:
+    // as poses cujo índice caísse na faixa de quantidade da primeira arte passavam
+    // a buscar a numeração DA ARTE (`num1_id`), que não existe mais, e desenhavam
+    // nenhum elemento. Como a faixa começa no índice 0, era sempre a primeira pose
+    // da folha que saía sem numeração — na tela, porque o payload do motor só leva
+    // multi_artes quando o esquema é multi_artes, e por isso o papel saía certo.
+    //
+    // `isMultiSelected` já força `schema = 'multi_artes'` mais acima, então esta
+    // condição cobre os dois casos. É o mesmo gate que o script.js sempre usou.
+    const artesMultiAtivas = (schema === 'multi_artes')
+        ? ((isMultiSelected ? tempMultiArtes : state.impMultiArtes) || [])
+        : [];
+
     let is_strict_mode = false;
     let stack_size = 50;
     let sets_needed = 1;
@@ -775,7 +791,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             is_strict_mode = true;
             if (cutstackMode === 'strict_assembly' || schema === "multi_artes") {
                 if (typeof buildStrictAssemblySets === 'function') {
-                    window.currentAssemblySets = buildStrictAssemblySets(isMultiSelected ? tempMultiArtes : state.impMultiArtes, isMultiSelected, total_items, stack_size, poses_per_sheet);
+                    window.currentAssemblySets = buildStrictAssemblySets(artesMultiAtivas, isMultiSelected, total_items, stack_size, poses_per_sheet);
                     sets_needed = window.currentAssemblySets.length;
                     total_sheets = window.currentAssemblySets.reduce((sum, s) => sum + s.num_sheets, 0);
                 } else {
@@ -964,9 +980,9 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             ctx.clip();
 
             let multiArteItem = null;
-            const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+            const artesList = artesMultiAtivas;
 
-            if (schema === "multi_artes" || (artesList && artesList.length > 0)) {
+            if (artesList.length > 0) {
                 if (typeof item_arte_index !== 'undefined' && item_arte_index !== null) {
                     multiArteItem = artesList[item_arte_index];
                 } else {

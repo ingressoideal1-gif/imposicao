@@ -4,7 +4,41 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v501)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v502)** — 2026-08-10 | Agente **1.2.23**
+
+---
+
+## [v503 — 2026-08-10] *(a publicar)* — A primeira pose ficava sem numeração por causa de um trabalho anterior
+
+### A causa
+O aviso que a v502 acrescentou entregou o caso na primeira ocorrência: gabarito com 2 elementos, 3 poses desenharam, 1 não, regra `pdf_multiple`.
+
+A prévia do painel de produção decidia usar o modo **multi-artes** assim:
+
+```js
+const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
+if (schema === "multi_artes" || (artesList && artesList.length > 0)) { ... }
+```
+
+A segunda condição é o defeito. A `state.impMultiArtes` é preenchida pelo painel de Multi-Artes e **nunca é limpa** — não há um único ponto no projeto que a esvazie. Bastava o operador ter usado multi-artes antes, na mesma sessão, para que o trabalho seguinte — de qualquer esquema — herdasse a lista.
+
+A partir daí, as poses cujo índice caísse na faixa de quantidade da primeira arte passavam a buscar a numeração **da arte** (`num1_id`), que já não existe, e desenhavam **nenhum elemento**. Como essa faixa começa no índice 0, era sempre a **primeira pose da folha**.
+
+O papel saía certo porque o payload do motor só leva `multi_artes` quando o esquema é multi-artes. Divergência de tela contra papel — de novo, e de novo pela mesma raiz: duas fontes de verdade para a mesma decisão.
+
+A prévia da view de Imposição (`script.js`) sempre usou o gate correto, `if (schema === "multi_artes")`. Era o `pedido.js` que estava fora de linha.
+
+### O conserto
+Uma variável só, resolvida uma vez por desenho: a lista de multi-artes só existe quando o esquema é multi-artes. `isMultiSelected` já força `schema = 'multi_artes'` antes, então a condição cobre os dois casos. Ela alimenta tanto a resolução por pose quanto o `buildStrictAssemblySets`, que tinha a mesma exposição no caminho `cut_stack` + *strict assembly*.
+
+### Como foi verificado
+Reproduzido primeiro — o que cinco tentativas anteriores não conseguiram, porque faltava justamente o resíduo de sessão. Com uma lista de multi-artes de uma unidade e regra Pdf Paginado: pose 1 com **0 pixels** de numeração, poses 2, 3 e 4 com ~1.700. Depois do conserto, pose 1 com **1.706** — igual às vizinhas.
+
+Multi-artes de verdade continua intacto, medido com a numeração do modelo em azul e as das artes em vermelho e verde: as poses usam a cor **da arte**, e nenhuma cai na do modelo.
+
+Regressões das v496 a v502 repetidas sem quebra.
+
+---
 
 ---
 
