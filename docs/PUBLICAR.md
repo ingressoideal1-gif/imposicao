@@ -157,8 +157,15 @@ O `vercel.json` tem duas regras de `Cache-Control`, e elas dependem uma da outra
 | **HTML** e tudo que não é `.js`/`.css` | `no-cache, no-store, must-revalidate` | O `index.html` **não tem versão na URL**. Se ele fosse cacheado, o navegador continuaria pedindo os assets da versão antiga depois de uma publicação. |
 | **`.js` e `.css`** | `public, max-age=3600` | Eles carregam `?v=NNN`, e o `publicar.ps1` bumpa esse número em **toda** publicação. URL nova = arquivo novo, na hora. Dentro da hora, o navegador reaproveita — são ~1,6 MB que deixam de ser baixados a cada carregamento. |
 
-As duas regras usam padrões **disjuntos** (a primeira exclui `.js`/`.css` por negação), então
-não há disputa de precedência: cada caminho casa com exatamente uma.
+Duas coisas sobre **onde** e **em que ordem** essas regras vivem, ambas aprendidas errando:
+
+- **O arquivo que vale é o `frontend/vercel.json`**, não o da raiz. O `publicar.ps1` roda
+  `vercel --prod` de dentro de `frontend/` (`Push-Location "$raiz\frontend"`), então é a
+  configuração daquela pasta que a Vercel lê. O `vercel.json` da raiz existe e é ignorado —
+  editar só ele não muda nada em produção.
+- **Quando mais de uma regra casa, vale a última.** Por isso a regra geral (`/(.*)`) vem
+  **primeiro** e as específicas (`.js`, `.css`) vêm **depois**. Invertendo a ordem, a geral
+  sobrescreve as específicas e tudo volta a ser `no-store` — sem erro nenhum, só sem efeito.
 
 Três coisas a não quebrar:
 
