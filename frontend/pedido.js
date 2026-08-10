@@ -845,6 +845,9 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     const isBack = state.previewFace === 'back' || previewPart === 'miolo_verso';
 
+    // Quantos elementos de numeração cada pose pintou nesta passada (ver o aviso no fim)
+    const posesDesenhadas = [];
+
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
             const P = row * cols + col;
@@ -1528,6 +1531,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         // O parametro `ctx` sombreia, de proposito, o contexto da folha dentro de toda
         // esta funcao: os elementos variaveis sao desenhados no GRUPO (arte + numeracao),
         // que so depois multiplica sobre a cor. Chame sempre passando gctx.
+        let vdpDesenhados = 0;
         const drawVdpElements = (currentNum, source_id, ctx) => {
 
             if (currentNum && currentNum.elements) {
@@ -1573,6 +1577,10 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     if (isBack && effectiveFace === 'front') return;
 
                     if (!isBack && effectiveFace === 'back') return;
+
+                    // Passou pelos filtros: este elemento vai mesmo ser pintado nesta pose.
+                    // A contagem alimenta o aviso de pose sem numeração, no fim do desenho.
+                    vdpDesenhados++;
 
                     // PosiÃ§Ã£o do elemento relativa ao canto superior esquerdo da cÃ©lula
 
@@ -1943,6 +1951,18 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             drawVdpElements(num2, 2, gctx);
         }
 
+        // Registro de quantos elementos de numeração esta pose de fato pintou. Serve ao
+        // aviso no fim do desenho: uma pose sem numeração no meio de poses com numeração
+        // é um defeito que passa despercebido na tela e só aparece no papel.
+        posesDesenhadas.push({
+            pose: P + 1,
+            item_index,
+            pagina: (schema === 'pdf_multiple')
+                ? (state.printMode === 'duplex' ? item_index * 2 + 1 : item_index + 1)
+                : null,
+            elementos: vdpDesenhados,
+        });
+
         // Arte + nome + numeração prontos: o grupo multiplica de uma vez só sobre a cor
         fecharGrupo();
 
@@ -1994,6 +2014,29 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     }
 
 
+
+    // ─── AVISO: pose sem numeração no meio de poses com numeração ──────────────
+    // Uma pose que não pinta nenhum elemento enquanto as vizinhas pintam é sempre
+    // defeito — o gabarito vale para a folha inteira. Na tela isso passa batido; no
+    // papel, custa tiragem. Aqui o desenho denuncia a si mesmo, com os dados que
+    // permitem entender o caso sem precisar reproduzi-lo.
+    const comNumeracao = posesDesenhadas.filter(p => p.elementos > 0);
+    const semNumeracao = posesDesenhadas.filter(p => p.elementos === 0);
+    if (comNumeracao.length && semNumeracao.length) {
+        console.warn(
+            '[Prévia] Numeração não desenhada em ' + semNumeracao.length + ' de '
+            + posesDesenhadas.length + ' poses desta folha.',
+            {
+                poses_sem_numeracao: semNumeracao,
+                poses_com_numeracao: comNumeracao,
+                regra: schema,
+                folha: window.currentPreviewPage || 1,
+                face: isBack ? 'verso' : 'frente',
+                numeracao_id: numId || null,
+                elementos_no_gabarito: (num && num.elements) ? num.elements.length : 0,
+            }
+        );
+    }
 
     // Borda da folha
 

@@ -4,7 +4,27 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v500)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v501)** — 2026-08-10 | Agente **1.2.23**
+
+---
+
+## [v502 — 2026-08-10] *(a publicar)* — A prévia denuncia a pose que ficou sem numeração
+
+### Por que existe
+Foi relatado que, numa folha de quatro poses, **só a primeira** aparecia sem a numeração do modelo — sem o QR e sem as guias do gabarito —, enquanto o PDF gerado saía correto. Confirmado que é defeito de tela, não de papel: o primeiro ingresso do PDF impresso tem tudo.
+
+Cinco reproduções foram tentadas e **nenhuma falhou**: folha 1×8 com texto; 2×2 com texto e QR; 2×2 com gabarito SVG, texto e QR; o caminho passando pelo `updatePedSummary()`, que é quem carrega o gabarito; e a navegação indo até a folha 2 e voltando. A leitura do código também não encontrou nenhuma condição que trate o primeiro item de forma diferente — nem no cálculo do valor sequencial, nem nos filtros de face, nem no laço de elementos.
+
+Quando um defeito só aparece com os dados de quem usa, o caminho não é adivinhar: é fazer o desenho contar o que fez.
+
+### O que passou a existir
+A prévia agora conta, **por pose**, quantos elementos de numeração realmente pintou. Se algumas poses pintaram e outras não, ela emite um aviso no console com o que permite entender o caso sem reproduzi-lo: quais poses ficaram sem, o índice e a página de cada uma, a regra de paginação, a folha, a face, o id da numeração e quantos elementos o gabarito tem.
+
+O aviso é para a **assimetria**, não para a ausência: uma folha inteira sem numeração é configuração (gabarito vazio, elementos só do verso), não defeito, e não gera ruído. Verificado que não dispara em nenhum dos dois casos legítimos.
+
+Isso não conserta o sintoma — conserta a cegueira. A próxima ocorrência diz onde olhar.
+
+---
 
 > As entradas das v494 e v495 ainda não foram escritas; o histórico delas está só nas
 > mensagens de commit.
