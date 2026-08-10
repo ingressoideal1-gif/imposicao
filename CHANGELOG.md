@@ -4,7 +4,41 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v503)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v505)** — 2026-08-10 | Agente **1.2.23**
+
+---
+
+## [v505 — 2026-08-10] — Prazo Entrega em badge colorido, no fim da lista
+
+### O que mudou
+No Painel de Produção, a coluna **Prazo Entrega** deixa de ser texto e passa a um badge colorido com a data em `dd/MM`. Também foi movida para o **fim** da lista:
+
+```
+Nº Pedido · Cliente/Evento · Progresso · Preview · Itens · Quantidade · Frete · Status · Prazo Entrega
+```
+
+### As cores
+
+| Cor | Regra | Equivale ao botão |
+|---|---|---|
+| 🔴 `#ef4444` | data **e hora** anteriores ao momento atual | Atrasados |
+| 🟠 `#f97316` | entrega hoje, ainda não vencida | Para Hoje |
+| 🔵 `#2f9fe8` | data futura | — |
+
+`formatPrazoBadge` reaproveita `pedidoEstaAtrasado` e `pedidoEhParaHoje`, as mesmas funções que alimentam os botões de filtro. Não é economia de código: é a garantia de que a cor da linha nunca discorde do filtro selecionado — tudo que está vermelho aparece em "Atrasados", tudo que está laranja aparece em "Para Hoje". Pedido sem prazo, ou com prazo inválido, mostra `--`.
+
+A regra ser por **hora** e não por dia veio da referência visual do pedido, que trazia dois badges com a mesma data `10/08`, um vermelho e outro laranja — só a hora separa os dois casos. Data e hora completas ficam no `title`.
+
+`formatPrazoDestaque` continua no arquivo, agora sem uso.
+
+### Seletor de setor
+
+No `index.html`, o botão "Impressão" (`setFiltroSetor('IMPRESSAO')`, ícone de impressora) virou "Laser" (`setFiltroSetor('LASER')`, ícone de sol). Trocado **o valor junto com o rótulo** — mudar só o texto deixaria um botão escrito "Laser" filtrando pelo setor `IMPRESSAO`. Alinha com o `producao.html`, que já tinha esse botão como Laser.
+
+> Se os itens estiverem cadastrados com setor `IMPRESSAO` em vez de `LASER`, o botão passa a não filtrar nada. Vale conferir num pedido de laser.
+
+### Como foi verificado
+Nove casos de data cobrindo a cor e o formato (hoje com hora vencida, hoje ainda por vir, ontem, amanhã, semana seguinte, sem prazo, prazo inválido) — todos com o resultado esperado. Conferida a correspondência de 9 cabeçalhos para 9 células, na ordem nova. Não foi verificado na tela.
 
 ---
 

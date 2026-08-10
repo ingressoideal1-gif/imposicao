@@ -15966,7 +15966,7 @@ function renderOrdens() {
                        <span style="display:none; font-size:0.78rem; color:var(--text-dim);">${escapeHtml(freteRaw)}</span>`
                     : `<span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text); border:1px solid rgba(255,255,255,0.1); font-size:0.75rem;">${escapeHtml(freteRaw)}</span>`;
 
-                const prazoInfo = formatPrazoDestaque(os.prazo_entrega);
+                const prazoBadgeHtml = formatPrazoBadge(os);
                 let nomeEventoHtml = '';
                 const osNumeroInt = parseInt(os.numero);
                 const artesDaOS = (state.todasArtes || []).filter(a => a.id_int === osNumeroInt);
@@ -15987,11 +15987,11 @@ function renderOrdens() {
                         </td>
                         <td>${progressBarHtml}</td>
                         <td style="text-align: center; vertical-align: middle;">${previewHtml}</td>
-                        <td style="font-size: 0.82rem; ${prazoInfo.style}">${prazoInfo.text}</td>
                         <td><span class="badge">${totalItens} ${totalItens === 1 ? 'modelo' : 'modelos'}</span></td>
                         <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
                         <td style="text-align:center; vertical-align:middle;">${freteHtml}</td>
                         <td>${getStatusImpressaoBadge(statusImpressaoPedido)}</td>
+                        <td style="text-align:center; vertical-align:middle;">${prazoBadgeHtml}</td>
                     </tr>
                 `;
 
@@ -16403,6 +16403,38 @@ function getFallbackPrazo(createdAtStr, numero) {
         return new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
     }
 }
+
+/**
+ * Badge colorido da coluna Prazo Entrega no Painel de Produção.
+ * Usa exatamente as mesmas regras dos botões Atrasados / Para Hoje, para a cor
+ * da linha nunca discordar do filtro: vermelho = data e hora já passaram,
+ * laranja = entrega hoje ainda por vir, azul = data futura.
+ */
+function formatPrazoBadge(os) {
+    const prazo = _prazoDoPedido(os);
+    if (!prazo) return '<span style="color: var(--text-dim);">--</span>';
+
+    let cor, titulo;
+    if (pedidoEstaAtrasado(os)) {
+        cor = '#ef4444';
+        titulo = 'Atrasado';
+    } else if (pedidoEhParaHoje(os)) {
+        cor = '#f97316';
+        titulo = 'Entrega hoje';
+    } else {
+        cor = '#2f9fe8';
+        titulo = 'Prazo futuro';
+    }
+
+    const dia = String(prazo.getDate()).padStart(2, '0');
+    const mes = String(prazo.getMonth() + 1).padStart(2, '0');
+    const completa = prazo.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).replace(',', '');
+
+    return `<span title="${titulo} — ${completa}" style="display:inline-block; background:${cor};`
+        + ` color:#ffffff; font-weight:800; font-size:1rem; padding:4px 14px; border-radius:6px;`
+        + ` box-shadow:0 3px 8px rgba(0,0,0,0.35); letter-spacing:0.02em; white-space:nowrap;">${dia}/${mes}</span>`;
+}
+window.formatPrazoBadge = formatPrazoBadge;
 
 function formatPrazoDestaque(prazoStr) {
     if (!prazoStr) return { text: '--', style: '' };
