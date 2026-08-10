@@ -4231,9 +4231,16 @@ window.runPedImposition = async function (mode) {
 
 
 
-        const res = await fetch(`${baseUrl}/api/impose`, { 
+        // O upload da imposição não passa pelo rewrite da Vercel: ela recusa corpos
+        // grandes com FUNCTION_PAYLOAD_TOO_LARGE. Ver baseParaImposicao() no script.js.
+        const baseUpload = typeof baseParaImposicao === 'function'
+            ? baseParaImposicao(baseUrl, window.location.origin)
+            : baseUrl;
+        const urlImpose = `${baseUpload}/api/impose`;
 
-            method: 'POST', 
+        const res = await fetch(urlImpose, {
+
+            method: 'POST',
 
             headers: headers,
 
@@ -4248,7 +4255,7 @@ window.runPedImposition = async function (mode) {
             // A resposta de erro nem sempre é JSON — ver descreverErroHttp() no script.js.
             // Fazer res.json() aqui trocava a mensagem real por um erro de sintaxe de JSON.
             throw new Error(typeof descreverErroHttp === 'function'
-                ? await descreverErroHttp(res, `${baseUrl}/api/impose`)
+                ? await descreverErroHttp(res, urlImpose)
                 : `Erro ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200) || res.statusText}`);
 
         }

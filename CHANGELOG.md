@@ -4,10 +4,40 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v498)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v499)** — 2026-08-10 | Agente **1.2.23**
 
 > As entradas das v494 e v495 ainda não foram escritas; o histórico delas está só nas
 > mensagens de commit.
+
+---
+
+## [v500 — 2026-08-10] *(a publicar)* — O upload da imposição para de passar pela Vercel
+
+### A causa, agora identificada
+A mensagem clara que a v499 destravou entregou o culpado na primeira ocorrência:
+
+> Erro 413: o arquivo enviado é grande demais para o servidor (Request Entity Too Large **FUNCTION_PAYLOAD_TOO_LARGE** gru1::…)
+
+`FUNCTION_PAYLOAD_TOO_LARGE` e `gru1` são da **Vercel**, não do motor. As chamadas de API do site passam por `/api/*`, que o `vercel.json` reescreve para o Render — ótimo para tudo, menos para esta requisição, que carrega o PDF da arte e, num modelo em modo PDF com centenas de páginas, chega a centenas de MB. O intermediário recusa antes de o motor ver qualquer coisa.
+
+### O conserto
+O upload da imposição passa a ir **direto ao motor**, pulando o intermediário — o destino final era o Render de qualquer forma. O `security_config.ALLOWED_ORIGINS` já libera o domínio do site, e o regex cobre os previews e o localhost, então o CORS responde sem mudança nenhuma no servidor.
+
+O servidor local e o agente **não são afetados**: quando a imposição roda em `localhost` ou `127.0.0.1` não há Vercel no meio, e o endereço é mantido. Só a rota de nuvem muda.
+
+### Como foi verificado
+Medido contra a produção, com o mesmo corpo de **150 MB** nos dois caminhos:
+
+| Caminho | Resultado |
+|---|---|
+| Direto no motor (novo) | **chega** — o motor responde o próprio erro de validação, em JSON |
+| Pelo rewrite da Vercel (antigo) | **falha** — `502 ROUTER_EXTERNAL_TARGET_CONNECTION_ERROR`, na mesma região `gru1` do erro relatado |
+
+Antes disso, a escada de tamanhos mostrou que 3, 4, 5, 6, 20, 40 e 60 MB atravessam a Vercel sem problema: o teto não é baixo, é alto — e um modelo em modo PDF passa dele.
+
+A decisão de rota foi verificada nos seis casos que importam: site na nuvem, preview da Vercel, site respondendo como se fosse agente, agente local na 9000, servidor local na 8080 e desenvolvimento. Só os três primeiros são desviados.
+
+Regressões das v496 a v499 repetidas sem quebra.
 
 ---
 

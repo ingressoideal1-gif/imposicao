@@ -3511,6 +3511,35 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
  * passar por aqui: `ctx.drawImage(img, x, y, w, h)` cru estica a arte e faz a tela
  * divergir do papel.
  */
+/** Endereço do motor na nuvem — o mesmo destino do rewrite `/api/*` do vercel.json. */
+const MOTOR_NUVEM = 'https://imposicao.onrender.com';
+
+/**
+ * Devolve para onde o **upload da imposição** deve ir.
+ *
+ * As chamadas de API do site passam por `/api/*`, que o `vercel.json` reescreve para
+ * o motor no Render. Isso é bom para tudo — menos para esta requisição, que carrega o
+ * PDF da arte e pode ter centenas de MB. A Vercel recusa corpos grandes no caminho
+ * dela, e devolve `413 Request Entity Too Large FUNCTION_PAYLOAD_TOO_LARGE`, um erro
+ * que não vem do motor e que o operador não tem como contornar.
+ *
+ * Como o destino final é o Render de qualquer jeito, o upload vai direto para lá e
+ * pula o intermediário. O `security_config.ALLOWED_ORIGINS` já libera o domínio do
+ * site (e o regex cobre os previews e o localhost), então o CORS responde.
+ *
+ * O servidor local e o agente **não são afetados**: quando a imposição roda em
+ * `localhost` ou `127.0.0.1`, não há Vercel no meio e o endereço é mantido.
+ *
+ * @param baseUrl base já resolvida pelo chamador ('' = mesma origem da página)
+ * @param origem  origem da página; parâmetro para poder ser testado
+ */
+function baseParaImposicao(baseUrl, origem) {
+    const alvo = (baseUrl || origem || window.location.origin || '').replace(/\/+$/, '');
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(alvo)) return baseUrl;
+    return MOTOR_NUVEM;
+}
+window.baseParaImposicao = baseParaImposicao;
+
 /**
  * Descreve uma resposta HTTP de erro em uma frase que serve ao operador.
  *
@@ -9507,9 +9536,13 @@ window.runImposition = async function (mode, returnBlob = false) {
 
 
 
-        const res = await fetch(`${baseUrl}/api/impose`, { 
+        // Upload direto ao motor: o rewrite da Vercel recusa corpos grandes.
+        // Ver baseParaImposicao(), acima neste arquivo.
+        const urlImpose = `${baseParaImposicao(baseUrl, window.location.origin)}/api/impose`;
 
-            method: 'POST', 
+        const res = await fetch(urlImpose, {
+
+            method: 'POST',
 
             headers: headers,
 
@@ -9521,7 +9554,7 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         if (!res.ok) {
 
-            throw new Error(await descreverErroHttp(res, `${baseUrl}/api/impose`));
+            throw new Error(await descreverErroHttp(res, urlImpose));
 
         }
 
