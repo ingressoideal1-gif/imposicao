@@ -58,6 +58,23 @@ DESCENDER_FRACTIONS = {
 }
 _DESCENDER_DEFAULT = 0.21  # valor médio para fontes do sistema (TTF/OTF)
 
+def _so_layout(el: dict) -> bool:
+    """Elemento marcado como "Layout" na Lista de Numeracoes.
+
+    O seletor Finalidade existe apenas nos elementos PDF e SVG e vale "print"
+    (o padrao, e o que todo o acervo anterior tem gravado) ou "layout". Um
+    elemento de layout existe so para conferencia nas janelas de visualizacao
+    do frontend: ele nunca e imposto, nunca entra no PDF gerado e nunca vai ao
+    papel. O frontend ja o retira do payload, mas o engine confere por conta
+    propria — o payload tambem chega por outros caminhos (agente local, um
+    replay de payload salvo) e imprimir o que a tela prometeu nao imprimir
+    custa papel e confianca.
+    """
+    if el.get("type") not in ("SVG", "PDF"):
+        return False
+    return str(el.get("render_mode", "print")).strip().lower() == "layout"
+
+
 def _hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
     """Converte #RRGGBB para (r, g, b) normalizados 0-1."""
     h = hex_color.lstrip("#")
@@ -290,6 +307,8 @@ class ImpositionConfig:
             for el in numeracao["elements"]:
                 if el.get("type") == "METADATA":
                     continue
+                if _so_layout(el):
+                    continue
                 e = dict(el)
                 # Converter mm → pt para todos os campos de posição/tamanho
                 e["_x"] = e.get("x_mm", 0) * MM2PT
@@ -319,6 +338,8 @@ class ImpositionConfig:
 
             for el in numeracao_2["elements"]:
                 if el.get("type") == "METADATA":
+                    continue
+                if _so_layout(el):
                     continue
                 e = dict(el)
                 # Converter mm → pt para todos os campos de posição/tamanho
@@ -445,6 +466,12 @@ class ImpositionEngine:
 
     def _render_element(self, page: fitz.Page, el: dict, cell_x0: float, cell_y0: float, val: int, csv_row: dict | None = None):
         """Renderiza um elemento VDP na posicao absoluta da celula."""
+        # Guarda final: um elemento de Layout nunca chega ao papel. Os tres pontos
+        # de ingestao ja o descartam; esta linha cobre qualquer caminho novo que
+        # monte uma lista de elementos sem passar por eles.
+        if _so_layout(el):
+            return
+
         # O frontend usa ancoragem central: (x_mm, y_mm) = centro do elemento.
         # Converter para top-left (canto superior esquerdo) para o PyMuPDF.
         t = el["type"]
@@ -913,6 +940,8 @@ class ImpositionEngine:
 
                     for el in num_obj["elements"]:
                         if el.get("type") == "METADATA":
+                            continue
+                        if _so_layout(el):
                             continue
                         e = dict(el)
                         e["_x"] = e.get("x_mm", 0) * MM2PT

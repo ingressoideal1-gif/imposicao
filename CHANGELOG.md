@@ -4,7 +4,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v505)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v506)** — 2026-08-10 | Agente **1.2.23**
+
+---
+
+## [v506 — 2026-08-10] — Finalidade do elemento PDF/SVG: Layout ou Impressão
+
+### O que mudou
+Todo elemento de numeração do tipo **PDF** ou **SVG** ganhou, na sua configuração dentro do editor da Lista de Numerações, um seletor **Finalidade** com duas opções:
+
+| Opção | Comportamento |
+|---|---|
+| **Impressão** (padrão) | Visualizado e impresso, exatamente como antes. |
+| **Layout** | Só visualização: aparece nas janelas de arte, mas **não é impresso, não entra em PDF gerado e não aparece na prévia de imposição**. |
+
+O elemento nasce em Impressão, e elemento gravado antes desta versão — que não tem o campo — também é Impressão. Nada do acervo muda de comportamento.
+
+A separação que decide cada tela é **quem promete o quê**:
+
+| Tela | Elemento de Layout | Por quê |
+|---|---|---|
+| Canvas do editor de numeração | **aparece**, com borda tracejada âmbar e o selo `LAYOUT` | é onde se posiciona o elemento |
+| Janela de arte do pedido, modo PDF, link do cliente, Criador de Arte | **aparece** | são janelas de visualização: mostram como a peça vai ficar |
+| **Prévia de imposição** (view Imposição e painel de Pedido) | **não aparece** | essa janela reflete sempre o comportamento esperado na impressão |
+| PDF Gabarito | **não aparece** | é um PDF de produção |
+| PDF gerado pelo motor / impressão | **não aparece** | — |
+
+O campo novo é `render_mode` no JSON do elemento, com valor `"print"` ou `"layout"`. Como vive dentro de `elements`, não houve mudança de esquema no banco, e duplicar uma numeração já o carrega junto.
+
+### As duas barreiras, de propósito
+O `engine.py` descarta o elemento de Layout nos **três** pontos em que ingere elementos (as duas cargas do `ImpositionConfig` e o `parse_elements` do `process`), mais uma guarda final no `_render_element` para qualquer caminho novo.
+
+O frontend **também** o retira do payload antes de enviar, nos dois construtores (`script.js` e `pedido.js`). Não é redundância inútil: o `NewProd.exe` carrega uma **cópia congelada** do `engine.py`, então uma estação com agente antigo imprimiria o que a tela prometeu que não seria impresso. Filtrar na origem fecha essa janela sem depender de republicar o agente.
+
+O fundo vetorial do PDF Gabarito passou a procurar o primeiro elemento PDF **de impressão**, em vez de ler a coluna `pdf_content` da numeração primeiro. A coluna é apenas derivada do primeiro elemento PDF ao salvar; o arquivo é do elemento, e é lá que dá para saber a finalidade. A coluna continua como fallback para os registros legados, sem elemento PDF.
+
+### De quebra
+O selo do card de todo elemento **PDF** exibia `undefined`: o mapa `typeLabel` de `renderElementsList()` tinha entrada para `SVG` mas não para `PDF` (o `typeBadge` ao lado já tinha). Agora mostra `📄 PDF`.
+
+### Como foi verificado
+**No motor**, impondo de verdade: uma folha de 100×50 mm com dois elementos PDF idênticos (um quadrado preto de 20 mm), o da esquerda em Impressão e o da direita em Layout. O PDF gerado tem **6.241 pixels escuros à esquerda e 0 à direita**. Controle com os dois em Impressão: 6.241 e 6.320 — ou seja, o teste mede mesmo o que promete.
+
+**No navegador**, contra o app rodando: 18 asserções, todas passando. As que importam — o editor desenha os dois; a janela de visualização desenha os dois; a prévia de imposição perde 147.456 pixels na metade direita quando o elemento vira Layout, enquanto a metade esquerda não muda um pixel; o gabarito rasterizado sai com 25.600 pixels à esquerda e 0 à direita, e 25.600 dos dois lados no controle.
 
 ---
 

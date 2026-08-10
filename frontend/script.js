@@ -3583,6 +3583,36 @@ async function descreverErroHttp(res, url) {
 }
 window.descreverErroHttp = descreverErroHttp;
 
+/**
+ * Elemento marcado como **Layout** na configuração do elemento PDF/SVG.
+ *
+ * Layout significa "só para conferência na tela": o elemento aparece no editor,
+ * na janela de arte do pedido e no link do cliente, mas **não** aparece na prévia
+ * de imposição (que reflete sempre o que vai sair na impressão), não entra no PDF
+ * gerado e não é enviado ao engine.
+ *
+ * O seletor só existe para PDF e SVG — qualquer outro tipo é sempre impressão,
+ * mesmo que o campo apareça por acidente no JSON. Elemento sem o campo é
+ * impressão, que é como todo o acervo anterior a esta versão foi gravado.
+ */
+function elementoSoLayout(el) {
+    return !!el && (el.type === 'SVG' || el.type === 'PDF')
+        && String(el.render_mode || 'print').trim().toLowerCase() === 'layout';
+}
+window.elementoSoLayout = elementoSoLayout;
+
+/**
+ * Cópia rasa da numeração sem os elementos de Layout — o que deve ser enviado ao
+ * engine e usado em qualquer geração de PDF. Não muta o objeto original, que
+ * costuma ser uma referência viva dentro de `state.numeracoes`.
+ */
+function numeracaoSemElementosDeLayout(num) {
+    if (!num || !Array.isArray(num.elements)) return num;
+    if (!num.elements.some(elementoSoLayout)) return num;
+    return { ...num, elements: num.elements.filter(el => !elementoSoLayout(el)) };
+}
+window.numeracaoSemElementosDeLayout = numeracaoSemElementosDeLayout;
+
 function drawImageContain(ctx, img, x, y, w, h) {
     const iw = img.naturalWidth || img.width || 0;
     const ih = img.naturalHeight || img.height || 0;
@@ -3904,6 +3934,27 @@ function drawElement(ctx, el, S) {
             ctx.setLineDash([]);
         } else {
             ctx.strokeRect(-hw, -hh, w, h);
+        }
+
+        // Elemento de Layout: o editor é a única tela em que ele aparece marcado.
+        // Nas janelas de arte ele é desenhado como qualquer outro, porque lá o que
+        // interessa é o resultado visual; aqui o operador precisa enxergar que este
+        // elemento não vai ao papel.
+        if (elementoSoLayout(el)) {
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.strokeRect(-hw, -hh, w, h);
+            ctx.setLineDash([]);
+
+            const fsSelo = Math.max(7, Math.min(12, h * 0.12));
+            ctx.font = `700 ${fsSelo}px Inter, sans-serif`;
+            ctx.fillStyle = '#f59e0b';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('LAYOUT', -hw, -hh - 2);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
         }
 
     }
@@ -5148,10 +5199,11 @@ window.addElement = function (type, extras) {
     if (type === 'BARCODE') Object.assign(base, { width_mm: 40, height_mm: 10, barcode_format: 'code128', pad: 4, prefix: '', suffix: '' });
 
     // SVG e PDF nascem vazios: quem os cria e a box "Adicionar Pdf e Svg", passando
-    // o arquivo e o tamanho natural por `extras`.
-    if (type === 'SVG') Object.assign(base, { width_mm: 20, height_mm: 20, svg_content: '' });
+    // o arquivo e o tamanho natural por `extras`. Nascem tambem em "Impressao",
+    // o mesmo comportamento de todo elemento anterior ao seletor Finalidade.
+    if (type === 'SVG') Object.assign(base, { width_mm: 20, height_mm: 20, svg_content: '', render_mode: 'print' });
 
-    if (type === 'PDF') Object.assign(base, { width_mm: 20, height_mm: 20, pdf_content: '' });
+    if (type === 'PDF') Object.assign(base, { width_mm: 20, height_mm: 20, pdf_content: '', render_mode: 'print' });
 
     if (type === 'PICOTE') Object.assign(base, { name: 'Picote' });
     
@@ -5216,7 +5268,9 @@ function renderElementsList() {
 
 
 
-    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
+    // PDF faltava aqui desde sempre, e o card de todo elemento PDF exibia
+    // "undefined" no selo — o typeBadge ao lado já tinha a entrada.
+    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PDF: '📄 PDF', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
 
     const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray', TEATRO_FILA: 'badge-purple', TEATRO_LUGAR: 'badge-purple', TEATRO_COMBO: 'badge-purple', CAMAROTE_LOCAL: 'badge-amber', CAMAROTE_PESSOA: 'badge-amber', CAMAROTE_PESSOA_TOTAL: 'badge-amber' };
 
@@ -5395,11 +5449,25 @@ function renderElementsList() {
             const natTxt = nat
                 ? `original: ${arred2(nat.w)} × ${arred2(nat.h)} mm`
                 : 'tamanho original ainda não medido';
+            const soLayout = elementoSoLayout(el);
 
             extraFields = `
 
                 <div class="form-group el-full" style="font-size:0.75rem;color:var(--text-dim);">
                     ${el.type === 'PDF' ? '📄' : '🎨'} ${nomeDoArquivoDoElemento(el)} — ${natTxt}
+                </div>
+
+                <div class="form-group el-full">
+                    <label>Finalidade</label>
+                    <select class="form-control" onchange="updateElRenderMode('${el.id}', this.value)">
+                        <option value="print" ${soLayout ? '' : 'selected'}>Impressão</option>
+                        <option value="layout" ${soLayout ? 'selected' : ''}>Layout</option>
+                    </select>
+                    <div style="font-size:0.72rem;color:${soLayout ? 'var(--amber, #f59e0b)' : 'var(--text-dim)'};margin-top:4px;">
+                        ${soLayout
+                    ? '👁️ Só visualização: aparece nas janelas de arte, mas não é impresso, não entra no PDF gerado e não aparece na prévia de imposição.'
+                    : '🖨️ Visualizado e impresso, como qualquer outro elemento.'}
+                    </div>
                 </div>
 
                 <div class="form-group"><label>Largura (mm)</label><input class="form-control" type="number" value="${el.width_mm || 20}" min="1" max="1000" step="0.5" onchange="updateElDimensaoArte('${el.id}','width_mm',+this.value)"></div>
@@ -5628,9 +5696,13 @@ window.renderBoxArquivos = function () {
         const w = Math.round((el.width_mm || 0) * 10) / 10;
         const h = Math.round((el.height_mm || 0) * 10) / 10;
         const selecionado = (state.selectedElIds || []).includes(el.id);
+        const selo = elementoSoLayout(el)
+            ? `<span style="font-size:0.68rem;font-weight:700;color:var(--amber, #f59e0b);border:1px solid currentColor;border-radius:4px;padding:0 4px;" title="Só visualização — não é impresso nem entra no PDF gerado">LAYOUT</span>`
+            : '';
         return `<div class="num-arquivo-item${selecionado ? ' selected' : ''}" onclick="selectElId('${el.id}', false)" title="Clique para selecionar este elemento no canvas">
             <span class="num-arquivo-icone">${icone}</span>
             <span class="num-arquivo-nome">${nome}</span>
+            ${selo}
             <span class="num-arquivo-dim">${w} × ${h} mm</span>
             <button class="btn btn-sm btn-ghost btn-danger" style="padding:2px 6px;" onclick="event.stopPropagation(); removeEl('${el.id}')" title="Remover este elemento">✕</button>
         </div>`;
@@ -5653,6 +5725,22 @@ window.updateEl = function (id, field, value) {
 };
 
 
+
+/**
+ * Troca a finalidade de um elemento PDF/SVG entre "Impressão" e "Layout".
+ * Re-renderiza a lista porque a mudança muda o texto de ajuda do card e o
+ * selo da box "Adicionar Pdf e Svg", além do desenho no canvas.
+ */
+window.updateElRenderMode = function (id, valor) {
+    const el = state.numElements.find(e => e.id === id);
+    if (!el) return;
+
+    el.render_mode = valor === 'layout' ? 'layout' : 'print';
+
+    saveNumHistory();
+    renderElementsList();
+    drawCanvas();
+};
 
 /**
  * Redimensiona um elemento PDF ou SVG mantendo a proporção original — mexer numa
@@ -7444,6 +7532,10 @@ function drawPreview() {
 
                 currentNum.elements.forEach(el => {
 
+                    // Esta janela reflete sempre o que vai sair na impressão: o
+                    // elemento marcado como Layout não aparece aqui, de propósito.
+                    if (elementoSoLayout(el)) return;
+
                     const printMode = document.getElementById('imp-print-mode')?.value || 'front';
 
                     let effectiveFace = el.face || 'both';
@@ -9134,6 +9226,17 @@ window.runImposition = async function (mode, returnBlob = false) {
         if (ma.numeracao_2) _injectFontUrls(ma.numeracao_2);
     }
 
+    // Tirar do payload os elementos marcados como Layout. O engine.py também os
+    // ignora, mas o NewProd.exe carrega uma cópia congelada do engine: filtrar
+    // aqui garante que uma estação com agente antigo não imprima o que a tela
+    // prometeu que não seria impresso. `numeracaoSemElementosDeLayout` devolve
+    // cópia rasa — as numerações de multi-artes são referências vivas do state.
+    payloadNumeracao = numeracaoSemElementosDeLayout(payloadNumeracao);
+    for (const ma of payloadMultiArtes) {
+        if (ma.numeracao) ma.numeracao = numeracaoSemElementosDeLayout(ma.numeracao);
+        if (ma.numeracao_2) ma.numeracao_2 = numeracaoSemElementosDeLayout(ma.numeracao_2);
+    }
+
     const payload = {
 
         formato_id: fmtId,
@@ -9160,7 +9263,7 @@ window.runImposition = async function (mode, returnBlob = false) {
             if (!num2) return null;
             const copy = JSON.parse(JSON.stringify(num2));
             _injectFontUrls(copy);
-            return copy;
+            return numeracaoSemElementosDeLayout(copy);
         })(),
 
         seq_start: start,
@@ -25841,6 +25944,10 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
 
     // Desenhar cada elemento da numeração (transparente por padrão)
     num.elements.forEach(el => {
+        // O gabarito é um PDF de produção: o elemento marcado como Layout fica
+        // de fora, pela mesma razão que fica de fora da imposição.
+        if (elementoSoLayout(el)) return;
+
         const x = el.x_mm * S;
         const y = el.y_mm * S;
         const color = el.color || '#000000';
@@ -26018,11 +26125,16 @@ async function exportarPdfGabarito() {
 
             if (num) {
                 // 1. Tentar localizar um PDF de fundo original na numeração (vector)
-                let rawPdfContent = num.pdf_content;
-                if (!rawPdfContent && num.elements) {
-                    const pdfEl = num.elements.find(e => e.type === 'PDF' && e.pdf_content);
-                    if (pdfEl) rawPdfContent = pdfEl.pdf_content;
-                }
+                // O arquivo é do elemento, não da numeração: a coluna pdf_content é
+                // apenas derivada do primeiro elemento PDF ao salvar. Procurar no
+                // elemento primeiro é o que permite pular os marcados como Layout,
+                // que existem só para conferência na tela e não podem virar o fundo
+                // vetorial de um PDF de produção. A coluna fica como fallback para
+                // os registros legados, anteriores ao elemento PDF por elemento.
+                const pdfEls = (num.elements || []).filter(e => e.type === 'PDF' && e.pdf_content);
+                const pdfElImpresso = pdfEls.find(e => !elementoSoLayout(e));
+                let rawPdfContent = pdfElImpresso ? pdfElImpresso.pdf_content
+                    : (pdfEls.length ? null : num.pdf_content);
 
                 if (rawPdfContent) {
                     try {

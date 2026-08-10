@@ -32,6 +32,16 @@ Três regras carregam o resto:
    o marcador de CAMAROTE lido por `engine.py:222` e mais três pontos, que testa se o
    nome do arquivo contém "CAMAROTE".
 
+Desde a v506 existe uma quarta regra: cada elemento PDF/SVG tem uma **Finalidade**
+(`render_mode`), `"print"` ou `"layout"`. Um elemento de Layout aparece nas janelas
+que mostram **como a peça vai ficar** (editor, janela de arte, modo PDF, link do
+cliente, Criador de Arte) e some das que prometem **o comportamento da impressão** —
+a prévia de imposição, o PDF Gabarito e o `engine.py`. Ao acrescentar renderizador
+novo, é essa a pergunta a responder, não "é canvas ou é PDF". Use
+`elementoSoLayout()` / `numeracaoSemElementosDeLayout()` no frontend e `_so_layout()`
+no `engine.py`, e não remova a filtragem do payload achando que a do engine basta: o
+`NewProd.exe` roda uma cópia congelada do `engine.py`.
+
 E uma armadilha de história: até a v489 o PDF da numeração também servia de **Arte de
 Fundo** do canvas, e reabrir uma numeração pintava o PDF do elemento por baixo a 55%
 de opacidade — o "fantasma". A arte de fundo é `state.bgImage` e mais nada. Se um

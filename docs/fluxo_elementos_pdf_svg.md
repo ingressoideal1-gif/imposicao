@@ -22,6 +22,7 @@ O arquivo é **do elemento**, não da numeração. Cada elemento PDF/SVG carrega
 | `pdf_filename` / `svg_filename` | o nome, para a box exibir |
 | `natural_w_mm` / `natural_h_mm` | o tamanho natural, para o botão "Tamanho original (100%)" |
 | `width_mm` / `height_mm` | o tamanho em uso, sempre na proporção do natural |
+| `render_mode` | `"print"` (padrão) ou `"layout"` — ver "Finalidade", abaixo |
 | `_pdfCanvas` / `_svgImage` | cache de render, nunca persistido |
 
 Dá para ter quantos quiser, de qualquer mistura. Quem os cria é a box **Adicionar
@@ -61,6 +62,49 @@ elementos vinda do banco.
 A impressão não re-renderiza nada: recebe o PDF que o engine gerou e manda para a
 impressora. Logo, **o que o engine faz é o que sai no papel**, e qualquer divergência
 entre tela e engine é divergência entre tela e papel.
+
+---
+
+## Finalidade: Layout ou Impressão (v506)
+
+Cada elemento PDF/SVG tem um seletor **Finalidade** no card de configuração, gravado
+em `render_mode`. `"print"` é o padrão e é o que todo elemento anterior à v506 tem
+(campo ausente = impressão). `"layout"` significa **só visualização**: o elemento
+existe para conferir o encaixe na tela e nunca vai ao papel.
+
+O critério que decide cada renderizador é **o que aquela tela promete**:
+
+| Renderizador | Elemento de Layout |
+|---|---|
+| `drawElement()` — canvas do editor | **desenha**, com borda tracejada âmbar e o selo `LAYOUT` |
+| `drawAmostraFace()` (`script.js` e `cliente.js`) | **desenha** |
+| `drawNumeracaoElementsOverCanvas()` (modo PDF, nas duas cópias) | **desenha** |
+| `renderEditorLayer2Numeracao()` — Criador de Arte | **desenha** |
+| `drawVdpElements()` — prévia de imposição, **nas duas cópias** | **pula** |
+| `criarCanvasNumeracaoRasterizada()` — PDF Gabarito | **pula** |
+| `engine.py` | **pula** |
+
+A prévia de imposição é a exceção entre as janelas de tela porque ela promete o
+comportamento da impressão, não a aparência da peça. Ao acrescentar um renderizador
+novo, a pergunta a responder é essa, e não "é canvas ou é PDF".
+
+Os predicados são `elementoSoLayout(el)` e `numeracaoSemElementosDeLayout(num)`, em
+`frontend/script.js` e expostos em `window` — o `pedido.js` usa os dois de lá, como já
+fazia com a `drawImageContain()`. No backend é `_so_layout(el)`, no topo do `engine.py`.
+
+**A filtragem é dupla de propósito.** O `engine.py` descarta o elemento nos três
+pontos de ingestão (as duas cargas do `ImpositionConfig` e o `parse_elements` do
+`process`) e ainda tem uma guarda no `_render_element`. Mas o frontend **também** o
+retira do payload antes de enviar, nos dois construtores. A razão é o `NewProd.exe`:
+ele carrega uma cópia congelada do `engine.py`, então uma estação com agente antigo
+imprimiria o que a tela prometeu que não seria impresso. Não remova nenhum dos dois
+lados achando que o outro basta.
+
+Uma consequência no PDF Gabarito: o fundo vetorial passou a procurar o primeiro
+elemento PDF **de impressão** em vez de ler a coluna `pdf_content` da numeração
+primeiro. A coluna é apenas derivada do primeiro elemento PDF ao salvar; o arquivo é
+do elemento, e é no elemento que existe a finalidade. A coluna segue como fallback
+para registros legados, sem elemento PDF.
 
 ---
 

@@ -1574,6 +1574,12 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                 currentNum.elements.forEach(el => {
 
+                    // Esta janela reflete sempre o que vai sair na impressão: o
+                    // elemento marcado como Layout não aparece aqui, de propósito.
+                    // `elementoSoLayout` vem do script.js, que a index.html carrega
+                    // antes deste arquivo (mesma dependência da drawImageContain).
+                    if (typeof elementoSoLayout === 'function' && elementoSoLayout(el)) return;
+
                     const printMode = document.getElementById('ped-print-mode')?.value || 'front';
 
                     let effectiveFace = el.face || 'both';
@@ -3961,6 +3967,20 @@ window.runPedImposition = async function (mode) {
         payloadNumeracao.csv_data = state.csvData;
     }
 
+    // Tirar do payload os elementos marcados como Layout — mesma razão da versão
+    // do script.js: o engine.py também os ignora, mas o NewProd.exe carrega uma
+    // cópia congelada dele. `numeracaoSemElementosDeLayout` devolve cópia rasa, o
+    // que importa aqui porque as numerações de multi-artes e a `num2` são
+    // referências vivas de `state.numeracoes`.
+    const _semLayout = typeof numeracaoSemElementosDeLayout === 'function'
+        ? numeracaoSemElementosDeLayout
+        : (n => n);
+    payloadNumeracao = _semLayout(payloadNumeracao);
+    for (const ma of payloadMultiArtes) {
+        if (ma.numeracao) ma.numeracao = _semLayout(ma.numeracao);
+        if (ma.numeracao_2) ma.numeracao_2 = _semLayout(ma.numeracao_2);
+    }
+
     const payload = {
 
         formato_id: fmtId,
@@ -3972,7 +3992,7 @@ window.runPedImposition = async function (mode) {
         numeracao_id: numId || null,
 
         numeracao_2_id: num2Id || null,
-        
+
         mapa_teatro_id: document.getElementById('ped-mapa-teatro')?.value || null,
 
         saida_id: saiId,
@@ -3983,7 +4003,7 @@ window.runPedImposition = async function (mode) {
 
         numeracao: payloadNumeracao,
 
-        numeracao_2: num2,
+        numeracao_2: _semLayout(num2),
 
         seq_start: start,
 
