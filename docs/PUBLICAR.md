@@ -148,6 +148,32 @@ Detalhes de funcionamento em [GUIA_AGENTE.md](../GUIA_AGENTE.md).
 
 ---
 
+## O cache do navegador, e por que ele é assim
+
+O `vercel.json` tem duas regras de `Cache-Control`, e elas dependem uma da outra:
+
+| O quê | Cabeçalho | Por quê |
+|---|---|---|
+| **HTML** e tudo que não é `.js`/`.css` | `no-cache, no-store, must-revalidate` | O `index.html` **não tem versão na URL**. Se ele fosse cacheado, o navegador continuaria pedindo os assets da versão antiga depois de uma publicação. |
+| **`.js` e `.css`** | `public, max-age=3600` | Eles carregam `?v=NNN`, e o `publicar.ps1` bumpa esse número em **toda** publicação. URL nova = arquivo novo, na hora. Dentro da hora, o navegador reaproveita — são ~1,6 MB que deixam de ser baixados a cada carregamento. |
+
+As duas regras usam padrões **disjuntos** (a primeira exclui `.js`/`.css` por negação), então
+não há disputa de precedência: cada caminho casa com exatamente uma.
+
+Três coisas a não quebrar:
+
+- **Se o HTML passar a ser cacheado, uma publicação deixa de chegar ao operador.** Foi
+  justamente esse o problema que, em julho de 2026, levou alguém a pôr `no-store` em tudo —
+  a marreta que resolvia o HTML e custava 1,6 MB por carregamento.
+- **O bump de versão do `publicar.ps1` é o que sustenta o cache dos assets.** Ele bumpa por
+  padrão (`.js?v=` e `.css?v=`), não por lista de nomes; não o troque por uma lista fixa.
+- **Nem todo `.js` local é versionado.** O `supabase-config.js` e o `pdf-lib.min.js` entram
+  sem `?v=`. É por isso que o teto é **1 hora** e não um ano: se um deles mudar, o erro se
+  corrige sozinho dentro da hora, em vez de ficar preso no navegador do operador.
+
+Se a tela continuar antiga depois de publicar, o `Ctrl+Shift+R` resolve na estação; se
+acontecer sempre, o suspeito é o cabeçalho do HTML ter mudado.
+
 ## Onde ficam as coisas
 
 - **Chaves e segredos:** no `.env.local`, que o git ignora. Nunca ponha chave em arquivo

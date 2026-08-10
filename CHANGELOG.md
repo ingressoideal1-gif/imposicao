@@ -4,7 +4,30 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v508)** — 2026-08-10 | Agente **1.2.24**
+## Versão atual: **v1.6.0 (v509)** — 2026-08-10 | Agente **1.2.24**
+
+---
+
+## [v510 — 2026-08-10] *(a publicar)* — O site parava de rebaixar 1,6 MB a cada carregamento
+
+### O que estava acontecendo
+Relato de que a janela tinha ficado mais lenta depois da v509. **Medido lado a lado, não tinha:** v509 em 386 ms de média contra 527 ms da v508, com as mesmas contagens de etapa, e a função de limpeza da v509 rodando **zero vezes** no caminho de carregamento — ela só é chamada quando não há arte.
+
+Mas a medição levou ao motivo real de o carregamento ser lento, e ele não é de agora: o `vercel.json` mandava `no-cache, no-store, must-revalidate` para **todo** arquivo do site. O `script.js` sozinho tem **1,07 MB**; com `pedido.js`, `cliente.js`, `criador-arte.js` e `style.css`, são **~1,6 MB baixados de novo a cada carregamento de página**, para sempre.
+
+Esse cabeçalho entrou em 01/07/2026 ("force Vercel cache bypass"). O sistema **já usava `?v=NNN` nos assets desde 10/06** — dois mecanismos para o mesmo problema, e a marreta ficou por cima do bisturi.
+
+### O que mudou
+Duas regras, com padrões disjuntos para não haver disputa de precedência:
+
+- **HTML e tudo que não é `.js`/`.css`** continua `no-store`. O `index.html` não tem versão na URL; cacheá-lo faria uma publicação nova não chegar ao operador — que foi exatamente o problema de julho.
+- **`.js` e `.css`** passam a `public, max-age=3600`. Eles carregam `?v=NNN`, e o `publicar.ps1` bumpa esse número em toda publicação: URL nova, arquivo novo, na hora.
+
+O teto é **1 hora, e não um ano, de propósito**: nem todo `.js` local é versionado — `supabase-config.js` e `pdf-lib.min.js` entram sem `?v=`. Com uma hora, uma mudança neles se corrige sozinha; com um ano, ficaria presa no navegador do operador. O `supabase-config.js` guarda a URL e a chave pública do Supabase.
+
+O raciocínio ficou escrito no `docs/PUBLICAR.md`, junto com as três coisas que não se pode quebrar — senão o próximo a olhar volta a pôr `no-store` em tudo.
+
+---
 
 ---
 
