@@ -19961,9 +19961,17 @@ function itemTemArte(item, face = 'frente') {
 }
 window.itemTemArte = itemTemArte;
 
-function onItemArteRemove(idx, osId, itemId, face = 'frente') {
-    const confirmMsg = "Tem certeza que deseja excluir a arte deste modelo?\n\nNão será possível reverter a ação...";
-    if (!confirm(confirmMsg)) return;
+async function onItemArteRemove(idx, osId, itemId, face = 'frente') {
+    // Confirmação desenhada na página, não o confirm() do navegador: ver o porquê
+    // em confirmarNaTela(). Com o diálogo nativo suprimido, este botão virava um
+    // botão que não faz nada e não explica.
+    const confirmou = await confirmarNaTela({
+        titulo: '✕ Excluir a arte deste modelo?',
+        mensagem: `A arte da ${face === 'verso' ? 'face de verso' : 'frente'} será removida do modelo `
+            + 'e do banco de dados.\n\nNão será possível reverter a ação.',
+        textoConfirmar: 'Excluir arte',
+    });
+    if (!confirmou) return;
 
     const inputId = face === 'verso' ? `amostra-item-arte-verso-${idx}` : `amostra-item-arte-${idx}`;
     const nameLabelId = face === 'verso' ? `amostra-item-arte-verso-name-${idx}` : `amostra-item-arte-name-${idx}`;
@@ -20912,6 +20920,97 @@ function pdfViewerNextPage(idx) {
  * - Arte: carrega imagem do upload
  * - Compõe tudo no canvas final
  */
+/**
+ * Confirmação destrutiva desenhada na própria página.
+ *
+ * Substitui o `confirm()` nativo nas ações que apagam trabalho. O motivo é
+ * concreto: depois de algumas caixas seguidas, o Chrome oferece "Impedir que esta
+ * página crie caixas de diálogo adicionais". Marcada — inclusive sem querer —, toda
+ * chamada a `confirm()` passa a devolver `false` **sem mostrar nada**. Numa ação de
+ * apagar, isso vira um botão que não faz nada e não explica: o operador clica,
+ * não aparece pergunta nenhuma, e a arte continua lá.
+ *
+ * Esta caixa é DOM da aplicação, então não há como o navegador suprimi-la.
+ *
+ * Devolve uma Promise que resolve `true` (confirmou) ou `false` (cancelou, apertou
+ * Esc ou clicou fora).
+ */
+function confirmarNaTela({ titulo, mensagem, textoConfirmar = 'Confirmar', textoCancelar = 'Cancelar' }) {
+    return new Promise(resolve => {
+        const anterior = document.getElementById('modal-confirmar-acao');
+        if (anterior) anterior.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'modal-confirmar-acao';
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100000;'
+            + ' display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);';
+
+        overlay.innerHTML = `
+            <div style="background:var(--bg-card,#1e293b); border:1px solid var(--border,#334155); border-radius:12px;
+                        max-width:440px; width:calc(100% - 40px); padding:22px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.7);">
+                <div style="font-size:1.05rem; font-weight:800; color:var(--text,#e2e8f0); margin-bottom:10px;">
+                    ${escapeHtml(titulo || 'Confirmar ação')}
+                </div>
+                <div style="font-size:0.9rem; color:var(--text-dim,#94a3b8); line-height:1.5; white-space:pre-line;">
+                    ${escapeHtml(mensagem || '')}
+                </div>
+                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                    <button type="button" id="btn-confirmar-nao" class="btn btn-sm btn-secondary">${escapeHtml(textoCancelar)}</button>
+                    <button type="button" id="btn-confirmar-sim" class="btn btn-sm btn-danger"
+                            style="background:#ef4444; border-color:#ef4444; color:#fff; font-weight:700;">${escapeHtml(textoConfirmar)}</button>
+                </div>
+            </div>`;
+
+        const fechar = (resposta) => {
+            document.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+            resolve(resposta);
+        };
+        // Só o Esc é tratado aqui. O Enter fica com o comportamento nativo: aciona o
+        // botão em foco, que é o Cancelar. Interceptar o Enter para confirmar
+        // transformaria um toque distraído em arte apagada.
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.stopPropagation(); fechar(false); }
+        };
+
+        document.body.appendChild(overlay);
+        overlay.querySelector('#btn-confirmar-nao').onclick = () => fechar(false);
+        overlay.querySelector('#btn-confirmar-sim').onclick = () => fechar(true);
+        // Clicar fora cancela — nunca confirma, porque a ação é destrutiva
+        overlay.onclick = (e) => { if (e.target === overlay) fechar(false); };
+        document.addEventListener('keydown', onKey, true);
+        // Foco no Cancelar: um Enter distraído não pode apagar trabalho
+        overlay.querySelector('#btn-confirmar-nao').focus();
+    });
+}
+window.confirmarNaTela = confirmarNaTela;
+
+/**
+ * Apaga a visualização do modo PDF de um item: o desenho, o canvas e o navegador
+ * de páginas.
+ *
+ * Zerar `width`/`height` não é enfeite — é o que solta o bitmap da memória e
+ * garante que nenhum pixel da arte anterior sobreviva se o canvas voltar a ser
+ * exibido antes de a próxima página terminar de renderizar.
+ */
+function limparVisualizadorPdf(idx) {
+    const pdfCanvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
+    if (pdfCanvas) {
+        try {
+            const pctx = pdfCanvas.getContext('2d');
+            if (pctx) pctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+        } catch (_) { /* canvas sem contexto: só esconder já resolve */ }
+        pdfCanvas.width = 1;
+        pdfCanvas.height = 1;
+        pdfCanvas.style.display = 'none';
+    }
+    const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
+    if (nav) nav.style.display = 'none';
+    const pageInfo = document.getElementById(`amostra-pdf-page-info-${idx}`);
+    if (pageInfo) pageInfo.textContent = 'Página 1 / 1';
+}
+window.limparVisualizadorPdf = limparVisualizadorPdf;
+
 function preloadAmostraItemPdfElements(numeracao, idx, osId) {
     if (!numeracao || !numeracao.elements) return;
 
@@ -20997,7 +21096,12 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 }
             }
         } else {
-            // Sem arte/PDF enviado ainda: mostra o estado vazio do modo PDF
+            // Sem arte/PDF: mostrar o estado vazio não basta, é preciso APAGAR o que
+            // ficou desenhado. O `canvas` escondido lá em cima é o canvas tradicional
+            // (#amostra-item-canvas-N); o do modo PDF é outro elemento, e ninguém o
+            // escondia — depois de excluir a arte, a página do PDF continuava na tela,
+            // ao lado do aviso de "faça upload", e parecia que a exclusão não pegou.
+            limparVisualizadorPdf(idx);
             if (empty) empty.style.display = 'block';
         }
         return;

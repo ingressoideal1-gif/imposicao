@@ -2006,7 +2006,22 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 }
             }
         } else {
-            // Sem arte/PDF enviado: mostrar estado vazio
+            // Sem arte/PDF: além de mostrar o estado vazio, apagar o que ficou
+            // desenhado. Espelha o mesmo trecho do script.js — lá a arte excluída
+            // continuava na tela porque ninguém escondia o canvas do modo PDF.
+            const pdfCanvas = document.getElementById(`amostra-pdf-canvas-${idx}`);
+            if (pdfCanvas) {
+                try {
+                    const pctx = pdfCanvas.getContext('2d');
+                    if (pctx) pctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+                } catch (_) { /* canvas sem contexto: esconder já resolve */ }
+                pdfCanvas.width = 1;
+                pdfCanvas.height = 1;
+                pdfCanvas.style.display = 'none';
+            }
+            const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
+            if (nav) nav.style.display = 'none';
+
             if (empty) empty.style.display = 'none';
             const emptyPdf = document.getElementById(`amostra-item-empty-pdf-${idx}`);
             if (emptyPdf) emptyPdf.style.display = 'block';

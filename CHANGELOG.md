@@ -4,7 +4,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v508)** — 2026-08-10 | Agente **1.2.23**
+## Versão atual: **v1.6.0 (v508)** — 2026-08-10 | Agente **1.2.24**
+
+---
+
+## [v509 — 2026-08-10] *(a publicar)* — Excluir a arte no modo PDF: a pergunta que sumia e o desenho que ficava
+
+### O sintoma
+Na janela combinada do pedido em arte, com o modelo em **modo PDF**, ao excluir a arte não aparecia a pergunta de confirmação e a visualização continuava na tela.
+
+São dois defeitos distintos, com causas independentes.
+
+### 1. A visualização não saía da tela
+Reproduzido e medido. O ramo de modo PDF do `drawAmostraFace()` faz `canvas.style.display = 'none'` — mas esse `canvas` é o **tradicional** (`#amostra-item-canvas-N`). O modo PDF desenha em **outro elemento**, o `#amostra-pdf-canvas-N`, e ninguém o escondia.
+
+Resultado: depois de excluir, o estado vazio aparecia ("Faça upload de um PDF") **e a página do PDF excluído continuava desenhada logo acima**. Para quem olha, a exclusão não funcionou — embora o registro já estivesse limpo no banco.
+
+Entrou `limparVisualizadorPdf(idx)`, que esconde o canvas, **zera o bitmap** (`width`/`height` para 1 — é o que solta a memória e garante que nenhum pixel da arte anterior sobreviva se o canvas voltar a aparecer antes da próxima renderização) e recolhe o navegador de páginas. O mesmo trecho foi espelhado no `cliente.js`.
+
+### 2. A pergunta de confirmação podia sumir
+Não reproduziu em teste — com clique de mouse real na tela visível, o `confirm()` aparece e o fluxo roda inteiro. A explicação que sobra é o próprio navegador: depois de algumas caixas seguidas, o Chrome oferece **"Impedir que esta página crie caixas de diálogo adicionais"**. Marcada — inclusive sem querer, num dia de muitos testes —, toda chamada a `confirm()` passa a devolver `false` **sem mostrar nada**.
+
+Numa ação de apagar, isso vira o pior tipo de botão: o que não faz nada e não explica. O operador clica, não aparece pergunta, e a arte continua lá.
+
+A confirmação desta ação passou a ser desenhada na própria página (`confirmarNaTela()`), então não há como o navegador suprimi-la. Três decisões deliberadas:
+
+- **O foco nasce no Cancelar**, e o Enter mantém o comportamento nativo de acionar o botão em foco. Interceptar o Enter para confirmar transformaria um toque distraído em arte apagada.
+- **Clicar fora cancela**, nunca confirma.
+- **Esc cancela.**
+
+Os outros 15 `confirm()` do sistema continuam como estavam. Este é o que apaga trabalho e foi o que apareceu; trocar todos de uma vez seria mexer em quinze fluxos sem sintoma relatado.
+
+### Como foi verificado
+Com o navegador dirigido por Puppeteer, montando um item em modo PDF com um PDF real e clicando com o mouse de verdade:
+
+| | |
+|---|---|
+| Antes de excluir | canvas visível, com pixels, navegador de páginas à mostra |
+| Ao clicar em Remover | a caixa da página aparece; **nenhum diálogo nativo** é criado |
+| Cancelando | arte intacta, visualização intacta |
+| Confirmando | `arte_url` nula, canvas escondido e **sem bitmap**, navegador recolhido, estado vazio de volta |
+
+Regressões dos elementos SVG/PDF no modo PDF (v497) e da fusão de camadas (v496) repetidas sem quebra.
 
 ---
 
