@@ -190,6 +190,43 @@ de pedidos que já estão em produção.
 Como o `csv_data` viaja pronto no payload, **o `engine.py` não muda por causa
 disso** e o agente não precisa ser republicado.
 
+### A visualização da amostra é paginada
+
+Numeração com elemento de CSV não tem "uma" amostra: tem uma por linha de dado.
+Por isso o card do modelo, na Lista de Arte, ganha um seletor de linhas abaixo do
+desenho — o mesmo idioma que o modo PDF já usava (`amostra-pdf-nav-N`):
+
+```
+◀   Linha 3 / 5   [3]   ▶
+   Fila: A · Assento: 03 · Setor: Pista
+```
+
+**Cada modelo navega apenas pela sua fatia.** As páginas saem de
+`linhasDaAmostra(item, num)`, que é a fatia do modelo quando ele tem uma, o banco
+inteiro quando não tem, e o CSV solto da Imposição em último caso (o que atende à
+amostra avulsa).
+
+Detalhes que importam:
+
+- **Um seletor comanda as duas faces.** Frente e verso mostram sempre a mesma
+  linha; seria confuso de qualquer outro jeito.
+- **Todos os elementos variáveis da face leem a mesma linha.** O
+  `drawAmostraFace` resolve `_linhaCsv` uma vez e a usa em TEXT, TEATRO_* e QR.
+- **O seletor só aparece quando há o que navegar**: a numeração precisa ter ao
+  menos um elemento com `source: "database"` e a fatia precisa ter mais de uma
+  linha.
+- **A página vive em `state.amostraCsvPaginas`, com chave `osId:itemId`** — e não
+  no objeto do item. O pedido recarrega os itens em segundo plano e substitui os
+  objetos; um campo posto no item se perderia no meio da navegação e a página
+  voltaria sozinha para a primeira linha. Isso apareceu na verificação.
+- **Navegar não é editar.** O `amostraCsvPagina()` não marca `_needsSnapshot`,
+  senão o instantâneo enviado ao link do cliente passaria a ser a linha que o
+  operador estava olhando por acaso.
+
+O link do cliente (`frontend/cliente.js`) tem a sua própria cópia do
+`drawAmostraFace` e **não** foi paginado. Ele continua mostrando a primeira
+linha. Se um dia isso mudar, é decisão de produto: muda o que o cliente vê.
+
 ### A tabela é `pedidos_modelos`
 
 Não é `producao_os_itens`. Os arquivos em `sql/` descrevem `producao_os_itens`,

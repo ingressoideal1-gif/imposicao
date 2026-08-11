@@ -109,6 +109,10 @@ const state = {
     csvFile: null,
 
     csvData: null,
+    // Pagina da visualizacao de cada modelo, por "osId:itemId". Ver
+    // paginaDaAmostra(): fica aqui, e nao no item, porque os itens sao
+    // substituidos quando o pedido recarrega.
+    amostraCsvPaginas: {},
 
     
 
@@ -11449,6 +11453,192 @@ async function salvarCsvDaNumeracao(numId, rows) {
 
 
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VISUALIZACAO PAGINADA DA AMOSTRA (uma pagina por linha do CSV)
+//
+// Numeracao com elemento de CSV nao tem "uma" amostra: tem uma por linha de
+// dado. A visualizacao do card vira multipagina, e cada modelo navega apenas
+// pelas linhas da SUA fatia — as que lhe foram atribuidas na distribuicao.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * As linhas que a visualizacao deste modelo pode mostrar. E a fatia do modelo
+ * quando ele tem uma; senao o banco inteiro da numeracao; senao o que estiver
+ * carregado na Imposicao (o comportamento antigo, que atende a amostra avulsa).
+ */
+function linhasDaAmostra(item, num) {
+
+    if (num && num.csv_data && num.csv_data.length) {
+
+        return fatiaCsvDoItem(item, num);
+
+    }
+
+    if (item && item.csv_data && item.csv_data.length) return linhasAtivasCsv(item.csv_data);
+
+    const solto = state.csvData || state.numCsvData || null;
+
+    return solto && solto.length ? linhasAtivasCsv(solto) : [];
+
+}
+
+
+
+/**
+ * A pagina fica num mapa do state, e nao no objeto do item, porque o pedido
+ * recarrega os itens em segundo plano e substitui os objetos — um campo posto
+ * no item se perderia no meio da navegacao, e o operador veria a pagina voltar
+ * sozinha para a primeira linha.
+ */
+function chaveDaAmostra(osId, item) {
+
+    return `${osId || ''}:${item ? item.id : ''}`;
+
+}
+
+
+
+/** Pagina corrente do modelo, sempre dentro do intervalo. */
+function paginaDaAmostra(item, total, osId) {
+
+    if (!total) return 0;
+
+    if (!state.amostraCsvPaginas) state.amostraCsvPaginas = {};
+
+    const p = parseInt(state.amostraCsvPaginas[chaveDaAmostra(osId, item)]) || 0;
+
+    return Math.max(0, Math.min(total - 1, p));
+
+}
+
+
+
+/** A linha do CSV que a visualizacao deste modelo esta mostrando agora. */
+function linhaDaAmostra(item, num, osId) {
+
+    const linhas = linhasDaAmostra(item, num);
+
+    if (!linhas.length) return null;
+
+    return linhas[paginaDaAmostra(item, linhas.length, osId)] || null;
+
+}
+
+
+
+/**
+ * Move a visualizacao do modelo. `delta` anda; `absoluto` vai direto (1-based,
+ * como o operador le na tela).
+ */
+window.amostraCsvPagina = function(idx, osId, delta, absoluto) {
+
+    const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
+
+    if (!item) return;
+
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+
+    const total = linhasDaAmostra(item, num).length;
+
+    if (!total) return;
+
+    let nova = (typeof absoluto === 'number' && !isNaN(absoluto))
+
+        ? absoluto - 1
+
+        : paginaDaAmostra(item, total, osId) + (delta || 0);
+
+    if (!state.amostraCsvPaginas) state.amostraCsvPaginas = {};
+
+    state.amostraCsvPaginas[chaveDaAmostra(osId, item)] = Math.max(0, Math.min(total - 1, nova));
+
+    // Navegar nao e editar: nao marca _needsSnapshot, senao o instantaneo que
+    // vai para o link do cliente passaria a ser a linha que o operador estava
+    // olhando por acaso.
+    renderItemAmostraCombinada(idx, osId);
+
+};
+
+
+
+/**
+ * Mostra e preenche a navegacao de linhas do CSV no card de um modelo.
+ * Espelha o idioma que o modo PDF ja usa logo acima (amostra-pdf-nav-N).
+ */
+function atualizarNavCsvDaAmostra(idx, item, num, container, osId) {
+
+    const nav = container.querySelector(`#amostra-csv-nav-${idx}`);
+
+    if (!nav) return;
+
+    const linhas = linhasDaAmostra(item, num);
+
+    const temElementoCsv = !!(num && (num.elements || []).some(el => el.source === 'database'));
+
+    // So aparece quando ha de fato dado variavel vindo de CSV para navegar.
+    if (!temElementoCsv || linhas.length <= 1) {
+
+        nav.style.display = 'none';
+
+        return;
+
+    }
+
+    nav.style.display = 'flex';
+
+    const total = linhas.length;
+
+    const pag = paginaDaAmostra(item, total, osId);
+
+    const linha = linhas[pag] || {};
+
+    const info = container.querySelector(`#amostra-csv-info-${idx}`);
+
+    if (info) info.textContent = `Linha ${pag + 1} / ${total}`;
+
+    const resumo = container.querySelector(`#amostra-csv-resumo-${idx}`);
+
+    if (resumo) {
+
+        // Um resumo curto da linha para o operador saber o que esta vendo sem
+        // precisar abrir o banco.
+        const cols = (num.csv_headers && num.csv_headers.length)
+
+            ? num.csv_headers
+
+            : Object.keys(linha).filter(k => k !== '__ativo' && k !== '__id');
+
+        resumo.textContent = cols.slice(0, 3)
+
+            .map(c => `${c}: ${linha[c] == null ? '' : linha[c]}`)
+
+            .join('  ·  ');
+
+    }
+
+    const goto = container.querySelector(`#amostra-csv-goto-${idx}`);
+
+    if (goto && document.activeElement !== goto) {
+
+        goto.value = pag + 1;
+
+        goto.max = total;
+
+    }
+
+    const bPrev = container.querySelector(`#amostra-csv-prev-${idx}`);
+
+    const bNext = container.querySelector(`#amostra-csv-next-${idx}`);
+
+    if (bPrev) bPrev.disabled = pag <= 0;
+
+    if (bNext) bNext.disabled = pag >= total - 1;
+
+}
+
+
+
 window.addCsvColumnElement = function(colName) {
 
     state.numElCounter++;
@@ -20118,6 +20308,21 @@ function renderAmostrasOSItens(osId) {
                                      <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
                                 </div>
                             </div>
+
+                            <!-- Navegacao das linhas do CSV. Um seletor so comanda
+                                 as duas faces: frente e verso mostram sempre a
+                                 MESMA linha. Escondida ate a numeracao ter elemento
+                                 de banco de dados; quem mostra e preenche e o
+                                 atualizarNavCsvDaAmostra(). -->
+                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:4px; padding:10px 14px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', -1)" title="Linha anterior do banco de dados">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:120px; text-align:center;">Linha 1 / 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:78px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', 1)" title="Proxima linha do banco de dados">&#9654;</button>
+                                </div>
+                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.78rem; color:var(--text-dim); text-align:center;"></div>
+                            </div>
                         </div>
                         ` : `
                         ${item.modo_pdf ? `
@@ -20136,6 +20341,19 @@ function renderAmostrasOSItens(osId) {
                         </div>
                         ` : `
                         <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
+
+                            <!-- Navegacao das linhas do CSV. Fica escondida ate
+                                 a numeracao ter elemento de banco de dados; quem
+                                 mostra e preenche e atualizarNavCsvDaAmostra(). -->
+                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:6px; margin-top:12px; padding:10px 14px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', -1)" title="Linha anterior do banco de dados">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:120px; text-align:center;">Linha 1 / 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:78px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 6px; font-size:0.85rem;" title="Ir para a linha" onchange="amostraCsvPagina(${idx}, '${osId}', 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, '${osId}', 1)" title="Proxima linha do banco de dados">&#9654;</button>
+                                </div>
+                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.78rem; color:var(--text-dim); text-align:center;"></div>
+                            </div>
                         <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Selecione Cor/Numeração e carregue uma Arte</p>
@@ -22545,6 +22763,10 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             numCtx.translate(x, y);
             numCtx.rotate(rot);
 
+            // A visualizacao e paginada: todos os elementos variaveis desta face
+            // leem a MESMA linha, a da pagina em que o operador esta.
+            const _linhaCsv = (typeof linhaDaAmostra === 'function') ? linhaDaAmostra(item, num, osId) : null;
+
             if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
                 const fs = (el.font_size || 12) * S / 2.8346;
                 numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
@@ -22554,14 +22776,14 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 if (el.type === 'FIXED') {
                     label = el.fixed_value || 'TEXTO';
                 } else if (el.type === 'TEATRO_FILA') {
-                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    const _fVal = _linhaCsv ? (_linhaCsv.Fila || 'A') : 'A';
                     label = `${el.prefix || ''}${_fVal}`;
                 } else if (el.type === 'TEATRO_LUGAR') {
-                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    const _lVal = _linhaCsv ? (_linhaCsv.Numero || '22') : '22';
                     label = `${el.prefix || ''}${_lVal}`;
                 } else if (el.type === 'TEATRO_COMBO') {
-                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
-                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : 'A';
+                    const _fVal = _linhaCsv ? (_linhaCsv.Fila || 'A') : 'A';
+                    const _lVal = _linhaCsv ? (_linhaCsv.Numero || '22') : '22';
                     const fila = `${el.prefix_fila || ''}${_fVal}`;
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
@@ -22583,8 +22805,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
-                    const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
-                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    const csvRow = _linhaCsv;
                     if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
@@ -22631,8 +22852,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     qrText = el.fixed_value || '';
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
-                    const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
-                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    const csvRow = _linhaCsv;
                     if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
@@ -22873,6 +23093,8 @@ async function renderItemAmostraCombinada(idx, osId) {
             return;
         }
     }
+
+    atualizarNavCsvDaAmostra(idx, item, num, container, osId);
 
     if (item.verso) {
         const canvasFront = container.querySelector(`#amostra-item-canvas-${idx}`);

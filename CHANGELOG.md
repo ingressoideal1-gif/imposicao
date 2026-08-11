@@ -8,6 +8,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v533 — 2026-08-11] — Visualizacao da amostra paginada, uma pagina por linha do CSV
+
+### O problema
+Numeracao com elemento de CSV nao tem "uma" amostra: tem uma por linha de dado.
+O card do modelo, na Lista de Arte, sempre desenhava a **primeira linha** do banco
+— para conferir o assento 340 nao havia caminho nenhum. E com o banco agora
+dividido entre os modelos do pedido, ficou pior: os tres modelos mostravam a mesma
+linha 1, mesmo cada um imprimindo um bloco diferente.
+
+### O que entrou
+A visualizacao virou multipagina, com um seletor abaixo do desenho — o mesmo
+idioma que o modo PDF ja usava:
+
+```
+◀   Linha 3 / 5   [3]   ▶
+   Fila: A · Assento: 03 · Setor: Pista
+```
+
+**Cada modelo navega apenas pela sua fatia**: as paginas saem das linhas que lhe
+foram atribuidas na distribuicao. Modelo sem fatia navega pelo banco inteiro, que
+e o comportamento de sempre. O resumo abaixo dos botoes diz que linha e aquela sem
+precisar abrir o banco.
+
+Um seletor comanda as duas faces — frente e verso mostram sempre a mesma linha — e
+todos os elementos variaveis da face (texto, teatro, QR) leem essa mesma linha.
+
+### Dois cuidados que a verificacao expos
+- **A pagina vive em `state.amostraCsvPaginas`, com chave `osId:itemId`**, e nao no
+  objeto do item. O pedido recarrega os itens em segundo plano e substitui os
+  objetos; guardada no item, a pagina se perdia no meio da navegacao e voltava
+  sozinha para a primeira linha.
+- **Navegar nao marca `_needsSnapshot`.** Senao o instantaneo enviado ao link do
+  cliente passaria a ser a linha que o operador estava olhando por acaso.
+
+### Fora de escopo
+O link do cliente tem a sua propria copia do `drawAmostraFace` e continua
+mostrando a primeira linha. Pagina-lo muda o que o cliente ve — e decisao de
+produto, nao consequencia tecnica.
+
+So frontend: o `engine.py` nao mudou, o agente nao precisa ser republicado.
+
+---
 ## [v532 — 2026-08-11] — "Célula" passou a ser o item do modelo, não a pose da folha
 
 Relatado da produção: *"Pq não permitiu colocar na mesma folha as numerações 1,
@@ -221,6 +263,7 @@ conferência: o operador vê a folha antes de mandar refazê-la.
 > site**, senão a estação continua com o motor antigo.
 
 ---
+
 
 ## [v527 — 2026-08-11] — O banco de dados dividido entre os modelos do pedido
 
