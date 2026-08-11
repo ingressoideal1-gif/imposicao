@@ -849,6 +849,14 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         }
     }
 
+    // ─── O QUE A CAIXA "REFAZER" PRECISA SABER ─────────────────────────────────
+    // Os campos De/Até contam folhas DENTRO DO SET, e o campo de células conta
+    // poses da folha. Sem esses dois totais os inputs aceitam qualquer número, e
+    // uma faixa fora do intervalo gera um PDF vazio sem que ninguém perceba.
+    window.pedRefazerTotalFolhas = visible_sheets;
+    window.pedRefazerTotalCelulas = poses_per_sheet;
+    if (typeof sincronizarLimitesRefazer === 'function') sincronizarLimitesRefazer();
+
     const folhaLabel = sets_needed > 1 ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}` : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
     // Em Pdf Paginado a quantidade sai do ARQUIVO, não do pedido: o engine faz
     // total_items = nº de páginas (metade em duplex). Dizer isso no cabeçalho é o que
@@ -863,6 +871,13 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     // Quantos elementos de numeração cada pose pintou nesta passada (ver o aviso no fim)
     const posesDesenhadas = [];
+
+    // Células escolhidas em "Refazer Célula" (null = todas). As que ficarem de
+    // fora continuam sendo desenhadas e depois recebem um véu: o operador precisa
+    // ver a folha inteira para conferir que escolheu as células certas.
+    const refazerCels = typeof getRefazerCelulasSelecionadas === 'function'
+        ? getRefazerCelulasSelecionadas()
+        : null;
 
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -2033,7 +2048,43 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             ctx.restore();
         }
 
+        // ─── VÉU DAS CÉLULAS FORA DO "REFAZER CÉLULA" ──────────────────────────
+        // Anotação de tela, como o rótulo de página acima: desenhada depois de
+        // fecharGrupo(), fora do grupo arte+numeração, para não multiplicar sobre
+        // a cor. Estas células saem em branco no papel — o véu é o que faz a
+        // prévia contar a mesma história que o PDF vai contar.
+        if (refazerCels && !refazerCels.includes(P + 1)) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(15,23,42,0.72)';
+            ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
+            ctx.strokeStyle = 'rgba(248,113,113,0.55)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(-cw / 2, -ch / 2);
+            ctx.lineTo(cw / 2, ch / 2);
+            ctx.moveTo(cw / 2, -ch / 2);
+            ctx.lineTo(-cw / 2, ch / 2);
+            ctx.stroke();
+            ctx.restore();
+        }
 
+        // Número da célula, para que o operador saiba o que digitar no campo.
+        // Só aparece enquanto "Refazer Célula" está ligado — fora disso seria
+        // ruído sobre a arte.
+        if (refazerCels) {
+            const selecionada = refazerCels.includes(P + 1);
+            ctx.save();
+            const fsCel = Math.max(9, Math.round(ch * 0.11));
+            ctx.font = `800 ${fsCel}px Inter, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = Math.max(2, fsCel * 0.3);
+            ctx.strokeStyle = 'rgba(15,23,42,0.85)';
+            ctx.strokeText(String(P + 1), 0, 0);
+            ctx.fillStyle = selecionada ? '#34d399' : 'rgba(248,113,113,0.9)';
+            ctx.fillText(String(P + 1), 0, 0);
+            ctx.restore();
+        }
 
             ctx.restore();
 
@@ -2127,6 +2178,241 @@ window.nextPedPreviewPage = function() {
     if (input) input.value = window.currentPreviewPage;
     drawPedPreview();
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  REFAZER FOLHAS / REFAZER CÉLULA
+// ═══════════════════════════════════════════════════════════════════════════
+// Refazer é o que o operador usa quando a tiragem já saiu e uma parte dela se
+// perdeu — folha amassada, célula borrada. O engine não desloca a numeração: ele
+// pula as folhas e as células fora do pedido (`continue` no laço), então a folha
+// 7 refeita traz exatamente os números que a folha 7 trazia. Por isso o filtro
+// pode ser aplicado sem recalcular nada.
+//
+// Duas regras de leitura que enganam quem mexe aqui:
+//  · De/Até contam folhas DENTRO DO SET escolhido, não folhas do trabalho todo.
+//  · As células são as poses da folha, numeradas 1..poses_per_sheet na ordem de
+//    leitura (esquerda→direita, cima→baixo) — o mesmo `P + 1` que a prévia e o
+//    engine usam.
+
+function refazerFolhasAtivo() {
+    return document.getElementById('ped-refazer-checkbox')?.checked === true;
+}
+
+function refazerCelulasAtivo() {
+    return document.getElementById('ped-refazer-cel-checkbox')?.checked === true;
+}
+
+// Aceita "1,3,5", "1 3 5" e faixas "1-4". Devolve a lista já ordenada e sem
+// repetição, mais o que não deu para entender — o campo é digitado às pressas,
+// na frente da impressora, e um "1,,3" não pode virar erro.
+function parseRefazerCelulas(texto) {
+    const cels = new Set();
+    const invalidos = [];
+    const total = window.pedRefazerTotalCelulas || 0;
+
+    for (const bruto of String(texto || '').split(/[,;\s]+/)) {
+        const parte = bruto.trim();
+        if (!parte) continue;
+
+        const faixa = parte.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (faixa) {
+            const ini = parseInt(faixa[1]);
+            const fim = parseInt(faixa[2]);
+            if (ini >= 1 && fim >= ini && (!total || fim <= total)) {
+                for (let c = ini; c <= fim; c++) cels.add(c);
+            } else {
+                invalidos.push(parte);
+            }
+            continue;
+        }
+
+        const n = parseInt(parte);
+        if (!isNaN(n) && String(n) === parte && n >= 1 && (!total || n <= total)) {
+            cels.add(n);
+        } else {
+            invalidos.push(parte);
+        }
+    }
+
+    return { cels: Array.from(cels).sort((a, b) => a - b), invalidos };
+}
+
+// null = desenhar/imposicionar todas as células. Lista = só essas.
+function getRefazerCelulasSelecionadas() {
+    if (!refazerCelulasAtivo()) return null;
+    const { cels } = parseRefazerCelulas(document.getElementById('ped-refazer-cel')?.value);
+    return cels.length ? cels : null;
+}
+window.getRefazerCelulasSelecionadas = getRefazerCelulasSelecionadas;
+
+// Chamado de dentro de drawPedPreview(): põe nos campos os limites reais desta
+// imposição e diz ao operador quantas folhas e quantas células ele tem.
+function sincronizarLimitesRefazer() {
+    const totalFolhas = window.pedRefazerTotalFolhas || 0;
+    const totalCelulas = window.pedRefazerTotalCelulas || 0;
+
+    for (const id of ['ped-refazer-de', 'ped-refazer-ate']) {
+        const el = document.getElementById(id);
+        if (el && totalFolhas > 0) el.max = totalFolhas;
+    }
+
+    const infoFolhas = document.getElementById('ped-refazer-total');
+    if (infoFolhas) infoFolhas.textContent = totalFolhas ? `de ${totalFolhas} folhas` : '';
+
+    const infoCels = document.getElementById('ped-refazer-cel-info');
+    if (infoCels) {
+        if (!refazerCelulasAtivo()) {
+            infoCels.textContent = totalCelulas ? `1 a ${totalCelulas}` : '';
+            infoCels.style.color = 'var(--text-muted)';
+        } else {
+            const { cels, invalidos } = parseRefazerCelulas(document.getElementById('ped-refazer-cel')?.value);
+            if (invalidos.length) {
+                infoCels.textContent = `inválido: ${invalidos.join(', ')} (1 a ${totalCelulas})`;
+                infoCels.style.color = '#f87171';
+            } else if (cels.length) {
+                infoCels.textContent = `${cels.length} de ${totalCelulas} células`;
+                infoCels.style.color = '#34d399';
+            } else {
+                infoCels.textContent = totalCelulas ? `1 a ${totalCelulas}` : '';
+                infoCels.style.color = 'var(--text-muted)';
+            }
+        }
+    }
+}
+window.sincronizarLimitesRefazer = sincronizarLimitesRefazer;
+
+// Leva a prévia para a folha digitada em "De:", no set escolhido. É o que
+// transforma o campo em conferência: o operador digita 7 e vê a folha 7 antes
+// de mandar refazer.
+function irParaFolhaRefazer() {
+    const de = parseInt(document.getElementById('ped-refazer-de')?.value);
+    if (isNaN(de) || de < 1) return;
+
+    const setRefazer = document.getElementById('ped-refazer-set');
+    const setPreview = document.getElementById('ped-preview-set-input');
+    if (setRefazer && setPreview && setRefazer.style.display !== 'none') {
+        setPreview.value = setRefazer.value;
+    }
+
+    const total = window.pedRefazerTotalFolhas || 0;
+    window.currentPreviewPage = (total && de > total) ? total : de;
+
+    const pageInput = document.getElementById('ped-preview-page-input');
+    if (pageInput) pageInput.value = window.currentPreviewPage;
+
+    drawPedPreview();
+}
+
+window.onRefazerToggle = function() {
+    const marcadoFolhas = refazerFolhasAtivo();
+    const marcadoCels = refazerCelulasAtivo();
+
+    const boxFolhas = document.getElementById('ped-refazer-inputs');
+    if (boxFolhas) boxFolhas.style.display = marcadoFolhas ? 'flex' : 'none';
+
+    const boxCels = document.getElementById('ped-refazer-cel-inputs');
+    if (boxCels) boxCels.style.display = marcadoCels ? 'flex' : 'none';
+
+    // Os botões pertencem aos dois modos: aparecem se qualquer um estiver ligado
+    const acoes = document.getElementById('ped-refazer-acoes');
+    if (acoes) acoes.style.display = (marcadoFolhas || marcadoCels) ? 'flex' : 'none';
+
+    if (marcadoFolhas) irParaFolhaRefazer();
+    else drawPedPreview();
+};
+
+window.onRefazerFolhaChange = function() {
+    irParaFolhaRefazer();
+};
+
+window.onRefazerCelulaChange = function() {
+    drawPedPreview();
+};
+
+// Trocar de modelo tem de zerar a caixa: uma faixa de folhas do pedido anterior
+// não quer dizer nada no pedido seguinte, e deixá-la marcada é convite a refazer
+// a coisa errada.
+function resetRefazerControls() {
+    for (const id of ['ped-refazer-checkbox', 'ped-refazer-cel-checkbox']) {
+        const el = document.getElementById(id);
+        if (el) el.checked = false;
+    }
+    for (const id of ['ped-refazer-de', 'ped-refazer-ate', 'ped-refazer-cel']) {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    }
+    if (typeof window.onRefazerToggle === 'function') window.onRefazerToggle();
+}
+window.resetRefazerControls = resetRefazerControls;
+
+// Traduz a caixa para o que vai no payload — e recusa o que geraria um PDF
+// vazio. Devolver {erro} em vez de mandar mesmo assim é o ponto central da
+// correção: antes, uma faixa invertida ou fora do total produzia zero folhas e a
+// tela ainda dizia "concluído e arquivos salvos".
+function montarRefazerPayload(isRefazer) {
+    const vazio = { refazer_de: 0, refazer_ate: 0, refazer_set: 1, refazer_celulas: [], sufixo: '' };
+    if (!isRefazer) return vazio;
+
+    const usaFolhas = refazerFolhasAtivo();
+    const usaCels = refazerCelulasAtivo();
+    if (!usaFolhas && !usaCels) {
+        return { erro: 'Marque "Refazer Folhas" ou "Refazer Célula" antes de refazer.' };
+    }
+
+    const resultado = { ...vazio };
+    const partes = [];
+
+    if (usaFolhas) {
+        const totalFolhas = window.pedRefazerTotalFolhas || 0;
+        const deRaw = document.getElementById('ped-refazer-de')?.value;
+        const ateRaw = document.getElementById('ped-refazer-ate')?.value;
+        const de = parseInt(deRaw);
+        const ate = parseInt(ateRaw);
+
+        if (isNaN(de) || de < 1) {
+            // O caso clássico: só "Até" preenchido. Antes disso passar, o motor
+            // lia refazer_de = 0, desligava o filtro e refazia o trabalho inteiro.
+            return { erro: 'Refazer Folhas: preencha "De:" com a primeira folha da faixa.' };
+        }
+        const ateFinal = (isNaN(ate) || ate < 1) ? de : ate;
+        if (ateFinal < de) {
+            return { erro: `Refazer Folhas: "Até" (${ateFinal}) é menor que "De" (${de}).` };
+        }
+        if (totalFolhas && de > totalFolhas) {
+            return { erro: `Refazer Folhas: a folha ${de} não existe — este set tem ${totalFolhas} folha(s).` };
+        }
+        if (totalFolhas && ateFinal > totalFolhas) {
+            return { erro: `Refazer Folhas: a folha ${ateFinal} não existe — este set tem ${totalFolhas} folha(s).` };
+        }
+
+        const setEl = document.getElementById('ped-refazer-set');
+        const set = (setEl && setEl.style.display !== 'none') ? (parseInt(setEl.value) || 1) : 1;
+
+        resultado.refazer_de = de;
+        resultado.refazer_ate = ateFinal;
+        resultado.refazer_set = set;
+        partes.push(de === ateFinal ? `folha${de}` : `folhas${de}-${ateFinal}`);
+        if (set > 1) partes.unshift(`set${set}`);
+    }
+
+    if (usaCels) {
+        const { cels, invalidos } = parseRefazerCelulas(document.getElementById('ped-refazer-cel')?.value);
+        if (invalidos.length) {
+            return { erro: `Refazer Célula: não entendi "${invalidos.join(', ')}". Use números de 1 a ${window.pedRefazerTotalCelulas || '?'} separados por vírgula.` };
+        }
+        if (!cels.length) {
+            return { erro: 'Refazer Célula: informe as células, separadas por vírgula (ex: 1,3,5).' };
+        }
+        resultado.refazer_celulas = cels;
+        partes.push(`cel${cels.join('-')}`);
+    }
+
+    // O sufixo entra no nome do arquivo. Sem ele, refazer 3 folhas gravava por
+    // cima do PDF do trabalho inteiro, com o mesmo nome, na mesma pasta.
+    resultado.sufixo = partes.length ? `_refazer_${partes.join('_')}` : '';
+    return resultado;
+}
+window.montarRefazerPayload = montarRefazerPayload;
 
 function onPedNumeracaoSelect() {
     const numId = document.getElementById('ped-numeracao')?.value;
@@ -3521,7 +3807,6 @@ function updatePedImprimirButtonsVisibility() {
 
     const btnImposePrint = document.getElementById('ped-btn-impose-print');
     const btnPreviewPrint = document.getElementById('ped-preview-btn-print');
-    const btnRefazerPrint = document.getElementById('ped-refazer-btn-print');
 
     if (btnImposePrint) {
         btnImposePrint.style.display = activeIsImpresso ? 'none' : 'flex';
@@ -3529,8 +3814,22 @@ function updatePedImprimirButtonsVisibility() {
     if (btnPreviewPrint) {
         btnPreviewPrint.style.display = activeIsImpresso ? 'none' : 'flex';
     }
-    if (btnRefazerPrint) {
-        btnRefazerPrint.style.display = activeIsImpresso ? 'none' : 'inline-block';
+
+    // O Imprimir da caixa "Refazer" NÃO segue essa regra. Esconder a reimpressão
+    // justamente quando o modelo já está IMPRESSO tirava o recurso da mão do
+    // operador no único momento em que ele serve: a folha amassou depois de sair.
+
+    // Trocar de modelo zera a caixa "Refazer" — uma faixa de folhas do modelo
+    // anterior não quer dizer nada aqui, e deixá-la marcada leva a refazer a
+    // coisa errada. Só dispara na troca, para não apagar o que está sendo
+    // digitado a cada redesenho da lista.
+    const chaveAtual = state.activeOSItem
+        ? `${state.activeOSItem.osId}|${state.activeOSItem.itemId}`
+        : '';
+    if (window._pedRefazerUltimoItem !== chaveAtual) {
+        const primeiraVez = window._pedRefazerUltimoItem === undefined;
+        window._pedRefazerUltimoItem = chaveAtual;
+        if (!primeiraVez && typeof resetRefazerControls === 'function') resetRefazerControls();
     }
 }
 window.updatePedImprimirButtonsVisibility = updatePedImprimirButtonsVisibility;
@@ -3701,8 +4000,23 @@ window.editPedidoCustomNumeracao = function(fieldId) {
     toast(`Clonando base "${baseNum.name}" para edição customizada.`, 'info');
 };
 
-window.runPedImposition = async function (mode) {
+// `isRefazer` decide se a faixa da caixa "Refazer" entra no trabalho. Ele vem do
+// botão clicado, NÃO do estado dos checkboxes: os botões principais (🚀 Gerar PDF
+// e 🖨️ Imprimir) chamam sem ele e por isso sempre produzem o pedido inteiro.
+// Antes, o payload lia os checkboxes diretamente, e uma caixa esquecida marcada
+// fazia o botão principal imprimir só um pedaço da tiragem sem avisar ninguém.
+window.runPedImposition = async function (mode, isRefazer) {
     if (window.isImposing) return;
+
+    // Validar antes de bloquear a tela: uma faixa impossível tem de virar aviso
+    // agora, não um PDF vazio três minutos depois.
+    const refazer = typeof montarRefazerPayload === 'function'
+        ? montarRefazerPayload(isRefazer === true)
+        : { refazer_de: 0, refazer_ate: 0, refazer_set: 1, refazer_celulas: [], sufixo: '' };
+    if (refazer.erro) {
+        return toast(refazer.erro, 'error');
+    }
+
     window.isImposing = true;
     window._printCancelRequested = false;
 
@@ -3712,6 +4026,19 @@ window.runPedImposition = async function (mode) {
     if (btnImpose) btnImpose.style.display = 'none';
     const btnImposePrint = document.getElementById('ped-btn-impose-print');
     if (btnImposePrint) btnImposePrint.style.display = 'none';
+
+    // As validações abaixo desistem ANTES do try/finally que devolve a tela ao
+    // normal. Sair delas com um `return` cru deixava `isImposing = true` e os
+    // botões escondidos para sempre — só um F5 destravava. Toda desistência
+    // daqui até o try passa por esta função.
+    const desistir = (msg, tipo) => {
+        window.isImposing = false;
+        if (btnCancelPed) btnCancelPed.style.display = 'none';
+        if (btnImpose) btnImpose.style.display = 'inline-flex';
+        if (btnImposePrint) btnImposePrint.style.display = 'inline-flex';
+        if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
+        if (msg) toast(msg, tipo || 'error');
+    };
 
 
     let fmtId = document.getElementById('ped-formato').value;
@@ -3805,9 +4132,9 @@ window.runPedImposition = async function (mode) {
 
 
 
-    if (!fmtId) return toast('Selecione um Formato.', 'error');
+    if (!fmtId) return desistir('Selecione um Formato.');
 
-    if (!saiId) return toast('Selecione uma SaÃ­da.', 'error');
+    if (!saiId) return desistir('Selecione uma SaÃ­da.');
 
     
 
@@ -3821,7 +4148,7 @@ window.runPedImposition = async function (mode) {
 
                 if (!artesList[i].pdf_url || (artesList[i].pdf_url === 'local_file' && !artesList[i].rawFile)) {
 
-                    return toast(`Arte ${i + 1}: faÃ§a o upload do PDF da arte (necessário a cada sessão).`, 'error');
+                    return desistir(`Arte ${i + 1}: faÃ§a o upload do PDF da arte (necessário a cada sessão).`);
 
                 }
 
@@ -3829,7 +4156,7 @@ window.runPedImposition = async function (mode) {
         } else {
             for (let i = 0; i < artesList.length; i++) {
                 if (!artesList[i].pdf_url) {
-                    return toast(`O modelo "${artesList[i].nome}" não possui arte cadastrada nem cor vinculada.`, 'error');
+                    return desistir(`O modelo "${artesList[i].nome}" não possui arte cadastrada nem cor vinculada.`);
                 }
             }
         }
@@ -3842,7 +4169,7 @@ window.runPedImposition = async function (mode) {
 
     if (schema !== 'multi_artes' && schema !== 'pdf_multiple') {
 
-        if (start > end) return toast('Número inicial deve ser menor que o final.', 'error');
+        if (start > end) return desistir('Número inicial deve ser menor que o final.');
 
     }
 
@@ -3876,7 +4203,11 @@ window.runPedImposition = async function (mode) {
     }
 
     const suffix = schema === "pdf_multiple" ? "Paginado" : `${start}-${end}`;
-    const defaultFilename = modeloNum ? `${modeloNum}.pdf` : `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}.pdf`;
+    // O sufixo de refazer entra no nome porque o arquivo cai na mesma pasta do
+    // trabalho original: sem ele, refazer 3 folhas gravava por cima do PDF da
+    // tiragem inteira — e o motor deriva daqui também os nomes `_setN_02_miolo`.
+    const baseFilename = modeloNum ? modeloNum : `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}`;
+    const defaultFilename = `${baseFilename}${refazer.sufixo || ''}.pdf`;
 
     if (window.showDirectoryPicker && mode !== 'print') {
         try {
@@ -3885,7 +4216,7 @@ window.runPedImposition = async function (mode) {
             });
         } catch (err) {
             if (err.name === 'AbortError') {
-                return;
+                return desistir(null);
             }
             console.error("Erro ao abrir showDirectoryPicker:", err);
         }
@@ -3906,7 +4237,7 @@ window.runPedImposition = async function (mode) {
             fileHandle = await window.showSaveFilePicker(options);
         } catch (err) {
             if (err.name === 'AbortError') {
-                return;
+                return desistir(null);
             }
             console.error("Erro ao abrir showSaveFilePicker no início:", err);
         }
@@ -4036,9 +4367,12 @@ window.runPedImposition = async function (mode) {
         q_cam: (state.activeOSItem ? parseInt(state.activeOSItem.q_cam) : null) || parseInt(document.getElementById('ped-q-cam')?.value || 0) || 0,
         l_cam: (state.activeOSItem ? parseInt(state.activeOSItem.l_cam) : null) || parseInt(document.getElementById('ped-l-cam')?.value || 1) || 1,
 
-        refazer_de: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-de')?.value) || 0) : 0,
-        refazer_ate: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-ate')?.value) || 0) : 0,
-        refazer_set: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-set')?.value) || 1) : 1
+        // Vem de montarRefazerPayload(isRefazer) — já validado. Os botões
+        // principais chamam sem `isRefazer` e por isso recebem tudo zerado.
+        refazer_de: refazer.refazer_de,
+        refazer_ate: refazer.refazer_ate,
+        refazer_set: refazer.refazer_set,
+        refazer_celulas: refazer.refazer_celulas
     };
 
 
@@ -4355,6 +4689,10 @@ window.runPedImposition = async function (mode) {
             let currentEvent = null;
             // Acumular blobs no modo print para envio sequencial à impressora
             const printBlobQueue = [];
+            // Quantos arquivos o motor chegou a emitir. Zero é o sintoma de uma
+            // faixa de refazer que não casou com folha nenhuma; sem esta conta a
+            // tela terminava dizendo "concluído e arquivos salvos" sem arquivo.
+            let arquivosRecebidos = 0;
 
             while (true) {
                 const { value, done } = await reader.read();
@@ -4379,6 +4717,7 @@ window.runPedImposition = async function (mode) {
                                 const bytes = new Uint8Array(binStr.length);
                                 for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
                                 const fBlob = new Blob([bytes], {type: "application/pdf"});
+                                arquivosRecebidos++;
 
                                 const fallbackDownload = async () => {
                                     toast(`Baixando: ${fileObj.name}...`, 'info');
@@ -4424,10 +4763,19 @@ window.runPedImposition = async function (mode) {
                 }
             }
 
+            if (arquivosRecebidos === 0) {
+                throw new Error(isRefazer
+                    ? 'O motor não gerou nenhuma folha para esta seleção. Confira a faixa em "De/Até" e as células pedidas.'
+                    : 'O motor terminou sem gerar nenhum arquivo.');
+            }
+
             if (mode === 'print' && printBlobQueue.length > 0) {
                 if (overlay) overlay.classList.remove('active');
                 toast(`Imposição concluída. Enviando ${printBlobQueue.length} arquivo(s) para a impressora...`, 'info');
-                const alvoImpressao = (state.activeOSItem && state.activeOSItem.itemId)
+                // Refazer é reimpressão de uma parte: o modelo já estava impresso
+                // (ou continua não estando). Perguntar "marcar como impresso?"
+                // depois de refazer três folhas confunde e leva a status errado.
+                const alvoImpressao = (!isRefazer && state.activeOSItem && state.activeOSItem.itemId)
                     ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
                     : [];
                 if (typeof sendPrintJobDirect === 'function') {
@@ -4442,7 +4790,9 @@ window.runPedImposition = async function (mode) {
             }
 
             // Gerar/salvar PDF não altera o status de impressão
-            toast('Processo de imposição concluído e arquivos salvos!', 'success');
+            toast(isRefazer
+                ? `Refazer concluído: ${arquivosRecebidos} arquivo(s) salvo(s).`
+                : 'Processo de imposição concluído e arquivos salvos!', 'success');
             return;
         }
 
@@ -4461,7 +4811,8 @@ window.runPedImposition = async function (mode) {
                 if (mode === 'print') {
                     if (overlay) overlay.classList.remove('active');
                     toast(`Imposição concluída. Enviando ${multiBlobs.length} arquivo(s) para a impressora...`, 'info');
-                    const alvoImpressao = (state.activeOSItem && state.activeOSItem.itemId)
+                    // Mesma razão do caminho por stream: refazer não muda status.
+                    const alvoImpressao = (!isRefazer && state.activeOSItem && state.activeOSItem.itemId)
                         ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
                         : [];
                     if (typeof sendPrintJobDirect === 'function') {

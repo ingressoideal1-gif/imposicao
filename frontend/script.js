@@ -9360,9 +9360,14 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         l_cam: isMultiSelected ? 1 : (parseInt(document.getElementById('ped-l-cam')?.value) || parseInt(document.getElementById('imp-l-cam')?.value) || 1),
 
-        refazer_de: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-de')?.value) || 0) : 0,
-        refazer_ate: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-ate')?.value) || 0) : 0,
-        refazer_set: document.getElementById('ped-refazer-checkbox')?.checked ? (parseInt(document.getElementById('ped-refazer-set')?.value) || 1) : 1,
+        // A view Imposição não tem caixa "Refazer" — a caixa vive no Painel de
+        // Produção (`ped-refazer-*`). Ler os campos de lá aqui fazia um refazer
+        // esquecido marcado no Painel filtrar silenciosamente um trabalho pedido
+        // por esta tela. Aqui o trabalho é sempre o inteiro.
+        refazer_de: 0,
+        refazer_ate: 0,
+        refazer_set: 1,
+        refazer_celulas: [],
 
         is_color_template: state.isColorTemplate || false
 

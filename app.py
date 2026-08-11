@@ -862,7 +862,8 @@ async def impose_file(
             l_cam=int(data.get("l_cam", 1) or 1),
             refazer_de=int(data.get("refazer_de", 0) or 0),
             refazer_ate=int(data.get("refazer_ate", 0) or 0),
-            refazer_set=int(data.get("refazer_set", 1) or 1)
+            refazer_set=int(data.get("refazer_set", 1) or 1),
+            refazer_celulas=data.get("refazer_celulas") or []
         )
 
         wants_stream = data.get("stream", False)
@@ -877,9 +878,15 @@ async def impose_file(
                 path = file_info["path"]
                 name = file_info["name"]
                 ftype = file_info["type"]
-                # Não enviar capas se refazer > 0 e o tipo for capa/contracapa
-                refazer_de = int(data.get("refazer_de", 0) or 0)
-                if refazer_de > 0 and ftype in ["capa", "contracapa"]:
+                # Refazer entrega miolo avulso: capa e contracapa pertencem ao set
+                # inteiro e já saíram na tiragem original. O motor também já não as
+                # gera nesse caso — esta é a segunda tranca, para o dia em que um
+                # caminho novo do motor esquecer a primeira.
+                refazendo = (
+                    int(data.get("refazer_de", 0) or 0) > 0
+                    or bool(data.get("refazer_celulas") or [])
+                )
+                if refazendo and ftype in ["capa", "contracapa"]:
                     return
                 if os.path.exists(path):
                     with open(path, "rb") as f_pdf:

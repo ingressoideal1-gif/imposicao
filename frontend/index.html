@@ -7,7 +7,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=527">
+    <link rel="stylesheet" href="/style.css?v=528">
     <script src="pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -1459,19 +1459,38 @@
                                         <span>🖨️</span> Imprimir
                                     </button>
 
-                                    <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1);">
-                                        <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                                            <input type="checkbox" id="ped-refazer-checkbox" onchange="document.getElementById('ped-refazer-inputs').style.display = this.checked ? 'flex' : 'none'">
+                                    <!-- REFAZER: reimpressão de parte de uma tiragem que já saiu.
+                                         "Refazer Folhas" conta folhas DENTRO DO SET; "Refazer Célula"
+                                         conta as poses da folha (os números aparecem na prévia).
+                                         Os dois podem ser combinados. Ver runPedImposition() e
+                                         montarRefazerPayload() em pedido.js. -->
+                                    <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1); flex-wrap: wrap;">
+                                        <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Refaz apenas uma faixa de folhas do set. A numeração é exatamente a mesma da tiragem original.">
+                                            <input type="checkbox" id="ped-refazer-checkbox" onchange="onRefazerToggle()">
                                             Refazer Folhas
                                         </label>
                                         <div id="ped-refazer-inputs" style="display: none; align-items: center; gap: 6px;">
-                                            <select id="ped-refazer-set" class="form-control" style="width: auto; padding: 2px 4px; height: 24px; font-size: 0.8rem; display: none;">
+                                            <select id="ped-refazer-set" class="form-control" style="width: auto; padding: 2px 4px; height: 24px; font-size: 0.8rem; display: none;" onchange="onRefazerFolhaChange()">
                                                 <option value="1">Set 1</option>
                                             </select>
                                             <span style="font-size:0.75rem; color:var(--text-muted);">De:</span>
-                                            <input type="number" id="ped-refazer-de" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 5">
+                                            <input type="number" id="ped-refazer-de" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 5" oninput="onRefazerFolhaChange()" title="Primeira folha da faixa. A prévia pula para ela assim que você digita.">
                                             <span style="font-size:0.75rem; color:var(--text-muted);">Até:</span>
                                             <input type="number" id="ped-refazer-ate" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 10">
+                                            <span id="ped-refazer-total" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;"></span>
+                                        </div>
+
+                                        <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Refaz apenas as células escolhidas. As demais saem em branco na folha.">
+                                            <input type="checkbox" id="ped-refazer-cel-checkbox" onchange="onRefazerToggle()">
+                                            Refazer Célula
+                                        </label>
+                                        <div id="ped-refazer-cel-inputs" style="display: none; align-items: center; gap: 6px;">
+                                            <span style="font-size:0.75rem; color:var(--text-muted);">Células:</span>
+                                            <input type="text" id="ped-refazer-cel" class="form-control" style="width: 92px; padding: 2px 6px; height: 24px; font-size: 0.8rem; text-align: center;" placeholder="Ex: 1,3,5" oninput="onRefazerCelulaChange()" title="Números das células separados por vírgula. Faixas também valem: 1-4">
+                                            <span id="ped-refazer-cel-info" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;"></span>
+                                        </div>
+
+                                        <div id="ped-refazer-acoes" style="display: none; align-items: center; gap: 6px;">
                                             <button class="btn btn-sm" style="background: linear-gradient(135deg, #a78bfa, #7c3aed); color: #fff; border: none; height: 24px; font-size: 0.7rem; padding: 0 8px;" onclick="runPedImposition('pdf', true)">Gerar PDF</button>
                                             <button class="btn btn-sm" id="ped-refazer-btn-print" style="background: linear-gradient(135deg, #34d399, #059669); color: #fff; border: none; height: 24px; font-size: 0.7rem; padding: 0 8px;" onclick="runPedImposition('print', true)">Imprimir</button>
                                         </div>
@@ -2568,11 +2587,11 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=527"></script>
-    <script src="csv-editor.js?v=527"></script>
-    <script src="script.js?v=527"></script>
-    <script src="criador-arte.js?v=527"></script>
-    <script src="/pedido.js?v=527"></script>
+    <script src="mapas.js?v=528"></script>
+    <script src="csv-editor.js?v=528"></script>
+    <script src="script.js?v=528"></script>
+    <script src="criador-arte.js?v=528"></script>
+    <script src="/pedido.js?v=528"></script>
 
 
 

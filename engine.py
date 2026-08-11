@@ -191,7 +191,8 @@ class ImpositionConfig:
                  l_cam: int = 1,
                  refazer_de: int = 0,
                  refazer_ate: int = 0,
-                 refazer_set: int = 1):
+                 refazer_set: int = 1,
+                 refazer_celulas: list = None):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -261,6 +262,12 @@ class ImpositionConfig:
         self.refazer_de = int(refazer_de) if refazer_de else 0
         self.refazer_ate = int(refazer_ate) if refazer_ate else 0
         self.refazer_set = int(refazer_set) if refazer_set else 1
+        # Células a refazer, 1-based, na mesma numeração de pose que o laço usa
+        # (P + 1, leitura da esquerda para a direita e de cima para baixo).
+        # Lista vazia = folha inteira.
+        self.refazer_celulas = sorted({
+            int(c) for c in (refazer_celulas or []) if str(c).strip().isdigit() and int(c) >= 1
+        })
         
         if layout_schema == "pdf_multiple":
             # Para Pdf Múltiplo, a quantidade total de itens é baseada na quantidade de páginas
@@ -853,11 +860,36 @@ class ImpositionEngine:
 
     def process(self):
         cfg = self.cfg
+        # ─── REFAZER ────────────────────────────────────────────────────────────
+        # Reimpressão de parte de uma tiragem que já saiu. O filtro é sempre um
+        # `continue`: nada é recalculado, então a folha 7 refeita traz exatamente
+        # os números que a folha 7 trazia. `r_de`/`r_ate` contam folhas dentro do
+        # set `r_set`; `r_cels` são poses da folha (P + 1), e vazio quer dizer a
+        # folha inteira. Os dois filtros se combinam.
         r_de = int(getattr(cfg, "refazer_de", 0) or 0)
         r_ate = int(getattr(cfg, "refazer_ate", 0) or 0)
         r_set = int(getattr(cfg, "refazer_set", 1) or 1)
+        r_cels = set(getattr(cfg, "refazer_celulas", None) or [])
         if r_de > 0 and r_ate <= 0:
             r_ate = r_de
+        # Só "Até" preenchido: o frontend já recusa, mas o motor também atende o
+        # agente local e a API. Assumir a folha 1 é o único palpite seguro — o
+        # contrário (r_de = 0) desliga o filtro e refaz a tiragem inteira.
+        if r_de <= 0 and r_ate > 0:
+            r_de = 1
+        if r_de > 0 and r_ate < r_de:
+            raise ValueError(
+                f"Refazer: faixa invalida — 'ate' ({r_ate}) e menor que 'de' ({r_de})."
+            )
+
+        # Refazendo por folha OU por célula: nos dois casos o que sai é miolo
+        # avulso para repor o que se perdeu. Capa e contracapa pertencem ao set
+        # inteiro e já foram impressas — reimprimi-las é desperdício de papel.
+        refazendo = (r_de > 0) or bool(r_cels)
+
+        def _pular_celula(pose_idx):
+            """True quando esta célula fica fora do 'Refazer Célula'."""
+            return bool(r_cels) and (pose_idx + 1) not in r_cels
         # Normalizar rotate_page para ângulo de rotação (0, 90, 180, 270)
         rot_val = getattr(cfg, "rotate_page", 0)
         if isinstance(rot_val, bool):
@@ -870,6 +902,16 @@ class ImpositionEngine:
         cols = cfg.cols
         rows = cfg.rows
         poses_per_sheet = cols * rows
+
+        # Uma célula que não existe nesta folha é sempre erro de digitação. Sem
+        # esta guarda o motor gerava as folhas normalmente e todas saíam em
+        # branco — papel gasto para repor exatamente nada.
+        fora = [c for c in r_cels if c > poses_per_sheet]
+        if fora:
+            raise ValueError(
+                "Refazer: celula(s) " + ",".join(str(c) for c in sorted(fora))
+                + f" nao existem — esta folha tem {poses_per_sheet} celula(s)."
+            )
 
         # Calcular área total usada na folha (itens + gaps)
         used_w = cols * cfg.item_w + (cols - 1) * cfg.gap_h
@@ -1248,7 +1290,7 @@ class ImpositionEngine:
                     doc_out = fitz.open()
                     
                     # 1. Gerar capa para o layer (chunk)
-                    if cfg.has_cover and r_de <= 0:
+                    if cfg.has_cover and not refazendo:
                         self._generate_capa_for_chunk(set_idx, layer_idx, set_def, cfg, multi_map)
                     
                     # 2. Gerar miolo para o layer
@@ -1269,6 +1311,8 @@ class ImpositionEngine:
                         for row in range(rows):
                             for col in range(cols):
                                 P = row * cols + col
+                                if _pular_celula(P):
+                                    continue
                                 item_data = set_def["cell_allocations"][P][sheet_within_set]
                                 if item_data is not None:
                                     self._render_item_front(out_page_front, item_data, row, col, cfg, start_x, start_y)
@@ -1283,6 +1327,10 @@ class ImpositionEngine:
                                 for col in range(cols):
                                     col_verso = cols - 1 - col
                                     P_frente = row * cols + col_verso
+                                    # A célula é a mesma da frente: filtrar pelo P
+                                    # da frente mantém frente e verso casados.
+                                    if _pular_celula(P_frente):
+                                        continue
                                     item_data = set_def["cell_allocations"][P_frente][sheet_within_set]
                                     if item_data is not None:
                                         self._render_item_back(out_page_back, item_data, row, col, cfg, start_x, start_y)
@@ -1297,7 +1345,7 @@ class ImpositionEngine:
                         doc_out.close()
                         
                     # 4. Gerar contracapa para o layer
-                    if cfg.has_cover and r_de <= 0:
+                    if cfg.has_cover and not refazendo:
                         self._generate_contracapa_for_chunk(set_idx, layer_idx, set_def, cfg)
                     
             # Fechar recursos
@@ -1307,7 +1355,7 @@ class ImpositionEngine:
                 if doc:
                     doc.close()
             
-            self._apply_refazer_filter()
+            self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels)
             print(f"[engine] strict_assembly: Gerado com sucesso.")
             return
 
@@ -1324,16 +1372,20 @@ class ImpositionEngine:
             
             if set_idx != set_idx_current:
                 if set_idx_current != -1 and doc_out:
-                    if len(doc_out) > 0:
-                        if cfg.has_cover and r_de <= 0:
-                            out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
-                            doc_out.save(out_name, garbage=4, deflate=True)
-                            self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
+                    # Gravar o miolo do set que acabou NÃO depende do refazer: só a
+                    # capa e a contracapa dependem. Antes as duas coisas estavam sob
+                    # a mesma condição, e o miolo de um set completo era descartado
+                    # em silêncio sempre que um filtro deixasse mais de um set passar.
+                    if len(doc_out) > 0 and cfg.has_cover:
+                        out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
+                        doc_out.save(out_name, garbage=4, deflate=True)
+                        self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
+                        if not refazendo:
                             self._generate_contracapa(set_idx_current, cfg, doc_base)
                     doc_out.close()
                     doc_out = fitz.open()
-                
-                if cfg.has_cover and r_de <= 0:
+
+                if cfg.has_cover and not refazendo:
                     self._generate_capa(set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets, multi_map)
                 
                 set_idx_current = set_idx
@@ -1348,6 +1400,9 @@ class ImpositionEngine:
             for row in range(rows):
                 for col in range(cols):
                     P = row * cols + col
+
+                    if _pular_celula(P):
+                        continue
 
                     if cfg.layout_schema == "cut_stack":
                         if cfg.cut_stack_mode == "strict":
@@ -1588,6 +1643,11 @@ class ImpositionEngine:
                     for col in range(cols):
                         P = row * cols + col
 
+                        # Mesma célula da frente (a coluna física vira col_verso
+                        # mais abaixo): frente e verso saem ou ficam juntos.
+                        if _pular_celula(P):
+                            continue
+
                         if cfg.layout_schema == "cut_stack":
                             if cfg.cut_stack_mode == "strict":
                                 stack_size = cfg.sheets_per_block * cfg.block_depth
@@ -1744,14 +1804,14 @@ class ImpositionEngine:
                     out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
                     doc_out.save(out_name, garbage=4, deflate=True)
                     self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
-                    if r_de <= 0:
+                    if not refazendo:
                         self._generate_contracapa(set_idx_current, cfg, doc_base)
         else:
             if len(doc_out) > 0:
                 doc_out.save(cfg.out_pdf, garbage=4, deflate=True)
                 self.generated_files.append({"type": "single", "path": cfg.out_pdf, "name": os.path.basename(cfg.out_pdf)})
         
-        self._apply_refazer_filter()
+        self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels)
         print(f"[engine] save done elapsed={_time.monotonic()-_t0:.1f}s")
         if doc_base:
             doc_base.close()
@@ -2363,6 +2423,24 @@ class ImpositionEngine:
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 
-    def _apply_refazer_filter(self):
-        """Filtro de refazer aplicado ativamente na geração de páginas para otimização."""
-        return
+    def _avisar_refazer_vazio(self, refazendo, r_de, r_ate, r_set, r_cels):
+        """Recusa um refazer que não casou com folha nenhuma.
+
+        Substitui o antigo `_apply_refazer_filter`, que era um `return` puro
+        deixado para trás quando o filtro passou a ser aplicado dentro do laço.
+        O problema real que sobrou não era o filtro e sim o silêncio: uma faixa
+        fora do intervalo produzia zero páginas, nenhum arquivo era emitido e o
+        operador via a tela dizer que tinha terminado. Numa gráfica isso vira
+        uma pilha de papel que ninguém reimprimiu.
+        """
+        if not refazendo or self.generated_files:
+            return
+        alvo = []
+        if r_de > 0:
+            alvo.append(f"folhas {r_de}-{r_ate} do set {r_set}")
+        if r_cels:
+            alvo.append("celulas " + ",".join(str(c) for c in sorted(r_cels)))
+        raise ValueError(
+            "Refazer: nenhuma folha corresponde a " + " e ".join(alvo)
+            + ". Confira a faixa e as celulas pedidas."
+        )

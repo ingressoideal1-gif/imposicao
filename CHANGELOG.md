@@ -8,6 +8,81 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v528 — 2026-08-11] — Refazer folhas: os freios que faltavam, e refazer célula
+
+### O que o recurso é
+"Refazer Folhas" existe para o momento em que a tiragem já saiu e uma parte dela
+se perdeu — folha amassada na saída, célula borrada. O motor filtra as folhas com
+um `continue` dentro do laço, sem recalcular índice nenhum, e é por isso que a
+folha 7 refeita traz **exatamente** os números que a folha 7 trazia. Essa
+propriedade agora está travada em `tests/test_engine_refazer.py`.
+
+### O que estava errado
+
+**O checkbox contaminava o botão principal.** Os botões da caixa passavam um
+segundo argumento (`runPedImposition('pdf', true)`) que a função simplesmente não
+recebia: a assinatura era `function (mode)`. O payload lia os checkboxes direto do
+DOM, então uma caixa esquecida marcada fazia o 🚀 Gerar PDF e o 🖨️ Imprimir
+principais saírem filtrados, sem nenhum aviso. O mesmo valia para a view
+Imposição, que nem caixa tem e mesmo assim lia os campos `ped-refazer-*` do Painel.
+
+**Só "Até" preenchido refazia o trabalho inteiro.** `refazer_de = 0` desliga o
+filtro. O operador digitava "Até: 10" achando que pedia as dez primeiras folhas e
+recebia as quinhentas.
+
+**Faixa impossível terminava em sucesso.** De maior que Até, ou De 500 num
+trabalho de 40: zero páginas geradas, nenhum arquivo emitido, e a tela dizendo
+"concluído e arquivos salvos". Numa gráfica isso é uma pilha que ninguém
+reimprimiu.
+
+**O arquivo saía com o nome do trabalho inteiro** e gravava por cima dele na mesma
+pasta.
+
+**O Imprimir do refazer sumia quando o modelo estava IMPRESSO** — o único momento
+em que o recurso serve. E o botão só tinha `id` no `index.html`, então no
+`producao.html` a regra nunca chegava a valer: as duas páginas se comportavam
+diferente.
+
+### O que mudou
+
+- `runPedImposition(mode, isRefazer)` honra o segundo argumento. A faixa só entra
+  quando o botão da caixa é quem chamou; os botões principais sempre produzem o
+  pedido inteiro. `runImposition()` (view Imposição) nunca refaz.
+- `montarRefazerPayload()` valida antes de bloquear a tela: "De" obrigatório,
+  Até ≥ De, faixa dentro do total de folhas do set, células dentro do total de
+  poses. O motor repete as guardas, porque também atende o agente local e a API.
+- O nome do arquivo ganha sufixo: `12345_refazer_folhas2-3_cel1-3-5.pdf`.
+- Zero arquivos gerados virou erro, no motor (`_avisar_refazer_vazio`, que
+  substituiu o `_apply_refazer_filter` — um `return` puro deixado para trás) e no
+  frontend, que agora conta os arquivos do stream.
+- Refazer não pergunta mais se o modelo deve ser marcado como impresso.
+- As desistências anteriores ao `try/finally` deixavam `isImposing = true` e os
+  botões escondidos até um F5. Todas passam por `desistir()` agora.
+- Bug latente junto: gravar o miolo de um set completo estava sob a mesma condição
+  que gerar a capa. Com mais de um set passando pelo filtro, o miolo era
+  descartado em silêncio.
+
+### Refazer Célula
+Segundo checkbox, campo com os números das células separados por vírgula (faixas
+`2-4` também valem). As células são as poses da folha, numeradas 1..N na ordem de
+leitura — o mesmo `P + 1` que a prévia e o motor usam. As não escolhidas saem em
+branco; capa e contracapa não são reimpressas. Os dois modos se combinam: folhas
+2-3, célula 5.
+
+Na prévia, as células fora da escolha recebem um véu escuro com um X, e todas
+ganham o número no centro — verde nas escolhidas, vermelho nas demais. É anotação
+de tela, desenhada depois de `fecharGrupo()`, fora do grupo arte+numeração: não
+multiplica sobre a cor nem entra no PDF.
+
+### E o campo "De:" agora mostra a folha
+Digitar em "De:" leva a prévia para aquela folha, no set escolhido. O campo virou
+conferência: o operador vê a folha antes de mandar refazê-la.
+
+> Toca `engine.py` e `app.py` — **o agente precisa ser publicado junto com o
+> site**, senão a estação continua com o motor antigo.
+
+---
+
 ## [v527 — 2026-08-11] — O banco de dados dividido entre os modelos do pedido
 
 ### O problema
