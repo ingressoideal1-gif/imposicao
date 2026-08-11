@@ -25218,6 +25218,170 @@ async function onPedPrinterChange() {
 }
 
 // Retorna as opções configuradas no painel lateral para uso direto no sendPrintJob
+// ═══════════════════════════════════════════════════════════════════════
+// HOT FOLDER
+// ═══════════════════════════════════════════════════════════════════════
+// A Epson SureColor F9470H nao recebe trabalho pela fila do Windows: quem a
+// conduz e o RIP Epson Edge Print, que observa uma pasta, importa o PDF que
+// aparece ali e aplica a ele o preset daquela pasta. Marcada a caixa, o material
+// imposto e gravado na pasta em vez de ir para a impressora.
+
+function _hotFolderAtivo() {
+    return document.getElementById('ped-hotfolder-enabled')?.checked === true;
+}
+
+function _hotFolderPath() {
+    return (document.getElementById('ped-hotfolder-path')?.value || '').trim();
+}
+
+function _hotFolderStatus(html, tipo) {
+    const el = document.getElementById('ped-hotfolder-status');
+    if (!el) return;
+    if (!html) { el.style.display = 'none'; return; }
+    const cores = {
+        ok:    ['rgba(34,197,94,0.1)',  'rgba(34,197,94,0.25)',  '#4ade80'],
+        aviso: ['rgba(245,158,11,0.1)', 'rgba(245,158,11,0.28)', '#fbbf24'],
+        erro:  ['rgba(239,68,68,0.1)',  'rgba(239,68,68,0.28)',  '#f87171'],
+    };
+    const [bg, borda, cor] = cores[tipo] || cores.aviso;
+    el.style.background = bg;
+    el.style.border = `1px solid ${borda}`;
+    el.style.color = cor;
+    el.innerHTML = html;
+    el.style.display = 'block';
+}
+
+// Hot folder nao carrega DEVMODE: bandeja, papel, frente/verso, cor e copias sao
+// do preset da pasta no RIP — e numa impressora de rolo para sublimacao metade
+// desses conceitos nem existe. Deixar os campos ativos faria o operador marcar
+// "Duplex" aqui, receber simplex no papel e concluir que o sistema esta errado.
+//
+// #ped-print-modes-box fica de fora da desabilitacao de proposito: Impressao
+// Reversa e Folha a Folha sao aplicadas ao PDF pelo navegador antes do envio, e
+// por isso continuam valendo.
+function _aplicarEstadoHotFolder() {
+    const ativo = _hotFolderAtivo();
+
+    const detalhes = document.getElementById('ped-hotfolder-detalhes');
+    if (detalhes) detalhes.style.display = ativo ? 'flex' : 'none';
+
+    ['ped-printer-box', 'ped-driver-options'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.opacity = ativo ? '0.35' : '1';
+        el.querySelectorAll('select, input, button').forEach(c => { c.disabled = ativo; });
+    });
+
+    const hint = document.getElementById('ped-driver-hint');
+    if (hint && ativo) hint.style.display = 'none';
+
+    // Sem impressora escolhida o botao de salvar fica escondido; no hot folder
+    // ele precisa aparecer, senao a pasta nunca e gravada para o produto.
+    const secaoSalvar = document.getElementById('ped-print-save-section');
+    if (secaoSalvar && ativo && _getActiveProductInfo()) secaoSalvar.style.display = 'block';
+}
+
+function onPedHotFolderToggle() {
+    _aplicarEstadoHotFolder();
+    if (_hotFolderAtivo()) {
+        if (!_hotFolderPath()) escolherHotFolder();
+    } else {
+        _hotFolderStatus('', null);
+    }
+}
+
+// O navegador nao enxerga o disco da estacao: quem abre o seletor e o agente.
+// A resposta demora o tempo que o operador levar para escolher — e uma janela
+// modal do Windows, aberta na maquina, nao ha como ser diferente.
+async function escolherHotFolder() {
+    const btn = document.getElementById('ped-hotfolder-pick-btn');
+    const rotulo = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Escolha a pasta na janela que abriu…'; }
+    try {
+        const resp = await fetch(`${AGENTE_LOCAL_URL}/api/hotfolder/escolher`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inicial: _hotFolderPath() })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (data.cancelado) { _hotFolderStatus('Nenhuma pasta escolhida.', 'aviso'); return; }
+        if (!data.ok) throw new Error(data.detail || 'o agente recusou a pasta');
+        _definirHotFolder(data);
+    } catch (e) {
+        console.error('[hotFolder] seletor indisponivel:', e);
+        _hotFolderStatus(
+            `Não foi possível abrir o seletor nesta estação (${e.message}).<br>` +
+            `Cole o caminho da pasta no campo acima — ele é conferido quando você sair do campo.`, 'erro');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = rotulo; }
+    }
+}
+
+// Plano B do seletor: o caminho digitado ou colado. Vale a mesma validacao —
+// so pasta que existe, e pasta e aceita escrita entra na lista da estacao.
+async function validarHotFolderDigitada() {
+    const caminho = _hotFolderPath();
+    if (!caminho) { _hotFolderStatus('', null); return; }
+    try {
+        const resp = await fetch(`${AGENTE_LOCAL_URL}/api/hotfolder/validar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: caminho })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!data.ok) { _hotFolderStatus(`✗ ${data.detail}`, 'erro'); return; }
+        _definirHotFolder(data);
+    } catch (e) {
+        _hotFolderStatus(`Não foi possível conferir a pasta: ${e.message}`, 'erro');
+    }
+}
+
+function _definirHotFolder(data) {
+    const campo = document.getElementById('ped-hotfolder-path');
+    if (campo) campo.value = data.path;
+    if (data.aviso_unidade_mapeada) {
+        // Letra mapeada pertence a sessao do usuario. Se o agente um dia rodar
+        // como servico ou sob outra conta, "Z:" nao existe para ele e o envio
+        // quebra em silencio — o arquivo simplesmente nunca chega ao RIP.
+        _hotFolderStatus(
+            `✓ Pasta pronta: <code>${data.path}</code><br>` +
+            `⚠ É uma unidade de rede mapeada. Prefira o caminho UNC ` +
+            `(<code>\\\\servidor\\pasta</code>).`, 'aviso');
+    } else {
+        _hotFolderStatus(`✓ Pasta pronta: <code>${data.path}</code>`, 'ok');
+    }
+}
+
+// O Edge Print importa o arquivo e o remove da pasta. Sobrando arquivo alguns
+// segundos depois, o watcher provavelmente nao esta rodando — e, uma vez largado
+// o PDF, este e o unico sinal barato de que o outro lado esta vivo.
+//
+// E aviso, nunca erro: ha RIP que deixa o arquivo no lugar de proposito.
+function _conferirConsumoHotFolder(caminhos) {
+    if (!caminhos || !caminhos.length) return;
+    setTimeout(async () => {
+        try {
+            const resp = await fetch(`${AGENTE_LOCAL_URL}/api/hotfolder/conferir`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paths: caminhos })
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const restantes = data.restantes || [];
+            if (restantes.length) {
+                toast(`⚠ ${restantes.length} de ${caminhos.length} arquivo(s) continuam na ` +
+                      `pasta — o RIP está rodando e observando o hot folder?`, 'warning');
+            }
+        } catch (e) {
+            // Sem agente nao ha o que conferir, e isso nao e falha do envio.
+            console.warn('[hotFolder] conferencia de consumo indisponivel:', e);
+        }
+    }, 12000);
+}
+
 function getPedPrintOptions() {
     const printerName = document.getElementById('ped-print-printer')?.value || '';
     const trayDual = document.getElementById('ped-tray-dual');
@@ -25237,6 +25401,10 @@ function getPedPrintOptions() {
         options.tray_capa = parseInt(document.getElementById('ped-print-tray-capa')?.value) || options.tray;
         options.tray_miolo = parseInt(document.getElementById('ped-print-tray-miolo')?.value) || options.tray;
     }
+    // No relay, este campo e o que faz o agente desviar do spooler para a pasta.
+    // Ele viaja dentro do ppd_options, que ja e coluna JSON no print_queue — por
+    // isso o hot folder nao exigiu coluna nova no Supabase.
+    if (_hotFolderAtivo()) options.hot_folder_path = _hotFolderPath();
     return { printerName, options };
 }
 
@@ -25308,8 +25476,13 @@ async function processPrintQueueOptions(queue, options) {
 // sem abrir o modal (modo "print sem modal")
 async function sendPrintJobDirect(queue) {
     const { printerName, options } = getPedPrintOptions();
+    const hotFolder = options.hot_folder_path || '';
 
-    if (!printerName) {
+    if (_hotFolderAtivo() && !hotFolder) {
+        toast('HOT FOLDER está marcado, mas nenhuma pasta foi escolhida.', 'error');
+        return false;
+    }
+    if (!hotFolder && !printerName) {
         toast('Selecione uma impressora no painel de configuração de impressão.', 'error');
         return false;
     }
@@ -25340,6 +25513,7 @@ async function sendPrintJobDirect(queue) {
         const loteId = Date.now();   // pasta do lote no Storage (so o relay usa)
         let successCount = 0;
         let failCount = 0;
+        const caminhosSoltos = [];   // hot folder: o que conferir depois
 
         for (let i = 0; i < queue.length; i++) {
             if (window._printCancelRequested) {
@@ -25364,7 +25538,22 @@ async function sendPrintJobDirect(queue) {
             }
 
             try {
-                if (isLocalMode) {
+                if (isLocalMode && hotFolder) {
+                    // O prefixo de ordem (00001_, 00002_...) passa a servir a dois
+                    // donos: o titulo do job no spooler e a ordem alfabetica em que
+                    // o watcher do Edge Print importa os arquivos da pasta.
+                    const formData = new FormData();
+                    formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
+                    formData.append('folder', hotFolder);
+                    const res = await fetch('/api/hotfolder/drop', { method: 'POST', body: formData });
+                    if (!res.ok) {
+                        let motivo = `HTTP ${res.status}`;
+                        try { motivo = (await res.json()).detail || motivo; } catch (_) {}
+                        throw new Error(motivo);
+                    }
+                    const dropData = await res.json();
+                    if (dropData.path) caminhosSoltos.push(dropData.path);
+                } else if (isLocalMode) {
                     const formData = new FormData();
                     formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
                     formData.append('printer_name', printerName);
@@ -25388,7 +25577,10 @@ async function sendPrintJobDirect(queue) {
                     const { error: dbError } = await supabaseClient.from('print_queue').insert({
                         agent_id: window._activeAgentData.id,
                         file_url: urlData.publicUrl,
-                        printer_name: printerName,
+                        // Sem impressora escolhida no modo hot folder, mas a coluna
+                        // e o que o operador le no historico da fila — deixar vazio
+                        // ali nao ajuda ninguem a saber para onde o trabalho foi.
+                        printer_name: printerName || (hotFolder ? `HOT FOLDER: ${hotFolder}` : ''),
                         ppd_options: options,
                         status: 'pending'
                     });
@@ -25403,7 +25595,9 @@ async function sendPrintJobDirect(queue) {
         }
 
         if (failCount === 0) {
-            toast(`✓ ${successCount} arquivo(s) enviado(s) para "${printerName}"!`, 'success');
+            const destino = hotFolder ? `a pasta "${hotFolder}"` : `"${printerName}"`;
+            toast(`✓ ${successCount} arquivo(s) enviado(s) para ${destino}!`, 'success');
+            _conferirConsumoHotFolder(caminhosSoltos);
             return true;
         }
         return false;
@@ -25459,12 +25653,20 @@ async function savePrintConfigForProduct() {
     if (!info) return toast('Nenhum produto ativo para salvar.', 'warning');
 
     const printerSel = document.getElementById('ped-print-printer');
-    if (!printerSel || !printerSel.value) return toast('Selecione uma impressora primeiro.', 'warning');
+    const hotFolderAtivo = _hotFolderAtivo();
+    if (hotFolderAtivo && !_hotFolderPath()) {
+        return toast('Escolha a pasta do hot folder primeiro.', 'warning');
+    }
+    if (!hotFolderAtivo && (!printerSel || !printerSel.value)) {
+        return toast('Selecione uma impressora primeiro.', 'warning');
+    }
 
     const config = {
         produto_id: String(info.prodId),
         produto_nome: info.prodNome,
-        printer_name: printerSel.value,
+        printer_name: printerSel?.value || '',
+        hot_folder: hotFolderAtivo,
+        hot_folder_path: hotFolderAtivo ? _hotFolderPath() : '',
         tray: parseInt(document.getElementById('ped-print-tray')?.value) || null,
         tray_capa: parseInt(document.getElementById('ped-print-tray-capa')?.value) || null,
         tray_miolo: parseInt(document.getElementById('ped-print-tray-miolo')?.value) || null,
@@ -25560,6 +25762,25 @@ async function loadPrintConfigForProduct(produtoId) {
 async function _applyPrintConfig(config) {
     if (!config) return;
 
+    // Hot folder vem antes da impressora, e fora do ramo dela de proposito: um
+    // produto configurado so para hot folder nao tem printer_name para casar com
+    // a lista da maquina, e o ramo abaixo nunca seria alcancado.
+    const chkHot = document.getElementById('ped-hotfolder-enabled');
+    if (chkHot) {
+        chkHot.checked = !!config.hot_folder;
+        const campoHot = document.getElementById('ped-hotfolder-path');
+        if (campoHot) campoHot.value = config.hot_folder_path || '';
+        _aplicarEstadoHotFolder();
+        if (config.hot_folder && config.hot_folder_path) {
+            _hotFolderStatus(`Pasta salva para este produto: <code>${config.hot_folder_path}</code>`, 'ok');
+            const indicador = document.getElementById('ped-print-saved-indicator');
+            if (indicador) {
+                indicador.style.display = 'block';
+                setTimeout(() => { if (indicador) indicador.style.display = 'none'; }, 5000);
+            }
+        }
+    }
+
     // Selecionar impressora
     const printerSel = document.getElementById('ped-print-printer');
     if (printerSel && config.printer_name) {
@@ -25623,6 +25844,10 @@ async function _applyPrintConfig(config) {
                     // Auto-esconder após 5 segundos
                     setTimeout(() => { if (indicator) indicator.style.display = 'none'; }, 5000);
                 }
+
+                // onPedPrinterChange() acabou de reexibir o bloco do driver; se o
+                // produto e de hot folder, ele precisa voltar a ficar desabilitado.
+                _aplicarEstadoHotFolder();
             }, 800);
         }
     }
@@ -25638,6 +25863,11 @@ window.onPedPrinterChange = onPedPrinterChange;
 window.getPedPrintOptions = getPedPrintOptions;
 window.processPrintQueueOptions = processPrintQueueOptions;
 window.sendPrintJobDirect = sendPrintJobDirect;
+
+// Hot folder — os onclick/onchange do index.html chamam por window.
+window.onPedHotFolderToggle = onPedHotFolderToggle;
+window.escolherHotFolder = escolherHotFolder;
+window.validarHotFolderDigitada = validarHotFolderDigitada;
 
 
 // Exportar funcoes globais (existentes)

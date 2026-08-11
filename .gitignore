@@ -24,6 +24,16 @@ dist/
 # E de cada maquina, nunca do repositorio.
 print_configs.json
 
+# Pastas observadas por RIP que a estacao autorizou a receber PDF. E a lista
+# branca do hot folder: caminho de maquina, e ao mesmo tempo a trava de
+# seguranca do endpoint de gravacao. Nunca versionar — o caminho de uma estacao
+# nao vale para outra, e versiona-la autorizaria pastas por engano.
+hot_folders.json
+
+# Copia do painel que o agente sincroniza para servir offline. Sai do Storage em
+# tempo de execucao, nao e fonte.
+painel/
+
 # Backup local da migração de preview_jpg — rede de segurança da máquina, não
 # conteúdo do projeto. São centenas de KB de base64 que não devem entrar no git.
 backup_preview_jpg_*.json

@@ -47,6 +47,7 @@ e o MSI **nunca os substitui** — ele instala apenas o `NewProd.exe`:
 |---|---|
 | `formats_db.json` | catálogo de formatos, numerações, cores **e fontes** |
 | `print_configs.json` | configuração de impressão por produto, desta estação |
+| `hot_folders.json` | pastas observadas por RIP que esta estação autorizou a receber PDF |
 | `agent_config.json` | identidade do agente (`AGENT_ID`) |
 | `fonts_cache/` | fontes baixadas do Storage |
 

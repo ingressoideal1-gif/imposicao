@@ -1243,6 +1243,77 @@ def list_print_configs():
     return _carregar_print_configs()
 
 
+# ─── Pastas observadas (hot folder) ───────────────────────────────────────────
+# Lista branca dos caminhos que podem receber PDF. Fica ao lado do
+# print_configs.json, e pela mesma razao: pasta e propriedade fisica da estacao.
+#
+# A lista existe por seguranca, nao por organizacao. O endpoint que grava um PDF
+# num caminho qualquer e uma primitiva de escrita em disco, e o agente aceita
+# requisicao de origem externa por CORS — sem a lista, qualquer pagina aberta no
+# navegador do operador poderia gravar arquivos na estacao. So entra aqui o que
+# o proprio operador escolheu no seletor nativo ou validou explicitamente.
+HOT_FOLDER_FILE = os.path.join(DB_DIR, "hot_folders.json")
+
+
+def _carregar_hot_folders() -> list:
+    if not os.path.exists(HOT_FOLDER_FILE):
+        return []
+    try:
+        with open(HOT_FOLDER_FILE, "r", encoding="utf-8") as f:
+            dados = json.load(f) or []
+        return [d for d in dados if isinstance(d, dict) and d.get("path")]
+    except Exception as e:
+        print(f"[db] hot_folders ilegivel ({e}); recomecando vazio")
+        return []
+
+
+def _salvar_hot_folders(pastas: list):
+    tmp = HOT_FOLDER_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(pastas, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, HOT_FOLDER_FILE)   # troca atomica: nunca meio arquivo
+
+
+def _chave_hot_folder(caminho: str) -> str:
+    """Forma canonica para comparar caminhos. Espelha hotfolder.normalizar()."""
+    if not caminho:
+        return ""
+    return os.path.normcase(os.path.abspath(os.path.normpath(caminho.strip())))
+
+
+def list_hot_folders() -> list:
+    """Pastas ja registradas nesta estacao."""
+    return _carregar_hot_folders()
+
+
+def hot_folder_registrada(caminho: str) -> bool:
+    alvo = _chave_hot_folder(caminho)
+    if not alvo:
+        return False
+    return any(_chave_hot_folder(p.get("path")) == alvo for p in _carregar_hot_folders())
+
+
+def registrar_hot_folder(caminho: str) -> bool:
+    """Autoriza esta pasta a receber PDF. Idempotente."""
+    alvo = (caminho or "").strip()
+    if not alvo:
+        return False
+    if hot_folder_registrada(alvo):
+        return True
+    try:
+        pastas = _carregar_hot_folders()
+        pastas.append({
+            "path": alvo,
+            "registrada_em": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        })
+        _salvar_hot_folders(pastas)
+        print(f"[db] hot folder registrada: {alvo}")
+        return True
+    except Exception as e:
+        print(f"[db] registrar_hot_folder erro: {e}")
+        return False
+
+
 def get_user_permissions(user_id):
     """Busca permissões do Imposition para um usuário."""
     if not IS_SUPABASE_ACTIVE:

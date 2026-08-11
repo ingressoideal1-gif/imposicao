@@ -29,6 +29,7 @@ def log_diag(msg: str):
 from engine import ImpositionConfig, ImpositionEngine
 import db
 import print_service
+import hotfolder
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
@@ -1128,6 +1129,92 @@ async def save_print_config_endpoint(request: Request):
     data = await request.json()
     ok = db.upsert_print_config(data)
     return {"ok": ok}
+
+
+# ─── HOT FOLDER ───────────────────────────────────────────────────────────────
+# Impressora conduzida por pasta observada (Epson SureColor F9470H + Epson Edge
+# Print): o PDF e gravado numa pasta e o RIP o importa, aplicando o preset
+# daquela pasta. Toda a logica esta em hotfolder.py; aqui so ha a casca HTTP.
+
+@app.post("/api/hotfolder/escolher")
+def hotfolder_escolher(payload: dict | None = None):
+    """Abre o seletor nativo de pasta NA ESTACAO e registra o que for escolhido.
+
+    A resposta demora o tempo que o operador levar para escolher — e uma janela
+    modal do Windows, nao ha como ser diferente.
+    """
+    inicial = (payload or {}).get("inicial") or ""
+    try:
+        caminho = hotfolder.escolher_pasta(inicial)
+    except Exception as e:
+        return {"ok": False, "detail": str(e)}
+
+    if not caminho:
+        return {"ok": False, "cancelado": True, "detail": "nenhuma pasta escolhida"}
+
+    valida, msg = hotfolder.validar_pasta(caminho)
+    if not valida:
+        return {"ok": False, "detail": msg}
+
+    db.registrar_hot_folder(caminho)
+    return {
+        "ok": True,
+        "path": caminho,
+        "aviso_unidade_mapeada": hotfolder.e_unidade_mapeada(caminho),
+    }
+
+
+@app.post("/api/hotfolder/validar")
+async def hotfolder_validar(request: Request):
+    """Valida um caminho digitado e, dando certo, o registra.
+
+    Existe porque o seletor nativo pode nao estar ao alcance: agente parado, ou
+    painel servido pela nuvem sem conseguir falar com o 127.0.0.1. Colar o
+    caminho e o plano B.
+    """
+    data = await request.json()
+    caminho = (data.get("path") or "").strip()
+    ok, msg = hotfolder.validar_pasta(caminho)
+    if not ok:
+        return {"ok": False, "detail": msg}
+    db.registrar_hot_folder(caminho)
+    return {
+        "ok": True,
+        "path": caminho,
+        "aviso_unidade_mapeada": hotfolder.e_unidade_mapeada(caminho),
+    }
+
+
+@app.post("/api/hotfolder/drop")
+async def hotfolder_drop(
+    file: UploadFile = File(...),
+    folder: str = Form(...),
+):
+    """Grava o PDF na pasta observada. So aceita pasta ja registrada."""
+    if not db.hot_folder_registrada(folder):
+        raise HTTPException(
+            status_code=403,
+            detail="pasta nao registrada nesta estacao — escolha a pasta de novo "
+                   "pelo botao 'Escolher pasta'")
+    dados = await file.read()
+    try:
+        caminho = hotfolder.soltar(folder, file.filename or "impressao.pdf", dados)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"ok": True, "path": caminho}
+
+
+@app.post("/api/hotfolder/conferir")
+async def hotfolder_conferir(request: Request):
+    """Quais dos caminhos enviados ainda estao na pasta.
+
+    O Edge Print importa e remove o arquivo. Sobrando arquivo, o watcher
+    provavelmente nao esta rodando — e depois de largar o PDF esse e o unico
+    sinal barato de que o outro lado esta vivo.
+    """
+    data = await request.json()
+    restantes = hotfolder.conferir(data.get("paths") or [])
+    return {"ok": True, "restantes": restantes}
 
 @app.get("/api/user/permissions/{user_id}")
 async def get_user_permissions_endpoint(user_id: str):

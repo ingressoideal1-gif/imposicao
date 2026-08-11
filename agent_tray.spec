@@ -75,6 +75,7 @@ a = Analysis(
         'db',
         'ppd_parser',
         'print_service',
+        'hotfolder',
         'local_print_agent',
         'agent_worker',
         'security_config',

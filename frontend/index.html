@@ -1521,8 +1521,26 @@
 
                                      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px;flex:1;">
 
+                                         <!-- Hot Folder — impressora conduzida por pasta observada (RIP) -->
+                                         <div id="ped-hotfolder-box" style="padding:10px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.22);border-radius:8px;display:flex;flex-direction:column;gap:9px;">
+                                             <label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;font-weight:700;color:#fbbf24;cursor:pointer;user-select:none;">
+                                                 <input type="checkbox" id="ped-hotfolder-enabled" onchange="onPedHotFolderToggle()" style="width:16px;height:16px;accent-color:#f59e0b;cursor:pointer;">
+                                                 <span>&#128193; HOT FOLDER</span>
+                                             </label>
+
+                                             <div id="ped-hotfolder-detalhes" style="display:none;flex-direction:column;gap:8px;">
+                                                 <input type="text" id="ped-hotfolder-path" placeholder="Nenhuma pasta escolhida" onchange="validarHotFolderDigitada()" style="width:100%;background:#0f172a;border:1px solid rgba(245,158,11,0.3);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.75rem;font-family:monospace;">
+                                                 <button id="ped-hotfolder-pick-btn" onclick="escolherHotFolder()" style="width:100%;padding:7px 12px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#fbbf24;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:700;">&#128194; Escolher pasta…</button>
+                                                 <div id="ped-hotfolder-status" style="display:none;font-size:0.7rem;line-height:1.35;padding:5px 8px;border-radius:5px;"></div>
+                                                 <div style="font-size:0.7rem;line-height:1.4;color:#94a3b8;">
+                                                     &#9888; Bandeja, papel, frente/verso, cor e cópias vêm do preset da pasta no RIP, não deste painel.
+                                                     <strong style="color:#cbd5e1;">Impressão reversa e Folha a Folha continuam valendo</strong> — elas são aplicadas ao PDF antes do envio.
+                                                 </div>
+                                             </div>
+                                         </div>
+
                                          <!-- Impressora -->
-                                         <div>
+                                         <div id="ped-printer-box">
                                              <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Impressora</label>
                                              <div style="display:flex;gap:6px;align-items:center;">
                                                  <select id="ped-print-printer" onchange="onPedPrinterChange()" style="flex:1;min-width:0;background:#0f172a;border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
@@ -1532,6 +1550,22 @@
                                              </div>
                                              <!-- Status do driver -->
                                              <div id="ped-driver-status" style="display:none;margin-top:6px;padding:5px 8px;border-radius:6px;font-size:0.72rem;"></div>
+                                         </div>
+
+                                         <!-- Modos Especiais de Impressão.
+                                              Ficam FORA de #ped-driver-options de propósito: são aplicados
+                                              ao PDF pelo navegador (processPrintQueueOptions), não pelo
+                                              driver. Continuam valendo no modo hot folder, onde o bloco
+                                              do driver inteiro fica desabilitado e vazio. -->
+                                         <div id="ped-print-modes-box" style="display:flex;flex-direction:column;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">
+                                             <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;">
+                                                 <input type="checkbox" id="ped-print-reverse" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+                                                 <span>🔄 Impressão reversa</span>
+                                             </label>
+                                             <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;">
+                                                 <input type="checkbox" id="ped-print-sheet-by-sheet" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+                                                 <span>📄 Folha a Folha</span>
+                                             </label>
                                          </div>
 
                                          <!-- Carregando -->
@@ -1565,18 +1599,6 @@
                                              <div>
                                                  <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">&#128196; Papel</label>
                                                  <select id="ped-print-paper" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;"></select>
-                                             </div>
-
-                                             <!-- Modos Especiais de Impressão -->
-                                             <div style="display:flex;flex-direction:column;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;margin-top:2px;">
-                                                 <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;">
-                                                     <input type="checkbox" id="ped-print-reverse" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
-                                                     <span>🔄 Impressão reversa</span>
-                                                 </label>
-                                                 <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:#f1f5f9;cursor:pointer;user-select:none;">
-                                                     <input type="checkbox" id="ped-print-sheet-by-sheet" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
-                                                     <span>📄 Folha a Folha</span>
-                                                 </label>
                                              </div>
 
                                              <!-- Duplex -->

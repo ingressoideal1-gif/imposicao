@@ -8,6 +8,74 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v519 — 2026-08-11] — Hot Folder: enviar o PDF para uma pasta em vez da impressora
+
+### O problema
+A Epson SureColor F9470H não recebe trabalho pela fila do Windows. Quem a conduz
+é o RIP **Epson Edge Print**, que observa uma pasta, importa o PDF que aparece ali
+e aplica a ele o preset associado àquela pasta. O painel só sabia falar com o
+spooler, então o operador exportava o PDF à mão e o arrastava para a pasta —
+desfazendo justamente o ganho de tempo que faz o agente local existir.
+
+### Como funciona
+Uma caixa **HOT FOLDER** no painel "Configuração de Impressão". Ao marcá-la, o
+seletor nativo de pasta abre **na estação** e o caminho escolhido fica gravado
+junto do resto da configuração daquele produto. A partir daí o material imposto é
+gravado na pasta, não enviado à impressora.
+
+Vale nos dois caminhos de envio: no painel local o PDF vai direto ao agente; pelo
+relay da nuvem o caminho viaja dentro do `ppd_options`, que já é coluna JSON —
+**nenhuma coluna nova no Supabase**.
+
+### As regras que evitam o estrago clássico
+- **Gravação atômica.** O arquivo é escrito como `<nome>.pdf.tmp` *dentro da pasta
+  de destino* e só então renomeado. Sem isso o RIP importa um PDF pela metade — e
+  isso não chega como erro, chega como arte cortada horas depois.
+- **Nunca sobrescreve.** Nome repetido vira `(2)`, `(3)`. Sobrescrever poderia
+  apagar em silêncio um trabalho que o RIP ainda não leu.
+- **Ordem preservada.** O prefixo `00001_`, `00002_` do `nomeParaSpool()` passa a
+  servir também à ordem alfabética em que o watcher importa.
+- **Só pastas registradas recebem arquivo.** O endpoint que grava um PDF num
+  caminho qualquer é uma primitiva de escrita em disco, e o agente aceita origem
+  externa por CORS. Entra na lista branca (`hot_folders.json`) apenas o que o
+  operador escolheu no seletor ou validou explicitamente. O nome do arquivo é
+  reduzido ao último componente, sanitizado e forçado a `.pdf`.
+
+### O que a interface deixa claro
+Com a caixa marcada, **bandeja, papel, frente/verso, cor e cópias ficam
+desabilitados** — eles vêm do preset da pasta no RIP, e numa impressora de rolo
+para sublimação metade desses conceitos nem existe. Sem isso o operador marcaria
+"Duplex" no painel, receberia simplex no papel e concluiria que o sistema errou.
+
+**Impressão reversa e Folha a Folha continuam valendo**: são aplicadas ao PDF pelo
+navegador antes do envio, então independem do driver. Por isso saíram de dentro
+de `#ped-driver-options` para o próprio bloco.
+
+### Confirmação de consumo
+O Edge Print importa o arquivo e o remove. Doze segundos depois do envio o painel
+pergunta ao agente quais caminhos ainda estão lá; sobrando arquivo, avisa que o
+watcher pode não estar rodando. É **aviso, nunca erro** — depois de largar o PDF,
+esse é o único sinal barato de que o outro lado está vivo.
+
+### Onde
+- `hotfolder.py` (novo) — validação, sanitização, colisão, gravação atômica,
+  seletor nativo e conferência. O seletor é `SHBrowseForFolderW` por `ctypes`, e
+  não o `filedialog` do tkinter: o tkinter está em `excludes` no `agent_tray.spec`
+  e não existe dentro do executável.
+- `db.py` — `hot_folders.json`, a lista branca de pastas da estação
+- `app.py` — `/api/hotfolder/{escolher,validar,drop,conferir}`
+- `agent_worker.py` — `_soltar_no_hot_folder()` e o desvio no `process_queue()`
+- `frontend/index.html` e `frontend/script.js` — a caixa, o estado e o envio
+- `tests/test_hotfolder.py` — 38 testes
+
+### Decidido de fora
+Job ticket XML/JDF foi **descartado**: o Epson Edge Print não aceita job ticket de
+terceiros. Ficaram para depois: várias pastas nomeadas por produto (uma por
+preset), cópia de segurança em `_enviados/` e intervalo configurável entre
+arquivos.
+
+---
+
 ## [v518 — 2026-08-11] — Ordem de envio no nome do trabalho no spool
 
 ### O problema

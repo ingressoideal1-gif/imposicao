@@ -15,6 +15,7 @@ import urllib.parse
 import db
 import print_service
 import ppd_parser
+import hotfolder
 
 # O config fica num caminho fixo por maquina, nao ao lado do executavel: antes,
 # rodar do codigo-fonte ou reinstalar em outra pasta gerava um AGENT_ID novo e
@@ -194,6 +195,37 @@ def titulo_do_job(file_url, job_id):
     return f"Job {job_id[:8]}"
 
 
+def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
+    """Larga o PDF baixado numa pasta observada pelo RIP. (sucesso, mensagem).
+
+    A lista branca vale aqui tambem, e nao e formalidade: no relay o caminho vem
+    do banco compartilhado, entao ele foi escrito por outra maquina. Pasta que
+    esta estacao nunca autorizou nao recebe arquivo.
+    """
+    try:
+        if not db.hot_folder_registrada(pasta):
+            return False, (f"hot folder '{pasta}' nao esta registrada nesta estacao; "
+                           "escolha a pasta no painel desta maquina")
+        with open(pdf_path, "rb") as f:
+            dados = f.read()
+        destino = hotfolder.soltar(pasta, nome, dados)
+
+        # O Edge Print importa e remove o arquivo. Sobrando arquivo, o watcher
+        # provavelmente nao esta rodando. Pelo relay nao ha ninguem olhando a
+        # tela desta maquina, entao o aviso vai para o log.
+        def _conferir():
+            time.sleep(hotfolder.SEGUNDOS_ATE_CONFERIR)
+            if hotfolder.conferir([destino]):
+                print(f"[agent_worker] hot folder: '{destino}' ainda esta na pasta "
+                      f"{hotfolder.SEGUNDOS_ATE_CONFERIR}s depois — o RIP esta rodando?",
+                      flush=True)
+        threading.Thread(target=_conferir, daemon=True, name="HotFolderConfere").start()
+
+        return True, f"gravado em {destino}"
+    except Exception as e:
+        return False, f"falha ao gravar no hot folder: {e}"
+
+
 def process_queue():
     try:
         path = f"print_queue?agent_id=eq.{AGENT_ID}&status=eq.pending&order=created_at.asc&limit=1"
@@ -233,14 +265,23 @@ def process_queue():
                 _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "error"})
                 continue
 
-            # Chamar diretamente a impressão via Windows GDI com as opções enviadas
-            success, msg = print_service.send_print_job_windows(
-                printer_name=printer_name,
-                pdf_path=temp_pdf.name,
-                options=ppd_options,
-                job_title=titulo_do_job(file_url, job_id)
-            )
-            
+            # Hot folder: o trabalho vai para uma pasta observada pelo RIP, e nao
+            # para a fila do Windows. O caminho viaja dentro do ppd_options, que
+            # ja e uma coluna JSON — nao ha coluna nova no Supabase por causa
+            # disso. Sem caminho ali, nada muda: o fluxo segue pelo spooler.
+            pasta = (ppd_options or {}).get("hot_folder_path") if isinstance(ppd_options, dict) else None
+            if pasta:
+                success, msg = _soltar_no_hot_folder(
+                    pasta, titulo_do_job(file_url, job_id), temp_pdf.name)
+            else:
+                # Chamar diretamente a impressão via Windows GDI com as opções enviadas
+                success, msg = print_service.send_print_job_windows(
+                    printer_name=printer_name,
+                    pdf_path=temp_pdf.name,
+                    options=ppd_options,
+                    job_title=titulo_do_job(file_url, job_id)
+                )
+
             try:
                 if os.path.exists(temp_pdf.name):
                     os.remove(temp_pdf.name)
