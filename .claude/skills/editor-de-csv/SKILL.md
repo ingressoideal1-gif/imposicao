@@ -31,6 +31,23 @@ As quatro coisas que enganam:
    "começar a editar", e `ed.editando` fica preso em `true` engolindo todos os
    atalhos — e o colar é aplicado duas vezes. Já aconteceu.
 
+O modal tem **dois modos**, e confundi-los é o erro fácil. No modo edição a caixa
+de marcar diz "imprime / não imprime". No modo distribuição — aberto do pedido,
+quando dois ou mais modelos dividem a mesma numeração com CSV — ela é a seleção do
+momento, e quem diz o que cada modelo imprime é a coluna Modelo. Nesse modo não
+existe editar célula, colar nem importar: trocar o banco daria identidade nova às
+linhas e nenhum modelo as reconheceria.
+
+A identidade é o `__id`, garantido em `recalcular()`. **Duplicar linha precisa
+apagar o `__id` da cópia**, senão nascem duas linhas com a mesma identidade e a
+fatia de um modelo passa a arrastar a linha do outro. A atribuição é exclusiva de
+propósito: é ela que impede o mesmo assento sair em dois modelos.
+
+A fatia mora em `pedidos_modelos.csv_selecao` — **não** em `producao_os_itens`,
+que os arquivos de `sql/` descrevem mas o app abandonou. Nessa tabela a numeração
+é `amostra_num_id`, e `item.modelo` guarda o **id**, não o nome (o nome está em
+`nome_modelo`).
+
 Dois cuidados do caminho "começar do zero" (o botão ➕ Criar vazio): o modal abre
 com zero colunas e o painel do estado vazio é a única interface — se você mexer
 no `renderVazio()`, ele não pode virar um retângulo escuro sem saída. E aplicar

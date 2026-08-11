@@ -136,6 +136,70 @@ para um lugar que não é o que ele está vendo. O `title` da alça explica.
 - O painel de colunas usa o id `csv-ed-cols` e os diálogos usam `csv-ed-dlg`, com
   z-index diferentes: um diálogo aberto por cima do painel precisa ganhar o Esc.
 
+## O segundo modo: distribuir entre os modelos do pedido
+
+Um mesmo CSV serve a vários modelos do mesmo pedido — o mapa do teatro vira um
+modelo por setor. O banco fica **uma vez** na numeração; a fatia de cada modelo
+mora em `pedidos_modelos.csv_selecao`. Desenho completo em
+`docs/superpowers/specs/2026-08-11-distribuir-csv-entre-modelos-design.md`.
+
+Entrada: uma faixa no topo da fila da OS (`renderImpOSQueue`), que só aparece
+quando dois ou mais modelos apontam para a mesma numeração com CSV. Ela mostra a
+cobertura e o botão **🧩 Distribuir entre os modelos**, que chama
+`abrirDistribuicaoCsv(osId, numId)`.
+
+O modal entra em modo distribuição quando recebe `modelos: [{id, nome, selecao}]`.
+Nesse modo:
+
+- Coluna fixa **Modelo** com bolinha colorida, e barra **"Atribuir a"** com um
+  botão por modelo.
+- **A caixa de marcar muda de sentido**: aqui ela é a seleção do momento, não o
+  "imprime / não imprime". Clicar numa célula seleciona a linha em vez de editar.
+- Sem edição de célula, sem coluna nova, sem colar, sem importar — trocar o banco
+  no meio da distribuição daria identidade nova às linhas e nenhum modelo as
+  reconheceria. Cancelar/reativar linha continua, porque faz parte do trabalho.
+- **A atribuição é exclusiva.** Dar uma linha a um modelo tira dela o dono
+  anterior. Linha repetida em dois modelos não acontece por construção.
+- O rodapé responde a única pergunta que sobra — ficou alguém sem dono? — e
+  clicar nele filtra a grade para essas linhas.
+
+A busca e o filtro do modo edição são a ferramenta de atribuição: filtre por
+coluna, clique em "Visíveis", clique no modelo.
+
+### `__id`: a identidade que faz isso funcionar
+
+Marcar à mão só sobrevive a uma edição do CSV porque cada linha tem `__id`, um
+inteiro sequencial gravado dentro dela. Nunca reaproveitado, nunca exportado,
+nunca oferecido como coluna. Garantido em `recalcular()`, que é por onde toda
+mutação passa — com uma armadilha: **duplicar linha precisa apagar o `__id` da
+cópia**, senão nascem duas linhas com a mesma identidade.
+
+`csv_selecao` guarda faixas compactas desses ids:
+`{ "tipo": "linhas", "ids": ["1-400", "612"] }`. **Nulo significa o banco
+inteiro**, que é o comportamento de todo pedido anterior — por isso a migração
+não converteu dado nenhum.
+
+### Onde a fatia entra na impressão
+
+`updateImpSummary()` carrega a fatia do item ativo em vez do banco inteiro; e no
+caminho `multi_artes` cada arte recebe uma cópia da numeração com `csv_data` já
+reduzido. Nesse segundo caminho a quantidade da arte passa a ser o tamanho da
+fatia — **só quando o modelo tem `csv_selecao`**, para não mudar o comportamento
+de pedidos que já estão em produção.
+
+Como o `csv_data` viaja pronto no payload, **o `engine.py` não muda por causa
+disso** e o agente não precisa ser republicado.
+
+### A tabela é `pedidos_modelos`
+
+Não é `producao_os_itens`. Os arquivos em `sql/` descrevem `producao_os_itens`,
+mas o aplicativo deixou essa tabela para trás — `loadOSItens` lê `pedidos_modelos`
+e é ela que recebe toda escrita ([script.js:14719](../frontend/script.js#L14719)).
+Nessa tabela a numeração do modelo é **`amostra_num_id`**; `numeracao_id` só
+existe no objeto já mapeado em memória. E cuidado com `item.modelo`: apesar do
+nome, o `loadOSItens` o preenche com o **id** do registro — o nome de gente está
+em `nome_modelo`.
+
 ## Como verificar uma mudança
 
 - `pytest tests/test_engine_csv_ativo.py` cobre o filtro no motor.

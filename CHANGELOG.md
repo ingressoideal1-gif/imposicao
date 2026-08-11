@@ -8,9 +8,78 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v527 — 2026-08-11] — Montar o banco de dados do zero, sem ter o CSV pronto
+## [v527 — 2026-08-11] — O banco de dados dividido entre os modelos do pedido
 
 ### O problema
+Um mesmo CSV serve a mais de um modelo dentro do mesmo pedido: o mapa do teatro
+vira um modelo por setor. Como o CSV morava na numeração e cada modelo aponta para
+uma numeração, o único caminho era duplicar a numeração por modelo — três cópias
+do mesmo banco, três correções a cada erro de digitação, três re-uploads quando o
+cliente manda o arquivo corrigido. E, o pior, **nada garantia que as fatias
+fechassem**: dava para imprimir o assento A-01 em dois modelos, ou esquecer um
+bloco inteiro, e só descobrir com o material na mão.
+
+### Onde a fatia passou a morar
+O banco continua uma vez só na numeração. O que muda por modelo é a fatia,
+guardada em `pedidos_modelos.csv_selecao` (migração em
+`sql/alter_pedidos_modelos_csv_selecao.sql`, já rodada em produção):
+
+```json
+{ "tipo": "linhas", "ids": ["1-400", "612", "700-712"] }
+```
+
+**Modelo sem `csv_selecao` imprime o banco inteiro** — o comportamento de todo
+pedido anterior. A migração é aditiva e não converteu nada.
+
+Para a seleção sobreviver a uma edição do CSV, cada linha ganhou `__id`: um
+inteiro sequencial gravado dentro dela, nunca reaproveitado, nunca exportado.
+Posição não serviria de referência — inserir uma linha no meio faria toda seleção
+salva escorregar.
+
+### A tela: distribuir uma vez, não três
+O mesmo modal do editor de CSV, num segundo modo, aberto por uma faixa no topo da
+fila do pedido — que só aparece quando dois ou mais modelos dividem a mesma
+numeração com CSV. Coluna **Modelo** com bolinha colorida, barra **"Atribuir a"**
+com um botão por modelo, e a caixa de marcar virando seleção do momento.
+
+Três decisões que fazem isso funcionar:
+
+- **A busca e o filtro viram a ferramenta de atribuição.** Filtra `Setor =
+  Camarote`, clica em "Visíveis", clica no modelo: três cliques resolvem 340
+  linhas — o poder de uma regra por coluna sem precisar salvar regra nenhuma.
+- **A atribuição é exclusiva.** Dar uma linha a um modelo tira dela o dono
+  anterior, e a tela avisa de quem saiu. Imprimir o mesmo assento em dois modelos
+  deixa de ser possível **por construção**, não por aviso.
+- **Distribuir não edita dado.** Sem célula, sem coluna nova, sem colar, sem
+  importar: trocar o banco no meio daria identidade nova às linhas e nenhum modelo
+  as reconheceria. Cancelar/reativar linha continua, porque "esse assento foi
+  interditado" é parte do trabalho.
+
+### A cobertura, que é o ganho de verdade
+Como a posse é exclusiva, sobra uma pergunta só: ficou alguém sem dono? O rodapé
+responde o tempo todo e a faixa do pedido repete a conta. Quando o cliente manda o
+CSV corrigido, as linhas novas entram sem dono e **aparecem no aviso** — antes,
+simplesmente não seriam impressas por ninguém, em silêncio.
+
+### Impressão
+`updateImpSummary()` carrega a fatia do modelo ativo; no caminho `multi_artes`
+cada arte recebe a numeração com `csv_data` já reduzido, o que permite os três
+modelos saírem numa imposição só. A quantidade da arte passa a ser o tamanho da
+fatia **apenas quando o modelo tem `csv_selecao`**, para não mexer em pedidos que
+já estão em produção.
+
+O `csv_data` viaja pronto no payload, então **o `engine.py` não mudou e o agente
+não precisa ser republicado**.
+
+### Uma correção de rota registrada
+A primeira migração proposta foi em `producao_os_itens` — tabela que os arquivos
+de `sql/` descrevem mas que o aplicativo abandonou. Os modelos de um pedido vivem
+em `pedidos_modelos`. Os arquivos de schema descrevem um desenho que o código
+deixou para trás; ao mexer em pedido, confira o `loadOSItens` antes do `sql/`.
+
+### Também nesta versão: montar o banco do zero, sem ter o CSV pronto
+
+#### O problema
 O editor de CSV só existia para quem já tinha o arquivo. Numeração sem banco
 mostrava apenas "Upload CSV", e não havia caminho nenhum para criar um: era
 preciso abrir o Excel, montar, salvar como .csv e subir — para depois editar
@@ -19,7 +88,7 @@ dentro do sistema mesmo assim.
 (O buraco irmão — banco invisível quando faltava `csv_headers` — saiu antes, na
 v526.)
 
-### O que entrou
+#### O que entrou
 Um botão **➕ Criar vazio** na box, visível só quando não há CSV. Ele abre o
 modal com zero colunas e zero linhas — e no lugar da grade, um painel com os três
 caminhos: **📋 Colar do Excel…**, **⬆ Importar CSV** e **+ Criar coluna**.
@@ -30,7 +99,7 @@ por padrão e a escolha entre substituir tudo e anexar. Depender do Ctrl+V diret
 na grade exigia foco no lugar certo e não era descobrível. O Ctrl+V continua
 valendo, e numa tabela sem colunas ele promove a primeira linha a cabeçalho.
 
-### Detalhe que evita numeração fantasma
+#### Detalhe que evita numeração fantasma
 Aplicar um banco que ficou sem nenhuma linha **limpa** o CSV da numeração em vez
 de gravar um array vazio — que a deixaria marcada como "tem CSV" e faria a
 Imposição tentar imprimir zero itens.

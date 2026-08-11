@@ -8640,7 +8640,9 @@ function updateImpSummary() {
 
     } else if (num && num.csv_data && num.csv_data.length) {
 
-        state.csvData = num.csv_data;
+        // A fatia do modelo, nao o banco inteiro: varios modelos do mesmo pedido
+        // costumam dividir o mesmo CSV.
+        state.csvData = fatiaCsvDoItem(itemAtivoDoPedido(), num);
 
         state.csvFile = null; // Banco embutido
 
@@ -8662,7 +8664,7 @@ function updateImpSummary() {
 
         if (impEnd) {
 
-            impEnd.value = linhasAtivasCsv(num.csv_data).length;
+            impEnd.value = state.csvData.length;   // ja e a fatia, ja sem canceladas
 
             impEnd.setAttribute('disabled', 'true');
 
@@ -8992,6 +8994,8 @@ window.runImposition = async function (mode, returnBlob = false) {
             return {
                 qtd: qt,
                 nome: sItem ? sItem.modelo : '',
+                _itemId: s.itemId,
+                _osId: s.osId,
                 num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
                 num2_id: null,
                 start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
@@ -9184,9 +9188,35 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         payloadMultiArtes = artesList.map(arte => {
 
+            // Cada arte e um modelo do pedido, e cada modelo imprime a sua fatia
+            // do banco. Sem isto, os tres modelos receberiam as mesmas linhas.
+            let numArte = state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null;
+
+            let qtdArte = arte.qtd;
+
+            if (numArte && numArte.csv_data && numArte.csv_data.length && arte._itemId) {
+
+                const itArte = (state.osItens[arte._osId] || [])
+
+                    .find(i => String(i.id) === String(arte._itemId));
+
+                if (itArte && itArte.csv_selecao) {
+
+                    numArte = JSON.parse(JSON.stringify(numArte));
+
+                    numArte.csv_data = fatiaCsvDoItem(itArte, numArte);
+
+                    // So mexe na quantidade quando ha fatia: para o modelo movido
+                    // a CSV, quantos itens saem E quantas linhas ele leva.
+                    qtdArte = numArte.csv_data.length;
+
+                }
+
+            }
+
             return {
 
-                qtd: arte.qtd,
+                qtd: qtdArte,
 
                 pdf_url: arte.pdf_url,
                 
@@ -9204,7 +9234,7 @@ window.runImposition = async function (mode, returnBlob = false) {
 
                 start: arte.start,
 
-                numeracao: state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null,
+                numeracao: numArte,
 
                 numeracao_2: state.numeracoes.find(n => String(n.id) === String(arte.num2_id)) || null,
 
@@ -11171,6 +11201,246 @@ function _abrirEditorCsvDaNumeracao(headers, rows, filename) {
     });
 
 };
+
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISTRIBUIR O BANCO DE DADOS (CSV) ENTRE OS MODELOS DE UM PEDIDO
+//
+// Um mesmo CSV costuma servir a vários modelos do mesmo pedido — o mapa do
+// teatro vira um modelo por setor. O banco fica UMA vez na numeração; o que
+// muda por modelo é a fatia, guardada em `pedidos_modelos.csv_selecao`. Ver
+// docs/editor_de_csv.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** O item do pedido carregado na Imposição agora, ou null. */
+function itemAtivoDoPedido() {
+
+    const a = state.activeOSItem;
+
+    if (!a || !a.osId) return null;
+
+    return (state.osItens[a.osId] || []).find(i => String(i.id) === String(a.itemId)) || null;
+
+}
+
+
+
+/** A numeração que um item usa. Em pedidos_modelos o campo é amostra_num_id. */
+function numeracaoIdDoItem(item) {
+
+    if (!item) return null;
+
+    return item.numeracao_id || item.amostra_num_id || null;
+
+}
+
+
+
+/**
+ * As linhas do banco que ESTE modelo imprime, na ordem original — que é a ordem
+ * de impressão. Item sem `csv_selecao` recebe o banco inteiro, que é o
+ * comportamento de todo pedido anterior a esta versão.
+ */
+function fatiaCsvDoItem(item, num) {
+
+    const rows = (num && num.csv_data) || [];
+
+    const sel = item && item.csv_selecao;
+
+    const mesmaNum = item && num && String(numeracaoIdDoItem(item)) === String(num.id);
+
+    if (!sel || !mesmaNum || !window.CsvEditor) return linhasAtivasCsv(rows);
+
+    return window.CsvEditor.fatiaDoModelo(rows, sel);
+
+}
+
+
+
+/**
+ * Numerações com CSV que dois ou mais modelos do pedido compartilham. Com um
+ * modelo só não há o que distribuir — ele leva o banco inteiro.
+ */
+function gruposDeCsvDoPedido(osId) {
+
+    const itens = state.osItens[osId] || [];
+
+    const porNum = {};
+
+    itens.forEach(it => {
+
+        const nid = numeracaoIdDoItem(it);
+
+        if (!nid) return;
+
+        const num = (state.numeracoes || []).find(n => String(n.id) === String(nid));
+
+        if (!num || !num.csv_data || !num.csv_data.length) return;
+
+        if (!porNum[nid]) porNum[nid] = { num, itens: [] };
+
+        porNum[nid].itens.push(it);
+
+    });
+
+    return Object.values(porNum).filter(g => g.itens.length >= 2);
+
+}
+
+
+
+/**
+ * Nome curto do modelo para a tela de distribuição. Cuidado: `item.modelo` NÃO
+ * é o nome — o loadOSItens o preenche com o id do registro. O nome de gente
+ * está em `nome_modelo`, e `produto` é derivado dele.
+ */
+function rotuloDoModelo(item, i) {
+
+    return item.nome_modelo || item.produto || item.nome_produto_real || `Modelo ${i + 1}`;
+
+}
+
+
+
+window.abrirDistribuicaoCsv = function(osId, numId) {
+
+    if (typeof window.abrirEditorCsv !== 'function') {
+
+        toast('O editor de CSV não carregou. Recarregue a página.', 'error');
+
+        return;
+
+    }
+
+    const grupo = gruposDeCsvDoPedido(osId).find(g => String(g.num.id) === String(numId));
+
+    if (!grupo) {
+
+        toast('Nenhum modelo deste pedido compartilha esse banco de dados.', 'error');
+
+        return;
+
+    }
+
+    const num = grupo.num;
+
+    window.abrirEditorCsv({
+
+        headers: num.csv_headers || [],
+
+        rows: num.csv_data,
+
+        filename: num.csv_filename || 'banco.csv',
+
+        modelos: grupo.itens.map((it, i) => ({
+
+            id: String(it.id),
+
+            nome: rotuloDoModelo(it, i),
+
+            selecao: it.csv_selecao || null
+
+        })),
+
+        onAplicar: async ({ rows, distribuicao }) => {
+
+            // 1. As linhas podem ter mudado (cancelar/reativar) e ganhado __id
+            //    novo. Grava o banco de volta na numeração, uma vez só.
+            num.csv_data = rows;
+
+            await salvarCsvDaNumeracao(num.id, rows);
+
+            // 2. A fatia de cada modelo vai para o registro dele no pedido.
+            let semFatia = 0;
+
+            for (const it of grupo.itens) {
+
+                const sel = distribuicao[String(it.id)] || { tipo: 'linhas', ids: [] };
+
+                it.csv_selecao = sel;
+
+                if (!sel.ids.length) semFatia++;
+
+                await autoSaveOSItemField(it.id, osId, 'csv_selecao', sel);
+
+            }
+
+            renderImpOSQueue();
+
+            const ativas = linhasAtivasCsv(rows).length;
+
+            const distribuidas = grupo.itens.reduce((acc, it) => {
+
+                const ids = (it.csv_selecao && it.csv_selecao.ids) || [];
+
+                return acc + window.CsvEditor.expandirIds(ids).length;
+
+            }, 0);
+
+            const sobra = ativas - distribuidas;
+
+            toast(
+
+                `Distribuição salva: ${distribuidas} de ${ativas} linhas`
+
+                + (sobra > 0 ? `, ${sobra} sem modelo` : '')
+
+                + (semFatia ? `, ${semFatia} modelo(s) sem nenhuma linha` : ''),
+
+                sobra > 0 || semFatia ? 'info' : 'success'
+
+            );
+
+        }
+
+    });
+
+};
+
+
+
+/** Grava só o csv_data de uma numeração, sem passar pelo editor dela. */
+async function salvarCsvDaNumeracao(numId, rows) {
+
+    try {
+
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+
+            const { error } = await supabaseClient
+
+                .from('producao_numeracoes')
+
+                .update({ csv_data: rows })
+
+                .eq('id', numId);
+
+            if (error) throw error;
+
+        } else {
+
+            await fetch(`${API_BASE_URL}/api/numeracoes/${numId}`, {
+
+                method: 'PUT',
+
+                headers: { 'Content-Type': 'application/json' },
+
+                body: JSON.stringify({ csv_data: rows })
+
+            });
+
+        }
+
+    } catch (e) {
+
+        console.error('[CSV] Erro ao gravar o banco da numeração:', e);
+
+        toast('A distribuição foi salva, mas o banco não pôde ser gravado: ' + e.message, 'error');
+
+    }
+
+}
 
 
 
@@ -18264,6 +18534,79 @@ function renderImpOSQueue() {
     const selectHeaderStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:4px 8px; font-size:0.85rem; cursor:not-allowed;';
 
     let html = '';
+
+    // ── Banco de dados (CSV) dividido entre modelos ──────────────────────────
+    // So aparece quando dois ou mais modelos do pedido apontam para a mesma
+    // numeracao com CSV. Com um modelo so nao ha o que distribuir.
+    const gruposCsv = (typeof gruposDeCsvDoPedido === 'function') ? gruposDeCsvDoPedido(osId) : [];
+
+    for (const g of gruposCsv) {
+
+        const ativas = linhasAtivasCsv(g.num.csv_data).length;
+
+        const porModelo = g.itens.map((it, i) => {
+
+            const ids = (it.csv_selecao && it.csv_selecao.ids) || [];
+
+            const n = window.CsvEditor ? window.CsvEditor.expandirIds(ids).length : 0;
+
+            return { nome: rotuloDoModelo(it, i), n, temFatia: ids.length > 0 };
+
+        });
+
+        const distribuidas = porModelo.reduce((a, m) => a + m.n, 0);
+
+        const nenhumaFatia = porModelo.every(m => !m.temFatia);
+
+        const sobra = ativas - distribuidas;
+
+        let cor, recado;
+
+        if (nenhumaFatia) {
+
+            cor = '#f59e0b';
+
+            recado = `ainda nao distribuido — os ${g.itens.length} modelos imprimiriam as mesmas ${ativas.toLocaleString('pt-BR')} linhas`;
+
+        } else if (sobra > 0) {
+
+            cor = '#f59e0b';
+
+            recado = `${sobra.toLocaleString('pt-BR')} linha(s) sem modelo`;
+
+        } else {
+
+            cor = '#22c55e';
+
+            recado = `${ativas.toLocaleString('pt-BR')} linhas distribuidas`;
+
+        }
+
+        const detalhe = porModelo
+
+            .map(m => `${m.nome}: <b style="color:#e2e8f0">${m.n.toLocaleString('pt-BR')}</b>`)
+
+            .join(' &nbsp;·&nbsp; ');
+
+        html += `
+        <div style="background:#0f172a; border:1px solid ${cor}; border-left:4px solid ${cor};
+                    border-radius:6px; padding:10px 14px; margin-bottom:8px;
+                    display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:280px;">
+                <div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">
+                    &#128202; ${g.num.csv_filename || 'Banco de dados'}
+                    <span style="font-weight:400; color:${cor};">— ${recado}</span>
+                </div>
+                <div style="font-size:0.82rem; color:#94a3b8; margin-top:3px;">${detalhe}</div>
+            </div>
+            <button class="btn btn-sm btn-secondary" style="white-space:nowrap;"
+                    onclick="abrirDistribuicaoCsv('${osId}', '${g.num.id}')"
+                    title="Escolher quais linhas do banco cada modelo imprime">
+                &#129513; Distribuir entre os modelos
+            </button>
+        </div>`;
+
+    }
 
     for (const prodId of Object.keys(groups)) {
         const groupItens = groups[prodId];

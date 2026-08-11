@@ -18,12 +18,27 @@
     'use strict';
 
     const COL_ATIVO = '__ativo';
+    // Identidade estável da linha. Existe porque a distribuição do banco entre os
+    // modelos de um pedido é feita à mão, linha a linha, e posição não serve de
+    // referência: inserir uma linha no meio faria toda seleção já salva escorregar.
+    // Nunca reaproveitado, nunca exportado, nunca oferecido como coluna.
+    const COL_ID = '__id';
+    const COLS_INTERNAS = [COL_ATIVO, COL_ID];
+
+    function colunaInterna(nome) {
+        return COLS_INTERNAS.indexOf(nome) !== -1;
+    }
     const ROW_H = 30;      // altura da linha, em px (fixa: a grade é virtualizada)
     const HEAD_H = 38;
     const W_DRAG = 26;
     const W_CHECK = 38;
     const W_IDX = 58;
     const OVERSCAN = 8;
+    const W_MODELO = 168;
+    // Cores dos modelos na distribuicao. Escolhidas para se distinguirem tambem
+    // em monitor de chao de fabrica, que costuma estar mal calibrado.
+    const PALETA = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6',
+                    '#ec4899', '#14b8a6', '#ef4444', '#eab308'];
     const MAX_UNDO = 50;
 
     // ══════════════════════════════════════════════════════════════════════
@@ -117,7 +132,7 @@
         const vistos = new Set();
         return brutos.map((h, i) => {
             let nome = String(h == null ? '' : h).trim();
-            if (!nome || nome === COL_ATIVO) nome = `Coluna ${i + 1}`;
+            if (!nome || colunaInterna(nome)) nome = `Coluna ${i + 1}`;
             let final = nome, n = 2;
             while (vistos.has(final)) { final = `${nome} (${n++})`; }
             vistos.add(final);
@@ -189,9 +204,92 @@
         return matriz;
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // Identidade da linha e faixas compactas
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** Maior __id já usado. Ids não são reaproveitados: some, some para sempre. */
+    function maiorId(rows) {
+        let max = 0;
+        for (const r of (rows || [])) {
+            const v = Number(r && r[COL_ID]);
+            if (Number.isFinite(v) && v > max) max = v;
+        }
+        return max;
+    }
+
+    /**
+     * Garante __id em toda linha, sem mexer nos que já existem. CSV salvo antes
+     * desta versão recebe os ids pela posição atual — o que é seguro justamente
+     * porque ainda não existe nenhuma seleção salva para sair do lugar.
+     * Muda `rows` no lugar e devolve quantos ids foram criados.
+     */
+    function garantirIds(rows) {
+        if (!Array.isArray(rows)) return 0;
+        let proximo = maiorId(rows) + 1;
+        let criados = 0;
+        for (const r of rows) {
+            if (!r) continue;
+            const v = Number(r[COL_ID]);
+            if (!Number.isFinite(v) || v <= 0) { r[COL_ID] = proximo++; criados++; }
+        }
+        return criados;
+    }
+
+    /**
+     * Comprime uma lista de ids em faixas: [1,2,3,7,10,11] → ["1-3","7","10-11"].
+     * Marcar à mão quase sempre produz blocos contínuos, então 400 linhas
+     * seguidas viram uma string em vez de 400 números no jsonb.
+     */
+    function comprimirIds(ids) {
+        const ord = Array.from(new Set((ids || []).map(Number).filter(Number.isFinite))).sort((a, b) => a - b);
+        const out = [];
+        let i = 0;
+        while (i < ord.length) {
+            const ini = ord[i];
+            let fim = ini;
+            while (i + 1 < ord.length && ord[i + 1] === fim + 1) { fim = ord[++i]; }
+            out.push(ini === fim ? String(ini) : `${ini}-${fim}`);
+            i++;
+        }
+        return out;
+    }
+
+    /** Desfaz o `comprimirIds`. Aceita número solto ou faixa "a-b". */
+    function expandirIds(faixas) {
+        const out = [];
+        for (const f of (faixas || [])) {
+            const s = String(f);
+            const m = s.match(/^(\d+)-(\d+)$/);
+            if (m) {
+                const a = Number(m[1]), b = Number(m[2]);
+                for (let v = Math.min(a, b); v <= Math.max(a, b); v++) out.push(v);
+            } else {
+                const v = Number(s);
+                if (Number.isFinite(v)) out.push(v);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * As linhas que um modelo imprime: a fatia dele, já sem as canceladas e na
+     * ordem original do banco (que é a ordem de impressão).
+     * `selecao` nula ou vazia significa "o banco inteiro" — é o que mantém todo
+     * pedido anterior a esta versão funcionando sem migração de dado.
+     */
+    function fatiaDoModelo(rows, selecao) {
+        const ativas = apenasAtivas(rows);
+        if (!selecao || !selecao.ids || !selecao.ids.length) return ativas;
+        const querido = new Set(expandirIds(selecao.ids));
+        return ativas.filter(r => querido.has(Number(r[COL_ID])));
+    }
+
     window.CsvEditor = {
-        COL_ATIVO, parseCsv, serializarCsv, detectarDelimitador,
-        linhaAtiva, contarAtivas, apenasAtivas, gerarSequencia, parseColado
+        COL_ATIVO, COL_ID, colunaInterna,
+        parseCsv, serializarCsv, detectarDelimitador,
+        linhaAtiva, contarAtivas, apenasAtivas, gerarSequencia, parseColado,
+        maiorId, garantirIds, comprimirIds, expandirIds, fatiaDoModelo
     };
 
     // ══════════════════════════════════════════════════════════════════════
@@ -302,6 +400,12 @@
   line-height:1.5;resize:vertical;white-space:pre;overflow:auto}
 .csv-ed-vazio .acoes{margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .csv-ed-vazio .titulo{font-size:.95rem;color:var(--text,#e2e8f0);margin-bottom:6px;font-weight:600}
+.csv-ed-r.sel{background:rgba(59,130,246,.20)}
+.csv-ed-r.sel:hover{background:rgba(59,130,246,.26)}
+.csv-ed-c.mod{gap:6px;font-size:.75rem}
+.csv-ed-c.mod.sem{color:#f59e0b}
+.csv-ed-c .chip,.csv-ed-b .chip{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
+.csv-ed-b.modelo{display:inline-flex;align-items:center;gap:7px}
 `;
         document.head.appendChild(st);
     }
@@ -471,7 +575,11 @@
     }
 
     function snapshot() {
-        ed.undo.push({ headers: ed.headers.slice(), rows: ed.rows.map(r => Object.assign({}, r)) });
+        ed.undo.push({
+            headers: ed.headers.slice(),
+            rows: ed.rows.map(r => Object.assign({}, r)),
+            dono: new Map(ed.dono)
+        });
         while (ed.undo.length > limiteUndo()) ed.undo.shift();
         ed.redo.length = 0;
         ed.sujo = true;
@@ -479,19 +587,29 @@
 
     function desfazer() {
         if (!ed.undo.length) return;
-        ed.redo.push({ headers: ed.headers.slice(), rows: ed.rows.map(r => Object.assign({}, r)) });
+        ed.redo.push({
+            headers: ed.headers.slice(),
+            rows: ed.rows.map(r => Object.assign({}, r)),
+            dono: new Map(ed.dono)
+        });
         const s = ed.undo.pop();
         ed.headers = s.headers;
         ed.rows = s.rows;
+        if (s.dono) ed.dono = s.dono;
         recalcular();
     }
 
     function refazer() {
         if (!ed.redo.length) return;
-        ed.undo.push({ headers: ed.headers.slice(), rows: ed.rows.map(r => Object.assign({}, r)) });
+        ed.undo.push({
+            headers: ed.headers.slice(),
+            rows: ed.rows.map(r => Object.assign({}, r)),
+            dono: new Map(ed.dono)
+        });
         const s = ed.redo.pop();
         ed.headers = s.headers;
         ed.rows = s.rows;
+        if (s.dono) ed.dono = s.dono;
         recalcular();
     }
 
@@ -506,6 +624,7 @@
         const idx = [];
         for (let i = 0; i < ed.rows.length; i++) {
             const r = ed.rows[i];
+            if (ed.soSemModelo && (!linhaAtiva(r) || donoDaLinha(r) != null)) continue;
             if (fc && fv !== '' && String(r[fc] == null ? '' : r[fc]) !== fv) continue;
             if (busca) {
                 let achou = false;
@@ -535,6 +654,121 @@
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    // Distribuição entre os modelos do pedido
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** O modal tem dois modos; este diz se estamos no de distribuir. */
+    function ehDistribuicao() {
+        return !!(ed && ed.modelos && ed.modelos.length);
+    }
+
+    function corDoModelo(id) {
+        const i = ed.modelos.findIndex(m => String(m.id) === String(id));
+        return i < 0 ? 'var(--text-faint,#475569)' : PALETA[i % PALETA.length];
+    }
+
+    function nomeDoModelo(id) {
+        const m = ed.modelos.find(x => String(x.id) === String(id));
+        return m ? m.nome : '(modelo fora do pedido)';
+    }
+
+    /** Dono atual de uma linha, ou null. A posse é exclusiva por construção. */
+    function donoDaLinha(row) {
+        const d = ed.dono.get(Number(row[COL_ID]));
+        return d === undefined ? null : d;
+    }
+
+    /**
+     * Entrega as linhas selecionadas a um modelo — ou as deixa sem dono, quando
+     * `modeloId` é nulo. Exclusiva de propósito: dar uma linha a um modelo tira
+     * dela o dono anterior, e é isso que torna impossível imprimir o mesmo
+     * assento em dois modelos do mesmo pedido.
+     */
+    function atribuir(modeloId) {
+        if (!ed.sel.size) { aviso('Selecione as linhas primeiro.', 'error'); return; }
+        snapshot();
+        const movidos = {};
+        let n = 0;
+        for (const id of ed.sel) {
+            const antes = ed.dono.get(id);
+            if (antes !== undefined && String(antes) !== String(modeloId)) {
+                movidos[antes] = (movidos[antes] || 0) + 1;
+            }
+            if (modeloId == null) ed.dono.delete(id);
+            else ed.dono.set(id, modeloId);
+            n++;
+        }
+        ed.sel.clear();
+        recalcular();
+        const de = Object.keys(movidos)
+            .map(k => movidos[k] + ' de ' + nomeDoModelo(k)).join(', ');
+        aviso(
+            (modeloId == null
+                ? n + ' linha(s) ficaram sem modelo'
+                : n + ' linha(s) para ' + nomeDoModelo(modeloId))
+            + (de ? ' (tiradas de: ' + de + ')' : '') + '.',
+            'success'
+        );
+    }
+
+    /** Quantas linhas ativas cada modelo leva, e quantas ficaram sem dono. */
+    function cobertura() {
+        const porModelo = {};
+        ed.modelos.forEach(m => { porModelo[m.id] = 0; });
+        let semDono = 0, ativas = 0;
+        for (const r of ed.rows) {
+            if (!linhaAtiva(r)) continue;
+            ativas++;
+            const d = donoDaLinha(r);
+            if (d == null) semDono++;
+            else if (porModelo[d] !== undefined) porModelo[d]++;
+            else semDono++;      // dono de um modelo que saiu do pedido
+        }
+        return { porModelo, semDono, ativas };
+    }
+
+    function alternarSelecao(ri, aditivo, ateAqui) {
+        const id = Number(ed.rows[ri][COL_ID]);
+        if (ateAqui && ed.ultimoClique != null) {
+            const a = posicaoNaView(ed.ultimoClique), b = posicaoNaView(ri);
+            if (a >= 0 && b >= 0) {
+                for (let p = Math.min(a, b); p <= Math.max(a, b); p++) {
+                    ed.sel.add(Number(ed.rows[ed.view[p]][COL_ID]));
+                }
+                pintarJanela(); renderRodape(); return;
+            }
+        }
+        if (ed.sel.has(id)) ed.sel.delete(id); else ed.sel.add(id);
+        ed.ultimoClique = ri;
+        pintarJanela();
+        renderCabecalho();
+        renderRodape();
+        renderBarras();   // os botoes de modelo so ligam com algo selecionado
+    }
+
+    function selecionarView(ligado) {
+        for (const i of ed.view) {
+            const id = Number(ed.rows[i][COL_ID]);
+            if (ligado) ed.sel.add(id); else ed.sel.delete(id);
+        }
+        pintarJanela();
+        renderCabecalho();
+        renderRodape();
+        renderBarras();
+    }
+
+    /** Cancela ou reativa as linhas selecionadas (o __ativo de sempre). */
+    function cancelarSelecao(cancelar) {
+        if (!ed.sel.size) { aviso('Selecione as linhas primeiro.', 'error'); return; }
+        snapshot();
+        for (const r of ed.rows) {
+            if (!ed.sel.has(Number(r[COL_ID]))) continue;
+            if (cancelar) r[COL_ATIVO] = false; else delete r[COL_ATIVO];
+        }
+        recalcular();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     // Larguras de coluna
     // ══════════════════════════════════════════════════════════════════════
 
@@ -555,13 +789,13 @@
     }
 
     function larguraTotal() {
-        let w = W_DRAG + W_CHECK + W_IDX;
+        let w = W_DRAG + W_CHECK + W_IDX + (ehDistribuicao() ? W_MODELO : 0);
         for (const h of ed.headers) w += ed.larguras[h] || 120;
         return w;
     }
 
     function esquerdaDaColuna(c) {
-        let x = W_DRAG + W_CHECK + W_IDX;
+        let x = W_DRAG + W_CHECK + W_IDX + (ehDistribuicao() ? W_MODELO : 0);
         for (let i = 0; i < c; i++) x += ed.larguras[ed.headers[i]] || 120;
         return x;
     }
@@ -571,6 +805,9 @@
     // ══════════════════════════════════════════════════════════════════════
 
     function recalcular() {
+        // Linha nova — criada, colada ou importada — nasce sem __id. Como toda
+        // mutação passa por aqui, este é o único lugar que precisa cuidar disso.
+        garantirIds(ed.rows);
         calcularLarguras();
         recomputarView();
         renderCabecalho();
@@ -594,16 +831,26 @@
         };
         head.appendChild(fixa(W_DRAG, ''));
 
-        const hChk = fixa(W_CHECK, '', 'Marcar ou desmarcar tudo');
+        const distrib = ehDistribuicao();
+        const hChk = fixa(W_CHECK, '', distrib
+            ? 'Selecionar ou limpar as linhas visíveis'
+            : 'Marcar ou desmarcar tudo');
         hChk.style.cursor = 'pointer';
         const cbTodos = document.createElement('input');
         cbTodos.type = 'checkbox';
-        cbTodos.checked = ed.rows.length > 0 && contarAtivas(ed.rows) === ed.rows.length;
-        cbTodos.onclick = e => { e.stopPropagation(); marcarTodas(cbTodos.checked); };
+        cbTodos.checked = distrib
+            ? (ed.view.length > 0 && ed.view.every(i => ed.sel.has(Number(ed.rows[i][COL_ID]))))
+            : (ed.rows.length > 0 && contarAtivas(ed.rows) === ed.rows.length);
+        cbTodos.onclick = e => {
+            e.stopPropagation();
+            if (distrib) selecionarView(cbTodos.checked);
+            else marcarTodas(cbTodos.checked);
+        };
         hChk.appendChild(cbTodos);
         head.appendChild(hChk);
 
         head.appendChild(fixa(W_IDX, '#', 'Ordem de impressão'));
+        if (distrib) head.appendChild(fixa(W_MODELO, 'Modelo', 'Qual modelo do pedido imprime esta linha'));
 
         ed.headers.forEach((h, c) => {
             const d = document.createElement('div');
@@ -653,7 +900,14 @@
         dom.vazio.style.display = 'block';
 
         if (ed.rows.length) {
-            dom.vazio.textContent = 'Nenhuma linha casa com a busca e o filtro atuais.';
+            dom.vazio.textContent = ed.soSemModelo
+                ? 'Nenhuma linha sem modelo — está tudo distribuído.'
+                : 'Nenhuma linha casa com a busca e o filtro atuais.';
+            return;
+        }
+        if (ehDistribuicao()) {
+            dom.vazio.textContent = 'Este banco de dados está vazio. '
+                + 'Abra a numeração para montá-lo antes de distribuir.';
             return;
         }
 
@@ -695,8 +949,11 @@
     function montarLinha(pos) {
         const ri = ed.view[pos];
         const row = ed.rows[ri];
+        const distrib = ehDistribuicao();
+        const selecionada = distrib && ed.sel.has(Number(row[COL_ID]));
         const el = document.createElement('div');
-        el.className = 'csv-ed-r' + (linhaAtiva(row) ? '' : ' off');
+        el.className = 'csv-ed-r' + (linhaAtiva(row) ? '' : ' off')
+            + (selecionada ? ' sel' : '');
         el.style.top = (pos * ROW_H) + 'px';
         el.style.minWidth = larguraTotal() + 'px';
         el.dataset.ri = ri;
@@ -743,9 +1000,18 @@
         chk.style.width = W_CHECK + 'px';
         const cb = document.createElement('input');
         cb.type = 'checkbox';
-        cb.checked = linhaAtiva(row);
-        cb.title = 'Desmarcada, a linha não é impressa (mas continua guardada)';
-        cb.onclick = e => { e.stopPropagation(); alternarAtiva(ri, cb.checked); };
+        // A caixa troca de sentido entre os dois modos, e isso e deliberado:
+        // distribuindo, ela e a selecao do momento; editando, ela diz se a
+        // linha vai para o papel.
+        cb.checked = distrib ? selecionada : linhaAtiva(row);
+        cb.title = distrib
+            ? 'Selecionar esta linha para atribuir a um modelo'
+            : 'Desmarcada, a linha não é impressa (mas continua guardada)';
+        cb.onclick = e => {
+            e.stopPropagation();
+            if (distrib) alternarSelecao(ri, true, e.shiftKey);
+            else alternarAtiva(ri, cb.checked);
+        };
         chk.appendChild(cb);
         el.appendChild(chk);
 
@@ -755,10 +1021,32 @@
         idx.textContent = String(ri + 1);
         el.appendChild(idx);
 
+        if (distrib) {
+            const cm = document.createElement('div');
+            cm.className = 'csv-ed-c mod';
+            cm.style.width = W_MODELO + 'px';
+            const dono = donoDaLinha(row);
+            if (dono == null) {
+                cm.classList.add('sem');
+                cm.textContent = '— sem modelo';
+            } else {
+                const chip = document.createElement('span');
+                chip.className = 'chip';
+                chip.style.background = corDoModelo(dono);
+                cm.appendChild(chip);
+                const nm = document.createElement('span');
+                nm.textContent = nomeDoModelo(dono);
+                nm.style.overflow = 'hidden';
+                nm.style.textOverflow = 'ellipsis';
+                cm.appendChild(nm);
+            }
+            el.appendChild(cm);
+        }
+
         ed.headers.forEach((h, c) => {
             const cel = document.createElement('div');
             cel.className = 'csv-ed-c';
-            if (ed.cursor.r === ri && ed.cursor.c === c) cel.classList.add('cursor');
+            if (!distrib && ed.cursor.r === ri && ed.cursor.c === c) cel.classList.add('cursor');
             cel.style.width = (ed.larguras[h] || 120) + 'px';
             const v = row[h];
             cel.textContent = v == null ? '' : String(v);
@@ -767,6 +1055,10 @@
             // o que gravaria o valor antigo na célula nova.
             cel.onmousedown = e => {
                 e.preventDefault();
+                // Distribuindo nao se edita dado: clicar na linha e selecionar.
+                // Sao dois trabalhos diferentes, e misturar os dois na mesma tela
+                // e o caminho curto para alterar um assento sem querer.
+                if (distrib) { alternarSelecao(ri, e.ctrlKey || e.metaKey, e.shiftKey); return; }
                 if (ed.editando) confirmarEdicao();
                 ed.cursor = { r: ri, c };
                 iniciarEdicao();
@@ -778,6 +1070,7 @@
     }
 
     function renderRodape() {
+        if (ehDistribuicao()) return renderRodapeDistribuicao();
         const ativas = contarAtivas(ed.rows);
         const total = ed.rows.length;
         dom.info.innerHTML = '';
@@ -789,6 +1082,47 @@
             (ed.view.length !== total ? ` · ${ed.view.length.toLocaleString('pt-BR')} visíveis` : '')
         ));
         dom.sub.textContent = `${total.toLocaleString('pt-BR')} linhas · ${ed.headers.length} colunas`;
+    }
+
+    /**
+     * No modo distribuição sobra uma pergunta só, porque a posse é exclusiva e
+     * linha repetida não pode acontecer: ficou alguém sem dono?
+     */
+    function renderRodapeDistribuicao() {
+        const c = cobertura();
+        dom.info.innerHTML = '';
+
+        const marca = document.createElement('b');
+        if (c.semDono) {
+            marca.textContent = `⚠ ${c.semDono.toLocaleString('pt-BR')} sem modelo`;
+            marca.style.color = '#f59e0b';
+            marca.style.cursor = 'pointer';
+            marca.title = 'Clique para ver só essas linhas';
+            marca.onclick = filtrarSemModelo;
+        } else {
+            marca.textContent = `✓ ${c.ativas.toLocaleString('pt-BR')} linhas distribuídas`;
+        }
+        dom.info.appendChild(marca);
+
+        const resto = ed.modelos
+            .map(m => `${m.nome} ${(c.porModelo[m.id] || 0).toLocaleString('pt-BR')}`)
+            .join(' · ');
+        dom.info.appendChild(document.createTextNode(
+            `  ·  ${resto}` + (ed.sel.size ? `  ·  ${ed.sel.size} selecionadas` : '')
+        ));
+
+        const canceladas = ed.rows.length - c.ativas;
+        dom.sub.textContent = `${ed.rows.length.toLocaleString('pt-BR')} linhas`
+            + (canceladas ? ` · ${canceladas} canceladas` : '');
+    }
+
+    /** Deixa na tela só as linhas ativas que ninguém pegou. */
+    function filtrarSemModelo() {
+        ed.busca = '';
+        ed.filtroCol = '';
+        ed.filtroVal = '';
+        ed.soSemModelo = !ed.soSemModelo;
+        recalcular();
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -988,7 +1322,7 @@
 
     function nomeDeColunaLivre(base) {
         let nome = base, n = 2;
-        while (ed.headers.includes(nome) || nome === COL_ATIVO) nome = `${base} (${n++})`;
+        while (ed.headers.includes(nome) || colunaInterna(nome)) nome = `${base} (${n++})`;
         return nome;
     }
 
@@ -1071,7 +1405,9 @@
     function duplicarLinha() {
         if (ed.cursor.r < 0 || !ed.rows[ed.cursor.r]) { aviso('Escolha uma linha primeiro.', 'error'); return; }
         snapshot();
-        ed.rows.splice(ed.cursor.r + 1, 0, Object.assign({}, ed.rows[ed.cursor.r]));
+        const copia = Object.assign({}, ed.rows[ed.cursor.r]);
+        delete copia[COL_ID];        // a cópia é outra linha, com identidade própria
+        ed.rows.splice(ed.cursor.r + 1, 0, copia);
         recalcular();
     }
 
@@ -1190,7 +1526,7 @@
                 inp.onchange = () => {
                     const novo = String(inp.value).trim();
                     if (!novo || novo === nome) { inp.value = nome; return; }
-                    if (ed.headers.includes(novo) || novo === COL_ATIVO) {
+                    if (ed.headers.includes(novo) || colunaInterna(novo)) {
                         aviso('Já existe uma coluna com esse nome.', 'error');
                         inp.value = nome;
                         return;
@@ -1530,8 +1866,12 @@
         b1.appendChild(bR);
 
         b1.appendChild(document.createElement('div')).className = 'csv-ed-sep';
-        b1.appendChild(botao('📋 Colar do Excel…', 'Colar células copiadas de uma planilha', colarDoExcel));
-        b1.appendChild(botao('⬆ Importar', 'Trocar ou anexar um arquivo CSV', importarCsv));
+        // Distribuindo, trocar o banco por baixo apagaria as fatias: as linhas
+        // novas teriam identidade nova e nenhum modelo as reconheceria.
+        if (!ehDistribuicao()) {
+            b1.appendChild(botao('📋 Colar do Excel…', 'Colar células copiadas de uma planilha', colarDoExcel));
+            b1.appendChild(botao('⬆ Importar', 'Trocar ou anexar um arquivo CSV', importarCsv));
+        }
         b1.appendChild(botao('⬇ Exportar', 'Baixar o CSV como está agora', exportarCsv));
         if (ed.ordemCol) {
             b1.appendChild(document.createElement('div')).className = 'csv-ed-sep';
@@ -1540,6 +1880,8 @@
                 aplicarOrdemNaImpressao));
         }
         bars.appendChild(b1);
+
+        if (ehDistribuicao()) { renderBarrasDistribuicao(bars); return; }
 
         // Faixa 2 — linhas e colunas
         const b2 = document.createElement('div');
@@ -1582,6 +1924,83 @@
         b3.appendChild(botao('Preencher…', 'Preencher uma coluna com um valor', preencher));
         b3.appendChild(botao('Gerar sequência…', 'Numerar uma coluna em sequência', gerarColunaSequencial));
         b3.appendChild(botao('Localizar/Substituir…', null, localizarSubstituir));
+        bars.appendChild(b3);
+    }
+
+    /**
+     * Barras do modo distribuição. Nada de estrutura aqui — nem coluna, nem
+     * linha nova, nem edição de célula. Distribuir é um trabalho; consertar o
+     * dado é outro, e cada um tem a sua tela.
+     */
+    function renderBarrasDistribuicao(bars) {
+        const c = cobertura();
+
+        const b2 = document.createElement('div');
+        b2.className = 'csv-ed-bar';
+        const l = document.createElement('label');
+        l.className = 'grp';
+        l.textContent = 'Atribuir a';
+        b2.appendChild(l);
+
+        ed.modelos.forEach(m => {
+            const b = document.createElement('button');
+            b.className = 'csv-ed-b modelo';
+            b.title = `Dar as linhas selecionadas para ${m.nome}`;
+            const chip = document.createElement('span');
+            chip.className = 'chip';
+            chip.style.background = corDoModelo(m.id);
+            b.appendChild(chip);
+            b.appendChild(document.createTextNode(
+                `${m.nome} (${(c.porModelo[m.id] || 0).toLocaleString('pt-BR')})`));
+            b.disabled = !ed.sel.size;
+            b.onclick = () => atribuir(m.id);
+            b2.appendChild(b);
+        });
+
+        const bNinguem = botao('— Sem modelo', 'Tirar o dono das linhas selecionadas',
+            () => atribuir(null));
+        bNinguem.disabled = !ed.sel.size;
+        b2.appendChild(bNinguem);
+        bars.appendChild(b2);
+
+        const b3 = document.createElement('div');
+        b3.className = 'csv-ed-bar';
+        const l3 = document.createElement('label');
+        l3.className = 'grp';
+        l3.textContent = 'Selecionar';
+        b3.appendChild(l3);
+        b3.appendChild(botao('Visíveis', 'Selecionar tudo que está na tela agora',
+            () => selecionarView(true)));
+        b3.appendChild(botao('Limpar', 'Limpar a seleção', () => {
+            ed.sel.clear(); pintarJanela(); renderCabecalho(); renderRodape(); renderBarras();
+        }));
+        b3.appendChild(botao('Sem modelo', 'Selecionar as linhas que ninguém pegou', () => {
+            ed.sel.clear();
+            for (const r of ed.rows) {
+                if (linhaAtiva(r) && donoDaLinha(r) == null) ed.sel.add(Number(r[COL_ID]));
+            }
+            recalcular();
+        }));
+
+        b3.appendChild(document.createElement('div')).className = 'csv-ed-sep';
+        const l3b = document.createElement('label');
+        l3b.className = 'grp';
+        l3b.textContent = 'Linha';
+        b3.appendChild(l3b);
+        const bCancel = botao('✕ Cancelar', 'A linha deixa de ser impressa por qualquer modelo',
+            () => cancelarSelecao(true), 'perigo');
+        bCancel.disabled = !ed.sel.size;
+        const bVolta = botao('↺ Reativar', 'Devolver a linha à impressão',
+            () => cancelarSelecao(false));
+        bVolta.disabled = !ed.sel.size;
+        b3.appendChild(bCancel);
+        b3.appendChild(bVolta);
+
+        if (ed.soSemModelo) {
+            b3.appendChild(document.createElement('div')).className = 'csv-ed-sep';
+            b3.appendChild(botao('✕ mostrando só as sem modelo',
+                'Voltar a mostrar o banco inteiro', filtrarSemModelo));
+        }
         bars.appendChild(b3);
     }
 
@@ -1683,7 +2102,7 @@
         });
 
         dom.scroll.addEventListener('paste', e => {
-            if (ed.editando) return;
+            if (ed.editando || ehDistribuicao()) return;
             const texto = (e.clipboardData || window.clipboardData).getData('text');
             if (!texto) return;
             e.preventDefault();
@@ -1707,9 +2126,13 @@
                 case 'ArrowUp': e.preventDefault(); moverCursor(-1, 0); break;
                 case 'ArrowRight': e.preventDefault(); moverCursor(0, 1); break;
                 case 'ArrowLeft': e.preventDefault(); moverCursor(0, -1); break;
-                case 'Enter': case 'F2': e.preventDefault(); iniciarEdicao(); break;
+                case 'Enter': case 'F2':
+                    e.preventDefault();
+                    if (!ehDistribuicao()) iniciarEdicao();
+                    break;
                 case 'Delete': {
                     e.preventDefault();
+                    if (ehDistribuicao()) break;
                     const { r, c } = ed.cursor;
                     if (ed.rows[r] && ed.headers[c] && ed.rows[r][ed.headers[c]] !== '') {
                         snapshot();
@@ -1720,10 +2143,15 @@
                 }
                 case ' ': {
                     e.preventDefault();
-                    if (ed.rows[ed.cursor.r]) alternarAtiva(ed.cursor.r, !linhaAtiva(ed.rows[ed.cursor.r]));
+                    if (ehDistribuicao()) {
+                        if (ed.rows[ed.cursor.r]) alternarSelecao(ed.cursor.r, true, false);
+                    } else if (ed.rows[ed.cursor.r]) {
+                        alternarAtiva(ed.cursor.r, !linhaAtiva(ed.rows[ed.cursor.r]));
+                    }
                     break;
                 }
                 default:
+                    if (ehDistribuicao()) break;
                     if (e.key.length === 1 && !e.altKey) { e.preventDefault(); iniciarEdicao(e.key); }
             }
         });
@@ -1768,6 +2196,21 @@
             filename: ed.filename,
             renomeacoes: ed.renomeacoes.filter(x => x.de !== x.para)
         };
+        if (ehDistribuicao()) {
+            // Uma entrada por modelo, sempre — inclusive vazia. Modelo que ficou
+            // sem nenhuma linha precisa ter a fatia gravada como vazia, senao o
+            // valor antigo continuaria valendo no banco.
+            const dist = {};
+            ed.modelos.forEach(m => { dist[m.id] = []; });
+            for (const r of ed.rows) {
+                const d = donoDaLinha(r);
+                if (d != null && dist[d]) dist[d].push(Number(r[COL_ID]));
+            }
+            carga.distribuicao = {};
+            Object.keys(dist).forEach(k => {
+                carga.distribuicao[k] = { tipo: 'linhas', ids: comprimirIds(dist[k]) };
+            });
+        }
         destruir();
         if (typeof cb === 'function') cb(carga);
     }
@@ -1780,13 +2223,14 @@
         if (dom) return;                        // já aberto
         injetarCss();
 
-        const headers = Array.isArray(opts.headers) ? opts.headers.filter(h => h !== COL_ATIVO) : [];
+        const headers = Array.isArray(opts.headers) ? opts.headers.filter(h => !colunaInterna(h)) : [];
         const rows = Array.isArray(opts.rows) ? opts.rows.map(r => Object.assign({}, r)) : [];
 
         // Um CSV salvo sem cabeçalho explícito ainda assim tem as chaves nas linhas.
         if (!headers.length && rows.length) {
-            for (const k of Object.keys(rows[0])) if (k !== COL_ATIVO) headers.push(k);
+            for (const k of Object.keys(rows[0])) if (!colunaInterna(k)) headers.push(k);
         }
+        garantirIds(rows);
 
         ed = {
             headers, rows,
@@ -1794,6 +2238,11 @@
             delim: opts.delimitador || ',',
             colunasEmUso: opts.colunasEmUso,
             onAplicar: opts.onAplicar,
+            modelos: Array.isArray(opts.modelos) ? opts.modelos.slice() : null,
+            dono: new Map(),
+            sel: new Set(),
+            ultimoClique: null,
+            soSemModelo: false,
             renomeacoes: [],
             busca: '', filtroCol: '', filtroVal: '',
             ordemCol: null, ordemDir: 1,
@@ -1803,8 +2252,17 @@
             editando: false, arrastando: null
         };
 
+        // Cada modelo chega com a fatia que ja tinha salva; o mapa inverte isso
+        // para "linha -> dono", que e como a tela pergunta.
+        if (ehDistribuicao()) {
+            ed.modelos.forEach(m => {
+                const ids = (m.selecao && m.selecao.ids) ? expandirIds(m.selecao.ids) : [];
+                ids.forEach(id => ed.dono.set(Number(id), m.id));
+            });
+        }
+
         montarModal();
-        dom.title.textContent = `📊 ${ed.filename}`;
+        dom.title.textContent = (ehDistribuicao() ? '🧩 Distribuir ' : '📊 ') + ed.filename;
         ligarEventos();
         recalcular();
         setTimeout(() => dom && dom.scroll.focus(), 30);
