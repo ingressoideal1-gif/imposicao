@@ -31,6 +31,12 @@ As quatro coisas que enganam:
    "começar a editar", e `ed.editando` fica preso em `true` engolindo todos os
    atalhos — e o colar é aplicado duas vezes. Já aconteceu.
 
+Dois cuidados do caminho "começar do zero" (o botão ➕ Criar vazio): o modal abre
+com zero colunas e o painel do estado vazio é a única interface — se você mexer
+no `renderVazio()`, ele não pode virar um retângulo escuro sem saída. E aplicar
+um banco sem nenhuma linha **limpa** o CSV da numeração em vez de gravar um array
+vazio, que a deixaria marcada como "tem CSV" para imprimir zero itens.
+
 **O filtro das linhas desmarcadas mora no `engine.py`**, no construtor de
 `ImpositionConfig`. O `engine.py` é embutido no `NewProd.exe`: qualquer mudança
 ali exige publicar o agente junto com o site, senão a estação mostra a tela nova

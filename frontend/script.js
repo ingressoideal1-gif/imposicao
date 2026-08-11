@@ -10920,6 +10920,10 @@ window.clearNumCsvFile = function() {
 
     if (btnVer) btnVer.style.display = 'none';
 
+    const btnCriar = document.getElementById('btn-criar-num-csv');
+
+    if (btnCriar) btnCriar.style.display = 'inline-flex';
+
     
 
     const colContainer = document.getElementById('num-csv-columns-container');
@@ -10965,6 +10969,10 @@ function renderNumCsvInterface() {
     const btnVer = document.getElementById('btn-ver-num-csv');
 
     if (btnVer) btnVer.style.display = 'inline-flex';
+
+    const btnCriar = document.getElementById('btn-criar-num-csv');
+
+    if (btnCriar) btnCriar.style.display = 'none';
 
     
 
@@ -11035,13 +11043,49 @@ window.abrirEditorCsvDaNumeracao = function() {
 
     }
 
+    _abrirEditorCsvDaNumeracao(state.numCsvHeaders || [], state.numCsvData, state.numCsvFilename || 'banco.csv');
+
+};
+
+
+
+/**
+ * Abre o editor com um banco vazio, para montar do zero: colar as colunas do
+ * Excel, importar um arquivo, ou digitar à mão. Sem isto, uma numeração sem CSV
+ * não tinha nenhum caminho a não ser ter o arquivo pronto de antemão.
+ */
+window.criarCsvVazioDaNumeracao = function() {
+
+    if (typeof window.abrirEditorCsv !== 'function') {
+
+        toast('O editor de CSV não carregou. Recarregue a página.', 'error');
+
+        return;
+
+    }
+
+    // Já existe banco: abrir vazio jogaria fora o que está lá. Abre o de sempre.
+    if (state.numCsvData && state.numCsvData.length) {
+
+        return window.abrirEditorCsvDaNumeracao();
+
+    }
+
+    _abrirEditorCsvDaNumeracao([], [], 'banco.csv');
+
+};
+
+
+
+function _abrirEditorCsvDaNumeracao(headers, rows, filename) {
+
     window.abrirEditorCsv({
 
-        headers: state.numCsvHeaders || [],
+        headers: headers,
 
-        rows: state.numCsvData,
+        rows: rows,
 
-        filename: state.numCsvFilename || 'banco.csv',
+        filename: filename,
 
         // Quantos elementos apontam para cada coluna, para o modal avisar antes
         // de renomear ou remover uma coluna em uso.
@@ -11064,6 +11108,19 @@ window.abrirEditorCsvDaNumeracao = function() {
         },
 
         onAplicar: ({ headers, rows, filename, renomeacoes }) => {
+
+            // Aplicar um banco sem nenhuma linha equivale a nao ter banco: se
+            // ficasse um array vazio, a numeracao seguiria marcada como "tem
+            // CSV" e a Imposicao tentaria imprimir zero itens.
+            if (!rows.length) {
+
+                clearNumCsvFile();
+
+                toast('Banco de dados vazio — a numeração ficou sem CSV.', 'info');
+
+                return;
+
+            }
 
             state.numCsvHeaders = headers;
 

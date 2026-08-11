@@ -481,6 +481,7 @@
                                     📊 Upload CSV
                                 </label>
                                 <input type="file" id="num-csv-file" accept=".csv" style="display:none">
+                                <button class="btn btn-sm btn-secondary" id="btn-criar-num-csv" onclick="criarCsvVazioDaNumeracao()" title="Montar o banco do zero: colar as colunas do Excel ou digitar à mão">➕ Criar vazio</button>
                                 <button class="btn btn-sm btn-secondary" id="btn-ver-num-csv" style="display:none;" onclick="abrirEditorCsvDaNumeracao()" title="Ver e editar o banco de dados como planilha">📋 Ver / Editar</button>
                                 <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-csv" style="display:none; padding: 4px 8px;" onclick="clearNumCsvFile()">✕ Remover</button>
                                 <span id="num-csv-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>

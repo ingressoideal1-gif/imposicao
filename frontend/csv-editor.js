@@ -298,6 +298,10 @@
 .csv-ed-colrow{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .csv-ed-colrow .csv-ed-in{flex:1}
 .csv-ed-colrow .uso{font-size:.7rem;color:#f59e0b;white-space:nowrap}
+.csv-ed-dlgbox textarea.csv-ed-in{font-family:ui-monospace,Consolas,monospace;font-size:.76rem;
+  line-height:1.5;resize:vertical;white-space:pre;overflow:auto}
+.csv-ed-vazio .acoes{margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.csv-ed-vazio .titulo{font-size:.95rem;color:var(--text,#e2e8f0);margin-bottom:6px;font-weight:600}
 `;
         document.head.appendChild(st);
     }
@@ -333,6 +337,25 @@
             for (const c of campos) {
                 const f = document.createElement('div');
                 f.className = 'csv-ed-f';
+
+                // Caixa de marcar fica ao lado do texto, nao embaixo dele, e o
+                // texto inteiro e clicavel.
+                if (c.type === 'checkbox') {
+                    const l = document.createElement('label');
+                    l.style.cssText = 'display:flex;align-items:center;gap:8px;cursor:pointer;margin:0';
+                    const el = document.createElement('input');
+                    el.type = 'checkbox';
+                    el.checked = !!c.value;
+                    const txt = document.createElement('span');
+                    txt.textContent = c.label || '';
+                    l.appendChild(el);
+                    l.appendChild(txt);
+                    f.appendChild(l);
+                    inputs[c.key] = el;
+                    box.appendChild(f);
+                    continue;
+                }
+
                 if (c.label) {
                     const l = document.createElement('label');
                     l.textContent = c.label;
@@ -353,6 +376,12 @@
                     el = document.createElement('input');
                     el.type = 'checkbox';
                     el.checked = !!c.value;
+                } else if (c.type === 'textarea') {
+                    el = document.createElement('textarea');
+                    el.className = 'csv-ed-in';
+                    el.rows = c.rows || 10;
+                    el.value = c.value == null ? '' : c.value;
+                    if (c.placeholder) el.placeholder = c.placeholder;
                 } else {
                     el = document.createElement('input');
                     el.className = 'csv-ed-in';
@@ -390,7 +419,10 @@
             };
             const onKey = e => {
                 if (e.key === 'Escape') { e.stopPropagation(); fechar(null); }
-                else if (e.key === 'Enter' && e.target.tagName !== 'SELECT') { e.stopPropagation(); fechar(colher()); }
+                // Enter dentro de um textarea e quebra de linha, nao confirmacao:
+                // colar do Excel depende disso.
+                else if (e.key === 'Enter' && e.target.tagName !== 'SELECT'
+                    && e.target.tagName !== 'TEXTAREA') { e.stopPropagation(); fechar(colher()); }
             };
             document.addEventListener('keydown', onKey, true);
             bCancel.onclick = () => fechar(null);
@@ -604,9 +636,46 @@
         dom.spacer.style.height = (n * ROW_H) + 'px';
         dom.spacer.style.minWidth = larguraTotal() + 'px';
         if (resetScroll) dom.scroll.scrollTop = Math.min(dom.scroll.scrollTop, Math.max(0, n * ROW_H - 50));
-        dom.vazio.style.display = n ? 'none' : 'block';
+        renderVazio();
         pintarJanela();
         posicionarEdicao();
+    }
+
+    /**
+     * O painel que ocupa o lugar da grade quando não há linha para mostrar.
+     * Banco vazio é diferente de filtro que não casou: no primeiro caso a tela
+     * precisa dizer por onde começar, senão o operador fica olhando um retângulo
+     * escuro sem saber que dá para colar do Excel.
+     */
+    function renderVazio() {
+        dom.vazio.innerHTML = '';
+        if (ed.view.length) { dom.vazio.style.display = 'none'; return; }
+        dom.vazio.style.display = 'block';
+
+        if (ed.rows.length) {
+            dom.vazio.textContent = 'Nenhuma linha casa com a busca e o filtro atuais.';
+            return;
+        }
+
+        const t = document.createElement('div');
+        t.className = 'titulo';
+        t.textContent = ed.headers.length
+            ? 'Nenhuma linha ainda.'
+            : 'Banco de dados vazio.';
+        const p = document.createElement('div');
+        p.textContent = ed.headers.length
+            ? 'As colunas já existem. Acrescente linhas, ou cole os dados de uma vez.'
+            : 'Cole as colunas prontas do Excel, importe um arquivo, ou monte à mão criando as colunas.';
+        const acoes = document.createElement('div');
+        acoes.className = 'acoes';
+        acoes.appendChild(botao('📋 Colar do Excel…', 'Colar o conteúdo copiado de uma planilha', colarDoExcel));
+        acoes.appendChild(botao('⬆ Importar CSV', 'Escolher um arquivo .csv', importarCsv));
+        acoes.appendChild(botao(ed.headers.length ? '+ Nova linha' : '+ Criar coluna', null,
+            ed.headers.length ? novaLinha : novaColuna));
+
+        dom.vazio.appendChild(t);
+        dom.vazio.appendChild(p);
+        dom.vazio.appendChild(acoes);
     }
 
     function pintarJanela() {
@@ -831,6 +900,92 @@
         aviso(`${matriz.length} linha(s) coladas.`, 'success');
     }
 
+    /**
+     * Despeja uma matriz inteira no banco: é o caminho de "colar do Excel" e o
+     * de começar do zero. Diferente de `colarMatriz`, que preenche a partir da
+     * célula do cursor, aqui a primeira linha pode virar o cabeçalho.
+     * `modo` é 'substituir' ou 'anexar'. Devolve quantas linhas entraram.
+     */
+    function aplicarMatriz(matriz, comCabecalho, modo) {
+        if (!matriz || !matriz.length) return 0;
+        snapshot();
+
+        let cabecalhos, linhas;
+        if (comCabecalho) {
+            cabecalhos = normalizarCabecalhos(matriz[0]);
+            linhas = matriz.slice(1);
+        } else {
+            const largura = Math.max(...matriz.map(l => l.length));
+            cabecalhos = (modo === 'anexar' && ed.headers.length)
+                ? ed.headers.slice()
+                : Array.from({ length: largura }, (_, i) => `Coluna ${i + 1}`);
+            linhas = matriz;
+        }
+
+        if (modo === 'substituir') {
+            ed.headers = cabecalhos;
+            ed.rows = [];
+            ed.larguras = {};
+            ed.ordemCol = null;
+            ed.filtroCol = '';
+            ed.filtroVal = '';
+            ed.busca = '';
+        } else {
+            // Anexando: coluna que o texto trouxe e a tabela não tem é criada,
+            // senão o dado colado sumiria sem aviso.
+            cabecalhos.forEach(h => {
+                if (!ed.headers.includes(h)) {
+                    ed.headers.push(h);
+                    ed.rows.forEach(r => { r[h] = ''; });
+                }
+            });
+        }
+
+        for (const l of linhas) {
+            const o = {};
+            ed.headers.forEach(h => { o[h] = ''; });
+            cabecalhos.forEach((h, i) => {
+                if (Object.prototype.hasOwnProperty.call(o, h)) o[h] = l[i] != null ? l[i] : '';
+            });
+            ed.rows.push(o);
+        }
+
+        ed.cursor = { r: ed.rows.length ? 0 : -1, c: 0 };
+        recalcular();
+        return linhas.length;
+    }
+
+    /**
+     * Cola por uma caixa de texto em vez de depender do Ctrl+V na grade. É o
+     * caminho principal de quem está montando o banco do zero: o Excel copia
+     * TSV, e a primeira linha quase sempre é o cabeçalho.
+     */
+    async function colarDoExcel() {
+        const vazio = !ed.headers.length || !ed.rows.length;
+        const v = await dialogo('Colar do Excel',
+            'Selecione as células no Excel ou no Google Sheets, copie com Ctrl+C, '
+            + 'e cole aqui dentro com Ctrl+V.',
+            [
+                {
+                    key: 'texto', label: 'Cole aqui', type: 'textarea', rows: 9,
+                    placeholder: 'Fila\tNumero\tSetor\nA\t01\tPista\nA\t02\tPista'
+                },
+                { key: 'cabecalho', label: 'A primeira linha é o cabeçalho', type: 'checkbox', value: true },
+                {
+                    key: 'modo', label: 'O que fazer', type: 'select',
+                    value: vazio ? 'substituir' : 'anexar',
+                    options: [
+                        { v: 'substituir', t: 'Substituir tudo o que está aqui' },
+                        { v: 'anexar', t: 'Anexar ao final' }
+                    ]
+                }
+            ], 'Colar');
+        if (!v || !String(v.texto).trim()) return;
+
+        const n = aplicarMatriz(parseColado(v.texto), v.cabecalho, v.modo);
+        aviso(n ? `${n} linha(s) coladas.` : 'Nada para colar.', n ? 'success' : 'error');
+    }
+
     function nomeDeColunaLivre(base) {
         let nome = base, n = 2;
         while (ed.headers.includes(nome) || nome === COL_ATIVO) nome = `${base} (${n++})`;
@@ -900,6 +1055,10 @@
     }
 
     function novaLinha() {
+        if (!ed.headers.length) {
+            aviso('Crie ao menos uma coluna antes de acrescentar linhas.', 'error');
+            return;
+        }
         snapshot();
         const nova = {};
         ed.headers.forEach(h => { nova[h] = ''; });
@@ -1371,6 +1530,7 @@
         b1.appendChild(bR);
 
         b1.appendChild(document.createElement('div')).className = 'csv-ed-sep';
+        b1.appendChild(botao('📋 Colar do Excel…', 'Colar células copiadas de uma planilha', colarDoExcel));
         b1.appendChild(botao('⬆ Importar', 'Trocar ou anexar um arquivo CSV', importarCsv));
         b1.appendChild(botao('⬇ Exportar', 'Baixar o CSV como está agora', exportarCsv));
         if (ed.ordemCol) {
@@ -1527,7 +1687,12 @@
             const texto = (e.clipboardData || window.clipboardData).getData('text');
             if (!texto) return;
             e.preventDefault();
-            colarMatriz(parseColado(texto));
+            const matriz = parseColado(texto);
+            // Numa tabela sem colunas nao existe "a partir do cursor": a primeira
+            // linha colada vira o cabecalho, que e o que se espera ao montar um
+            // banco do zero.
+            if (!ed.headers.length) aplicarMatriz(matriz, true, 'substituir');
+            else colarMatriz(matriz);
         });
 
         dom.scroll.addEventListener('keydown', e => {

@@ -10,15 +10,38 @@ Desenho: `docs/superpowers/specs/2026-08-11-editor-csv-design.md`.
 
 ## Como se chega nele
 
-Dois botões, os dois chamando `abrirEditorCsvDaNumeracao()`:
+Três botões na box "Banco de Dados (CSV)" do editor de numeração, e um quarto
+mais abaixo. Quem alterna a visibilidade de todos é `renderNumCsvInterface()`
+(há CSV) e `clearNumCsvFile()` (não há):
 
-- **📋 Ver / Editar**, na box "Banco de Dados (CSV)" do editor de numeração
-  (`frontend/index.html`, perto do "Upload CSV").
-- **📋 Ver / Editar CSV**, o primeiro botão da barra "Colunas do Banco de Dados
-  (CSV)", que só aparece quando há CSV carregado.
+| Botão | Aparece quando | Chama |
+|---|---|---|
+| 📊 Upload CSV | sempre | `handleNumCsvSelected()` |
+| ➕ Criar vazio | **não** há CSV | `criarCsvVazioDaNumeracao()` |
+| 📋 Ver / Editar | há CSV | `abrirEditorCsvDaNumeracao()` |
+| 📋 Ver / Editar CSV (barra "Colunas do Banco de Dados") | há CSV | idem |
 
-Ambos ficam escondidos enquanto não há CSV. Quem os mostra é
-`renderNumCsvInterface()`; quem os esconde é `clearNumCsvFile()`.
+### Começar do zero
+
+`criarCsvVazioDaNumeracao()` abre o modal com **zero colunas e zero linhas**.
+Não é uma tela morta: no lugar da grade aparece um painel com os três caminhos —
+**📋 Colar do Excel…**, **⬆ Importar CSV** e **+ Criar coluna**. Quando já há
+colunas mas nenhuma linha, o terceiro vira **+ Nova linha** e o texto muda.
+
+Se o banco já existir, o botão não aparece; e mesmo que seja chamado, a função
+desvia para `abrirEditorCsvDaNumeracao()` em vez de jogar fora o que está lá.
+
+**Colar do Excel** é o caminho principal de quem monta o banco na hora: uma caixa
+de texto onde se cola o TSV copiado da planilha, com a opção *"A primeira linha é
+o cabeçalho"* marcada por padrão, e a escolha entre substituir tudo e anexar ao
+final. Existe porque depender do Ctrl+V direto na grade exige foco no lugar certo
+e não é descobrível. O Ctrl+V na grade continua funcionando, e **numa tabela sem
+colunas ele promove a primeira linha colada a cabeçalho** — não haveria "a partir
+do cursor" a respeitar.
+
+Aplicar um banco que ficou **sem nenhuma linha** limpa o CSV da numeração em vez
+de gravar um array vazio. Um array vazio deixaria a numeração marcada como "tem
+CSV" e a Imposição tentaria imprimir zero itens.
 
 ## O contrato
 

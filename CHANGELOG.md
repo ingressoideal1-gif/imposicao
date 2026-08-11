@@ -8,6 +8,36 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v527 — 2026-08-11] — Montar o banco de dados do zero, sem ter o CSV pronto
+
+### O problema
+O editor de CSV só existia para quem já tinha o arquivo. Numeração sem banco
+mostrava apenas "Upload CSV", e não havia caminho nenhum para criar um: era
+preciso abrir o Excel, montar, salvar como .csv e subir — para depois editar
+dentro do sistema mesmo assim.
+
+(O buraco irmão — banco invisível quando faltava `csv_headers` — saiu antes, na
+v526.)
+
+### O que entrou
+Um botão **➕ Criar vazio** na box, visível só quando não há CSV. Ele abre o
+modal com zero colunas e zero linhas — e no lugar da grade, um painel com os três
+caminhos: **📋 Colar do Excel…**, **⬆ Importar CSV** e **+ Criar coluna**.
+
+**Colar do Excel** ganhou lugar próprio na barra de ferramentas: uma caixa onde
+se cola o TSV copiado da planilha, com "A primeira linha é o cabeçalho" marcada
+por padrão e a escolha entre substituir tudo e anexar. Depender do Ctrl+V direto
+na grade exigia foco no lugar certo e não era descobrível. O Ctrl+V continua
+valendo, e numa tabela sem colunas ele promove a primeira linha a cabeçalho.
+
+### Detalhe que evita numeração fantasma
+Aplicar um banco que ficou sem nenhuma linha **limpa** o CSV da numeração em vez
+de gravar um array vazio — que a deixaria marcada como "tem CSV" e faria a
+Imposição tentar imprimir zero itens.
+
+Só frontend: o `engine.py` não mudou, o agente não precisa ser republicado.
+
+---
 ## [v525 — 2026-08-11] — Hot Folder: o RIP não via o arquivo que o agente gravava
 
 ### O sintoma
@@ -77,6 +107,7 @@ agente, não um release novo:
   renomear para dentro da pasta
 
 ---
+
 
 ## [v524 — 2026-08-11] — Editor de CSV: ver e mexer no banco de dados da numeração
 
@@ -1515,7 +1546,6 @@ Refatoração completa do fluxo de status entre o painel interno (designer/atend
 `ed6e17c` — `fix(arte): fluxo correto de status - Em Arte > Enviar Arte (auto) > APROVADO/REPROVADO`
 
 ---
-
 
 
 ### 1. fix: Menus do sistema pararam de funcionar (CRITICO)
