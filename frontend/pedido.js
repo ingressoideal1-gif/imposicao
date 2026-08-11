@@ -940,16 +940,21 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 }
             }
         }
-        visible_sheets = Math.ceil(fontesRefazer.length / poses_per_sheet);
+        // Nenhuma célula digitada ainda: continua havendo uma folha para mostrar,
+        // e ela é a folha vazia. `Math.max(1, ...)` evita o "Folha 1 de 0".
+        visible_sheets = Math.max(1, Math.ceil(fontesRefazer.length / poses_per_sheet));
         total_sheets = visible_sheets;
     }
 
     const folhaBase = sets_needed > 1 || refazerCels
         ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}`
         : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
-    const folhaLabel = refazerCels
-        ? `${folhaBase} · compactada · ${fontesRefazer.length} item(ns) de ${folhasOriginais} folha(s)`
-        : folhaBase;
+    let folhaLabel = folhaBase;
+    if (refazerCels && fontesRefazer.length === 0) {
+        folhaLabel = `${folhaBase} · digite as células a refazer`;
+    } else if (refazerCels) {
+        folhaLabel = `${folhaBase} · compactada · ${fontesRefazer.length} item(ns) de ${folhasOriginais} folha(s)`;
+    }
     // Em Pdf Paginado a quantidade sai do ARQUIVO, não do pedido: o engine faz
     // total_items = nº de páginas (metade em duplex). Dizer isso no cabeçalho é o que
     // permite ao operador conferir a conta sem abrir o PDF.
@@ -964,9 +969,12 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     // Quantos elementos de numeração cada pose pintou nesta passada (ver o aviso no fim)
     const posesDesenhadas = [];
 
-    // Célula de saída sem item: acontece no fim da última folha compactada, quando
-    // a conta não fecha redondo. Fica marcada para que ninguém leia a folha como
-    // se tivesse mais itens do que tem.
+    // Célula de saída sem item — a folha inteira logo que se marca "Refazer
+    // Célula", e a sobra do fim quando a conta não fecha redondo.
+    //
+    // Desenhada clara e tracejada de propósito: no papel essas células saem em
+    // BRANCO, e um véu escuro faria a prévia parecer que ali há algo bloqueado.
+    // O tracejado diz "a célula existe e está vazia", que é a verdade da folha.
     const desenharCelulaVazia = (row, col) => {
         const col_f = isBack ? (cols - 1 - col) : col;
         const x = (start_x + col_f * (item_w + gap_h)) * scale;
@@ -974,17 +982,12 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         const w = item_w * scale;
         const h = item_h * scale;
         ctx.save();
-        ctx.fillStyle = 'rgba(15,23,42,0.72)';
+        ctx.fillStyle = 'rgba(148,163,184,0.10)';
         ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = 'rgba(148,163,184,0.45)';
+        ctx.strokeStyle = 'rgba(100,116,139,0.55)';
         ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
         ctx.strokeRect(x, y, w, h);
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + w, y + h);
-        ctx.moveTo(x + w, y);
-        ctx.lineTo(x, y + h);
-        ctx.stroke();
         ctx.restore();
     };
 
@@ -2351,11 +2354,15 @@ function parseRefazerCelulas(texto) {
     return { cels: Array.from(cels).sort((a, b) => a - b), invalidos };
 }
 
-// null = desenhar/imposicionar todas as células. Lista = só essas.
+// null = a folha da tiragem, inteira. Lista = a folha compactada com essas
+// células — e a lista VAZIA é um estado legítimo, não "sem filtro": marcar o
+// checkbox esvazia a folha na hora, e cada célula digitada vai aparecendo. É o
+// que deixa o operador montar a folha vendo o que está montando, em vez de
+// digitar às cegas e conferir depois.
 function getRefazerCelulasSelecionadas() {
     if (!refazerCelulasAtivo()) return null;
     const { cels } = parseRefazerCelulas(document.getElementById('ped-refazer-cel')?.value);
-    return cels.length ? cels : null;
+    return cels;
 }
 window.getRefazerCelulasSelecionadas = getRefazerCelulasSelecionadas;
 

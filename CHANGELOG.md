@@ -8,6 +8,29 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v530 — 2026-08-11] — A folha se monta enquanto se digita as células
+
+Marcar "Refazer Célula" agora **esvazia a folha na prévia na hora**, antes de
+qualquer coisa ser digitada. Cada célula digitada vai aparecendo, ocupando a
+próxima posição vaga; as que faltam ficam tracejadas e vazias.
+
+Antes, com o campo em branco, a prévia mostrava a folha da tiragem inteira — o
+operador digitava às cegas e só via o resultado depois de fechar a lista. Montar
+vendo o que se monta é o ponto do recurso.
+
+Duas mudanças pequenas sustentam isso:
+
+- `getRefazerCelulasSelecionadas()` passou a devolver **lista vazia** em vez de
+  `null` quando o checkbox está marcado. Vazio deixou de significar "sem filtro"
+  e passou a significar "nenhuma célula ainda", que é um estado legítimo da tela.
+- A célula sem item deixou de ter véu escuro com X e virou **tracejado claro**.
+  No papel essas células saem em branco; o véu escuro dava a entender que havia
+  ali algo bloqueado.
+
+Só frontend — `engine.py` não mudou, o agente não precisa sair junto.
+
+---
+
 ## [v529 — 2026-08-11] — Refazer célula compacta os itens na folha
 
 ### O que mudou desde a v528
