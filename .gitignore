@@ -34,6 +34,10 @@ hot_folders.json
 # tempo de execucao, nao e fonte.
 painel/
 
+# Banco SQLite que o db.py cria ao subir o servidor. E estado de execucao de cada
+# maquina, nao conteudo do projeto.
+imposition.db
+
 # Copia dos codigos de acesso local que o agente baixa para validar o login sem
 # rede. Sao SENHAS em texto claro, de cada maquina, e nunca do repositorio.
 acessos_locais.json

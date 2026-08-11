@@ -233,8 +233,22 @@ class ImpositionConfig:
         self.seq_start = seq_start
         self.seq_end = seq_end
         self.seq_increment = seq_increment
+        # Uma linha desmarcada no editor de CSV carrega __ativo: false e nao deve
+        # ser impressa. A ausencia da chave significa ativa, entao todo CSV salvo
+        # antes da v524 continua valendo. Filtrar aqui, num ponto so, resolve de
+        # uma vez o total_items logo abaixo e todos os cfg.csv_data[item_index]
+        # espalhados pelos metodos de layout.
+        if csv_data:
+            ativas = [r for r in csv_data if r.get("__ativo", True) is not False]
+            if not ativas:
+                raise ValueError(
+                    "Todas as linhas do banco de dados (CSV) estao desmarcadas: "
+                    "nao ha nada para imprimir. Abra o CSV da numeracao e marque "
+                    "ao menos uma linha."
+                )
+            csv_data = ativas
         self.csv_data = csv_data
-        
+
         self.num_tipo = numeracao.get("tipo", "SEQUENCIAL") if numeracao else "SEQUENCIAL"
         if numeracao and "CAMAROTE" in str(numeracao.get("svg_content", "")):
             self.num_tipo = "CAMAROTE"

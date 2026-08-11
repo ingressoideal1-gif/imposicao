@@ -8,6 +8,63 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v524 — 2026-08-11] — Editor de CSV: ver e mexer no banco de dados da numeração
+
+### O problema
+Uma numeração pode carregar um CSV cujas colunas viram elementos variáveis, e o
+motor consome a linha `N` para imprimir o item `N`. Só que **não havia como ver
+esse CSV**. A interface inteira era o botão "Upload CSV" e um rótulo com o nome do
+arquivo e a contagem de linhas. Corrigir um assento errado num mapa de 1.240
+linhas obrigava a abrir o arquivo fora do sistema, editar e subir de novo — sem
+conferência possível. E não havia jeito de tirar uma linha da impressão sem
+apagá-la, o que transformava uma reimpressão parcial em recorte de CSV à mão.
+
+### O que entrou
+Um modal de tela cheia, aberto pelo botão **📋 Ver / Editar**, que mostra o CSV
+como planilha: editar célula, linha e coluna; buscar, filtrar e ordenar;
+selecionar quais linhas imprimem; preencher, gerar sequência e
+localizar/substituir em massa; colar do Excel; importar e exportar; desfazer e
+refazer. A grade é virtualizada — só as linhas visíveis viram DOM, senão um mapa
+de teatro trava o navegador.
+
+O código vive em `frontend/csv-editor.js`, separado do `script.js`, e conversa com
+o editor de numeração por um contrato estreito, sem enxergar o `state`.
+
+### Linha desmarcada não é linha apagada
+Desmarcar a caixinha grava `__ativo: false` dentro da linha: ela some da impressão
+e continua guardada. A **ausência** da chave significa ativa, então todo CSV já
+salvo continua valendo sem migração.
+
+O motor filtra num ponto só, no construtor de `ImpositionConfig`, o que corrige de
+uma vez o total de itens e os seis lugares que indexam `cfg.csv_data`. Se **todas**
+as linhas estiverem desmarcadas, ele levanta erro com recado claro em vez de cair
+no ramo sequencial e imprimir numeração errada.
+
+**Isto mexe no `engine.py`, que é embutido no `NewProd.exe`** — publicar o site não
+fecha a mudança, o agente precisa sair na mesma leva.
+
+### Cuidados que a tela toma
+- **Ordenar pelo cabeçalho é só visual.** A ordem das linhas *é* a ordem de
+  impressão; reordenar de verdade exige o botão "⇅ Aplicar ordem à impressão", com
+  confirmação. A coluna `#` continua mostrando a posição real.
+- **Renomear coluna arrasta os elementos junto.** Um elemento `source: "database"`
+  aponta para a coluna pelo nome; o painel mostra em âmbar quantos elementos usam
+  cada coluna e avisa antes de remover uma em uso.
+- **Arrastar linha trava com busca, filtro ou ordenação ativos**, senão o operador
+  arrastaria para um lugar diferente do que está vendo.
+
+### O parser de CSV foi trocado
+O antigo fazia `split` cru pelo delimitador: quebrava em campo com aspas contendo
+vírgula, em campo com quebra de linha, e não tratava BOM. Ninguém via porque
+ninguém via o CSV. Entrou um parser RFC 4180 de verdade, usado também pelo upload
+do CSV da Imposição.
+
+### Onde está documentado
+`docs/editor_de_csv.md` e `docs/superpowers/specs/2026-08-11-editor-csv-design.md`.
+Teste: `tests/test_engine_csv_ativo.py`.
+
+---
+
 ## [v519 — 2026-08-11] — Hot Folder: enviar o PDF para uma pasta em vez da impressora
 
 ### O problema

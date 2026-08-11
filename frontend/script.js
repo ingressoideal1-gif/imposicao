@@ -8647,7 +8647,7 @@ function updateImpSummary() {
 
         if (impEnd) {
 
-            impEnd.value = num.csv_data.length;
+            impEnd.value = linhasAtivasCsv(num.csv_data).length;
 
             impEnd.setAttribute('disabled', 'true');
 
@@ -8747,7 +8747,7 @@ function updateImpSummary() {
 
     } else if (state.csvData) {
 
-        total = state.csvData.length;
+        total = linhasAtivasCsv(state.csvData).length;
 
     } else {
 
@@ -9410,7 +9410,7 @@ window.runImposition = async function (mode, returnBlob = false) {
 
     } else if (state.csvData) {
 
-        total = state.csvData.length;
+        total = linhasAtivasCsv(state.csvData).length;
 
     } else {
 
@@ -10688,7 +10688,7 @@ async function handleCsvSelected() {
 
             if (impEnd) {
 
-                impEnd.value = state.csvData.length;
+                impEnd.value = linhasAtivasCsv(state.csvData).length;
 
                 impEnd.setAttribute('disabled', 'true');
 
@@ -10715,6 +10715,12 @@ async function handleCsvSelected() {
 
 
 function parseCSVRows(text) {
+
+    // O parse de verdade mora no csv-editor.js desde a v524: o codigo abaixo
+    // fazia split cru e quebrava em campo com aspas contendo o delimitador,
+    // em campo com quebra de linha, e nao tratava BOM. Fica so como reserva
+    // caso o csv-editor.js nao tenha carregado.
+    if (window.CsvEditor) return window.CsvEditor.parseCsv(text).rows;
 
     const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
 
@@ -10814,7 +10820,8 @@ async function handleNumCsvSelected() {
 
             
 
-            const rows = parseCSVRows(text);
+            const parsed = window.CsvEditor.parseCsv(text);
+            const rows = parsed.rows;
 
             if (!rows.length) {
 
@@ -10824,15 +10831,7 @@ async function handleNumCsvSelected() {
 
             
 
-            let delimiter = ',';
-
-            if (text.split('\n')[0].includes(';')) {
-
-                delimiter = ';';
-
-            }
-
-            const headers = text.split('\n')[0].split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
+            const headers = parsed.headers;
 
             
 
@@ -10902,6 +10901,10 @@ window.clearNumCsvFile = function() {
 
     if (btnRemove) btnRemove.style.display = 'none';
 
+    const btnVer = document.getElementById('btn-ver-num-csv');
+
+    if (btnVer) btnVer.style.display = 'none';
+
     
 
     const colContainer = document.getElementById('num-csv-columns-container');
@@ -10930,9 +10933,23 @@ function renderNumCsvInterface() {
 
     
 
-    if (nameEl) nameEl.textContent = `📎 ${state.numCsvFilename} (${state.numCsvData ? state.numCsvData.length : 0} linhas)`;
+    const totalLinhas = state.numCsvData ? state.numCsvData.length : 0;
+
+    const ativas = linhasAtivasCsv(state.numCsvData).length;
+
+    if (nameEl) {
+
+        nameEl.textContent = ativas === totalLinhas
+            ? `📎 ${state.numCsvFilename} (${totalLinhas} linhas)`
+            : `📎 ${state.numCsvFilename} (${ativas} de ${totalLinhas} linhas serão impressas)`;
+
+    }
 
     if (btnRemove) btnRemove.style.display = 'inline-flex';
+
+    const btnVer = document.getElementById('btn-ver-num-csv');
+
+    if (btnVer) btnVer.style.display = 'inline-flex';
 
     
 
@@ -10940,7 +10957,9 @@ function renderNumCsvInterface() {
 
         container.style.display = 'block';
 
-        bar.innerHTML = state.numCsvHeaders.map(col => `
+        bar.innerHTML = `<button class="btn btn-sm btn-secondary" onclick="abrirEditorCsvDaNumeracao()" title="Ver e editar o banco de dados como planilha">📋 Ver / Editar CSV</button>`
+
+            + state.numCsvHeaders.map(col => `
 
             <button class="btn btn-sm btn-secondary" onclick="addCsvColumnElement('${col}')" title="Adicionar como texto variável">📊 ${col}</button>
 
@@ -10959,6 +10978,127 @@ function renderNumCsvInterface() {
     drawCanvas();
 
 }
+
+
+
+/**
+ * Só as linhas do CSV que serão impressas. Uma linha desmarcada no editor de
+ * CSV carrega `__ativo: false`; a ausência da chave significa ativa, então todo
+ * CSV salvo antes da v524 continua valendo. O engine.py aplica o mesmo filtro.
+ */
+function linhasAtivasCsv(rows) {
+
+    if (!Array.isArray(rows)) return [];
+
+    return rows.filter(r => !r || r.__ativo !== false);
+
+}
+
+window.linhasAtivasCsv = linhasAtivasCsv;
+
+
+
+/**
+ * Abre o editor de CSV (modal de tela cheia, em frontend/csv-editor.js) com o
+ * banco de dados da numeração que está aberta no editor.
+ */
+window.abrirEditorCsvDaNumeracao = function() {
+
+    if (typeof window.abrirEditorCsv !== 'function') {
+
+        toast('O editor de CSV não carregou. Recarregue a página.', 'error');
+
+        return;
+
+    }
+
+    if (!state.numCsvData || !state.numCsvData.length) {
+
+        toast('Nenhum CSV carregado nesta numeração.', 'error');
+
+        return;
+
+    }
+
+    window.abrirEditorCsv({
+
+        headers: state.numCsvHeaders || [],
+
+        rows: state.numCsvData,
+
+        filename: state.numCsvFilename || 'banco.csv',
+
+        // Quantos elementos apontam para cada coluna, para o modal avisar antes
+        // de renomear ou remover uma coluna em uso.
+        colunasEmUso: () => {
+
+            const uso = {};
+
+            (state.numElements || []).forEach(el => {
+
+                if (el.source === 'database' && el.csv_column) {
+
+                    uso[el.csv_column] = (uso[el.csv_column] || 0) + 1;
+
+                }
+
+            });
+
+            return uso;
+
+        },
+
+        onAplicar: ({ headers, rows, filename, renomeacoes }) => {
+
+            state.numCsvHeaders = headers;
+
+            state.numCsvData = rows;
+
+            state.numCsvFilename = filename;
+
+            // Coluna renomeada tem que arrastar junto os elementos que a usam,
+            // senão eles ficariam apontando para um nome que não existe mais.
+            let ajustados = 0;
+
+            (renomeacoes || []).forEach(({ de, para }) => {
+
+                (state.numElements || []).forEach(el => {
+
+                    if (el.source === 'database' && el.csv_column === de) {
+
+                        el.csv_column = para;
+
+                        ajustados++;
+
+                    }
+
+                });
+
+            });
+
+            renderNumCsvInterface();
+
+            const fora = rows.length - linhasAtivasCsv(rows).length;
+
+            toast(
+
+                `CSV atualizado: ${rows.length} linhas`
+
+                + (fora ? `, ${fora} fora da impressão` : '')
+
+                + (ajustados ? `, ${ajustados} elemento(s) reapontados` : '')
+
+                + '. Salve a numeração para gravar.',
+
+                'success'
+
+            );
+
+        }
+
+    });
+
+};
 
 
 
