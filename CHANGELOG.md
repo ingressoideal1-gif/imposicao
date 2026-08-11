@@ -8,6 +8,39 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v532 — 2026-08-11] — "Célula" passou a ser o item do modelo, não a pose da folha
+
+Relatado da produção: *"Pq não permitiu colocar na mesma folha as numerações 1,
+6, 22, 77, 99? deve permitir qualquer célula do modelo"*.
+
+### O mal-entendido
+Eu tinha lido "célula" como a **pose da folha imposta** — a posição física dentro
+da folha de saída, o `P + 1` do laço. Num formato de dez poses, o campo recusava
+22, 77 e 99. Mas "célula do modelo", no vocabulário da gráfica, é o **ticket
+individual**: o 1º, o 6º, o 22º item da tiragem daquele modelo.
+
+### O que mudou
+O campo passou a receber **posições do item no modelo**, 1 a Quantidade. O índice
+interno é `posição - 1`, e mais nada — nenhuma conta de esquema entra na
+compactação, porque onde o item caiu na tiragem original (cut_stack, multi-artes,
+sequencial) é irrelevante para quem só quer o ticket de volta. Isso apagou
+`_indice_de_origem` do `engine.py` e a sua cópia no `pedido.js`: duas
+reimplementações da matemática de índice que tinham de concordar entre si, e
+agora simplesmente não existem.
+
+O teto do campo virou a quantidade do modelo. A prévia rotula cada célula com
+`#posição` em vez de `f2·c5`, e o cabeçalho diz "5 de 200 item(ns) do modelo".
+
+### Os dois modos ficaram excludentes
+Marcar "Refazer Folhas" desmarca "Refazer Célula" e vice-versa. Combiná-los
+deixou de fazer sentido: as posições são absolutas no modelo, e uma faixa de
+folhas só poderia contradizê-las. O motor ignora a faixa quando há posições,
+porque também atende o agente local e a API.
+
+> Toca `engine.py` — **o agente precisa ser publicado junto com o site**.
+
+---
+
 ## [v531 — 2026-08-11] — Refazer célula: uma folha por vez, na ordem digitada
 
 Dois erros de comportamento na v529/v530, relatados da produção: *"ao digitar 7,

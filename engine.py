@@ -262,9 +262,10 @@ class ImpositionConfig:
         self.refazer_de = int(refazer_de) if refazer_de else 0
         self.refazer_ate = int(refazer_ate) if refazer_ate else 0
         self.refazer_set = int(refazer_set) if refazer_set else 1
-        # Células a refazer, 1-based, na mesma numeração de pose que o laço usa
-        # (P + 1, leitura da esquerda para a direita e de cima para baixo).
-        # Lista vazia = folha inteira.
+        # Itens a refazer, identificados pela POSIÇÃO NO MODELO (1-based): o 1º,
+        # o 6º, o 22º ticket do trabalho. NÃO é a pose da folha — pedir "22" num
+        # formato de dez células é legítimo e quer dizer o vigésimo segundo
+        # ticket. Lista vazia = o trabalho inteiro.
         #
         # A ORDEM É A RECEBIDA, não crescente: as células ocupam a folha
         # compactada na ordem da lista, e ordenar aqui trocaria de lugar o que o
@@ -866,37 +867,49 @@ class ImpositionEngine:
     def process(self):
         cfg = self.cfg
         # ─── REFAZER ────────────────────────────────────────────────────────────
-        # Reimpressão de parte de uma tiragem que já saiu. O filtro é sempre um
-        # `continue`: nada é recalculado, então a folha 7 refeita traz exatamente
-        # os números que a folha 7 trazia. `r_de`/`r_ate` contam folhas dentro do
-        # set `r_set`; `r_cels` são poses da folha (P + 1), e vazio quer dizer a
-        # folha inteira. Os dois filtros se combinam.
+        # Reimpressão de parte de uma tiragem que já saiu. São dois modos, e eles
+        # não se misturam:
+        #
+        #  · POR FOLHA (`r_de`/`r_ate`, dentro do set `r_set`): reimprime folhas
+        #    inteiras, iguais às originais. O filtro é um `continue` no laço —
+        #    nada é recalculado, então a folha 7 traz os números que ela trazia.
+        #
+        #  · POR CÉLULA (`r_cels`): a lista é de POSIÇÕES DO ITEM NO MODELO,
+        #    1-based — o 1º, o 6º, o 22º ticket do trabalho, onde quer que ele
+        #    esteja. Não é a pose da folha: pedir "22" numa folha de dez células
+        #    é legítimo e quer dizer o vigésimo segundo ticket. Os itens pedidos
+        #    são compactados numa folha só.
+        #
+        # Quando há células, a faixa de folhas não se aplica: as posições já são
+        # absolutas no modelo, e filtrar por folha só poderia contradizê-las.
         r_de = int(getattr(cfg, "refazer_de", 0) or 0)
         r_ate = int(getattr(cfg, "refazer_ate", 0) or 0)
         r_set = int(getattr(cfg, "refazer_set", 1) or 1)
-        # Lista, não conjunto: a ordem decide qual célula ocupa qual posição na
+        # Lista, não conjunto: a ordem decide qual item ocupa qual posição na
         # folha compactada (ver `refazer_celulas` no ImpositionConfig).
         r_cels = list(getattr(cfg, "refazer_celulas", None) or [])
-        if r_de > 0 and r_ate <= 0:
-            r_ate = r_de
-        # ─── A CÉLULA PERTENCE A UMA FOLHA ──────────────────────────────────────
-        # Pedir células sem dizer a folha significa a FOLHA 1, não a tiragem
-        # inteira. Sem isso, "célula 7" devolvia a célula 7 de cada folha do
-        # trabalho — dezenas de tickets onde o operador queria um. Para repetir a
-        # mesma posição em várias folhas (cilindro sujo marca sempre no mesmo
-        # lugar), informa-se a faixa e ela multiplica de propósito.
-        if r_cels and r_de <= 0:
-            r_de = 1
-            r_ate = 1
-        # Só "Até" preenchido: o frontend já recusa, mas o motor também atende o
-        # agente local e a API. Assumir a folha 1 é o único palpite seguro — o
-        # contrário (r_de = 0) desliga o filtro e refaz a tiragem inteira.
-        if r_de <= 0 and r_ate > 0:
-            r_de = 1
-        if r_de > 0 and r_ate < r_de:
-            raise ValueError(
-                f"Refazer: faixa invalida — 'ate' ({r_ate}) e menor que 'de' ({r_de})."
-            )
+
+        if r_cels:
+            r_de = 0
+            r_ate = 0
+            fora = [c for c in r_cels if c > cfg.total_items]
+            if fora:
+                raise ValueError(
+                    "Refazer: posicao(oes) " + ",".join(str(c) for c in fora)
+                    + f" nao existem — este modelo tem {cfg.total_items} item(ns)."
+                )
+        else:
+            if r_de > 0 and r_ate <= 0:
+                r_ate = r_de
+            # Só "Até" preenchido: o frontend já recusa, mas o motor também atende
+            # o agente local e a API. Assumir a folha 1 é o único palpite seguro —
+            # o contrário (r_de = 0) desliga o filtro e refaz a tiragem inteira.
+            if r_de <= 0 and r_ate > 0:
+                r_de = 1
+            if r_de > 0 and r_ate < r_de:
+                raise ValueError(
+                    f"Refazer: faixa invalida — 'ate' ({r_ate}) e menor que 'de' ({r_de})."
+                )
 
         # Refazendo por folha OU por célula: nos dois casos o que sai é miolo
         # avulso para repor o que se perdeu. Capa e contracapa pertencem ao set
@@ -914,16 +927,6 @@ class ImpositionEngine:
         cols = cfg.cols
         rows = cfg.rows
         poses_per_sheet = cols * rows
-
-        # Uma célula que não existe nesta folha é sempre erro de digitação. Sem
-        # esta guarda o motor gerava as folhas normalmente e todas saíam em
-        # branco — papel gasto para repor exatamente nada.
-        fora = [c for c in r_cels if c > poses_per_sheet]
-        if fora:
-            raise ValueError(
-                "Refazer: celula(s) " + ",".join(str(c) for c in sorted(fora))
-                + f" nao existem — esta folha tem {poses_per_sheet} celula(s)."
-            )
 
         # Calcular área total usada na folha (itens + gaps)
         used_w = cols * cfg.item_w + (cols - 1) * cfg.gap_h
@@ -965,62 +968,22 @@ class ImpositionEngine:
             stack_size = total_sheets
 
         # ─── REFAZER CÉLULA: OS ITENS SÃO COMPACTADOS ───────────────────────────
-        # Refazer duas células de dez folhas não pode custar dez folhas de papel
-        # com dois tickets cada. Os itens escolhidos são recolhidos na ordem de
-        # leitura (folha, depois célula) e reimpostos preenchendo a folha de saída
-        # célula a célula, sem buraco — dez folhas viram uma.
+        # Repor cinco tickets não pode custar cinco folhas de papel com um ticket
+        # cada. Os itens pedidos são reimpostos preenchendo a folha de saída,
+        # célula a célula, sem buraco.
         #
-        # A numeração não se move junto: cada item leva o índice que tinha na
-        # tiragem original, e é só a POSIÇÃO na folha que muda. Por isso a lista
-        # guarda `item_index` de origem, e o laço principal apenas o consome.
-        def _indice_de_origem(S, P, row, col):
-            """(folha, célula) da tiragem original -> índice do item.
-
-            É a mesma conta do laço principal, extraída para poder ser usada
-            antes dele. Os dois pontos têm de concordar: se um mudar sem o outro,
-            o refazer passa a repor o ticket errado — `tests/test_engine_refazer.py`
-            compara a folha refeita com a folha da tiragem inteira justamente aí.
-            """
-            if cfg.layout_schema == "cut_stack":
-                if cfg.cut_stack_mode == "strict":
-                    bloco = cfg.sheets_per_block * cfg.block_depth
-                    full_sets = total_sheets // bloco
-                    return ((P * full_sets) + (S // bloco)) * bloco + (S % bloco)
-                if cfg.cut_stack_mode == "strict_assembly":
-                    bloco = cfg.sheets_per_block * cfg.block_depth
-                    full_sets = total_sheets // bloco
-                    if S < full_sets * bloco:
-                        return ((P * full_sets) + (S // bloco)) * bloco + (S % bloco)
-                    S_asm = S - (full_sets * bloco)
-                    asm_sheets = total_sheets - (full_sets * bloco)
-                    return full_sets * bloco * poses_per_sheet + (P * asm_sheets) + S_asm
-                return (P * total_sheets) + S
-            if cfg.layout_schema == "multi_artes":
-                return ((col * rows + row) * total_sheets) + S
-            if cfg.layout_schema == "step_repeat":
-                return S
-            return (S * poses_per_sheet) + P
-
+        # `r_cels` são POSIÇÕES NO MODELO, 1-based, e o índice interno do item é
+        # simplesmente `posição - 1`. Não há conta de esquema aqui: o esquema
+        # (cut_stack, multi_artes, sequential) decide onde o item CAIU na tiragem
+        # original, e isso não importa para quem só quer o ticket de volta.
+        #
+        # A numeração não se move junto: o item leva o número que sempre teve, e
+        # é só a posição na folha que muda.
         empacotando = bool(r_cels)
         fontes = []
         if empacotando:
-            for S_src in range(total_sheets):
-                if r_de > 0:
-                    if (S_src // stack_size) + 1 != r_set:
-                        continue
-                    n_folha = (S_src % stack_size) + 1
-                    if n_folha < r_de or n_folha > r_ate:
-                        continue
-                # Na ordem digitada: é ela que decide qual célula ocupa qual
-                # posição na folha compactada.
-                for celula in r_cels:
-                    P_src = celula - 1
-                    idx = _indice_de_origem(S_src, P_src, P_src // cols, P_src % cols)
-                    # A última folha da tiragem costuma ter células vazias: uma
-                    # célula pedida que caia ali não existe como item e não pode
-                    # ocupar espaço na folha compactada.
-                    if 0 <= idx < cfg.total_items:
-                        fontes.append(idx)
+            # Ordem digitada: é ela que decide qual item ocupa qual posição.
+            fontes = [c - 1 for c in r_cels if 0 <= c - 1 < cfg.total_items]
             total_sheets = math.ceil(len(fontes) / poses_per_sheet) if fontes else 0
             # Saída compactada é um documento só: sem troca de set, sem capa.
             stack_size = max(total_sheets, 1)
@@ -1355,21 +1318,16 @@ class ImpositionEngine:
             print(f"[engine] strict_assembly: total_sheets={total_sheets} partitioned into {len(set_definitions)} sets")
             
             if empacotando:
-                # Mesma regra do caminho principal, aplicada à alocação por célula
-                # deste esquema: recolher os itens pedidos na ordem de leitura e
-                # reimpô-los preenchendo a folha, sem buraco. A saída é um miolo
-                # só, porque não faz sentido dividir em sets uma reposição avulsa.
-                itens = []
-                for set_idx, set_def in enumerate(set_definitions):
-                    if r_de > 0 and (set_idx + 1) != r_set:
-                        continue
-                    for sheet_within_set in range(set_def["num_sheets"]):
-                        if r_de > 0 and not (r_de <= sheet_within_set + 1 <= r_ate):
-                            continue
-                        for celula in r_cels:
-                            item_data = set_def["cell_allocations"][celula - 1][sheet_within_set]
-                            if item_data is not None:
-                                itens.append(item_data)
+                # Mesma regra do caminho principal. Aqui o item não sai de uma
+                # conta de índice e sim do próprio `multi_map`, que é a lista
+                # ordenada de itens do trabalho — a posição N do modelo é o
+                # `multi_map[N - 1]`, seja qual for a célula em que ele caiu na
+                # tiragem. A saída é um miolo só: não faz sentido dividir em sets
+                # uma reposição avulsa.
+                itens = [
+                    multi_map[c - 1] for c in r_cels
+                    if 0 <= c - 1 < len(multi_map) and multi_map[c - 1] is not None
+                ]
 
                 print(f"[engine] refazer celula (strict_assembly): {len(itens)} item(ns)")
                 doc_out = fitz.open()
@@ -2578,8 +2536,8 @@ class ImpositionEngine:
         if r_de > 0:
             alvo.append(f"folhas {r_de}-{r_ate} do set {r_set}")
         if r_cels:
-            alvo.append("celulas " + ",".join(str(c) for c in r_cels))
+            alvo.append("posicoes " + ",".join(str(c) for c in r_cels))
         raise ValueError(
-            "Refazer: nenhuma folha corresponde a " + " e ".join(alvo)
-            + ". Confira a faixa e as celulas pedidas."
+            "Refazer: nada corresponde a " + " e ".join(alvo)
+            + ". Confira a faixa de folhas e as posicoes pedidas."
         )

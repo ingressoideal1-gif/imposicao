@@ -850,107 +850,35 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     }
 
     // ─── O QUE A CAIXA "REFAZER" PRECISA SABER ─────────────────────────────────
-    // Os campos De/Até contam folhas DENTRO DO SET, e o campo de células conta
-    // poses da folha. Guardar o total ANTES da compactação é essencial: uma vez
+    // Os campos De/Até contam folhas DENTRO DO SET. O campo de células conta
+    // POSIÇÕES NO MODELO — o 1º, o 6º, o 22º ticket —, e por isso o teto dele é a
+    // quantidade do modelo, não as poses da folha. Limitar pelas poses recusava
+    // "22" num formato de dez células, que é um pedido perfeitamente legítimo.
+    //
+    // Guardar o total de folhas ANTES da compactação é essencial: uma vez
     // compactada, a prévia passa a mostrar folhas de saída, e validar "De: 7"
     // contra elas recusaria uma folha de origem que existe.
     window.pedRefazerTotalFolhas = visible_sheets;
-    window.pedRefazerTotalCelulas = poses_per_sheet;
+    window.pedRefazerTotalCelulas = total_items;
     if (typeof sincronizarLimitesRefazer === 'function') sincronizarLimitesRefazer();
 
     // ─── REFAZER CÉLULA: A PRÉVIA MOSTRA A FOLHA COMPACTADA ────────────────────
-    // O motor recolhe os itens pedidos e os reimpõe preenchendo a folha, célula a
-    // célula (ver `_indice_de_origem` e o laço de `fontes` no engine.py). A prévia
-    // repete a mesma conta com a mesma ordem — folha, depois célula — porque uma
-    // prévia que mostrasse a folha original com buracos estaria contando uma
-    // história diferente da do papel.
+    // As células são POSIÇÕES NO MODELO (o 1º, o 6º, o 22º ticket), então o
+    // índice interno do item é `posição - 1` e pronto — nenhuma conta de esquema
+    // entra aqui. Onde o item caiu na tiragem original é irrelevante para quem só
+    // quer o ticket de volta; o motor faz exatamente a mesma coisa (`fontes`, no
+    // engine.py), e é essa simetria que mantém tela e papel iguais.
     const refazerCels = typeof getRefazerCelulasSelecionadas === 'function'
         ? getRefazerCelulasSelecionadas()
         : null;
 
-    // (local_S, P) da tiragem original -> o item que mora ali. É a mesma conta que
-    // o laço abaixo faz; as duas têm de concordar, senão a prévia mostra um número
-    // e o papel sai com outro.
-    // `total_sheets` é reatribuído logo abaixo quando se compacta; a conta de
-    // origem tem de continuar usando a contagem da tiragem, não a da saída.
-    const totalFolhasOrigem = total_sheets;
-    const indiceDeOrigem = (local_S, P) => {
-        const row_o = Math.floor(P / cols);
-        const col_o = P % cols;
-        let S = local_S;
-        if (is_strict_mode && !window.currentAssemblySets) {
-            S = ((currentSet - 1) * stack_size) + local_S;
-        }
-        let idx = (S * poses_per_sheet) + P;
-        let local_idx, arte_idx;
-
-        if (schema === "cut_stack" || schema === "multi_artes") {
-            const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
-            if (cutstackMode === 'strict' && !window.currentAssemblySets) {
-                const full_sets = Math.floor(totalFolhasOrigem / stack_size);
-                idx = ((P * full_sets) + Math.floor(S / stack_size)) * stack_size + (S % stack_size);
-            } else if ((cutstackMode === 'strict_assembly' || schema === "multi_artes") && window.currentAssemblySets) {
-                const set_def = window.currentAssemblySets[currentSet - 1];
-                const item_data = set_def?.cell_allocations?.[P]?.[local_S];
-                if (item_data) {
-                    idx = item_data.global_index;
-                    local_idx = item_data.local_index;
-                    arte_idx = item_data.arte_index;
-                } else {
-                    idx = total_items;
-                }
-            } else if (schema === "multi_artes") {
-                idx = ((col_o * rows + row_o) * totalFolhasOrigem) + S;
-            } else if (cutstackMode === 'strict_assembly') {
-                const full_sets = Math.floor(totalFolhasOrigem / stack_size);
-                if (S < full_sets * stack_size) {
-                    idx = ((P * full_sets) + Math.floor(S / stack_size)) * stack_size + (S % stack_size);
-                } else {
-                    const S_asm = S - (full_sets * stack_size);
-                    const asm_sheets = totalFolhasOrigem - (full_sets * stack_size);
-                    idx = full_sets * stack_size * poses_per_sheet + (P * asm_sheets) + S_asm;
-                }
-            } else {
-                idx = (P * totalFolhasOrigem) + S;
-            }
-        } else if (schema === "step_repeat") {
-            idx = S;
-        }
-
-        return { item_index: idx, item_local_index: local_idx, item_arte_index: arte_idx };
-    };
-
     let fontesRefazer = null;
-    let folhaIni = 1;
-    let folhaFim = 1;
-    const folhasOriginais = visible_sheets;
     if (refazerCels) {
-        // ─── A CÉLULA PERTENCE A UMA FOLHA ─────────────────────────────────────
-        // Sem faixa em "Refazer Folhas", a origem é a FOLHA 1 — uma só. Varrer a
-        // tiragem inteira fazia "célula 7" devolver a célula 7 de cada folha
-        // (7, 17, 27...) quando o operador queria um ticket. Para pegar a mesma
-        // posição em várias folhas — que é o defeito típico de cilindro sujo —
-        // marca-se "Refazer Folhas" e a faixa multiplica de propósito.
-        const usaFaixa = typeof refazerFolhasAtivo === 'function' && refazerFolhasAtivo();
-        const de = parseInt(document.getElementById('ped-refazer-de')?.value) || 0;
-        const ateBruto = parseInt(document.getElementById('ped-refazer-ate')?.value) || 0;
-        folhaIni = (usaFaixa && de > 0) ? de : 1;
-        folhaFim = (usaFaixa && de > 0) ? (ateBruto >= de ? ateBruto : de) : 1;
-
-        fontesRefazer = [];
-        for (let s = folhaIni - 1; s <= folhaFim - 1 && s < folhasOriginais; s++) {
-            // Ordem digitada, não crescente: é ela que decide qual célula ocupa
-            // qual posição na folha compactada.
-            for (const celula of refazerCels) {
-                const fonte = indiceDeOrigem(s, celula - 1);
-                // Célula vazia da última folha não existe como item e não pode
-                // ocupar espaço na folha compactada — igual ao engine.
-                if (fonte.item_index < total_items) {
-                    fontesRefazer.push({ ...fonte, folha: s + 1, celula });
-                }
-            }
-        }
-        // Nenhuma célula digitada ainda: continua havendo uma folha para mostrar,
+        // Ordem digitada: é ela que decide qual item ocupa qual posição na folha.
+        fontesRefazer = refazerCels
+            .filter(pos => pos >= 1 && pos <= total_items)
+            .map(pos => ({ item_index: pos - 1, posicao: pos }));
+        // Nenhuma posição digitada ainda: continua havendo uma folha para mostrar,
         // e ela é a folha vazia. `Math.max(1, ...)` evita o "Folha 1 de 0".
         visible_sheets = Math.max(1, Math.ceil(fontesRefazer.length / poses_per_sheet));
         total_sheets = visible_sheets;
@@ -961,14 +889,9 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
     let folhaLabel = folhaBase;
     if (refazerCels) {
-        // Dizer de qual folha as células vêm é o que evita o mal-entendido que
-        // gerou esta correção: sem faixa, é a folha 1, não a tiragem inteira.
-        const origem = folhaIni === folhaFim
-            ? `da folha ${folhaIni}`
-            : `das folhas ${folhaIni} a ${folhaFim}`;
         folhaLabel = fontesRefazer.length === 0
-            ? `${folhaBase} · digite as células a refazer ${origem}`
-            : `${folhaBase} · compactada · ${fontesRefazer.length} item(ns) ${origem}`;
+            ? `${folhaBase} · digite as posições a refazer (1 a ${total_items})`
+            : `${folhaBase} · compactada · ${fontesRefazer.length} de ${total_items} item(ns) do modelo`;
     }
     // Em Pdf Paginado a quantidade sai do ARQUIVO, não do pedido: o engine faz
     // total_items = nº de páginas (metade em duplex). Dizer isso no cabeçalho é o que
@@ -1020,22 +943,25 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             }
 
             let item_index = (S * poses_per_sheet) + P;
-            // Origem desta célula quando a folha é compactada — usada só para o
-            // rótulo, mas é o dado que deixa o operador conferir de onde veio cada
-            // item ("f2·c5" = célula 5 da folha 2 da tiragem).
+            // Posição no modelo que caiu nesta célula da folha compactada — usada
+            // só para o rótulo, mas é o dado que deixa o operador conferir que
+            // pediu os itens certos ("#22" = o vigésimo segundo do modelo).
             let origemDaCelula = null;
 
             if (fontesRefazer) {
                 // Folha compactada: esta célula recebe o próximo item da lista, na
-                // ordem de leitura. A conta de esquema já rodou em indiceDeOrigem.
+                // ordem digitada. O índice é a posição no modelo menos 1.
                 const fonte = fontesRefazer[(local_S * poses_per_sheet) + P];
                 if (!fonte) {
                     desenharCelulaVazia(row, col);
                     continue;
                 }
                 item_index = fonte.item_index;
-                item_local_index = fonte.item_local_index;
-                item_arte_index = fonte.item_arte_index;
+                // Deixados indefinidos de propósito: sem eles, a busca por arte
+                // mais abaixo cai no percurso por quantidade acumulada, que é o
+                // certo aqui porque `item_index` é global no trabalho.
+                item_local_index = undefined;
+                item_arte_index = undefined;
                 origemDaCelula = fonte;
             } else if (schema === "cut_stack" || schema === "multi_artes") {
                 const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
@@ -2192,11 +2118,10 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             ctx.restore();
         }
 
-        // ─── DE ONDE VEIO ESTA CÉLULA (FOLHA COMPACTADA) ───────────────────────
-        // Na folha compactada o item mudou de lugar: o que estava na célula 5 da
-        // folha 2 pode cair na célula 1. Sem dizer a origem, o operador não tem
-        // como conferir que pediu as células certas — e a numeração, que é a
-        // mesma da tiragem, não denuncia a troca de posição.
+        // ─── QUAL ITEM DO MODELO CAIU AQUI (FOLHA COMPACTADA) ──────────────────
+        // Na folha compactada o item mudou de lugar: o 22º ticket do modelo pode
+        // cair na primeira célula. Sem dizer qual é, o operador não tem como
+        // conferir que pediu os itens certos.
         //
         // Anotação de tela, como o rótulo de página acima: desenhada depois de
         // fecharGrupo(), fora do grupo arte+numeração, para não multiplicar sobre
@@ -2207,7 +2132,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             ctx.font = `700 ${fsOrig}px Inter, sans-serif`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'bottom';
-            const rotulo = `f${origemDaCelula.folha}·c${origemDaCelula.celula}`;
+            const rotulo = `#${origemDaCelula.posicao}`;
             const ox = -cw / 2 + fsOrig * 0.4;
             const oy = ch / 2 - fsOrig * 0.4;
             ctx.lineWidth = Math.max(2, fsOrig * 0.32);
@@ -2315,16 +2240,21 @@ window.nextPedPreviewPage = function() {
 //  REFAZER FOLHAS / REFAZER CÉLULA
 // ═══════════════════════════════════════════════════════════════════════════
 // Refazer é o que o operador usa quando a tiragem já saiu e uma parte dela se
-// perdeu — folha amassada, célula borrada. O engine não desloca a numeração: ele
-// pula as folhas e as células fora do pedido (`continue` no laço), então a folha
-// 7 refeita traz exatamente os números que a folha 7 trazia. Por isso o filtro
-// pode ser aplicado sem recalcular nada.
+// perdeu — folha amassada, ticket borrado. A numeração nunca se desloca: o item
+// leva o número que sempre teve, e só a posição na folha muda.
 //
-// Duas regras de leitura que enganam quem mexe aqui:
-//  · De/Até contam folhas DENTRO DO SET escolhido, não folhas do trabalho todo.
-//  · As células são as poses da folha, numeradas 1..poses_per_sheet na ordem de
-//    leitura (esquerda→direita, cima→baixo) — o mesmo `P + 1` que a prévia e o
-//    engine usam.
+// São DOIS MODOS, e eles não se combinam — marcar um desmarca o outro:
+//
+//  · REFAZER FOLHAS — De/Até contam folhas DENTRO DO SET escolhido, não folhas
+//    do trabalho todo. Reimprime as folhas inteiras, iguais às originais.
+//
+//  · REFAZER CÉLULA — a lista é de POSIÇÕES NO MODELO, 1-based: o 1º, o 6º, o
+//    22º ticket do trabalho. NÃO é a pose da folha; pedir "22" num formato de
+//    dez células é legítimo e quer dizer o vigésimo segundo ticket. Os itens
+//    pedidos são compactados numa folha só, na ordem digitada.
+//
+// Combinar os dois não faz sentido: as posições já são absolutas no modelo, e
+// uma faixa de folhas só poderia contradizê-las.
 
 function refazerFolhasAtivo() {
     return document.getElementById('ped-refazer-checkbox')?.checked === true;
@@ -2338,10 +2268,14 @@ function refazerCelulasAtivo() {
 // sem repetição, mais o que não deu para entender — o campo é digitado às pressas,
 // na frente da impressora, e um "1,,3" não pode virar erro.
 //
-// A ordem é digitada, NÃO crescente. Ordenar parecia inofensivo e não é: as
-// células ocupam a folha na ordem da lista, então digitar "7" e depois "7,3"
+// A ordem é digitada, NÃO crescente. Ordenar parecia inofensivo e não é: os
+// itens ocupam a folha na ordem da lista, então digitar "7" e depois "7,3"
 // fazia o 7 saltar da primeira posição para a segunda diante do operador. O
 // `Set` do JavaScript preserva a ordem de inserção, e é dele que vem a garantia.
+//
+// O teto é a QUANTIDADE DO MODELO (`pedRefazerTotalCelulas`), não as poses da
+// folha: os números são posições no modelo, e "22" num formato de dez células é
+// um pedido válido.
 function parseRefazerCelulas(texto) {
     const cels = new Set();
     const invalidos = [];
@@ -2374,11 +2308,11 @@ function parseRefazerCelulas(texto) {
     return { cels: Array.from(cels), invalidos };
 }
 
-// null = a folha da tiragem, inteira. Lista = a folha compactada com essas
-// células — e a lista VAZIA é um estado legítimo, não "sem filtro": marcar o
-// checkbox esvazia a folha na hora, e cada célula digitada vai aparecendo. É o
-// que deixa o operador montar a folha vendo o que está montando, em vez de
-// digitar às cegas e conferir depois.
+// null = a folha da tiragem, inteira. Lista = a folha compactada com esses itens
+// — e a lista VAZIA é um estado legítimo, não "sem filtro": marcar o checkbox
+// esvazia a folha na hora, e cada posição digitada vai aparecendo. É o que deixa
+// o operador montar a folha vendo o que está montando, em vez de digitar às
+// cegas e conferir depois.
 function getRefazerCelulasSelecionadas() {
     if (!refazerCelulasAtivo()) return null;
     const { cels } = parseRefazerCelulas(document.getElementById('ped-refazer-cel')?.value);
@@ -2387,7 +2321,7 @@ function getRefazerCelulasSelecionadas() {
 window.getRefazerCelulasSelecionadas = getRefazerCelulasSelecionadas;
 
 // Chamado de dentro de drawPedPreview(): põe nos campos os limites reais desta
-// imposição e diz ao operador quantas folhas e quantas células ele tem.
+// imposição — quantas folhas tem o set e quantos itens tem o modelo.
 function sincronizarLimitesRefazer() {
     const totalFolhas = window.pedRefazerTotalFolhas || 0;
     const totalCelulas = window.pedRefazerTotalCelulas || 0;
@@ -2411,7 +2345,7 @@ function sincronizarLimitesRefazer() {
                 infoCels.textContent = `inválido: ${invalidos.join(', ')} (1 a ${totalCelulas})`;
                 infoCels.style.color = '#f87171';
             } else if (cels.length) {
-                infoCels.textContent = `${cels.length} de ${totalCelulas} células`;
+                infoCels.textContent = `${cels.length} de ${totalCelulas} itens`;
                 infoCels.style.color = '#34d399';
             } else {
                 infoCels.textContent = totalCelulas ? `1 a ${totalCelulas}` : '';
@@ -2435,14 +2369,6 @@ function irParaFolhaRefazer() {
         setPreview.value = setRefazer.value;
     }
 
-    if (refazerCelulasAtivo()) {
-        // Com células, a prévia mostra a folha COMPACTADA — a folha 7 da tiragem
-        // não é mais uma página da saída, é um punhado de itens espalhados nela.
-        // Ir para a página 1 é a única leitura honesta.
-        irParaPrimeiraFolhaDaPrevia();
-        return;
-    }
-
     const total = window.pedRefazerTotalFolhas || 0;
     window.currentPreviewPage = (total && de > total) ? total : de;
 
@@ -2459,7 +2385,17 @@ function irParaPrimeiraFolhaDaPrevia() {
     drawPedPreview();
 }
 
-window.onRefazerToggle = function() {
+// `origem` diz qual checkbox o operador acabou de mexer, para que o OUTRO possa
+// ser desmarcado. Os dois modos são excludentes: "Refazer Folhas" reimprime
+// folhas inteiras da tiragem e "Refazer Célula" monta uma folha nova com itens
+// escolhidos pela posição no modelo. Deixar os dois ligados só produziria um
+// pedido contraditório — uma faixa de folhas não filtra posições absolutas.
+window.onRefazerToggle = function(origem) {
+    const cbFolhas = document.getElementById('ped-refazer-checkbox');
+    const cbCels = document.getElementById('ped-refazer-cel-checkbox');
+    if (origem === 'folhas' && cbFolhas?.checked && cbCels) cbCels.checked = false;
+    if (origem === 'celulas' && cbCels?.checked && cbFolhas) cbFolhas.checked = false;
+
     const marcadoFolhas = refazerFolhasAtivo();
     const marcadoCels = refazerCelulasAtivo();
 
@@ -2514,8 +2450,10 @@ function montarRefazerPayload(isRefazer) {
     const vazio = { refazer_de: 0, refazer_ate: 0, refazer_set: 1, refazer_celulas: [], sufixo: '' };
     if (!isRefazer) return vazio;
 
-    const usaFolhas = refazerFolhasAtivo();
     const usaCels = refazerCelulasAtivo();
+    // Modos excludentes (ver onRefazerToggle): com células, a faixa de folhas não
+    // participa — as posições já são absolutas no modelo.
+    const usaFolhas = !usaCels && refazerFolhasAtivo();
     if (!usaFolhas && !usaCels) {
         return { erro: 'Marque "Refazer Folhas" ou "Refazer Célula" antes de refazer.' };
     }
@@ -2559,13 +2497,16 @@ function montarRefazerPayload(isRefazer) {
     if (usaCels) {
         const { cels, invalidos } = parseRefazerCelulas(document.getElementById('ped-refazer-cel')?.value);
         if (invalidos.length) {
-            return { erro: `Refazer Célula: não entendi "${invalidos.join(', ')}". Use números de 1 a ${window.pedRefazerTotalCelulas || '?'} separados por vírgula.` };
+            return { erro: `Refazer Célula: não entendi "${invalidos.join(', ')}". Use as posições do item no modelo, de 1 a ${window.pedRefazerTotalCelulas || '?'}, separadas por vírgula.` };
         }
         if (!cels.length) {
-            return { erro: 'Refazer Célula: informe as células, separadas por vírgula (ex: 1,3,5).' };
+            return { erro: 'Refazer Célula: informe as posições, separadas por vírgula (ex: 1,6,22).' };
         }
         resultado.refazer_celulas = cels;
-        partes.push(`cel${cels.join('-')}`);
+        // No máximo seis no nome do arquivo: uma reposição de trinta itens viraria
+        // um nome que o Windows recusa.
+        const resumo = cels.length > 6 ? `${cels.slice(0, 6).join('-')}-mais${cels.length - 6}` : cels.join('-');
+        partes.push(`itens${resumo}`);
     }
 
     // O sufixo entra no nome do arquivo. Sem ele, refazer 3 folhas gravava por

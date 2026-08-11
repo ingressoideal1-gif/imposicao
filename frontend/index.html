@@ -7,7 +7,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=531">
+    <link rel="stylesheet" href="/style.css?v=532">
     <script src="pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -1460,15 +1460,16 @@
                                     </button>
 
                                     <!-- REFAZER: reimpressão de parte de uma tiragem que já saiu.
-                                         "Refazer Folhas" conta folhas DENTRO DO SET e reimprime a
-                                         folha inteira. "Refazer Célula" conta as poses da folha e
-                                         COMPACTA: os itens escolhidos são recolhidos e reimpostos
-                                         preenchendo a folha, sem buraco. Os dois se combinam.
-                                         Ver runPedImposition() e montarRefazerPayload() em
-                                         pedido.js, e `fontes` no engine.py. -->
+                                         dois modos EXCLUDENTES (marcar um desmarca o outro).
+                                         "Refazer Folhas": De/Ate contam folhas DENTRO DO SET e a
+                                         folha sai inteira. "Refazer Celula": a lista e de POSICOES
+                                         DO ITEM NO MODELO (o 1o, o 6o, o 22o ticket) — nao e a pose
+                                         da folha — e os itens sao compactados numa folha nova.
+                                         Ver montarRefazerPayload() em pedido.js e `fontes` no
+                                         engine.py. -->
                                     <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px dashed rgba(255,255,255,0.1); flex-wrap: wrap;">
                                         <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Refaz apenas uma faixa de folhas do set. A numeração é exatamente a mesma da tiragem original.">
-                                            <input type="checkbox" id="ped-refazer-checkbox" onchange="onRefazerToggle()">
+                                            <input type="checkbox" id="ped-refazer-checkbox" onchange="onRefazerToggle('folhas')">
                                             Refazer Folhas
                                         </label>
                                         <div id="ped-refazer-inputs" style="display: none; align-items: center; gap: 6px;">
@@ -1482,13 +1483,13 @@
                                             <span id="ped-refazer-total" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;"></span>
                                         </div>
 
-                                        <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Refaz apenas as células escolhidas. Os itens são compactados: preenchem a folha célula a célula, sem deixar espaço em branco.">
-                                            <input type="checkbox" id="ped-refazer-cel-checkbox" onchange="onRefazerToggle()">
+                                        <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Refaz itens escolhidos pela POSIÇÃO no modelo (o 1º, o 6º, o 22º ticket). Eles são compactados: preenchem a folha célula a célula, sem espaço em branco.">
+                                            <input type="checkbox" id="ped-refazer-cel-checkbox" onchange="onRefazerToggle('celulas')">
                                             Refazer Célula
                                         </label>
                                         <div id="ped-refazer-cel-inputs" style="display: none; align-items: center; gap: 6px;">
-                                            <span style="font-size:0.75rem; color:var(--text-muted);">Células:</span>
-                                            <input type="text" id="ped-refazer-cel" class="form-control" style="width: 92px; padding: 2px 6px; height: 24px; font-size: 0.8rem; text-align: center;" placeholder="Ex: 1,3,5" oninput="onRefazerCelulaChange()" title="Números das células separados por vírgula. Faixas também valem: 1-4. Os itens escolhidos são compactados na folha de saída — a prévia mostra a origem de cada um (f2·c5).">
+                                            <span style="font-size:0.75rem; color:var(--text-muted);">Itens:</span>
+                                            <input type="text" id="ped-refazer-cel" class="form-control" style="width: 92px; padding: 2px 6px; height: 24px; font-size: 0.8rem; text-align: center;" placeholder="Ex: 1,6,22" oninput="onRefazerCelulaChange()" title="Posições do item no modelo, separadas por vírgula (o 1º, o 6º, o 22º...). Faixas também valem: 1-4. Não é a célula da folha: 22 num formato de 10 células é válido. A prévia rotula cada um com #posição.">
                                             <span id="ped-refazer-cel-info" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;"></span>
                                         </div>
 
@@ -2589,11 +2590,11 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=531"></script>
-    <script src="csv-editor.js?v=531"></script>
-    <script src="script.js?v=531"></script>
-    <script src="criador-arte.js?v=531"></script>
-    <script src="/pedido.js?v=531"></script>
+    <script src="mapas.js?v=532"></script>
+    <script src="csv-editor.js?v=532"></script>
+    <script src="script.js?v=532"></script>
+    <script src="criador-arte.js?v=532"></script>
+    <script src="/pedido.js?v=532"></script>
 
 
 
