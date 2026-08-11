@@ -8,6 +8,64 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v525 — 2026-08-11] — Hot Folder: o RIP não via o arquivo que o agente gravava
+
+### O sintoma
+O Epson Edge Print não processava o PDF que o agente gravava na pasta observada.
+Fechar e reabrir o RIP fazia o mesmo arquivo ser importado sem problema. Um PDF
+gerado em outra pasta e arrastado pelo Explorer sempre funcionou.
+
+### O que esses três fatos dizem
+A suspeita natural — o RIP lendo o PDF ainda incompleto — é **descartada pelo
+segundo fato**: se o arquivo estivesse truncado, reabrir o Edge Print não o
+salvaria. O conteúdo estava bom o tempo todo.
+
+Sobra o evento do sistema de arquivos. O Edge Print varre a pasta ao iniciar e,
+em regime, depende de uma notificação do Windows. O agente gravava
+`<nome>.pdf.tmp` e **renomeava** para `<nome>.pdf` — o Windows anuncia isso como
+`FILE_ACTION_RENAMED_NEW_NAME`. Criar um arquivo anuncia `FILE_ACTION_ADDED`. Um
+observador que só trate "arquivo criado" — o caso comum, e o padrão de quem usa
+`FileSystemWatcher.Created` — **nunca enxerga um arquivo renomeado para dentro da
+pasta**.
+
+A ironia: o rename existia justamente para proteger contra leitura parcial, e ao
+fazer isso escondia o arquivo do RIP que deveria proteger.
+
+### O conserto
+O arquivo passa a ser **criado já com o nome final**, numa única escrita. Do ponto
+de vista do sistema de arquivos é exatamente o que o Explorer faz ao copiar — o
+único caminho observado como funcional nesta máquina.
+
+Perde-se a atomicidade. Em troca, o arquivo aparece. E a evidência mostra que o
+Edge Print lida bem com arquivo ainda crescendo: arrastar um PDF grande pela rede
+leva segundos e sempre deu certo.
+
+**Cuidado novo que isso exige:** com o nome final desde o início, uma escrita
+interrompida deixaria um PDF truncado com nome de PDF bom, e o RIP importaria
+lixo. Qualquer falha no meio agora remove o arquivo da pasta.
+
+### Escape hatch, porque não dá para testar contra o RIP
+`hot_folders.json` aceita `"metodo"` por pasta; trocar exige só reiniciar o
+agente, não um release novo:
+
+| Método | Como o arquivo aparece |
+|---|---|
+| `direto` (padrão) | criado com o nome final, escrita única |
+| `exclusivo` | idem, trancado (`dwShareMode=0`) enquanto escreve — quem ler no meio recebe `SHARING_VIOLATION` e repete |
+| `rename` | o comportamento antigo; só serve para RIP que trate renomeação |
+
+### Onde
+- `hotfolder.py` — `soltar()` reescrita, três gravadores, limpeza do parcial
+- `db.py` — `metodo_hot_folder()`
+- `app.py` e `agent_worker.py` — passam o método configurado
+- `ferramentas/diagnostico_hotfolder.py` — larga o mesmo PDF por cinco caminhos
+  diferentes e relata qual o RIP consome; decide a escolha quando houver acesso
+  à máquina com o Edge Print
+- `tests/test_hotfolder.py` — 47 testes, um deles falha se alguém voltar a
+  renomear para dentro da pasta
+
+---
+
 ## [v524 — 2026-08-11] — Editor de CSV: ver e mexer no banco de dados da numeração
 
 ### O problema

@@ -75,18 +75,54 @@ As travas:
    separador de caminho, sem caractere proibido pelo Windows) e forçado a `.pdf`;
 3. há teto de tamanho por arquivo.
 
-### A gravação é atômica
+### A gravação cria o arquivo — não renomeia para dentro da pasta
 
-O arquivo é escrito como `<nome>.pdf.tmp` **dentro da própria pasta de destino** e
-só então renomeado para `<nome>.pdf` com `os.replace`. Escrever num temporário do
-sistema e copiar depois não serve: o rename só é atômico dentro do mesmo volume.
+> **Revisado em 11/08/2026, depois de falhar em produção.** A decisão original
+> era o contrário do que está escrito abaixo, e está registrada logo em seguida.
 
-Sem isso o Edge Print importa um PDF pela metade. Esse é o modo de falha clássico
-de hot folder, e ele não aparece como erro claro — aparece como arte cortada ou
-trabalho abortado no RIP, horas depois, sem ninguém saber por quê.
+O arquivo é **criado já com o nome final**, numa única escrita. Não há `.tmp` e
+não há renomeação.
 
-Um watcher pode enxergar o `.tmp`; por isso a extensão dupla, que nenhum RIP
-associa a PDF, e por isso o `.tmp` é apagado se a gravação falhar no meio.
+**A decisão original, e por que ela quebrou.** O desenho era gravar
+`<nome>.pdf.tmp` dentro da pasta e renomear: a troca é atômica, então o RIP nunca
+veria um PDF pela metade. Em produção, o Edge Print simplesmente **ignorava** o
+arquivo. Fechar e reabrir o RIP importava o mesmo arquivo sem problema, e um PDF
+gerado fora e arrastado pelo Explorer sempre funcionou.
+
+Os três fatos juntos dizem uma coisa só. Se o arquivo estivesse truncado ou
+inválido, reabrir o RIP não o salvaria — logo o conteúdo estava bom. O Edge Print
+varre a pasta ao iniciar e, em regime, depende de uma notificação do Windows.
+Renomear para dentro da pasta emite `FILE_ACTION_RENAMED_NEW_NAME`; criar emite
+`FILE_ACTION_ADDED`. Um observador que só trate "arquivo criado" — o caso comum, e
+o comportamento padrão de quem usa `FileSystemWatcher.Created` — nunca vê um
+arquivo que chegou por renomeação.
+
+A proteção contra leitura parcial estava escondendo o arquivo do próprio RIP que
+ela deveria proteger.
+
+**O que se perde e o que se ganha.** Perde-se a atomicidade. Ganha-se o único
+comportamento observado como funcional nesta máquina: arrastar pelo Explorer
+produz exatamente esta sequência de operações e sempre deu certo, o que mostra que
+o Edge Print sabe lidar com um arquivo ainda crescendo. A escrita sai numa única
+chamada, a partir de bytes já em memória, então a janela é a menor possível.
+
+**A consequência que exige cuidado novo:** com o nome final desde o início, uma
+escrita interrompida deixa um PDF truncado com nome de PDF bom, e o RIP importaria
+lixo. Por isso qualquer falha no meio remove o arquivo da pasta — o que com o
+rename era desnecessário.
+
+**Escape hatch.** `hot_folders.json` aceita `"metodo"` por pasta, e trocá-lo exige
+apenas reiniciar o agente, não um release novo. Três valores:
+
+| Método | Como o arquivo aparece |
+| --- | --- |
+| `direto` (padrão) | criado com o nome final, escrita única |
+| `exclusivo` | idem, porém trancado (`dwShareMode=0`) enquanto escreve — quem tentar ler no meio recebe `ERROR_SHARING_VIOLATION` e repete |
+| `rename` | o desenho original; só serve para RIP que trate evento de renomeação |
+
+`ferramentas/diagnostico_hotfolder.py` larga o mesmo PDF na pasta por cinco
+caminhos diferentes e relata qual o RIP consome. É o que decide a escolha quando
+houver acesso à máquina com o Edge Print.
 
 ### Nunca sobrescreve
 
@@ -191,8 +227,12 @@ sem diálogo:
 - sanitização rejeita `..`, separador de caminho e caractere proibido;
 - extensão é forçada a `.pdf`;
 - colisão gera `(2)`, `(3)` e nunca sobrescreve;
-- gravação é atômica — nenhum `.tmp` sobra ao final;
-- falha no meio da gravação não deixa `.tmp` nem arquivo final;
+- nenhum `.tmp` sobra ao final, em nenhum dos três métodos;
+- falha no meio da gravação não deixa `.tmp` nem arquivo final — o PDF parcial é
+  removido da pasta, senão o RIP importaria lixo;
+- o método padrão é `direto`, e o teste falha se alguém voltar a renomear;
+- `"metodo"` escrito no `hot_folders.json` é respeitado, e um valor inválido cai
+  no padrão em vez de impedir a impressão;
 - pasta fora da lista branca é recusada;
 - pasta inexistente e arquivo no lugar de pasta são recusados;
 - validação detecta pasta sem permissão de escrita;

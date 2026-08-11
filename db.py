@@ -1294,6 +1294,22 @@ def hot_folder_registrada(caminho: str) -> bool:
     return any(_chave_hot_folder(p.get("path")) == alvo for p in _carregar_hot_folders())
 
 
+def metodo_hot_folder(caminho: str) -> str | None:
+    """Como gravar nesta pasta, se a estacao tiver dito algo diferente do padrao.
+
+    Existe para poder trocar o modo de gravacao editando o hot_folders.json e
+    reiniciando o agente, sem esperar um release novo. O modo importa mais do
+    que parece: e ele que decide se o RIP enxerga o arquivo (ver hotfolder.py).
+    """
+    alvo = _chave_hot_folder(caminho)
+    if not alvo:
+        return None
+    for p in _carregar_hot_folders():
+        if _chave_hot_folder(p.get("path")) == alvo:
+            return (p.get("metodo") or "").strip() or None
+    return None
+
+
 def registrar_hot_folder(caminho: str) -> bool:
     """Autoriza esta pasta a receber PDF. Idempotente."""
     alvo = (caminho or "").strip()

@@ -208,7 +208,8 @@ def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
                            "escolha a pasta no painel desta maquina")
         with open(pdf_path, "rb") as f:
             dados = f.read()
-        destino = hotfolder.soltar(pasta, nome, dados)
+        destino = hotfolder.soltar(pasta, nome, dados,
+                                   metodo=db.metodo_hot_folder(pasta))
 
         # O Edge Print importa e remove o arquivo. Sobrando arquivo, o watcher
         # provavelmente nao esta rodando. Pelo relay nao ha ninguem olhando a

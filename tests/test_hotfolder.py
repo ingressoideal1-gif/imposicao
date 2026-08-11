@@ -108,6 +108,12 @@ def teste_soltar():
         checar(not [a for a in os.listdir(tmp) if a.endswith(".tmp")],
                "nenhum temporario sobra depois da gravacao")
 
+        # O ponto do conserto de 11/08: renomear para dentro da pasta emite um
+        # evento que o Edge Print nao escuta. Se um .tmp voltar a aparecer aqui,
+        # o hot folder quebrou de novo — e em silencio.
+        checar(hotfolder.METODO_PADRAO == "direto",
+               "o metodo padrao cria o arquivo, nao renomeia para dentro da pasta")
+
         # Sobrescrever poderia apagar, em silencio, um trabalho que o RIP ainda
         # nao importou — e pior, enquanto ele o le.
         c2 = hotfolder.soltar(tmp, "00001_Ingresso.pdf", b"outro")
@@ -148,6 +154,12 @@ def teste_soltar():
 
 
 def teste_falha_no_meio_nao_deixa_lixo():
+    """Gravando direto, o arquivo ja nasce com o nome final.
+
+    Se a escrita morrer no meio (disco cheio, share caiu), o que fica na pasta e
+    um PDF truncado com nome de PDF bom — e o RIP importaria lixo. Com o rename
+    antigo isso nao acontecia, entao esta limpeza e obrigatoria agora.
+    """
     print("\nsoltar — falha no meio da gravacao")
     tmp = tempfile.mkdtemp(prefix="hf_meio_")
     original = os.fdopen
@@ -172,8 +184,67 @@ def teste_falha_no_meio_nao_deixa_lixo():
     finally:
         os.fdopen = original
         sobrou = os.listdir(tmp)
-        checar(sobrou == [], f"nada sobra na pasta apos falha (sobrou: {sobrou})")
+        checar(sobrou == [],
+               f"o arquivo parcial e removido da pasta (sobrou: {sobrou})")
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def teste_metodos_de_gravacao():
+    """Os tres metodos gravam o mesmo arquivo; muda so como ele aparece."""
+    print("\nmetodos de gravacao")
+    dados = b"%PDF-1.4 conteudo"
+    for metodo in hotfolder.METODOS_VALIDOS:
+        tmp = tempfile.mkdtemp(prefix=f"hf_m_{metodo}_")
+        try:
+            c1 = hotfolder.soltar(tmp, "a.pdf", dados, metodo=metodo)
+            with open(c1, "rb") as f:
+                conteudo_ok = f.read() == dados
+            c2 = hotfolder.soltar(tmp, "a.pdf", dados, metodo=metodo)
+            sem_tmp = not [a for a in os.listdir(tmp) if a.endswith(".tmp")]
+            checar(conteudo_ok and os.path.basename(c2) == "a (2).pdf" and sem_tmp,
+                   f"'{metodo}': grava, nao sobrescreve e nao deixa .tmp")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    tmp = tempfile.mkdtemp(prefix="hf_m_ruim_")
+    try:
+        # Um metodo escrito errado no hot_folders.json nao pode impedir a
+        # impressao: cai no padrao e avisa no log.
+        c = hotfolder.soltar(tmp, "a.pdf", dados, metodo="metodo_inexistente")
+        checar(os.path.isfile(c), "metodo desconhecido cai no padrao em vez de falhar")
+        c = hotfolder.soltar(tmp, "b.pdf", dados, metodo=None)
+        checar(os.path.isfile(c), "metodo ausente usa o padrao")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def teste_metodo_vem_do_registro():
+    print("\nmetodo configurado na estacao (db)")
+    import db
+    tmp_dir = tempfile.mkdtemp(prefix="hf_mcfg_")
+    original = db.HOT_FOLDER_FILE
+    db.HOT_FOLDER_FILE = os.path.join(tmp_dir, "hot_folders.json")
+    try:
+        pasta = tempfile.mkdtemp(prefix="hf_alvo2_")
+        try:
+            db.registrar_hot_folder(pasta)
+            checar(db.metodo_hot_folder(pasta) is None,
+                   "sem nada configurado, o metodo e o padrao do hotfolder.py")
+
+            # Trocar o modo de gravacao editando o JSON e reiniciando o agente:
+            # e o escape hatch para nao depender de um release novo.
+            registros = db._carregar_hot_folders()
+            registros[0]["metodo"] = "exclusivo"
+            db._salvar_hot_folders(registros)
+            checar(db.metodo_hot_folder(pasta) == "exclusivo",
+                   "o metodo escrito no hot_folders.json e respeitado")
+            checar(db.metodo_hot_folder(r"C:\outra\pasta") is None,
+                   "pasta desconhecida nao devolve metodo")
+        finally:
+            shutil.rmtree(pasta, ignore_errors=True)
+    finally:
+        db.HOT_FOLDER_FILE = original
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # ─── Conferencia de consumo ───────────────────────────────────────────────────
@@ -237,6 +308,8 @@ if __name__ == "__main__":
     teste_validar()
     teste_soltar()
     teste_falha_no_meio_nao_deixa_lixo()
+    teste_metodos_de_gravacao()
+    teste_metodo_vem_do_registro()
     teste_conferir()
     teste_lista_branca()
 

@@ -84,17 +84,18 @@ def sanitizar_nome(nome: str) -> str:
     return base + ".pdf"
 
 
-def _nome_livre(pasta: str, nome: str) -> str:
-    """Primeiro nome que ainda nao existe na pasta: nome.pdf, nome (2).pdf, ..."""
-    caminho = os.path.join(pasta, nome)
-    if not os.path.exists(caminho):
-        return caminho
+def _nomes_candidatos(pasta: str, nome: str):
+    """nome.pdf, nome (2).pdf, nome (3).pdf... na ordem.
+
+    Devolve candidatos em vez de "o primeiro livre" de proposito: quem grava
+    reivindica o nome na propria criacao do arquivo, entao a decisao de pular
+    para o proximo pertence ao sistema de arquivos, nao a um os.path.exists que
+    ja pode estar desatualizado quando a criacao acontece.
+    """
+    yield os.path.join(pasta, nome)
     base = nome[:-4]
     for i in range(2, 1000):
-        candidato = os.path.join(pasta, f"{base} ({i}).pdf")
-        if not os.path.exists(candidato):
-            return candidato
-    raise OSError(f"mais de 999 arquivos com o nome {nome} na pasta")
+        yield os.path.join(pasta, f"{base} ({i}).pdf")
 
 
 # ─── Pasta ────────────────────────────────────────────────────────────────────
@@ -161,17 +162,140 @@ def validar_pasta(caminho: str):
 
 # ─── Gravacao ─────────────────────────────────────────────────────────────────
 
-def soltar(pasta: str, nome: str, dados: bytes) -> str:
+# Como o arquivo passa a existir na pasta. NAO e preferencia de estilo: e o que
+# decide se o RIP enxerga o trabalho ou nao. Ver o comentario extenso em soltar().
+METODO_PADRAO = "direto"
+METODOS_VALIDOS = ("direto", "exclusivo", "rename")
+
+
+def _gravar_direto(destino: str, dados: bytes):
+    """Cria o arquivo ja com o nome final e escreve nele. O padrao.
+
+    Do ponto de vista do sistema de arquivos, e exatamente o que o Explorer faz
+    ao copiar um arquivo para a pasta — o unico caminho que sabemos, por
+    observacao, que o Epson Edge Print aceita.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    fd = os.open(destino, flags)
+    with os.fdopen(fd, "wb") as f:
+        # Uma unica chamada de escrita, e nao um laco em pedacos: o arquivo ja
+        # esta inteiro na memoria, e quanto menos operacoes, menor a janela em
+        # que ele existe com o nome final e conteudo parcial.
+        f.write(dados)
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def _gravar_exclusivo(destino: str, dados: bytes):
+    """Nome final, mas trancado: ninguem abre o arquivo enquanto escrevemos.
+
+    Escape hatch para o caso de o RIP reagir tao rapido ao evento de criacao que
+    chegue a ler o arquivo pela metade. Com dwShareMode=0, quem tentar abrir no
+    meio recebe ERROR_SHARING_VIOLATION — que e o mesmo que qualquer copia em
+    andamento produz, e por isso observadores de hot folder costumam repetir a
+    tentativa em vez de desistir.
+
+    Nao e o padrao porque "costumam" nao e "garantidamente": um observador que
+    desista na primeira recusa ficaria cego de novo, e nao temos como testar
+    contra o Edge Print.
+    """
+    import win32file
+    import win32con
+    ERROR_FILE_EXISTS = 80
+    try:
+        h = win32file.CreateFile(
+            destino,
+            win32con.GENERIC_WRITE,
+            0,                       # dwShareMode = 0: acesso exclusivo
+            None,
+            win32con.CREATE_NEW,     # falha se o arquivo ja existir
+            win32con.FILE_ATTRIBUTE_NORMAL,
+            None,
+        )
+    except Exception as e:
+        # A API do Windows sinaliza colisao com um erro proprio; quem chama so
+        # sabe pular para o proximo nome se ele chegar como FileExistsError.
+        if getattr(e, "winerror", None) == ERROR_FILE_EXISTS:
+            raise FileExistsError(destino) from e
+        raise
+    try:
+        win32file.WriteFile(h, dados)
+        win32file.FlushFileBuffers(h)
+    finally:
+        h.Close()
+
+
+def _gravar_por_rename(destino: str, dados: bytes):
+    """Grava um .tmp na pasta e renomeia. NAO USE com o Epson Edge Print.
+
+    Era o padrao ate 2026-08-11 e foi o que quebrou o hot folder em producao.
+    Continua aqui porque a troca atomica e genuinamente mais segura contra
+    leitura parcial, e um RIP que trate evento de renomeacao ganha isso de graca.
+    """
+    temporario = destino + ".tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    fd = os.open(temporario, flags)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(dados)
+            f.flush()
+            os.fsync(f.fileno())
+        if os.path.exists(destino):
+            raise FileExistsError(destino)
+        os.rename(temporario, destino)
+    except Exception:
+        try:
+            if os.path.exists(temporario):
+                os.remove(temporario)
+        except Exception:
+            pass
+        raise
+
+
+_GRAVADORES = {
+    "direto": _gravar_direto,
+    "exclusivo": _gravar_exclusivo,
+    "rename": _gravar_por_rename,
+}
+
+
+def soltar(pasta: str, nome: str, dados: bytes, metodo: str = None) -> str:
     """Grava o PDF na pasta e devolve o caminho final.
 
-    Grava primeiro como "<nome>.pdf.tmp" DENTRO da pasta de destino e so entao
-    renomeia. O temporario precisa estar no mesmo volume — rename entre volumes
-    nao e atomico, vira copia, e o RIP pode importar o arquivo pela metade. Esse
-    e o modo de falha classico de hot folder, e ele nao aparece como erro: chega
-    como arte cortada ou trabalho abortado, horas depois.
+    O arquivo e CRIADO ja com o nome final. Nao ha .tmp e nao ha renomeacao —
+    e isso e a coisa mais importante deste modulo.
 
-    A extensao dupla (.pdf.tmp) existe para que nenhum watcher associe o
-    temporario a um PDF enquanto ele esta sendo escrito.
+    A primeira versao gravava "<nome>.pdf.tmp" e renomeava, pela razao classica:
+    a troca e atomica, entao o RIP nunca veria o arquivo pela metade. Em
+    producao, com a Epson SureColor F9470H e o Epson Edge Print, isso nao
+    funcionou — o RIP simplesmente ignorava o arquivo. Fechar e reabrir o Edge
+    Print fazia o mesmo arquivo ser importado sem problema, e um PDF gerado
+    fora e arrastado pelo Explorer sempre funcionou.
+
+    Esses tres fatos, juntos, dizem uma coisa so. Se o arquivo fosse invalido ou
+    truncado, reabrir o RIP nao o salvaria — logo o conteudo estava bom. O Edge
+    Print varre a pasta ao iniciar e, em regime, depende de uma notificacao do
+    Windows. Renomear para dentro da pasta emite FILE_ACTION_RENAMED_NEW_NAME;
+    criar emite FILE_ACTION_ADDED. Um observador que so trate "arquivo criado" —
+    o caso comum, e o comportamento padrao de quem usa FileSystemWatcher.Created
+    — nunca ve um arquivo que chegou por renomeacao.
+
+    Ou seja: a protecao contra leitura parcial estava escondendo o arquivo do
+    proprio RIP que ela deveria proteger.
+
+    O que perdemos ao gravar direto e a atomicidade. O que ganhamos e o unico
+    comportamento observado como funcional nesta maquina — arrastar pelo
+    Explorer produz exatamente esta mesma sequencia de operacoes, e sempre deu
+    certo, o que mostra que o Edge Print sabe lidar com um arquivo que ainda
+    esta crescendo. A escrita sai numa unica chamada, a partir de bytes que ja
+    estao na memoria, entao a janela e a menor possivel.
+
+    Se algum dia um arquivo parcial for importado, o `metodo` permite trocar sem
+    release novo do agente: "exclusivo" tranca o arquivo enquanto escreve.
     """
     if dados is None:
         raise ValueError("nenhum conteudo para gravar")
@@ -186,41 +310,49 @@ def soltar(pasta: str, nome: str, dados: bytes) -> str:
     if not ok:
         raise OSError(msg)
 
+    escolhido = (metodo or METODO_PADRAO).strip().lower()
+    gravador = _GRAVADORES.get(escolhido)
+    if gravador is None:
+        print(f"[hotfolder] metodo '{escolhido}' desconhecido; usando '{METODO_PADRAO}'")
+        escolhido = METODO_PADRAO
+        gravador = _GRAVADORES[METODO_PADRAO]
+
     nome_final = sanitizar_nome(nome)
 
     with _lock_gravacao:
-        destino = _nome_livre(pasta, nome_final)
-        temporario = destino + ".tmp"
-
-        try:
-            # O_EXCL garante que nao estamos escrevendo por cima do temporario
-            # de outro envio que ainda esta em andamento.
-            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-            if hasattr(os, "O_BINARY"):
-                flags |= os.O_BINARY
-            fd = os.open(temporario, flags)
+        # O nome livre e reivindicado pela propria criacao (O_EXCL / CREATE_NEW):
+        # se outro processo tiver criado o arquivo entre a escolha e a criacao, a
+        # chamada falha e tentamos o proximo nome. Isso mantem "nunca
+        # sobrescrever" como garantia do sistema de arquivos, e nao como uma
+        # checagem nossa que pode correr atrasada.
+        destino = None
+        for candidato in _nomes_candidatos(pasta, nome_final):
             try:
-                with os.fdopen(fd, "wb") as f:
-                    f.write(dados)
-                    f.flush()
-                    os.fsync(f.fileno())
+                gravador(candidato, dados)
+                destino = candidato
+                break
+            except FileExistsError:
+                continue
             except Exception:
+                # Escrita interrompida no meio (disco cheio, share caiu). Com a
+                # gravacao direta o arquivo ja esta na pasta COM O NOME FINAL e
+                # incompleto — o RIP importaria lixo. Tem que sair daqui.
+                _remover_silencioso(candidato)
+                _remover_silencioso(candidato + ".tmp")
                 raise
-            # rename, e nao replace: no Windows ele falha se o destino existir,
-            # o que transforma "nunca sobrescrever" numa garantia do sistema de
-            # arquivos e nao numa checagem nossa que pode correr atrasada.
-            if os.path.exists(destino):
-                raise FileExistsError(destino)
-            os.rename(temporario, destino)
-        except Exception:
-            try:
-                if os.path.exists(temporario):
-                    os.remove(temporario)
-            except Exception:
-                pass
-            raise
+
+        if destino is None:
+            raise OSError(f"nao consegui um nome livre para {nome_final} em {pasta}")
 
     return destino
+
+
+def _remover_silencioso(caminho: str):
+    try:
+        if os.path.exists(caminho):
+            os.remove(caminho)
+    except Exception:
+        pass
 
 
 def conferir(caminhos) -> list:

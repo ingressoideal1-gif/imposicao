@@ -1198,7 +1198,8 @@ async def hotfolder_drop(
                    "pelo botao 'Escolher pasta'")
     dados = await file.read()
     try:
-        caminho = hotfolder.soltar(folder, file.filename or "impressao.pdf", dados)
+        caminho = hotfolder.soltar(folder, file.filename or "impressao.pdf", dados,
+                                   metodo=db.metodo_hot_folder(folder))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"ok": True, "path": caminho}
