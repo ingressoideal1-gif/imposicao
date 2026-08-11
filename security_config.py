@@ -49,6 +49,40 @@ def is_allowed_release_url(url: str) -> bool:
     return (url or "").lower().startswith(RELEASES_BASE_URL.lower())
 
 
+# ─── Painel servido pelo agente ───────────────────────────────────────────────
+# O painel embutido no executável envelhecia a cada publicação do site, e
+# atualizá-lo custava um release de agente por vez. Agora o agente baixa os
+# arquivos do painel desta origem e serve a cópia local.
+#
+# ISSO NÃO MOVE A IMPOSIÇÃO PARA A NUVEM. Quem decide o motor é o
+# supabase-config.js, em tempo de execução, pela porta da página:
+#
+#     const isPort9000 = window.location.port === "9000";
+#     const API_BASE_URL = (isLocalhost || isPort9000) ? "" : "https://imposicao.onrender.com";
+#
+# Servido pelo agente na 9000, API_BASE_URL fica vazio e o motor é o da própria
+# máquina. Baixar o arquivo da nuvem não altera essa decisão.
+#
+# Origem literal pelo mesmo motivo do manifesto: vinda de fora, quem controlasse
+# o ambiente controlaria o código que roda na estação.
+PAINEL_BASE_URL = "https://imposicao.vercel.app"
+
+# Só o que a estação precisa. As fontes (fonts_local) ficam de fora: são ~140 MB
+# e já têm o próprio sincronismo, pelo Storage.
+PAINEL_ARQUIVOS = [
+    "index.html",
+    "producao.html",
+    "cliente.html",
+    "script.js",
+    "pedido.js",
+    "cliente.js",
+    "criador-arte.js",
+    "mapas.js",
+    "supabase-config.js",
+    "style.css",
+]
+
+
 # ─── Proxy de arquivos (/api/proxy) ───────────────────────────────────────────
 # Usado como fallback para buscar PDFs quando o fetch direto falha por CORS.
 # Na prática só aponta para o Storage do Supabase.

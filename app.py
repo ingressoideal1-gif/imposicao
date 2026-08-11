@@ -93,7 +93,44 @@ if not _FRONTEND_DIR or not os.path.isdir(_FRONTEND_DIR):
     _FRONTEND_DIR = "frontend"
     os.makedirs(_FRONTEND_DIR, exist_ok=True)
 
-app.mount("/app", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
+
+# ─── De onde o painel é servido ───────────────────────────────────────────────
+# No executável, servir direto de _MEIPASS congelava o painel na versão do
+# build: cada correção publicada no site exigia um release de agente. Agora o
+# painel é servido de uma pasta ao lado do executável, que o agent_worker
+# mantém em dia (sincronizar_painel).
+#
+# A pasta nasce como cópia do que veio embutido, então a estação funciona na
+# primeira execução e continua funcionando sem internet — a sincronização só
+# substitui arquivo quando o conjunto inteiro chega íntegro.
+#
+# Fora do executável nada muda: em desenvolvimento serve-se a pasta frontend/ do
+# repositório, senão editar um arquivo não teria efeito nenhum.
+def _semear_painel(destino: str, origem: str) -> bool:
+    """Copia para `destino` o que faltar de `origem`. Não sobrescreve o que já existe."""
+    try:
+        os.makedirs(destino, exist_ok=True)
+        for nome in os.listdir(origem):
+            org = os.path.join(origem, nome)
+            dst = os.path.join(destino, nome)
+            if os.path.isfile(org) and not os.path.exists(dst):
+                shutil.copy2(org, dst)
+        return os.path.isfile(os.path.join(destino, "index.html"))
+    except Exception as e:
+        print(f"[app] Não consegui semear o painel local: {e}", flush=True)
+        return False
+
+
+_PAINEL_DIR = _FRONTEND_DIR
+if getattr(sys, 'frozen', False):
+    _candidato = os.path.join(os.path.dirname(sys.executable), "painel")
+    if _semear_painel(_candidato, _FRONTEND_DIR):
+        _PAINEL_DIR = _candidato
+        print(f"[app] Painel servido de {_PAINEL_DIR}", flush=True)
+    else:
+        print("[app] Painel local indisponível; servindo a cópia embutida.", flush=True)
+
+app.mount("/app", StaticFiles(directory=_PAINEL_DIR, html=True), name="frontend")
 
 # ─── ROTAS UTILITÁRIAS ────────────────────────────────────────────────────────
 
@@ -1159,6 +1196,9 @@ async def send_email_endpoint(request: Request):
     return result
 
 # Fallback mount to serve static files from root (resolves absolute links like /style.css, /script.js, /supabase-config.js in frontend)
-app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="root_frontend")
+# Mesma pasta do mount /app: as páginas referenciam /script.js e /style.css por
+# caminho absoluto, então servir daqui a cópia embutida enquanto /app serve a
+# sincronizada faria a página nova carregar o script velho.
+app.mount("/", StaticFiles(directory=_PAINEL_DIR, html=True), name="root_frontend")
 
 

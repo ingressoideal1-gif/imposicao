@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import uuid
+import shutil
 import tempfile
 import urllib.request
 import urllib.error
@@ -52,8 +53,26 @@ if not AGENT_ID:
 
 AGENT_NAME = os.environ.get("COMPUTERNAME", "Agente Ideal")
 
+def _relay_ativo() -> bool:
+    """O relay de nuvem depende só de haver URL e chave.
+
+    NÃO usar db.IS_SUPABASE_ACTIVE aqui. Ela é False de propósito no executável
+    (db.py força isso quando sys.frozen) para que o CATÁLOGO seja lido do
+    formats_db.json local — decisão de desempenho, porque a imposição roda na
+    estação e não pode depender de rede.
+
+    A fila de impressão não tem nada a ver com isso. Amarrada àquela flag, o
+    process_queue recebia None do _supabase_request, caía no `if not jobs:
+    return` e encerrava em silêncio a cada 5 segundos: os trabalhos ficavam
+    eternamente em 'pending' e nenhuma linha aparecia no log. O heartbeat
+    seguia funcionando porque monta a requisição direto, sem passar por aqui —
+    o que fazia tudo PARECER conectado.
+    """
+    return bool(db.SUPABASE_URL and db.SUPABASE_KEY)
+
+
 def _supabase_request(method: str, path: str, body: dict = None, is_storage=False) -> dict | list | None:
-    if not db.IS_SUPABASE_ACTIVE:
+    if not _relay_ativo():
         return None
     url = f"{db.SUPABASE_URL}/rest/v1/{path}"
     headers = {
@@ -205,6 +224,11 @@ INTERVALO_UPDATE_S = 30 * 60
 # faltar. Fonte nova no catalogo demora ate 6h para aparecer, o que e aceitavel.
 INTERVALO_FONTES_S = 6 * 3600
 
+# Painel a cada 30 min, como o manifesto: sao ~1,5 MB e a estacao precisa pegar
+# a correcao publicada no mesmo dia. A primeira sincronizacao acontece 5s apos
+# subir — antes disso vale a copia que ja estava no disco.
+INTERVALO_PAINEL_S = 30 * 60
+
 
 # Resultado do ultimo teste de alcance ao Storage. Fica em memoria porque a
 # sondagem custa uma requisicao de rede e o heartbeat roda a cada 30s.
@@ -302,6 +326,88 @@ def sincronizar_fontes():
 def _sincronizar_fontes_em_thread():
     import threading
     threading.Thread(target=sincronizar_fontes, daemon=True, name="SyncFontes").start()
+
+
+# ─── Sincronismo do painel ────────────────────────────────────────────────────
+# O painel embutido no executavel congelava na versao do build: atualiza-lo
+# custava um release de agente por publicacao do site. Agora o agente baixa os
+# arquivos e serve a copia local, que o app.py aponta em PAINEL_DIR.
+#
+# A imposicao continua na estacao. Quem escolhe o motor e o supabase-config.js,
+# em tempo de execucao, pela porta da pagina — servido na 9000, API_BASE_URL
+# fica vazio e o motor e o local. Ver security_config.PAINEL_BASE_URL.
+
+PAINEL_DIR = os.path.join(db.DB_DIR, "painel")
+
+
+def _painel_valido(pasta: str) -> bool:
+    """Todos os arquivos presentes, nao vazios, e o index parecendo HTML."""
+    import security_config
+    for nome in security_config.PAINEL_ARQUIVOS:
+        caminho = os.path.join(pasta, nome)
+        if not os.path.isfile(caminho) or os.path.getsize(caminho) == 0:
+            return False
+    try:
+        with open(os.path.join(pasta, "index.html"), "r", encoding="utf-8", errors="replace") as f:
+            if "<html" not in f.read(4000).lower():
+                return False
+    except Exception:
+        return False
+    return True
+
+
+def sincronizar_painel():
+    """Baixa o painel da nuvem e substitui a copia local, se vier inteira.
+
+    Baixa para uma pasta ao lado e so troca depois de validar o conjunto: um
+    download pela metade nunca vira painel quebrado na estacao. Se a rede
+    falhar, a copia anterior continua servindo — e, na primeira instalacao, a
+    copia embutida no executavel, que o app.py semeia.
+    """
+    import security_config
+    base = security_config.PAINEL_BASE_URL.rstrip("/")
+    temp = PAINEL_DIR + ".novo"
+
+    try:
+        if os.path.isdir(temp):
+            shutil.rmtree(temp, ignore_errors=True)
+        os.makedirs(temp, exist_ok=True)
+
+        for nome in security_config.PAINEL_ARQUIVOS:
+            # Cache-buster: o painel na Vercel ja responde no-store, mas uma
+            # borda intermediaria mal configurada devolveria arquivo velho — e o
+            # sintoma seria exatamente o que estamos consertando.
+            url = f"{base}/{nome}?t={int(time.time())}"
+            req = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(f"HTTP {resp.status} em {nome}")
+                conteudo = resp.read()
+            if not conteudo:
+                raise RuntimeError(f"{nome} veio vazio")
+            with open(os.path.join(temp, nome), "wb") as f:
+                f.write(conteudo)
+
+        if not _painel_valido(temp):
+            raise RuntimeError("conjunto incompleto apos o download")
+
+        os.makedirs(PAINEL_DIR, exist_ok=True)
+        for nome in security_config.PAINEL_ARQUIVOS:
+            os.replace(os.path.join(temp, nome), os.path.join(PAINEL_DIR, nome))
+
+        print(f"[agent_worker] Painel sincronizado ({len(security_config.PAINEL_ARQUIVOS)} arquivos).", flush=True)
+        return True
+
+    except Exception as e:
+        print(f"[agent_worker] Painel nao sincronizado ({e}). Segue a copia atual.", flush=True)
+        return False
+    finally:
+        shutil.rmtree(temp, ignore_errors=True)
+
+
+def _sincronizar_painel_em_thread():
+    import threading
+    threading.Thread(target=sincronizar_painel, daemon=True, name="SyncPainel").start()
 
 
 # Registro da ultima tentativa de atualizacao, EM DISCO.
@@ -471,6 +577,7 @@ def run_loop():
     heartbeat_timer = 0
     update_timer = 60   # primeira checagem 1 min apos subir
     fontes_timer = 20   # sync de fontes logo no inicio
+    painel_timer = 5    # painel quase de imediato: e o que o operador ve
     while True:
         try:
             if heartbeat_timer <= 0:
@@ -482,17 +589,22 @@ def run_loop():
             if fontes_timer <= 0:
                 _sincronizar_fontes_em_thread()
                 fontes_timer = INTERVALO_FONTES_S
+            if painel_timer <= 0:
+                _sincronizar_painel_em_thread()
+                painel_timer = INTERVALO_PAINEL_S
             process_queue()
             time.sleep(5)
             heartbeat_timer -= 5
             update_timer -= 5
             fontes_timer -= 5
+            painel_timer -= 5
         except Exception as e:
             print(f"[agent_worker] Erro no loop principal: {e}", flush=True)
             time.sleep(5)
             heartbeat_timer -= 5 # Garantir decremento
             update_timer -= 5
             fontes_timer -= 5
+            painel_timer -= 5
 
 
 if __name__ == "__main__":
