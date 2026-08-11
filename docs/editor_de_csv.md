@@ -227,6 +227,60 @@ O link do cliente (`frontend/cliente.js`) tem a sua própria cópia do
 `drawAmostraFace` e **não** foi paginado. Ele continua mostrando a primeira
 linha. Se um dia isso mudar, é decisão de produto: muda o que o cliente vê.
 
+### O banco também se abre do card do modelo
+
+Chegar ao banco de dados exigia abrir o editor da numeração — uma tela de
+catálogo — enquanto o trabalho acontecia no pedido. Por isso o card de cada
+modelo, na Lista de Arte, ganhou dois botões ao lado do seletor de numeração,
+junto do 📋 e do ✏️ que já estavam lá:
+
+| Botão | Abre | Grava em |
+|-------|------|----------|
+| 📊 | O editor comum: célula, coluna, quais linhas imprimem | `producao_numeracoes` (o banco é da numeração) |
+| 🧩 | A distribuição entre os modelos do pedido | `pedidos_modelos.csv_selecao` (a fatia é do modelo) |
+
+São dois trabalhos diferentes e por isso são duas telas — a mesma separação que o
+editor já fazia. Consertar o dado é uma coisa; repartir as linhas é outra.
+
+Os botões **só aparecem quando a numeração escolhida tem banco de dados**, e quem
+decide isso é `atualizarBotoesCsvDaAmostra()`, a cada redesenho — não o template.
+A numeração muda pelo seletor sem redesenhar o card inteiro, então uma decisão
+tomada na montagem do HTML ficaria velha na primeira troca. O `title` do 🧩 diz
+quantas linhas o modelo leva ("5 de 10"), e ele fica vermelho quando o modelo
+está sem nenhuma — um modelo sem linha não imprime nada, e descobrir isso aqui é
+mais barato do que descobrir na frente da impressora.
+
+O 🧩 abre a distribuição **já destacando o modelo de onde partiu** (o `foco` do
+`abrirEditorCsv`): com seis faixas coloridas na barra, achar a sua é o primeiro
+trabalho do operador. E a distribuição passou a valer **com um modelo só** —
+recortar uma fatia para o único modelo do pedido é legítimo, e antes não havia
+caminho para isso.
+
+### A janela ampliada
+
+Clicar na imagem do modelo abre a visualização em tela cheia: frente e verso
+lado a lado, grandes, com o mesmo seletor de linhas do card e os mesmos dois
+botões de banco. `←` e `→` viram a página, `Home`/`End` vão aos extremos, `Esc`
+fecha, e "🔍 Tamanho real" troca entre caber na tela e o tamanho natural, para
+conferir numeração miúda.
+
+Vive em [`frontend/amostra-modal.js`](../frontend/amostra-modal.js) e **não
+desenha nada**: ela copia o bitmap dos canvases que o `drawAmostraFace()` já
+pintou no card. É de propósito — o card é o renderizador canônico (ver
+[editor_de_arte.md](editor_de_arte.md)), e uma segunda implementação divergiria
+dele no primeiro ajuste de fusão de camadas: o operador aprovaria numa tela o que
+sairia diferente no papel.
+
+Quem vira a página continua sendo o card. A janela chama
+`amostraCsvPagina()` — que agora **devolve a promessa** do redesenho — e só
+depois copia o bitmap. No sentido inverso, `renderItemAmostraCombinada()` avisa
+`window.AmostraModal.atualizar(idx, osId)` ao terminar, para a janela não ficar
+velha quando algo redesenha o card por baixo dela.
+
+Até aqui o `onclick` dessas imagens chamava `openClienteLightbox()`, que **só
+existe no `cliente.js`** — no aplicativo interno o clique dava
+`ReferenceError` e não acontecia nada.
+
 ### A tabela é `pedidos_modelos`
 
 Não é `producao_os_itens`. Os arquivos em `sql/` descrevem `producao_os_itens`,

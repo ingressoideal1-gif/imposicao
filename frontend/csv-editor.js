@@ -1953,6 +1953,12 @@
             b.appendChild(document.createTextNode(
                 `${m.nome} (${(c.porModelo[m.id] || 0).toLocaleString('pt-BR')})`));
             b.disabled = !ed.sel.size;
+            // O modelo de onde a tela foi aberta fica marcado: com seis faixas
+            // coloridas na barra, achar a sua é o primeiro trabalho do operador.
+            if (ed.foco && String(m.id) === ed.foco) {
+                b.style.outline = '2px solid ' + corDoModelo(m.id);
+                b.style.outlineOffset = '1px';
+            }
             b.onclick = () => atribuir(m.id);
             b2.appendChild(b);
         });
@@ -2239,6 +2245,8 @@
             colunasEmUso: opts.colunasEmUso,
             onAplicar: opts.onAplicar,
             modelos: Array.isArray(opts.modelos) ? opts.modelos.slice() : null,
+            // Modelo de onde a tela foi aberta. Só destaca — não restringe nada.
+            foco: opts.foco != null ? String(opts.foco) : null,
             dono: new Map(),
             sel: new Set(),
             ultimoClique: null,
@@ -2262,7 +2270,8 @@
         }
 
         montarModal();
-        dom.title.textContent = (ehDistribuicao() ? '🧩 Distribuir ' : '📊 ') + ed.filename;
+        dom.title.textContent = (ehDistribuicao() ? '🧩 Distribuir ' : '📊 ') + ed.filename
+            + (ed.foco && ehDistribuicao() ? '  —  aberto por ' + nomeDoModelo(ed.foco) : '');
         ligarEventos();
         recalcular();
         setTimeout(() => dom && dom.scroll.focus(), 30);

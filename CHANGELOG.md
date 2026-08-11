@@ -8,6 +8,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v534 — 2026-08-11] — Banco de dados no card do modelo e janela de visualizacao ampliada
+
+### O problema
+Para mexer no banco de dados de um modelo era preciso sair do pedido e abrir o
+editor da numeracao — uma tela de catalogo — enquanto o trabalho acontecia ali,
+no card. E a imagem do modelo, apesar do cursor de lupa, nao abria nada: o
+`onclick` chamava `openClienteLightbox()`, que so existe no `cliente.js`. No
+aplicativo interno o clique dava `ReferenceError` em silencio.
+
+### O que entrou
+**Dois botoes no card de cada modelo**, ao lado do seletor de numeracao:
+
+- **📊** abre o editor comum do banco (celula, coluna, quais linhas imprimem) e
+  grava de volta na numeracao.
+- **🧩** abre a distribuicao entre os modelos do pedido, ja **destacando o modelo
+  de onde partiu**, e grava a fatia em `pedidos_modelos.csv_selecao`.
+
+Aparecem so quando a numeracao tem banco de dados, e o `title` do 🧩 diz quantas
+linhas o modelo leva ("5 de 10"). Ele fica vermelho quando o modelo esta sem
+nenhuma — modelo sem linha nao imprime nada.
+
+A distribuicao passou a valer **com um modelo so**: recortar uma fatia para o
+unico modelo do pedido e legitimo e nao havia caminho para isso.
+
+**Clicar na imagem abre a janela ampliada** (`frontend/amostra-modal.js`): frente
+e verso lado a lado, grandes, com o seletor de linhas do CSV, os mesmos dois
+botoes de banco, `←`/`→` para virar a pagina, `Esc` para fechar e um botao de
+tamanho real para conferir numeracao miuda.
+
+### O cuidado que definiu o desenho
+A janela **nao desenha nada** — copia o bitmap dos canvases que o
+`drawAmostraFace()` ja pintou no card. O card e o renderizador canonico; uma
+segunda implementacao divergiria dele no primeiro ajuste de fusao de camadas, e
+o operador aprovaria numa tela o que sairia diferente no papel.
+
+### Arquivos
+`frontend/amostra-modal.js` (novo), `frontend/script.js`,
+`frontend/csv-editor.js`, `frontend/index.html`, `docs/editor_de_csv.md`.
+So frontend — o `engine.py` nao muda e o agente nao precisa ser republicado.
+
+---
+
 ## [v533 — 2026-08-11] — Visualizacao da amostra paginada, uma pagina por linha do CSV
 
 ### O problema

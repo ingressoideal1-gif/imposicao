@@ -11313,7 +11313,15 @@ function rotuloDoModelo(item, i) {
 
 
 
-window.abrirDistribuicaoCsv = function(osId, numId) {
+/**
+ * Abre a tela de distribuição do banco entre os modelos do pedido. `focoItemId`
+ * destaca um modelo — é por onde o botão do card entra, para o operador ver de
+ * cara qual das faixas coloridas é a dele.
+ *
+ * Vale também com UM modelo só: escolher que ele imprime parte do banco é
+ * legítimo, e era o único jeito de recortar uma fatia sem ter um segundo modelo.
+ */
+window.abrirDistribuicaoCsv = function(osId, numId, focoItemId) {
 
     if (typeof window.abrirEditorCsv !== 'function') {
 
@@ -11323,17 +11331,20 @@ window.abrirDistribuicaoCsv = function(osId, numId) {
 
     }
 
-    const grupo = gruposDeCsvDoPedido(osId).find(g => String(g.num.id) === String(numId));
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
 
-    if (!grupo) {
+    const itens = (state.osItens[osId] || [])
+        .filter(it => String(numeracaoIdDoItem(it)) === String(numId));
 
-        toast('Nenhum modelo deste pedido compartilha esse banco de dados.', 'error');
+    if (!num || !num.csv_data || !num.csv_data.length || !itens.length) {
+
+        toast('Nenhum modelo deste pedido usa esse banco de dados.', 'error');
 
         return;
 
     }
 
-    const num = grupo.num;
+    const grupo = { num, itens };
 
     window.abrirEditorCsv({
 
@@ -11342,6 +11353,8 @@ window.abrirDistribuicaoCsv = function(osId, numId) {
         rows: num.csv_data,
 
         filename: num.csv_filename || 'banco.csv',
+
+        foco: focoItemId != null ? String(focoItemId) : null,
 
         modelos: grupo.itens.map((it, i) => ({
 
@@ -11378,6 +11391,10 @@ window.abrirDistribuicaoCsv = function(osId, numId) {
 
             renderImpOSQueue();
 
+            // O card de cada modelo mostra a fatia dele; sem isto continuaria
+            // exibindo a contagem e a página anteriores até o próximo redesenho.
+            redesenharCardsDoPedido(osId);
+
             const ativas = linhasAtivasCsv(rows).length;
 
             const distribuidas = grupo.itens.reduce((acc, it) => {
@@ -11413,6 +11430,19 @@ window.abrirDistribuicaoCsv = function(osId, numId) {
 /** Grava só o csv_data de uma numeração, sem passar pelo editor dela. */
 async function salvarCsvDaNumeracao(numId, rows) {
 
+    return salvarCamposDaNumeracao(numId, { csv_data: rows });
+
+}
+
+
+
+/**
+ * Grava campos avulsos de uma numeração. Existe porque o banco de dados passou
+ * a ser editável de fora do editor de numeração — do card do modelo, no pedido —
+ * e ali não há formulário para submeter: é uma alteração cirúrgica.
+ */
+async function salvarCamposDaNumeracao(numId, patch) {
+
     try {
 
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
@@ -11421,7 +11451,7 @@ async function salvarCsvDaNumeracao(numId, rows) {
 
                 .from('producao_numeracoes')
 
-                .update({ csv_data: rows })
+                .update(patch)
 
                 .eq('id', numId);
 
@@ -11435,7 +11465,7 @@ async function salvarCsvDaNumeracao(numId, rows) {
 
                 headers: { 'Content-Type': 'application/json' },
 
-                body: JSON.stringify({ csv_data: rows })
+                body: JSON.stringify(patch)
 
             });
 
@@ -11443,9 +11473,9 @@ async function salvarCsvDaNumeracao(numId, rows) {
 
     } catch (e) {
 
-        console.error('[CSV] Erro ao gravar o banco da numeração:', e);
+        console.error('[CSV] Erro ao gravar na numeração:', e);
 
-        toast('A distribuição foi salva, mas o banco não pôde ser gravado: ' + e.message, 'error');
+        toast('Não foi possível gravar na numeração: ' + e.message, 'error');
 
     }
 
@@ -11556,7 +11586,10 @@ window.amostraCsvPagina = function(idx, osId, delta, absoluto) {
     // Navegar nao e editar: nao marca _needsSnapshot, senao o instantaneo que
     // vai para o link do cliente passaria a ser a linha que o operador estava
     // olhando por acaso.
-    renderItemAmostraCombinada(idx, osId);
+    //
+    // Devolve a promessa: a janela ampliada espelha o canvas do card e precisa
+    // esperar o desenho terminar antes de copiar o bitmap.
+    return renderItemAmostraCombinada(idx, osId);
 
 };
 
@@ -11636,6 +11669,190 @@ function atualizarNavCsvDaAmostra(idx, item, num, container, osId) {
     if (bNext) bNext.disabled = pag >= total - 1;
 
 }
+
+
+
+/**
+ * Liga os dois botões de CSV do card do modelo. Ficam escondidos enquanto a
+ * numeração escolhida não tiver banco de dados — e como a numeração muda pelo
+ * seletor sem redesenhar o card inteiro, quem decide isso é esta função, a cada
+ * redesenho, e não o template.
+ */
+function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
+
+    const bEditar = container.querySelector(`#btn-csv-editar-${idx}`);
+
+    const bFatia = container.querySelector(`#btn-csv-fatia-${idx}`);
+
+    if (!bEditar && !bFatia) return;
+
+    const temCsv = !!(num && num.csv_data && num.csv_data.length);
+
+    if (bEditar) bEditar.style.display = temCsv ? '' : 'none';
+
+    if (!bFatia) return;
+
+    bFatia.style.display = temCsv ? '' : 'none';
+
+    if (!temCsv) return;
+
+    const minhas = fatiaCsvDoItem(item, num).length;
+
+    const total = linhasAtivasCsv(num.csv_data).length;
+
+    bFatia.title = `Linhas do banco que ESTE modelo imprime: ${minhas} de ${total}.`
+
+        + ' Clique para escolher.';
+
+    // Um modelo sem nenhuma linha não imprime nada — avisar aqui é mais barato
+    // do que descobrir na frente da impressora.
+    bFatia.style.color = minhas ? '' : 'var(--red, #ef4444)';
+
+}
+
+
+
+/** Redesenha todos os cards de um pedido (usado depois de distribuir). */
+function redesenharCardsDoPedido(osId) {
+
+    (state.osItens[osId] || []).forEach((_, i) => renderItemAmostraCombinada(i, osId));
+
+}
+
+
+
+/**
+ * O banco de dados a partir do card do modelo. Dois trabalhos, duas telas — a
+ * mesma separação que o editor de CSV já fazia:
+ *
+ *   'editar'      — corrigir o dado: célula, coluna, quais linhas imprimem.
+ *                   Grava na numeração, que é onde o banco vive.
+ *   'distribuir'  — repartir as linhas entre os modelos do pedido. Grava em
+ *                   `pedidos_modelos.csv_selecao`, que é por modelo.
+ */
+window.abrirCsvDoModelo = function(idx, osId, modo) {
+
+    if (typeof window.abrirEditorCsv !== 'function') {
+
+        toast('O editor de CSV não carregou. Recarregue a página.', 'error');
+
+        return;
+
+    }
+
+    const item = (state.osItens[osId] || [])[idx];
+
+    if (!item) return;
+
+    const num = (state.numeracoes || [])
+        .find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+
+    if (!num || !num.csv_data || !num.csv_data.length) {
+
+        toast('A numeração deste modelo não usa banco de dados (CSV).', 'error');
+
+        return;
+
+    }
+
+    if (modo === 'distribuir') {
+
+        return window.abrirDistribuicaoCsv(osId, num.id, item.id);
+
+    }
+
+    window.abrirEditorCsv({
+
+        headers: num.csv_headers || [],
+
+        rows: num.csv_data,
+
+        filename: num.csv_filename || 'banco.csv',
+
+        colunasEmUso: () => {
+
+            const uso = {};
+
+            (num.elements || []).forEach(el => {
+
+                if (el.source === 'database' && el.csv_column) {
+
+                    uso[el.csv_column] = (uso[el.csv_column] || 0) + 1;
+
+                }
+
+            });
+
+            return uso;
+
+        },
+
+        onAplicar: async ({ headers, rows, filename, renomeacoes }) => {
+
+            // Coluna renomeada arrasta junto os elementos que a usam, senão
+            // eles ficariam apontando para um nome que não existe mais.
+            let ajustados = 0;
+
+            (renomeacoes || []).forEach(({ de, para }) => {
+
+                (num.elements || []).forEach(el => {
+
+                    if (el.source === 'database' && el.csv_column === de) {
+
+                        el.csv_column = para;
+
+                        ajustados++;
+
+                    }
+
+                });
+
+            });
+
+            // Banco sem nenhuma linha equivale a não ter banco: deixar um array
+            // vazio manteria a numeração marcada como "tem CSV", e a Imposição
+            // tentaria imprimir zero itens.
+            const patch = rows.length
+
+                ? { csv_data: rows, csv_headers: headers, csv_filename: filename }
+
+                : { csv_data: null, csv_headers: [], csv_filename: '' };
+
+            if (ajustados) patch.elements = num.elements;
+
+            Object.assign(num, patch);
+
+            await salvarCamposDaNumeracao(num.id, patch);
+
+            redesenharCardsDoPedido(osId);
+
+            if (!rows.length) {
+
+                toast('Banco de dados vazio — a numeração ficou sem CSV.', 'info');
+
+                return;
+
+            }
+
+            const fora = rows.length - linhasAtivasCsv(rows).length;
+
+            toast(
+
+                `Banco salvo: ${rows.length} linhas`
+
+                + (fora ? `, ${fora} fora da impressão` : '')
+
+                + (ajustados ? `, ${ajustados} elemento(s) reapontados` : ''),
+
+                'success'
+
+            );
+
+        }
+
+    });
+
+};
 
 
 
@@ -20171,6 +20388,10 @@ function renderAmostrasOSItens(osId) {
                                             <div style="display: flex; gap: 4px; align-items: center;">
                                                 <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
                                                 <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
+                                                <!-- Só aparecem quando a numeração tem banco de dados;
+                                                     quem decide é atualizarBotoesCsvDaAmostra(). -->
+                                                <button class="btn btn-sm btn-ghost" id="btn-csv-editar-${idx}" style="padding: 0 4px; font-size: 0.9rem; display: none;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'editar')" title="Ver e editar o banco de dados (CSV)">📊</button>
+                                                <button class="btn btn-sm btn-ghost" id="btn-csv-fatia-${idx}" style="padding: 0 4px; font-size: 0.9rem; display: none;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'distribuir')" title="Escolher as linhas do banco que este modelo imprime">🧩</button>
                                             </div>
                                         `}
                                     </div>
@@ -20294,7 +20515,7 @@ function renderAmostrasOSItens(osId) {
                         <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">FRENTE</div>
-                                <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
+                                <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
                                 <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Sem Frente</p>
@@ -20302,7 +20523,7 @@ function renderAmostrasOSItens(osId) {
                             </div>
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
-                                <canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>
+                                <canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
                                 <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
@@ -20327,7 +20548,7 @@ function renderAmostrasOSItens(osId) {
                         ` : `
                         ${item.modo_pdf ? `
                         <div id="amostra-pdf-viewer-${idx}" style="text-align: center;">
-                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-pdf-canvas-${idx}')"></canvas>
+                            <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
                             <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
                                 <button class="btn btn-sm btn-secondary" onclick="pdfViewerPrevPage(${idx})">◀</button>
                                 <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
@@ -20340,7 +20561,7 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
-                        <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>
+                        <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
 
                             <!-- Navegacao das linhas do CSV. Fica escondida ate
                                  a numeracao ter elemento de banco de dados; quem
@@ -23095,6 +23316,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     }
 
     atualizarNavCsvDaAmostra(idx, item, num, container, osId);
+    atualizarBotoesCsvDaAmostra(idx, item, num, container);
 
     if (item.verso) {
         const canvasFront = container.querySelector(`#amostra-item-canvas-${idx}`);
@@ -23114,6 +23336,8 @@ async function renderItemAmostraCombinada(idx, osId) {
                 snapshotAmostraAndUpload(idx, osId, item, canvasBack, 'verso');
             }, 2000);
         }
+
+        if (window.AmostraModal) window.AmostraModal.atualizar(idx, osId);
     } else {
         const canvas = container.querySelector(`#amostra-item-canvas-${idx}`);
         const empty = container.querySelector(`#amostra-item-empty-${idx}`);
@@ -23128,6 +23352,7 @@ async function renderItemAmostraCombinada(idx, osId) {
             }, 2000);
         }
 
+        if (window.AmostraModal) window.AmostraModal.atualizar(idx, osId);
     }
 }
 
