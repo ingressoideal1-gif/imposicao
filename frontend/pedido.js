@@ -921,16 +921,26 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     };
 
     let fontesRefazer = null;
+    let folhaIni = 1;
+    let folhaFim = 1;
     const folhasOriginais = visible_sheets;
     if (refazerCels) {
+        // ─── A CÉLULA PERTENCE A UMA FOLHA ─────────────────────────────────────
+        // Sem faixa em "Refazer Folhas", a origem é a FOLHA 1 — uma só. Varrer a
+        // tiragem inteira fazia "célula 7" devolver a célula 7 de cada folha
+        // (7, 17, 27...) quando o operador queria um ticket. Para pegar a mesma
+        // posição em várias folhas — que é o defeito típico de cilindro sujo —
+        // marca-se "Refazer Folhas" e a faixa multiplica de propósito.
         const usaFaixa = typeof refazerFolhasAtivo === 'function' && refazerFolhasAtivo();
         const de = parseInt(document.getElementById('ped-refazer-de')?.value) || 0;
         const ateBruto = parseInt(document.getElementById('ped-refazer-ate')?.value) || 0;
-        const ate = ateBruto >= de ? ateBruto : de;
+        folhaIni = (usaFaixa && de > 0) ? de : 1;
+        folhaFim = (usaFaixa && de > 0) ? (ateBruto >= de ? ateBruto : de) : 1;
 
         fontesRefazer = [];
-        for (let s = 0; s < folhasOriginais; s++) {
-            if (usaFaixa && de > 0 && (s + 1 < de || s + 1 > ate)) continue;
+        for (let s = folhaIni - 1; s <= folhaFim - 1 && s < folhasOriginais; s++) {
+            // Ordem digitada, não crescente: é ela que decide qual célula ocupa
+            // qual posição na folha compactada.
             for (const celula of refazerCels) {
                 const fonte = indiceDeOrigem(s, celula - 1);
                 // Célula vazia da última folha não existe como item e não pode
@@ -950,10 +960,15 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
         ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}`
         : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
     let folhaLabel = folhaBase;
-    if (refazerCels && fontesRefazer.length === 0) {
-        folhaLabel = `${folhaBase} · digite as células a refazer`;
-    } else if (refazerCels) {
-        folhaLabel = `${folhaBase} · compactada · ${fontesRefazer.length} item(ns) de ${folhasOriginais} folha(s)`;
+    if (refazerCels) {
+        // Dizer de qual folha as células vêm é o que evita o mal-entendido que
+        // gerou esta correção: sem faixa, é a folha 1, não a tiragem inteira.
+        const origem = folhaIni === folhaFim
+            ? `da folha ${folhaIni}`
+            : `das folhas ${folhaIni} a ${folhaFim}`;
+        folhaLabel = fontesRefazer.length === 0
+            ? `${folhaBase} · digite as células a refazer ${origem}`
+            : `${folhaBase} · compactada · ${fontesRefazer.length} item(ns) ${origem}`;
     }
     // Em Pdf Paginado a quantidade sai do ARQUIVO, não do pedido: o engine faz
     // total_items = nº de páginas (metade em duplex). Dizer isso no cabeçalho é o que
@@ -2319,9 +2334,14 @@ function refazerCelulasAtivo() {
     return document.getElementById('ped-refazer-cel-checkbox')?.checked === true;
 }
 
-// Aceita "1,3,5", "1 3 5" e faixas "1-4". Devolve a lista já ordenada e sem
-// repetição, mais o que não deu para entender — o campo é digitado às pressas,
+// Aceita "1,3,5", "1 3 5" e faixas "1-4". Devolve a lista **na ordem digitada**,
+// sem repetição, mais o que não deu para entender — o campo é digitado às pressas,
 // na frente da impressora, e um "1,,3" não pode virar erro.
+//
+// A ordem é digitada, NÃO crescente. Ordenar parecia inofensivo e não é: as
+// células ocupam a folha na ordem da lista, então digitar "7" e depois "7,3"
+// fazia o 7 saltar da primeira posição para a segunda diante do operador. O
+// `Set` do JavaScript preserva a ordem de inserção, e é dele que vem a garantia.
 function parseRefazerCelulas(texto) {
     const cels = new Set();
     const invalidos = [];
@@ -2351,7 +2371,7 @@ function parseRefazerCelulas(texto) {
         }
     }
 
-    return { cels: Array.from(cels).sort((a, b) => a - b), invalidos };
+    return { cels: Array.from(cels), invalidos };
 }
 
 // null = a folha da tiragem, inteira. Lista = a folha compactada com essas

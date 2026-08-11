@@ -131,17 +131,29 @@ def test_faixa_fora_do_trabalho_e_erro(tmp_path):
     assert "nenhuma folha" in str(erro.value)
 
 
-def test_refazer_celulas_compacta_os_itens_na_folha(tmp_path):
+def test_celula_sem_faixa_vale_so_para_a_folha_1(tmp_path):
     """
-    Celulas 1 e 3 das tres folhas = seis itens. Eles NAO saem espalhados em tres
-    folhas com dois tickets cada: sao recolhidos e reimpostos preenchendo a folha
-    celula a celula. Numa folha de quatro celulas, seis itens viram uma folha
-    cheia mais duas celulas na seguinte.
+    Pedir celulas sem dizer a folha significa a FOLHA 1 — uma so.
 
-    A ordem e a de leitura: folha, depois celula. Por isso 1,3 (folha 1), 5,7
-    (folha 2), 9,11 (folha 3).
+    Antes, a lista de celulas varria a tiragem inteira: pedir a celula 3 devolvia
+    a celula 3 de cada folha (N3, N7, N11) quando o operador queria um ticket.
+    Para repetir a mesma posicao em varias folhas existe a faixa, logo abaixo.
     """
-    assert impor(tmp_path, refazer_celulas=[1, 3]) == [[1, 3, 5, 7], [9, 11]]
+    assert impor(tmp_path, refazer_celulas=[3]) == [[3]]
+    assert impor(tmp_path, refazer_celulas=[1, 3]) == [[1, 3]]
+
+
+def test_a_faixa_de_folhas_multiplica_as_celulas(tmp_path):
+    """
+    Com a faixa, a mesma celula sai de cada folha pedida — e o resultado e
+    compactado. Celulas 1 e 3 das tres folhas = seis itens: uma folha de quatro
+    celulas cheia, mais duas na seguinte.
+
+    Multiplicar so quando a faixa e informada e o que separa "quero este ticket"
+    de "o cilindro sujou esta posicao em todas as folhas".
+    """
+    assert impor(tmp_path, refazer_de=1, refazer_ate=3, refazer_celulas=[1, 3]) \
+        == [[1, 3, 5, 7], [9, 11]]
 
 
 def test_a_numeracao_nao_se_move_com_a_compactacao(tmp_path):
@@ -152,9 +164,9 @@ def test_a_numeracao_nao_se_move_com_a_compactacao(tmp_path):
     assert impor(tmp_path, refazer_de=2, refazer_ate=3, refazer_celulas=[3]) == [[7, 11]]
 
 
-def test_celulas_fora_de_ordem_e_repetidas(tmp_path):
+def test_celulas_repetidas_entram_uma_vez_so(tmp_path):
     """O campo e digitado as pressas, na frente da impressora."""
-    assert impor(tmp_path, refazer_celulas=[3, 1, 3]) == [[1, 3, 5, 7], [9, 11]]
+    assert impor(tmp_path, refazer_celulas=[3, 1, 3]) == [[1, 3]]
 
 
 def test_folha_e_celula_combinadas(tmp_path):
@@ -180,7 +192,8 @@ def test_celula_da_ultima_folha_incompleta_nao_ocupa_espaco(tmp_path):
     cfg = ImpositionConfig(
         base_file="base_ticket.pdf", out_pdf=str(out), formato=FORMATO,
         numeracao=NUMERACAO, saida=SAIDA, seq_start=1, seq_end=10,
-        seq_increment=1, layout_schema="sequential", refazer_celulas=[4],
+        seq_increment=1, layout_schema="sequential",
+        refazer_de=1, refazer_ate=3, refazer_celulas=[4],
     )
     ImpositionEngine(cfg).process()
     doc = fitz.open(str(out))
@@ -233,7 +246,13 @@ def test_cut_stack_refazer_celula_compacta_a_coluna(tmp_path):
     o refazer repoe o ticket errado — e este teste e quem denuncia. A celula 2
     das tres folhas guarda N4, N5 e N6; compactada, e uma folha so.
     """
-    assert _impor_cut_stack(tmp_path, refazer_celulas=[2]) == [[4, 5, 6]]
+    assert _impor_cut_stack(tmp_path, refazer_de=1, refazer_ate=3, refazer_celulas=[2]) \
+        == [[4, 5, 6]]
+
+
+def test_cut_stack_celula_sem_faixa_e_so_a_folha_1(tmp_path):
+    """Em cut_stack a celula 2 da folha 1 guarda o N4 — so ele."""
+    assert _impor_cut_stack(tmp_path, refazer_celulas=[2]) == [[4]]
 
 
 def test_cut_stack_celula_e_folha_juntas(tmp_path):
@@ -264,6 +283,17 @@ def _numeros_em_ordem_de_leitura(caminho):
         doc.close()
 
 
+def _impor_para_ordem(tmp_path, **refazer):
+    out = tmp_path / "refazer.pdf"
+    cfg = ImpositionConfig(
+        base_file="base_ticket.pdf", out_pdf=str(out), formato=FORMATO,
+        numeracao=NUMERACAO, saida=SAIDA, seq_start=SEQ_INICIO, seq_end=SEQ_FIM,
+        seq_increment=1, layout_schema="sequential", **refazer,
+    )
+    ImpositionEngine(cfg).process()
+    return _numeros_em_ordem_de_leitura(out)
+
+
 def test_o_item_vai_para_a_proxima_celula_vaga(tmp_path):
     """
     O coracao do "refazer celula". Celulas 2 e 4 das tres folhas sao seis itens
@@ -272,14 +302,21 @@ def test_o_item_vai_para_a_proxima_celula_vaga(tmp_path):
     celulas da primeira folha e as duas primeiras da segunda — nenhuma celula
     vaga no meio.
     """
-    out = tmp_path / "refazer.pdf"
-    cfg = ImpositionConfig(
-        base_file="base_ticket.pdf", out_pdf=str(out), formato=FORMATO,
-        numeracao=NUMERACAO, saida=SAIDA, seq_start=SEQ_INICIO, seq_end=SEQ_FIM,
-        seq_increment=1, layout_schema="sequential", refazer_celulas=[2, 4],
-    )
-    ImpositionEngine(cfg).process()
-    assert _numeros_em_ordem_de_leitura(out) == [[2, 4, 6, 8], [10, 12]]
+    assert _impor_para_ordem(tmp_path, refazer_de=1, refazer_ate=3, refazer_celulas=[2, 4]) \
+        == [[2, 4, 6, 8], [10, 12]]
+
+
+def test_as_celulas_entram_na_ordem_digitada(tmp_path):
+    """
+    A ordem da lista e a ordem em que as celulas ocupam a folha. Digitar "4,1"
+    poe o item da celula 4 na primeira posicao e o da celula 1 na segunda.
+
+    Ordenar parecia inofensivo e nao era: com a previa desenhando enquanto se
+    digita, acrescentar um numero menor fazia o anterior saltar de posicao diante
+    do operador — "embaralha tudo", nas palavras dele.
+    """
+    assert _impor_para_ordem(tmp_path, refazer_celulas=[4, 1]) == [[4, 1]]
+    assert _impor_para_ordem(tmp_path, refazer_celulas=[1, 4]) == [[1, 4]]
 
 
 def test_sem_refazer_a_lista_de_celulas_fica_vazia():

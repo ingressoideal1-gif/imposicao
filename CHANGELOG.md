@@ -8,6 +8,39 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v531 — 2026-08-11] — Refazer célula: uma folha por vez, na ordem digitada
+
+Dois erros de comportamento na v529/v530, relatados da produção: *"ao digitar 7,
+vem todas as celulas com o 7, 17, 27, deveria vir apenas a 7. Ao seguir digitando
+novos numeros embaralha tudo"*.
+
+### 1. A célula pertence a UMA folha
+A lista de células estava sendo aplicada a **todas as folhas da tiragem**. Pedir a
+célula 7 devolvia a célula 7 de cada folha — dezenas de tickets onde o operador
+queria um.
+
+Agora, sem faixa em "Refazer Folhas", a origem é a **folha 1**, uma só. Para
+repetir a mesma posição em várias folhas — que é o defeito típico de cilindro
+sujo, sempre no mesmo lugar — marca-se "Refazer Folhas" e a faixa multiplica de
+propósito. O cabeçalho da prévia passou a dizer de onde as células vêm: "3
+item(ns) da folha 1" ou "das folhas 1 a 3".
+
+### 2. A ordem é a digitada, não a crescente
+A lista era ordenada. Com a prévia desenhando a cada tecla, digitar "7" e depois
+"7,3" fazia o 7 **saltar da primeira posição para a segunda** diante do operador —
+o "embaralha tudo". As células ocupam a folha na ordem em que foram digitadas:
+"4,1" põe a célula 4 na primeira posição.
+
+A correção vale nos dois lados. No `engine.py`, `refazer_celulas` deixou de ser
+`sorted(set(...))` e virou `dict.fromkeys(...)` — dedup preservando a ordem — e os
+três laços que iteravam `sorted(r_cels)` passaram a iterar a lista. No frontend,
+`parseRefazerCelulas` deixou de ordenar (o `Set` do JavaScript já preserva a ordem
+de inserção).
+
+> Toca `engine.py` — **o agente precisa ser publicado junto com o site**.
+
+---
+
 ## [v530 — 2026-08-11] — A folha se monta enquanto se digita as células
 
 Marcar "Refazer Célula" agora **esvazia a folha na prévia na hora**, antes de

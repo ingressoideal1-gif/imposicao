@@ -265,9 +265,14 @@ class ImpositionConfig:
         # Células a refazer, 1-based, na mesma numeração de pose que o laço usa
         # (P + 1, leitura da esquerda para a direita e de cima para baixo).
         # Lista vazia = folha inteira.
-        self.refazer_celulas = sorted({
+        #
+        # A ORDEM É A RECEBIDA, não crescente: as células ocupam a folha
+        # compactada na ordem da lista, e ordenar aqui trocaria de lugar o que o
+        # operador viu na prévia enquanto digitava. `dict.fromkeys` tira as
+        # repetidas preservando a ordem de entrada.
+        self.refazer_celulas = list(dict.fromkeys(
             int(c) for c in (refazer_celulas or []) if str(c).strip().isdigit() and int(c) >= 1
-        })
+        ))
         
         if layout_schema == "pdf_multiple":
             # Para Pdf Múltiplo, a quantidade total de itens é baseada na quantidade de páginas
@@ -869,9 +874,20 @@ class ImpositionEngine:
         r_de = int(getattr(cfg, "refazer_de", 0) or 0)
         r_ate = int(getattr(cfg, "refazer_ate", 0) or 0)
         r_set = int(getattr(cfg, "refazer_set", 1) or 1)
-        r_cels = set(getattr(cfg, "refazer_celulas", None) or [])
+        # Lista, não conjunto: a ordem decide qual célula ocupa qual posição na
+        # folha compactada (ver `refazer_celulas` no ImpositionConfig).
+        r_cels = list(getattr(cfg, "refazer_celulas", None) or [])
         if r_de > 0 and r_ate <= 0:
             r_ate = r_de
+        # ─── A CÉLULA PERTENCE A UMA FOLHA ──────────────────────────────────────
+        # Pedir células sem dizer a folha significa a FOLHA 1, não a tiragem
+        # inteira. Sem isso, "célula 7" devolvia a célula 7 de cada folha do
+        # trabalho — dezenas de tickets onde o operador queria um. Para repetir a
+        # mesma posição em várias folhas (cilindro sujo marca sempre no mesmo
+        # lugar), informa-se a faixa e ela multiplica de propósito.
+        if r_cels and r_de <= 0:
+            r_de = 1
+            r_ate = 1
         # Só "Até" preenchido: o frontend já recusa, mas o motor também atende o
         # agente local e a API. Assumir a folha 1 é o único palpite seguro — o
         # contrário (r_de = 0) desliga o filtro e refaz a tiragem inteira.
@@ -995,7 +1011,9 @@ class ImpositionEngine:
                     n_folha = (S_src % stack_size) + 1
                     if n_folha < r_de or n_folha > r_ate:
                         continue
-                for celula in sorted(r_cels):
+                # Na ordem digitada: é ela que decide qual célula ocupa qual
+                # posição na folha compactada.
+                for celula in r_cels:
                     P_src = celula - 1
                     idx = _indice_de_origem(S_src, P_src, P_src // cols, P_src % cols)
                     # A última folha da tiragem costuma ter células vazias: uma
@@ -1348,7 +1366,7 @@ class ImpositionEngine:
                     for sheet_within_set in range(set_def["num_sheets"]):
                         if r_de > 0 and not (r_de <= sheet_within_set + 1 <= r_ate):
                             continue
-                        for celula in sorted(r_cels):
+                        for celula in r_cels:
                             item_data = set_def["cell_allocations"][celula - 1][sheet_within_set]
                             if item_data is not None:
                                 itens.append(item_data)
@@ -2560,7 +2578,7 @@ class ImpositionEngine:
         if r_de > 0:
             alvo.append(f"folhas {r_de}-{r_ate} do set {r_set}")
         if r_cels:
-            alvo.append("celulas " + ",".join(str(c) for c in sorted(r_cels)))
+            alvo.append("celulas " + ",".join(str(c) for c in r_cels))
         raise ValueError(
             "Refazer: nenhuma folha corresponde a " + " e ".join(alvo)
             + ". Confira a faixa e as celulas pedidas."
