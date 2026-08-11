@@ -886,10 +886,6 @@ class ImpositionEngine:
         # avulso para repor o que se perdeu. Capa e contracapa pertencem ao set
         # inteiro e já foram impressas — reimprimi-las é desperdício de papel.
         refazendo = (r_de > 0) or bool(r_cels)
-
-        def _pular_celula(pose_idx):
-            """True quando esta célula fica fora do 'Refazer Célula'."""
-            return bool(r_cels) and (pose_idx + 1) not in r_cels
         # Normalizar rotate_page para ângulo de rotação (0, 90, 180, 270)
         rot_val = getattr(cfg, "rotate_page", 0)
         if isinstance(rot_val, bool):
@@ -951,7 +947,67 @@ class ImpositionEngine:
                 stack_size = total_sheets
         else:
             stack_size = total_sheets
-            
+
+        # ─── REFAZER CÉLULA: OS ITENS SÃO COMPACTADOS ───────────────────────────
+        # Refazer duas células de dez folhas não pode custar dez folhas de papel
+        # com dois tickets cada. Os itens escolhidos são recolhidos na ordem de
+        # leitura (folha, depois célula) e reimpostos preenchendo a folha de saída
+        # célula a célula, sem buraco — dez folhas viram uma.
+        #
+        # A numeração não se move junto: cada item leva o índice que tinha na
+        # tiragem original, e é só a POSIÇÃO na folha que muda. Por isso a lista
+        # guarda `item_index` de origem, e o laço principal apenas o consome.
+        def _indice_de_origem(S, P, row, col):
+            """(folha, célula) da tiragem original -> índice do item.
+
+            É a mesma conta do laço principal, extraída para poder ser usada
+            antes dele. Os dois pontos têm de concordar: se um mudar sem o outro,
+            o refazer passa a repor o ticket errado — `tests/test_engine_refazer.py`
+            compara a folha refeita com a folha da tiragem inteira justamente aí.
+            """
+            if cfg.layout_schema == "cut_stack":
+                if cfg.cut_stack_mode == "strict":
+                    bloco = cfg.sheets_per_block * cfg.block_depth
+                    full_sets = total_sheets // bloco
+                    return ((P * full_sets) + (S // bloco)) * bloco + (S % bloco)
+                if cfg.cut_stack_mode == "strict_assembly":
+                    bloco = cfg.sheets_per_block * cfg.block_depth
+                    full_sets = total_sheets // bloco
+                    if S < full_sets * bloco:
+                        return ((P * full_sets) + (S // bloco)) * bloco + (S % bloco)
+                    S_asm = S - (full_sets * bloco)
+                    asm_sheets = total_sheets - (full_sets * bloco)
+                    return full_sets * bloco * poses_per_sheet + (P * asm_sheets) + S_asm
+                return (P * total_sheets) + S
+            if cfg.layout_schema == "multi_artes":
+                return ((col * rows + row) * total_sheets) + S
+            if cfg.layout_schema == "step_repeat":
+                return S
+            return (S * poses_per_sheet) + P
+
+        empacotando = bool(r_cels)
+        fontes = []
+        if empacotando:
+            for S_src in range(total_sheets):
+                if r_de > 0:
+                    if (S_src // stack_size) + 1 != r_set:
+                        continue
+                    n_folha = (S_src % stack_size) + 1
+                    if n_folha < r_de or n_folha > r_ate:
+                        continue
+                for celula in sorted(r_cels):
+                    P_src = celula - 1
+                    idx = _indice_de_origem(S_src, P_src, P_src // cols, P_src % cols)
+                    # A última folha da tiragem costuma ter células vazias: uma
+                    # célula pedida que caia ali não existe como item e não pode
+                    # ocupar espaço na folha compactada.
+                    if 0 <= idx < cfg.total_items:
+                        fontes.append(idx)
+            total_sheets = math.ceil(len(fontes) / poses_per_sheet) if fontes else 0
+            # Saída compactada é um documento só: sem troca de set, sem capa.
+            stack_size = max(total_sheets, 1)
+            print(f"[engine] refazer celula: {len(fontes)} item(ns) -> {total_sheets} folha(s) compactada(s)")
+
         set_idx_current = -1
         
         is_duplex = (cfg.print_mode == "duplex")
@@ -1280,12 +1336,70 @@ class ImpositionEngine:
             total_sheets = sum(s["num_sheets"] for s in set_definitions)
             print(f"[engine] strict_assembly: total_sheets={total_sheets} partitioned into {len(set_definitions)} sets")
             
+            if empacotando:
+                # Mesma regra do caminho principal, aplicada à alocação por célula
+                # deste esquema: recolher os itens pedidos na ordem de leitura e
+                # reimpô-los preenchendo a folha, sem buraco. A saída é um miolo
+                # só, porque não faz sentido dividir em sets uma reposição avulsa.
+                itens = []
+                for set_idx, set_def in enumerate(set_definitions):
+                    if r_de > 0 and (set_idx + 1) != r_set:
+                        continue
+                    for sheet_within_set in range(set_def["num_sheets"]):
+                        if r_de > 0 and not (r_de <= sheet_within_set + 1 <= r_ate):
+                            continue
+                        for celula in sorted(r_cels):
+                            item_data = set_def["cell_allocations"][celula - 1][sheet_within_set]
+                            if item_data is not None:
+                                itens.append(item_data)
+
+                print(f"[engine] refazer celula (strict_assembly): {len(itens)} item(ns)")
+                doc_out = fitz.open()
+                for inicio in range(0, len(itens), poses_per_sheet):
+                    bloco = itens[inicio:inicio + poses_per_sheet]
+
+                    out_page_front = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+                    if self.rotate_angle > 0:
+                        out_page_front.set_rotation(self.rotate_angle)
+                    for pos, item_data in enumerate(bloco):
+                        self._render_item_front(
+                            out_page_front, item_data, pos // cols, pos % cols, cfg, start_x, start_y
+                        )
+
+                    if is_duplex:
+                        out_page_back = doc_out.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+                        if self.rotate_angle > 0:
+                            out_page_back.set_rotation(self.rotate_angle)
+                        for pos, item_data in enumerate(bloco):
+                            # A coluna física do verso é o espelho da coluna da
+                            # frente; _render_item_back desfaz o espelho para achar
+                            # a rotação da célula, então os dois voltam a casar.
+                            self._render_item_back(
+                                out_page_back, item_data,
+                                pos // cols, cols - 1 - (pos % cols), cfg, start_x, start_y
+                            )
+
+                if len(doc_out) > 0:
+                    out_name = cfg.out_pdf.replace(".pdf", "_02_miolo.pdf")
+                    doc_out.save(out_name, garbage=4, deflate=True)
+                    self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
+                doc_out.close()
+
+                if doc_base:
+                    doc_base.close()
+                for doc in pdf_cache.values():
+                    if doc:
+                        doc.close()
+                self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels)
+                print(f"[engine] strict_assembly: Gerado com sucesso (compactado).")
+                return
+
             for set_idx, set_def in enumerate(set_definitions):
                 if r_de > 0 and (set_idx + 1) != r_set:
                     continue
                 depth = set_def.get("depth", 1)
                 stack_size = cfg.sheets_per_block
-                
+
                 for layer_idx in range(depth):
                     doc_out = fitz.open()
                     
@@ -1311,8 +1425,6 @@ class ImpositionEngine:
                         for row in range(rows):
                             for col in range(cols):
                                 P = row * cols + col
-                                if _pular_celula(P):
-                                    continue
                                 item_data = set_def["cell_allocations"][P][sheet_within_set]
                                 if item_data is not None:
                                     self._render_item_front(out_page_front, item_data, row, col, cfg, start_x, start_y)
@@ -1327,10 +1439,6 @@ class ImpositionEngine:
                                 for col in range(cols):
                                     col_verso = cols - 1 - col
                                     P_frente = row * cols + col_verso
-                                    # A célula é a mesma da frente: filtrar pelo P
-                                    # da frente mantém frente e verso casados.
-                                    if _pular_celula(P_frente):
-                                        continue
                                     item_data = set_def["cell_allocations"][P_frente][sheet_within_set]
                                     if item_data is not None:
                                         self._render_item_back(out_page_back, item_data, row, col, cfg, start_x, start_y)
@@ -1362,8 +1470,11 @@ class ImpositionEngine:
         for S in range(total_sheets):
             set_idx = S // stack_size
             
-            # Se for refazer, filtrar ativamente por set e por faixa de folhas do set
-            if r_de > 0:
+            # Se for refazer, filtrar ativamente por set e por faixa de folhas do
+            # set. Quando se compacta, `S` já é folha de SAÍDA e o filtro de folha
+            # de origem foi aplicado ao montar `fontes` — aplicá-lo de novo aqui
+            # descartaria as folhas compactadas.
+            if r_de > 0 and not empacotando:
                 if (set_idx + 1) != r_set:
                     continue
                 sheet_num_in_set = (S % stack_size) + 1
@@ -1401,10 +1512,16 @@ class ImpositionEngine:
                 for col in range(cols):
                     P = row * cols + col
 
-                    if _pular_celula(P):
-                        continue
-
-                    if cfg.layout_schema == "cut_stack":
+                    if empacotando:
+                        # Folha compactada: esta célula recebe o próximo item da
+                        # lista, não o item que a conta de esquema daria. A conta
+                        # de esquema já rodou em _indice_de_origem, ao montar a
+                        # lista — aqui só se consome, em ordem.
+                        k = S * poses_per_sheet + P
+                        if k >= len(fontes):
+                            continue
+                        item_index = fontes[k]
+                    elif cfg.layout_schema == "cut_stack":
                         if cfg.cut_stack_mode == "strict":
                             stack_size = cfg.sheets_per_block * cfg.block_depth
                             full_sets = total_sheets // stack_size
@@ -1643,12 +1760,16 @@ class ImpositionEngine:
                     for col in range(cols):
                         P = row * cols + col
 
-                        # Mesma célula da frente (a coluna física vira col_verso
-                        # mais abaixo): frente e verso saem ou ficam juntos.
-                        if _pular_celula(P):
-                            continue
-
-                        if cfg.layout_schema == "cut_stack":
+                        if empacotando:
+                            # O MESMO índice que a frente usou nesta célula — a
+                            # coluna física vira col_verso mais abaixo. Ler a
+                            # lista com o mesmo `k` é o que mantém frente e verso
+                            # casados na folha compactada.
+                            k = S * poses_per_sheet + P
+                            if k >= len(fontes):
+                                continue
+                            item_index = fontes[k]
+                        elif cfg.layout_schema == "cut_stack":
                             if cfg.cut_stack_mode == "strict":
                                 stack_size = cfg.sheets_per_block * cfg.block_depth
                                 set_index = S // stack_size

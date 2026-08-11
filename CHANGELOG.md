@@ -8,6 +8,56 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v529 — 2026-08-11] — Refazer célula compacta os itens na folha
+
+### O que mudou desde a v528
+Na v528, refazer as células 2 e 5 de dez folhas devolvia **dez folhas** com dois
+tickets cada e o resto em branco. Numa gráfica isso é papel jogado fora: a
+reposição de vinte tickets custava dez folhas.
+
+Agora os itens escolhidos são **recolhidos e reimpostos preenchendo a folha,
+célula a célula, sem buraco**. Vinte tickets numa folha de seis células viram
+quatro folhas — a última com as células vagas marcadas na prévia.
+
+### A ordem
+Ordem de leitura: **folha, depois célula**. As células 2 e 5 das folhas 1 a 3
+saem na sequência f1·c2, f1·c5, f2·c2, f2·c5, f3·c2, f3·c5, ocupando as células
+1 a 6 da folha de saída.
+
+### O que não muda
+**A numeração.** O item troca de lugar na folha, nunca de número: o que estava na
+célula 5 da folha 2 pode cair na célula 1 da folha compactada, e continua sendo o
+mesmo ticket. É a propriedade que `tests/test_engine_refazer.py` trava — inclusive
+comparando a ordem física em que os números aparecem na folha, lida pelas
+coordenadas do texto no PDF.
+
+Células da última folha da tiragem que não existem como item (a tiragem raramente
+fecha redonda) não entram e não ocupam espaço.
+
+### Onde isso mora
+A conta de "(folha, célula) da tiragem → índice do item" foi extraída para
+`_indice_de_origem`, no `engine.py`, e a lista `fontes` é consumida pelo laço
+principal, que passou a só ler dela quando se compacta. O `strict_assembly` tem o
+seu próprio caminho, sobre `cell_allocations`. **Os dois lugares que fazem essa
+conta — motor e prévia — têm de concordar**; se um mudar sem o outro, o refazer
+repõe o ticket errado, e é exatamente aí que `test_cut_stack_refazer_celula_compacta_a_coluna`
+morde.
+
+### A prévia mostra a folha compactada
+Não a folha original com buracos — senão a tela contaria uma história e o papel,
+outra. Cada célula ganha o rótulo da origem (`f2·c5`) no canto inferior, em verde,
+e as células vagas do fim recebem o véu. O cabeçalho diz "Folha 1 de 2 ·
+compactada · 8 item(ns) de 4 folha(s)".
+
+Um detalhe que engana: **"De/Até" continua contando folhas da TIRAGEM**, não da
+saída compactada. Por isso o total usado na validação é guardado antes da
+compactação. Com células ligadas, digitar em "De:" leva a prévia para a primeira
+folha compactada, porque a folha 7 da tiragem deixou de ser uma página da saída.
+
+> Toca `engine.py` — **o agente precisa ser publicado junto com o site**.
+
+---
+
 ## [v528 — 2026-08-11] — Refazer folhas: os freios que faltavam, e refazer célula
 
 ### O que o recurso é

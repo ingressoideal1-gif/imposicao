@@ -851,13 +851,105 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     // ─── O QUE A CAIXA "REFAZER" PRECISA SABER ─────────────────────────────────
     // Os campos De/Até contam folhas DENTRO DO SET, e o campo de células conta
-    // poses da folha. Sem esses dois totais os inputs aceitam qualquer número, e
-    // uma faixa fora do intervalo gera um PDF vazio sem que ninguém perceba.
+    // poses da folha. Guardar o total ANTES da compactação é essencial: uma vez
+    // compactada, a prévia passa a mostrar folhas de saída, e validar "De: 7"
+    // contra elas recusaria uma folha de origem que existe.
     window.pedRefazerTotalFolhas = visible_sheets;
     window.pedRefazerTotalCelulas = poses_per_sheet;
     if (typeof sincronizarLimitesRefazer === 'function') sincronizarLimitesRefazer();
 
-    const folhaLabel = sets_needed > 1 ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}` : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
+    // ─── REFAZER CÉLULA: A PRÉVIA MOSTRA A FOLHA COMPACTADA ────────────────────
+    // O motor recolhe os itens pedidos e os reimpõe preenchendo a folha, célula a
+    // célula (ver `_indice_de_origem` e o laço de `fontes` no engine.py). A prévia
+    // repete a mesma conta com a mesma ordem — folha, depois célula — porque uma
+    // prévia que mostrasse a folha original com buracos estaria contando uma
+    // história diferente da do papel.
+    const refazerCels = typeof getRefazerCelulasSelecionadas === 'function'
+        ? getRefazerCelulasSelecionadas()
+        : null;
+
+    // (local_S, P) da tiragem original -> o item que mora ali. É a mesma conta que
+    // o laço abaixo faz; as duas têm de concordar, senão a prévia mostra um número
+    // e o papel sai com outro.
+    // `total_sheets` é reatribuído logo abaixo quando se compacta; a conta de
+    // origem tem de continuar usando a contagem da tiragem, não a da saída.
+    const totalFolhasOrigem = total_sheets;
+    const indiceDeOrigem = (local_S, P) => {
+        const row_o = Math.floor(P / cols);
+        const col_o = P % cols;
+        let S = local_S;
+        if (is_strict_mode && !window.currentAssemblySets) {
+            S = ((currentSet - 1) * stack_size) + local_S;
+        }
+        let idx = (S * poses_per_sheet) + P;
+        let local_idx, arte_idx;
+
+        if (schema === "cut_stack" || schema === "multi_artes") {
+            const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
+            if (cutstackMode === 'strict' && !window.currentAssemblySets) {
+                const full_sets = Math.floor(totalFolhasOrigem / stack_size);
+                idx = ((P * full_sets) + Math.floor(S / stack_size)) * stack_size + (S % stack_size);
+            } else if ((cutstackMode === 'strict_assembly' || schema === "multi_artes") && window.currentAssemblySets) {
+                const set_def = window.currentAssemblySets[currentSet - 1];
+                const item_data = set_def?.cell_allocations?.[P]?.[local_S];
+                if (item_data) {
+                    idx = item_data.global_index;
+                    local_idx = item_data.local_index;
+                    arte_idx = item_data.arte_index;
+                } else {
+                    idx = total_items;
+                }
+            } else if (schema === "multi_artes") {
+                idx = ((col_o * rows + row_o) * totalFolhasOrigem) + S;
+            } else if (cutstackMode === 'strict_assembly') {
+                const full_sets = Math.floor(totalFolhasOrigem / stack_size);
+                if (S < full_sets * stack_size) {
+                    idx = ((P * full_sets) + Math.floor(S / stack_size)) * stack_size + (S % stack_size);
+                } else {
+                    const S_asm = S - (full_sets * stack_size);
+                    const asm_sheets = totalFolhasOrigem - (full_sets * stack_size);
+                    idx = full_sets * stack_size * poses_per_sheet + (P * asm_sheets) + S_asm;
+                }
+            } else {
+                idx = (P * totalFolhasOrigem) + S;
+            }
+        } else if (schema === "step_repeat") {
+            idx = S;
+        }
+
+        return { item_index: idx, item_local_index: local_idx, item_arte_index: arte_idx };
+    };
+
+    let fontesRefazer = null;
+    const folhasOriginais = visible_sheets;
+    if (refazerCels) {
+        const usaFaixa = typeof refazerFolhasAtivo === 'function' && refazerFolhasAtivo();
+        const de = parseInt(document.getElementById('ped-refazer-de')?.value) || 0;
+        const ateBruto = parseInt(document.getElementById('ped-refazer-ate')?.value) || 0;
+        const ate = ateBruto >= de ? ateBruto : de;
+
+        fontesRefazer = [];
+        for (let s = 0; s < folhasOriginais; s++) {
+            if (usaFaixa && de > 0 && (s + 1 < de || s + 1 > ate)) continue;
+            for (const celula of refazerCels) {
+                const fonte = indiceDeOrigem(s, celula - 1);
+                // Célula vazia da última folha não existe como item e não pode
+                // ocupar espaço na folha compactada — igual ao engine.
+                if (fonte.item_index < total_items) {
+                    fontesRefazer.push({ ...fonte, folha: s + 1, celula });
+                }
+            }
+        }
+        visible_sheets = Math.ceil(fontesRefazer.length / poses_per_sheet);
+        total_sheets = visible_sheets;
+    }
+
+    const folhaBase = sets_needed > 1 || refazerCels
+        ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}`
+        : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
+    const folhaLabel = refazerCels
+        ? `${folhaBase} · compactada · ${fontesRefazer.length} item(ns) de ${folhasOriginais} folha(s)`
+        : folhaBase;
     // Em Pdf Paginado a quantidade sai do ARQUIVO, não do pedido: o engine faz
     // total_items = nº de páginas (metade em duplex). Dizer isso no cabeçalho é o que
     // permite ao operador conferir a conta sem abrir o PDF.
@@ -872,12 +964,29 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
     // Quantos elementos de numeração cada pose pintou nesta passada (ver o aviso no fim)
     const posesDesenhadas = [];
 
-    // Células escolhidas em "Refazer Célula" (null = todas). As que ficarem de
-    // fora continuam sendo desenhadas e depois recebem um véu: o operador precisa
-    // ver a folha inteira para conferir que escolheu as células certas.
-    const refazerCels = typeof getRefazerCelulasSelecionadas === 'function'
-        ? getRefazerCelulasSelecionadas()
-        : null;
+    // Célula de saída sem item: acontece no fim da última folha compactada, quando
+    // a conta não fecha redondo. Fica marcada para que ninguém leia a folha como
+    // se tivesse mais itens do que tem.
+    const desenharCelulaVazia = (row, col) => {
+        const col_f = isBack ? (cols - 1 - col) : col;
+        const x = (start_x + col_f * (item_w + gap_h)) * scale;
+        const y = (start_y + row * (item_h + gap_v)) * scale;
+        const w = item_w * scale;
+        const h = item_h * scale;
+        ctx.save();
+        ctx.fillStyle = 'rgba(15,23,42,0.72)';
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = 'rgba(148,163,184,0.45)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, w, h);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + w, y + h);
+        ctx.moveTo(x + w, y);
+        ctx.lineTo(x, y + h);
+        ctx.stroke();
+        ctx.restore();
+    };
 
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -893,7 +1002,24 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             }
 
             let item_index = (S * poses_per_sheet) + P;
-            if (schema === "cut_stack" || schema === "multi_artes") {
+            // Origem desta célula quando a folha é compactada — usada só para o
+            // rótulo, mas é o dado que deixa o operador conferir de onde veio cada
+            // item ("f2·c5" = célula 5 da folha 2 da tiragem).
+            let origemDaCelula = null;
+
+            if (fontesRefazer) {
+                // Folha compactada: esta célula recebe o próximo item da lista, na
+                // ordem de leitura. A conta de esquema já rodou em indiceDeOrigem.
+                const fonte = fontesRefazer[(local_S * poses_per_sheet) + P];
+                if (!fonte) {
+                    desenharCelulaVazia(row, col);
+                    continue;
+                }
+                item_index = fonte.item_index;
+                item_local_index = fonte.item_local_index;
+                item_arte_index = fonte.item_arte_index;
+                origemDaCelula = fonte;
+            } else if (schema === "cut_stack" || schema === "multi_artes") {
                 const cutstackMode = document.getElementById('ped-cutstack-mode')?.value || 'independent';
                 if (cutstackMode === 'strict' && !window.currentAssemblySets) {
                     const full_sets = Math.floor(total_sheets / stack_size);
@@ -2048,41 +2174,29 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             ctx.restore();
         }
 
-        // ─── VÉU DAS CÉLULAS FORA DO "REFAZER CÉLULA" ──────────────────────────
+        // ─── DE ONDE VEIO ESTA CÉLULA (FOLHA COMPACTADA) ───────────────────────
+        // Na folha compactada o item mudou de lugar: o que estava na célula 5 da
+        // folha 2 pode cair na célula 1. Sem dizer a origem, o operador não tem
+        // como conferir que pediu as células certas — e a numeração, que é a
+        // mesma da tiragem, não denuncia a troca de posição.
+        //
         // Anotação de tela, como o rótulo de página acima: desenhada depois de
         // fecharGrupo(), fora do grupo arte+numeração, para não multiplicar sobre
-        // a cor. Estas células saem em branco no papel — o véu é o que faz a
-        // prévia contar a mesma história que o PDF vai contar.
-        if (refazerCels && !refazerCels.includes(P + 1)) {
+        // a cor nem entrar no PDF.
+        if (origemDaCelula) {
             ctx.save();
-            ctx.fillStyle = 'rgba(15,23,42,0.72)';
-            ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
-            ctx.strokeStyle = 'rgba(248,113,113,0.55)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(-cw / 2, -ch / 2);
-            ctx.lineTo(cw / 2, ch / 2);
-            ctx.moveTo(cw / 2, -ch / 2);
-            ctx.lineTo(-cw / 2, ch / 2);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        // Número da célula, para que o operador saiba o que digitar no campo.
-        // Só aparece enquanto "Refazer Célula" está ligado — fora disso seria
-        // ruído sobre a arte.
-        if (refazerCels) {
-            const selecionada = refazerCels.includes(P + 1);
-            ctx.save();
-            const fsCel = Math.max(9, Math.round(ch * 0.11));
-            ctx.font = `800 ${fsCel}px Inter, sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.lineWidth = Math.max(2, fsCel * 0.3);
-            ctx.strokeStyle = 'rgba(15,23,42,0.85)';
-            ctx.strokeText(String(P + 1), 0, 0);
-            ctx.fillStyle = selecionada ? '#34d399' : 'rgba(248,113,113,0.9)';
-            ctx.fillText(String(P + 1), 0, 0);
+            const fsOrig = Math.max(6, Math.round(ch * 0.055));
+            ctx.font = `700 ${fsOrig}px Inter, sans-serif`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            const rotulo = `f${origemDaCelula.folha}·c${origemDaCelula.celula}`;
+            const ox = -cw / 2 + fsOrig * 0.4;
+            const oy = ch / 2 - fsOrig * 0.4;
+            ctx.lineWidth = Math.max(2, fsOrig * 0.32);
+            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+            ctx.strokeText(rotulo, ox, oy);
+            ctx.fillStyle = '#059669';
+            ctx.fillText(rotulo, ox, oy);
             ctx.restore();
         }
 
@@ -2294,12 +2408,27 @@ function irParaFolhaRefazer() {
         setPreview.value = setRefazer.value;
     }
 
+    if (refazerCelulasAtivo()) {
+        // Com células, a prévia mostra a folha COMPACTADA — a folha 7 da tiragem
+        // não é mais uma página da saída, é um punhado de itens espalhados nela.
+        // Ir para a página 1 é a única leitura honesta.
+        irParaPrimeiraFolhaDaPrevia();
+        return;
+    }
+
     const total = window.pedRefazerTotalFolhas || 0;
     window.currentPreviewPage = (total && de > total) ? total : de;
 
     const pageInput = document.getElementById('ped-preview-page-input');
     if (pageInput) pageInput.value = window.currentPreviewPage;
 
+    drawPedPreview();
+}
+
+function irParaPrimeiraFolhaDaPrevia() {
+    window.currentPreviewPage = 1;
+    const pageInput = document.getElementById('ped-preview-page-input');
+    if (pageInput) pageInput.value = 1;
     drawPedPreview();
 }
 
@@ -2317,7 +2446,10 @@ window.onRefazerToggle = function() {
     const acoes = document.getElementById('ped-refazer-acoes');
     if (acoes) acoes.style.display = (marcadoFolhas || marcadoCels) ? 'flex' : 'none';
 
-    if (marcadoFolhas) irParaFolhaRefazer();
+    // Ligar ou desligar as células troca o que a prévia é (folha da tiragem x
+    // folha compactada), então a contagem de páginas muda embaixo do operador.
+    if (marcadoCels) irParaPrimeiraFolhaDaPrevia();
+    else if (marcadoFolhas) irParaFolhaRefazer();
     else drawPedPreview();
 };
 
@@ -2326,7 +2458,9 @@ window.onRefazerFolhaChange = function() {
 };
 
 window.onRefazerCelulaChange = function() {
-    drawPedPreview();
+    // Mudar as células muda quantas folhas compactadas existem; ficar na página 3
+    // de uma saída que agora tem uma só confunde mais do que ajuda.
+    irParaPrimeiraFolhaDaPrevia();
 };
 
 // Trocar de modelo tem de zerar a caixa: uma faixa de folhas do pedido anterior
