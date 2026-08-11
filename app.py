@@ -1250,7 +1250,11 @@ async def listar_acessos_locais_endpoint():
 @app.post("/api/acessos-locais")
 async def salvar_acesso_local_endpoint(request: Request):
     data = await request.json()
-    acesso = db.salvar_acesso_local(data)
+    try:
+        acesso = db.salvar_acesso_local(data)
+    except db.CodigoInvalido as e:
+        # 400 e nao 500: quem digitou o codigo precisa ler o motivo na tela.
+        raise HTTPException(status_code=400, detail=str(e))
     if not acesso:
         raise HTTPException(status_code=500, detail="Nao foi possivel salvar o acesso local")
     return {"ok": True, "acesso": acesso}
@@ -1284,7 +1288,8 @@ async def login_local(request: Request):
     return {
         "ok": True,
         "nome": acesso.get("nome") or "Operador",
-        "is_admin": bool(acesso.get("is_admin")),
+        "role": acesso.get("role") or "",
+        "permissoes": acesso.get("permissoes") or {},
     }
 
 # ─── DISPARO DE E-MAILS & CONFIGURAÇÕES SMTP ─────────────────────────────────

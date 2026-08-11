@@ -11493,20 +11493,26 @@ async function iniciarAcessoLocal(liberarUICompleta) {
 /**
  * Permissões de um operador local.
  *
- * Tudo liberado, menos a área de administração para quem não é admin — sem isso,
- * qualquer operador leria na própria estação os códigos de todos os colegas.
- * As chaves saem dos mapas de permissão em vez de ROLE_DEFAULTS: os mapas são a
- * lista completa do que existe, e uma chave faltando aqui esconderia um menu que
- * o operador usa todo dia.
+ * São as mesmas permissões por módulo dos usuários do sistema, cadastradas no
+ * Menu Usuários e sincronizadas com a estação. O `role` só decide o rótulo na
+ * barra lateral; quem manda é a grade.
+ *
+ * Sem grade nenhuma — acesso criado antes das permissões existirem, ou estação
+ * com cópia antiga — vale tudo menos a área de administração. Trancar o operador
+ * para fora do trabalho dele por causa de um campo vazio seria pior; esconder o
+ * Menu Usuários é obrigatório de todo jeito, porque é lá que estão os códigos de
+ * todos os colegas.
  */
-function permsDoOperadorLocal(isAdmin) {
+function permsDoOperadorLocal(permissoes) {
+    if (permissoes && Object.keys(permissoes).length) return { ...permissoes };
+
     const perms = {};
     for (const key of Object.keys(PERM_VIEW_MAP)) perms[key] = true;
     for (const key of Object.keys(PERM_NAV_MAP)) perms[key] = true;
     perms.perm_gerar_pdf = true;
     perms.perm_imprimir = true;
-    perms.perm_admin_view = !!isAdmin;
-    perms.perm_admin_edit = !!isAdmin;
+    perms.perm_admin_view = false;
+    perms.perm_admin_edit = false;
     return perms;
 }
 
@@ -11514,7 +11520,7 @@ function aplicarAcessoLocal(sessao, liberarUICompleta) {
     window._acessoLocal = sessao;
     liberarUICompleta();
 
-    const perms = permsDoOperadorLocal(sessao.is_admin);
+    const perms = permsDoOperadorLocal(sessao.permissoes);
     window._currentPerms = perms;
     applyPermissions(perms);
 
@@ -11522,8 +11528,9 @@ function aplicarAcessoLocal(sessao, liberarUICompleta) {
     const emailDisplay = document.getElementById('user-email-display');
     if (profileBar) profileBar.style.display = 'block';
     if (emailDisplay) {
-        const selo = sessao.is_admin
-            ? '<span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#f87171;padding:1px 6px;border-radius:10px;margin-left:4px;">ADMIN</span>'
+        const rl = ROLE_LABELS[sessao.role] || {};
+        const selo = rl.label
+            ? `<span style="font-size:0.65rem;background:${rl.color}22;color:${rl.color};padding:1px 6px;border-radius:10px;margin-left:4px;">${rl.label.toUpperCase()}</span>`
             : '';
         emailDisplay.innerHTML = `🖥️ ${escapeHtml(sessao.nome)}${selo}`;
     }
@@ -11589,7 +11596,7 @@ window.handleLoginLocal = async function(e) {
         if (!resp.ok) throw new Error('Código inválido');
         const data = await resp.json();
 
-        const sessao = { nome: data.nome, is_admin: !!data.is_admin };
+        const sessao = { nome: data.nome, role: data.role || '', permissoes: data.permissoes || {} };
         // sessionStorage e não localStorage: fechou o navegador, pede de novo. Numa
         // estação compartilhada, a sessão não pode sobreviver ao turno.
         sessionStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(sessao));
@@ -11701,6 +11708,55 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ──────────────────────────────────────────────────────────────────────────
 
+/**
+ * A grade de ver/editar por módulo, mais as ações.
+ *
+ * Uma função só para os dois cards desta tela — usuários do sistema e acessos
+ * locais do NewProd. São a MESMA lista de permissões, e duas cópias do mesmo
+ * HTML acabariam divergindo no dia em que um módulo novo entrasse no menu.
+ *
+ * `handler` é o nome da função global chamada a cada clique, porque cada card
+ * grava num lugar diferente: toggleUserPerm vai para o Supabase por user_id,
+ * toggleAcessoLocalPerm regrava o objeto de permissões do acesso local.
+ */
+function renderGradePermissoes(perms, handler, id) {
+    const p = perms || {};
+    const alvo = escapeJsAttr(id);
+
+    const linhasModulo = PERM_MODULES.map(m => {
+        const vKey = `perm_${m.key}_view`;
+        const eKey = `perm_${m.key}_edit`;
+        return `<div style="display:contents;">
+            <span style="font-size:0.7rem;white-space:nowrap;color:var(--text-dim);">${m.icon} ${m.label}</span>
+            <label style="text-align:center;cursor:pointer;"><input type="checkbox" ${p[vKey] === true ? 'checked' : ''} onchange="${handler}('${alvo}','${vKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"></label>
+            <label style="text-align:center;cursor:pointer;"><input type="checkbox" ${p[eKey] === true ? 'checked' : ''} onchange="${handler}('${alvo}','${eKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"></label>
+        </div>`;
+    }).join('');
+
+    const linhasAcao = PERM_ACTIONS.map(a => {
+        const aKey = `perm_${a.key}`;
+        return `<div style="display:contents;">
+            <span style="font-size:0.7rem;white-space:nowrap;color:var(--text-dim);">${a.icon} ${a.label}</span>
+            <label style="text-align:center;cursor:pointer;grid-column:span 2;"><input type="checkbox" ${p[aKey] === true ? 'checked' : ''} onchange="${handler}('${alvo}','${aKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"> Sim</label>
+        </div>`;
+    }).join('');
+
+    // max-width: sem ela o `auto` da primeira coluna estica com a tabela e as
+    // caixas de marcar acabam a meia tela do nome do módulo a que pertencem.
+    return `
+        <div style="display:grid;grid-template-columns:1fr 30px 30px;gap:2px 6px;align-items:center;max-width:260px;">
+            <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-transform:uppercase;">Módulo</span>
+            <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-align:center;" title="Visualizar">👁️</span>
+            <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-align:center;" title="Editar">✏️</span>
+            ${linhasModulo}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 66px;gap:2px 6px;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);max-width:260px;">
+            <span style="font-size:0.62rem;font-weight:700;color:#f59e0b;text-transform:uppercase;grid-column:span 2;">Ações</span>
+            ${linhasAcao}
+        </div>`;
+}
+
+
 window.loadAdminUsers = async function() {
     const tbody = document.getElementById('tbody-admin-users');
     if (!tbody) return;
@@ -11767,41 +11823,9 @@ window.loadAdminUsers = async function() {
                 </button>`;
 
             // Grid de permissões View/Edit por módulo
-            let permGrid = '—';
-            if (hasAccess) {
-                const moduleRows = PERM_MODULES.map(m => {
-                    const vKey = `perm_${m.key}_view`;
-                    const eKey = `perm_${m.key}_edit`;
-                    const vChecked = perms[vKey] === true ? 'checked' : '';
-                    const eChecked = perms[eKey] === true ? 'checked' : '';
-                    return `<div style="display:contents;">
-                        <span style="font-size:0.7rem;white-space:nowrap;color:var(--text-dim);">${m.icon} ${m.label}</span>
-                        <label style="text-align:center;cursor:pointer;"><input type="checkbox" ${vChecked} onchange="toggleUserPerm('${userId}','${vKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"></label>
-                        <label style="text-align:center;cursor:pointer;"><input type="checkbox" ${eChecked} onchange="toggleUserPerm('${userId}','${eKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"></label>
-                    </div>`;
-                }).join('');
-
-                const actionRows = PERM_ACTIONS.map(a => {
-                    const aKey = `perm_${a.key}`;
-                    const aChecked = perms[aKey] === true ? 'checked' : '';
-                    return `<div style="display:contents;">
-                        <span style="font-size:0.7rem;white-space:nowrap;color:var(--text-dim);">${a.icon} ${a.label}</span>
-                        <label style="text-align:center;cursor:pointer;grid-column:span 2;"><input type="checkbox" ${aChecked} onchange="toggleUserPerm('${userId}','${aKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"> Sim</label>
-                    </div>`;
-                }).join('');
-
-                permGrid = `
-                    <div style="display:grid;grid-template-columns:auto 30px 30px;gap:2px 6px;align-items:center;">
-                        <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-transform:uppercase;">Módulo</span>
-                        <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-align:center;" title="Visualizar">👁️</span>
-                        <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-align:center;" title="Editar">✏️</span>
-                        ${moduleRows}
-                    </div>
-                    <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 6px;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">
-                        <span style="font-size:0.62rem;font-weight:700;color:#f59e0b;text-transform:uppercase;grid-column:span 2;">Ações</span>
-                        ${actionRows}
-                    </div>`;
-            }
+            const permGrid = hasAccess
+                ? renderGradePermissoes(perms, 'toggleUserPerm', userId)
+                : '—';
 
             return `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);${!hasAccess ? 'opacity:0.55;' : ''}">
@@ -11891,6 +11915,14 @@ document.getElementById('nav-admin')?.addEventListener('click', () => {
 // perdeu o código, gera outro.
 // ══════════════════════════════════════════════════════════════════════════
 
+// A lista que está na tela. Guardada porque `permissoes` é um objeto único no
+// banco: marcar uma caixa exige reenviar o objeto inteiro, e relê-lo do servidor
+// a cada clique deixaria a grade lenta e piscando.
+let _acessosLocais = [];
+
+const CODIGO_ACESSO_TAMANHO = 6;
+const CODIGO_ACESSO_REGEX = /^[A-Z0-9]{6}$/;
+
 window.loadAcessosLocais = async function() {
     const tbody = document.getElementById('tbody-acessos-locais');
     if (!tbody) return;
@@ -11899,37 +11931,52 @@ window.loadAcessosLocais = async function() {
     try {
         const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`);
         const data = await resp.json();
-        const acessos = (data.ok && data.acessos) ? data.acessos : [];
+        _acessosLocais = (data.ok && data.acessos) ? data.acessos : [];
 
-        if (!acessos.length) {
+        if (!_acessosLocais.length) {
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px;">
                 Nenhum acesso local cadastrado — a estação continua entrando sem código.
             </td></tr>`;
             return;
         }
 
-        tbody.innerHTML = acessos.map(a => {
+        tbody.innerHTML = _acessosLocais.map(a => {
             const inativo = a.ativo === false;
+            const id = escapeJsAttr(a.id);
+            const rl = ROLE_LABELS[a.role] || {};
+
+            const opcoesPerfil = Object.entries(ROLE_LABELS).map(([k, v]) =>
+                `<option value="${k}" ${a.role === k ? 'selected' : ''}>${v.icon} ${v.label}</option>`
+            ).join('');
+
             return `
             <tr style="border-bottom:1px solid rgba(255,255,255,0.05);${inativo ? 'opacity:0.5;' : ''}">
-                <td style="padding:10px 12px;">
+                <td style="padding:10px 12px;vertical-align:top;">
                     <strong style="color:#fff;font-size:0.88rem;">${escapeHtml(a.nome || '—')}</strong>
+                    <br>
+                    <label style="font-size:0.72rem;color:var(--text-dim);cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-top:6px;">
+                        <input type="checkbox" ${inativo ? '' : 'checked'} style="cursor:pointer;width:13px;height:13px;"
+                               onchange="salvarCampoAcessoLocal('${id}','ativo',this.checked)"> Ativo
+                    </label>
                 </td>
-                <td style="padding:10px 12px;">
+                <td style="padding:10px 12px;vertical-align:top;">
                     <span style="font-family:ui-monospace,Consolas,monospace;font-size:1rem;font-weight:700;letter-spacing:2px;color:var(--blue);">${escapeHtml(a.codigo || '')}</span>
-                    <button class="btn btn-ghost btn-sm" title="Copiar código" onclick="copiarCodigoAcesso('${escapeJsAttr(a.codigo || '')}')" style="padding:2px 6px;margin-left:6px;">📋</button>
+                    <button class="btn btn-ghost btn-sm" title="Copiar código" onclick="copiarCodigoAcesso('${escapeJsAttr(a.codigo || '')}')" style="padding:2px 6px;margin-left:4px;">📋</button>
+                    <br>
+                    <button class="btn btn-secondary btn-sm" title="Trocar o código" onclick="trocarCodigoAcesso('${id}')" style="font-size:0.72rem;padding:2px 8px;margin-top:6px;">✏️ Trocar</button>
                 </td>
-                <td style="padding:10px 12px;text-align:center;">
-                    <input type="checkbox" ${a.is_admin ? 'checked' : ''} style="cursor:pointer;width:15px;height:15px;"
-                           onchange="salvarCampoAcessoLocal('${escapeJsAttr(a.id)}','is_admin',this.checked)">
+                <td style="padding:10px 12px;vertical-align:top;">
+                    <span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;padding:2px 8px;border-radius:12px;background:${rl.color || '#6b7280'}22;color:${rl.color || '#6b7280'};font-weight:600;">${rl.icon || ''} ${rl.label || a.role || '—'}</span>
+                    <br>
+                    <select class="form-control" style="width:auto;display:inline-block;padding:3px 6px;font-size:0.78rem;height:28px;margin-top:6px;" onchange="mudarPerfilAcessoLocal('${id}', this.value)">
+                        ${opcoesPerfil}
+                    </select>
                 </td>
-                <td style="padding:10px 12px;text-align:center;">
-                    <input type="checkbox" ${inativo ? '' : 'checked'} style="cursor:pointer;width:15px;height:15px;"
-                           onchange="salvarCampoAcessoLocal('${escapeJsAttr(a.id)}','ativo',this.checked)">
+                <td style="padding:10px 12px;vertical-align:top;">
+                    ${renderGradePermissoes(a.permissoes, 'toggleAcessoLocalPerm', a.id)}
                 </td>
-                <td style="padding:10px 12px;text-align:right;white-space:nowrap;">
-                    <button class="btn btn-secondary btn-sm" title="Gerar um código novo" onclick="gerarNovoCodigoAcesso('${escapeJsAttr(a.id)}')" style="font-size:0.75rem;padding:3px 8px;">🎲 Novo código</button>
-                    <button class="btn btn-ghost btn-sm btn-danger" title="Excluir" onclick="excluirAcessoLocal('${escapeJsAttr(a.id)}','${escapeJsAttr(a.nome || '')}')" style="font-size:0.75rem;padding:3px 8px;">🗑️</button>
+                <td style="padding:10px 12px;vertical-align:top;text-align:right;">
+                    <button class="btn btn-ghost btn-sm btn-danger" title="Excluir" onclick="excluirAcessoLocal('${id}','${escapeJsAttr(a.nome || '')}')" style="font-size:0.75rem;padding:3px 8px;">🗑️</button>
                 </td>
             </tr>`;
         }).join('');
@@ -11938,59 +11985,121 @@ window.loadAcessosLocais = async function() {
     }
 };
 
-// O código sai pronto do motor: o alfabeto sem O/0/I/1 e a conferência de
-// duplicidade moram lá, num lugar só, porque é ele quem grava.
+/**
+ * Envia um acesso local ao motor e devolve o registro gravado.
+ *
+ * O motor responde 400 com o motivo quando o código não serve — código repetido,
+ * tamanho errado, caractere fora de letras e números. Mostrar esse texto é o que
+ * separa "não deu certo" de "esse código já é de outro operador".
+ */
+async function salvarAcessoLocalNoMotor(payload) {
+    const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+        throw new Error(data.detail || 'o motor não confirmou a gravação');
+    }
+    return data.acesso;
+}
+
+// Conferência local antes de ir ao motor: o administrador corrige na hora, sem
+// esperar a ida e volta. O motor confere de novo — é ele quem grava.
+function pedirCodigoAcesso(titulo, atual = '') {
+    const bruto = prompt(`${titulo}\n\n${CODIGO_ACESSO_TAMANHO} caracteres, letras e números (ex: NEW123).`, atual);
+    if (bruto === null) return null;
+    const codigo = bruto.replace(/\s+/g, '').toUpperCase();
+    if (!CODIGO_ACESSO_REGEX.test(codigo)) {
+        toast(`O código precisa ter ${CODIGO_ACESSO_TAMANHO} caracteres, só letras e números.`, 'error');
+        return null;
+    }
+    return codigo;
+}
+
 window.novoAcessoLocal = async function() {
     const nome = prompt('Nome do operador que vai usar este acesso:');
     if (!nome || !nome.trim()) return;
+
+    const codigo = pedirCodigoAcesso(`Código de acesso de ${nome.trim()}:`);
+    if (!codigo) return;
+
     try {
-        const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nome: nome.trim(), is_admin: false, ativo: true })
+        const acesso = await salvarAcessoLocalNoMotor({
+            nome: nome.trim(),
+            codigo,
+            ativo: true,
+            role: 'visualizador',
+            permissoes: { ...ROLE_DEFAULTS.visualizador },
         });
-        const data = await resp.json();
-        if (!data.ok) throw new Error('o motor não confirmou a gravação');
-        toast(`Acesso criado — código ${data.acesso.codigo}`, 'success');
+        toast(`Acesso criado — código ${acesso.codigo}`, 'success');
         loadAcessosLocais();
     } catch (e) {
         toast('Erro ao criar acesso: ' + e.message, 'error');
     }
 };
 
+window.trocarCodigoAcesso = async function(id) {
+    const acesso = _acessosLocais.find(a => a.id === id);
+    const codigo = pedirCodigoAcesso(`Código novo para ${acesso?.nome || 'este operador'}:`, acesso?.codigo || '');
+    if (!codigo) return;
+    try {
+        await salvarAcessoLocalNoMotor({ id, codigo });
+        toast(`Código trocado para ${codigo} — o antigo não vale mais`, 'success');
+        loadAcessosLocais();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+};
+
 window.salvarCampoAcessoLocal = async function(id, campo, valor) {
     try {
-        const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, [campo]: valor })
-        });
-        const data = await resp.json();
-        if (!data.ok) throw new Error('o motor não confirmou a gravação');
-        toast(campo === 'ativo'
-            ? (valor ? 'Acesso ativado' : 'Acesso desativado')
-            : (valor ? 'Marcado como admin' : 'Deixou de ser admin'), 'success');
+        await salvarAcessoLocalNoMotor({ id, [campo]: valor });
+        if (campo === 'ativo') {
+            toast(valor ? 'Acesso ativado' : 'Acesso desativado', 'success');
+        }
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
         loadAcessosLocais();
     }
 };
 
-// Enviar string vazia faz o motor sortear um código novo — é o mesmo caminho da
-// criação, então não existe um segundo gerador para sair de sincronia.
-window.gerarNovoCodigoAcesso = async function(id) {
+// Trocar o perfil reescreve a grade inteira com o padrão daquele perfil, como no
+// card dos usuários do sistema.
+window.mudarPerfilAcessoLocal = async function(id, role) {
+    const rl = ROLE_LABELS[role] || {};
+    if (!confirm(`Aplicar o perfil ${rl.icon || ''} ${rl.label || role}? As permissões deste operador voltam ao padrão do perfil.`)) {
+        loadAcessosLocais();
+        return;
+    }
     try {
-        const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, codigo: '' })
+        await salvarAcessoLocalNoMotor({
+            id, role,
+            permissoes: { ...(ROLE_DEFAULTS[role] || ROLE_DEFAULTS.visualizador) },
         });
-        const data = await resp.json();
-        if (!data.ok) throw new Error('o motor não confirmou a gravação');
-        toast(`Código novo: ${data.acesso.codigo} — o antigo não vale mais`, 'success');
+        toast(`Perfil alterado para ${rl.icon || ''} ${rl.label || role}`, 'success');
         loadAcessosLocais();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
+        loadAcessosLocais();
+    }
+};
+
+// `permissoes` é um objeto só no banco, então uma caixa marcada reenvia o objeto
+// inteiro. O cache local é atualizado antes do envio para que dois cliques
+// seguidos não percam o primeiro.
+window.toggleAcessoLocalPerm = async function(id, permKey, valor) {
+    const acesso = _acessosLocais.find(a => a.id === id);
+    if (!acesso) return;
+    acesso.permissoes = { ...(acesso.permissoes || {}), [permKey]: valor };
+    try {
+        await salvarAcessoLocalNoMotor({ id, permissoes: acesso.permissoes });
+        const rotulo = permKey.replace('perm_', '').replace(/_/g, ' ');
+        toast(`${rotulo} ${valor ? '✅ ativada' : '❌ desativada'}`, 'success');
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+        loadAcessosLocais();
     }
 };
 

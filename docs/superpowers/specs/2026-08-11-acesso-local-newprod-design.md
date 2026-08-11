@@ -16,13 +16,18 @@ depende de rede, e a imposição existe justamente para não depender de rede.
 ## Solução
 
 Uma lista própria de operadores locais, sem vínculo nenhum com as contas do sistema. Cada
-operador recebe do administrador um código de **6 caracteres alfanuméricos**, gerado no
-Menu Usuários e entregue por fora (WhatsApp, telefone, papel). O código vale **apenas**
-para entrar no painel do NewProd local; não dá acesso a nada no site.
+operador recebe do administrador um código de **6 caracteres alfanuméricos**, que o próprio
+administrador escolhe e digita no Menu Usuários, e entrega por fora (WhatsApp, telefone,
+papel). O código vale **apenas** para entrar no painel do NewProd local; não dá acesso a
+nada no site.
 
-O administrador gera, vê o código em texto claro na tela e envia. Não existe fluxo de
-confirmação, e-mail, troca de senha pelo operador ou recuperação: se o código se perde, o
-administrador gera outro.
+O administrador vê o código em texto claro na tela. Não existe fluxo de confirmação,
+e-mail, troca de senha pelo operador ou recuperação: se o código se perde, o administrador
+digita outro.
+
+Cada operador recebe também a **mesma grade de permissões por módulo** dos usuários do
+sistema — perfil como atalho, e o ver/editar de cada módulo mais as ações. É essa grade que
+o painel aplica na estação depois do login.
 
 ## Modelo de dados
 
@@ -33,22 +38,34 @@ Tabela nova no Supabase, `imposition_acessos_locais`:
 | `id` | uuid | chave primária |
 | `nome` | text | quem é o operador, para o admin se localizar |
 | `codigo` | text | 6 caracteres, único |
-| `is_admin` | bool | libera os menus Usuários e ADM na estação |
+| `role` | text | perfil, o mesmo vocabulário de `ROLE_LABELS` |
+| `permissoes` | jsonb | a grade `perm_*`, no formato que o painel já usa |
 | `ativo` | bool | desligar sem perder o registro |
 | `criado_em` / `atualizado_em` | timestamptz | |
 
-O alfabeto do código é `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` — sem `O`, `0`, `I` e `1`,
-porque o código é ditado em voz alta e digitado à mão. São 32 símbolos em 6 posições, ou
-cerca de um bilhão de combinações.
+O código aceita `A–Z` e `0–9`, exatamente 6 caracteres, e é normalizado para maiúsculas sem
+espaços — quem digita não precisa acertar a forma. A unicidade é conferida antes da
+gravação, para que a mensagem seja "esse código já é de outro operador" em vez do erro de
+chave única do Postgres.
+
+As permissões ficam em JSONB, e não em ~30 colunas booleanas como em
+`imposition_user_permissions`: a lista de módulos cresce a cada tela nova, e cada
+crescimento viraria um `ALTER TABLE`. O painel já trata permissão como um objeto de chaves
+`perm_*`, então o formato aqui é o mesmo que ele consome.
+
+Não há coluna `is_admin`. Ser admin é `perm_admin_view` dentro da grade — duas fontes para
+a mesma pergunta acabariam discordando uma hora.
 
 ## Componentes
 
 **`db.py` (nuvem).** `listar_acessos_locais()`, `salvar_acesso_local(data)`,
-`excluir_acesso_local(id)` e `gerar_codigo_acesso(existentes)`, no mesmo padrão das
-funções `*_user_permissions`. O gerador recebe os códigos já em uso e sorteia até achar um
-livre, para que a unicidade não dependa de uma corrida contra o banco.
+`excluir_acesso_local(id)` e `validar_codigo_acesso(codigo, existentes)`, no mesmo padrão
+das funções `*_user_permissions`. A validação levanta `CodigoInvalido`, que vira mensagem
+na tela. Uma atualização parcial — mudar o perfil, desativar — não toca no código: trocar a
+senha de quem só mudou de perfil o deixaria do lado de fora sem ninguém entender por quê.
 
-**`app.py` (nuvem).** `GET`, `POST` e `DELETE` em `/api/acessos-locais`.
+**`app.py` (nuvem).** `GET`, `POST` e `DELETE` em `/api/acessos-locais`. Código recusado
+responde 400 com o motivo, e não 500.
 
 **`agent_worker.py`.** `sincronizar_acessos()` baixa a lista pelo REST do Supabase e grava
 `acessos_locais.json` ao lado do executável, no mesmo ciclo de 30 minutos que já
@@ -56,19 +73,24 @@ sincroniza o painel. Só substitui o arquivo quando o download vem inteiro — u
 rede mantém a cópia anterior valendo.
 
 **`app.py` (agente).** `POST /api/local/login` recebe `{codigo}` e confere contra o JSON
-local, sem rede no caminho do operador. Responde `{ok, nome, is_admin}` ou 401 com
+local, sem rede no caminho do operador. Responde `{ok, nome, role, permissoes}` ou 401 com
 mensagem genérica. Após cinco erros seguidos, cada tentativa nova espera três segundos.
 `GET /api/local/login/estado` informa se existe lista sincronizada.
 
 **`frontend/script.js`.** No lugar do bypass da estação, uma tela "NewProd — Acesso local"
 com um campo de seis caracteres. A sessão fica em `sessionStorage`: fechou o navegador,
-pede de novo. Quem não é admin não vê os menus Usuários e ADM — sem isso, qualquer
-operador leria na própria estação os códigos de todos os colegas.
+pede de novo. Depois do login, `applyPermissions` recebe a grade daquele operador, então a
+estação mostra exatamente o que o Menu Usuários liberou. Sem grade — acesso antigo, ou
+estação com cópia velha — vale tudo menos a área de administração: trancar o operador para
+fora do trabalho dele por um campo vazio seria pior, e esconder o Menu Usuários é
+obrigatório de todo jeito, porque é lá que estão os códigos de todos os colegas.
 
 **`frontend/index.html` + `script.js`.** No Menu Usuários, um card "Acesso Local —
-NewProd" com a lista de operadores, o código visível em fonte monoespaçada, botão de
-copiar, gerar novo código, ativar/desativar, marcar como admin e excluir. O botão de criar
-pede apenas o nome e já devolve o código pronto.
+NewProd" com a lista de operadores, o código visível em fonte monoespaçada com botão de
+copiar e de trocar, o seletor de perfil, a grade de permissões e o excluir. Criar pede o
+nome e o código. A grade é a função `renderGradePermissoes`, usada também pelo card dos
+usuários do sistema — são a mesma lista, e duas cópias do mesmo HTML divergiriam no dia em
+que um módulo novo entrasse no menu.
 
 ## Degradação
 

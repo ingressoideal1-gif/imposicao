@@ -1382,33 +1382,40 @@ def delete_user_permissions(user_id):
 # ─── ACESSO LOCAL AO NEWPROD ──────────────────────────────────────────────────
 # Lista própria de operadores, sem vínculo com as contas do sistema: quem opera a
 # estação não tem conta no Supabase, e exigir uma colocaria a rede no caminho de
-# quem só quer imprimir. O administrador gera o código, lê na tela e entrega.
+# quem só quer imprimir. Quem escolhe o código é o administrador — ele digita, lê
+# na tela e entrega ao operador.
 
-# Sem O, 0, I e 1: o código é ditado em voz alta e digitado à mão.
-ALFABETO_CODIGO_ACESSO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+ALFABETO_CODIGO_ACESSO = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 TAMANHO_CODIGO_ACESSO = 6
 
 
-def gerar_codigo_acesso(existentes=None) -> str:
-    """Sorteia um código de 6 caracteres que ainda não esteja em uso.
-
-    Recebe os códigos já existentes em vez de consultar o banco: a unicidade fica
-    resolvida antes da gravação, sem depender de uma corrida contra o Supabase.
-    """
-    import secrets
-    usados = {str(c).upper() for c in (existentes or []) if c}
-    for _ in range(200):
-        codigo = "".join(secrets.choice(ALFABETO_CODIGO_ACESSO)
-                         for _ in range(TAMANHO_CODIGO_ACESSO))
-        if codigo not in usados:
-            return codigo
-    # 32^6 combinações — chegar aqui significa uma lista absurda ou um bug.
-    raise RuntimeError("nao foi possivel gerar um codigo de acesso livre")
+class CodigoInvalido(ValueError):
+    """O código que o administrador digitou não serve. A mensagem vai à tela."""
 
 
 def normalizar_codigo_acesso(codigo) -> str:
-    """Maiúsculas e sem espaços — o operador digita como quiser."""
+    """Maiúsculas e sem espaços — quem digita não precisa acertar a forma."""
     return "".join(str(codigo or "").split()).upper()
+
+
+def validar_codigo_acesso(codigo, existentes=None) -> str:
+    """Confere o código escolhido pelo administrador e devolve a forma gravável.
+
+    Recebe os códigos já em uso em vez de consultar o banco aqui: quem chama já
+    tem a lista, e a conferência de duplicidade fica antes da gravação — a
+    mensagem "esse código já é de outro operador" é muito mais útil do que o erro
+    de chave única que o Postgres devolveria.
+    """
+    limpo = normalizar_codigo_acesso(codigo)
+    if len(limpo) != TAMANHO_CODIGO_ACESSO:
+        raise CodigoInvalido(
+            f"O codigo precisa ter exatamente {TAMANHO_CODIGO_ACESSO} caracteres.")
+    if any(c not in ALFABETO_CODIGO_ACESSO for c in limpo):
+        raise CodigoInvalido("O codigo aceita apenas letras e numeros.")
+    usados = {normalizar_codigo_acesso(c) for c in (existentes or []) if c}
+    if limpo in usados:
+        raise CodigoInvalido("Esse codigo ja esta em uso por outro operador.")
+    return limpo
 
 
 def listar_acessos_locais():
@@ -1428,34 +1435,35 @@ def listar_acessos_locais():
 def salvar_acesso_local(data):
     """Cria ou atualiza um acesso local (upsert por id).
 
-    Sem id, é criação: gera o código na hora, conferindo contra os que já existem.
+    Criar exige o código digitado pelo administrador. Atualizar sem a chave
+    `codigo` no corpo não toca no código — mudar o perfil de alguém não pode
+    trocar a senha dele e deixá-lo do lado de fora sem ninguém entender por quê.
+
+    Levanta CodigoInvalido quando o código não serve; quem chama transforma isso
+    em mensagem na tela.
     """
     if not IS_SUPABASE_ACTIVE:
         return None
+
+    registro = dict(data or {})
+    agora = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    registro['atualizado_em'] = agora
+    criando = not registro.get('id')
+
+    if criando:
+        registro['id'] = str(uuid.uuid4())
+        registro['criado_em'] = agora
+        registro.setdefault('ativo', True)
+        registro.setdefault('permissoes', {})
+
+    # Fora do try: CodigoInvalido precisa chegar a quem chamou, e não virar um
+    # "nao foi possivel salvar" que não diz o que houve de errado.
+    if criando or 'codigo' in registro:
+        usados = [a.get('codigo') for a in listar_acessos_locais()
+                  if a.get('id') != registro['id']]
+        registro['codigo'] = validar_codigo_acesso(registro.get('codigo'), usados)
+
     try:
-        registro = dict(data or {})
-        agora = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        registro['atualizado_em'] = agora
-        criando = not registro.get('id')
-
-        if criando:
-            registro['id'] = str(uuid.uuid4())
-            registro['criado_em'] = agora
-            registro.setdefault('ativo', True)
-            registro.setdefault('is_admin', False)
-
-        # Codigo vazio EXPLICITO e o pedido de "gerar outro"; codigo ausente e
-        # atualizacao parcial (marcar admin, desativar) e nao pode sortear nada —
-        # trocar o codigo de quem so foi marcado como admin deixaria o operador
-        # do lado de fora sem ninguem entender por que.
-        pediu_codigo_novo = criando or ('codigo' in registro and not registro['codigo'])
-        if pediu_codigo_novo:
-            usados = [a.get('codigo') for a in listar_acessos_locais()
-                      if a.get('id') != registro['id']]
-            registro['codigo'] = gerar_codigo_acesso(usados)
-        elif 'codigo' in registro:
-            registro['codigo'] = normalizar_codigo_acesso(registro['codigo'])
-
         body = json.dumps(registro).encode('utf-8')
         url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais?on_conflict=id"
         headers = _headers()

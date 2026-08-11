@@ -41,7 +41,10 @@ def salvar_lista(acessos) -> bool:
         enxuto.append({
             "codigo": codigo,
             "nome": a.get("nome") or "Operador",
-            "is_admin": bool(a.get("is_admin")),
+            "role": a.get("role") or "",
+            # A grade de permissoes por modulo, a mesma dos demais usuarios. E o
+            # que o painel aplica na estacao depois do login.
+            "permissoes": a.get("permissoes") or {},
             "ativo": a.get("ativo") is not False,
         })
     try:

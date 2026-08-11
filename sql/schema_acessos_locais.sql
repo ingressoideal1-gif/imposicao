@@ -3,19 +3,20 @@
 --
 -- Lista propria de operadores, sem vinculo com as contas do sistema: quem opera
 -- a estacao nao tem conta no Supabase, e exigir uma colocaria a rede no caminho
--- de quem so quer imprimir. O administrador gera o codigo no Menu Usuarios, le
--- na tela e entrega ao operador.
+-- de quem so quer imprimir. O administrador escolhe o codigo de 6 caracteres,
+-- le na tela e entrega ao operador.
 --
 -- O codigo fica em texto claro de proposito — o administrador precisa le-lo para
 -- entregar. Isto e uma tranca de estacao, nao uma barreira criptografica.
--- Quando a fase 1 do RLS chegar, esta deve ser a primeira tabela a fechar.
+--
+-- RODE ESTE ARQUIVO INTEIRO. Ele e idempotente: da para rodar de novo a qualquer
+-- momento sem perder dado nenhum.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.imposition_acessos_locais (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome          TEXT NOT NULL,
     codigo        TEXT NOT NULL UNIQUE,
-    is_admin      BOOLEAN DEFAULT false,
     ativo         BOOLEAN DEFAULT true,
     criado_em     TIMESTAMPTZ DEFAULT now(),
     atualizado_em TIMESTAMPTZ DEFAULT now()
@@ -24,6 +25,26 @@ CREATE TABLE IF NOT EXISTS public.imposition_acessos_locais (
 -- O login da estacao procura pelo codigo; e a unica consulta que existe aqui.
 CREATE INDEX IF NOT EXISTS idx_acessos_locais_codigo
     ON public.imposition_acessos_locais (codigo);
+
+-- ============================================================
+-- Perfil e permissoes — a mesma grade dos demais usuarios
+--
+-- O operador local recebe as mesmas permissoes por modulo que um usuario do
+-- sistema: perfil (role) como atalho e a grade de ver/editar por modulo mais as
+-- acoes. Em JSONB, e nao em ~30 colunas booleanas como a
+-- imposition_user_permissions, porque a lista de modulos cresce a cada tela nova
+-- e cada crescimento viraria um ALTER TABLE — o painel ja trata permissao como
+-- um objeto de chaves perm_*, entao o formato aqui e o mesmo que ele ja usa.
+-- ============================================================
+ALTER TABLE public.imposition_acessos_locais
+    ADD COLUMN IF NOT EXISTS role       TEXT   DEFAULT 'visualizador',
+    ADD COLUMN IF NOT EXISTS permissoes JSONB  DEFAULT '{}'::jsonb;
+
+-- is_admin saiu: virou perm_admin_view dentro de `permissoes`, junto com todo o
+-- resto. Duas fontes para a mesma pergunta ("este operador e admin?") acabariam
+-- discordando uma hora.
+ALTER TABLE public.imposition_acessos_locais
+    DROP COLUMN IF EXISTS is_admin;
 
 -- ============================================================
 -- RLS: DESLIGADO, como no resto do projeto — e por que
