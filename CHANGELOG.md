@@ -8,7 +8,10 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v534 — 2026-08-11] — Banco de dados no card do modelo e janela de visualizacao ampliada
+## [v533 — 2026-08-11] — Banco de dados no card do modelo e janela de visualizacao ampliada
+
+> Saiu na mesma leva que a paginacao da amostra, logo abaixo: os dois commits
+> foram publicados juntos, sob a mesma tag v533.
 
 ### O problema
 Para mexer no banco de dados de um modelo era preciso sair do pedido e abrir o
