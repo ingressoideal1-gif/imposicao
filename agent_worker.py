@@ -10,6 +10,7 @@ import tempfile
 import threading
 import urllib.request
 import urllib.error
+import urllib.parse
 
 import db
 import print_service
@@ -171,6 +172,28 @@ def sync_heartbeat():
     except Exception as e:
         print(f"[agent_worker] Erro fatal no sync_heartbeat: {e}", flush=True)
 
+def titulo_do_job(file_url, job_id):
+    """
+    O nome que aparece na fila do Windows quando o trabalho chega pelo relay.
+
+    O painel envia o arquivo ao Storage ja com o nome final — prefixo de ordem
+    (00001_, 00002_...) mais o nome do material — entao basta ler o ultimo
+    pedaco da URL. Antes daqui o titulo era "Cloud Print Job <hash>", que nao
+    dizia nada a quem esta na frente da impressora e nao carregava a ordem.
+
+    Trabalhos enfileirados por versoes antigas do painel nao tem esse nome; para
+    eles o hash continua sendo a melhor identificacao disponivel.
+    """
+    try:
+        caminho = urllib.parse.urlsplit(file_url or "").path
+        nome = urllib.parse.unquote(os.path.basename(caminho)).strip()
+        if nome:
+            return nome
+    except Exception:
+        pass
+    return f"Job {job_id[:8]}"
+
+
 def process_queue():
     try:
         path = f"print_queue?agent_id=eq.{AGENT_ID}&status=eq.pending&order=created_at.asc&limit=1"
@@ -215,7 +238,7 @@ def process_queue():
                 printer_name=printer_name,
                 pdf_path=temp_pdf.name,
                 options=ppd_options,
-                job_title=f"Cloud Print Job {job_id[:8]}"
+                job_title=titulo_do_job(file_url, job_id)
             )
             
             try:

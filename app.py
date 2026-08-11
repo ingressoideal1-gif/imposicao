@@ -1074,7 +1074,10 @@ async def submit_print_job(
             printer_name=printer_name,
             pdf_path=pdf_path,
             options=selected_options,
-            job_title=f"Ideal Imposition - {os.path.basename(file.filename or 'print')}"
+            # O titulo do job E o nome do arquivo, sem marca do programa: quem
+            # le a fila do Windows quer reconhecer o material, e o prefixo de
+            # ordem (00001_, 00002_...) ja vem embutido no nome pelo frontend.
+            job_title=os.path.basename(file.filename or "impressao.pdf")
         )
         if not success:
             raise HTTPException(status_code=500, detail=msg)

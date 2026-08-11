@@ -24582,6 +24582,37 @@ async function savePrinterPPDMap() {}
 let _printBlobQueue = [];   // [{name, blob}]
 let _printQueueIndex = 0;   // índice atual na fila
 
+// Nome com que o trabalho entra no spool.
+//
+// O prefixo de 5 digitos e a ORDEM DE ENVIO, nao o numero do arquivo: 00001 e o
+// primeiro que sai daqui, 00002 o segundo, e assim por diante. Ele existe porque
+// a fila do Windows (e o painel da impressora) e ordenavel por nome — sem um
+// numero na frente, capa, miolo e contracapa aparecem em ordem alfabetica e o
+// operador imprime na sequencia errada. Reinicia em 00001 a cada lote enviado,
+// entao o operador sempre le "de 00001 ate o total do lote".
+//
+// O nome do arquivo vem inteiro depois do prefixo — nenhuma marca do programa,
+// so o que identifica o material.
+function nomeParaSpool(ordem, nomeArquivo) {
+    const seq = String(ordem).padStart(5, '0');
+    const base = (nomeArquivo || 'impressao.pdf').replace(/\.pdf$/i, '');
+    return `${seq}_${base}.pdf`;
+}
+
+// O relay guarda o arquivo no Storage antes do agente busca-lo, e o nome do
+// objeto e o que o agente le para titular o job. Acento e espaco nao sobrevivem
+// a uma chave de Storage, entao caem aqui — mesma normalizacao que db.py aplica
+// ao enviar as fontes.
+function nomeObjetoStorage(nome) {
+    let saida = '';
+    for (const ch of (nome || 'impressao.pdf').normalize('NFD')) {
+        const cod = ch.codePointAt(0);
+        if (cod >= 0x300 && cod <= 0x36f) continue;   // acento solto pela NFD: descarta
+        saida += /[A-Za-z0-9._-]/.test(ch) ? ch : '_';
+    }
+    return saida;
+}
+
 // Carrega impressoras do agente cloud ou, em último caso, do agente local
 async function _loadPrinterListIfEmpty() {
     if (_printerList && _printerList.length > 0) return;
@@ -24873,6 +24904,7 @@ async function sendPrintJob() {
         window.location.hostname === '127.0.0.1';
 
     const queue = _printBlobQueue.length > 0 ? _printBlobQueue : [{ name: 'imposicao.pdf', blob: _lastImposedBlob }];
+    const loteId = Date.now();   // pasta do lote no Storage (so o relay usa)
     let successCount = 0;
     let failCount = 0;
 
@@ -24890,7 +24922,7 @@ async function sendPrintJob() {
         try {
             if (isLocalMode) {
                 const formData = new FormData();
-                formData.append('file', item.blob, item.name);
+                formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
                 formData.append('printer_name', printerName);
                 formData.append('options', JSON.stringify(options));
 
@@ -24904,8 +24936,12 @@ async function sendPrintJob() {
                 if (!_printerAgentActive || !window._activeAgentData) {
                     throw new Error('Agente de Impressão inativo. Inicie o NewProd.exe.');
                 }
-                const fileName = `print_job_${Date.now()}_${i}.pdf`;
-                const filePath = `${window._activeAgentData.id}/${fileName}`;
+                // O nome do objeto E o titulo que o agente dara ao job, entao
+                // ele carrega o prefixo de ordem. O carimbo de tempo saiu do
+                // nome e virou PASTA do lote: assim dois lotes do mesmo modelo
+                // nao colidem no Storage sem sujar o nome que o operador le.
+                const fileName = nomeObjetoStorage(nomeParaSpool(i + 1, item.name));
+                const filePath = `${window._activeAgentData.id}/${loteId}/${fileName}`;
 
                 const { error: uploadError } = await supabaseClient.storage
                     .from('print_jobs')
@@ -25301,6 +25337,7 @@ async function sendPrintJobDirect(queue) {
             window.location.hostname === 'localhost' ||
             window.location.hostname === '127.0.0.1';
 
+        const loteId = Date.now();   // pasta do lote no Storage (so o relay usa)
         let successCount = 0;
         let failCount = 0;
 
@@ -25329,7 +25366,7 @@ async function sendPrintJobDirect(queue) {
             try {
                 if (isLocalMode) {
                     const formData = new FormData();
-                    formData.append('file', item.blob, item.name);
+                    formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
                     formData.append('printer_name', printerName);
                     formData.append('options', JSON.stringify(itemOptions));
                     const res = await fetch('/api/print/submit', { method: 'POST', body: formData });
@@ -25341,8 +25378,8 @@ async function sendPrintJobDirect(queue) {
                     if (!_printerAgentActive || !window._activeAgentData) {
                         throw new Error('Agente de Impressão inativo. Inicie o NewProd.exe.');
                     }
-                    const fileName = `print_job_${Date.now()}_${i}.pdf`;
-                    const filePath = `${window._activeAgentData.id}/${fileName}`;
+                    const fileName = nomeObjetoStorage(nomeParaSpool(i + 1, item.name));
+                    const filePath = `${window._activeAgentData.id}/${loteId}/${fileName}`;
                     const { error: uploadError } = await supabaseClient.storage
                         .from('print_jobs')
                         .upload(filePath, item.blob, { contentType: 'application/pdf', upsert: false });

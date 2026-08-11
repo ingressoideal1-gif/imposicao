@@ -155,7 +155,7 @@ async def submit_print_job(
             printer_name=printer_name,
             pdf_path=pdf_path,
             selected_options_codes=selected_codes,
-            job_title=f"Ideal Imposition - {os.path.basename(file.filename or 'print')}"
+            job_title=os.path.basename(file.filename or "impressao.pdf")
         )
         if not success:
             raise HTTPException(status_code=500, detail=msg)

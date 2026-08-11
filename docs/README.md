@@ -400,6 +400,29 @@ Fallback do backend em modo local. Mesma estrutura das tabelas Supabase em arqui
 - Conversão PDF → PostScript Level 2 (JPEG → ASCII85)
 - PPDs em `ppds/`, mapeamento em `printer_ppd_map.json`
 
+### Nome do trabalho no spool
+
+O que aparece na fila do Windows é **`{ordem}_{nome do arquivo}.pdf`** — sem
+nenhuma marca do programa no nome.
+
+O prefixo tem 5 dígitos e é a **ordem de envio**, não o número do arquivo:
+`00001` é o primeiro trabalho que sai do painel, `00002` o segundo, e assim por
+diante. Ele reinicia em `00001` a cada lote, para que o operador leia sempre "de
+00001 até o total do lote". Sem esse prefixo a fila, ordenada por nome, embaralha
+capa, miolo e contracapa.
+
+O prefixo é atribuído no envio (`nomeParaSpool` em `frontend/script.js`), porque
+é ali que a ordem existe de fato, e vale nos dois caminhos:
+
+| caminho | como chega ao spool |
+|---|---|
+| impressora local | nome do `multipart` → `job_title` em `app.py` |
+| relay pela nuvem | nome do objeto no Storage → `titulo_do_job` em `agent_worker.py` |
+
+No relay o carimbo de tempo do lote é **pasta**, não parte do nome
+(`{agente}/{lote}/00001_....pdf`): garante que dois lotes do mesmo modelo não
+colidam no Storage sem sujar o nome que o operador lê.
+
 ### local_print_agent.py
 - FastAPI independente em `127.0.0.1:9000`
 - Replica endpoints de impressão e imposição

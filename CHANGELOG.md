@@ -4,7 +4,46 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v517)** — 2026-08-10 | Agente **1.2.24**
+## Versão atual: **v1.6.1 (v518)** — 2026-08-11 | Agente **1.2.26**
+
+---
+
+## [v518 — 2026-08-11] — Ordem de envio no nome do trabalho no spool
+
+### O problema
+A fila do Windows é ordenada por nome, e os nomes que chegavam nela não diziam
+nada sobre a ordem. Um lote de capa/miolo/contracapa aparecia em ordem
+alfabética, não na ordem em que foi enviado — e `1234_set10_...` vinha antes de
+`1234_set2_...`. Pelo relay da nuvem era pior: o título era `Cloud Print Job
+3f2a1b9c`, um hash que não identifica material nenhum.
+
+### A regra nova
+O trabalho entra no spool como **`{ordem}_{nome do arquivo}.pdf`**. O prefixo tem
+5 dígitos, é a ordem de envio (não o número do arquivo) e reinicia em `00001` a
+cada lote:
+
+```
+00001_1234_set1_01_capa.pdf
+00002_1234_set1_02_miolo.pdf
+00003_1234_set1_03_contracapa.pdf
+```
+
+A referência "Ideal Imposition" saiu do nome. O título do job agora é só o nome
+do arquivo — em `app.py`, `local_print_agent.py` e nos padrões do
+`print_service.py`.
+
+### Onde
+- `nomeParaSpool()` e `nomeObjetoStorage()` em `frontend/script.js` — o prefixo é
+  atribuído no envio, que é onde a ordem existe de fato
+- os quatro pontos de envio (modal de impressão e `sendPrintJobDirect`, cada um
+  no caminho local e no relay) e o fallback do `pedido.js`
+- `titulo_do_job()` em `agent_worker.py` tira o nome do último pedaço da URL do
+  Storage; job antigo na fila, sem esse nome, continua caindo no hash
+- no relay o carimbo de tempo virou **pasta** do lote
+  (`{agente}/{lote}/00001_....pdf`), para não sujar o nome que o operador lê
+
+> Exige agente **1.2.27** nas estações: o título pelo relay é montado no agente.
+> Até a atualização chegar, o caminho local já sai com a ordem correta.
 
 ---
 

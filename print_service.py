@@ -131,7 +131,7 @@ def convert_pdf_to_ps_with_ppd(pdf_path, selected_options_codes, dpi=150):
 
     return "\n".join(ps_lines)
 
-def send_print_job(printer_name, pdf_path, selected_options_codes, job_title="Imposição Job"):
+def send_print_job(printer_name, pdf_path, selected_options_codes, job_title="impressao.pdf"):
     """Converts a PDF to PS injecting PPD options, then sends directly to the print spooler."""
     try:
         ps_data = convert_pdf_to_ps_with_ppd(pdf_path, selected_options_codes)
@@ -538,7 +538,7 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title):
         return False, err
 
 
-def send_print_job_windows(printer_name, pdf_path, options, job_title="Ideal Imposition Job"):
+def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao.pdf"):
     """
     Pipeline de impressão com suporte a múltiplas estratégias.
     Padrão: PDF RAW direto (preserva fontes embutidas, sem conversão).

@@ -3050,7 +3050,7 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                     // Fallback: enviar para API local diretamente
                     const { printerName, options } = typeof getPedPrintOptions === 'function' ? getPedPrintOptions() : { printerName: (document.getElementById('ped-print-printer')?.value || ''), options: { print_mode: 'gdi' } };
                     const formData = new FormData();
-                    formData.append('file', finalBlob, 'impressao_multipla.pdf');
+                    formData.append('file', finalBlob, nomeParaSpool(1, 'impressao_multipla.pdf'));
                     formData.append('printer_name', printerName || document.getElementById('ped-print-printer')?.value || '');
                     formData.append('options', JSON.stringify(options || { print_mode: 'gdi' }));
                     try {
