@@ -11158,6 +11158,18 @@ const ROLE_LABELS = {
     visualizador: { label: 'Visualizador', icon: '👁️', color: '#6b7280' },
 };
 
+/**
+ * Perfil de quem entra pela primeira vez, quando já existem outros usuários.
+ *
+ * Precisa ser uma chave que exista em ROLE_DEFAULTS e em ROLE_LABELS. Antes daqui
+ * o valor era 'operador', que não existe em nenhum dos dois: `...ROLE_DEFAULTS
+ * ['operador']` espalhava `undefined`, ou seja, NADA, e a conta nascia com a
+ * lista de permissões inteiramente vazia — a pessoa entrava e não via menu
+ * nenhum. No card de Usuários o seletor dela ainda aparecia em "Administrador",
+ * porque nenhuma opção casava com 'operador' e o navegador mostra a primeira.
+ */
+const ROLE_PADRAO_NOVO_USUARIO = 'visualizador';
+
 // Mapeamento: permissão _view → IDs de nav-btn na sidebar
 const PERM_NAV_MAP = {
     perm_formatos_view:    ['nav-formatos', 'nav-lista-formatos'],
@@ -11298,7 +11310,7 @@ async function ensureUserPermissions(userId, email) {
         const existingUsers = (data.ok && data.permissions) ? data.permissions : [];
 
         // Se não tem ninguém, este é o primeiro → admin
-        const role = existingUsers.length === 0 ? 'admin' : 'operador';
+        const role = existingUsers.length === 0 ? 'admin' : ROLE_PADRAO_NOVO_USUARIO;
         const defaults = ROLE_DEFAULTS[role];
 
         const newPerms = {
@@ -11317,7 +11329,11 @@ async function ensureUserPermissions(userId, email) {
         return { ...newPerms };
     } catch (e) {
         console.warn('[auth] Erro ao criar permissões:', e);
-        return { ...ROLE_DEFAULTS.operador, role: 'operador', user_id: userId };
+        return {
+            ...ROLE_DEFAULTS[ROLE_PADRAO_NOVO_USUARIO],
+            role: ROLE_PADRAO_NOVO_USUARIO,
+            user_id: userId,
+        };
     }
 }
 
@@ -11916,15 +11932,26 @@ window.loadAdminUsers = async function() {
             const role = perms ? perms.role : null;
             const rl = ROLE_LABELS[role] || {};
 
-            // Status badge com cor do perfil
-            const statusBadge = hasAccess
-                ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;padding:2px 8px;border-radius:12px;background:${rl.color || '#6b7280'}22;color:${rl.color || '#6b7280'};font-weight:600;">${rl.icon || ''} ${rl.label || role}</span>`
-                : `<span style="font-size:0.72rem;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,0.05);color:var(--text-dim);">SEM ACESSO</span>`;
+            // Perfil que não existe na lista: conta criada pela versão que
+            // gravava 'operador'. Ela está sem permissão nenhuma, e o seletor
+            // mostrava "Administrador" por acidente — nenhuma opção casava, e o
+            // navegador exibe a primeira. Dizer a verdade aqui é o que leva o
+            // administrador a escolher um perfil e consertar a conta.
+            const perfilQuebrado = hasAccess && !ROLE_LABELS[role];
+
+            const statusBadge = !hasAccess
+                ? `<span style="font-size:0.72rem;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,0.05);color:var(--text-dim);">SEM ACESSO</span>`
+                : perfilQuebrado
+                ? `<span title="Esta conta está sem permissão nenhuma. Escolha um perfil abaixo." style="font-size:0.72rem;padding:2px 8px;border-radius:12px;background:rgba(245,158,11,0.18);color:#fbbf24;font-weight:700;">⚠️ PERFIL INVÁLIDO</span>`
+                : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;padding:2px 8px;border-radius:12px;background:${rl.color || '#6b7280'}22;color:${rl.color || '#6b7280'};font-weight:600;">${rl.icon || ''} ${rl.label || role}</span>`;
 
             // Role select com os 7 perfis
-            const roleOptions = Object.entries(ROLE_LABELS).map(([k, v]) =>
-                `<option value="${k}" ${role === k ? 'selected' : ''}>${v.icon} ${v.label}</option>`
-            ).join('');
+            const roleOptions = (perfilQuebrado
+                    ? `<option value="" selected disabled>— escolha um perfil —</option>`
+                    : '')
+                + Object.entries(ROLE_LABELS).map(([k, v]) =>
+                    `<option value="${k}" ${role === k ? 'selected' : ''}>${v.icon} ${v.label}</option>`
+                ).join('');
 
             const roleSelect = hasAccess ? `
                 <select class="form-control" style="width:auto;display:inline-block;padding:3px 6px;font-size:0.78rem;height:28px;margin-top:4px;" onchange="changeUserRole('${userId}', this.value)">
@@ -11976,7 +12003,11 @@ window.grantUserAccess = async function(userId, email) {
 };
 
 window.changeUserRole = async function(userId, newRole) {
-    const rl = ROLE_LABELS[newRole] || {};
+    // O placeholder "escolha um perfil" é disabled, então não deveria chegar aqui
+    // — mas gravar role vazio recriaria a conta quebrada que este guard existe
+    // para eliminar.
+    if (!ROLE_LABELS[newRole]) return;
+    const rl = ROLE_LABELS[newRole];
     if (!confirm(`Alterar perfil para ${rl.icon || ''} ${rl.label || newRole}?`)) {
         loadAdminUsers();
         return;
