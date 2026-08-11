@@ -4,7 +4,55 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v515)** — 2026-08-10 | Agente **1.2.24**
+## Versão atual: **v1.6.0 (v516)** — 2026-08-10 | Agente **1.2.24**
+
+---
+
+## [v516 — 2026-08-10] — Impressoras voltam a aparecer no painel servido pela nuvem
+
+### O sintoma
+Abrindo `https://imposicao.vercel.app`, não era possível localizar o driver das impressoras. Na verdade o painel de impressão inteiro estava morto ali — não só as opções de driver.
+
+### A causa, medida no navegador
+Não era CORS (o agente já libera a origem) nem o endereço errado. É o **Local Network Access** do Chrome:
+
+```
+Access to fetch at 'http://127.0.0.1:9000/api/status' from origin
+'https://imposicao.vercel.app' has been blocked by CORS policy:
+Permission was denied for this request to access the `loopback` address space.
+```
+
+Uma página HTTPS pública não fala mais com o `localhost`, **em endereço nenhum** — testados `127.0.0.1`, `localhost` e o hostname da página. A causa foi confirmada por eliminação: com `--disable-features=LocalNetworkAccessChecks` a mesma chamada devolve `200` e as 10 impressoras. Conceder a permissão programaticamente também não funciona; o Chrome 150 não a reconhece como concedível.
+
+O ponto de quebra era o `descobrirAgentIdLocal()`, que identificava a estação perguntando ao `127.0.0.1:9000/api/status`. Sem identificar o agente, `_activeAgentData` ficava nulo e tudo desabava a partir dali.
+
+Havia também um bug real, mas secundário: em três lugares o endereço do agente era montado com `window.location.hostname`, que na nuvem virava `http://imposicao.vercel.app:9000` — endereço inexistente. Corrigido para `127.0.0.1`, mas isso sozinho não resolveria nada.
+
+### A saída
+O agente **já publica tudo** no heartbeat: impressoras, capacidades do driver, IP e versão. Faltava saber qual agente é o da estação sem chamar o localhost. Agora o operador escolhe uma vez, e a escolha fica no navegador.
+
+- a escolha salva tem prioridade; a auto-detecção continua na frente quando funciona, para quem abre pelo `localhost` não precisar escolher nada
+- estação escolhida que para de dar sinal tem a escolha descartada sozinha, em vez de deixar o operador preso nela
+- botão **Escolher estação** quando não há agente, e um **trocar** discreto quando há
+- a lista de impressoras passa a vir da nuvem primeiro; o localhost virou último recurso
+
+### Renomear a estação
+Os nomes vinham do hostname (`DESKTOP-5N8AF7D`, `LAPTOP-9BSK81S0`) e não diziam nada a quem precisa escolher. Cada operador pode renomear a sua pelo ✏️ na lista.
+
+O apelido **não** pode ir na coluna `name`: o heartbeat faz upsert dela a cada ciclo com o hostname, e a edição sumiria em segundos sem erro aparecer. Vai em `print_agents.apelido`, que o agente nunca escreve — ver `alter_print_agents_apelido.sql`.
+
+> **Enquanto o SQL não for executado**, a renomeação vale no localStorage de quem renomeou. Depois de executado, passa a ser vista por todas as estações. Nenhum estado quebrado no meio do caminho.
+
+### Como foi verificado
+Chrome de verdade (via Puppeteer) contra a página real da Vercel, com o `script.js` corrigido injetado por interceptação:
+
+| | sem estação escolhida | com estação escolhida |
+|---|---|---|
+| agente ativo | não (correto) | sim — `PC-JR-HOME` |
+| impressoras | 0 | **10** |
+| driver | — | **10 impressoras com bandejas, papéis e duplex** |
+
+E a renomeação com a coluna ainda ausente: não lança erro, o apelido passa a ser exibido na lista e o hostname original é preservado.
 
 ---
 

@@ -24386,9 +24386,10 @@ async function checkPrinterAgent() {
             if (idLocal) {
                 consulta = consulta.eq('id', idLocal);
             } else {
-                // Sem agente local respondendo, não há para onde imprimir nesta
-                // máquina. Não cair no agente de outra estação.
-                console.warn('[Agente] Nenhum agente local em 127.0.0.1:9000 — impressão local indisponível.');
+                // Nem escolha salva, nem auto-detecção. Não cair no agente de
+                // outra estação: sem saber qual é a desta máquina, o operador
+                // mandaria o trabalho para a impressora de outra sala.
+                console.warn('[Agente] Estação não identificada — o operador precisa escolher qual é a desta máquina.');
                 _printerAgentActive = false;
                 window._activeAgentData = null;
                 consulta = null;
@@ -24399,6 +24400,12 @@ async function checkPrinterAgent() {
                 if (data && data.length > 0) {
                     _printerAgentActive = true;
                     window._activeAgentData = data[0];
+                } else if (getEstacaoEscolhida()) {
+                    // A estação escolhida antes não responde mais (desligada,
+                    // reinstalada, id novo). Descartar a escolha para o operador
+                    // poder escolher de novo, em vez de ficar preso nela.
+                    console.warn(`[Agente] A estação escolhida (${idLocal}) não tem heartbeat recente. Escolha descartada.`);
+                    setEstacaoEscolhida('');
                 } else {
                     console.warn(`[Agente] Agente local ${idLocal} não tem heartbeat recente no Supabase.`);
                 }
@@ -24411,7 +24418,10 @@ async function checkPrinterAgent() {
     if (_printerAgentActive) {
         if (indicator) indicator.style.background = '#22c55e';
         if (label) label.textContent = 'Agente Local Ativo';
-        if (detail) detail.textContent = `Conectado via Nuvem (${window._activeAgentData.name})`;
+        if (detail) {
+            detail.innerHTML = `Conectado via Nuvem (${escapeHtml(nomeDaEstacao(window._activeAgentData))}) `
+                + `<button type="button" onclick="escolherEstacao()" style="margin-left:8px; border:1px solid rgba(148,163,184,0.35); background:transparent; color:#94a3b8; border-radius:6px; padding:2px 8px; font-size:0.72rem; cursor:pointer;">trocar</button>`;
+        }
         if (printerCard) { printerCard.style.opacity = '1'; printerCard.style.pointerEvents = 'auto'; }
         if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; ppdCard.style.display = 'none'; }
         if (navBtn) navBtn.style.display = '';
@@ -24428,7 +24438,10 @@ async function checkPrinterAgent() {
     } else {
         if (indicator) indicator.style.background = '#ef4444';
         if (label) label.textContent = 'Agente Local Inativo';
-        if (detail) detail.textContent = 'Inicie o NewProd.exe no computador da impressora.';
+        if (detail) {
+            detail.innerHTML = 'Inicie o NewProd.exe no computador da impressora. '
+                + `<button type="button" onclick="escolherEstacao()" style="margin-left:8px; border:1px solid #3b82f6; background:rgba(59,130,246,0.15); color:#60a5fa; border-radius:6px; padding:3px 10px; font-size:0.75rem; font-weight:700; cursor:pointer;">Escolher estação</button>`;
+        }
         if (printerCard) { printerCard.style.opacity = '0.5'; printerCard.style.pointerEvents = 'none'; }
         if (ppdCard) { ppdCard.style.opacity = '0.5'; ppdCard.style.pointerEvents = 'none'; ppdCard.style.display = 'none'; }
         if (badge) badge.style.display = 'none';
@@ -24501,19 +24514,30 @@ async function savePrinterPPDMap() {}
 let _printBlobQueue = [];   // [{name, blob}]
 let _printQueueIndex = 0;   // índice atual na fila
 
-// Carrega impressoras do servidor local ou do agente cloud
+// Carrega impressoras do agente cloud ou, em último caso, do agente local
 async function _loadPrinterListIfEmpty() {
     if (_printerList && _printerList.length > 0) return;
+
+    // 1. Da nuvem: o heartbeat do agente já publica a lista no Supabase. É o
+    //    único caminho que funciona com o painel servido pela Vercel, porque o
+    //    navegador bloqueia chamadas de página HTTPS para o localhost.
+    const daNuvem = window._activeAgentData?.printers_json?.printers;
+    if (Array.isArray(daNuvem) && daNuvem.length > 0) {
+        _printerList = daNuvem.map(p => typeof p === 'object' ? p.name : p);
+        return;
+    }
+
+    // 2. Do agente local. Só alcança quando o painel está na própria máquina.
+    //    O endereço era montado com o hostname da PÁGINA, o que na nuvem virava
+    //    http://imposicao.vercel.app:9000 — um endereço que não existe.
     try {
-        // Sempre usar o hostname atual na porta 9000 (servidor local)
-        const apiBase = `http://${window.location.hostname}:9000`;
-        const res = await fetch(`${apiBase}/api/printers`);
+        const res = await fetch(`${AGENTE_LOCAL_URL}/api/printers`);
         if (res.ok) {
             const data = await res.json();
             _printerList = (data.printers || data || []).map(p => typeof p === 'object' ? p.name : p);
         }
     } catch (e) {
-        console.warn('[PrintModal] Servidor local não disponível.');
+        console.warn('[PrintModal] Agente local inalcançável e nada publicado na nuvem. Escolha a estação em Impressoras.');
     }
 }
 
@@ -24668,7 +24692,7 @@ async function onPrintPrinterChange() {
     // 2. Tentar via API local (porta 9000 no mesmo servidor)
     if (!caps) {
         try {
-            const apiBase = `http://${window.location.hostname}:9000`;
+            const apiBase = AGENTE_LOCAL_URL;   // 127.0.0.1: o hostname da pagina apontava para a Vercel
             const res = await fetch(`${apiBase}/api/printers/${encodeURIComponent(printerName)}/capabilities`);
             if (res.ok) caps = await res.json();
         } catch (e) {
@@ -24989,7 +25013,7 @@ async function onPedPrinterChange() {
     if (!caps) {
         try {
             // Sempre usar o hostname atual na porta 9000
-            const apiBase = `http://${window.location.hostname}:9000`;
+            const apiBase = AGENTE_LOCAL_URL;   // 127.0.0.1: o hostname da pagina apontava para a Vercel
             const url = `${apiBase}/api/printers/${encodeURIComponent(printerName)}/capabilities`;
             console.log('[PedDriverPanel] Buscando capacidades:', url);
             const res = await fetch(url);
@@ -26821,11 +26845,235 @@ setInterval(atualizarVersaoAgenteRodape, 60000);
 let _agentIdLocalCache = null;
 let _agentIdLocalEm = 0;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// QUAL AGENTE E O DESTA ESTACAO
+//
+// A deteccao automatica (perguntar ao 127.0.0.1:9000 quem ele e) so funciona
+// quando o painel esta na propria maquina. Servido pela nuvem, o Chrome recusa:
+//
+//   "blocked by CORS policy: Permission was denied for this request to access
+//    the `loopback` address space."
+//
+// E o Local Network Access — pagina HTTPS publica nao fala com o localhost, em
+// endereco nenhum. Nao e CORS (o agente ja libera a origem) nem endereco errado.
+// Verificado no Chrome 150: com --disable-features=LocalNetworkAccessChecks a
+// mesma chamada devolve 200. Edge segue o Chromium, entao nao da para depender
+// disso em estacoes variadas.
+//
+// A saida e o operador escolher a estacao uma vez, do que o Supabase ja conhece
+// (o heartbeat publica nome, impressoras e capacidades). A escolha fica neste
+// navegador. A auto-deteccao continua na frente quando funciona, para nao pedir
+// nada a quem abre pelo localhost.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CHAVE_ESTACAO = 'newprod_estacao_id';
+
+function getEstacaoEscolhida() {
+    try { return localStorage.getItem(CHAVE_ESTACAO) || ''; } catch (e) { return ''; }
+}
+
+function setEstacaoEscolhida(agentId) {
+    try {
+        if (agentId) localStorage.setItem(CHAVE_ESTACAO, agentId);
+        else localStorage.removeItem(CHAVE_ESTACAO);
+    } catch (e) { /* navegador sem localStorage: vale so nesta aba */ }
+    _agentIdLocalCache = agentId || null;
+    _agentIdLocalEm = agentId ? Date.now() : 0;
+}
+window.getEstacaoEscolhida = getEstacaoEscolhida;
+window.setEstacaoEscolhida = setEstacaoEscolhida;
+
+// ─── Apelido da estação ──────────────────────────────────────────────────────
+// O `name` da tabela print_agents NÃO serve para renomear: o heartbeat faz
+// upsert dele a cada ciclo com o hostname da máquina, e qualquer edição some em
+// segundos. O apelido vai numa coluna própria, que o agente nunca escreve.
+//
+// Guardado também no localStorage: assim a renomeação funciona no ato, mesmo
+// antes de rodar alter_print_agents_apelido.sql, e continua valendo se a
+// escrita no Supabase for recusada. Com a coluna criada o apelido passa a ser
+// visto por todas as estações; sem ela, vale só neste navegador.
+
+const CHAVE_APELIDOS = 'newprod_apelidos_estacao';
+
+function _lerApelidosLocais() {
+    try { return JSON.parse(localStorage.getItem(CHAVE_APELIDOS) || '{}'); } catch (e) { return {}; }
+}
+
+function getApelidoLocal(agentId) {
+    return _lerApelidosLocais()[String(agentId)] || '';
+}
+
+function setApelidoLocal(agentId, apelido) {
+    try {
+        const mapa = _lerApelidosLocais();
+        if (apelido) mapa[String(agentId)] = apelido;
+        else delete mapa[String(agentId)];
+        localStorage.setItem(CHAVE_APELIDOS, JSON.stringify(mapa));
+    } catch (e) { /* sem localStorage: vale só nesta aba */ }
+}
+
+/** Nome a exibir: apelido compartilhado > apelido deste navegador > hostname. */
+function nomeDaEstacao(agente) {
+    if (!agente) return '';
+    return agente.apelido || getApelidoLocal(agente.id) || agente.name || 'Sem nome';
+}
+window.nomeDaEstacao = nomeDaEstacao;
+
+/**
+ * Renomeia a estação. Grava sempre localmente e tenta compartilhar via Supabase.
+ * A falha na coluna não é erro para o operador: o apelido já valeu no ato.
+ */
+async function renomearEstacao(agentId, nomeAtual) {
+    const novo = (prompt('Nome desta estação (ex: Laser 1, Acabamento, Recepção):', nomeAtual || '') || '').trim();
+    if (!novo) return null;
+
+    setApelidoLocal(agentId, novo);
+
+    let compartilhado = false;
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        try {
+            const { error } = await supabaseClient.from('print_agents').update({ apelido: novo }).eq('id', agentId);
+            if (!error) compartilhado = true;
+            else console.warn('[Agente] Apelido só neste navegador:', error.message);
+        } catch (e) {
+            console.warn('[Agente] Apelido só neste navegador:', e.message);
+        }
+    }
+
+    if (typeof toast === 'function') {
+        toast(compartilhado
+            ? `Estação renomeada para "${novo}" — visível em todas as máquinas.`
+            : `Estação renomeada para "${novo}" — por enquanto só neste navegador.`, 'success');
+    }
+    return novo;
+}
+window.renomearEstacao = renomearEstacao;
+
+/** Estações com heartbeat recente, para o operador escolher a dele. */
+async function listarEstacoesOnline() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return [];
+    const doisMinAtras = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    try {
+        const { data } = await supabaseClient
+            .from('print_agents')
+            .select('*')
+            .eq('status', 'online')
+            .gte('last_seen', doisMinAtras)
+            .order('last_seen', { ascending: false });
+        return data || [];
+    } catch (e) {
+        console.error('[Agente] Erro ao listar estações online:', e);
+        return [];
+    }
+}
+window.listarEstacoesOnline = listarEstacoesOnline;
+
+/**
+ * Modal para o operador escolher a estação desta máquina.
+ * Resolve com o id escolhido, ou null se ele fechar sem escolher.
+ */
+async function escolherEstacao() {
+    const estacoes = await listarEstacoesOnline();
+    const atual = getEstacaoEscolhida();
+
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.72); z-index:100000; display:flex; align-items:center; justify-content:center; padding:20px;';
+
+        const linhas = estacoes.length ? estacoes.map(a => {
+            const j = a.printers_json || {};
+            const nImp = Array.isArray(j.printers) ? j.printers.length : 0;
+            const marcado = String(a.id) === String(atual);
+            const exibido = nomeDaEstacao(a);
+            const renomeada = exibido !== (a.name || '');
+            return `<div style="display:flex; gap:8px; align-items:stretch; margin-bottom:8px;">
+                <button type="button" data-id="${escapeHtml(String(a.id))}" style="flex:1; text-align:left; padding:12px 14px; border-radius:8px; cursor:pointer;
+                    background:${marcado ? 'rgba(59,130,246,0.2)' : '#334155'}; border:1px solid ${marcado ? '#3b82f6' : 'rgba(255,255,255,0.18)'}; color:#e2e8f0;">
+                    <div style="font-weight:800; font-size:0.95rem;">${escapeHtml(exibido)}${marcado ? ' &nbsp;<span style="color:#60a5fa;">(atual)</span>' : ''}</div>
+                    <div style="font-size:0.78rem; color:#94a3b8; margin-top:3px;">
+                        ${renomeada ? escapeHtml(a.name || '') + ' &nbsp;·&nbsp; ' : ''}${nImp} impressora(s) &nbsp;·&nbsp; IP ${escapeHtml(j.local_ip || '--')} &nbsp;·&nbsp; versão ${escapeHtml(j.version || '--')}
+                    </div>
+                </button>
+                <button type="button" data-renomear="${escapeHtml(String(a.id))}" title="Renomear esta estação"
+                    style="width:44px; border-radius:8px; cursor:pointer; background:#334155; border:1px solid rgba(255,255,255,0.18); color:#cbd5e1; font-size:1rem;">✏️</button>
+            </div>`;
+        }).join('') : `<div style="color:#94a3b8; font-size:0.9rem; line-height:1.5;">
+                Nenhuma estação com sinal recente. Confira se o <strong>NewProd.exe</strong> está rodando nesta máquina — ele avisa a nuvem a cada poucos segundos.
+            </div>`;
+
+        overlay.innerHTML = `
+            <div style="background:#1e293b; border:1px solid rgba(148,163,184,0.25); border-radius:12px; box-shadow:0 24px 60px rgba(0,0,0,0.6); width:100%; max-width:520px; max-height:80vh; display:flex; flex-direction:column;">
+                <div style="padding:18px 22px; border-bottom:1px solid rgba(148,163,184,0.2);">
+                    <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:#e2e8f0;">🖨️ Qual é esta estação?</h3>
+                    <div style="margin-top:6px; font-size:0.85rem; color:#94a3b8; line-height:1.45;">
+                        Escolha o computador em que você está. A escolha fica salva neste navegador e define para qual impressora os trabalhos vão.
+                    </div>
+                </div>
+                <div style="padding:18px 22px; overflow-y:auto; flex:1;">${linhas}</div>
+                <div style="padding:14px 22px; border-top:1px solid rgba(148,163,184,0.2); display:flex; justify-content:space-between; gap:10px;">
+                    <button type="button" data-role="recarregar" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:9px 16px; font-size:0.9rem; font-weight:600; cursor:pointer;">Procurar de novo</button>
+                    <button type="button" data-role="fechar" style="border:1px solid rgba(148,163,184,0.35); background:transparent; color:#cbd5e1; border-radius:8px; padding:9px 16px; font-size:0.9rem; font-weight:600; cursor:pointer;">Fechar</button>
+                </div>
+            </div>`;
+
+        let encerrado = false;
+        const finalizar = (valor) => {
+            if (encerrado) return;
+            encerrado = true;
+            document.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+            resolve(valor);
+        };
+        const onKey = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); finalizar(null); } };
+
+        overlay.querySelectorAll('button[data-id]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                setEstacaoEscolhida(id);
+                finalizar(id);
+                if (typeof toast === 'function') toast('Estação definida. Buscando as impressoras...', 'success');
+                if (typeof checkPrinterAgent === 'function') checkPrinterAgent();
+            });
+        });
+        overlay.querySelectorAll('button[data-renomear]').forEach(btn => {
+            btn.addEventListener('click', async (ev) => {
+                ev.stopPropagation();
+                const id = btn.dataset.renomear;
+                const alvo = estacoes.find(e => String(e.id) === String(id));
+                const novo = await renomearEstacao(id, nomeDaEstacao(alvo));
+                if (novo) { finalizar(null); escolherEstacao(); }   // redesenha com o nome novo
+            });
+        });
+        overlay.querySelector('[data-role="fechar"]').addEventListener('click', () => finalizar(null));
+        overlay.querySelector('[data-role="recarregar"]').addEventListener('click', () => {
+            finalizar(null);
+            escolherEstacao();
+        });
+        overlay.addEventListener('click', (ev) => { if (ev.target === overlay) finalizar(null); });
+        document.addEventListener('keydown', onKey, true);
+
+        document.body.appendChild(overlay);
+    });
+}
+window.escolherEstacao = escolherEstacao;
+
 async function descobrirAgentIdLocal() {
     // cache curto: esta função roda a cada checagem de agente
     if (_agentIdLocalCache && (Date.now() - _agentIdLocalEm) < 60000) {
         return _agentIdLocalCache;
     }
+
+    // 1. Escolha do operador, salva neste navegador. Vem primeiro porque é o
+    //    único caminho que funciona com o painel vindo da nuvem.
+    const escolhida = getEstacaoEscolhida();
+    if (escolhida) {
+        _agentIdLocalCache = escolhida;
+        _agentIdLocalEm = Date.now();
+        return escolhida;
+    }
+
+    // 2. Auto-detecção: dispensa o operador de escolher quando o painel está
+    //    na própria máquina (localhost) ou o navegador não aplica a política.
     for (const base of ['http://127.0.0.1:9000', 'http://localhost:9000']) {
         try {
             const ctrl = new AbortController();
