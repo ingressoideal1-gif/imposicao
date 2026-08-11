@@ -50,3 +50,17 @@ Describe "Update-VersaoCompilar" {
         (Update-VersaoCompilar $txt '9.9.9') -match 'NewProd_Setup_v9\.9\.9\.msi' | Should Be $true
     }
 }
+
+Describe "Get-MensagemTag" {
+    It "usa as notas quando elas existem" {
+        Get-MensagemTag -Versao '1.2.28' -Notas 'corrige a fonte no verso' |
+            Should Be 'corrige a fonte no verso'
+    }
+    It "NUNCA devolve vazio — foi o que fez o git recusar a tag do 1.2.28" {
+        # 'git tag -a X -m' sem valor aborta com "switch 'm' requires a value",
+        # e o agente ficava publicado sem ponto de restauracao.
+        Get-MensagemTag -Versao '1.2.28' -Notas ''    | Should Be 'Agente 1.2.28'
+        Get-MensagemTag -Versao '1.2.28' -Notas '   ' | Should Be 'Agente 1.2.28'
+        Get-MensagemTag -Versao '1.2.28'              | Should Be 'Agente 1.2.28'
+    }
+}

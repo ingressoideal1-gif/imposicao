@@ -340,9 +340,29 @@ try {
 # ─── 9. Registrar ────────────────────────────────────────────────────────────
 git add agent_version.py agent_installer.wxs compilar_msi.ps1
 git commit -m "chore(agente): versao $Versao"
-git tag -a "agente-v$Versao" -m "$Notas"
+
+# A mensagem passa por Get-MensagemTag porque -Notas vazio fazia o git recusar a
+# tag inteira. Ver a explicacao la, no VersaoAgente.psm1.
+git tag -a "agente-v$Versao" -m (Get-MensagemTag -Versao $Versao -Notas $Notas)
+$tagCriada = ($LASTEXITCODE -eq 0)
+
 git push origin main
-git push origin "agente-v$Versao"
+if ($tagCriada) {
+    git push origin "agente-v$Versao"
+    $tagCriada = ($LASTEXITCODE -eq 0)
+}
+
+# Aviso alto e no fim: o MSI ja esta no ar a esta altura, entao abortar nao
+# desfaria nada — mas ficar sem o ponto de restauracao nao pode passar
+# despercebido no meio do log do PyInstaller.
+if (-not $tagCriada) {
+    Write-Host ""
+    Write-Host "  ATENCAO: a tag agente-v$Versao NAO foi criada ou nao subiu." -ForegroundColor Red
+    Write-Host "  O agente $Versao esta publicado, mas sem ponto de restauracao." -ForegroundColor Red
+    Write-Host "  Crie a mao:" -ForegroundColor Yellow
+    Write-Host "    git tag -a agente-v$Versao -m ""Agente $Versao""" -ForegroundColor Yellow
+    Write-Host "    git push origin agente-v$Versao" -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "  Agente $Versao publicado." -ForegroundColor Green

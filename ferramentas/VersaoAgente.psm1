@@ -71,4 +71,28 @@ function Update-VersaoCompilar {
     return [regex]::Replace($Texto, $padrao, "NewProd_Setup_v$Versao.msi")
 }
 
-Export-ModuleMember -Function Update-VersaoAgentPy, Update-VersaoWxs, Update-VersaoCompilar
+function Get-MensagemTag {
+    <#
+    .SYNOPSIS
+        Mensagem da tag do agente, nunca vazia.
+    .DESCRIPTION
+        Publicar sem -Notas deixava $Notas como "" — e o PowerShell DESCARTA o
+        argumento vazio ao chamar um executavel, entao o git recebia
+        "tag -a agente-vX -m" e recusava com "switch 'm' requires a value".
+
+        A tag e o ponto de restauracao do agente: voltar uma versao exige
+        compilar o codigo antigo com um numero novo (-Codigo agente-vX), e sem
+        a tag nao ha de onde traze-lo. Perde-la em silencio significa descobrir
+        que ela nao existe justamente no dia em que for preciso voltar.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][string]$Versao,
+        [AllowEmptyString()][string]$Notas = ""
+    )
+    if ([string]::IsNullOrWhiteSpace($Notas)) { return "Agente $Versao" }
+    return $Notas
+}
+
+Export-ModuleMember -Function Update-VersaoAgentPy, Update-VersaoWxs, Update-VersaoCompilar, Get-MensagemTag
