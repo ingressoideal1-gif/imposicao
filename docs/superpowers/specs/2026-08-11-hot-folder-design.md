@@ -120,9 +120,20 @@ apenas reiniciar o agente, não um release novo. Três valores:
 | `exclusivo` | idem, porém trancado (`dwShareMode=0`) enquanto escreve — quem tentar ler no meio recebe `ERROR_SHARING_VIOLATION` e repete |
 | `rename` | o desenho original; só serve para RIP que trate evento de renomeação |
 
-`ferramentas/diagnostico_hotfolder.py` larga o mesmo PDF na pasta por cinco
-caminhos diferentes e relata qual o RIP consome. É o que decide a escolha quando
-houver acesso à máquina com o Edge Print.
+`ferramentas/diagnostico_hotfolder.ps1` larga o mesmo PDF na pasta por seis
+caminhos diferentes e relata qual o RIP consome. É o que decide a escolha.
+
+É PowerShell puro de propósito: quem tem acesso ao Edge Print é o operador, na
+estação, e ele não tem Python nem o repositório. Um `.ps1` roda em qualquer
+Windows. **O arquivo precisa de BOM UTF-8** — sem ele o PowerShell 5.1 lê na
+codepage ANSI e os acentos quebram o parser, o mesmo cuidado que o
+`publicar_agente.ps1` documenta.
+
+O sexto método é `chrome`: cria `nome.pdf.crdownload` e renomeia, que é
+exatamente o que o navegador faz ao baixar. Ele existe porque o operador relatou
+que **gerar o PDF pelo botão "Impor" e salvar na pasta do hot folder funciona
+100%** — e esse caminho é um rename, igual ao que falhava. Comparar `chrome` com
+`rename` é o que separa "o RIP ignora rename" de "o RIP ignora outra coisa".
 
 ### Nunca sobrescreve
 

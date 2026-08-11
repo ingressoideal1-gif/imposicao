@@ -58,9 +58,9 @@ agente, não um release novo:
 - `hotfolder.py` — `soltar()` reescrita, três gravadores, limpeza do parcial
 - `db.py` — `metodo_hot_folder()`
 - `app.py` e `agent_worker.py` — passam o método configurado
-- `ferramentas/diagnostico_hotfolder.py` — larga o mesmo PDF por cinco caminhos
-  diferentes e relata qual o RIP consome; decide a escolha quando houver acesso
-  à máquina com o Edge Print
+- `ferramentas/diagnostico_hotfolder.ps1` — larga o mesmo PDF por seis caminhos
+  diferentes e relata qual o RIP consome. PowerShell puro, sem Python e sem o
+  repositório: roda na estação, pelo operador
 - `tests/test_hotfolder.py` — 47 testes, um deles falha se alguém voltar a
   renomear para dentro da pasta
 
