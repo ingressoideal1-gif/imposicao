@@ -44,6 +44,18 @@ leva segundos e sempre deu certo.
 interrompida deixaria um PDF truncado com nome de PDF bom, e o RIP importaria
 lixo. Qualquer falha no meio agora remove o arquivo da pasta.
 
+### Confirmado em produção
+Com o agente **1.2.32** na estação, a impressão direta para o hot folder passou a
+funcionar. O método `direto` é o certo para o Epson Edge Print.
+
+Fica uma pergunta em aberto, e vale registrá-la para quem voltar aqui: o operador
+relatou que gerar o PDF pelo botão "Impor" e salvar na pasta também funcionava —
+e esse caminho é o gerenciador de download do Chrome, que grava
+`nome.pdf.crdownload` e **renomeia**, a mesma forma de evento que falhava. Ou
+seja, "o RIP ignora renomeação" descreve o que observamos mas não explica esse
+caso. O `diagnostico_hotfolder.ps1` responde isso em dois minutos, se um dia
+importar saber.
+
 ### Escape hatch, porque não dá para testar contra o RIP
 `hot_folders.json` aceita `"metodo"` por pasta; trocar exige só reiniciar o
 agente, não um release novo:

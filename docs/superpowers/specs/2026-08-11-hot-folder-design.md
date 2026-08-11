@@ -79,6 +79,11 @@ As travas:
 
 > **Revisado em 11/08/2026, depois de falhar em produção.** A decisão original
 > era o contrário do que está escrito abaixo, e está registrada logo em seguida.
+>
+> **Confirmado em produção** com o agente 1.2.32: a impressão direta para o hot
+> folder passou a funcionar. `direto` é o método certo para o Epson Edge Print.
+> A explicação abaixo descreve o que foi observado, mas não fecha — ver a
+> ressalva ao final desta seção.
 
 O arquivo é **criado já com o nome final**, numa única escrita. Não há `.tmp` e
 não há renomeação.
@@ -110,6 +115,19 @@ chamada, a partir de bytes já em memória, então a janela é a menor possível
 escrita interrompida deixa um PDF truncado com nome de PDF bom, e o RIP importaria
 lixo. Por isso qualquer falha no meio remove o arquivo da pasta — o que com o
 rename era desnecessário.
+
+**A ressalva, para quem voltar aqui.** A correção funciona, mas a explicação não
+fecha. O operador relatou que gerar o PDF pelo botão "Impor" e salvar na pasta do
+hot folder também funcionava — e esse caminho é o gerenciador de download do
+Chrome, que grava `nome.pdf.crdownload` e **renomeia**. Se o RIP simplesmente
+ignorasse renomeação, esse caso falharia também. Não falha.
+
+Ou seja: "criar em vez de renomear" é o comportamento que resolve, e está
+verificado em produção; "o RIP ignora renomeação" é a melhor descrição que temos
+do porquê, e ela tem um contraexemplo conhecido. Se o assunto voltar, o
+`diagnostico_hotfolder.ps1` compara `rename` com `chrome` e separa as duas
+explicações — as hipóteses vivas são a extensão do temporário e o ritmo em que o
+agente larga vários arquivos seguidos.
 
 **Escape hatch.** `hot_folders.json` aceita `"metodo"` por pasta, e trocá-lo exige
 apenas reiniciar o agente, não um release novo. Três valores:
