@@ -72,13 +72,22 @@ def carregar_lista():
 
 
 def ha_lista() -> bool:
-    """Existe ao menos um acesso ativo sincronizado?
+    """Esta estacao ja recebeu alguma lista de acessos?
 
     Enquanto a resposta for nao — instalacao nova, ou maquina que nunca alcancou
     a nuvem — o painel libera a entrada como fazia antes. Travar a producao
     porque a internet caiu seria pior do que o problema que isto resolve.
+
+    Repare que conta acesso INATIVO tambem, de proposito. Contar so os ativos
+    parecia mais certo e produzia o oposto do que o administrador pediu:
+    desativar o ultimo acesso da lista zerava a contagem, a estacao concluia que
+    nao havia codigo nenhum e voltava a deixar QUALQUER UM entrar. Desativar
+    alguem tem de restringir, nunca liberar. Uma vez que a grafica cadastrou
+    acessos, a estacao passa a pedir codigo para sempre; se todos forem
+    desativados, ninguem entra ate o administrador reativar alguem pelo site —
+    que e exatamente o que ele mandou fazer.
     """
-    return any(a.get("ativo") is not False for a in carregar_lista())
+    return len(carregar_lista()) > 0
 
 
 def validar(codigo):

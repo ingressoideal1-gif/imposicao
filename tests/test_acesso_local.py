@@ -91,8 +91,15 @@ def test_codigo_errado_nao_entra(tmp_path):
 
 def test_acesso_inativo_nao_entra(tmp_path):
     _preparar_lista(tmp_path, [{"nome": "Joao", "codigo": "NEW123", "ativo": False}])
-    assert acesso_local.ha_lista() is False
     assert acesso_local.validar("NEW123") is None
+
+
+def test_desativar_o_ultimo_acesso_nao_libera_a_estacao(tmp_path):
+    # Contar só os ativos produzia o oposto do que o administrador pediu: a lista
+    # zerava, a estação concluía que não havia código nenhum e voltava a deixar
+    # qualquer um entrar. Desativar tem de restringir, nunca liberar.
+    _preparar_lista(tmp_path, [{"nome": "Joao", "codigo": "NEW123", "ativo": False}])
+    assert acesso_local.ha_lista() is True
 
 
 def test_lista_gravada_guarda_so_o_que_o_login_usa(tmp_path):

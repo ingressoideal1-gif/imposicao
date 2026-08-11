@@ -11527,11 +11527,75 @@ async function iniciarAcessoLocal(liberarUICompleta) {
         sessao = JSON.parse(sessionStorage.getItem(CHAVE_SESSAO_LOCAL) || 'null');
     } catch (e) { /* sessão ilegível vale como ausente */ }
 
-    if (sessao && sessao.nome) {
+    if (!sessao || !sessao.nome) {
+        mostrarLoginLocal(liberarUICompleta);
+        return;
+    }
+
+    // Sessão guardada sem código: veio de uma versão anterior do painel, que não
+    // o guardava. Vale como está; o próximo login já grava.
+    if (!sessao.codigo) {
         aplicarAcessoLocal(sessao, liberarUICompleta);
         return;
     }
-    mostrarLoginLocal(liberarUICompleta);
+
+    const conferida = await reconferirAcessoLocal(sessao.codigo);
+    if (conferida.sessao) {
+        aplicarAcessoLocal(conferida.sessao, liberarUICompleta);
+        return;
+    }
+    if (conferida.motivo === 'recusado') {
+        // Acesso desativado, excluído, ou código trocado enquanto a aba estava
+        // aberta. Sem isto, a sessão antiga valeria até o operador sair por conta
+        // própria — ou seja, tirar a permissão de alguém não teria efeito.
+        sessionStorage.removeItem(CHAVE_SESSAO_LOCAL);
+        mostrarLoginLocal(liberarUICompleta);
+        toast('Seu acesso mudou. Entre de novo com o código.', 'warning');
+        return;
+    }
+    // Agente sem resposta: seguir com o que estava guardado. Travar o operador
+    // porque o agente demorou seria pior do que uma grade de permissões velha.
+    console.warn('[acesso local] Sem resposta da estação; mantendo a sessão guardada.');
+    aplicarAcessoLocal(sessao, liberarUICompleta);
+}
+
+/**
+ * Reconfere o código com o agente e devolve a sessão atualizada.
+ *
+ * É o que faz uma mudança de permissão valer sem precisar que o operador saia:
+ * a estação baixa a lista a cada 5 minutos, e um F5 depois disso já traz a grade
+ * nova. Também é o que faz um acesso desativado parar de valer.
+ *
+ * Distingue "o agente recusou" de "o agente não respondeu": só o primeiro derruba
+ * a sessão.
+ */
+async function reconferirAcessoLocal(codigo) {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/local/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo })
+        });
+        if (!resp.ok) return { motivo: 'recusado' };
+        const data = await resp.json();
+        const sessao = sessaoDoLogin(data, codigo);
+        sessionStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(sessao));
+        return { sessao };
+    } catch (e) {
+        return { motivo: 'sem_resposta' };
+    }
+}
+
+// O código fica na sessão do navegador para permitir a reconferência acima. É a
+// mesma máquina onde ele acabou de ser digitado, e o sessionStorage morre quando
+// o navegador fecha — o mesmo limite que a própria sessão já tinha.
+function sessaoDoLogin(data, codigo) {
+    return {
+        nome: data.nome,
+        role: data.role || '',
+        permissoes: data.permissoes || {},
+        codigo,
+    };
 }
 
 /**
@@ -11641,7 +11705,7 @@ window.handleLoginLocal = async function(e) {
         if (!resp.ok) throw new Error('Código inválido');
         const data = await resp.json();
 
-        const sessao = { nome: data.nome, role: data.role || '', permissoes: data.permissoes || {} };
+        const sessao = sessaoDoLogin(data, codigo);
         // sessionStorage e não localStorage: fechou o navegador, pede de novo. Numa
         // estação compartilhada, a sessão não pode sobreviver ao turno.
         sessionStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(sessao));
