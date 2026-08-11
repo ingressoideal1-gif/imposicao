@@ -87,6 +87,15 @@ está sendo construído é uma tranca de estação, não uma barreira criptográ
 Enquanto o RLS seguir adiado, a tabela é legível pela chave anônima como todas as outras
 do projeto. Quando a fase 1 do RLS acontecer, esta deve ser a primeira tabela a fechar.
 
+Criada pelo editor SQL, a tabela nasce com RLS ligado e sem política nenhuma — estado em
+que o PostgREST devolve lista vazia na leitura e 401 na escrita, e nada funciona. Escrever
+política para o papel `anon` não resolveria: é a mesma chave anônima que o site, o motor no
+Render e o agente usam, então qualquer política larga o bastante para o motor gravar libera
+a internet junto. Fechar de verdade exige uma chave `service_role` no motor e o agente
+buscando a lista através do motor, em vez de direto do Supabase — que é exatamente o
+trabalho da fase 1. Até lá, o `schema_acessos_locais.sql` desliga o RLS desta tabela, com a
+razão escrita ao lado.
+
 ## Publicação
 
 O trabalho toca o site e o código que o executável embute. Publicar só o site colocaria a

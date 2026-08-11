@@ -24,3 +24,24 @@ CREATE TABLE IF NOT EXISTS public.imposition_acessos_locais (
 -- O login da estacao procura pelo codigo; e a unica consulta que existe aqui.
 CREATE INDEX IF NOT EXISTS idx_acessos_locais_codigo
     ON public.imposition_acessos_locais (codigo);
+
+-- ============================================================
+-- RLS: DESLIGADO, como no resto do projeto — e por que
+--
+-- Criada pelo editor SQL, a tabela nasce com RLS LIGADO e sem politica
+-- nenhuma. Nesse estado o PostgREST devolve lista vazia na leitura e 401 na
+-- escrita: o Menu Usuarios nao salva e a estacao nunca recebe a lista.
+--
+-- Nao adianta escrever politica para o papel `anon`: e a MESMA chave anonima
+-- que o site, o motor no Render e o agente usam. Qualquer politica larga o
+-- bastante para o motor gravar libera a internet inteira junto — o efeito e
+-- identico a deixar o RLS desligado, so que disfarcado de protecao.
+--
+-- Fechar isto de verdade exige uma chave `service_role` no motor e o agente
+-- buscando a lista atraves do motor, e nao direto do Supabase. E o trabalho da
+-- fase 1 do RLS, ainda adiado por decisao do usuario. Enquanto ele nao vem,
+-- esta tabela fica como as outras — com a diferenca, que precisa estar escrita
+-- em algum lugar, de que aqui dentro ha SENHAS em texto claro. Quando a fase 1
+-- comecar, comece por esta tabela.
+-- ============================================================
+ALTER TABLE public.imposition_acessos_locais DISABLE ROW LEVEL SECURITY;
