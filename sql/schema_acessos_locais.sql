@@ -66,3 +66,23 @@ ALTER TABLE public.imposition_acessos_locais
 -- comecar, comece por esta tabela.
 -- ============================================================
 ALTER TABLE public.imposition_acessos_locais DISABLE ROW LEVEL SECURITY;
+
+-- E a politica permissiva POR CIMA do RLS desligado, que parece redundante e
+-- nao e.
+--
+-- O painel do Supabase mostra um aviso em toda tabela sem RLS, com um botao de
+-- ligar. Ligar o RLS numa tabela sem politica nenhuma nao da erro em lugar
+-- nenhum: a leitura passa a devolver lista vazia e a escrita passa a responder
+-- 401. Foi o que aconteceu aqui, DEPOIS de a tabela ja estar funcionando —
+-- alguem clicou no aviso, e o sintoma foi "Erro ao criar acesso" sem nenhuma
+-- pista do motivo.
+--
+-- Com a politica no lugar, ligar o RLS deixa de quebrar nada. Ela nao afrouxa
+-- nada que o DISABLE ja nao afrouxasse: e a mesma chave anonima do site, do
+-- motor e do agente, entao "liberar para anon" e o estado em que a tabela ja
+-- esta. Quem for fechar isto de verdade, na fase 1 do RLS, troca esta politica
+-- por uma que exija service_role — e e por isso que ela tem nome.
+DROP POLICY IF EXISTS acessos_locais_anon ON public.imposition_acessos_locais;
+CREATE POLICY acessos_locais_anon ON public.imposition_acessos_locais
+    FOR ALL TO anon, authenticated
+    USING (true) WITH CHECK (true);

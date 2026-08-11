@@ -11321,6 +11321,49 @@ async function ensureUserPermissions(userId, email) {
     }
 }
 
+/**
+ * Quem está usando a estação, no rodapé do Painel de Produção.
+ *
+ * Fica logo acima da versão do agente porque é ali que o operador já olha. Numa
+ * estação compartilhada ele precisa conferir de relance se quem está logado é
+ * ele mesmo — e sair sem ter de procurar o botão.
+ *
+ * Sem nome — site sem login, ou estação sem código cadastrado — o rótulo diz que
+ * a entrada está liberada e o botão Sair some, porque não haveria de onde sair.
+ */
+function atualizarIdentidadeNoPainel(nome, papel) {
+    const alvo = document.getElementById('newprod-usuario-nome');
+    const selo = document.getElementById('newprod-usuario-papel');
+    const botao = document.getElementById('btn-sair-painel');
+    if (!alvo) return;
+
+    if (!nome) {
+        alvo.textContent = 'Acesso liberado';
+        alvo.title = 'Nenhum código de acesso cadastrado para esta estação';
+        alvo.style.color = '#64748b';
+        if (selo) selo.style.display = 'none';
+        if (botao) botao.style.display = 'none';
+        return;
+    }
+
+    const rl = ROLE_LABELS[papel] || {};
+    alvo.textContent = `👤 ${nome}`;
+    alvo.title = nome + (rl.label ? ` — ${rl.label}` : '');
+    alvo.style.color = '#cbd5e1';
+
+    if (selo) {
+        selo.style.display = rl.label ? '' : 'none';
+        if (rl.label) {
+            selo.textContent = rl.label;
+            selo.style.background = `${rl.color}22`;
+            selo.style.color = rl.color;
+        }
+    }
+    if (botao) botao.style.display = '';
+}
+window.atualizarIdentidadeNoPainel = atualizarIdentidadeNoPainel;
+
+
 // ──── Atualizar UI do perfil logado ───────────────────────────────────────
 function updateProfileUI(user, perms) {
     const profileBar = document.getElementById('user-profile-bar');
@@ -11331,6 +11374,7 @@ function updateProfileUI(user, perms) {
         const roleBadge = perms ? `<span style="font-size:0.65rem;background:${perms.role === 'admin' ? 'rgba(239,68,68,0.2);color:#f87171' : 'rgba(59,130,246,0.2);color:#60a5fa'};padding:1px 6px;border-radius:10px;margin-left:4px;">${(perms.role || '').toUpperCase()}</span>` : '';
         emailDisplay.innerHTML = (user.email || '—') + roleBadge;
     }
+    atualizarIdentidadeNoPainel(user.email, perms && perms.role);
 }
 
 // ──── Sign Out ────────────────────────────────────────────────────────────
@@ -11534,6 +11578,7 @@ function aplicarAcessoLocal(sessao, liberarUICompleta) {
             : '';
         emailDisplay.innerHTML = `🖥️ ${escapeHtml(sessao.nome)}${selo}`;
     }
+    atualizarIdentidadeNoPainel(sessao.nome, sessao.role);
 
     loadAll();
 }
@@ -11641,6 +11686,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
         document.querySelectorAll('.nav-btn').forEach(el => el.style.display = '');
         document.querySelectorAll('.nav-group-label').forEach(el => el.style.display = '');
+        // Quem entrar por cima disto (login local, sessão do site) sobrescreve
+        // logo em seguida. Aqui é o estado sem ninguém logado.
+        atualizarIdentidadeNoPainel(null);
     };
 
     if (isLocal) {
