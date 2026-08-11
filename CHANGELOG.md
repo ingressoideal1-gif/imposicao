@@ -4,7 +4,65 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.0 (v516)** — 2026-08-10 | Agente **1.2.24**
+## Versão atual: **v1.6.0 (v517)** — 2026-08-10 | Agente **1.2.24**
+
+---
+
+## [v517 — 2026-08-10] — Os quatro filtros de setor não devolviam nada
+
+### O sintoma
+Flexo, PVC, Têxtil e Laser: nenhum devolvia linha nenhuma. Também pareciam lentos, "às vezes parando de funcionar".
+
+### A medição
+`renderOrdens()` leva **5 ms** e `setFiltroSetor()` **3 ms**. O filtro nunca foi lento — o que parecia lentidão era a lista voltando vazia. Mas a fila estava assim:
+
+```
+comSetor: 0     semSetor: 35     produtosGlobais: 64
+```
+
+Nenhum item tinha setor, embora todos tivessem `_vibe_id_produto` e a tabela de produtos estivesse carregada. Refazendo o mesmo `find` com tudo em memória, **33 dos 35** resolviam. O join estava certo; rodava cedo demais.
+
+### A corrida
+
+```
+itens mapeados  ->  1.501 ms
+produtosGlobais ->  3.207 ms
+```
+
+Os itens são montados quando as OS chegam, e o setor sai de `produtos.setor_pcp` via `state.produtosGlobais`. As duas cargas são independentes, e o `loadAll` só atribui `produtosGlobais` quando **todas as seis buscas do `Promise.all`** terminam. Na janela entre uma coisa e outra, o `find` não acha nada, o item nasce sem setor — e fica assim, porque ninguém remapeia.
+
+> O log do console engana quem for investigar: `[loadAll] vibeProdutos carregados: 64` é impresso dentro do `.then()` daquele fetch (linha 881), mas a atribuição ao `state` acontece na linha 907, depois do `Promise.all`. O log anuncia a chegada; o `state` só recebe quando a mais lenta das seis buscas terminar.
+
+### Por que só apareceu agora
+O defeito é antigo, mas estava mascarado: até a v515, item sem setor virava `'PVC'` por padrão. O sintoma era outro — PVC mostrava tudo, os demais mostravam pouco. Removido o padrão, a corrida ficou exposta e os quatro filtros zeraram.
+
+### A correção
+Em vez de tentar ordenar duas cargas assíncronas, o setor passa a ser reparado sempre que for possível:
+
+- `repararSetoresDosItens()` preenche o setor de quem está sem, a partir de um índice `id_produto -> setor_pcp`
+- chamado no `loadAll`, logo após `produtosGlobais` ser atribuído
+- e no início do `renderOrdens`, como rede de segurança para qualquer outro caminho que carregue pedidos antes dos produtos
+
+É idempotente e só toca em item sem setor, então não desfaz escolha alguma.
+
+### Como foi verificado
+Chrome real contra a página de produção, com o `script.js` corrigido injetado:
+
+```
+[loadAll] Setor preenchido em 33 item(ns) mapeado(s) antes dos produtos chegarem.
+
+           antes   depois
+Flexo        0       2
+PVC          0       1
+Têxtil       0       1
+Laser        0       5
+Todos        9       9
+```
+
+`renderOrdens` continua em 5 ms e a segunda passada do reparo devolve 0 — idempotente. Os 2 itens que seguem sem setor são produtos sem `setor_pcp` cadastrado, que é o comportamento correto.
+
+### Achado colateral, não corrigido
+O `loadAll` roda **duas vezes** no boot — dois `vibeProdutos carregados` e dois `Re-renderizando` no console. É trabalho duplicado e provável parte da lentidão do carregamento inicial. Não foi investigado.
 
 ---
 

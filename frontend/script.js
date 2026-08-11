@@ -906,6 +906,14 @@ async function loadAll() {
         state.modelosImposicao = modelos || [];
         state.produtosGlobais = vibeProdutos || [];
 
+        // Os itens podem ter sido mapeados antes desta linha — é o caso comum,
+        // porque as OS carregam por conta própria. Sem este reparo eles ficam
+        // sem setor para sempre e os filtros de setor não devolvem nada.
+        const _reparados = repararSetoresDosItens();
+        if (_reparados) {
+            console.log(`[loadAll] Setor preenchido em ${_reparados} item(ns) mapeado(s) antes dos produtos chegarem.`);
+        }
+
         renderAll();
         if (typeof renderPedOSQueue === 'function') {
             console.log('[loadAll] Re-renderizando fila de pedidos após carregar produtos...');
@@ -14324,6 +14332,60 @@ function mapVibecodeProdutoToOSItem(p, osId) {
     };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// REPARO DO SETOR DOS ITENS
+//
+// Os itens de um pedido são mapeados assim que as OS chegam, e o setor sai de
+// produtos.setor_pcp via state.produtosGlobais. Só que as duas cargas são
+// independentes e o loadAll atribui produtosGlobais apenas quando TODAS as seis
+// buscas do Promise.all terminam. Medido na produção: itens mapeados aos
+// 1.501 ms, produtosGlobais preenchido aos 3.207 ms.
+//
+// Nessa janela o find não acha nada, o item nasce sem setor e o resultado fica
+// gravado — ninguém remapeia depois. O efeito era mascarado pelo padrão 'PVC'
+// (removido na v515): antes tudo caía em PVC, agora os quatro filtros de setor
+// ficam vazios.
+//
+// Em vez de tentar ordenar duas cargas assíncronas, o setor é reparado sempre
+// que der: ao chegarem os produtos e a cada render. É idempotente e só toca em
+// item que está sem setor, então não desfaz escolha nenhuma.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Índice id_produto -> setor_pcp. */
+function _mapaSetorPorProduto() {
+    const mapa = new Map();
+    for (const p of (state.produtosGlobais || [])) {
+        if (p && p.id_produto !== null && p.id_produto !== undefined) {
+            mapa.set(String(p.id_produto), p.setor_pcp || '');
+        }
+    }
+    return mapa;
+}
+
+/**
+ * Preenche o setor dos itens que nasceram sem ele por terem sido mapeados
+ * antes de os produtos chegarem. Devolve quantos foram reparados.
+ */
+function repararSetoresDosItens() {
+    if (!state.produtosGlobais || !state.produtosGlobais.length) return 0;
+    if (!state.osItens) return 0;
+
+    const mapa = _mapaSetorPorProduto();
+    let reparados = 0;
+
+    for (const osId of Object.keys(state.osItens)) {
+        for (const item of (state.osItens[osId] || [])) {
+            if (!item || item.setor) continue;   // já tem setor: não mexe
+            const pid = item._vibe_id_produto || item.id_produto || item.produto_id;
+            if (pid === null || pid === undefined || pid === '') continue;
+            const setor = mapa.get(String(pid));
+            if (setor) { item.setor = setor; reparados++; }
+        }
+    }
+    return reparados;
+}
+window.repararSetoresDosItens = repararSetoresDosItens;
+
 /**
  * Carrega os itens de uma OS específica
  */
@@ -15581,6 +15643,12 @@ function renderOrdens() {
     const tbodyImpressao = document.getElementById('tbody-impressao');
     const tbodyArte = document.getElementById('tbody-arte');
     if (!tbodyImpressao && !tbodyArte) return;
+
+    // Rede de segurança: qualquer caminho que carregue pedidos antes dos
+    // produtos deixa itens sem setor. Reparar aqui cobre todos eles de uma vez,
+    // inclusive os que ainda não existem. Só percorre item sem setor, e o
+    // renderOrdens inteiro leva ~5 ms — o custo é irrelevante.
+    repararSetoresDosItens();
 
     // Filtros de busca — guard contra autocomplete do browser (Chrome ignora autocomplete=off)
     const _searchArteEl = document.getElementById('os-search-arte');
