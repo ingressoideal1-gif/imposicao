@@ -2851,7 +2851,22 @@ function editNumeracao(id) {
 
 
 
+    // Numeracao salva sem csv_headers mas com csv_data nao pode ficar sem
+    // interface: e o caso de todo CSV gravado antes de a coluna de cabecalhos
+    // existir. Os nomes das colunas estao nas chaves da propria linha, entao da
+    // para reconstruir. Sem isto o botao "Ver / Editar" nunca aparecia e o
+    // banco de dados ficava invisivel, mesmo estando la.
+    if ((!state.numCsvHeaders || !state.numCsvHeaders.length)
+        && state.numCsvData && state.numCsvData.length) {
+
+        state.numCsvHeaders = Object.keys(state.numCsvData[0] || {})
+            .filter(k => k !== '__ativo');
+
+    }
+
     if (state.numCsvHeaders && state.numCsvHeaders.length) {
+
+        if (!state.numCsvFilename) state.numCsvFilename = 'banco.csv';
 
         renderNumCsvInterface();
 
