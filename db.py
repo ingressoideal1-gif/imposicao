@@ -3,6 +3,7 @@ import os
 import uuid
 import urllib.request
 import urllib.parse
+import urllib.error
 
 import sys
 import datetime
@@ -1463,16 +1464,34 @@ def salvar_acesso_local(data):
                   if a.get('id') != registro['id']]
         registro['codigo'] = validar_codigo_acesso(registro.get('codigo'), usados)
 
+    # Criar e atualizar sao verbos diferentes aqui, e nao um upsert so.
+    #
+    # O upsert do PostgREST e um INSERT com ON CONFLICT: ele valida o corpo como
+    # se fosse linha nova. Um corpo parcial — trocar o perfil, desativar — nao
+    # traz `nome` nem `codigo`, que sao NOT NULL, e a requisicao morre com 400
+    # antes de chegar ao UPDATE. O PATCH so escreve as colunas que vieram, que e
+    # exatamente o que "atualizacao parcial" quer dizer.
     try:
-        body = json.dumps(registro).encode('utf-8')
-        url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais?on_conflict=id"
         headers = _headers()
         headers['Content-Type'] = 'application/json'
-        headers['Prefer'] = 'resolution=merge-duplicates,return=representation'
-        req = urllib.request.Request(url, data=body, headers=headers, method='POST')
+        headers['Prefer'] = 'return=representation'
+
+        if criando:
+            url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais"
+            metodo = 'POST'
+        else:
+            alvo = urllib.parse.quote(str(registro.pop('id')), safe='')
+            url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais?id=eq.{alvo}"
+            metodo = 'PATCH'
+
+        body = json.dumps(registro).encode('utf-8')
+        req = urllib.request.Request(url, data=body, headers=headers, method=metodo)
         with urllib.request.urlopen(req, timeout=10) as resp:
             resultado = json.loads(resp.read().decode('utf-8') or '[]')
             return resultado[0] if resultado else registro
+    except urllib.error.HTTPError as e:
+        print(f"[db] salvar_acesso_local erro: {e} -> {e.read().decode('utf-8')[:300]}")
+        return None
     except Exception as e:
         print(f"[db] salvar_acesso_local erro: {e}")
         return None
