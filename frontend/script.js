@@ -11336,6 +11336,9 @@ function updateProfileUI(user, perms) {
 // ──── Sign Out ────────────────────────────────────────────────────────────
 window.handleSignOut = async function() {
     try {
+        // Na estação a sessão é local; sem limpar aqui, o reload entraria de novo
+        // com o mesmo operador e o botão Sair não sairia de nada.
+        sessionStorage.removeItem(CHAVE_SESSAO_LOCAL);
         if (supabaseClient && supabaseClient.auth) {
             await supabaseClient.auth.signOut();
         }
@@ -11443,6 +11446,171 @@ window.handleGoogleLogin = async function() {
     }
 };
 
+// ══════════════════════════════════════════════════════════════════════════
+// ACESSO LOCAL À ESTAÇÃO (NewProd)
+//
+// O painel servido pelo agente em 127.0.0.1:9000 não pode exigir a conta do
+// sistema: o operador não tem conta, e o login dependeria de rede — que é
+// exatamente o que o agente local existe para tirar do caminho. No lugar disso,
+// um código de 6 caracteres que o administrador gera no Menu Usuários e entrega
+// por fora. Quem valida é o próprio agente, contra a cópia em disco.
+// ══════════════════════════════════════════════════════════════════════════
+
+const CHAVE_SESSAO_LOCAL = 'newprod_acesso_local';
+
+async function iniciarAcessoLocal(liberarUICompleta) {
+    let exigirCodigo = false;
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/local/login/estado`);
+        const data = await resp.json();
+        exigirCodigo = !!(data && data.exigir_codigo);
+    } catch (e) {
+        // Agente numa versão anterior, sem o endpoint, ou fora do ar. Entrar como
+        // antes: parar a produção porque a estação não soube responder seria pior
+        // do que o problema que o código resolve.
+        console.warn('[acesso local] A estação não respondeu sobre o código:', e);
+    }
+
+    if (!exigirCodigo) {
+        console.log('[acesso local] Nenhum código cadastrado nesta estação — entrada liberada.');
+        liberarUICompleta();
+        loadAll();
+        return;
+    }
+
+    let sessao = null;
+    try {
+        sessao = JSON.parse(sessionStorage.getItem(CHAVE_SESSAO_LOCAL) || 'null');
+    } catch (e) { /* sessão ilegível vale como ausente */ }
+
+    if (sessao && sessao.nome) {
+        aplicarAcessoLocal(sessao, liberarUICompleta);
+        return;
+    }
+    mostrarLoginLocal(liberarUICompleta);
+}
+
+/**
+ * Permissões de um operador local.
+ *
+ * Tudo liberado, menos a área de administração para quem não é admin — sem isso,
+ * qualquer operador leria na própria estação os códigos de todos os colegas.
+ * As chaves saem dos mapas de permissão em vez de ROLE_DEFAULTS: os mapas são a
+ * lista completa do que existe, e uma chave faltando aqui esconderia um menu que
+ * o operador usa todo dia.
+ */
+function permsDoOperadorLocal(isAdmin) {
+    const perms = {};
+    for (const key of Object.keys(PERM_VIEW_MAP)) perms[key] = true;
+    for (const key of Object.keys(PERM_NAV_MAP)) perms[key] = true;
+    perms.perm_gerar_pdf = true;
+    perms.perm_imprimir = true;
+    perms.perm_admin_view = !!isAdmin;
+    perms.perm_admin_edit = !!isAdmin;
+    return perms;
+}
+
+function aplicarAcessoLocal(sessao, liberarUICompleta) {
+    window._acessoLocal = sessao;
+    liberarUICompleta();
+
+    const perms = permsDoOperadorLocal(sessao.is_admin);
+    window._currentPerms = perms;
+    applyPermissions(perms);
+
+    const profileBar = document.getElementById('user-profile-bar');
+    const emailDisplay = document.getElementById('user-email-display');
+    if (profileBar) profileBar.style.display = 'block';
+    if (emailDisplay) {
+        const selo = sessao.is_admin
+            ? '<span style="font-size:0.65rem;background:rgba(239,68,68,0.2);color:#f87171;padding:1px 6px;border-radius:10px;margin-left:4px;">ADMIN</span>'
+            : '';
+        emailDisplay.innerHTML = `🖥️ ${escapeHtml(sessao.nome)}${selo}`;
+    }
+
+    loadAll();
+}
+
+function mostrarLoginLocal(liberarUICompleta) {
+    let overlay = document.getElementById('auth-overlay-local');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'auth-overlay-local';
+        overlay.className = 'auth-overlay active';
+        overlay.innerHTML = `
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h2>🖥️ NewProd — Acesso local</h2>
+                    <p>Digite o código de 6 caracteres que o administrador entregou</p>
+                </div>
+                <form onsubmit="handleLoginLocal(event)">
+                    <div class="form-group" style="margin-bottom:14px;">
+                        <input type="text" id="auth-codigo-local" class="form-control" maxlength="6"
+                               autocomplete="off" autocapitalize="characters" spellcheck="false" required
+                               placeholder="A2B4C6"
+                               style="text-align:center;font-family:ui-monospace,Consolas,monospace;font-size:1.7rem;letter-spacing:10px;text-transform:uppercase;height:56px;">
+                    </div>
+                    <div id="auth-erro-local" style="display:none;color:var(--red);font-size:0.82rem;text-align:center;margin-bottom:12px;"></div>
+                    <div class="auth-actions">
+                        <button type="submit" id="btn-auth-local" class="btn btn-primary btn-full" style="height:42px;font-size:0.95rem;">🚀 Entrar</button>
+                    </div>
+                </form>
+                <div style="text-align:center;margin-top:14px;color:var(--text-dim);font-size:0.76rem;">
+                    Este código vale só nesta estação. Não é a senha do site.
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    } else {
+        overlay.classList.add('active');
+    }
+    document.body.classList.add('not-logged-in');
+    window._liberarUIAposLoginLocal = liberarUICompleta;
+    setTimeout(() => document.getElementById('auth-codigo-local')?.focus(), 50);
+}
+
+window.handleLoginLocal = async function(e) {
+    e.preventDefault();
+    const campo = document.getElementById('auth-codigo-local');
+    const erro = document.getElementById('auth-erro-local');
+    const btn = document.getElementById('btn-auth-local');
+    const codigo = (campo?.value || '').trim().toUpperCase();
+
+    btn.disabled = true;
+    btn.textContent = 'Conferindo...';
+    if (erro) erro.style.display = 'none';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/local/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo })
+        });
+        if (!resp.ok) throw new Error('Código inválido');
+        const data = await resp.json();
+
+        const sessao = { nome: data.nome, is_admin: !!data.is_admin };
+        // sessionStorage e não localStorage: fechou o navegador, pede de novo. Numa
+        // estação compartilhada, a sessão não pode sobreviver ao turno.
+        sessionStorage.setItem(CHAVE_SESSAO_LOCAL, JSON.stringify(sessao));
+
+        document.getElementById('auth-overlay-local')?.classList.remove('active');
+        document.body.classList.remove('not-logged-in');
+        toast(`Bem-vindo, ${sessao.nome}!`, 'success');
+        aplicarAcessoLocal(sessao, window._liberarUIAposLoginLocal || (() => {}));
+    } catch (err) {
+        if (erro) {
+            erro.textContent = 'Código inválido. Confira com o administrador.';
+            erro.style.display = 'block';
+        }
+        if (campo) { campo.value = ''; campo.focus(); }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 Entrar';
+    }
+};
+
+
 // ──── Inicialização de auth (DOMContentLoaded) ────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     // Antes, qualquer acesso por localhost/127.0.0.1 pulava o login e recebia
@@ -11469,9 +11637,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     if (isLocal) {
-        console.log('[auth] file:// — bypass de autenticação');
-        liberarUICompleta();
-        loadAll();
+        // file:// não tem agente a quem perguntar — segue o bypass de sempre.
+        if (window.location.protocol === 'file:') {
+            console.log('[auth] file:// — bypass de autenticação');
+            liberarUICompleta();
+            loadAll();
+            return;
+        }
+        await iniciarAcessoLocal(liberarUICompleta);
         return;
     }
 
@@ -11704,8 +11877,143 @@ window.toggleUserPerm = async function(userId, permKey, value) {
 // Carregar admin ao clicar na aba
 document.getElementById('nav-admin')?.addEventListener('click', () => {
     loadAdminUsers();
-
+    loadAcessosLocais();
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// ACESSO LOCAL AO NEWPROD
+//
+// Lista própria de operadores, sem vínculo com as contas do sistema: quem opera
+// a estação não tem conta no Supabase, e exigir uma colocaria a rede no caminho
+// de quem só quer imprimir. O administrador gera o código, lê aqui na tela e
+// entrega ao operador por fora. Não há confirmação, e-mail nem recuperação —
+// perdeu o código, gera outro.
+// ══════════════════════════════════════════════════════════════════════════
+
+window.loadAcessosLocais = async function() {
+    const tbody = document.getElementById('tbody-acessos-locais');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando...</td></tr>';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`);
+        const data = await resp.json();
+        const acessos = (data.ok && data.acessos) ? data.acessos : [];
+
+        if (!acessos.length) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px;">
+                Nenhum acesso local cadastrado — a estação continua entrando sem código.
+            </td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = acessos.map(a => {
+            const inativo = a.ativo === false;
+            return `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);${inativo ? 'opacity:0.5;' : ''}">
+                <td style="padding:10px 12px;">
+                    <strong style="color:#fff;font-size:0.88rem;">${escapeHtml(a.nome || '—')}</strong>
+                </td>
+                <td style="padding:10px 12px;">
+                    <span style="font-family:ui-monospace,Consolas,monospace;font-size:1rem;font-weight:700;letter-spacing:2px;color:var(--blue);">${escapeHtml(a.codigo || '')}</span>
+                    <button class="btn btn-ghost btn-sm" title="Copiar código" onclick="copiarCodigoAcesso('${escapeJsAttr(a.codigo || '')}')" style="padding:2px 6px;margin-left:6px;">📋</button>
+                </td>
+                <td style="padding:10px 12px;text-align:center;">
+                    <input type="checkbox" ${a.is_admin ? 'checked' : ''} style="cursor:pointer;width:15px;height:15px;"
+                           onchange="salvarCampoAcessoLocal('${escapeJsAttr(a.id)}','is_admin',this.checked)">
+                </td>
+                <td style="padding:10px 12px;text-align:center;">
+                    <input type="checkbox" ${inativo ? '' : 'checked'} style="cursor:pointer;width:15px;height:15px;"
+                           onchange="salvarCampoAcessoLocal('${escapeJsAttr(a.id)}','ativo',this.checked)">
+                </td>
+                <td style="padding:10px 12px;text-align:right;white-space:nowrap;">
+                    <button class="btn btn-secondary btn-sm" title="Gerar um código novo" onclick="gerarNovoCodigoAcesso('${escapeJsAttr(a.id)}')" style="font-size:0.75rem;padding:3px 8px;">🎲 Novo código</button>
+                    <button class="btn btn-ghost btn-sm btn-danger" title="Excluir" onclick="excluirAcessoLocal('${escapeJsAttr(a.id)}','${escapeJsAttr(a.nome || '')}')" style="font-size:0.75rem;padding:3px 8px;">🗑️</button>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);">Erro: ${e.message}</td></tr>`;
+    }
+};
+
+// O código sai pronto do motor: o alfabeto sem O/0/I/1 e a conferência de
+// duplicidade moram lá, num lugar só, porque é ele quem grava.
+window.novoAcessoLocal = async function() {
+    const nome = prompt('Nome do operador que vai usar este acesso:');
+    if (!nome || !nome.trim()) return;
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome: nome.trim(), is_admin: false, ativo: true })
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error('o motor não confirmou a gravação');
+        toast(`Acesso criado — código ${data.acesso.codigo}`, 'success');
+        loadAcessosLocais();
+    } catch (e) {
+        toast('Erro ao criar acesso: ' + e.message, 'error');
+    }
+};
+
+window.salvarCampoAcessoLocal = async function(id, campo, valor) {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, [campo]: valor })
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error('o motor não confirmou a gravação');
+        toast(campo === 'ativo'
+            ? (valor ? 'Acesso ativado' : 'Acesso desativado')
+            : (valor ? 'Marcado como admin' : 'Deixou de ser admin'), 'success');
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+        loadAcessosLocais();
+    }
+};
+
+// Enviar string vazia faz o motor sortear um código novo — é o mesmo caminho da
+// criação, então não existe um segundo gerador para sair de sincronia.
+window.gerarNovoCodigoAcesso = async function(id) {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, codigo: '' })
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error('o motor não confirmou a gravação');
+        toast(`Código novo: ${data.acesso.codigo} — o antigo não vale mais`, 'success');
+        loadAcessosLocais();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+};
+
+window.excluirAcessoLocal = async function(id, nome) {
+    if (!confirm(`Excluir o acesso de ${nome}? O código dele deixa de funcionar nas estações.`)) return;
+    try {
+        await fetch(`${API_BASE_URL}/api/acessos-locais/${id}`, { method: 'DELETE' });
+        toast('Acesso excluído', 'success');
+        loadAcessosLocais();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+};
+
+window.copiarCodigoAcesso = async function(codigo) {
+    try {
+        await navigator.clipboard.writeText(codigo);
+        toast(`Código ${codigo} copiado`, 'success');
+    } catch (e) {
+        // clipboard exige contexto seguro; em http:// puro cai aqui
+        prompt('Copie o código:', codigo);
+    }
+};
 
 
 

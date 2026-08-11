@@ -1237,6 +1237,56 @@ async def delete_user_permissions_endpoint(user_id: str):
     ok = db.delete_user_permissions(user_id)
     return {"ok": ok}
 
+# ─── ACESSO LOCAL AO NEWPROD ─────────────────────────────────────────────────
+# O CRUD roda na nuvem (o administrador gerencia pelo Menu Usuarios). O login
+# roda na estacao, contra a copia que o agent_worker sincroniza — sem rede no
+# caminho do operador.
+
+@app.get("/api/acessos-locais")
+async def listar_acessos_locais_endpoint():
+    return {"ok": True, "acessos": db.listar_acessos_locais()}
+
+
+@app.post("/api/acessos-locais")
+async def salvar_acesso_local_endpoint(request: Request):
+    data = await request.json()
+    acesso = db.salvar_acesso_local(data)
+    if not acesso:
+        raise HTTPException(status_code=500, detail="Nao foi possivel salvar o acesso local")
+    return {"ok": True, "acesso": acesso}
+
+
+@app.delete("/api/acessos-locais/{acesso_id}")
+async def excluir_acesso_local_endpoint(acesso_id: str):
+    return {"ok": db.excluir_acesso_local(acesso_id)}
+
+
+@app.get("/api/local/login/estado")
+async def estado_login_local():
+    """Ha lista sincronizada nesta estacao?
+
+    Sem lista — instalacao nova, ou maquina que nunca alcancou a nuvem — o painel
+    entra como fazia antes. Parar a producao por falta de rede seria pior do que
+    o problema que a tranca resolve.
+    """
+    import acesso_local
+    return {"ok": True, "exigir_codigo": acesso_local.ha_lista()}
+
+
+@app.post("/api/local/login")
+async def login_local(request: Request):
+    import acesso_local
+    data = await request.json()
+    acesso = acesso_local.validar(data.get("codigo"))
+    if not acesso:
+        # Mensagem unica: nao dizer se o codigo existe mas esta inativo.
+        raise HTTPException(status_code=401, detail="Codigo invalido")
+    return {
+        "ok": True,
+        "nome": acesso.get("nome") or "Operador",
+        "is_admin": bool(acesso.get("is_admin")),
+    }
+
 # ─── DISPARO DE E-MAILS & CONFIGURAÇÕES SMTP ─────────────────────────────────
 
 @app.get("/api/email/config")

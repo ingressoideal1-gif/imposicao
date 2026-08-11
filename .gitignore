@@ -34,6 +34,10 @@ hot_folders.json
 # tempo de execucao, nao e fonte.
 painel/
 
+# Copia dos codigos de acesso local que o agente baixa para validar o login sem
+# rede. Sao SENHAS em texto claro, de cada maquina, e nunca do repositorio.
+acessos_locais.json
+
 # Backup local da migração de preview_jpg — rede de segurança da máquina, não
 # conteúdo do projeto. São centenas de KB de base64 que não devem entrar no git.
 backup_preview_jpg_*.json

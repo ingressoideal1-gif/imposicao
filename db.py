@@ -1379,6 +1379,111 @@ def delete_user_permissions(user_id):
         return False
 
 
+# ─── ACESSO LOCAL AO NEWPROD ──────────────────────────────────────────────────
+# Lista própria de operadores, sem vínculo com as contas do sistema: quem opera a
+# estação não tem conta no Supabase, e exigir uma colocaria a rede no caminho de
+# quem só quer imprimir. O administrador gera o código, lê na tela e entrega.
+
+# Sem O, 0, I e 1: o código é ditado em voz alta e digitado à mão.
+ALFABETO_CODIGO_ACESSO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+TAMANHO_CODIGO_ACESSO = 6
+
+
+def gerar_codigo_acesso(existentes=None) -> str:
+    """Sorteia um código de 6 caracteres que ainda não esteja em uso.
+
+    Recebe os códigos já existentes em vez de consultar o banco: a unicidade fica
+    resolvida antes da gravação, sem depender de uma corrida contra o Supabase.
+    """
+    import secrets
+    usados = {str(c).upper() for c in (existentes or []) if c}
+    for _ in range(200):
+        codigo = "".join(secrets.choice(ALFABETO_CODIGO_ACESSO)
+                         for _ in range(TAMANHO_CODIGO_ACESSO))
+        if codigo not in usados:
+            return codigo
+    # 32^6 combinações — chegar aqui significa uma lista absurda ou um bug.
+    raise RuntimeError("nao foi possivel gerar um codigo de acesso livre")
+
+
+def normalizar_codigo_acesso(codigo) -> str:
+    """Maiúsculas e sem espaços — o operador digita como quiser."""
+    return "".join(str(codigo or "").split()).upper()
+
+
+def listar_acessos_locais():
+    """Lista os operadores com acesso ao NewProd local."""
+    if not IS_SUPABASE_ACTIVE:
+        return []
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais?select=*&order=nome.asc"
+        req = urllib.request.Request(url, headers=_headers(), method='GET')
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        print(f"[db] listar_acessos_locais erro: {e}")
+        return []
+
+
+def salvar_acesso_local(data):
+    """Cria ou atualiza um acesso local (upsert por id).
+
+    Sem id, é criação: gera o código na hora, conferindo contra os que já existem.
+    """
+    if not IS_SUPABASE_ACTIVE:
+        return None
+    try:
+        registro = dict(data or {})
+        agora = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        registro['atualizado_em'] = agora
+        criando = not registro.get('id')
+
+        if criando:
+            registro['id'] = str(uuid.uuid4())
+            registro['criado_em'] = agora
+            registro.setdefault('ativo', True)
+            registro.setdefault('is_admin', False)
+
+        # Codigo vazio EXPLICITO e o pedido de "gerar outro"; codigo ausente e
+        # atualizacao parcial (marcar admin, desativar) e nao pode sortear nada —
+        # trocar o codigo de quem so foi marcado como admin deixaria o operador
+        # do lado de fora sem ninguem entender por que.
+        pediu_codigo_novo = criando or ('codigo' in registro and not registro['codigo'])
+        if pediu_codigo_novo:
+            usados = [a.get('codigo') for a in listar_acessos_locais()
+                      if a.get('id') != registro['id']]
+            registro['codigo'] = gerar_codigo_acesso(usados)
+        elif 'codigo' in registro:
+            registro['codigo'] = normalizar_codigo_acesso(registro['codigo'])
+
+        body = json.dumps(registro).encode('utf-8')
+        url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais?on_conflict=id"
+        headers = _headers()
+        headers['Content-Type'] = 'application/json'
+        headers['Prefer'] = 'resolution=merge-duplicates,return=representation'
+        req = urllib.request.Request(url, data=body, headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resultado = json.loads(resp.read().decode('utf-8') or '[]')
+            return resultado[0] if resultado else registro
+    except Exception as e:
+        print(f"[db] salvar_acesso_local erro: {e}")
+        return None
+
+
+def excluir_acesso_local(acesso_id):
+    """Remove um acesso local."""
+    if not IS_SUPABASE_ACTIVE:
+        return False
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais?id=eq.{acesso_id}"
+        req = urllib.request.Request(url, headers=_headers(), method='DELETE')
+        with urllib.request.urlopen(req, timeout=8):
+            return True
+    except Exception as e:
+        print(f"[db] excluir_acesso_local erro: {e}")
+        return False
+
+
 def get_email_config() -> dict:
     """Busca configurações salvas do servidor SMTP de e-mail."""
     if IS_SUPABASE_ACTIVE:

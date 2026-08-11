@@ -308,6 +308,11 @@ INTERVALO_FONTES_S = 6 * 3600
 # subir — antes disso vale a copia que ja estava no disco.
 INTERVALO_PAINEL_S = 30 * 60
 
+# Acessos locais a cada 5 min, e nao 30: sao poucas linhas, e quando o
+# administrador gera um codigo alguem esta esperando para entrar do outro lado do
+# telefone. Meia hora de espera nesse momento parece defeito.
+INTERVALO_ACESSOS_S = 5 * 60
+
 # Um unico run_loop por processo. Ver o comentario no proprio run_loop.
 _loop_ativo = False
 _loop_lock = threading.Lock()
@@ -493,6 +498,33 @@ def _sincronizar_painel_em_thread():
     threading.Thread(target=sincronizar_painel, daemon=True, name="SyncPainel").start()
 
 
+def sincronizar_acessos():
+    """Baixa a lista de acessos locais e grava a copia da estacao.
+
+    Vai direto ao REST do Supabase, como o resto do relay, e NAO passa pelo
+    db.IS_SUPABASE_ACTIVE — que e False de proposito no executavel para manter o
+    catalogo local. Uma falha de rede deixa a copia anterior valendo: o operador
+    que ja tinha codigo continua entrando com a internet fora.
+    """
+    import acesso_local
+    if not _relay_ativo():
+        return False
+    acessos = _supabase_request("GET", "imposition_acessos_locais?select=*")
+    if acessos is None:
+        print("[agent_worker] Acessos locais nao sincronizados. Segue a copia atual.", flush=True)
+        return False
+    if acesso_local.salvar_lista(acessos):
+        ativos = sum(1 for a in acessos if a.get("ativo") is not False)
+        print(f"[agent_worker] Acessos locais sincronizados ({ativos} ativos).", flush=True)
+        return True
+    return False
+
+
+def _sincronizar_acessos_em_thread():
+    import threading
+    threading.Thread(target=sincronizar_acessos, daemon=True, name="SyncAcessos").start()
+
+
 # Registro da ultima tentativa de atualizacao, EM DISCO.
 # Precisa sobreviver ao reinicio: se o msiexec falhar, o .bat reinicia o agente na
 # versao antiga e um registro em memoria se perderia — justamente no caso que
@@ -676,6 +708,7 @@ def run_loop():
     update_timer = 60   # primeira checagem 1 min apos subir
     fontes_timer = 20   # sync de fontes logo no inicio
     painel_timer = 5    # painel quase de imediato: e o que o operador ve
+    acessos_timer = 5   # junto com o painel: sem a lista, ninguem entra
     while True:
         try:
             if heartbeat_timer <= 0:
@@ -690,12 +723,16 @@ def run_loop():
             if painel_timer <= 0:
                 _sincronizar_painel_em_thread()
                 painel_timer = INTERVALO_PAINEL_S
+            if acessos_timer <= 0:
+                _sincronizar_acessos_em_thread()
+                acessos_timer = INTERVALO_ACESSOS_S
             process_queue()
             time.sleep(5)
             heartbeat_timer -= 5
             update_timer -= 5
             fontes_timer -= 5
             painel_timer -= 5
+            acessos_timer -= 5
         except Exception as e:
             print(f"[agent_worker] Erro no loop principal: {e}", flush=True)
             time.sleep(5)
@@ -703,6 +740,7 @@ def run_loop():
             update_timer -= 5
             fontes_timer -= 5
             painel_timer -= 5
+            acessos_timer -= 5
 
 
 if __name__ == "__main__":

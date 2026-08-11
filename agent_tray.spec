@@ -76,6 +76,7 @@ a = Analysis(
         'ppd_parser',
         'print_service',
         'hotfolder',
+        'acesso_local',
         'local_print_agent',
         'agent_worker',
         'security_config',
