@@ -7,6 +7,7 @@ import sys
 import uuid
 import shutil
 import tempfile
+import threading
 import urllib.request
 import urllib.error
 
@@ -184,8 +185,22 @@ def process_queue():
             file_url = job.get("file_url")
             printer_name = job.get("printer_name")
             ppd_options = job.get("ppd_options", {})
-            
-            _supabase_request("PATCH", f"print_queue?id=eq.{job_id}", {"status": "printing"})
+
+            # REIVINDICACAO ATOMICA: so assume o trabalho se ELE ainda estiver
+            # 'pending'. O status=eq.pending na URL faz o proprio Postgres
+            # decidir quem ganha; quem perder recebe lista vazia e sai.
+            #
+            # Sem isso, dois processadores lendo antes de qualquer um marcar
+            # imprimem o mesmo arquivo duas vezes. Aconteceu de verdade: o
+            # run_loop rodava em dobro no mesmo processo, e ha estacao com duas
+            # linhas em print_agents com o mesmo nome. O guard do run_loop
+            # resolve o caso de hoje; este trecho resolve a classe do problema.
+            reivindicado = _supabase_request(
+                "PATCH", f"print_queue?id=eq.{job_id}&status=eq.pending", {"status": "printing"})
+            if not reivindicado:
+                print(f"[agent_worker] Job {job_id} ja foi assumido por outro processador; ignorando.", flush=True)
+                continue
+
             print(f"[agent_worker] Processando Job {job_id} para {printer_name}...", flush=True)
             
             temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
@@ -228,6 +243,10 @@ INTERVALO_FONTES_S = 6 * 3600
 # a correcao publicada no mesmo dia. A primeira sincronizacao acontece 5s apos
 # subir — antes disso vale a copia que ja estava no disco.
 INTERVALO_PAINEL_S = 30 * 60
+
+# Um unico run_loop por processo. Ver o comentario no proprio run_loop.
+_loop_ativo = False
+_loop_lock = threading.Lock()
 
 
 # Resultado do ultimo teste de alcance ao Storage. Fica em memoria porque a
@@ -573,6 +592,21 @@ del "%~f0"
 
 
 def run_loop():
+    # UM laco por processo. Ele e iniciado em dois lugares: o agent_tray chama
+    # direto e o lifespan do app.py sobe uma thread. Os dois rodavam juntos, o
+    # que aparecia como heartbeat em dobro no log -- inofensivo -- e como
+    # IMPRESSAO EM DOBRO assim que o relay voltou a funcionar, porque os dois
+    # liam o mesmo job pendente antes de qualquer um marca-lo.
+    #
+    # O guard fica aqui, e nao em quem chama, porque as duas chamadas sao
+    # legitimas: o tray e o modo normal, o lifespan cobre quem sobe so o app.py.
+    global _loop_ativo
+    with _loop_lock:
+        if _loop_ativo:
+            print("[agent_worker] run_loop ja esta rodando neste processo; segunda chamada ignorada.", flush=True)
+            return
+        _loop_ativo = True
+
     print(f"Iniciando Agent Worker (Cloud Relay) - ID: {AGENT_ID}", flush=True)
     heartbeat_timer = 0
     update_timer = 60   # primeira checagem 1 min apos subir
