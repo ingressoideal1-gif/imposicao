@@ -4,6 +4,45 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-12] — Dado variável em espaço limitado: espremer as letras e conferir o banco antes de imprimir
+
+As duas ideias que ficaram anotadas no release anterior.
+
+### Funcionalidade 1 — Espremer as letras mantendo a altura (`overflow: "condense"`)
+Terceira opção do "Se não couber", ao lado de *Reduzir a fonte* e *Quebrar em linhas*.
+As letras estreitam na horizontal e o corpo não muda, então a linha do ticket fica na
+mesma altura em todos os ingressos — é o truque do cartão de embarque, e o que permite
+usar um grid rígido com nomes de tamanhos diferentes. A compressão para no piso de 75%
+(`PISO_CONDENSA`); daí para baixo a fonte também reduz, senão o dado sairia ilegível.
+
+No motor, compressão e rotação viajam num `morph` só — `Matrix(escala_x, 1) * Matrix(-angle)`,
+pivô no centro do bloco — com o ponto de inserção pré-corrigido para a linha cair no lugar
+certo depois de comprimida. No canvas, o equivalente é `ctx.scale(esc, 1)` com o `x`
+dividido pela escala. Medido na tela: no mesmo espaço, o texto espremido sai com 6,0 mm de
+altura contra 3,7 mm do reduzido.
+
+### Funcionalidade 2 — Conferidor de estouro do banco de dados
+A box 📏 passou a varrer o banco inteiro pelo mesmo ajuste do desenho e responder, antes de
+o papel sair: quantas linhas têm a **coluna vazia** (ticket em branco), quantas ficam
+**abaixo de 6 pt** e quantas produzem um bloco que **passa da altura do ticket**. Linha
+desmarcada é ignorada, porque não vai à impressão. Sem nada a apontar, a linha fica verde e
+informa o corpo da linha mais apertada.
+
+O botão **🔍 Ver essas linhas** abre o editor de CSV já filtrado nelas, com faixa explicando
+o motivo, marca âmbar que permanece quando o filtro é desligado, e o arrasto travado como em
+qualquer outro filtro. O resultado é cacheado por elemento, com a própria lista de linhas na
+chave — trocar o CSV cria um array novo e invalida sozinho.
+
+**Testes:** os três modos na função pura, e no PDF gerado a prova que interessa — dentro do
+piso a altura medida do `condense` é igual à do texto livre; além do piso, cai. Mais o caso
+rotacionado, que discrimina a ordem das matrizes. Verificação no app real: aviso correto
+("De 3 linhas: 1 com a coluna vazia · 1 abaixo de 6 pt"), editor abrindo com as 2 linhas
+apontadas e marcadas, zero erros de console.
+
+**Publicação:** `engine.py` mudou — o agente NewProd sai junto com o site.
+
+---
+
 ## [2026-08-12] — Editor de numeração: travar elemento, frente/trás e largura máxima do dado variável
 
 ### Funcionalidade 1 — 🔒 Travar elemento

@@ -201,12 +201,46 @@ o comportamento antigo:
 
 - **📏 Espaço do texto** (`max_width_mm`, `overflow`, `text_align`): só na UI de
   elementos `TEXT` com origem Banco de Dados, mas o mecanismo vale para qualquer
-  elemento da família texto que tenha os campos. `overflow` é `"shrink"` (reduz o
-  corpo na razão exata até caber — padrão) ou `"wrap"` (quebra por palavra, com
-  quebra por caractere para palavra maior que o espaço). `text_align`
+  elemento da família texto que tenha os campos. `text_align`
   (`center`/`left`/`right`) só age quando há largura. Com o elemento selecionado,
   o editor desenha a guia tracejada do espaço. Trocar a origem para Sequencial
-  apaga os três campos.
+  apaga os três campos. `overflow` tem três valores:
+
+  | Valor | O que faz |
+  |---|---|
+  | `"shrink"` (padrão) | reduz o corpo na razão exata até caber |
+  | `"condense"` | espreme as letras na horizontal e **mantém a altura** — as linhas do ticket seguem alinhadas de um ingresso ao outro. No piso de `PISO_CONDENSA` (75%) a compressão para e o resto vira redução de corpo, senão o dado sairia ilegível |
+  | `"wrap"` | quebra por palavra, com quebra por caractere para palavra maior que o espaço |
+
+  A compressão viaja junto com a rotação num `morph` só, no pivô `(cx, cy)`:
+  `Matrix(escala_x, 1) * Matrix(-angle)` — comprime primeiro, gira depois. Como
+  a escala acontece em torno do pivô, o ponto de inserção de cada linha é
+  pré-corrigido (`cx + (borda_esq − cx) / escala_x`) para ela cair no lugar
+  certo **depois** de comprimida. No canvas o equivalente é `ctx.scale(esc, 1)`
+  com o `x` dividido pela escala — o `ctx` já está na âncora, que é o mesmo
+  pivô. Inverter a ordem das matrizes comprime o eixo errado quando há rotação;
+  há teste para isso.
+
+- **O conferidor de estouro**, dentro da própria box 📏: varre o banco inteiro
+  pelo mesmo ajuste do desenho e responde as três perguntas que custam caro na
+  produção — quantas linhas têm a **coluna vazia** (ticket em branco), quantas
+  ficam **abaixo de `CORPO_MINIMO_PT` (6 pt)** e quantas produzem um bloco que
+  **passa da altura do ticket**. Linha desmarcada (`__ativo: false`) é ignorada,
+  porque não vai ao papel. Quando não há nada a apontar, a linha fica verde e
+  diz o corpo da linha mais apertada.
+
+  O botão **🔍 Ver essas linhas** abre o editor de CSV já filtrado nelas
+  (`abrirEditorCsv({ destacar: { indices, motivo } })`). As posições viram
+  `__id` na abertura, depois do `garantirIds` — id sobrevive a ordenar, filtrar
+  e desfazer; posição não. As linhas ficam com a marca âmbar mesmo com o filtro
+  desligado, e `soDestacadas` entra em `ordenacaoOuFiltroAtivo()` para travar o
+  arrasto, pela mesma razão dos outros filtros.
+
+  O resultado é cacheado por elemento em `_cacheEstouro`, porque
+  `renderElementsList()` roda a cada tecla e varrer 3.000 linhas a cada uma
+  seria desperdício. A chave inclui **a própria lista de linhas**: trocar o CSV
+  sempre cria um array novo, então a invalidação acontece sozinha, sem depender
+  de alguém lembrar de limpar o cache em cada caminho.
 
   O algoritmo vive em **dois espelhos que precisam mudar juntos**:
   `frontend/texto-ajuste.js` (`window.ajustarTextoNaLargura` +
@@ -217,9 +251,13 @@ o comportamento antigo:
   renderizador novo, use-o também. Folga de 0,5% na comparação para a mesma
   palavra não quebrar diferente entre a régua do canvas e a do fitz.
 
-  Testes: `tests/test_engine_ajuste_texto.py` (a função) e
+  Testes: `tests/test_engine_ajuste_texto.py` (a função, nos três modos) e
   `tests/test_engine_largura_maxima.py` (o texto desenhado no PDF respeita a
-  largura). Mexeu no `engine.py` ⇒ o agente publica junto com o site.
+  largura; no `condense` dentro do piso a **altura medida no PDF é igual à do
+  texto livre**, e além do piso ela cai). As larguras dos testes de `condense`
+  saem de `fitz.get_text_length` do próprio dado, não de número mágico — 40 mm
+  parecia "dentro do piso" e estava além dele. Mexeu no `engine.py` ⇒ o agente
+  publica junto com o site.
 
 ## Verificando uma mudança nesta tela
 
