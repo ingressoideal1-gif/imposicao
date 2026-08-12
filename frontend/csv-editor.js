@@ -721,6 +721,57 @@
         );
     }
 
+    /**
+     * Seleciona um intervalo de linhas pelo numero da coluna #. Existe porque
+     * repartir 3.000 assentos entre setores e trabalho de intervalo, nao de
+     * clique: rolar ate a linha 1.500 com shift pressionado nao e caminho.
+     */
+    async function selecionarIntervalo() {
+        const v = await dialogo('Selecionar por intervalo',
+            'Use o número da linha que aparece na coluna #, que é a ordem de impressão.',
+            [
+                { key: 'de', label: 'Da linha', type: 'number', value: 1 },
+                { key: 'ate', label: 'Até a linha', type: 'number', value: ed.rows.length },
+                {
+                    key: 'pular', type: 'checkbox', value: true,
+                    label: 'Pular as linhas que já são de outro modelo (as vermelhas)'
+                },
+                {
+                    key: 'somar', type: 'checkbox', value: false,
+                    label: 'Somar à seleção atual, em vez de substituí-la'
+                }
+            ], 'Selecionar');
+        if (!v) return;
+
+        const de = Math.max(1, Math.min(ed.rows.length, parseInt(v.de) || 1));
+        const ate = Math.max(1, Math.min(ed.rows.length, parseInt(v.ate) || 1));
+        const a = Math.min(de, ate) - 1, b = Math.max(de, ate) - 1;
+
+        if (!v.somar) ed.sel.clear();
+
+        let pegas = 0, deOutro = 0, desmarcadas = 0;
+        for (let i = a; i <= b; i++) {
+            const row = ed.rows[i];
+            if (!row) continue;
+            // Linha desmarcada nao vai para o papel; atribui-la a um modelo nao
+            // faria nada, e ainda inflaria a contagem da fatia.
+            if (!linhaAtiva(row)) { desmarcadas++; continue; }
+            const dono = donoDaLinha(row);
+            const deTerceiro = dono != null && (!ed.foco || String(dono) !== String(ed.foco));
+            if (v.pular && deTerceiro) { deOutro++; continue; }
+            ed.sel.add(Number(row[COL_ID]));
+            pegas++;
+        }
+        recalcular();
+        aviso(
+            `${pegas.toLocaleString('pt-BR')} linha(s) selecionada(s)`
+            + (deOutro ? `, ${deOutro} de outro modelo ficaram de fora` : '')
+            + (desmarcadas ? `, ${desmarcadas} desmarcada(s) ignorada(s)` : '')
+            + '.',
+            pegas ? 'success' : 'error'
+        );
+    }
+
     /** Quantas linhas ativas cada modelo leva, e quantas ficaram sem dono. */
     function cobertura() {
         const porModelo = {};
@@ -1036,16 +1087,33 @@
             cm.className = 'csv-ed-c mod';
             cm.style.width = W_MODELO + 'px';
             const dono = donoDaLinha(row);
-            if (dono == null) {
+            // Aberta a partir de um modelo (o 🧩 do card), a coluna vira
+            // semaforo: verde e o que este modelo ainda pode pegar, vermelho e
+            // o que ja pertence a outro. Sem foco — vindo do aviso da fila, em
+            // que se reparte entre todos — vale a cor de cada modelo, que ali e
+            // a informacao util.
+            const comFoco = !!ed.foco;
+            const meu = comFoco && dono != null && String(dono) === String(ed.foco);
+            if (dono == null && !comFoco) {
                 cm.classList.add('sem');
                 cm.textContent = '— sem modelo';
+            } else if (dono == null) {
+                const chip = document.createElement('span');
+                chip.className = 'chip';
+                chip.style.background = '#22c55e';
+                cm.appendChild(chip);
+                const nm = document.createElement('span');
+                nm.textContent = 'Disponível';
+                nm.style.color = '#22c55e';
+                cm.appendChild(nm);
             } else {
                 const chip = document.createElement('span');
                 chip.className = 'chip';
-                chip.style.background = corDoModelo(dono);
+                chip.style.background = (comFoco && !meu) ? '#ef4444' : corDoModelo(dono);
                 cm.appendChild(chip);
                 const nm = document.createElement('span');
                 nm.textContent = nomeDoModelo(dono);
+                if (comFoco && !meu) nm.style.color = '#ef4444';
                 nm.style.overflow = 'hidden';
                 nm.style.textOverflow = 'ellipsis';
                 cm.appendChild(nm);
@@ -1956,7 +2024,13 @@
             + '<span class="seta">\u2192</span>'
             + '<span class="passo"><span class="num">2</span>'
             + 'Clique no nome do modelo, na barra de baixo</span>'
-            + '<span class="nota">Aqui só se reparte. Para corrigir o conteúdo das '
+            + '<span class="nota">'
+            + (ed.foco
+                ? '<b style="color:#22c55e">\u25cf Disponível</b> \u00b7 '
+                  + '<b style="color:#ef4444">\u25cf já é de outro modelo</b> \u00b7 '
+                  + 'as suas ficam na cor do modelo. &nbsp;&nbsp;'
+                : '')
+            + 'Aqui só se reparte. Para corrigir o conteúdo das '
             + 'células, feche e use <b>📊 Ver / editar</b> no card do modelo.</span>';
         const estado = document.createElement('span');
         estado.className = 'estado';
@@ -2016,6 +2090,9 @@
         b3.appendChild(l3);
         b3.appendChild(botao('Visíveis', 'Selecionar tudo que está na tela agora',
             () => selecionarView(true)));
+        b3.appendChild(botao('Intervalo…',
+            'Selecionar da linha N até a linha M pelo número da coluna #',
+            selecionarIntervalo));
         b3.appendChild(botao('Limpar', 'Limpar a seleção', () => {
             ed.sel.clear(); pintarJanela(); renderCabecalho(); renderRodape(); renderBarras();
         }));

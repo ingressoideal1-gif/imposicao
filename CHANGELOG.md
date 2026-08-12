@@ -8,6 +8,42 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v535 — 2026-08-12] — Seletor de linhas: intervalo e semaforo verde/vermelho
+
+### A coluna Modelo virou semaforo
+Aberta pelo 🧩 de um modelo, a coluna deixa de mostrar a cor de paleta de cada
+um e passa a responder a pergunta de quem abriu:
+
+| | |
+|---|---|
+| 🟢 **Disponivel** | ninguem pegou; este modelo pode levar |
+| 🔴 **Nome do outro** | ja e de outro modelo do pedido |
+| 🔵 **Nome deste** | e deste modelo (fica na cor dele) |
+
+A legenda entrou na faixa de instrucao. Vindo do aviso da fila — em que se
+reparte entre todos ao mesmo tempo — vale a cor de cada modelo, que ali e a
+informacao util: nao ha um "outro" para alertar.
+
+### Selecionar por intervalo
+Repartir 3.000 assentos entre setores e trabalho de intervalo, nao de clique:
+rolar ate a linha 1.500 segurando Shift nao e caminho. O botao **Intervalo…**,
+na barra *Selecionar*, pede da linha N ate a M pelo numero da coluna `#`, com
+duas opcoes:
+
+- **Pular as linhas que ja sao de outro modelo (as vermelhas)** — ligada por
+  padrao. A posse e exclusiva: sem ela, um intervalo que invade a fatia do
+  vizinho **rouba** as linhas dele, em silencio.
+- **Somar a selecao atual** — desligada por padrao, para juntar faixas soltas.
+
+Linhas desmarcadas sao ignoradas, e o aviso final diz quantas entraram, quantas
+ficaram de fora por serem de outro modelo e quantas estavam desmarcadas.
+
+### Arquivos
+`frontend/csv-editor.js`, `docs/editor_de_csv.md`.
+So frontend — o agente nao precisa ser republicado.
+
+---
+
 ## [v534 — 2026-08-12] — A tela do banco de dados passou a se explicar
 
 Relatado direto: *"Não ficou claro a edição do .csv e a forma de seleção para

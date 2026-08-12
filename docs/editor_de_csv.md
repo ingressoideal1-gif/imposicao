@@ -321,6 +321,38 @@ A última linha existe porque as duas telas se parecem: a de distribuir **não**
 edita célula (é decisão de projeto — ver acima), e sem dizer isso o operador
 tenta, não consegue, e conclui que está quebrada.
 
+#### A coluna Modelo é um semáforo
+
+Aberta pelo 🧩 de um modelo — quando existe `ed.foco` —, a coluna troca as cores
+de paleta por três estados, lidos do ponto de vista de quem abriu:
+
+| | |
+|---|---|
+| 🟢 **Disponível** | ninguém pegou; este modelo pode levar |
+| 🔴 **Nome do outro** | já é de outro modelo do pedido |
+| 🔵 **Nome deste** | é deste modelo (fica na cor dele) |
+
+Sem foco — vindo do aviso da fila, em que se reparte entre todos ao mesmo tempo —
+vale a cor de cada modelo, que ali é a informação útil: não há um "outro" para
+alertar.
+
+#### Selecionar por intervalo
+
+Repartir 3.000 assentos entre setores é trabalho de intervalo, não de clique:
+rolar até a linha 1.500 segurando Shift não é caminho. O botão **Intervalo…**, na
+barra *Selecionar*, pede da linha N até a M — pelo número da coluna `#`, que é a
+ordem de impressão — com duas opções:
+
+- **Pular as linhas que já são de outro modelo (as vermelhas)**, ligada por
+  padrão. A posse é exclusiva: sem ela, atribuir um intervalo que invade a fatia
+  do vizinho **rouba** as linhas dele, em silêncio.
+- **Somar à seleção atual**, desligada por padrão, para juntar faixas soltas.
+
+Linhas desmarcadas (`__ativo: false`) são ignoradas — não vão ao papel, e
+atribuí-las só inflaria a contagem da fatia. O aviso ao final diz quantas
+entraram, quantas ficaram de fora por serem de outro modelo e quantas foram
+ignoradas por estarem desmarcadas.
+
 ### A janela ampliada
 
 Clicar na imagem do modelo abre a visualização em tela cheia: frente e verso
