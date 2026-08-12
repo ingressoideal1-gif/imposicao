@@ -348,7 +348,7 @@ function renderAmostrasOSItens(osId) {
                     ${statusBadge}
                 </div>
             </div>
-            <div style="padding: 24px;">
+            <div class="amostra-card-corpo" style="padding: 24px;">
                 <div class="amostra-mid-row" style="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'grid-template-columns: 1fr;' : ''}">
                     <div class="amostra-decisao-panel">
                         ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
@@ -468,15 +468,15 @@ function renderAmostrasOSItens(osId) {
                                  faces: frente e verso mostram sempre a mesma
                                  linha. So existe onde o desenho e ao vivo: sobre
                                  a imagem aprovada nao haveria o que virar. -->
-                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:8px; margin-top:14px; padding:12px 16px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
-                                <div style="font-size:0.72rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em;">Confira os ingressos</div>
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior" style="min-width:44px; min-height:36px;">&#9664;</button>
-                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:140px; text-align:center;">Ingresso 1 de 1</span>
-                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:80px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:6px; font-size:0.88rem;" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
-                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso" style="min-width:44px; min-height:36px;">&#9654;</button>
+                            <div id="amostra-csv-nav-${idx}" class="amostra-csv-nav" style="display:none;">
+                                <div class="rotulo">Confira os ingressos</div>
+                                <div class="controles">
+                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" class="info">Ingresso 1 de 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" class="ir" min="1" value="1" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso">&#9654;</button>
                                 </div>
-                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.8rem; color:var(--text-dim); text-align:center;"></div>
+                                <div id="amostra-csv-resumo-${idx}" class="resumo"></div>
                             </div>`}
                         </div>
                         ` : `
@@ -503,15 +503,15 @@ function renderAmostrasOSItens(osId) {
                                  faces: frente e verso mostram sempre a mesma
                                  linha. So existe onde o desenho e ao vivo: sobre
                                  a imagem aprovada nao haveria o que virar. -->
-                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:8px; margin-top:14px; padding:12px 16px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
-                                <div style="font-size:0.72rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em;">Confira os ingressos</div>
-                                <div style="display:flex; align-items:center; gap:10px;">
-                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior" style="min-width:44px; min-height:36px;">&#9664;</button>
-                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:140px; text-align:center;">Ingresso 1 de 1</span>
-                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:80px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:6px; font-size:0.88rem;" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
-                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso" style="min-width:44px; min-height:36px;">&#9654;</button>
+                            <div id="amostra-csv-nav-${idx}" class="amostra-csv-nav" style="display:none;">
+                                <div class="rotulo">Confira os ingressos</div>
+                                <div class="controles">
+                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" class="info">Ingresso 1 de 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" class="ir" min="1" value="1" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary seta" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso">&#9654;</button>
                                 </div>
-                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.8rem; color:var(--text-dim); text-align:center;"></div>
+                                <div id="amostra-csv-resumo-${idx}" class="resumo"></div>
                             </div>`}
                         <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>

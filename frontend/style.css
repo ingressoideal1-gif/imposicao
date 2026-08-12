@@ -859,7 +859,12 @@ input[type="color"].element-card-fields .form-control,
     display: flex;
     flex-direction: column;
     gap: 8px;
-    z-index: 2000;
+    /* Acima de TUDO, inclusive da `.cliente-page` (99999) e do lightbox de
+       ampliação (100000/100001). Em 2000 o aviso nascia atrás da página do
+       cliente, que tem fundo opaco: o cliente que tocava em ALTERAR sem
+       escrever a observação recebia o aviso "escreva o que precisa mudar" —
+       e não via nada. Para ele, o botão simplesmente não reagia. */
+    z-index: 100003;
 }
 
 .toast {
@@ -1602,7 +1607,13 @@ body.not-logged-in .app-shell {
     max-width: 900px;
     margin: 0 auto;
     padding: 24px 20px;
+    /* `dvh` e não `vh`: no celular o `100vh` mede a altura COM a barra de
+       endereço recolhida, e como o pai já tem altura própria, o container
+       nascia 60-110px mais alto que a caixa de rolagem — o deslocamento
+       vertical clássico, com o rodapé sempre fora de alcance.
+       A linha `vh` fica como reserva para navegador que não conhece `dvh`. */
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
 }
@@ -1675,12 +1686,80 @@ body.not-logged-in .app-shell {
     min-width: 200px;
 }
 
+/* `.btn-lg` nunca existiu como classe: o botão de finalizar carregava o nome
+   e tirava o tamanho de um `font-size` preso no `style=""`. Aquele atributo
+   saiu (era ele, junto do `nowrap`, que cortava o rótulo no celular), então o
+   tamanho passa a morar aqui — onde a media query consegue encolhê-lo. */
+.cliente-page .btn-lg {
+    font-size: 1.1rem;
+}
+
 .cliente-footer {
     margin-top: auto;
     text-align: center;
     padding: 24px 0;
     color: var(--text-faint);
     font-size: 0.8rem;
+}
+
+/* ─── Seletor de ingressos do link do cliente ────────────────────────────────
+   Os tamanhos vivem aqui, e não em `style=""` no template, porque preso no
+   atributo nada disso encolhe: os pisos somavam 372px (44 + 140 + 80 + 44, mais
+   três gaps de 10 e 32 de padding) numa tela de 360, e o bloco, por ser
+   centralizado, transbordava para a ESQUERDA — onde não há rolagem que alcance.
+   O cliente ficava sem ler o dado do próprio ingresso: "Página: Bulgaria" saía
+   como "gina: Bulgaria". */
+.amostra-csv-nav {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    max-width: 100%;
+}
+.amostra-csv-nav .rotulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.amostra-csv-nav .controles {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 100%;
+}
+.amostra-csv-nav .seta {
+    min-width: 44px;
+    min-height: 36px;
+}
+.amostra-csv-nav .info {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text);
+    min-width: 140px;
+    text-align: center;
+}
+.amostra-csv-nav .ir {
+    width: 80px;
+    text-align: center;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px;
+    font-size: 0.88rem;
+}
+.amostra-csv-nav .resumo {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    text-align: center;
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 
 @media (max-width: 600px) {
@@ -1706,6 +1785,52 @@ body.not-logged-in .app-shell {
     .cliente-section {
         padding: 16px;
     }
+
+    /* ─── Devolver largura à arte ────────────────────────────────────────────
+       Quatro paddings aninhados comiam 176px de uma tela de 360 — 49% — antes
+       de sobrar espaço para o desenho, e um ingresso de 180x50mm saía com
+       184px de largura. Os `max-height` de 250/450px nunca chegavam a atuar:
+       a largura estrangulava antes. Encolher os quatro devolve ~120px. */
+    .cliente-page .cliente-container { padding: 10px 6px; }
+    .cliente-page .card { padding: 12px; }
+    .cliente-page .amostra-card-corpo { padding: 12px !important; }
+    .cliente-page .amostra-preview-container {
+        padding: 10px;
+        min-height: auto;
+    }
+
+    /* Soltar o teto de ALTURA da arte no celular.
+       Os `max-height` de 250px (frente sozinha) e 450px (frente e verso) vêm
+       presos no `style=""` do template. Num ingresso deitado eles nunca
+       importam — a largura estrangula antes. Numa credencial em pé, não: com
+       620x850 de canvas, o teto de 250 puxava a largura para 182px, e nem
+       devolver os 120px de padding acima adiantava, porque a proporção segurava.
+       Com o teto em 60vh quem volta a mandar é a largura disponível. */
+    .cliente-page .amostra-preview-container canvas,
+    .cliente-page .amostra-preview-container img {
+        max-height: 60vh !important;
+    }
+
+    /* O seletor de ingressos cabendo na tela: o texto do meio passa a ser o
+       elástico e as peças rígidas encolhem só até o alvo de toque. */
+    .amostra-csv-nav { padding: 10px 8px; gap: 6px; }
+    .amostra-csv-nav .controles { gap: 6px; width: 100%; justify-content: center; }
+    .amostra-csv-nav .seta { min-width: 40px; padding-left: 8px; padding-right: 8px; }
+    .amostra-csv-nav .info { min-width: 0; flex: 1 1 auto; font-size: 0.82rem; }
+    .amostra-csv-nav .ir { width: 64px; }
+
+    /* Rótulo de botão quebra linha em vez de vazar. O `.btn` do painel é
+       `nowrap` porque lá a largura sobra; aqui não sobra. */
+    .cliente-page .btn { white-space: normal; }
+    .cliente-page .btn-lg { font-size: 0.95rem; line-height: 1.25; }
+
+    /* 16px é o piso abaixo do qual o Safari do iPhone dá zoom ao focar o
+       campo — e ele não desfaz o zoom ao sair, deixando a página ampliada e
+       cortada. `!important` porque esses tamanhos vêm de `style=""` no
+       template, e sem ele a regra não ganha. */
+    .cliente-page input,
+    .cliente-page textarea,
+    .cliente-page select { font-size: 16px !important; }
 }
 
 /* ─── Painel de Produção Estilizado (Fila de Impressão) ─── */
