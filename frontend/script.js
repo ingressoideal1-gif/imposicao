@@ -4137,19 +4137,26 @@ function onCanvasMouseDown(e) {
             }
         }
 
-        // Configurar o arraste para todos os elementos atualmente selecionados
-        state.dragging = {
-            targets: state.selectedElIds.map(id => {
-                const el = state.numElements.find(item => item.id === id);
-                return el ? {
-                    elId: id,
+        // Configurar o arraste para todos os elementos atualmente selecionados.
+        // Travado não arrasta — e seleção/grupo com UM travado para inteira,
+        // senão o arrasto quebraria o layout relativo do grupo.
+        const alvosSelecionados = state.selectedElIds
+            .map(id => state.numElements.find(item => item.id === id))
+            .filter(Boolean);
+        if (alvosSelecionados.some(el => el.locked)) {
+            state.dragging = null;
+            avisarElementoTravado();
+        } else {
+            state.dragging = {
+                targets: alvosSelecionados.map(el => ({
+                    elId: el.id,
                     startX: el.x_mm,
                     startY: el.y_mm
-                } : null;
-            }).filter(Boolean),
-            downX: x,
-            downY: y
-        };
+                })),
+                downX: x,
+                downY: y
+            };
+        }
 
     } else {
 
@@ -4471,9 +4478,11 @@ window.alignSelectedElement = function (alignment) {
     }
     const fmt = state.numFormato;
     let mutated = false;
+    let pulados = 0;
     state.selectedElIds.forEach(id => {
         const el = state.numElements.find(e => e.id === id);
         if (!el) return;
+        if (el.locked) { pulados++; return; }
         mutated = true;
 
 
@@ -4524,6 +4533,8 @@ window.alignSelectedElement = function (alignment) {
 
         }
     });
+
+    if (pulados > 0 && !mutated) avisarElementoTravado();
 
     if (mutated) saveNumHistory();
 
@@ -5345,7 +5356,9 @@ function renderElementsList() {
 
                     <div style="display:flex; gap:4px;">
 
-                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">⧉</button>
+                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado no desenho. Clique para destravar.' : 'Clique para travar e impedir arrasto por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
+
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">⧉</button>
 
                         <button class="btn btn-danger btn-sm" style="padding: 2px 8px;" onclick="removeEl('${el.id}');event.stopPropagation()" title="Excluir">✕</button>
 
@@ -5589,6 +5602,8 @@ function renderElementsList() {
 
                 <div style="display:flex; gap:4px;">
 
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado no desenho. Clique para destravar.' : 'Clique para travar e impedir arrasto por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
+
                     <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">⧉</button>
 
                     <button class="btn btn-danger btn-sm" style="padding: 2px 8px;" onclick="removeEl('${el.id}');event.stopPropagation()" title="Excluir">✕</button>
@@ -5751,6 +5766,40 @@ window.renderBoxArquivos = function () {
 
 
 
+
+let _ultimoAvisoTravado = 0;
+function avisarElementoTravado() {
+    const agora = Date.now();
+    if (agora - _ultimoAvisoTravado < 2500) return;   // não metralhar a cada mousedown
+    _ultimoAvisoTravado = agora;
+    toast('🔒 Elemento travado — destrave no cartão para mover', 'error');
+}
+
+window.toggleElLock = function (id) {
+    const el = state.numElements.find(e => e.id === id);
+    if (!el) return;
+    if (el.locked) delete el.locked; else el.locked = true;
+    saveNumHistory();
+    renderElementsList();
+    drawCanvas();
+};
+
+window.moverElOrdem = function (id, direcao) {
+    // A ordem do array E a ordem de desenho (tela, papel e hit-test):
+    // trocar de posicao aqui muda a sobreposicao em todas as janelas.
+    const i = state.numElements.findIndex(e => e.id === id);
+    if (i < 0) return;
+    const j = direcao === 'frente' ? i + 1 : i - 1;
+    if (j < 0 || j >= state.numElements.length) {
+        toast(direcao === 'frente' ? 'Já está na frente de todos' : 'Já está atrás de todos');
+        return;
+    }
+    const tmp = state.numElements[i];
+    state.numElements[i] = state.numElements[j];
+    state.numElements[j] = tmp;
+    saveNumHistory();
+    drawCanvas();
+};
 
 window.updateEl = function (id, field, value) {
     const el = state.numElements.find(e => e.id === id);
