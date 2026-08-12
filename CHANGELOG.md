@@ -4,7 +4,28 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v538** — 2026-08-12 | Agente **1.2.37**
+## Versão atual: **v539** — 2026-08-12 | Agente **1.2.37**
+
+---
+
+## [v539 — 2026-08-12] — O aviso de permissao diz QUAL permissao falta
+
+Relatado: *"designer continua sem conseguir entrar no pedido"*, com tres avisos
+identicos empilhados sobre a Lista de Arte.
+
+O bloqueio em si estava certo, e era dado: a conta continuava com
+`perm_pedidos_view` desligado. O defeito era o aviso. **"Voce nao tem permissao
+para acessar esta tela"** nomeia o problema sem dar a ninguem como resolve-lo: o
+designer nao sabe o que pedir, e o administrador que recebe o recado nao sabe
+qual das vinte e oito caixas ligar. Foi exatamente o que aconteceu — duas das
+tres contas foram destravadas, a terceira ficou, e nada na tela dizia por que.
+
+Agora o aviso nomeia a tela e a permissao: *"Voce nao tem permissao para abrir
+📦 Pedido. Peca ao administrador a permissao VER de 'Pedido' em Usuarios."* O
+recado que chega ao administrador ja e a instrucao.
+
+O mesmo aviso tambem parou de se repetir em menos de 4 s. Clicar em tres pedidos
+seguidos empilhava tres avisos identicos, escondendo a lista atras deles.
 
 ---
 

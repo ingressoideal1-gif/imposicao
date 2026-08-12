@@ -12723,6 +12723,40 @@ function abrirTelaInicial(role) {
 }
 window.abrirTelaInicial = abrirTelaInicial;
 
+/**
+ * Diz QUAL permissão está faltando, e não só que falta alguma.
+ *
+ * "Você não tem permissão para acessar esta tela" nomeava o problema sem dar a
+ * ninguém como resolvê-lo: o designer não sabia o que pedir, e o administrador
+ * que recebia o recado não sabia qual das vinte e oito caixas ligar. Com a
+ * permissão nomeada, o recado que chega ao administrador já é a instrução —
+ * "🎛️ Pedido, coluna VER" é o que ele procura na tela de Usuários.
+ *
+ * O mesmo aviso não se repete em menos de 4 s: clicar em três pedidos seguidos
+ * empilhava três avisos idênticos, escondendo a lista atrás deles.
+ */
+let _ultimoAvisoPermissao = { viewId: null, quando: 0 };
+
+function avisarFaltaPermissao(viewId) {
+    if (typeof toast !== 'function') return;
+
+    const agora = Date.now();
+    if (_ultimoAvisoPermissao.viewId === viewId && agora - _ultimoAvisoPermissao.quando < 4000) return;
+    _ultimoAvisoPermissao = { viewId, quando: agora };
+
+    const permKey = VIEW_PERM_REQUERIDA[viewId];
+    const chaveModulo = permKey ? permKey.replace(/^perm_/, '').replace(/_view$/, '') : null;
+    const modulo = PERM_MODULES.find(m => m.key === chaveModulo);
+
+    if (!modulo) {
+        toast('Você não tem permissão para acessar esta tela.', 'warning');
+        return;
+    }
+    toast(`Você não tem permissão para abrir ${modulo.icon} ${modulo.label}. `
+        + `Peça ao administrador a permissão VER de "${modulo.label}" em Usuários.`, 'warning');
+}
+window.avisarFaltaPermissao = avisarFaltaPermissao;
+
 // Definição dos módulos para renderizar permissões no painel admin.
 //
 // `tela` diz QUAL tela cada caixa abre, em português, e não é enfeite: um
@@ -20452,8 +20486,8 @@ window.showView = function(viewId) {
     // bastava um showView() disparado de outro ponto do código para a tela abrir
     // e carregar os dados.
     if (!podeAbrirView(viewId)) {
-        console.warn('[perm] Acesso negado à tela', viewId);
-        if (typeof toast === 'function') toast('Você não tem permissão para acessar esta tela.', 'warning');
+        console.warn('[perm] Acesso negado à tela', viewId, '— falta', VIEW_PERM_REQUERIDA[viewId]);
+        avisarFaltaPermissao(viewId);
 
         // Não deixar a tela em branco. Se já havia uma view aberta, fica onde está.
         // Se não havia — caso do F5 restaurando uma tela que o usuário perdeu o
