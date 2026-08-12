@@ -748,6 +748,28 @@ class ImpositionEngine:
                         insert_kwargs["fontname"] = "hebo" if is_bold else "helv"
                         font_file = None
 
+            # ── Largura maxima do elemento (max_width_mm) ─────────────────
+            # Ajusta ANTES de line_height/baseline: shrink muda o corpo,
+            # wrap muda as linhas. Espelho exato do frontend
+            # (window.desenharTextoAjustado em frontend/texto-ajuste.js).
+            try:
+                _max_w_mm = float(el.get("max_width_mm") or 0)
+            except (TypeError, ValueError):
+                _max_w_mm = 0.0
+            _align = None
+            if _max_w_mm > 0:
+                if font_file:
+                    _medir = lambda s, fs: fs * 0.55 * len(s)
+                else:
+                    _medir = lambda s, fs: fitz.get_text_length(
+                        s, fontname=font_name, fontsize=fs)
+                _modo = "wrap" if el.get("overflow") == "wrap" else "shrink"
+                font_size, _linhas_aj = _ajustar_texto_na_largura(
+                    _medir, val_str, font_size, _max_w_mm * MM2PT, _modo)
+                insert_kwargs["fontsize"] = font_size
+                val_str = "\n".join(_linhas_aj)
+                _align = el.get("text_align")
+
             # Medir largura real do texto para centralizar horizontalmente
             if font_file:
                 # Fontes de sistema: get_text_length nao suporta fontfile,
@@ -796,7 +818,12 @@ class ImpositionEngine:
                 else:
                     text_width = fitz.get_text_length(line_str, fontname=font_name, fontsize=font_size)
 
-                origin_x = cx - text_width / 2.0
+                if _align == "left":
+                    origin_x = cx - (_max_w_mm * MM2PT) / 2.0
+                elif _align == "right":
+                    origin_x = cx + (_max_w_mm * MM2PT) / 2.0 - text_width
+                else:
+                    origin_x = cx - text_width / 2.0
 
                 # Centro visual da linha i
                 cy_line = block_top + (i * line_height) + (line_height / 2.0)
