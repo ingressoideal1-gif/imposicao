@@ -11023,7 +11023,7 @@ window.clearNumCsvFile = function() {
  *
  * Devolve quantos campos foram criados.
  */
-function adicionarColunasComoElementos(headers) {
+function adicionarColunasComoElementos(headers, semCampo) {
 
     const jaTem = new Set((state.numElements || [])
 
@@ -11031,7 +11031,7 @@ function adicionarColunasComoElementos(headers) {
 
         .map(el => el.csv_column));
 
-    const novas = (headers || []).filter(h => h && !jaTem.has(h));
+    const novas = (headers || []).filter(h => h && h !== semCampo && !jaTem.has(h));
 
     if (!novas.length) return 0;
 
@@ -11265,23 +11265,43 @@ function nomeDoContentDisposition(cd) {
  * atualizar um banco ja ligado a uma planilha — passam por aqui, para que as
  * mensagens de erro sejam as mesmas nos dois.
  */
-async function baixarCsvDaWeb(link) {
+/** O identificador da planilha dentro do link, ou null se nao for uma. */
+function idDaPlanilhaGoogle(url) {
 
-    const alvo = urlCsvDaPlanilha(link);
+    const m = String(url || '').match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
 
-    if (!alvo) throw new Error('Cole o link da planilha antes de buscar.');
+    return m ? m[1] : null;
 
-    if (!/^https?:\/\//i.test(alvo)) {
+}
 
-        throw new Error('O link precisa começar com http:// ou https://');
 
-    }
+
+/** Nome de coluna que ainda nao existe: "Página", "Página 2", "Página 3"… */
+function nomeLivreDaColuna(base, headers) {
+
+    if (!headers.includes(base)) return base;
+
+    let i = 2;
+
+    while (headers.includes(`${base} ${i}`)) i++;
+
+    return `${base} ${i}`;
+
+}
+
+
+
+/**
+ * Baixa um endereco e devolve { texto, filename }, com as guardas que separam
+ * um CSV de verdade de uma pagina de login.
+ */
+async function baixarTextoDaWeb(url) {
 
     let resp;
 
     try {
 
-        resp = await fetch(alvo, { credentials: 'omit' });
+        resp = await fetch(url, { credentials: 'omit' });
 
     } catch (_) {
 
@@ -11315,21 +11335,283 @@ async function baixarCsvDaWeb(link) {
 
     }
 
-    const parsed = window.CsvEditor.parseCsv(texto);
-
-    if (!parsed.rows.length) throw new Error('A planilha está vazia.');
-
     return {
 
-        headers: parsed.headers,
-
-        rows: parsed.rows,
+        texto,
 
         filename: nomeDoContentDisposition(resp.headers.get('content-disposition'))
 
             || 'planilha-web.csv'
 
     };
+
+}
+
+
+
+/**
+ * As paginas (abas) de uma Planilha Google, na ordem em que aparecem la.
+ *
+ * O `/export?format=csv` so entrega UMA pagina, e o `gid` de cada uma e um
+ * numero arbitrario que nao da para adivinhar. Quem lista as paginas sem exigir
+ * chave de API e a pagina `/htmlview`, que o Google serve com os cabecalhos de
+ * CORS e que carrega um trecho de javascript com `items.push({name: …, gid: …})`
+ * — um por aba, na ordem certa, com o nome ja legivel.
+ *
+ * Isso e leitura de HTML dos outros, entao pode deixar de funcionar sem aviso.
+ * Por isso qualquer falha aqui devolve lista vazia em vez de erro: a busca cai
+ * no caminho de sempre e traz a primeira pagina, que e o comportamento anterior.
+ */
+async function paginasDaPlanilhaGoogle(id) {
+
+    try {
+
+        const resp = await fetch(
+
+            `https://docs.google.com/spreadsheets/d/${id}/htmlview`, { credentials: 'omit' });
+
+        if (!resp.ok) return [];
+
+        const html = await resp.text();
+
+        const re = /items\.push\(\{\s*name:\s*"((?:[^"\\]|\\.)*)"[\s\S]{0,400}?gid:\s*"(\d+)"/g;
+
+        const paginas = [];
+
+        const vistos = new Set();
+
+        let m;
+
+        while ((m = re.exec(html))) {
+
+            let nome = m[1];
+
+            // O nome vem escapado como string de javascript (\u00e1, \").
+            try { nome = JSON.parse('"' + nome + '"'); } catch (_) { }
+
+            if (vistos.has(m[2])) continue;
+
+            vistos.add(m[2]);
+
+            paginas.push({ nome, gid: m[2] });
+
+        }
+
+        return paginas;
+
+    } catch (_) {
+
+        return [];
+
+    }
+
+}
+
+
+
+/**
+ * Empilha as paginas numa tabela so.
+ *
+ * As colunas sao a uniao das colunas de todas elas, na ordem em que aparecem —
+ * pagina que nao tem uma coluna fica com o campo vazio, em vez de desalinhar. A
+ * primeira coluna e criada por nos e diz de qual pagina veio a linha: sem ela,
+ * 300 linhas de 8 paises viram um bloco indistinguivel, e e justamente por ela
+ * que o operador filtra no editor e reparte as linhas entre os modelos.
+ */
+function juntarPaginas(partes) {
+
+    const colunas = [];
+
+    for (const p of partes) {
+
+        for (const h of p.headers) if (h && !colunas.includes(h)) colunas.push(h);
+
+    }
+
+    const colunaPagina = nomeLivreDaColuna('Página', colunas);
+
+    const rows = [];
+
+    for (const p of partes) {
+
+        for (const r of p.rows) {
+
+            const nova = {};
+
+            nova[colunaPagina] = p.nome;
+
+            for (const c of colunas) nova[c] = (r[c] !== undefined && r[c] !== null) ? r[c] : '';
+
+            rows.push(nova);
+
+        }
+
+    }
+
+    return { headers: [colunaPagina, ...colunas], rows, colunaPagina };
+
+}
+
+
+
+/** "267690 Credencial - Bulgaria.csv" + aba "Bulgaria" → "267690 Credencial". */
+function nomeDoCadernoSemAPagina(filename, nomeDaPagina) {
+
+    const base = String(filename || '').replace(/\.csv$/i, '');
+
+    const sufixo = ' - ' + nomeDaPagina;
+
+    return base.endsWith(sufixo) ? base.slice(0, -sufixo.length) : base;
+
+}
+
+
+
+/**
+ * Baixa todas as paginas e devolve uma tabela so. Uma pagina que falhe ou venha
+ * vazia nao derruba as outras — ela e relatada e o resto entra.
+ */
+async function baixarTodasAsPaginas(id, paginas, progresso) {
+
+    let prontas = 0;
+
+    const naoVieram = [];
+
+    const partes = await Promise.all(paginas.map(async (pagina) => {
+
+        try {
+
+            const { texto, filename } = await baixarTextoDaWeb(
+
+                `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${pagina.gid}`);
+
+            const parsed = window.CsvEditor.parseCsv(texto);
+
+            return { nome: pagina.nome, headers: parsed.headers, rows: parsed.rows, filename };
+
+        } catch (_) {
+
+            naoVieram.push(pagina.nome);
+
+            return null;
+
+        } finally {
+
+            prontas++;
+
+            if (progresso) progresso(`⏳ ${prontas}/${paginas.length}`);
+
+        }
+
+    }));
+
+    const comLinhas = partes.filter(p => p && p.rows.length);
+
+    const vazias = partes.filter(p => p && !p.rows.length).map(p => p.nome);
+
+    if (!comLinhas.length) {
+
+        throw new Error(`Nenhuma das ${paginas.length} páginas tinha linhas.`);
+
+    }
+
+    const { headers, rows, colunaPagina } = juntarPaginas(comLinhas);
+
+    const caderno = nomeDoCadernoSemAPagina(comLinhas[0].filename, comLinhas[0].nome);
+
+    return {
+
+        headers,
+
+        rows,
+
+        colunaPagina,
+
+        filename: `${caderno} (${comLinhas.length} páginas).csv`,
+
+        paginas: comLinhas.map(p => ({ nome: p.nome, linhas: p.rows.length })),
+
+        vazias,
+
+        naoVieram
+
+    };
+
+}
+
+
+
+/**
+ * Baixa e interpreta o CSV de um endereco. Devolve
+ * { headers, rows, filename, paginas, colunaPagina, vazias, naoVieram }.
+ *
+ * Os dois caminhos que trazem banco da web — buscar pela primeira vez e
+ * atualizar um banco ja ligado a uma planilha — passam por aqui, para que as
+ * mensagens de erro sejam as mesmas nos dois.
+ *
+ * Planilha Google com mais de uma pagina vem INTEIRA. Foi o pedido, e faz
+ * sentido no trabalho: um caderno de credenciais tem uma pagina por pais, e o
+ * pedido imprime todos. Quem quiser so uma abre a pagina no Google antes de
+ * copiar o endereco — o link fica com `#gid=`, e um gid explicito e respeitado
+ * como escolha deliberada de uma pagina so.
+ */
+async function baixarCsvDaWeb(link, progresso) {
+
+    const alvo = urlCsvDaPlanilha(link);
+
+    if (!alvo) throw new Error('Cole o link da planilha antes de buscar.');
+
+    if (!/^https?:\/\//i.test(alvo)) {
+
+        throw new Error('O link precisa começar com http:// ou https://');
+
+    }
+
+    const id = idDaPlanilhaGoogle(link);
+
+    const gidExplicito = /[#?&]gid=\d+/.test(String(link || ''));
+
+    if (id && !gidExplicito) {
+
+        const paginas = await paginasDaPlanilhaGoogle(id);
+
+        if (paginas.length > 1) return await baixarTodasAsPaginas(id, paginas, progresso);
+
+    }
+
+    const { texto, filename } = await baixarTextoDaWeb(alvo);
+
+    const parsed = window.CsvEditor.parseCsv(texto);
+
+    if (!parsed.rows.length) throw new Error('A planilha está vazia.');
+
+    return { headers: parsed.headers, rows: parsed.rows, filename, paginas: [] };
+
+}
+
+
+
+/**
+ * A frase que conta o que veio de um caderno de varias paginas. Vazia quando a
+ * planilha tinha uma pagina so — nesse caso nao ha nada a explicar.
+ */
+function fraseDasPaginas(res) {
+
+    const paginas = (res && res.paginas) || [];
+
+    if (paginas.length < 2) return '';
+
+    const nomes = paginas.map(p => p.nome);
+
+    const mostra = nomes.slice(0, 3).join(', ') + (nomes.length > 3 ? ` +${nomes.length - 3}` : '');
+
+    let frase = ` ${paginas.length} páginas (${mostra}), com a coluna "${res.colunaPagina}" dizendo de qual veio cada linha.`;
+
+    if (res.vazias && res.vazias.length) frase += ` ${res.vazias.length} vazia(s) ignorada(s).`;
+
+    if (res.naoVieram && res.naoVieram.length) frase += ` Não veio: ${res.naoVieram.join(', ')}.`;
+
+    return frase;
 
 }
 
@@ -11342,9 +11624,11 @@ async function comBotaoOcupado(id, rotuloOcupado, tarefa) {
 
     const rotulo = botao ? botao.textContent : '';
 
+    const progresso = (txt) => { if (botao) botao.textContent = txt; };
+
     if (botao) { botao.disabled = true; botao.textContent = rotuloOcupado; }
 
-    try { return await tarefa(); }
+    try { return await tarefa(progresso); }
 
     finally { if (botao) { botao.disabled = false; botao.textContent = rotulo; } }
 
@@ -11364,9 +11648,11 @@ window.buscarCsvDaWeb = async function() {
 
     try {
 
-        const { headers, rows, filename } = await comBotaoOcupado(
+        const res = await comBotaoOcupado(
 
-            'btn-buscar-num-csv', '⏳ Buscando…', () => baixarCsvDaWeb(link));
+            'btn-buscar-num-csv', '⏳ Buscando…', (p) => baixarCsvDaWeb(link, p));
+
+        const { headers, rows, filename } = res;
 
         state.numCsvHeaders = headers;
 
@@ -11379,7 +11665,9 @@ window.buscarCsvDaWeb = async function() {
         // numeracao meses depois.
         state.numCsvUrl = link;
 
-        const campos = adicionarColunasComoElementos(headers);
+        // A coluna que diz a pagina de origem e nossa, nao da planilha: ela
+        // serve para filtrar e repartir, e nao para ser impressa no ticket.
+        const campos = adicionarColunasComoElementos(headers, res.colunaPagina);
 
         renderNumCsvInterface();
 
@@ -11387,7 +11675,7 @@ window.buscarCsvDaWeb = async function() {
 
             `${rows.length} linha(s) e ${headers.length} coluna(s) `
 
-            + `de "${filename}".` + fraseDosCampos(campos)
+            + `de "${filename}".` + fraseDasPaginas(res) + fraseDosCampos(campos)
 
             + ' Salve a numeração para gravar.',
 
@@ -11437,9 +11725,11 @@ window.atualizarCsvDaPlanilha = async function() {
 
     try {
 
-        const { headers, rows, filename } = await comBotaoOcupado(
+        const res = await comBotaoOcupado(
 
-            'btn-atualizar-num-csv', '⏳ Atualizando…', () => baixarCsvDaWeb(link));
+            'btn-atualizar-num-csv', '⏳ Atualizando…', (p) => baixarCsvDaWeb(link, p));
+
+        const { headers, rows, filename } = res;
 
         const antigas = Array.isArray(state.numCsvData) ? state.numCsvData : [];
 
@@ -11539,7 +11829,7 @@ window.atualizarCsvDaPlanilha = async function() {
 
         // Coluna que a planilha ganhou desde a ultima vez entra como campo novo;
         // as que ja tem elemento ficam onde o operador as deixou.
-        const campos = adicionarColunasComoElementos(headers);
+        const campos = adicionarColunasComoElementos(headers, res.colunaPagina);
 
         renderNumCsvInterface();
 
@@ -11547,7 +11837,7 @@ window.atualizarCsvDaPlanilha = async function() {
 
             `Banco atualizado: ${rows.length} linha(s), ${herdadas} mantendo a `
 
-            + 'identidade que já tinham.' + fraseDosCampos(campos)
+            + 'identidade que já tinham.' + fraseDasPaginas(res) + fraseDosCampos(campos)
 
             + ' Salve a numeração para gravar.',
 

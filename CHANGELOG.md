@@ -4,7 +4,7 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v540** — 2026-08-12 | Agente **1.2.37**
+## Versão atual: **v541** — 2026-08-12 | Agente **1.2.39**
 
 ---
 
@@ -198,7 +198,41 @@ precisam viajar juntos.
 
 ---
 
-## [v538 — 2026-08-12] — O banco lembra a planilha, e ja se apresenta desenhado
+## [v541 — 2026-08-12] — Planilha inteira, campos no ticket e vinculo com a origem
+
+> NOTA DE NUMERACAO: esta entrada foi escrita como v538 e renumerada para v541.
+> A frente de permissoes correu em paralelo, em outra janela, e acabou saindo
+> antes — em tres publicacoes proprias: **v538**, **v539** e **v540**. As duas
+> frentes NAO dividiram um release, ao contrario do que esta nota dizia enquanto
+> o trabalho estava em andamento. Esta aqui e a v541, sozinha.
+
+### Planilha de varias paginas vem inteira
+Pedido: *"Identificar quando a planilha URL possuir mais de uma pagina e carregar
+todas as paginas no editor"*.
+
+Um caderno de credenciais tem uma pagina por pais, e o pedido imprime todas.
+Colar o link de compartilhamento de uma planilha com mais de uma pagina agora traz
+**todas de uma vez**, empilhadas numa tabela so. Medido na planilha do usuario:
+**238 linhas de 8 paginas em 1,5 s** — Bulgaria 37, Chile 29, Colombia 24,
+Eslovaquia 30, Espanha 29, Tchequia 25, Macedonia 28, Paraguay 36.
+
+O `/export?format=csv` entrega uma pagina so, e o `gid` de cada uma e um numero
+arbitrario. Quem lista as paginas sem exigir chave de API e a pagina `/htmlview`,
+que o Google serve com CORS e que carrega um `items.push({name, gid})` por aba.
+Cada pagina e entao baixada pelo caminho normal, em paralelo. **E leitura do HTML
+dos outros**, entao qualquer falha ali devolve lista vazia em vez de erro, e a
+busca cai no comportamento anterior — a primeira pagina.
+
+- **Colunas sao a uniao das paginas**; pagina sem uma coluna fica com o campo
+  vazio, em vez de desalinhar.
+- **Uma coluna `Página`**, criada por nos, diz de onde veio cada linha — e e por
+  ela que se filtra no editor e se reparte as linhas entre os modelos. Colide com
+  uma coluna existente? Vira `Página 2`.
+- **Essa coluna nao vira campo no ticket**: e metadado, nao conteudo impresso.
+- **Pagina vazia e ignorada**, pagina que falhou nao derruba as outras, e as duas
+  coisas aparecem no aviso.
+- **Para trazer uma pagina so**, abra-a no Google antes de copiar o endereco: o
+  link fica com `#gid=`, e gid explicito e respeitado. Esta escrito na tela.
 
 ### O banco que chega poe os campos no ticket
 Relatado: *"quando clicar em buscar, deve add os elementos para posicionamento na

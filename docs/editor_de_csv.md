@@ -295,6 +295,43 @@ O nome do arquivo sai do cabeçalho `Content-Disposition` da resposta — que o
 Google expõe ao navegador —, então a numeração fica com o nome real da planilha,
 e não com um rótulo genérico.
 
+### Planilha de várias páginas vem inteira
+
+Um caderno de credenciais costuma ter **uma página por país**, e o pedido imprime
+todas. Por isso, colar o link de compartilhamento de uma planilha com mais de uma
+página traz **todas de uma vez**, empilhadas numa tabela só.
+
+O `/export?format=csv` entrega uma página apenas, e o `gid` de cada uma é um
+número arbitrário que não dá para adivinhar. Quem lista as páginas sem exigir
+chave de API é a página **`/htmlview`**, que o Google serve com os cabeçalhos de
+CORS e que carrega um trecho de javascript com um
+`items.push({name: "…", gid: "…"})` por aba, na ordem certa e com o nome já
+legível. `paginasDaPlanilhaGoogle()` lê esse trecho; cada página é então baixada
+pelo caminho normal, `export?format=csv&gid=N`, em paralelo.
+
+**Isso é leitura do HTML dos outros e pode parar de funcionar sem aviso.** Por
+isso qualquer falha ali devolve lista vazia em vez de erro: a busca cai no
+caminho de sempre e traz a primeira página, que era o comportamento anterior.
+
+O que a junção faz:
+
+- **Colunas são a união de todas as páginas**, na ordem em que aparecem. Página
+  que não tem uma coluna fica com o campo vazio, em vez de desalinhar.
+- **A primeira coluna é criada por nós**, chamada `Página`, e diz de onde veio
+  cada linha. Sem ela, 238 linhas de 8 países viram um bloco indistinguível — e é
+  justamente por ela que o operador filtra no editor e reparte as linhas entre os
+  modelos. Se a planilha já tiver uma coluna `Página`, a nossa vira `Página 2`.
+- **Essa coluna não vira campo no ticket.** É metadado de organização, não
+  conteúdo impresso; quem quiser imprimi-la clica no botão `📊 Página`.
+- **Página vazia é ignorada**, e página que falhou não derruba as outras — as
+  duas coisas são relatadas no aviso.
+- **O nome fica `<caderno> (N páginas).csv`**, derivado do
+  `Content-Disposition` da primeira página com o sufixo ` - <página>` removido.
+
+**Para trazer uma página só**, abra-a no Google antes de copiar o endereço: o
+link fica com `#gid=`, e um `gid` explícito é respeitado como escolha deliberada.
+É a única forma de pedir uma página específica, e está escrita embaixo do campo.
+
 **Os modos de falha que a tela precisa distinguir:**
 
 - **Planilha privada ou inexistente** → resposta 404, e o aviso diz para
