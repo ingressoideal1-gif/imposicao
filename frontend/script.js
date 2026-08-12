@@ -5356,7 +5356,11 @@ function renderElementsList() {
 
                     <div style="display:flex; gap:4px;">
 
-                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado no desenho. Clique para destravar.' : 'Clique para travar e impedir arrasto por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
+                        <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;" onclick="moverElOrdem('${el.id}','frente');event.stopPropagation()" title="Trazer para frente: este elemento passa a ficar POR CIMA na sobreposição">⬆</button>
+
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;" onclick="moverElOrdem('${el.id}','tras');event.stopPropagation()" title="Enviar para trás: este elemento passa a ficar POR BAIXO na sobreposição">⬇</button>
+
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado no desenho. Clique para destravar.' : 'Clique para travar e impedir arrasto por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
 
                     <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">⧉</button>
 
@@ -5601,6 +5605,10 @@ function renderElementsList() {
                 </span>
 
                 <div style="display:flex; gap:4px;">
+
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;" onclick="moverElOrdem('${el.id}','frente');event.stopPropagation()" title="Trazer para frente: este elemento passa a ficar POR CIMA na sobreposição">⬆</button>
+
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;" onclick="moverElOrdem('${el.id}','tras');event.stopPropagation()" title="Enviar para trás: este elemento passa a ficar POR BAIXO na sobreposição">⬇</button>
 
                     <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado no desenho. Clique para destravar.' : 'Clique para travar e impedir arrasto por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
 
