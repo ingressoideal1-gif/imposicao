@@ -7807,19 +7807,10 @@ function drawPreview() {
 
                         ctx.fillStyle = color;
 
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        
-                        if (val_str.includes('\n')) {
-                            const lines = val_str.split('\n');
-                            ctx.fillText(lines[0], 0, -fs / 2);
-                            ctx.fillText(lines[1], 0, fs / 2);
-                        } else {
-                            ctx.fillText(val_str, 0, 0);
-                        }
-                        
-                        ctx.textAlign = 'left';
-                        ctx.textBaseline = 'alphabetic';
+                        window.desenharTextoAjustado(
+                            ctx, el, val_str, fs, scale * 2.8346,
+                            (f) => buildCanvasFont(f, el.font_name)
+                        );
 
                     } else if (el.type === 'QR') {
 
@@ -14863,17 +14854,12 @@ window.onAmostraNumeracaoSelect = function() {
 
                 }
 
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                if (label.includes('\n')) {
-                    const lines = label.split('\n');
-                    ctx.fillText(lines[0], 0, -fs/2);
-                    ctx.fillText(lines[1], 0, fs/2);
-                } else {
-                    ctx.fillText(label, 0, 0);
-                }
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'alphabetic';
+                // Multilinha 1.2 e largura maxima iguais ao papel (antes só
+                // desenhava 2 linhas fixas com passo mais apertado que o engine).
+                window.desenharTextoAjustado(
+                    ctx, el, label, fs, S,
+                    (f) => buildCanvasFont(f, el.font_name)
+                );
 
             } else if (el.type === 'QR') {
 
@@ -23772,20 +23758,10 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
             }
 
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            if (label.includes('\n')) {
-                const lines = label.split('\n');
-                const lineHeight = fs * 1.2;
-                const totalH = lines.length * lineHeight;
-                const blockTop = -totalH / 2;
-                lines.forEach((line, i) => {
-                    const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
-                    ctx.fillText(line, 0, lineCenter);
-                });
-            } else {
-                ctx.fillText(label, 0, 0);
-            }
+            window.desenharTextoAjustado(
+                ctx, el, label, fs, Sx,
+                (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+            );
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * S;
             let qrText = '';
@@ -24523,22 +24499,10 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     }
                     label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
                 }
-                numCtx.textAlign = 'center';
-                numCtx.textBaseline = 'middle';
-                if (label.includes('\n')) {
-                    const lines = label.split('\n');
-                    const lineHeight = fs * 1.2;
-                    const totalH = lines.length * lineHeight;
-                    const blockTop = -totalH / 2;
-                    lines.forEach((line, i) => {
-                        const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
-                        numCtx.fillText(line, 0, lineCenter);
-                    });
-                } else {
-                    numCtx.fillText(label, 0, 0);
-                }
-                numCtx.textAlign = 'left';
-                numCtx.textBaseline = 'alphabetic';
+                window.desenharTextoAjustado(
+                    numCtx, el, label, fs, S,
+                    (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+                );
             } else if (el.type === 'QR') {
                 const sz = (el.size_mm || 15) * S;
                 let qrText = '';
@@ -29497,22 +29461,10 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
                 const padVal = typeof el.pad !== 'undefined' ? el.pad : 6;
                 label = `${el.prefix || ''}${String(1).padStart(padVal, '0')}${el.suffix || ''}`;
             }
-            numCtx.textAlign = 'center';
-            numCtx.textBaseline = 'middle';
-            if (label.includes('\n')) {
-                const lines = label.split('\n');
-                const lineHeight = fs * 1.2;  // igual ao engine.py e drawElement
-                const totalH = lines.length * lineHeight;
-                const blockTop = -totalH / 2;
-                lines.forEach((line, i) => {
-                    const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
-                    numCtx.fillText(line, 0, lineCenter);
-                });
-            } else {
-                numCtx.fillText(label, 0, 0);
-            }
-            numCtx.textAlign = 'left';
-            numCtx.textBaseline = 'alphabetic';
+            window.desenharTextoAjustado(
+                numCtx, el, label, fs, S,
+                (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+            );
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * S;
             const hsz = sz / 2;

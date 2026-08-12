@@ -630,24 +630,10 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
                 label = `${el.prefix || ''}${String(current_val).padStart(padVal, '0')}${el.suffix || ''}`;
             }
 
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            if (label.includes('\n')) {
-                const lines = label.split('\n');
-                const lineHeight = fs * 1.2;
-                const totalH = lines.length * lineHeight;
-                const blockTop = -totalH / 2;
-                lines.forEach((line, i) => {
-                    const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
-                    ctx.fillText(line, 0, lineCenter);
-                });
-            } else {
-                ctx.fillText(label, 0, 0);
-            }
-
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'alphabetic';
+            window.desenharTextoAjustado(
+                ctx, el, label, fs, scalePx,
+                (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+            );
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * scalePx;
             let qrText = '';

@@ -1809,19 +1809,10 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                         ctx.fillStyle = color;
 
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        
-                        if (val_str.includes('\n')) {
-                            const lines = val_str.split('\n');
-                            ctx.fillText(lines[0], 0, -fs / 2);
-                            ctx.fillText(lines[1], 0, fs / 2);
-                        } else {
-                            ctx.fillText(val_str, 0, 0);
-                        }
-                        
-                        ctx.textAlign = 'left';
-                        ctx.textBaseline = 'alphabetic';
+                        window.desenharTextoAjustado(
+                            ctx, el, val_str, fs, scale * 2.8346,
+                            (f) => buildCanvasFont(f, el.font_name)
+                        );
 
                     } else if (el.type === 'QR') {
 
