@@ -439,6 +439,30 @@
      * repintar quando a imagem chega tarde. Elas precisam da foto ANTES do
      * primeiro traço.
      */
+    /**
+     * As fotos que aquelas linhas precisam e que AINDA não chegaram.
+     *
+     * Existe para quebrar um laço: quem pré-carrega e depois manda repintar
+     * chamaria o pré-carregamento de novo no repinte, que resolveria na hora (já
+     * está em cache) e mandaria repintar outra vez, para sempre. Perguntando
+     * antes "falta alguma?", o segundo passe não repinta nada.
+     */
+    function fotosPendentes(elementos, linhas) {
+        var els = (elementos || []).filter(function (e) { return e && e.type === 'FOTO'; });
+        if (!els.length) return [];
+        var fonte = (linhas && linhas.length) ? linhas : [null];
+        var falta = [];
+        fonte.forEach(function (linha) {
+            els.forEach(function (el) {
+                var m = fotoDaLinha(el, linha);
+                if (!m || !m.url || !urlCarregavel(m.url)) return;
+                var reg = cache.get(m.url);
+                if ((!reg || (!reg.pronta && !reg.falhou)) && falta.indexOf(m.url) === -1) falta.push(m.url);
+            });
+        });
+        return falta;
+    }
+
     function precarregarFotosDosElementos(elementos, linhas) {
         var els = (elementos || []).filter(function (e) { return e && e.type === 'FOTO'; });
         if (!els.length) return Promise.resolve();
@@ -490,29 +514,21 @@
         if (img) {
             desenharJanelaFoto(ctx, img, -hw, -hh, w, h, meta, el.fit || 'cover');
         } else if (faltando) {
-            ctx.fillStyle = 'rgba(239,68,68,0.14)';
-            ctx.fillRect(-hw, -hh, w, h);
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(-hw, -hh, w, h);
-            ctx.clip();
-            ctx.strokeStyle = 'rgba(239,68,68,0.5)';
-            ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.02);
-            var passo = Math.max(6, Math.min(w, h) * 0.18);
-            for (var d = -h; d < w + h; d += passo) {
-                ctx.beginPath();
-                ctx.moveTo(-hw + d, -hh);
-                ctx.lineTo(-hw + d - h, hh);
-                ctx.stroke();
-            }
-            ctx.restore();
-
-            var fsF = Math.max(6, Math.min(13, h * 0.13));
-            ctx.font = 'bold ' + fsF + 'px Inter, sans-serif';
+            // Quadro VERMELHO CHEIO com uma interrogação branca no meio.
+            //
+            // Texto não serve aqui: nas janelas de conferência a janela de foto
+            // aparece com poucos milímetros na tela, e "SEM FOTO" vira um borrão
+            // ilegível. Uma mancha vermelha com um "?" grande é reconhecível de
+            // longe, em qualquer tamanho, que é o que o operador precisa ao
+            // varrer uma folha inteira procurando buracos.
             ctx.fillStyle = '#ef4444';
+            ctx.fillRect(-hw, -hh, w, h);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold ' + (Math.min(w, h) * 0.62) + 'px Inter, system-ui, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('SEM FOTO', 0, 0);
+            ctx.fillText('?', 0, h * 0.02);
             ctx.textAlign = 'left';
             ctx.textBaseline = 'alphabetic';
         } else {
@@ -573,6 +589,7 @@
         dimensoesDaFoto: dimensoesDaFoto,
         carregarFoto: carregarFoto,
         precarregarFotosDosElementos: precarregarFotosDosElementos,
+        fotosPendentes: fotosPendentes,
         desenharElementoFoto: desenharElementoFoto
     };
 

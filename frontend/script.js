@@ -24447,8 +24447,23 @@ window.limparVisualizadorPdf = limparVisualizadorPdf;
  * completo. Agora todo modelo que depende do elemento assina a espera, e o fim
  * do carregamento repinta todos. O gêmeo desta função vive no `cliente.js`.
  */
-function preloadAmostraItemPdfElements(numeracao, idx, osId) {
+function preloadAmostraItemPdfElements(numeracao, idx, osId, item) {
     if (!numeracao || !numeracao.elements) return;
+
+    // As FOTOS primeiro, e por fora do laço de PDF abaixo: o card não tem
+    // repinte próprio, então a foto que não for pedida aqui nunca aparece. O
+    // gêmeo desta função vive no `cliente.js`.
+    if (typeof window.fotosPendentes === 'function') {
+        const linha = (typeof linhaDaAmostra === 'function') ? linhaDaAmostra(item, numeracao, osId) : null;
+        const linhas = [linha].filter(Boolean);
+        // Perguntar o que falta ANTES evita o laço: no repinte não falta nada e
+        // ele não pede outro repinte.
+        if (window.fotosPendentes(numeracao.elements, linhas).length) {
+            window.precarregarFotosDosElementos(numeracao.elements, linhas)
+                .then(() => { if (typeof renderItemAmostraCombinada === 'function') renderItemAmostraCombinada(idx, osId); })
+                .catch(() => { });
+        }
+    }
 
     const assinatura = idx + '|' + osId;
 
@@ -25124,7 +25139,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     }
 
     if (num) {
-        preloadAmostraItemPdfElements(num, idx, osId);
+        preloadAmostraItemPdfElements(num, idx, osId, item);
     }
 
     let fmt = null;
@@ -25347,7 +25362,7 @@ async function forceRegenerateSnapshots(osId) {
 
         // Preload SVG/PDF e aguardar carregamento real dos elementos
         if (num && num.elements && num.elements.length > 0 && typeof preloadAmostraItemPdfElements === 'function') {
-            preloadAmostraItemPdfElements(num, idx, osId);
+            preloadAmostraItemPdfElements(num, idx, osId, item);
             const svgEls = num.elements.filter(e => e && (e.type === 'SVG' || e.type === 'PDF'));
             if (svgEls.length > 0) {
                 await new Promise(resolve => {

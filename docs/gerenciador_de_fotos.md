@@ -125,7 +125,7 @@ descoberta. Ela aparece em três lugares:
 
 | Onde | Como |
 |---|---|
-| Nas janelas de arte (editor, prévia, amostra, link do cliente) | a janela fica **vermelha e riscada**, escrito `SEM FOTO` |
+| Nas janelas de arte (editor, prévia, amostra, link do cliente) | a janela vira um **quadro vermelho com um “?” branco** — texto não serve, porque nessas telas a janela tem poucos milímetros e vira borrão |
 | Na folha de contato | um cartão marcado, na mesma grade das outras, com **📎 anexar foto** |
 | No editor de CSV | a célula da coluna de foto fica **vermelha**, com a dica de que aquela linha não vai imprimir; quem tem foto fica verde com 🖼️ |
 

@@ -2083,8 +2083,26 @@ async function precarregarArtesDosElementos(elementos, linhas) {
  * numeração só o primeiro saía completo. Por isso todo modelo que depende do
  * elemento entra numa lista de espera, e o fim do carregamento repinta todos.
  */
-function preloadAmostraItemPdfElements(numeracao, idx, osId) {
+function preloadAmostraItemPdfElements(numeracao, idx, osId, item) {
     if (!numeracao || !numeracao.elements) return;
+
+    // As FOTOS primeiro, e por fora do filtro de PDF/SVG.
+    //
+    // Era aqui que a foto do cliente se perdia: sem nenhum elemento PDF ou SVG
+    // pendente, esta função saía na linha seguinte e as fotos nunca chegavam a
+    // ser pedidas. Como o desenho do card não tem repinte próprio, a janela
+    // ficava vazia para sempre.
+    if (typeof window.fotosPendentes === 'function') {
+        const linha = (typeof linhaDaAmostra === 'function') ? linhaDaAmostra(item, numeracao, osId) : null;
+        const linhas = [linha].filter(Boolean);
+        // Perguntar antes o que falta é o que impede o laço: no repinte não
+        // falta mais nada, e ele não pede repinte de novo.
+        if (window.fotosPendentes(numeracao.elements, linhas).length) {
+            window.precarregarFotosDosElementos(numeracao.elements, linhas)
+                .then(() => renderItemAmostraCombinada(idx, osId))
+                .catch(() => { });
+        }
+    }
 
     const necessarios = numeracao.elements.filter(el =>
         !el._preloadFalhou && (
@@ -2900,7 +2918,7 @@ async function renderItemAmostraCombinada(idx, osId) {
     const num = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
 
     if (num) {
-        preloadAmostraItemPdfElements(num, idx, osId);
+        preloadAmostraItemPdfElements(num, idx, osId, item);
     }
 
     let fmt = null;
