@@ -181,6 +181,46 @@ de antes de o `Cli_Num` existir — e **aparecem normalmente na lista**. Há um
 (`frontend/script.js:18197` e `:19200`), que casa pelo `os_item_id` em vez do
 cliente.
 
+## Travar, frente/trás e o espaço do texto (v546)
+
+Três controles nos cartões de elemento do editor de numeração, todos gravados no
+próprio elemento (`elements` da numeração), sem migração — a ausência do campo é
+o comportamento antigo:
+
+- **🔓/🔒 Travar** (`locked`): elemento travado continua selecionável e editável
+  pelo cartão, mas **não é arrastado** no canvas nem movido pelas ferramentas de
+  alinhamento. Seleção ou grupo com um travado não arrasta ninguém, para não
+  quebrar o layout relativo, e um toast explica. O sublinhado de seleção fica
+  âmbar. Duplicar copia a trava. O motor ignora o campo.
+
+- **⬆/⬇ Frente/trás**: os botões trocam o elemento com o vizinho no array
+  `state.numElements` — e **a ordem do array É a ordem de desenho** em todas as
+  janelas, no hit-test (invertido) e no `engine.py`. Não existe `z_index`; não
+  crie um. A lista de cartões não muda de ordem porque ela ordena por
+  `last_interaction`.
+
+- **📏 Espaço do texto** (`max_width_mm`, `overflow`, `text_align`): só na UI de
+  elementos `TEXT` com origem Banco de Dados, mas o mecanismo vale para qualquer
+  elemento da família texto que tenha os campos. `overflow` é `"shrink"` (reduz o
+  corpo na razão exata até caber — padrão) ou `"wrap"` (quebra por palavra, com
+  quebra por caractere para palavra maior que o espaço). `text_align`
+  (`center`/`left`/`right`) só age quando há largura. Com o elemento selecionado,
+  o editor desenha a guia tracejada do espaço. Trocar a origem para Sequencial
+  apaga os três campos.
+
+  O algoritmo vive em **dois espelhos que precisam mudar juntos**:
+  `frontend/texto-ajuste.js` (`window.ajustarTextoNaLargura` +
+  `window.desenharTextoAjustado`, carregado por `index.html` e `cliente.html`) e
+  `_ajustar_texto_na_largura` no `engine.py` (aplicado em `_render_element`, por
+  onde todos os caminhos de texto do motor passam). Todos os dez renderizadores
+  de texto do frontend desenham via `desenharTextoAjustado` — ao criar um
+  renderizador novo, use-o também. Folga de 0,5% na comparação para a mesma
+  palavra não quebrar diferente entre a régua do canvas e a do fitz.
+
+  Testes: `tests/test_engine_ajuste_texto.py` (a função) e
+  `tests/test_engine_largura_maxima.py` (o texto desenhado no PDF respeita a
+  largura). Mexeu no `engine.py` ⇒ o agente publica junto com o site.
+
 ## Verificando uma mudança nesta tela
 
 Não há framework de testes de frontend no projeto. Use a skill `rodar-app` para

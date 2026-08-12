@@ -115,10 +115,11 @@ ajustarTextoNaLargura(medir, texto, corpo, larguraMax, modo) -> { corpo, linhas[
 
 ### Onde a função vive e quem a chama
 
-- **`frontend/script.js`**: `ajustarTextoNaLargura` exposta em `window` (mesmo
-  precedente da `drawImageContain`).
-- **`frontend/cliente.js`**: cópia declarada no topo — `cliente.html` não carrega
-  o `script.js` (mesmo precedente).
+- **`frontend/texto-ajuste.js`** (arquivo novo, padrão `csv-editor.js`): define
+  `window.ajustarTextoNaLargura` e o desenhador comum `window.desenharTextoAjustado`,
+  e é carregado por `index.html` **e** `cliente.html` — um arquivo compartilhado em
+  vez de uma cópia por página, para as duas não driftarem. (Na implementação, isso
+  substituiu a ideia original de copiar a função para o `cliente.js`.)
 - **`engine.py`**: `_ajustar_texto_na_largura()` no topo do arquivo, chamada em
   `_render_element` antes do laço `lines_to_draw`. A medição usa a régua que o
   engine já usa para centralizar: `fitz.get_text_length` para Base-14 e a

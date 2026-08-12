@@ -4,6 +4,48 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-12] — Editor de numeração: travar elemento, frente/trás e largura máxima do dado variável
+
+### Funcionalidade 1 — 🔒 Travar elemento
+Botão no cartão de cada elemento (inclusive PICOTE). Elemento travado (`locked` no
+elemento) não é arrastado no canvas nem movido pelo alinhamento — mas continua
+selecionável e editável pelo cartão, e pode ser duplicado, excluído e reordenado.
+Seleção/grupo com um membro travado não arrasta ninguém (senão o arrasto quebraria o
+layout relativo), e um toast explica. Sublinhado de seleção âmbar indica a trava.
+
+### Funcionalidade 2 — ⬆⬇ Trazer para frente / Enviar para trás
+Dois botões no cartão trocam o elemento com o vizinho no array `numElements`. A ordem
+do array já era a ordem de desenho em todas as janelas e no `engine.py`, então a
+sobreposição muda na tela e no papel sem nenhuma alteração nos renderizadores.
+
+### Funcionalidade 3 — 📏 Espaço do texto (largura máxima em mm para colunas do CSV)
+Elementos TEXT com origem Banco de Dados ganham `Largura máxima (mm)`, `Se não couber`
+(**Reduzir a fonte até caber** ou **Quebrar em linhas**, com quebra por caractere para
+palavra maior que o espaço) e `Alinhamento` (Centro/Esquerda/Direita dentro do espaço).
+Com o elemento selecionado, o editor mostra a guia tracejada do espaço delimitado.
+
+O ajuste é uma função pura em dois espelhos que mudam juntos: `frontend/texto-ajuste.js`
+(novo arquivo, carregado por `index.html` e `cliente.html`; todos os dez renderizadores
+de texto do frontend desenham por `window.desenharTextoAjustado`) e
+`_ajustar_texto_na_largura` no `engine.py`, aplicada em `_render_element` — por onde
+todos os caminhos de texto do motor passam. Folga de 0,5% na comparação para a mesma
+palavra não quebrar diferente entre a régua do canvas e a do fitz.
+
+De tabela, os renderizadores que desenhavam multilinha com passo apertado (prévia da
+amostra na Imposição e prévia do Painel de Produção, 2 linhas fixas com passo `fs`)
+passaram ao mesmo `1.2 × corpo` do engine.
+
+**Testes:** `tests/test_engine_ajuste_texto.py` (shrink na razão exata, wrap
+determinístico, palavra gigante, parágrafo vazio) e `tests/test_engine_largura_maxima.py`
+(o texto desenhado no PDF respeita a largura e o alinhamento encosta nas bordas da
+caixa). Verificação visual por Puppeteer: shrink cravado no limite, wrap dentro da
+guia, trava segurando o arrasto e frente/trás refletido no array.
+
+**Publicação:** `engine.py` mudou — o agente NewProd sai junto com o site na próxima
+publicação.
+
+---
+
 ## [2026-06-13] — Integração: Tabelas de Catálogo no Supabase do Vibecode (Aprovação Parcial)
 
 ### Funcionalidade 1 — Criação do Schema Isolado de Catálogo com RLS Habilitado
