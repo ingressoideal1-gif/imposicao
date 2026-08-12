@@ -494,14 +494,7 @@
 
         ctx.save();
         if (el.corner === 'circle' || el.corner === 'round') {
-            ctx.beginPath();
-            if (el.corner === 'circle') {
-                ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2);
-            } else if (ctx.roundRect) {
-                ctx.roundRect(-hw, -hh, w, h, Math.min(w, h) * 0.12);
-            } else {
-                ctx.rect(-hw, -hh, w, h);
-            }
+            caminhoDaJanela(ctx, el, -hw, -hh, w, h);
             ctx.clip();
         }
 
@@ -564,14 +557,42 @@
         }
         ctx.restore();
 
-        ctx.strokeStyle = isSelected ? '#3b82f6' : (el.color || '#94a3b8');
-        ctx.lineWidth = isSelected ? 2 : 1;
+        // CONTORNO DE VERDADE: só existe se o operador pedir, e aí ele é arte —
+        // sai no papel, com a espessura em milímetros e a cor escolhidas.
+        //
+        // Antes esta função riscava a caixa sempre, com um traço fino cinza.
+        // Aquilo era andaime de editor, para o elemento vazio não ficar
+        // invisível enquanto se monta a arte — e vazou para as prévias, onde
+        // aparecia uma moldura em volta de toda foto que ninguém tinha pedido.
+        var esp = Number(el.border_mm) || 0;
+        if (esp > 0) {
+            // `S` é px por mm: a espessura acompanha o zoom da janela, como
+            // qualquer outra medida da arte.
+            ctx.strokeStyle = el.border_color || '#000000';
+            ctx.lineWidth = Math.max(0.5, esp * S);
+            caminhoDaJanela(ctx, el, -hw, -hh, w, h);
+            ctx.stroke();
+        }
+
+        // Seleção: só no editor, e nunca no papel.
         if (isSelected) {
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
             ctx.setLineDash([4, 2]);
             ctx.strokeRect(-hw - 2, -hh - 2, w + 4, h + 4);
             ctx.setLineDash([]);
+        }
+    }
+
+    /** O contorno da janela na forma escolhida: reto, arredondado ou círculo. */
+    function caminhoDaJanela(ctx, el, x, y, w, h) {
+        ctx.beginPath();
+        if (el.corner === 'circle') {
+            ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        } else if (el.corner === 'round' && ctx.roundRect) {
+            ctx.roundRect(x, y, w, h, Math.min(w, h) * 0.12);
         } else {
-            ctx.strokeRect(-hw, -hh, w, h);
+            ctx.rect(x, y, w, h);
         }
     }
 

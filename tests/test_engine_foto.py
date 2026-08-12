@@ -180,6 +180,59 @@ def test_caber_deixa_margem(foto_metades):
     assert cont["vermelho"] > 0 and cont["azul"] > 0
 
 
+def test_sem_contorno_por_padrao(foto_metades):
+    """A janela nao ganha moldura que ninguem pediu.
+
+    O padrao existia como andaime de editor e vazou para as previas: aparecia um
+    fio em volta de toda foto. Contorno agora e escolha, e a escolha padrao e
+    nenhum.
+    """
+    el, linha = _el(foto_metades)
+    doc, page, pix = _pintar(el, linha)
+    x0, y0, x1, y1 = _janela_pt()
+    # Faixa de 3 pt logo FORA da janela: com moldura, ela teria tinta.
+    cont = _conta_cores(pix, x0 - 4, y0 - 4, x1 + 4, y0 - 1)
+    total = sum(cont.values())
+    assert total > 50
+    assert cont["branco"] / total > 0.98
+
+
+def test_contorno_pedido_aparece_na_cor_e_espessura(foto_metades):
+    """2 mm de contorno verde tem de virar tinta verde na borda da janela."""
+    el, linha = _el(foto_metades, border_mm=2, border_color="#00C800")
+    doc, page, pix = _pintar(el, linha)
+    x0, y0, x1, y1 = _janela_pt()
+    # Faixa dentro da janela, na borda de cima: e ali que o contorno mora.
+    cont = _conta_cores(pix, x0 + 4, y0 + 1, x1 - 4, y0 + 2 * MM2PT - 1)
+    total = sum(cont.values())
+    assert total > 50
+    assert cont["verde"] / total > 0.8, cont
+
+    # O miolo continua sendo a foto, nao a cor do contorno.
+    meio = _conta_cores(pix, x0 + 4 * MM2PT, y0 + 8 * MM2PT, x1 - 4 * MM2PT, y1 - 8 * MM2PT)
+    assert meio["verde"] < sum(meio.values()) * 0.05
+
+
+def test_canto_circulo_recorta_de_verdade(foto_metades):
+    """Circulo na tela tem de ser circulo no papel.
+
+    Sem o recorte, o operador escolhia "Circulo", via um circulo na tela e
+    imprimia um retangulo — a divergencia mais cara que existe aqui.
+    """
+    el, linha = _el(foto_metades, corner="circle")
+    doc, page, pix = _pintar(el, linha)
+    x0, y0, x1, y1 = _janela_pt()
+
+    # Canto superior esquerdo da janela: fora da elipse, tem de continuar branco.
+    canto = _conta_cores(pix, x0 + 1, y0 + 1, x0 + 5, y0 + 5)
+    assert sum(canto.values()) > 4
+    assert canto["branco"] / sum(canto.values()) > 0.8, canto
+
+    # O centro continua pintado.
+    centro = _conta_cores(pix, (x0 + x1) / 2 - 6, (y0 + y1) / 2 - 6, (x0 + x1) / 2 + 6, (y0 + y1) / 2 + 6)
+    assert centro["branco"] / sum(centro.values()) < 0.2, centro
+
+
 # ─── Conferencia previa e pre-carregamento ────────────────────────────────────
 
 class _CfgFake:

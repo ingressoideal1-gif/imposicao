@@ -28,7 +28,8 @@ paleta do editor de numeração. Nasce em 25 × 32 mm — a 3×4 de credencial �
 | `width_mm` / `height_mm` | **são** a janela. O retângulo do elemento é o espaço pré-definido em que a foto entra. |
 | `csv_column` | a coluna do banco onde a foto daquela linha está registrada |
 | `fit` | `cover` preenche a janela e descarta o excedente (o certo para retrato); `contain` encaixa a foto inteira, com margem |
-| `corner` | `square`, `round` ou `circle` |
+| `corner` | `square`, `round` ou `circle`. Canto arredondado ou círculo **recorta de verdade no papel**: a janela é rasterizada e entra com máscara, porque recorte por caminho não existe no `show_pdf_page`. O custo só aparece para quem escolhe o canto redondo |
+| `border_mm` / `border_color` | contorno **impresso**, em milímetros e na cor escolhida. Zero é o padrão: a janela não ganha moldura que ninguém pediu |
 
 O elemento é desenhado por `desenharElementoFoto()`, no `foto-lib.js`, chamada
 pelos **sete** pontos de desenho do app: editor, prévia de imposição, modo PDF,

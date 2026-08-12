@@ -5319,7 +5319,10 @@ window.addElement = function (type, extras) {
     // fundo. Por isso ela nunca tem origem "Sequencial".
     if (type === 'FOTO') Object.assign(base, {
         width_mm: 25, height_mm: 32, source: 'database', csv_column: '',
-        fit: 'cover', corner: 'square', render_mode: 'print'
+        fit: 'cover', corner: 'square', render_mode: 'print',
+        // Sem contorno por padrao: contorno e decisao de arte, nao andaime de
+        // editor. Quando existir, ele e impresso.
+        border_mm: 0, border_color: '#000000'
     });
 
     if (type === 'PICOTE') Object.assign(base, { name: 'Picote' });
@@ -5607,6 +5610,18 @@ function renderElementsList() {
                         <option value="round" ${el.corner === 'round' ? 'selected' : ''}>Arredondado</option>
                         <option value="circle" ${el.corner === 'circle' ? 'selected' : ''}>Círculo</option>
                     </select>
+                </div>
+
+                <div class="form-group"><label>Contorno (mm)</label>
+                    <input class="form-control" type="number" value="${el.border_mm || 0}" min="0" max="10" step="0.1"
+                           onchange="updateEl('${el.id}','border_mm',+this.value)">
+                    <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;">0 = sem contorno. O contorno é impresso.</div>
+                </div>
+
+                <div class="form-group"><label>Cor do contorno</label>
+                    <input class="form-control" type="color" style="height:38px;padding:2px;"
+                           value="${el.border_color || '#000000'}"
+                           onchange="updateEl('${el.id}','border_color',this.value)">
                 </div>
 
                 <div class="form-group el-full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">

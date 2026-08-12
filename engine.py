@@ -1141,13 +1141,63 @@ class ImpositionEngine:
                     keep_proportion=True,
                     rotate=(360 - rot_foto) % 360,
                 )
+
+                # Contorno: e arte, nao enfeite de tela. Desenhado DENTRO da
+                # pagina da janela, recuado meia espessura para nao ter metade do
+                # traco cortada pela borda da pagina — e assim ele acompanha a
+                # rotacao do elemento junto com a foto.
+                esp = float(el.get("border_mm", 0) or 0) * MM2PT
+                canto = str(el.get("corner", "square") or "square").lower()
+                if esp > 0:
+                    cor = _hex_to_rgb(el.get("border_color", "#000000") or "#000000")
+                    meia = esp / 2.0
+                    r_borda = fitz.Rect(meia, meia, w_pt - meia, h_pt - meia)
+                    if canto == "circle":
+                        pj.draw_oval(r_borda, color=cor, width=esp)
+                    else:
+                        try:
+                            raio = min(w_pt, h_pt) * 0.12 if canto == "round" else 0
+                            if raio:
+                                pj.draw_rect(r_borda, color=cor, width=esp, radius=0.12)
+                            else:
+                                pj.draw_rect(r_borda, color=cor, width=esp)
+                        except (TypeError, ValueError):
+                            # PyMuPDF sem `radius`: canto reto e melhor que erro.
+                            pj.draw_rect(r_borda, color=cor, width=esp)
+
                 rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
-                page.show_pdf_page(
-                    rect, jan, 0,
-                    keep_proportion=True,
-                    rotate=_graus_90(360 - angle),
-                    clip=jan[0].rect,
-                )
+                py_rotate = _graus_90(360 - angle)
+
+                if canto in ("round", "circle"):
+                    # Canto arredondado exige recorte, e recorte por caminho nao
+                    # existe no show_pdf_page. Entao a janela e rasterizada e
+                    # entra como imagem com mascara na forma escolhida — o custo
+                    # so aparece para quem escolheu canto redondo, e sem isto a
+                    # tela mostraria um circulo e o PVC sairia quadrado.
+                    pix = pj.get_pixmap(dpi=300, alpha=False)
+                    from PIL import ImageDraw
+                    mascara = Image.new("L", (pix.width, pix.height), 0)
+                    desenho = ImageDraw.Draw(mascara)
+                    if canto == "circle":
+                        desenho.ellipse([0, 0, pix.width - 1, pix.height - 1], fill=255)
+                    else:
+                        desenho.rounded_rectangle(
+                            [0, 0, pix.width - 1, pix.height - 1],
+                            radius=int(min(pix.width, pix.height) * 0.12), fill=255
+                        )
+                    buf = io.BytesIO()
+                    mascara.save(buf, format="PNG")
+                    page.insert_image(
+                        rect, stream=pix.tobytes("png"), mask=buf.getvalue(),
+                        rotate=py_rotate, keep_proportion=False,
+                    )
+                else:
+                    page.show_pdf_page(
+                        rect, jan, 0,
+                        keep_proportion=True,
+                        rotate=py_rotate,
+                        clip=jan[0].rect,
+                    )
                 jan.close()
             except Exception as ex:
                 # Nao engolir: credencial impressa com a janela vazia e PVC no lixo.
