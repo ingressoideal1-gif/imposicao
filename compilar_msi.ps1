@@ -66,7 +66,7 @@ Write-Host "`nEtapa 1/2: Compilando XML (.wxs -> .wixobj)..." -ForegroundColor G
 # LOCAL_AGENT_VERSION em app.py — o MSI usa esse campo para decidir se o
 # upgrade se aplica, e o frontend compara o valor reportado pelo agente.
 Write-Host "Etapa 2/2: Gerando pacote final MSI (.wixobj -> .msi)..." -ForegroundColor Green
-$msiOutput = "dist\NewProd_Setup_v1.2.44.msi"
+$msiOutput = "dist\NewProd_Setup_v1.2.45.msi"
 & $wixLight -ext WixUIExtension -nologo -sval "dist\agent_installer.wixobj" -out $msiOutput
 
 if (Test-Path $msiOutput) {
