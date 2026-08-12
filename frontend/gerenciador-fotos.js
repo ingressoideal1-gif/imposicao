@@ -33,12 +33,14 @@
     var QUALIDADE = 0.9;
 
     var cfg = null;          // configuração da sessão aberta
-    var fotos = [];          // { nome, blob, url, hash, w, h, dpi }
+    var fotos = [];          // { nome, blob, url, hash, w, h, dpi, noBanco }
     var resultado = null;    // saída do casarFotos
     var selecionado = null;  // { tipo: 'sobrando'|'linha', chave }
     var aba = 'importar';
     var pagina = 0;
     var focoEnquadro = -1;   // índice da linha em ajuste na folha de contato
+    var colunaId = '';       // coluna que identifica a pessoa na tela
+    var trocandoLinha = -1;  // linha cuja foto está sendo substituída
 
     // ══════════════════════════════════════════════════════════════════════
     // Normalização — EXIF, tamanho, formato
@@ -185,6 +187,21 @@
 .gf-card .rot{font-size:11px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gf-card .dpi{font-size:10px;color:#64748b}
 .gf-card .dpi.ruim{color:#f87171;font-weight:600}
+.gf-drop.compacta{padding:12px;margin-bottom:4px}
+.gf-sel{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:12px}
+.gf-duvida{padding:8px;border-bottom:1px solid #1e293b}
+.gf-par{display:flex;gap:8px;align-items:center;padding:6px;border:1px solid #334155;border-radius:8px;
+  margin-bottom:6px;cursor:pointer;background:#0b1220}
+.gf-par:hover{border-color:#3b82f6;background:#111c33}
+.gf-par img{width:38px;height:48px;object-fit:cover;border-radius:4px;background:#1e293b;flex:none}
+.gf-lados{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.gf-lado{display:flex;flex-direction:column;min-width:0;flex:1}
+.gf-lado b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.gf-rot{font-size:10px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gf-seta{color:#475569;flex:none}
+.gf-mini{margin-top:6px;width:100%;font-size:10px;padding:3px 6px;border-radius:5px;
+  border:1px solid #334155;background:#1e293b;color:#94a3b8;cursor:pointer}
+.gf-mini:hover{background:#334155;color:#e2e8f0}
 .gf-vazio{color:#64748b;padding:22px;text-align:center}
 .gf-aviso{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);color:#fbbf24;
   padding:8px 12px;border-radius:8px;margin-bottom:12px}
@@ -208,16 +225,53 @@
         });
     }
 
-    /** Como identificar uma linha na tela: a primeira coluna com texto. */
-    function rotuloDaLinha(i) {
-        var r = cfg.rows[i] || {};
+    /**
+     * A coluna que identifica a pessoa na tela.
+     *
+     * Sem dizer de QUAL coluna veio o texto, o operador não consegue comparar
+     * "Ana Paula" com `ana_paula.jpg` com segurança — pode ser o nome, pode ser
+     * o cargo, pode ser um código. Por isso o nome da coluna aparece sempre, e o
+     * operador pode trocar qual coluna manda.
+     */
+    function colunaDeIdentidade() {
+        if (colunaId && cfg.headers.indexOf(colunaId) !== -1) return colunaId;
         for (var k = 0; k < cfg.headers.length; k++) {
-            var v = r[cfg.headers[k]];
-            if (v != null && String(v).trim() && cfg.headers[k] !== cfg.coluna) {
-                return String(v).slice(0, 28);
+            if (cfg.headers[k] === cfg.coluna) continue;
+            for (var i = 0; i < cfg.rows.length; i++) {
+                var v = cfg.rows[i] ? cfg.rows[i][cfg.headers[k]] : null;
+                if (v != null && String(v).trim()) return cfg.headers[k];
             }
         }
-        return 'linha ' + (i + 1);
+        return cfg.headers[0] || '';
+    }
+
+    /** { coluna, valor } daquela linha, para a tela mostrar os dois. */
+    function identidadeDaLinha(i) {
+        var col = colunaDeIdentidade();
+        var r = cfg.rows[i] || {};
+        var v = col ? r[col] : null;
+        v = (v == null ? '' : String(v)).trim();
+        return { coluna: col, valor: v || ('linha ' + (i + 1)) };
+    }
+
+    function rotuloDaLinha(i) {
+        var id = identidadeDaLinha(i);
+        return id.valor.slice(0, 40);
+    }
+
+    /** As demais colunas da linha, para desempatar uma ambiguidade. */
+    function detalhesDaLinha(i, limite) {
+        var r = cfg.rows[i] || {};
+        var col = colunaDeIdentidade();
+        var out = [];
+        for (var k = 0; k < cfg.headers.length && out.length < (limite || 3); k++) {
+            var h = cfg.headers[k];
+            if (h === col || h === cfg.coluna) continue;
+            var v = r[h];
+            if (v == null || !String(v).trim()) continue;
+            out.push({ coluna: h, valor: String(v).slice(0, 30) });
+        }
+        return out;
     }
 
     function linhasAtivas() {
@@ -231,27 +285,44 @@
     // ══════════════════════════════════════════════════════════════════════
 
     function htmlImportar() {
-        if (!fotos.length) {
-            return `
-            <div class="gf-drop" id="gf-drop">
-                <div style="font-size:30px">🖼️</div>
-                <div style="margin-top:8px;font-size:14px;color:#e2e8f0">Solte aqui o lote de fotos</div>
-                <div style="margin-top:6px">ou clique para escolher — aceita a pasta inteira, JPG, PNG, WEBP e HEIC</div>
-                <div class="gf-tag" style="margin-top:14px">
-                    As fotos são reduzidas para 300 dpi desta janela (${cfg.janela.w_mm} × ${cfg.janela.h_mm} mm)
-                    antes de subir, e casadas com as linhas pelo nome do arquivo.
-                </div>
-            </div>`;
-        }
-
         var r = resultado || { casadas: [], ambiguas: [], sobrando: [], semFoto: [] };
-        var baixaRes = r.casadas.filter(function (c) { return fotoDe(c.arquivo) && fotoDe(c.arquivo).dpi < DPI_MINIMO; }).length;
+        var baixaRes = r.casadas.filter(function (c) { var f = fotoDe(c.arquivo); return f && f.dpi && f.dpi < DPI_MINIMO; }).length;
+        var primeiraVez = !fotos.length;
+
+        // A zona de soltar NUNCA some. O lote de uma gráfica chega em pedaços —
+        // um pendrive hoje, um WhatsApp amanhã — e ter de gravar para poder
+        // trazer mais fotos obrigaria o operador a fechar e reabrir a tela a
+        // cada leva.
+        var solta = `
+        <div class="gf-drop ${primeiraVez ? '' : 'compacta'}" id="gf-drop">
+            <div style="font-size:${primeiraVez ? 30 : 18}px">🖼️</div>
+            <div style="margin-top:6px;font-size:${primeiraVez ? 14 : 13}px;color:#e2e8f0">
+                ${primeiraVez ? 'Solte aqui o lote de fotos' : '➕ Solte mais fotos aqui (o que já foi casado não se perde)'}
+            </div>
+            <div style="margin-top:4px">ou clique para escolher — aceita a pasta inteira, JPG, PNG, WEBP e HEIC</div>
+            ${primeiraVez ? `<div class="gf-tag" style="margin-top:14px">
+                As fotos são reduzidas para 300 dpi desta janela (${cfg.janela.w_mm} × ${cfg.janela.h_mm} mm)
+                antes de subir, e casadas com as linhas pelo nome do arquivo.
+            </div>` : ''}
+        </div>`;
+
+        if (primeiraVez && !r.casadas.length && !r.semFoto.length) return solta;
 
         return `
         ${baixaRes ? `<div class="gf-aviso">⚠️ ${baixaRes} foto(s) abaixo de ${DPI_MINIMO} dpi nesta janela — vão sair borradas no PVC. Elas aparecem marcadas na aba Enquadrar.</div>` : ''}
-        <div class="gf-tag">
-            ${fotos.length} arquivo(s) no lote · ${linhasAtivas().length} linha(s) que imprimem.
-            Clique numa foto sobrando e depois numa linha sem foto para ligar as duas.
+        ${solta}
+        <div style="display:flex;align-items:center;gap:10px;margin:12px 0 4px;flex-wrap:wrap">
+            <span class="gf-tag">
+                ${fotos.length} foto(s) no lote · ${linhasAtivas().length} linha(s) que imprimem ·
+                clique numa foto sobrando e depois numa linha sem foto para ligar as duas
+            </span>
+            <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+                <label class="gf-tag">Identificar a linha pela coluna</label>
+                <select class="gf-sel" onchange="window.__gfColunaId(this.value)">
+                    ${cfg.headers.filter(function (h) { return h !== cfg.coluna; })
+                .map(function (h) { return `<option value="${esc(h)}" ${colunaDeIdentidade() === h ? 'selected' : ''}>${esc(h)}</option>`; }).join('')}
+                </select>
+            </span>
         </div>
         <div class="gf-pilhas">
             ${pilhaCasadas(r)}
@@ -260,6 +331,11 @@
             ${pilhaSemFoto(r)}
         </div>`;
     }
+
+    window.__gfColunaId = function (v) {
+        colunaId = v;
+        pintar();
+    };
 
     function fotoDe(nome) {
         return fotos.find(function (f) { return f.nome === nome; }) || null;
@@ -281,20 +357,44 @@
         </div>`;
     }
 
+    /**
+     * A pilha das dúvidas mostra a COMPARAÇÃO, não só o veredito.
+     *
+     * Uma ambiguidade só é decidível se o operador enxergar os dois lados: o
+     * arquivo (miniatura e nome) e a linha (a coluna de identidade mais as
+     * outras colunas que desempatam). "ana.jpg → Ana" não ajuda quando existem
+     * duas Anas; "ana.jpg → Nome: Ana · CPF: 123 · Cargo: Portaria" ajuda.
+     */
     function pilhaAmbiguas(r) {
         return `
         <div class="gf-pilha">
             <h3>❓ Ambíguas <span class="gf-tag">${r.ambiguas.length}</span></h3>
             <div class="lista">
                 ${r.ambiguas.length ? r.ambiguas.map(function (a, i) {
-            return `<div style="padding:6px;border-bottom:1px solid #1e293b">
-                        <div class="gf-tag">${esc(a.motivo)}</div>
+            return `<div class="gf-duvida">
+                        <div class="gf-tag" style="margin-bottom:6px">⚠️ ${esc(a.motivo)}</div>
                         ${a.candidatos.map(function (c) {
                 var f = fotoDe(c.arquivo);
                 return a.linhas.map(function (li) {
-                    return `<div class="gf-item" onclick="window.__gfResolver(${i},'${esc(c.arquivo)}',${li})">
+                    var id = identidadeDaLinha(li);
+                    var extras = detalhesDaLinha(li, 3);
+                    return `<div class="gf-par" onclick="window.__gfResolver(${i},'${esc(c.arquivo)}',${li})"
+                                     title="clique para usar esta foto nesta linha">
                                     <img src="${f ? f.url : ''}" alt="">
-                                    <div class="txt">${esc(c.arquivo)} → ${esc(rotuloDaLinha(li))}</div>
+                                    <div class="gf-lados">
+                                        <div class="gf-lado">
+                                            <span class="gf-rot">arquivo</span>
+                                            <b>${esc(c.arquivo)}</b>
+                                        </div>
+                                        <div class="gf-seta">↔</div>
+                                        <div class="gf-lado">
+                                            <span class="gf-rot">${esc(id.coluna)} · linha ${li + 1}</span>
+                                            <b>${esc(id.valor)}</b>
+                                            ${extras.map(function (e) {
+                        return `<span class="gf-rot">${esc(e.coluna)}: ${esc(e.valor)}</span>`;
+                    }).join('')}
+                                        </div>
+                                    </div>
                                 </div>`;
                 }).join('');
             }).join('')}
@@ -322,17 +422,29 @@
     }
 
     function pilhaSemFoto(r) {
+        var col = colunaDeIdentidade();
         return `
         <div class="gf-pilha">
             <h3>🚫 Linhas sem foto <span class="gf-tag">${r.semFoto.length}</span></h3>
             <div class="lista">
                 ${r.semFoto.length ? r.semFoto.map(function (li) {
+            var id = identidadeDaLinha(li);
+            var extras = detalhesDaLinha(li, 2);
             return `<div class="gf-item" onclick="window.__gfSoltar(${li})">
                         <div style="width:30px;height:38px;border-radius:3px;background:#1e293b;flex:none"></div>
-                        <div class="txt">${esc(rotuloDaLinha(li))}<br><span class="gf-tag">linha ${li + 1}</span></div>
+                        <div class="txt">
+                            <span class="gf-rot">${esc(id.coluna)} · linha ${li + 1}</span><br>
+                            <b>${esc(id.valor)}</b>
+                            ${extras.length ? '<br>' + extras.map(function (e) {
+                return `<span class="gf-rot">${esc(e.coluna)}: ${esc(e.valor)}</span>`;
+            }).join(' · ') : ''}
+                        </div>
                     </div>`;
         }).join('') : '<div class="gf-vazio">toda linha tem foto 🎉</div>'}
             </div>
+            ${r.semFoto.length ? `<div class="gf-tag" style="padding:6px 10px;border-top:1px solid #1e293b">
+                comparando pela coluna <b>${esc(col)}</b>
+            </div>` : ''}
         </div>`;
     }
 
@@ -422,10 +534,12 @@
             var f = fotoDe(c.arquivo);
             var idx = ini + k;
             var ruim = f && f.dpi < DPI_MINIMO;
+            var id = identidadeDaLinha(c.linha);
             return `<div class="gf-card ${focoEnquadro === idx ? 'foco' : ''}" id="gf-card-${idx}">
                     <canvas id="gf-cv-${idx}" data-idx="${idx}"></canvas>
-                    <div class="rot">${esc(rotuloDaLinha(c.linha))}</div>
-                    <div class="dpi ${ruim ? 'ruim' : ''}">${f ? f.dpi + ' dpi' : ''}${ruim ? ' ⚠' : ''}</div>
+                    <div class="rot" title="${esc(id.coluna)}: ${esc(id.valor)}">${esc(id.valor)}</div>
+                    <div class="dpi ${ruim ? 'ruim' : ''}">${f && f.dpi ? f.dpi + ' dpi' : ''}${ruim ? ' ⚠' : ''}</div>
+                    <button class="gf-mini" onclick="window.__gfTrocar(${c.linha})" title="substituir a foto desta pessoa">🔁 trocar</button>
                 </div>`;
         }).join('')}
         </div>
@@ -440,6 +554,37 @@
         pagina = Math.max(0, pagina + d);
         pintar();
     };
+
+    /**
+     * Substituir a foto de UMA pessoa, a qualquer momento.
+     *
+     * O caso é corriqueiro numa gráfica: a foto veio tremida, o cliente mandou
+     * outra depois, a pessoa trocou de crachá. Sem isto, corrigir um rosto
+     * obrigaria a reimportar o lote inteiro.
+     */
+    window.__gfTrocar = function (linha) {
+        trocandoLinha = linha;
+        el('gf-file-uma').click();
+    };
+
+    async function receberTroca(file) {
+        var linha = trocandoLinha;
+        trocandoLinha = -1;
+        if (linha < 0 || !file) return;
+        try {
+            var nova = await normalizarFoto(file, cfg.janela);
+            // Nome único por linha: duas pessoas podem mandar "foto.jpg", e o
+            // casamento é por nome de arquivo.
+            if (fotoDe(nova.nome)) nova.nome = nova.nome + ' (linha ' + (linha + 1) + ')';
+            fotos.push(nova);
+            ligar(nova.nome, linha, 'trocada');
+            var c = resultado.casadas.find(function (x) { return x.linha === linha; });
+            if (c) c.enq = { cx: nova.cx, cy: nova.cy, zoom: 1, rot: 0 };
+            pintar();
+        } catch (ex) {
+            aviso('Não consegui ler esse arquivo: ' + ex.message);
+        }
+    }
 
     /** Desenha um cartão da folha de contato com o MESMO recorte do papel. */
     function pintarCartao(idx) {
@@ -463,6 +608,23 @@
 
         var img = window.fotoImagem(f.url, window.repintor('gf-cartao-' + idx, function () { pintarCartao(idx); }));
         if (!img) return;
+
+        // Foto que veio do banco não trouxe as dimensões: agora que a imagem
+        // chegou, dá para dizer a resolução real dela nesta janela — que pode
+        // ter mudado, se a janela foi redimensionada depois.
+        if (!f.w || !f.h) {
+            var dim = window.dimensoesDaFoto(f.url);
+            if (dim) {
+                f.w = dim.w; f.h = dim.h;
+                f.dpi = window.dpiNaJanela(dim.w, dim.h, jw, jh, cfg.janela.fit, enquadroDe(c).zoom);
+                var rot = el('gf-card-' + idx) ? el('gf-card-' + idx).querySelector('.dpi') : null;
+                if (rot) {
+                    rot.textContent = f.dpi + ' dpi' + (f.dpi < DPI_MINIMO ? ' ⚠' : '');
+                    rot.className = 'dpi' + (f.dpi < DPI_MINIMO ? ' ruim' : '');
+                }
+            }
+        }
+
         window.desenharJanelaFoto(ctx, img, 0, 0, larg, alt, enquadroDe(c), cfg.janela.fit);
     }
 
@@ -559,7 +721,9 @@
             var f = fotoDe(c.arquivo);
             if (!f) { falhas.push(c.arquivo); continue; }
             try {
-                var url = await cfg.subirFoto(f.blob, f.hash);
+                // Foto que já está no banco não sobe de novo: reenquadrar 500
+                // credenciais não pode custar 500 uploads. Só o retângulo muda.
+                var url = f.blob ? await cfg.subirFoto(f.blob, f.hash) : f.url;
                 if (!url) throw new Error('o Storage não devolveu endereço');
                 var e = enquadroDe(c);
                 var linha = cfg.rows[c.linha];
@@ -571,8 +735,10 @@
                     dpi: window.dpiNaJanela(f.w, f.h, cfg.janela.w_mm, cfg.janela.h_mm, cfg.janela.fit, e.zoom)
                 };
                 // A célula mostra o nome do arquivo: legível na grade do CSV, e é
-                // o que permite reconhecer a foto sem abrir o gerenciador.
-                if (!linha[cfg.coluna]) linha[cfg.coluna] = f.nome;
+                // o que permite reconhecer a foto sem abrir o gerenciador. Uma
+                // foto trocada precisa atualizar o nome, senão a célula passa a
+                // mentir sobre qual arquivo está impresso.
+                linha[cfg.coluna] = f.nome;
                 gravadas++;
             } catch (ex) {
                 console.warn('[Fotos] falha ao subir', c.arquivo, ex);
@@ -649,7 +815,15 @@
         for (var i = 0; i < imgs.length; i++) {
             try {
                 var f = await normalizarFoto(imgs[i], cfg.janela);
-                if (!fotos.some(function (x) { return x.nome === f.nome; })) fotos.push(f);
+                var antiga = fotoDe(f.nome);
+                if (!antiga) {
+                    fotos.push(f);
+                } else if (antiga.noBanco) {
+                    // Mesmo nome de uma foto já gravada: é o cliente reenviando
+                    // aquela pessoa. A nova entra no lugar, e a linha que já
+                    // apontava para ela passa a apontar para a nova.
+                    fotos[fotos.indexOf(antiga)] = f;
+                }
             } catch (ex) {
                 console.warn('[Fotos] arquivo ignorado', imgs[i].name, ex);
             }
@@ -661,11 +835,77 @@
         pintar();
     }
 
+    /**
+     * Casa o que ainda não foi casado, PRESERVANDO o que já está decidido.
+     *
+     * É o que permite trazer o lote em levas: a segunda leva não desfaz o
+     * casamento da primeira, nem as ligações feitas na mão, nem as fotos que já
+     * estavam gravadas no banco. Só os arquivos novos disputam as linhas que
+     * ainda estão vazias.
+     */
+    /**
+     * Traz para a tela as fotos que já estão gravadas nas linhas.
+     *
+     * Elas entram como casadas e SEM `blob`: na hora de gravar não sobem de
+     * novo, só o enquadramento é atualizado. Reenquadrar 500 credenciais não
+     * pode custar 500 uploads.
+     */
+    function carregarDoBanco() {
+        var casadas = [], semFoto = [];
+        (cfg.rows || []).forEach(function (linha, i) {
+            if (!linha || linha.__ativo === false) return;
+            var meta = (linha.__fotos || {})[cfg.coluna];
+            if (!meta || !String(meta.url || '').trim()) { semFoto.push(i); return; }
+
+            var nome = meta.arquivo || String(linha[cfg.coluna] || '').trim() || ('foto ' + (i + 1));
+            if (!fotoDe(nome)) {
+                fotos.push({
+                    nome: nome, blob: null, url: meta.url, hash: meta.ref || '',
+                    w: 0, h: 0, dpi: meta.dpi || 0,
+                    cx: meta.cx, cy: meta.cy, noBanco: true
+                });
+            }
+            casadas.push({
+                arquivo: nome, linha: i, regra: 'no banco',
+                enq: {
+                    cx: typeof meta.cx === 'number' ? meta.cx : 0.5,
+                    cy: typeof meta.cy === 'number' ? meta.cy : 0.4,
+                    zoom: typeof meta.zoom === 'number' ? meta.zoom : 1,
+                    rot: meta.rot || 0
+                }
+            });
+        });
+        resultado = { casadas: casadas, ambiguas: [], sobrando: [], semFoto: semFoto };
+        if (casadas.length) aba = 'enquadrar';
+    }
+
     function recasar() {
         var colunas = [];
         if (cfg.coluna) colunas.push(cfg.coluna);
         cfg.headers.forEach(function (h) { if (colunas.indexOf(h) === -1) colunas.push(h); });
-        resultado = window.casarFotos(fotos, cfg.rows, colunas);
+
+        var jaCasadas = (resultado && resultado.casadas) ? resultado.casadas.slice() : [];
+        var arquivosUsados = {}, linhasUsadas = {};
+        jaCasadas.forEach(function (c) { arquivosUsados[c.arquivo] = true; linhasUsadas[c.linha] = true; });
+
+        var novos = fotos.filter(function (f) { return !arquivosUsados[f.nome]; });
+
+        // Cópia das linhas com as já resolvidas marcadas como inativas: o
+        // `casarFotos` já sabe pular linha inativa, então não é preciso um
+        // caminho novo só para isto. A cópia é rasa e descartável — as linhas de
+        // verdade não são tocadas.
+        var visiveis = cfg.rows.map(function (r, i) {
+            return linhasUsadas[i] ? { __ativo: false } : r;
+        });
+
+        var novo = window.casarFotos(novos, visiveis, colunas);
+
+        resultado = {
+            casadas: jaCasadas.concat(novo.casadas),
+            ambiguas: novo.ambiguas,
+            sobrando: novo.sobrando,
+            semFoto: novo.semFoto
+        };
     }
 
     function fechar() {
@@ -685,6 +925,13 @@
         cfg = config;
         fotos = []; resultado = null; selecionado = null;
         aba = 'importar'; pagina = 0; focoEnquadro = -1;
+        colunaId = ''; trocandoLinha = -1;
+
+        // O gerenciador nunca abre em branco: o que já está gravado nas linhas
+        // volta para a tela, com o enquadramento que tem. É isso que permite
+        // reenquadrar ou trocar uma foto depois — sem precisar reimportar o lote
+        // inteiro só para acertar um rosto torto.
+        carregarDoBanco();
 
         garantirCss();
         var ov = document.createElement('div');
@@ -705,11 +952,16 @@
                 <div class="gf-prog"><i id="gf-barra"></i></div>
                 <button class="gf-btn primario" id="gf-aplicar" disabled onclick="window.__gfAplicar()">✔ Gravar no banco</button>
             </div>
-            <input type="file" id="gf-file" multiple accept="image/*" style="display:none">`;
+            <input type="file" id="gf-file" multiple accept="image/*" style="display:none">
+            <input type="file" id="gf-file-uma" accept="image/*" style="display:none">`;
         document.body.appendChild(ov);
 
         el('gf-file').addEventListener('change', function (ev) {
             receberArquivos(Array.from(ev.target.files || []));
+            ev.target.value = '';
+        });
+        el('gf-file-uma').addEventListener('change', function (ev) {
+            receberTroca((ev.target.files || [])[0]);
             ev.target.value = '';
         });
         document.addEventListener('keydown', aoTeclado);

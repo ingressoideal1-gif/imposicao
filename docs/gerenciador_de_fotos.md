@@ -88,12 +88,33 @@ O resultado abre em quatro pilhas: **casadas · ambíguas · fotos sem linha ·
 linhas sem foto**. Clicar numa foto sobrando e depois numa linha sem foto liga as
 duas. Nada é gravado antes de **Gravar no banco**.
 
+Quatro coisas que a tela faz questão de garantir:
+
+- **O lote chega em levas.** A zona de soltar nunca some: dá para trazer mais
+  fotos a qualquer momento, e a leva nova **não desfaz** o que já foi casado, nem
+  as ligações feitas na mão. Só os arquivos novos disputam as linhas que ainda
+  estão vazias. Ter de gravar entre uma leva e outra obrigaria o operador a
+  fechar e reabrir a tela a cada pendrive que chega.
+- **A linha se identifica pela coluna, com o nome dela à vista.** "Ana Paula" não
+  diz de onde veio; "Nome · linha 12: Ana Paula · Cargo: Portaria" diz. O
+  operador escolhe no alto da tela qual coluna identifica a pessoa.
+- **A dúvida mostra os dois lados.** A pilha de ambíguas não dá veredito: ela põe
+  lado a lado a miniatura e o nome do arquivo contra a coluna de identidade e as
+  outras colunas da linha. Com duas Anas na planilha, é o CPF ou o cargo que
+  decide — e eles precisam estar na tela.
+- **Nada é definitivo.** O gerenciador reabre trazendo o que já está gravado nas
+  linhas, direto na folha de contato, com o enquadramento que cada foto tem.
+  Reenquadrar ou trocar a foto de uma pessoa é um clique, a qualquer momento.
+  Foto que já está no banco **não sobe de novo**: reenquadrar 500 credenciais não
+  pode custar 500 uploads.
+
 ### 4. Folha de contato
 
 A aba **Enquadrar**: todas as fotos já renderizadas dentro da janela real do
 modelo, com o mesmo recorte que o papel terá. Roda do mouse aproxima, arrastar
 move, as setas do teclado trocam de foto, duplo clique volta ao automático. Selo
-vermelho abaixo de 150 dpi.
+vermelho abaixo de 150 dpi, e **🔁 trocar** em cada cartão para substituir a foto
+daquela pessoa sem mexer no resto do lote.
 
 É a tela que os concorrentes não têm — cardPresso, BarTender e o Data Merge do
 InDesign corrigem um registro por vez.
