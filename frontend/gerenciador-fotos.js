@@ -461,7 +461,7 @@
         ctx.fillStyle = '#020617';
         ctx.fillRect(0, 0, larg, alt);
 
-        var img = window.fotoImagem(f.url, function () { pintarCartao(idx); });
+        var img = window.fotoImagem(f.url, window.repintor('gf-cartao-' + idx, function () { pintarCartao(idx); }));
         if (!img) return;
         window.desenharJanelaFoto(ctx, img, 0, 0, larg, alt, enquadroDe(c), cfg.janela.fit);
     }

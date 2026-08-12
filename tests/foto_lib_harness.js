@@ -223,7 +223,52 @@ assincronos.push(comImagemFalhando(function () {
     });
 }));
 
-// ─── 14. So tenta carregar o que o navegador consegue buscar ──────────────────
+// ─── 14. Um lote inteiro chegando repinta a tela UMA vez ──────────────────────
+//
+// Sem isto, 300 fotos que carregam viram 300 redesenhos inteiros da tela — o
+// que, num canvas de verdade, e a aba travada por varios segundos. Medido: 300
+// fotos produziam 303 redesenhos.
+
+function comImagemQueCarrega(fn) {
+    const antes = globalThis.Image;
+    globalThis.Image = function () { };
+    Object.defineProperty(globalThis.Image.prototype, 'src', {
+        set: function () {
+            const self = this;
+            Promise.resolve().then(function () { if (self.onload) self.onload(); });
+        },
+        configurable: true
+    });
+    return Promise.resolve().then(fn).finally(function () { globalThis.Image = antes; });
+}
+
+assincronos.push(comImagemQueCarrega(function () {
+    let repintadas = 0;
+    const repintar = lib.repintor('teste-lote', function () { repintadas++; });
+    for (let i = 0; i < 40; i++) {
+        lib.fotoImagem('https://exemplo/lote/' + i + '.jpg', repintar);
+    }
+    return new Promise(function (res) { setTimeout(res, 80); }).then(function () {
+        ok(repintadas === 1, '40 fotos chegando repintam a tela uma vez so', { repintadas });
+    });
+}));
+
+assincronos.push(comImagemQueCarrega(function () {
+    // Janelas diferentes (editor e previa) sao repintores diferentes: cada uma
+    // repinta a si mesma, uma vez.
+    let a = 0, b = 0;
+    const rA = lib.repintor('janela-a', function () { a++; });
+    const rB = lib.repintor('janela-b', function () { b++; });
+    for (let i = 0; i < 10; i++) {
+        lib.fotoImagem('https://exemplo/duas/' + i + '.jpg', rA);
+        lib.fotoImagem('https://exemplo/duas/' + i + '.jpg', rB);
+    }
+    return new Promise(function (res) { setTimeout(res, 80); }).then(function () {
+        ok(a === 1 && b === 1, 'cada janela repinta uma vez', { a, b });
+    });
+}));
+
+// ─── 15. So tenta carregar o que o navegador consegue buscar ──────────────────
 
 (function carregavel() {
     ok(lib.urlCarregavel('https://exemplo/a.jpg'), 'https e carregavel');

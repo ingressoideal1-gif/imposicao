@@ -322,6 +322,60 @@
         return /^(https?:|data:|blob:|\/)/i.test(u);
     }
 
+    // ─── Repintores: um lote inteiro chegando repinta a tela UMA vez ─────────
+    //
+    // Cada foto que chega pede à janela que se redesenhe. Com um lote de 300,
+    // isso eram 300 redesenhos inteiros — medido — e um canvas de verdade não
+    // aguenta isso sem travar a aba. Aqui os pedidos são juntados: quem repinta
+    // é registrado por NOME (o editor, a prévia, a folha de contato), e o nome
+    // é redesenhado no máximo uma vez por quadro, não importa quantas fotos
+    // tenham chegado.
+
+    var repintores = new Map();
+    var pendentes = new Set();
+    var agendado = false;
+
+    function agendarRepinte() {
+        if (agendado) return;
+        agendado = true;
+        var executar = function () {
+            agendado = false;
+            var lista = Array.from(pendentes);
+            pendentes.clear();
+            lista.forEach(function (nome) {
+                var r = repintores.get(nome);
+                if (r) { try { r.fn(); } catch (e) { } }
+            });
+        };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(executar);
+        else setTimeout(executar, 16);
+    }
+
+    /**
+     * A função que uma janela passa para `fotoImagem` como "me avise".
+     *
+     * Devolve SEMPRE o mesmo objeto para o mesmo nome, o que é o ponto: é isso
+     * que faz o `Set` de ouvintes guardar um pedido por janela em vez de um por
+     * foto. Um closure novo a cada desenho enganaria o `Set`.
+     */
+    function repintor(nome, fn) {
+        var reg = repintores.get(nome);
+        if (!reg) {
+            reg = {
+                fn: fn,
+                disparar: function () { pendentes.add(nome); agendarRepinte(); }
+            };
+            repintores.set(nome, reg);
+        } else {
+            // `disparar` continua o MESMO objeto para sempre; só a função que ele
+            // chama é atualizada. É a identidade estável que faz o Set de
+            // ouvintes guardar um pedido por janela, mesmo quando quem desenha
+            // passa um closure novo a cada quadro.
+            reg.fn = fn;
+        }
+        return reg.disparar;
+    }
+
     function registro(url) {
         var reg = cache.get(url);
         if (reg) return reg;
@@ -483,6 +537,7 @@
         casarFotos: casarFotos,
         normalizarTexto: normalizarTexto,
         urlCarregavel: urlCarregavel,
+        repintor: repintor,
         fotoImagem: fotoImagem,
         dimensoesDaFoto: dimensoesDaFoto,
         carregarFoto: carregarFoto,

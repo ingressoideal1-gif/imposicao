@@ -3920,7 +3920,10 @@ function drawElement(ctx, el, S) {
 
     } else if (el.type === 'FOTO') {
 
-        desenharElementoFoto(ctx, el, S, isSelected, linhaDeAmostra(), () => drawCanvas());
+        // repintor NOMEADO, nunca um closure novo: é o que garante que um lote
+        // de 300 fotos chegando redesenhe o editor uma vez, e não 300.
+        desenharElementoFoto(ctx, el, S, isSelected, linhaDeAmostra(),
+            window.repintor('editor', drawCanvas));
 
     } else if (el.type === 'SVG' || el.type === 'PDF') {
 
@@ -8083,7 +8086,7 @@ function drawPreview() {
                         desenharElementoFoto(
                             ctx, el, MM2PT * scale, false,
                             (state.csvData && state.csvData[item_index]) || null,
-                            () => drawPreview()
+                            window.repintor('previa', drawPreview)
                         );
 
                     } else if (el.type === 'SVG') {
