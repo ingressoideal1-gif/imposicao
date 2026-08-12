@@ -303,19 +303,47 @@
 
     var cache = new Map();
 
+    /**
+     * O navegador consegue buscar este endereço?
+     *
+     * A coluna da foto pode conter um nome solto (`ana.jpg`) ou um caminho de
+     * disco (`C:\fotos\ana.jpg`) — as duas coisas são legítimas e o `engine.py`
+     * sabe abrir as duas, porque ele roda na estação. O navegador não: ele
+     * resolveria o nome contra o endereço da página e pediria ao servidor um
+     * arquivo que não existe. Uma tabela com 500 nomes viraria 500 requisições
+     * inúteis, e cada falha ainda mandava a tela se redesenhar.
+     *
+     * Então aqui a regra é honesta: o que o navegador não consegue mostrar, ele
+     * não tenta — desenha a moldura da janela e segue.
+     */
+    function urlCarregavel(url) {
+        var u = String(url || '').trim();
+        if (!u) return false;
+        return /^(https?:|data:|blob:|\/)/i.test(u);
+    }
+
     function registro(url) {
         var reg = cache.get(url);
         if (reg) return reg;
 
-        var img = typeof Image !== 'undefined' ? new Image() : null;
+        var img = (typeof Image !== 'undefined' && urlCarregavel(url)) ? new Image() : null;
         reg = { img: img, pronta: false, falhou: false, ouvintes: new Set() };
         reg.espera = new Promise(function (resolve) {
             if (!img) { reg.falhou = true; return resolve(reg); }
             img.crossOrigin = 'anonymous';
             var fim = function () {
-                reg.ouvintes.forEach(function (fn) { try { fn(); } catch (e) { } });
+                // A lista é copiada e ESVAZIADA antes de qualquer ouvinte rodar.
+                //
+                // Sem isso a aba congela: o ouvinte repinta a tela, a tela pede a
+                // foto de novo, e o pedido acrescenta um ouvinte novo ao Set —
+                // que o `forEach` ainda está percorrendo. `Set.forEach` visita o
+                // que é inserido durante a iteração, então o laço se alimenta
+                // sozinho e nunca termina. Aconteceu com um banco cuja coluna já
+                // trazia os nomes dos arquivos e nenhuma foto carregada.
+                var lista = Array.from(reg.ouvintes);
                 reg.ouvintes.clear();
                 resolve(reg);
+                lista.forEach(function (fn) { try { fn(); } catch (e) { } });
             };
             img.onload = function () { reg.pronta = true; fim(); };
             img.onerror = function () { reg.falhou = true; fim(); };
@@ -330,6 +358,9 @@
         if (!url) return null;
         var reg = registro(url);
         if (reg.pronta) return reg.img;
+        // Foto que já falhou não volta: registrar um ouvinte aqui seria acumular
+        // função que nunca é chamada, uma por redesenho.
+        if (reg.falhou) return null;
         if (typeof aoCarregar === 'function') reg.ouvintes.add(aoCarregar);
         return null;
     }
@@ -411,12 +442,22 @@
             ctx.ellipse(0, h * 0.34, w * 0.32, h * 0.26, 0, Math.PI, 0);
             ctx.fill();
 
+            // O rótulo diz em que pé a janela está, e são três situações
+            // diferentes que o operador precisa distinguir de longe: a coluna
+            // ainda não foi escolhida, a linha não tem foto, ou a linha aponta
+            // para um arquivo que o sistema ainda não tem.
+            var rotulo;
+            if (!el.csv_column) rotulo = '[escolha a coluna]';
+            else if (!meta) rotulo = '[sem foto]';
+            else if (!urlCarregavel(meta.url)) rotulo = '⏳ ' + String(meta.arquivo || meta.url).split(/[\\/]/).pop();
+            else rotulo = '[' + el.csv_column + ']';
+
             var fs = Math.max(6, Math.min(11, h * 0.11));
             ctx.font = fs + 'px Inter, sans-serif';
             ctx.fillStyle = '#475569';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('[' + (el.csv_column || 'coluna') + ']', 0, hh - fs);
+            ctx.fillText(rotulo, 0, hh - fs);
             ctx.textAlign = 'left';
             ctx.textBaseline = 'alphabetic';
         }
@@ -441,6 +482,7 @@
         dpiNaJanela: dpiNaJanela,
         casarFotos: casarFotos,
         normalizarTexto: normalizarTexto,
+        urlCarregavel: urlCarregavel,
         fotoImagem: fotoImagem,
         dimensoesDaFoto: dimensoesDaFoto,
         carregarFoto: carregarFoto,

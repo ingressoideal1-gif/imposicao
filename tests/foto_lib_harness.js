@@ -179,5 +179,63 @@ function casadaDe(r, nome) {
     ok(Math.abs(d2 - 150) <= 1, 'zoom 2 corta a resolucao pela metade', d2);
 })();
 
-console.log((total - falhas) + '/' + total + ' casos passaram');
-process.exit(falhas ? 1 : 0);
+// ─── 13. Foto que nao carrega nao pode travar a tela ──────────────────────────
+//
+// O caso real: a coluna do banco ja tem os NOMES dos arquivos, mas as fotos
+// ainda nao foram carregadas. Cada nome vira uma imagem que falha, e o ouvinte
+// que repinta a tela chamava fotoImagem de novo — acrescentando um ouvinte ao
+// Set DURANTE o forEach do proprio Set. O forEach visita o que e inserido
+// enquanto ele roda: o laco se alimenta sozinho e a aba congela.
+
+function comImagemFalhando(fn) {
+    const antes = globalThis.Image;
+    globalThis.Image = function () { };
+    Object.defineProperty(globalThis.Image.prototype, 'src', {
+        set: function () {
+            const self = this;
+            // Erro assincrono, como no navegador: da tempo de o ouvinte se
+            // registrar antes da falha chegar.
+            Promise.resolve().then(function () { if (self.onerror) self.onerror(); });
+        },
+        configurable: true
+    });
+    return Promise.resolve().then(fn).finally(function () { globalThis.Image = antes; });
+}
+
+const assincronos = [];
+
+assincronos.push(comImagemFalhando(function () {
+    let repintadas = 0;
+    const url = 'foto_001.jpg';
+
+    function repintar() {
+        repintadas++;
+        if (repintadas > 200) return;         // rede de seguranca do proprio teste
+        lib.fotoImagem(url, repintar);        // e o que a tela faz ao redesenhar
+    }
+
+    lib.fotoImagem(url, repintar);
+    // Duas voltas de microtarefa: a falha e a reacao a ela.
+    return Promise.resolve().then(function () { }).then(function () {
+        ok(repintadas <= 1, 'foto que falha repinta a tela no maximo uma vez', { repintadas });
+        ok(lib.fotoImagem(url, repintar) === null, 'foto que falhou continua sem imagem');
+        ok(repintadas <= 1, 'pedir de novo uma foto que falhou nao repinta mais', { repintadas });
+    });
+}));
+
+// ─── 14. So tenta carregar o que o navegador consegue buscar ──────────────────
+
+(function carregavel() {
+    ok(lib.urlCarregavel('https://exemplo/a.jpg'), 'https e carregavel');
+    ok(lib.urlCarregavel('data:image/png;base64,AAA'), 'data: e carregavel');
+    ok(lib.urlCarregavel('blob:http://x/abc'), 'blob: e carregavel');
+    ok(lib.urlCarregavel('/fotos/a.jpg'), 'caminho absoluto do site e carregavel');
+    ok(!lib.urlCarregavel('ana.jpg'), 'nome de arquivo solto NAO e carregavel pelo navegador');
+    ok(!lib.urlCarregavel('C:\\fotos\\ana.jpg'), 'caminho do Windows nao e carregavel pelo navegador');
+    ok(!lib.urlCarregavel(''), 'vazio nao e carregavel');
+})();
+
+Promise.all(assincronos).then(function () {
+    console.log((total - falhas) + '/' + total + ' casos passaram');
+    process.exit(falhas ? 1 : 0);
+});
