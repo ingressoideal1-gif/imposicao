@@ -58,6 +58,62 @@ DESCENDER_FRACTIONS = {
 }
 _DESCENDER_DEFAULT = 0.21  # valor médio para fontes do sistema (TTF/OTF)
 
+
+def _ajustar_texto_na_largura(medir, texto, corpo, largura_max, modo):
+    """Ajusta texto variavel a um espaco de largura fixa.
+
+    Espelho exato de window.ajustarTextoNaLargura (frontend/texto-ajuste.js);
+    mudou aqui, muda la. `medir(texto, corpo)` e a regua de quem chama.
+    Devolve (corpo, linhas). Folga de 0,5% para a mesma palavra nao quebrar
+    diferente entre a regua do canvas e a do fitz.
+    """
+    paragrafos = str(texto).split("\n")
+    try:
+        largura_max = float(largura_max or 0)
+        corpo = float(corpo)
+    except (TypeError, ValueError):
+        return corpo, paragrafos
+    if largura_max <= 0 or corpo <= 0:
+        return corpo, paragrafos
+    alvo = largura_max * 0.995
+
+    if modo == "wrap":
+        linhas = []
+        for p in paragrafos:
+            if not p:
+                linhas.append("")
+                continue
+            atual = ""
+            for palavra in p.split(" "):
+                while len(palavra) > 1 and medir(palavra, corpo) > alvo:
+                    if atual:
+                        linhas.append(atual)
+                        atual = ""
+                    corte = len(palavra) - 1
+                    while corte > 1 and medir(palavra[:corte], corpo) > alvo:
+                        corte -= 1
+                    linhas.append(palavra[:corte])
+                    palavra = palavra[corte:]
+                tentativa = (atual + " " + palavra) if atual else palavra
+                if atual and medir(tentativa, corpo) > alvo:
+                    linhas.append(atual)
+                    atual = palavra
+                else:
+                    atual = tentativa
+            linhas.append(atual)
+        return corpo, linhas
+
+    # shrink (padrao): largura de texto e linear no corpo — uma divisao basta.
+    maior = 0.0
+    for p in paragrafos:
+        w = medir(p, corpo)
+        if w > maior:
+            maior = w
+    if maior > alvo:
+        return corpo * (alvo / maior), paragrafos
+    return corpo, paragrafos
+
+
 def _so_layout(el: dict) -> bool:
     """Elemento marcado como "Layout" na Lista de Numeracoes.
 
