@@ -4,7 +4,75 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v541** — 2026-08-12 | Agente **1.2.39**
+## Versão atual: **v548** — 2026-08-12 | Agente **1.2.44**
+
+---
+
+## [v548 — 2026-08-12] — A foto vira dado variável
+
+Pedido: *"A dificuldade maior em fazer artes de credenciais fica por conta das
+imagens, geralmente fotos... dificuldade em tornar as fotos como dados variáveis,
+ajustar seus formatos (geralmente dentro de janelas pré definidas), cortes,
+identificar em qual linha do arquivo ela deve ser inserida... Mesmo depois de
+ajustadas, sempre vai precisar posterior ajuste de enquadramento."*
+
+O texto variável de credencial já estava resolvido. A foto não estava, e é ela
+que dá trabalho. Agora existe o **elemento FOTO** e o **Gerenciador de Fotos**.
+
+### O elemento FOTO
+
+Botão 🖼️ Foto na paleta do editor de numeração. Nasce 25 × 32 mm — a 3×4 de
+credencial — e sempre ligado ao banco: foto que não varia por linha é arte de
+fundo, não dado variável. O retângulo do elemento **é** a janela pré-definida.
+Encaixe `cobrir` ou `caber`, cantos reto, arredondado ou círculo.
+
+### Importar o lote e casar com as linhas
+
+Solte a pasta inteira. Cada arquivo é corrigido pelo EXIF, convertido para sRGB e
+reduzido a 300 dpi da janela com 30 % de folga para o zoom — de 4 MB para ~150 KB.
+Isso não é economia de espaço: um lote de 500 fotos cruas seriam 2 GB de rede
+dentro do caminho crítico do operador.
+
+O casamento por nome segue a cascata do mercado — exato, sem extensão,
+normalizado (sem acento, sem caixa, sem separador), só os dígitos (o caso do CPF)
+— e uma sugestão aproximada que nunca é aplicada sozinha. Na dúvida o sistema não
+escolhe: a disputa vira pendência com os candidatos à vista, porque uma
+credencial com a foto trocada só é descoberta pelo cliente.
+
+O que sobrar aparece em quatro pilhas: **casadas · ambíguas · fotos sem linha ·
+linhas sem foto**. Um clique na foto, outro na linha, e as duas ficam ligadas.
+
+### Folha de contato
+
+A segunda aba mostra o lote inteiro já dentro da janela real do modelo. Roda do
+mouse aproxima, arrastar move, as setas trocam de foto, duplo clique volta ao
+automático, e um selo vermelho marca a foto abaixo de 150 dpi antes de ela virar
+PVC borrado. É a tela que cardPresso, BarTender e o Data Merge do InDesign não
+têm — todos eles corrigem um registro por vez.
+
+O enquadramento inicial vem da detecção de rosto do navegador, feita uma vez na
+importação. Só o retângulo é guardado: o executável do agente não ganhou nenhuma
+biblioteca de visão computacional.
+
+### No motor
+
+`process()` passa a conferir as fotos antes do primeiro papel e acusa **todas** as
+linhas vazias de uma vez — descobrir a décima depois de nove credenciais impressas
+é PVC no lixo. Passada a conferência, as fotos únicas são baixadas em paralelo e
+guardadas em `%LOCALAPPDATA%\NewProd\cache\fotos`; reimprimir a mesma tiragem não
+baixa nada.
+
+O recorte não toca nos bytes da imagem: a foto é desenhada maior que a janela numa
+página do tamanho exato dela, e o que sobra fica de fora. Enquadrar não custa
+qualidade.
+
+### Correção que apareceu no caminho
+
+`texto-ajuste.js` entrou no painel com o "espremer letras" (v547) e **nunca foi
+incluído em `PAINEL_ARQUIVOS`**. Em toda estação ele dava 404, então o conferidor
+de estouro e o modo condense simplesmente não existiam na gráfica. É exatamente o
+buraco que a suíte `test_painel_estacao` nasceu para fechar — ela estava
+acusando, e o alerta não tinha sido lido.
 
 ---
 

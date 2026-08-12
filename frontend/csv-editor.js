@@ -23,7 +23,13 @@
     // referência: inserir uma linha no meio faria toda seleção já salva escorregar.
     // Nunca reaproveitado, nunca exportado, nunca oferecido como coluna.
     const COL_ID = '__id';
-    const COLS_INTERNAS = [COL_ATIVO, COL_ID];
+    // Enquadramento das fotos daquela linha, gravado pelo Gerenciador de Fotos:
+    // { coluna: { url, cx, cy, zoom, rot } }. Mora dentro da linha, e não numa
+    // tabela à parte, para acompanhar a pessoa quando a tabela é reordenada ou
+    // dividida entre modelos. Como o __ativo e o __id, nunca vira coluna da
+    // grade nem é exportado.
+    const COL_FOTOS = '__fotos';
+    const COLS_INTERNAS = [COL_ATIVO, COL_ID, COL_FOTOS];
 
     function colunaInterna(nome) {
         return COLS_INTERNAS.indexOf(nome) !== -1;

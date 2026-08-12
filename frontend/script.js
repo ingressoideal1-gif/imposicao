@@ -2875,7 +2875,7 @@ function editNumeracao(id) {
         && state.numCsvData && state.numCsvData.length) {
 
         state.numCsvHeaders = Object.keys(state.numCsvData[0] || {})
-            .filter(k => k !== '__ativo');
+            .filter(k => k !== '__ativo' && k !== '__id' && k !== '__fotos');
 
     }
 
@@ -5587,7 +5587,7 @@ function renderElementsList() {
                 </div>
 
                 <div class="form-group el-full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="abrirGerenciadorDeFotos('${el.id}')">🖼️ Gerenciar fotos do lote</button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="abrirFotosDoElemento('${el.id}')">🖼️ Gerenciar fotos do lote</button>
                     ${dpiEx ? `<span style="font-size:0.75rem;color:${dpiEx < 150 ? '#ef4444' : 'var(--text-dim)'};">amostra: ${dpiEx} dpi nesta janela${dpiEx < 150 ? ' — baixa para impressão' : ''}</span>` : ''}
                 </div>`;
 
@@ -12220,6 +12220,106 @@ window.abrirEditorCsvDaNumeracao = function() {
     }
 
     _abrirEditorCsvDaNumeracao(state.numCsvHeaders || [], state.numCsvData, state.numCsvFilename || 'banco.csv');
+
+};
+
+
+
+/**
+ * Abre o Gerenciador de Fotos para um elemento FOTO da numeração aberta.
+ *
+ * Esta é a ponte entre o editor e o `gerenciador-fotos.js`, que não enxerga o
+ * `state` — mesmo desenho do editor de CSV. Ela entrega as linhas VIVAS (os
+ * mesmos objetos de `state.numCsvData`), porque é escrevendo `__fotos` dentro
+ * delas que o enquadramento passa a viajar junto com a pessoa.
+ */
+window.abrirFotosDoElemento = function (elId) {
+
+    const el = (state.numElements || []).find(e => e.id === elId);
+
+    if (!el) return;
+
+    if (typeof window.abrirGerenciadorDeFotos !== 'function') {
+
+        toast('O Gerenciador de Fotos não carregou. Recarregue a página.', 'error');
+
+        return;
+
+    }
+
+    if (!state.numCsvData || !state.numCsvData.length) {
+
+        toast('Esta numeração ainda não tem banco de dados. Crie ou importe o CSV antes de trazer as fotos.', 'error');
+
+        return;
+
+    }
+
+    if (!el.csv_column) {
+
+        toast('Escolha primeiro a coluna do banco em que a foto será guardada.', 'error');
+
+        return;
+
+    }
+
+    // A coluna da foto pode ter sido digitada à mão e ainda não existir na
+    // planilha. Ela precisa existir, senão a célula com o nome do arquivo não
+    // apareceria na grade e o operador acharia que nada foi gravado.
+    if (!(state.numCsvHeaders || []).includes(el.csv_column)) {
+
+        state.numCsvHeaders = [...(state.numCsvHeaders || []), el.csv_column];
+
+    }
+
+    const numId = (document.getElementById('num-id')?.value || 'rascunho').trim() || 'rascunho';
+
+    window.abrirGerenciadorDeFotos({
+
+        janela: { w_mm: el.width_mm || 25, h_mm: el.height_mm || 32, fit: el.fit || 'cover' },
+
+        coluna: el.csv_column,
+
+        headers: state.numCsvHeaders || [],
+
+        rows: state.numCsvData,
+
+        // O bucket 'artes' é o mesmo que já recebe as artes do editor; as fotos
+        // ficam sob o prefixo fotos/<numeração>/, com o hash no nome. Foto
+        // idêntica reenviada sobrescreve a si mesma em vez de duplicar.
+        subirFoto: (blob, hash) => uploadToStorage(blob, hash + '.jpg', 'fotos', {
+            objectPath: `fotos/${numId}/${hash}.jpg`
+        }),
+
+        onAplicar: ({ gravadas, falhas, semFoto, coluna }) => {
+
+            if (gravadas) {
+
+                toast(`${gravadas} foto(s) ligadas à coluna “${coluna}”.`, 'success');
+
+            }
+
+            if (falhas && falhas.length) {
+
+                toast(`${falhas.length} foto(s) não subiram. Elas continuam no lote.`, 'error');
+
+            }
+
+            if (semFoto && semFoto.length) {
+
+                toast(`${semFoto.length} linha(s) ainda estão sem foto — a impressão vai recusar.`, 'info');
+
+            }
+
+            if (typeof renderNumCsvInterface === 'function') renderNumCsvInterface();
+
+            renderElementsList();
+
+            drawCanvas();
+
+        }
+
+    });
 
 };
 

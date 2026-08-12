@@ -64,6 +64,21 @@ As funções puras ficam em `window.CsvEditor`: `parseCsv`, `serializarCsv`,
 `detectarDelimitador`, `linhaAtiva`, `contarAtivas`, `apenasAtivas`,
 `gerarSequencia`, `parseColado`. Nenhuma delas toca no DOM.
 
+## As três chaves de sistema da linha
+
+Uma linha do banco carrega, além das colunas do operador, chaves que **nunca
+viram coluna da grade e nunca são exportadas**: `__ativo` (imprime ou não),
+`__id` (identidade estável da linha) e `__fotos` (o enquadramento das fotos
+daquela pessoa, gravado pelo Gerenciador de Fotos — ver
+`docs/gerenciador_de_fotos.md`). As três estão em `COLS_INTERNAS`, no
+`csv-editor.js`, e todo ponto que derive cabeçalhos das chaves da linha precisa
+filtrá-las.
+
+`__fotos` mora dentro da linha, e não numa tabela à parte, pelo mesmo motivo que
+o `__id`: é o que faz o enquadramento acompanhar a pessoa quando a tabela é
+reordenada, quando a numeração é dividida entre modelos, e quando uma célula é
+refeita.
+
 ## As quatro coisas que enganam
 
 ### 1. Uma linha desmarcada continua guardada

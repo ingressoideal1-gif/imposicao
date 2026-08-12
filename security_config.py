@@ -90,6 +90,7 @@ PAINEL_ARQUIVOS = [
     "csv-editor.js",
     "texto-ajuste.js",
     "foto-lib.js",
+    "gerenciador-fotos.js",
     "amostra-modal.js",
     "mapas.js",
     "supabase-config.js",
