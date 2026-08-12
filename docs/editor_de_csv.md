@@ -260,6 +260,55 @@ Agora são duas consultas: o catálogo com colunas explícitas e sem `csv_data`
 Ao acrescentar coluna nova em `producao_numeracoes` que o link do cliente
 precise ler, lembre de incluí-la nessa lista — ela é explícita de propósito.
 
+### Buscar o banco direto da web
+
+Na caixa **Banco de Dados (CSV)** do editor de numeração há um campo de endereço:
+cola-se o link de uma Planilha Google (ou de qualquer `.csv` público) e o banco
+entra igual a um upload de arquivo.
+
+```
+🌐 Da web  [ https://docs.google.com/spreadsheets/d/1_Yj…/edit?usp=sharing ]  ⬇ Buscar
+```
+
+**Roda no navegador, sem servidor no meio.** O endereço de exportação do Google
+devolve `Access-Control-Allow-Origin`, então o `fetch` da página funciona — foi
+verificado, não presumido. Por isso o recurso não toca no `app.py` e **não exige
+publicar o agente**.
+
+O que o `urlCsvDaPlanilha()` faz com o link:
+
+| Cola-se | Busca-se |
+|---------|----------|
+| `…/spreadsheets/d/ID/edit?usp=sharing` | `…/spreadsheets/d/ID/export?format=csv` |
+| `…/edit#gid=1234567` | `…&gid=1234567` (a **aba** do link) |
+| um endereço que já exporta CSV | ele mesmo, intacto |
+| qualquer outro `.csv` público | ele mesmo |
+
+O `gid` importa: sem ele vem sempre a primeira aba, que raramente é a que o
+operador estava olhando.
+
+O nome do arquivo sai do cabeçalho `Content-Disposition` da resposta — que o
+Google expõe ao navegador —, então a numeração fica com o nome real da planilha,
+e não com um rótulo genérico.
+
+**Os modos de falha que a tela precisa distinguir:**
+
+- **Planilha privada ou inexistente** → resposta 404, e o aviso diz para
+  compartilhar como "Qualquer pessoa com o link".
+- **Planilha que responde 200 com a página de login** → chegaria HTML. Sem
+  guarda, o parser aceitaria esse HTML como uma tabela de uma coluna só; por
+  isso o texto é recusado quando começa com `<!doctype` ou `<html`.
+- **Erro de rede/CORS** → o `fetch` rejeita com um `TypeError` sem detalhe
+  nenhum, e a mensagem genérica do navegador não ajudaria ninguém; a tela
+  traduz para o que quase sempre é a causa, o compartilhamento.
+
+Em qualquer falha **o banco que já estava carregado permanece**: buscar não
+apaga o que existe antes de ter o substituto em mãos.
+
+O endereço **não é guardado** na numeração — a busca é uma importação, não um
+vínculo. Para trazer as alterações que o cliente fez na planilha, cola-se o link
+de novo. Guardá-lo exigiria uma coluna nova em `producao_numeracoes`.
+
 ### O banco também se abre do card do modelo
 
 Chegar ao banco de dados exigia abrir o editor da numeração — uma tela de

@@ -486,6 +486,18 @@
                                 <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-csv" style="display:none; padding: 4px 8px;" onclick="clearNumCsvFile()">✕ Remover</button>
                                 <span id="num-csv-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
                             </div>
+                            <!-- Buscar o banco direto da web. Funciona no navegador,
+                                 sem servidor no meio: o endereco de exportacao do
+                                 Google devolve os cabecalhos de CORS. -->
+                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+                                <span style="font-size:0.78rem; color:var(--text-dim); white-space:nowrap;">🌐 Da web</span>
+                                <input type="text" id="num-csv-url" class="form-control" style="flex:1; min-width:280px; font-size:0.85rem; padding:6px 10px;" placeholder="Cole o link da Planilha Google, ou de um arquivo .csv" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCsvDaWeb();}">
+                                <button class="btn btn-sm btn-secondary" id="btn-buscar-num-csv" onclick="buscarCsvDaWeb()" title="Baixar o banco de dados desse endereço">⬇ Buscar</button>
+                            </div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px; line-height:1.5;">
+                                A planilha precisa estar compartilhada como <b>“Qualquer pessoa com o link”</b>.
+                                Se o link tiver <code>#gid=</code>, vem a aba correspondente; sem ele, vem a primeira.
+                            </div>
                         </div>
                     </div>
                 </div>

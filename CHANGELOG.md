@@ -8,6 +8,45 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v537 — 2026-08-12] — Banco de dados direto da web (Planilha Google)
+
+### O que entrou
+Na caixa **Banco de Dados (CSV)** do editor de numeracao, um campo de endereco:
+
+```
+🌐 Da web  [ https://docs.google.com/spreadsheets/d/1_Yj…/edit?usp=sharing ]  ⬇ Buscar
+```
+
+Cola-se o link da Planilha Google — o mesmo que se copia da barra do navegador —
+e o banco entra igual a um upload de arquivo. Serve tambem para qualquer `.csv`
+publico na web.
+
+O link de compartilhamento devolve HTML; quem devolve CSV e o endereco de
+exportacao, e a traducao e automatica. Se o link tiver `#gid=`, vem a **aba**
+correspondente; sem ele, vem a primeira. O nome do arquivo sai do cabecalho
+`Content-Disposition`, entao a numeracao fica com o nome real da planilha.
+
+### Roda no navegador, sem servidor no meio
+O endereco de exportacao do Google devolve os cabecalhos de CORS — verificado,
+nao presumido. Por isso o recurso **nao toca no `app.py` e nao exige publicar o
+agente**.
+
+### As falhas que a tela distingue
+- **Planilha privada ou inexistente**: 404, e o aviso diz para compartilhar como
+  "Qualquer pessoa com o link".
+- **Pagina de login com 200**: chegaria HTML, e sem guarda o parser o aceitaria
+  como uma tabela de uma coluna so. O texto e recusado.
+- **Erro de rede/CORS**: o `fetch` rejeita com um `TypeError` sem detalhe; a tela
+  traduz para o que quase sempre e a causa.
+
+Em qualquer falha **o banco que ja estava carregado permanece**.
+
+### Arquivos
+`frontend/index.html`, `frontend/script.js`, `docs/editor_de_csv.md`.
+So frontend — o agente nao precisa ser republicado.
+
+---
+
 ## [v536 — 2026-08-12] — A amostra entrava escura, como se multiplicasse duas vezes
 
 Relatado: *"toda vez que entro no pedido, quando contem elemento .csv na

@@ -11044,6 +11044,164 @@ function renderNumCsvInterface() {
 
 
 /**
+ * O link que se copia da barra do navegador termina em `/edit?usp=sharing` e
+ * devolve HTML. Quem devolve CSV e o endereco de exportacao. O `gid` identifica
+ * a ABA — sem ele vem sempre a primeira, que raramente e a que o operador esta
+ * olhando.
+ *
+ * Devolve o endereco a buscar. Se nao for uma Planilha Google, devolve o
+ * proprio link: serve para qualquer .csv publico.
+ */
+function urlCsvDaPlanilha(url) {
+
+    const limpo = String(url || '').trim();
+
+    if (!limpo) return null;
+
+    const m = limpo.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+
+    if (!m) return limpo;
+
+    // Ja e um endereco que devolve CSV: nao mexer.
+    if (/[?&]format=csv|tqx=out:csv/.test(limpo)) return limpo;
+
+    const gid = (limpo.match(/[#?&]gid=(\d+)/) || [])[1];
+
+    return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv`
+
+        + (gid ? `&gid=${gid}` : '');
+
+}
+
+
+
+/** O nome do arquivo que o servidor mandou, quando manda. */
+function nomeDoContentDisposition(cd) {
+
+    if (!cd) return null;
+
+    // O `filename*` vem em UTF-8 e sem os problemas de acento do `filename`.
+    const estrela = cd.match(/filename\*=UTF-8''([^;]+)/i);
+
+    if (estrela) { try { return decodeURIComponent(estrela[1]); } catch (_) { } }
+
+    const simples = cd.match(/filename="?([^";]+)"?/i);
+
+    return simples ? simples[1] : null;
+
+}
+
+
+
+/**
+ * Busca o banco de dados de um endereco da web e carrega no editor da
+ * numeracao, do mesmo jeito que o upload de arquivo faz.
+ */
+window.buscarCsvDaWeb = async function() {
+
+    const campo = document.getElementById('num-csv-url');
+
+    const botao = document.getElementById('btn-buscar-num-csv');
+
+    const alvo = urlCsvDaPlanilha(campo ? campo.value : '');
+
+    if (!alvo) {
+
+        toast('Cole o link da planilha antes de buscar.', 'error');
+
+        return;
+
+    }
+
+    if (!/^https?:\/\//i.test(alvo)) {
+
+        toast('O link precisa começar com http:// ou https://', 'error');
+
+        return;
+
+    }
+
+    const rotulo = botao ? botao.textContent : '';
+
+    if (botao) { botao.disabled = true; botao.textContent = '⏳ Buscando…'; }
+
+    try {
+
+        const resp = await fetch(alvo, { credentials: 'omit' });
+
+        if (!resp.ok) {
+
+            throw new Error(resp.status === 404
+
+                ? 'Planilha não encontrada, ou não está compartilhada por link.'
+
+                : `O servidor respondeu ${resp.status}.`);
+
+        }
+
+        const texto = await resp.text();
+
+        // Planilha privada devolve a pagina de login, com 200. Sem esta guarda o
+        // parser aceitaria o HTML como se fosse uma tabela de uma coluna so.
+        if (/^\s*<(!doctype|html)/i.test(texto)) {
+
+            throw new Error('Veio uma página HTML, não um CSV. '
+
+                + 'Compartilhe a planilha como "Qualquer pessoa com o link".');
+
+        }
+
+        const parsed = window.CsvEditor.parseCsv(texto);
+
+        if (!parsed.rows.length) throw new Error('A planilha está vazia.');
+
+        state.numCsvHeaders = parsed.headers;
+
+        state.numCsvData = parsed.rows;
+
+        state.numCsvFilename = nomeDoContentDisposition(resp.headers.get('content-disposition'))
+
+            || 'planilha-web.csv';
+
+        renderNumCsvInterface();
+
+        toast(
+
+            `${parsed.rows.length} linha(s) e ${parsed.headers.length} coluna(s) `
+
+            + `de "${state.numCsvFilename}". Salve a numeração para gravar.`,
+
+            'success'
+
+        );
+
+    } catch (e) {
+
+        // Erro de rede no fetch chega como TypeError sem detalhe: quase sempre e
+        // o link que nao permite leitura de outro site.
+        const msg = (e instanceof TypeError)
+
+            ? 'Não consegui ler esse endereço do navegador. '
+
+              + 'Se for Planilha Google, confira o compartilhamento por link.'
+
+            : e.message;
+
+        toast('Erro ao buscar: ' + msg, 'error');
+
+    } finally {
+
+        if (botao) { botao.disabled = false; botao.textContent = rotulo || '⬇ Buscar'; }
+
+    }
+
+};
+
+window.urlCsvDaPlanilha = urlCsvDaPlanilha;
+
+
+
+/**
  * Só as linhas do CSV que serão impressas. Uma linha desmarcada no editor de
  * CSV carrega `__ativo: false`; a ausência da chave significa ativa, então todo
  * CSV salvo antes da v524 continua valendo. O engine.py aplica o mesmo filtro.
