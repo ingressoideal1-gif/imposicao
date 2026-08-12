@@ -10,9 +10,6 @@ PDF pode estar certa e a tinta sair errada.
 Geometria: _render_element recebe o centro do elemento ja em pontos, nas chaves
 _x/_y (quem converte de x_mm e o chamador).
 """
-import io
-import os
-
 import fitz
 import pytest
 from PIL import Image
@@ -181,6 +178,67 @@ def test_caber_deixa_margem(foto_metades):
     total = sum(cont.values())
     assert cont["branco"] / total > 0.25
     assert cont["vermelho"] > 0 and cont["azul"] > 0
+
+
+# ─── Conferencia previa e pre-carregamento ────────────────────────────────────
+
+class _CfgFake:
+    def __init__(self, elements, csv_data):
+        self.elements = elements
+        self.csv_data = csv_data
+
+
+def _engine_fake(elements, csv_data):
+    eng = object.__new__(ImpositionEngine)
+    eng._url_cache = {}
+    eng.cfg = _CfgFake(elements, csv_data)
+    return eng
+
+
+EL_FOTO = {"type": "FOTO", "csv_column": "Foto", "width_mm": 25, "height_mm": 32}
+
+
+def test_linha_sem_foto_interrompe_antes_de_imprimir(foto_metades):
+    """Melhor parar agora do que descobrir a janela vazia com o PVC na bandeja."""
+    eng = _engine_fake([EL_FOTO], [
+        {"Nome": "Ana", "Foto": foto_metades},
+        {"Nome": "Bruno", "Foto": ""},
+        {"Nome": "Carla", "Foto": foto_metades},
+    ])
+    with pytest.raises(ValueError) as ex:
+        eng._conferir_e_aquecer_fotos()
+    msg = str(ex.value)
+    assert "2" in msg          # a linha acusada
+    assert "Foto" in msg       # e a coluna
+
+
+def test_a_mesma_foto_repetida_baixa_uma_vez_so(monkeypatch, foto_metades):
+    """Credencial de evento repete logo e fundo; baixar de novo e tempo jogado fora."""
+    import engine as eng_mod
+    monkeypatch.setattr(eng_mod, "_foto_cache_path", lambda origem: None)
+
+    baixados = []
+
+    def _falso_download(self, url):
+        baixados.append(url)
+        with open(foto_metades, "rb") as f:
+            return f.read()
+
+    monkeypatch.setattr(ImpositionEngine, "_get_url_bytes", _falso_download)
+
+    url = "https://exemplo.invalido/fotos/abc.jpg"
+    eng = _engine_fake([EL_FOTO], [{"Foto": url} for _ in range(5)])
+    eng._conferir_e_aquecer_fotos()
+
+    assert len(baixados) == 1
+    assert eng._get_foto_bytes(url)  # sai do cache, sem novo download
+    assert len(baixados) == 1
+
+
+def test_sem_elemento_foto_nao_confere_nada():
+    """Numeracao de ingresso nao pode pagar pedagio por um recurso que nao usa."""
+    eng = _engine_fake([{"type": "TEXT"}], [{"Nome": "Ana"}])
+    eng._conferir_e_aquecer_fotos()  # nao levanta
 
 
 def test_valor_cru_da_coluna_tambem_serve(foto_metades):

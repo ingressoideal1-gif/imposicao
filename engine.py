@@ -628,6 +628,71 @@ class ImpositionEngine:
         self._url_cache[origem] = dados
         return dados
 
+    def _conferir_e_aquecer_fotos(self):
+        """Antes do primeiro papel: toda linha tem foto? E as fotos, ja estao aqui?
+
+        Duas coisas que so fazem sentido juntas, e so fazem sentido ANTES do laco
+        de imposicao:
+
+          · A conferencia acusa TODAS as linhas sem foto de uma vez. Descobrir a
+            decima linha vazia depois de imprimir nove credenciais e desperdicio
+            de PVC e de tempo do operador.
+          · O aquecimento baixa as fotos em paralelo e guarda no cache. Dentro do
+            laco, cada foto seria buscada uma por vez, em serie, com o operador
+            de pe na frente da impressora — que e exatamente o custo que o agente
+            local existe para nao pagar.
+        """
+        cfg = self.cfg
+        els = [e for e in (getattr(cfg, "elements", None) or []) if e.get("type") == "FOTO"]
+        if not els:
+            return
+        linhas = getattr(cfg, "csv_data", None) or []
+        if not linhas:
+            return
+
+        faltando = []
+        origens = []
+        for i, linha in enumerate(linhas, start=1):
+            for el in els:
+                meta = _foto_da_linha(el, linha)
+                origem = str((meta or {}).get("url") or "").strip()
+                if not origem:
+                    faltando.append((i, el.get("csv_column", "")))
+                else:
+                    origens.append(origem)
+
+        if faltando:
+            amostra = ", ".join(f"linha {i} (coluna '{c}')" for i, c in faltando[:10])
+            resto = f" e mais {len(faltando) - 10}" if len(faltando) > 10 else ""
+            raise ValueError(
+                f"{len(faltando)} linha(s) do banco estao sem foto: {amostra}{resto}. "
+                "Abra o Gerenciador de Fotos e complete o lote antes de imprimir."
+            )
+
+        # dict.fromkeys preserva a ordem e mata a repeticao: a credencial que usa
+        # a mesma foto em duas janelas, ou o lote com a foto do crachá padrao
+        # repetida, baixa uma vez so.
+        unicas = list(dict.fromkeys(origens))
+        if not unicas:
+            return
+        if len(unicas) == 1:
+            self._aquecer_uma_foto(unicas[0])
+            return
+        try:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                list(pool.map(self._aquecer_uma_foto, unicas))
+        except Exception:
+            # Falha no aquecimento nao e falha de impressao: o render busca de
+            # novo e, ai sim, com a mensagem completa do que deu errado.
+            pass
+
+    def _aquecer_uma_foto(self, origem: str):
+        try:
+            self._get_foto_bytes(origem)
+        except Exception:
+            pass
+
     def _load_base_as_pdf(self) -> fitz.Document:
         """Abre o arquivo base (PDF, JPG, PNG) como documento fitz com dimensões físicas precisas."""
         if not self.cfg.base_file:
@@ -1171,6 +1236,9 @@ class ImpositionEngine:
 
     def process(self):
         cfg = self.cfg
+        # Fotos primeiro: acusa as linhas sem foto e baixa o lote em paralelo,
+        # antes de qualquer papel. Sem elemento FOTO, sai na primeira linha.
+        self._conferir_e_aquecer_fotos()
         # ─── REFAZER ────────────────────────────────────────────────────────────
         # Reimpressão de parte de uma tiragem que já saiu. São dois modos, e eles
         # não se misturam:
