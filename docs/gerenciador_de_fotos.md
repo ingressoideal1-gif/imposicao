@@ -53,7 +53,11 @@ ao lado de `__ativo` e `__id`:
 - `cx`/`cy` — o ponto da foto que fica no centro da janela, em fração (0..1)
 - `zoom` — fator sobre o encaixe mínimo; 1 é o menor que ainda cobre
 - `ref` — hash do arquivo normalizado; é a chave do cache em disco do agente
-- `dpi` — resolução efetiva na janela, calculada na importação
+- `dpi` — resolução efetiva na janela **com aquele zoom**. Aproximar 2× usa
+  metade da largura da foto para preencher a mesma janela, então a resolução cai
+  pela metade: uma foto que entra com 390 dpi vira 195 dpi em 2×, e 98 dpi em 4×,
+  que é o teto do zoom. O número mostrado na folha de contato é recalculado a
+  cada ajuste, e é exatamente o que vai gravado aqui
 
 **Por que dentro da linha e não numa tabela à parte:** é isso que faz o
 enquadramento acompanhar a pessoa quando a tabela é reordenada, quando a

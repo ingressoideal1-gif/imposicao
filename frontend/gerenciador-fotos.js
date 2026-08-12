@@ -642,22 +642,49 @@
         if (!img) return;
 
         // Foto que veio do banco não trouxe as dimensões: agora que a imagem
-        // chegou, dá para dizer a resolução real dela nesta janela — que pode
-        // ter mudado, se a janela foi redimensionada depois.
+        // chegou, dá para medi-la.
         if (!f.w || !f.h) {
             var dim = window.dimensoesDaFoto(f.url);
-            if (dim) {
-                f.w = dim.w; f.h = dim.h;
-                f.dpi = window.dpiNaJanela(dim.w, dim.h, jw, jh, cfg.janela.fit, enquadroDe(c).zoom);
-                var rot = el('gf-card-' + idx) ? el('gf-card-' + idx).querySelector('.dpi') : null;
-                if (rot) {
-                    rot.textContent = f.dpi + ' dpi' + (f.dpi < DPI_MINIMO ? ' ⚠' : '');
-                    rot.className = 'dpi' + (f.dpi < DPI_MINIMO ? ' ruim' : '');
-                }
-            }
+            if (dim) { f.w = dim.w; f.h = dim.h; }
         }
 
+        atualizarDpi(idx, c);
         window.desenharJanelaFoto(ctx, img, 0, 0, larg, alt, enquadroDe(c), cfg.janela.fit);
+    }
+
+    /**
+     * A resolução real daquela foto NESTE enquadramento.
+     *
+     * O zoom conta, e conta muito: aproximar 2× usa metade da largura da foto
+     * para preencher a mesma janela, então a resolução cai pela metade. Uma foto
+     * que entrou com 390 dpi vira 195 dpi com zoom 2 — ainda boa — e 130 dpi com
+     * zoom 3, que é rosto borrado em PVC.
+     *
+     * Por isso o número não pode ser o do momento da importação: ele é
+     * recalculado a cada ajuste, e é o mesmo cálculo que vai para o banco.
+     */
+    function dpiDoEnquadro(c) {
+        var f = fotoDe(c.arquivo);
+        if (!f || !f.w || !f.h) return 0;
+        return window.dpiNaJanela(f.w, f.h, cfg.janela.w_mm, cfg.janela.h_mm,
+            cfg.janela.fit, enquadroDe(c).zoom);
+    }
+
+    function atualizarDpi(idx, c) {
+        var dpi = dpiDoEnquadro(c);
+        if (!dpi) return;
+        var f = fotoDe(c.arquivo);
+        if (f) f.dpi = dpi;
+        var cartao = el('gf-card-' + idx);
+        var alvo = cartao ? cartao.querySelector('.dpi') : null;
+        if (!alvo) return;
+        var ruim = dpi < DPI_MINIMO;
+        var z = enquadroDe(c).zoom;
+        alvo.textContent = dpi + ' dpi' + (z > 1.01 ? ' · ' + z.toFixed(1) + '×' : '') + (ruim ? ' ⚠' : '');
+        alvo.className = 'dpi' + (ruim ? ' ruim' : '');
+        alvo.title = ruim
+            ? 'Abaixo de ' + DPI_MINIMO + ' dpi nesta janela com este zoom — vai sair borrada no PVC.'
+            : 'Resolução da foto dentro da janela, já contando o zoom deste enquadramento.';
     }
 
     /** O enquadramento vivo daquela linha (o que a folha de contato edita). */
