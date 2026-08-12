@@ -4,11 +4,15 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v1.6.1 (v518)** — 2026-08-11 | Agente **1.2.26**
+## Versão atual: **v538** — 2026-08-12 | Agente **1.2.37**
 
 ---
 
-## [v540 — 2026-08-12] — Permissoes: a tela parou de mentir sobre o que gravou
+## [v538 — 2026-08-12] — Permissoes: a tela parou de mentir sobre o que gravou | Agente **1.2.37**
+
+> Este release saiu junto com a correcao do painel da estacao, descrita na secao
+> seguinte: as duas foram ao ar no mesmo commit `v538`. Os numeros v539 e v540,
+> usados enquanto o trabalho estava em andamento, nunca existiram como tag.
 
 Relatado: *"Nao esta funcionando corretamente o gerenciamento de usuarios,
 revisar, inclusive layout que esta bem ruim, regras por login pararam de
