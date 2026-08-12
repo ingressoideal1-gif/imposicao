@@ -17028,6 +17028,14 @@ async function loadOSItens(osId) {
                     .eq('id_int', queryNum);
                 
                 if (data && data.length > 0) {
+                    // Trocas que o pedido impos por cima do que estava escolhido.
+                    // Vao para um aviso na tela: mudar a cor ou a numeracao muda o
+                    // que sai na impressora, e o operador precisa ver acontecer —
+                    // ainda mais porque um gabarito RENOMEADO no catalogo produz o
+                    // mesmo desencontro que uma troca feita pelo parceiro, e so
+                    // quem esta olhando o pedido sabe distinguir os dois.
+                    const seguiramOPedido = [];
+
                     // Usar pedidos_modelos como fonte principal
                     state.osItens[osId] = data.map(item => {
                         const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
@@ -17038,7 +17046,32 @@ async function loadOSItens(osId) {
                         else if (item.status_arte === 'APROVADA_CLIENTE' || item.status_arte === 'APROVADA') statusFrontend = 'APROVADA';
                         else if (item.status_arte === 'REPROVADA_CLIENTE' || item.status_arte === 'REPROVADA') statusFrontend = 'REPROVADA';
 
-                        const resolvedNumId = item.amostra_num_id || (prop ? prop.amostra_num_id : null);
+                        // O parceiro edita a cor e a numeracao pelo NOME (padrao /
+                        // gabarito_operacional); os ids sao cache nosso. Sem esta
+                        // conferencia o id velho vencia para sempre e a troca feita
+                        // no ERP nunca chegava a tela — nem apertando F5, porque o
+                        // desencontro esta na linha do banco. A regra (e o motivo de
+                        // ela nao ser igual para os dois) esta em
+                        // frontend/cor-numeracao-do-modelo.js.
+                        const idsDoBanco = (typeof reconciliarCorNumDoModelo === 'function')
+                            ? reconciliarCorNumDoModelo(item, state.cores, state.numeracoes)
+                            : { corId: item.amostra_cor_id, numId: item.amostra_num_id };
+
+                        // So avisa quando havia uma escolha anterior sendo substituida.
+                        // Preencher um campo que estava vazio nao e novidade para ninguem.
+                        const _nomeNoCatalogo = (catalogo, id) => {
+                            const linha = id ? (catalogo || []).find(x => String(x.id) === String(id)) : null;
+                            return linha ? (linha.name || linha.tipo || '') : '';
+                        };
+                        const _modelo = item.nome_modelo || 'Modelo';
+                        if (idsDoBanco.corTrocada && item.amostra_cor_id) {
+                            seguiramOPedido.push(`${_modelo}: cor ${_nomeNoCatalogo(state.cores, item.amostra_cor_id)} → ${_nomeNoCatalogo(state.cores, idsDoBanco.corId)}`);
+                        }
+                        if (idsDoBanco.numTrocada && item.amostra_num_id) {
+                            seguiramOPedido.push(`${_modelo}: numeração ${_nomeNoCatalogo(state.numeracoes, item.amostra_num_id)} → ${_nomeNoCatalogo(state.numeracoes, idsDoBanco.numId)}`);
+                        }
+
+                        const resolvedNumId = idsDoBanco.numId || (prop ? prop.amostra_num_id : null);
                         const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
                         const numIsDuplex = isNumeracaoDuplex(matchedNum);
                         // Fonte de verdade: print_mode da numeração em producao_numeracoes
@@ -17078,7 +17111,7 @@ async function loadOSItens(osId) {
                             verso_tipo: resolvedVersoTipo,
                             impressao: normalizarStatusImpressao(item.status_impressao || item.status_producao || item.impressao),
                             nome_produto_real: prop ? prop.nome_produto : null,
-                            amostra_cor_id: item.amostra_cor_id || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
+                            amostra_cor_id: idsDoBanco.corId || item.id_cor || item.cor_id || (prop ? (prop.amostra_cor_id || prop.id_cor) : null),
                             amostra_num_id: resolvedNumId || null,
                             amostra_arte_base64: item.amostra_arte_base64 || (prop ? prop.amostra_arte_base64 : null),
                             verso_amostra_arte_base64: item.verso_amostra_arte_base64 || (prop ? prop.verso_amostra_arte_base64 : null),
@@ -17109,6 +17142,13 @@ async function loadOSItens(osId) {
                     state.osItens[osId].forEach(it => {
                         console.log(`[COR DEBUG] id=${it.id} padrao=${it.padrao} cor=${it.cor} amostra_cor_id=${it.amostra_cor_id} id_cor=${it.id_cor} cor_raw=${it._rawCor}`);
                     });
+
+                    if (seguiramOPedido.length && typeof toast === 'function') {
+                        const lista = seguiramOPedido.slice(0, 3).join(' | ');
+                        const resto = seguiramOPedido.length > 3 ? ` (+${seguiramOPedido.length - 3})` : '';
+                        toast(`Atualizado conforme o pedido — ${lista}${resto}`, 'info');
+                        console.log('[PEDIDO] Cor/numeração seguiram o banco:', seguiramOPedido);
+                    }
                 } else if (propData && propData.length > 0) {
                     // Fallback: usar produtos_proposta diretamente quando pedidos_modelos está vazio
                     console.log('[loadOSItens] Fallback: usando produtos_proposta para id_int=' + queryNum);
@@ -21059,15 +21099,11 @@ async function navigateToAmostrasFromOS(osId) {
         if (state.osItens && state.osItens[realOSId]) {
             state.osItens[realOSId] = state.osItens[realOSId].map(i => ({ ...i, _dbLoaded: false }));
         }
-        console.log('[Nav] Carregando itens da OS...');
-        try {
-            await loadOSItens(realOSId);
-        } catch (e) {
-            console.warn('[Nav] Erro ao carregar itens:', e);
-        }
-        console.log('[Nav] Itens carregados:', (state.osItens[realOSId] || []).length);
-
-        // Garantir que cores e numerações estejam carregados
+        // Os catalogos vem ANTES dos itens de proposito: o loadOSItens depende
+        // deles para saber se a numeracao do modelo imprime verso e para conferir
+        // a cor do parceiro contra o id em cache. Enquanto essa garantia vinha
+        // depois, um pedido aberto com o catalogo ainda vazio nascia sem essas
+        // duas decisoes e ninguem as refazia.
         if (!state.cores || state.cores.length === 0 || !state.numeracoes || state.numeracoes.length === 0) {
             try {
                 await loadAll();
@@ -21075,6 +21111,14 @@ async function navigateToAmostrasFromOS(osId) {
                 console.warn('[Nav] Erro ao carregar dados de cadastro:', e);
             }
         }
+
+        console.log('[Nav] Carregando itens da OS...');
+        try {
+            await loadOSItens(realOSId);
+        } catch (e) {
+            console.warn('[Nav] Erro ao carregar itens:', e);
+        }
+        console.log('[Nav] Itens carregados:', (state.osItens[realOSId] || []).length);
 
         // Salvar o ID do pedido ativo na tela de Amostras
         state.amostrasOSAtivo = realOSId;

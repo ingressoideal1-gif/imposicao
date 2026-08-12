@@ -72,6 +72,33 @@ Log de mensagens do pedido (visível no chat do ERP Vibecode).
 
 ---
 
+## Quem manda na Cor e na Numeração do modelo
+
+A linha de `pedidos_modelos` guarda o mesmo fato duas vezes: o **nome**, que o
+sistema parceiro escreve (`padrao` e `gabarito_operacional`), e o **id**, que
+este painel deriva depois (`amostra_cor_id` e `amostra_num_id`).
+
+Quando os dois discordam, **o nome vence** — ele é a origem. Medido no banco em
+12/08/2026: 36 modelos tinham `padrao` sem id e nenhum tinha id sem `padrao`.
+Enquanto o id vencia, uma troca de cor feita no ERP depois do primeiro
+salvamento nunca mais chegava à tela, nem apertando F5, porque o desencontro
+mora na linha do banco e não em cache do navegador.
+
+A regra **não é igual para a numeração**: uma numeração customizada é gravada só
+no `amostra_num_id` e deixa o `gabarito_operacional` no gabarito base, então
+seguir o texto ali devolveria a numeração de fábrica e apagaria o trabalho do
+operador. Os detalhes, os casos de borda e o motivo de cada guarda estão no
+cabeçalho de `frontend/cor-numeracao-do-modelo.js`, e os testes em
+`tests/CorNumeracaoDoModelo.Tests.ps1`.
+
+A correção acontece ao **carregar o pedido** (`loadOSItens` no painel e o
+carregador do `cliente.js` no link), vale em memória, e aparece na tela como um
+aviso dizendo o que mudou — trocar cor ou numeração muda o que sai na
+impressora, e o operador precisa ver acontecer. O banco se acerta sozinho no
+próximo salvamento do modelo.
+
+---
+
 ## Status da Arte e Mensagens ao Cliente
 
 O status da arte controla **exatamente** o que o cliente vê ao acessar o link:

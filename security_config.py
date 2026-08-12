@@ -86,6 +86,7 @@ PAINEL_ARQUIVOS = [
     "pedido.js",
     "cliente.js",
     "criador-arte.js",
+    "cor-numeracao-do-modelo.js",
     "csv-editor.js",
     "amostra-modal.js",
     "mapas.js",
