@@ -244,6 +244,20 @@ function renderAmostrasOSItens(osId) {
         }
 
 
+        // Numeração com banco de dados: o cliente folheia as linhas DESTE
+        // modelo, e a visualização passa a ser desenhada aqui, no navegador
+        // dele (canvas), em vez de ser a imagem aprovada (<img>). Uma imagem
+        // por linha seria inviável — 3.000 linhas dariam centenas de MB.
+        const numDoModelo = resolvedNumId
+            ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId))
+            : null;
+        // Só troca a imagem aprovada pelo desenho ao vivo quando o desenho tem
+        // com o que trabalhar. Sem `arte_url` o canvas sairia com a cor e a
+        // numeração e SEM a arte — pior do que não paginar. Modo PDF fica de
+        // fora porque já tem o seletor de páginas dele.
+        const temArteParaDesenhar = !!item.arte_url && (!item.verso || !!item.verso_arte_url);
+        const paginaCsv = temCsvVariavel(numDoModelo) && !item.modo_pdf && temArteParaDesenhar;
+
         // Filtrar numerações com base no formato da cor selecionada
         const filteredNumeracoes = (state.numeracoes || []).filter(n => {
             // Se for a numeração salva neste item, sempre exibe
@@ -382,21 +396,37 @@ function renderAmostrasOSItens(osId) {
                                     </div>
                                 </div>
                                 ` : `
-                                <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
+                                ${paginaCsv ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
                                 `}
-                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 || item.modo_pdf ? 'none' : 'block'};">
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || item.amostra_arte_base64 || item.modo_pdf ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Sem Frente</p>
                                 </div>
                             </div>
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
-                                <img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />
-                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.verso_amostra_arte_base64 ? 'none' : 'block'};">
+                                ${paginaCsv ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || item.verso_amostra_arte_base64 ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
                                      <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
                                 </div>
                             </div>
+
+                            ${!paginaCsv ? '' : `
+                            <!-- Seletor de ingressos. Um so comanda as duas
+                                 faces: frente e verso mostram sempre a mesma
+                                 linha. So existe onde o desenho e ao vivo: sobre
+                                 a imagem aprovada nao haveria o que virar. -->
+                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:8px; margin-top:14px; padding:12px 16px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <div style="font-size:0.72rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em;">Confira os ingressos</div>
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior" style="min-width:44px; min-height:36px;">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:140px; text-align:center;">Ingresso 1 de 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:80px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:6px; font-size:0.88rem;" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso" style="min-width:44px; min-height:36px;">&#9654;</button>
+                                </div>
+                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.8rem; color:var(--text-dim); text-align:center;"></div>
+                            </div>`}
                         </div>
                         ` : `
                         ${item.modo_pdf ? `
@@ -414,9 +444,25 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
-                        <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
+                        ${paginaCsv ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
                         `}
-                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 || item.modo_pdf ? 'none' : 'block'};">
+
+                            ${!paginaCsv ? '' : `
+                            <!-- Seletor de ingressos. Um so comanda as duas
+                                 faces: frente e verso mostram sempre a mesma
+                                 linha. So existe onde o desenho e ao vivo: sobre
+                                 a imagem aprovada nao haveria o que virar. -->
+                            <div id="amostra-csv-nav-${idx}" style="display:none; flex-direction:column; align-items:center; gap:8px; margin-top:14px; padding:12px 16px; background:rgba(15,23,42,0.6); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <div style="font-size:0.72rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em;">Confira os ingressos</div>
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-prev-${idx}" onclick="amostraCsvPagina(${idx}, -1)" title="Ingresso anterior" style="min-width:44px; min-height:36px;">&#9664;</button>
+                                    <span id="amostra-csv-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text); min-width:140px; text-align:center;">Ingresso 1 de 1</span>
+                                    <input type="number" id="amostra-csv-goto-${idx}" min="1" value="1" style="width:80px; text-align:center; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:6px; font-size:0.88rem;" title="Ir para o ingresso" onchange="amostraCsvPagina(${idx}, 0, parseInt(this.value))">
+                                    <button class="btn btn-sm btn-secondary" id="amostra-csv-next-${idx}" onclick="amostraCsvPagina(${idx}, 1)" title="Próximo ingresso" style="min-width:44px; min-height:36px;">&#9654;</button>
+                                </div>
+                                <div id="amostra-csv-resumo-${idx}" style="font-size:0.8rem; color:var(--text-dim); text-align:center;"></div>
+                            </div>`}
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || item.amostra_arte_base64 || item.modo_pdf ? 'none' : 'block'};">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Aguardando visualização da Arte...</p>
                         </div>
@@ -737,7 +783,13 @@ async function initClientePage(numero, token) {
         try {
             const [coresRes, numeracoesRes, formatosRes, produtosRes] = await Promise.all([
                 supabaseClient.from('producao_cores').select('*').order('name', { ascending: true }),
-                supabaseClient.from('producao_numeracoes').select('*').order('name', { ascending: true }),
+                // Colunas explicitas, sem `csv_data`. Com `select('*')` o
+                // cliente baixava os bancos de TODAS as numeracoes do sistema —
+                // 569 KB, dos quais 84% eram CSV de pedidos alheios que ele
+                // nunca veria. O banco do proprio pedido vem logo abaixo.
+                supabaseClient.from('producao_numeracoes')
+                    .select('id, name, tipo, formato_id, formato_ids, elements, print_mode, ticket_qtd, ticket_logica, csv_headers, csv_filename, Cli_Num, is_custom, os_item_id')
+                    .order('name', { ascending: true }),
                 supabaseClient.from('producao_formatos').select('*').order('name', { ascending: true }),
                 supabaseClient.from('produtos').select('*')
             ]);
@@ -810,6 +862,24 @@ async function initClientePage(numero, token) {
         } catch (e) { console.warn('Erro ao buscar pedidos_modelos:', e); }
 
         state.osItens[osId] = itensCarregados;
+
+        // 2. O banco de dados (CSV) apenas das numeracoes que ESTE pedido usa.
+        //    E o que permite folhear os ingressos sem baixar o catalogo inteiro.
+        try {
+            const numIds = [...new Set(
+                itensCarregados.map(it => it.amostra_num_id || it.numeracao_id).filter(Boolean).map(String)
+            )];
+            if (numIds.length) {
+                const { data: bancos } = await supabaseClient
+                    .from('producao_numeracoes')
+                    .select('id, csv_data')
+                    .in('id', numIds);
+                (bancos || []).forEach(b => {
+                    const n = (state.numeracoes || []).find(x => String(x.id) === String(b.id));
+                    if (n) n.csv_data = b.csv_data;
+                });
+            }
+        } catch (e) { console.warn('Erro ao buscar o banco de dados das numeracoes:', e); }
 
         // 3. Mesclar dados de pedidos_artes (arquivos PDF, revisões e urls)
         try {
@@ -1965,6 +2035,151 @@ function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BANCO DE DADOS (CSV) NO LINK DO CLIENTE
+//
+// Numeracao com elemento de CSV nao tem "uma" amostra: tem uma por linha de
+// dado. O cliente folheia as linhas do MODELO dele — a fatia gravada em
+// `pedidos_modelos.csv_selecao` — e o desenho e refeito aqui, no navegador
+// dele. Nao ha imagem por linha: virar pagina nao custa rede nenhuma.
+//
+// Estas funcoes espelham as de mesmo nome no script.js. O cliente.js e
+// deliberadamente autonomo (nao carrega o csv-editor.js), entao os dois
+// utilitarios de fatia estao repetidos aqui, enxutos.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** "1-5" e "7" viram [1,2,3,4,5,7]. Espelha CsvEditor.expandirIds. */
+function expandirIdsCsv(ids) {
+    const fora = [];
+    (ids || []).forEach(t => {
+        const p = String(t).split('-');
+        if (p.length === 2) {
+            const a = parseInt(p[0]), b = parseInt(p[1]);
+            if (!isNaN(a) && !isNaN(b)) for (let i = a; i <= b; i++) fora.push(i);
+        } else {
+            const v = parseInt(t);
+            if (!isNaN(v)) fora.push(v);
+        }
+    });
+    return fora;
+}
+
+/** So as linhas que serao impressas. `__ativo: false` fica de fora. */
+function linhasAtivasCsv(rows) {
+    if (!Array.isArray(rows)) return [];
+    return rows.filter(r => !r || r.__ativo !== false);
+}
+
+/** A numeracao deste modelo. Em pedidos_modelos o campo e amostra_num_id. */
+function numeracaoIdDoItem(item) {
+    if (!item) return null;
+    return item.numeracao_id || item.amostra_num_id || null;
+}
+
+/**
+ * As linhas que ESTE modelo imprime, na ordem original — que e a ordem de
+ * impressao. Modelo sem `csv_selecao` leva o banco inteiro, que e o
+ * comportamento de todo pedido anterior a esta versao.
+ */
+function fatiaCsvDoItem(item, num) {
+    const rows = (num && num.csv_data) || [];
+    const sel = item && item.csv_selecao;
+    const mesmaNum = item && num && String(numeracaoIdDoItem(item)) === String(num.id);
+    if (!sel || !mesmaNum || !sel.ids || !sel.ids.length) return linhasAtivasCsv(rows);
+    const querido = new Set(expandirIdsCsv(sel.ids).map(Number));
+    return linhasAtivasCsv(rows).filter(r => querido.has(Number(r.__id)));
+}
+
+/** A numeracao tem dado variavel vindo de CSV? */
+function temCsvVariavel(num) {
+    return !!(num && num.csv_data && num.csv_data.length
+        && (num.elements || []).some(el => el && el.source === 'database'));
+}
+
+/** A numeracao de um item, buscada no catalogo ja carregado. */
+function numDoItem(item) {
+    const nid = numeracaoIdDoItem(item);
+    if (!nid) return null;
+    return (state.numeracoes || []).find(n => String(n.id) === String(nid)) || null;
+}
+
+/** As linhas que a visualizacao deste modelo pode mostrar. */
+function linhasDaAmostra(item, num) {
+    if (num && num.csv_data && num.csv_data.length) return fatiaCsvDoItem(item, num);
+    if (item && item.csv_data && item.csv_data.length) return linhasAtivasCsv(item.csv_data);
+    return [];
+}
+
+/** Pagina corrente do modelo, sempre dentro do intervalo. */
+function paginaDaAmostra(item, total) {
+    if (!total) return 0;
+    if (!state.amostraCsvPaginas) state.amostraCsvPaginas = {};
+    const p = parseInt(state.amostraCsvPaginas[item ? item.id : '']) || 0;
+    return Math.max(0, Math.min(total - 1, p));
+}
+
+/** A linha do CSV que a visualizacao deste modelo esta mostrando agora. */
+function linhaDaAmostra(item, num) {
+    const linhas = linhasDaAmostra(item, num);
+    if (!linhas.length) return null;
+    return linhas[paginaDaAmostra(item, linhas.length)] || null;
+}
+
+/**
+ * Move a visualizacao do modelo. `delta` anda; `absoluto` vai direto (1-based,
+ * como o cliente le na tela). Redesenhar e local: nao ha ida ao servidor.
+ */
+window.amostraCsvPagina = function (idx, delta, absoluto) {
+    const osId = clienteState.osId;
+    const item = state.osItens[osId] ? state.osItens[osId][idx] : null;
+    if (!item) return;
+    const num = numDoItem(item);
+    const total = linhasDaAmostra(item, num).length;
+    if (!total) return;
+    let nova = (typeof absoluto === 'number' && !isNaN(absoluto))
+        ? absoluto - 1
+        : paginaDaAmostra(item, total) + (delta || 0);
+    if (!state.amostraCsvPaginas) state.amostraCsvPaginas = {};
+    state.amostraCsvPaginas[item.id] = Math.max(0, Math.min(total - 1, nova));
+    return renderItemAmostraCombinada(idx, osId);
+};
+
+/** Mostra e preenche a navegacao de linhas do CSV no card de um modelo. */
+function atualizarNavCsvDaAmostra(idx, item, num, container) {
+    const nav = container.querySelector(`#amostra-csv-nav-${idx}`);
+    if (!nav) return;
+    const linhas = linhasDaAmostra(item, num);
+    if (!temCsvVariavel(num) || linhas.length <= 1) {
+        nav.style.display = 'none';
+        return;
+    }
+    nav.style.display = 'flex';
+    const total = linhas.length;
+    const pag = paginaDaAmostra(item, total);
+    const linha = linhas[pag] || {};
+    const info = container.querySelector(`#amostra-csv-info-${idx}`);
+    if (info) info.textContent = `Ingresso ${pag + 1} de ${total}`;
+    const resumo = container.querySelector(`#amostra-csv-resumo-${idx}`);
+    if (resumo) {
+        const cols = (num.csv_headers && num.csv_headers.length)
+            ? num.csv_headers
+            : Object.keys(linha).filter(k => k !== '__ativo' && k !== '__id');
+        resumo.textContent = cols.slice(0, 3)
+            .map(c => `${c}: ${linha[c] == null ? '' : linha[c]}`)
+            .join('  \u00b7  ');
+    }
+    const goto = container.querySelector(`#amostra-csv-goto-${idx}`);
+    if (goto && document.activeElement !== goto) {
+        goto.value = pag + 1;
+        goto.max = total;
+    }
+    const bPrev = container.querySelector(`#amostra-csv-prev-${idx}`);
+    const bNext = container.querySelector(`#amostra-csv-next-${idx}`);
+    if (bPrev) bPrev.disabled = pag <= 0;
+    if (bNext) bNext.disabled = pag >= total - 1;
+}
+
+
 async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, osId, S) {
     // Em modo PDF, o canvas tradicional (#amostra-item-canvas-X) não existe —
     // o viewer usa #amostra-pdf-canvas-X. Permitir passagem para o bloco modo_pdf.
@@ -2231,6 +2446,11 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
     // ====== CAMADA 3: NUMERAÇÃO ======
     if (num && num.elements && num.elements.length > 0) {
+        // A linha do banco que esta face vai mostrar. Resolvida UMA vez: todos
+        // os elementos variaveis da face leem a mesma linha, senao o ingresso
+        // sairia com a fila de uma linha e o assento de outra.
+        const _linhaCsv = linhaDaAmostra(item, num);
+
         const numCanvas = document.createElement('canvas');
         numCanvas.width = Math.round(fmt.width_mm * S);
         numCanvas.height = Math.round(fmt.height_mm * S);
@@ -2275,14 +2495,14 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 if (el.type === 'FIXED') {
                     label = el.fixed_value || 'TEXTO';
                 } else if (el.type === 'TEATRO_FILA') {
-                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
+                    const _fVal = _linhaCsv ? (_linhaCsv.Fila || 'A') : 'A';
                     label = `${el.prefix || ''}${_fVal}`;
                 } else if (el.type === 'TEATRO_LUGAR') {
-                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : '22';
+                    const _lVal = _linhaCsv ? (_linhaCsv.Numero || '22') : '22';
                     label = `${el.prefix || ''}${_lVal}`;
                 } else if (el.type === 'TEATRO_COMBO') {
-                    const _fVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Fila || 'A' : 'A';
-                    const _lVal = (state.csvData && state.csvData[0]) ? state.csvData[0].Numero || '22' : 'A';
+                    const _fVal = _linhaCsv ? (_linhaCsv.Fila || 'A') : 'A';
+                    const _lVal = _linhaCsv ? (_linhaCsv.Numero || '22') : 'A';
                     const fila = `${el.prefix_fila || ''}${_fVal}`;
                     const lugar = `${el.prefix_lugar || ''}${_lVal}`;
                     label = el.layout === '2lines' ? `${fila}\n${lugar}` : `${fila} - ${lugar}`;
@@ -2303,8 +2523,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     label = `${el.prefix || ''}1/${_lCamB}`;
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
-                    const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
-                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    const csvRow = _linhaCsv;
                     if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
@@ -2351,8 +2570,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     qrText = el.fixed_value || '';
                 } else if (el.source === 'database') {
                     const colName = el.csv_column || '';
-                    const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
-                    const csvRow = (csvData && csvData[0]) ? csvData[0] : null;
+                    const csvRow = _linhaCsv;
                     if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                         qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                     } else {
@@ -2548,6 +2766,8 @@ async function renderItemAmostraCombinada(idx, osId) {
     }
 
     const S = 150 / 25.4;
+
+    atualizarNavCsvDaAmostra(idx, item, num, container);
 
     if (item.verso) {
         const canvasFront = container.querySelector(`#amostra-item-canvas-${idx}`);
@@ -2757,8 +2977,11 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 label = `${el.prefix || ''}${pageNum}/${_lCamB}`;
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
-                const csvRow = (csvData && csvData[pageNum - 1]) ? csvData[pageNum - 1] : null;
+                // A pagina N do PDF mostra a linha N da FATIA deste modelo. Antes
+                // indexava o banco inteiro: um modelo cuja fatia comeca na linha
+                // 601 exibia a linha 1 na primeira pagina.
+                const csvData = linhasDaAmostra(item, num);
+                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
@@ -2796,8 +3019,8 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 qrText = el.fixed_value || '';
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
-                const csvRow = (csvData && csvData[pageNum - 1]) ? csvData[pageNum - 1] : null;
+                const csvData = linhasDaAmostra(item, num);
+                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {

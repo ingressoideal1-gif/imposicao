@@ -8,6 +8,52 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v534 — 2026-08-12] — O link do cliente pagina os ingressos, e ficou mais leve
+
+### O problema
+O cliente via sempre o **primeiro** ingresso do banco. Com o banco dividido
+entre os modelos do pedido ficou pior: todos os modelos mostravam a mesma linha
+1, mesmo cada um imprimindo um bloco diferente.
+
+E a pagina ja era pesada por outro motivo. O `cliente.js` fazia `select('*')` em
+`producao_numeracoes` e baixava o banco de dados de **todas** as numeracoes do
+sistema: 569 KB (89 KB comprimidos), dos quais **84% eram CSV de pedidos
+alheios**. O `Whisper.csv` (3.000 linhas) e o `Avra.csv` (2.000) desciam para o
+celular de qualquer cliente que abrisse qualquer link, e nenhum era usado.
+
+### O que entrou
+O cliente folheia os ingressos do modelo dele:
+
+```
+       CONFIRA OS INGRESSOS
+   ◀   Ingresso 3 de 5   [3]   ▶
+   Fila: A · Assento: 03 · Setor: Pista
+```
+
+**O desenho e refeito no navegador dele**, e nao vem pronto do servidor. Uma
+imagem por linha seria inviavel: 3.000 linhas dariam centenas de MB no Storage e
+um download a cada clique. Desenhando ali, virar pagina **nao gera nenhuma ida a
+rede** — verificado com o contador de requisicoes do navegador: zero.
+
+So os modelos que paginam trocam a imagem aprovada por canvas, e so quando ha
+com o que desenhar (`arte_url` presente). Todo o resto continua exatamente como
+estava, com a imagem aprovada.
+
+E o catalogo passou a vir em duas consultas: colunas explicitas sem `csv_data`
+(11 KB comprimidos) e o `csv_data` **apenas das numeracoes do pedido**. O link
+ficou mais leve do que era antes da paginacao.
+
+### Um erro que estava escondido no modo PDF
+No modo PDF — que ja paginava, nos dois lados — a pagina N indexava o **banco
+inteiro** em vez da fatia do modelo. Um modelo cuja fatia comeca na linha 601
+exibia a linha 1 na primeira pagina. Corrigido no painel e no link do cliente.
+
+### Arquivos
+`frontend/cliente.js`, `frontend/script.js`, `docs/editor_de_csv.md`.
+So frontend — o `engine.py` nao muda e o agente nao precisa ser republicado.
+
+---
+
 ## [v533 — 2026-08-11] — Banco de dados no card do modelo e janela de visualizacao ampliada
 
 > Saiu na mesma leva que a paginacao da amostra, logo abaixo: os dois commits

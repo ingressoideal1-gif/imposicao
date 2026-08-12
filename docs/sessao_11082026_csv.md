@@ -153,7 +153,11 @@ O molde: semear `state.numeracoes`, `state.formatos`, `state.cores`,
 
 ## Para amanhã
 
-1. **Decidir sobre o link do cliente** — pagina ou não? (ver acima)
+1. ~~**Decidir sobre o link do cliente** — pagina ou não?~~ **Decidido em
+   12/08/2026: pagina.** Entrou na v534, com o desenho refeito no navegador do
+   cliente e o corte de 84% no que a página baixava. Ver
+   [`editor_de_csv.md`](editor_de_csv.md), seção "O link do cliente também
+   pagina".
 2. Sem mais nada pendente desta linha de trabalho.
 
 Antes de mergulhar em qualquer coisa: `.\ferramentas\conferir.ps1`.

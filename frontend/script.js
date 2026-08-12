@@ -22337,8 +22337,13 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 label = `${el.prefix || ''}${pageNum}/${_lCamB}`;
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
-                const csvRow = (csvData && csvData[pageNum - 1]) ? csvData[pageNum - 1] : null;
+                // A pagina N do PDF mostra a linha N da FATIA deste modelo. Antes
+                // indexava o banco inteiro: um modelo cuja fatia comeca na linha
+                // 601 exibia a linha 1 na primeira pagina.
+                const csvData = (typeof linhasDaAmostra === 'function')
+                    ? linhasDaAmostra(item, num)
+                    : (num?.csv_data || item?.csv_data || []);
+                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     label = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
@@ -22376,8 +22381,10 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 qrText = el.fixed_value || '';
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
-                const csvRow = (csvData && csvData[pageNum - 1]) ? csvData[pageNum - 1] : null;
+                const csvData = (typeof linhasDaAmostra === 'function')
+                    ? linhasDaAmostra(item, num)
+                    : (num?.csv_data || item?.csv_data || []);
+                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {

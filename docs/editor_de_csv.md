@@ -223,9 +223,42 @@ Detalhes que importam:
   senão o instantâneo enviado ao link do cliente passaria a ser a linha que o
   operador estava olhando por acaso.
 
-O link do cliente (`frontend/cliente.js`) tem a sua própria cópia do
-`drawAmostraFace` e **não** foi paginado. Ele continua mostrando a primeira
-linha. Se um dia isso mudar, é decisão de produto: muda o que o cliente vê.
+### O link do cliente também pagina
+
+O cliente folheia os ingressos do modelo dele, com o mesmo seletor — no
+vocabulário dele: `◀ Ingresso 3 de 5 ▶`.
+
+**O desenho é refeito no navegador do cliente**, e não vem pronto do servidor.
+Uma imagem por linha seria inviável: um banco de 3.000 linhas daria centenas de
+MB no Storage e um download a cada clique no ◀▶. Desenhando ali, virar página
+**não gera nenhuma ida à rede** — está verificado.
+
+Por isso, e só nos modelos que paginam, a `<img>` da imagem aprovada dá lugar a
+um `<canvas>`. A decisão está em `paginaCsv`, dentro do `renderAmostrasOSItens`
+do `cliente.js`, e ela exige **três** coisas:
+
+1. a numeração tem banco e um elemento `source: "database"`;
+2. o modelo **não** está em modo PDF — esse já tem o seletor de páginas dele;
+3. o modelo tem `arte_url` (e `verso_arte_url`, se tiver verso).
+
+A terceira condição não é preciosismo: o `drawAmostraFace` do cliente lê a arte
+de `item.arte_url` e **não** cai para `amostra_arte_base64`. Sem ela, o canvas
+sairia com a cor e a numeração e sem a arte — pior do que não paginar. Quem não
+passa nas três continua exatamente como antes, com a imagem aprovada e sem
+seletor.
+
+#### A página ficou mais leve do que era
+
+O `cliente.js` fazia `select('*')` em `producao_numeracoes`: **569 KB** (89 KB
+comprimidos) com o banco de dados de **todas** as numerações do sistema. Medido
+em 12/08/2026: 84% disso era `csv_data` de pedidos alheios — o `Whisper.csv` de
+3.000 linhas e o `Avra.csv` de 2.000 desciam para o celular de qualquer cliente
+que abrisse qualquer link, e nenhum era usado.
+
+Agora são duas consultas: o catálogo com colunas explícitas e sem `csv_data`
+(11 KB comprimidos), e o `csv_data` **apenas das numerações que o pedido usa**.
+Ao acrescentar coluna nova em `producao_numeracoes` que o link do cliente
+precise ler, lembre de incluí-la nessa lista — ela é explícita de propósito.
 
 ### O banco também se abre do card do modelo
 
