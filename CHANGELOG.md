@@ -8,6 +8,74 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v539 — 2026-08-12] — A estacao para de servir tela velha com motor novo | Agente **1.2.37**
+
+Relatado: *"Refazer Celula funciona perfeitamente na minha maquina, mas nao
+funcionou nas estacoes da grafica, agente esta desatualizado?"*
+
+Estava, em tres estacoes — mas nao na que importava. A DESKTOP-5N8AF7D rodava o
+agente 1.2.36, o mais novo, e mesmo assim marcar "Refazer Celula" nao trocava a
+previa e digitar as posicoes separadas por virgula nao respondia. Esse e, nos
+detalhes, o comportamento da **v528** do painel: nove releases atras. O
+executavel estava certo; velha estava a tela que ele servia.
+
+### O HTML do painel nao fica mais em cache
+
+Os scripts se protegem com `?v=NNN`. Quem carrega esse carimbo e o proprio
+`index.html`, e ele nao tinha como se invalidar: servido sem `Cache-Control`, o
+navegador da estacao aplicava cache heuristico e segurava o HTML antigo por
+horas — pedindo `pedido.js?v=528` do proprio cache. O agente trocava os arquivos
+no disco a cada 30 minutos e nada disso chegava a tela.
+
+Agora todo `text/html` servido pela estacao sai com `Cache-Control: no-store`.
+Vale so para o HTML: e o unico arquivo sem carimbo, e e ele que carrega os
+outros. O resto continua cacheavel, que e o que mantem a tela rapida.
+
+### Tres arquivos que nunca se atualizavam
+
+`PAINEL_ARQUIVOS` listava dez arquivos; o HTML do painel carrega treze. Os tres
+de fora nunca chegavam a estacao:
+
+- **`amostra-modal.js` dava 404 em toda estacao.** Ele nasceu na v533, depois do
+  build do agente 1.2.36, e `window.abrirAmostraModal` e `window.AmostraModal` so
+  existem nele — ampliar a amostra estava quebrado em todas as maquinas.
+- **`csv-editor.js` estava tres releases atras**, congelado na data do build.
+- **`pdf-lib.min.js`** pelo mesmo motivo.
+
+A causa era a soma de duas coisas: a lista de sincronismo nao os incluia, e o
+`_semear_painel` do `app.py` copiava da copia embutida **so o que ainda nao
+existia**, nunca sobrescrevendo. Quem instalou o agente uma vez ficava com o
+arquivo daquela instalacao para sempre.
+
+Agora a lista tem os treze, e o semeador tambem repoe o que for mais antigo que
+a copia embutida. A comparacao e por data de arquivo e e segura nos dois
+sentidos: o painel baixado da nuvem e sempre mais novo que o build, entao nunca
+volta atras. `tests/test_painel_estacao.py` le os tres HTML do painel e cobra que
+todo `.js` e `.css` local que eles carregam esteja na lista — a regra deixa de
+depender de alguem lembrar.
+
+### A estacao passa a dizer qual painel esta servindo
+
+O heartbeat reportava a versao do executavel, e so. Saber qual painel a maquina
+servia exigia ir ate ela — foi o ponto cego que custou a investigacao inteira.
+Agora `printers_json` leva tambem:
+
+```json
+"painel": { "versao": "537", "quando": "2026-08-12T12:58:45+00:00" }
+```
+
+A versao sai do carimbo `?v=NNN` do proprio `index.html`, e `quando` e a data do
+arquivo em disco — que denuncia sincronizacao parada mesmo quando o carimbo nao
+muda. Agente e painel tem ciclos de vida separados, entao os dois numeros
+precisam viajar juntos.
+
+> **Na pratica, hoje:** `Ctrl+F5` no painel da estacao resolve na hora. As
+> estacoes CESAR-CPD e PRD-ACABAMENTO estao abaixo da 1.2.7 (nao reportam versao)
+> e precisam do MSI instalado a mao uma vez — elas sao anteriores ao auto-update
+> por manifesto e nunca vao se atualizar sozinhas.
+
+---
+
 ## [v537 — 2026-08-12] — Banco de dados direto da web (Planilha Google)
 
 ### O que entrou

@@ -67,7 +67,8 @@ tela e no PDF, sem erro visível.
 O heartbeat leva o estado da estação em `print_agents.printers_json`:
 
 ```json
-"version": "1.2.17",
+"version": "1.2.37",
+"painel": { "versao": "537", "quando": "2026-08-12T12:58:45+00:00" },
 "fontes": { "cache_arquivos": 270, "cache_mb": 142.8,
             "catalogo_total": 316, "catalogo_relativas": 0,
             "catalogo_gstatic": 0, "catalogo_storage": 316,
@@ -82,9 +83,39 @@ Como ler:
 | `cache_arquivos` muito abaixo do catálogo | sync incompleto, ou em andamento |
 | `storage_alcancavel: false` | **a rede daquela estação não alcança o Supabase** |
 | `version` desatualizada | ver a seção de auto-update |
+| `painel.versao` abaixo da `vNNN` publicada | a estação serve tela velha, com executável novo |
+| `painel.quando` parado há horas | `sincronizar_painel` está falhando — o download é tudo-ou-nada |
 
 Para investigar na própria máquina, existe o `Diagnostico_Fontes.ps1` na raiz do
 projeto — só consulta, não altera nada.
+
+### Executável e painel são duas versões, não uma
+
+`version` é o `NewProd.exe`; `painel.versao` é a tela que o operador vê. Eles se
+atualizam por caminhos diferentes — MSI pelo manifesto, painel por download da
+Vercel a cada 30 min — e **já divergiram em produção**.
+
+Em 12/08/2026 uma estação com o agente 1.2.36, o mais novo, servia o painel da
+v528: o operador marcava "Refazer Célula", a prévia não mudava e digitar as
+posições não respondia, enquanto a mesma operação funcionava na máquina do
+desenvolvedor. Nada no heartbeat mostrava isso — só a versão do executável
+viajava, e ela estava certa. Foi essa investigação que criou o campo `painel`.
+
+Duas regras nasceram daí, e as duas são cobradas por `tests/test_painel_estacao.py`:
+
+- **Todo arquivo local que o HTML do painel carrega tem de estar em
+  `security_config.PAINEL_ARQUIVOS`.** O que fica de fora nunca se atualiza na
+  estação: o `_semear_painel` do `app.py` só o repõe quando a cópia embutida é
+  mais nova, e o `sincronizar_painel` não o baixa. Foi assim que o
+  `amostra-modal.js` passou a dar 404 em toda estação — ele nasceu depois do
+  build — e que o `csv-editor.js` ficou três releases atrás.
+- **O HTML do painel é servido com `Cache-Control: no-store`.** O `?v=NNN`
+  protege os scripts, mas quem carrega esse carimbo é o `index.html`, e ele não
+  tem como se invalidar. Sem o cabeçalho, o navegador da estação segura o HTML
+  antigo por horas e continua pedindo os scripts da versão antiga do próprio
+  cache — painel novo no disco, painel velho na tela.
+
+Se mesmo assim uma estação parecer velha, **Ctrl+F5 no painel** resolve na hora.
 
 ---
 

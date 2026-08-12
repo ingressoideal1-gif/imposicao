@@ -72,6 +72,25 @@ async def add_pna_header(request: Request, call_next):
         response.headers["Access-Control-Allow-Private-Network"] = "true"
     return response
 
+
+# ─── O HTML do painel nunca fica em cache ─────────────────────────────────────
+# O agente troca os arquivos do painel no disco a cada 30 min, mas nada disso
+# chega ao navegador que já está aberto na estação. Os scripts se protegem com
+# `?v=NNN`; quem carrega esse carimbo é o próprio HTML, e ele não tem como se
+# invalidar. Servido sem Cache-Control, o Chrome aplica cache heurístico e
+# segura o index.html por horas — então a estação pedia `pedido.js?v=528` do
+# próprio cache e mostrava o painel de nove releases atrás com o executável mais
+# novo instalado. Foi exatamente esse o sintoma na gráfica em 12/08/2026.
+#
+# Vale só para text/html: é o único arquivo sem carimbo, e é ele que carrega
+# todos os outros. O resto continua cacheável, que é o que mantém a tela rápida.
+@app.middleware("http")
+async def painel_html_sem_cache(request: Request, call_next):
+    response = await call_next(request)
+    if (response.headers.get("content-type") or "").lower().startswith("text/html"):
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+    return response
+
 import sys
 _FRONTEND_DIR = None
 if getattr(sys, 'frozen', False):
@@ -108,14 +127,28 @@ if not _FRONTEND_DIR or not os.path.isdir(_FRONTEND_DIR):
 # Fora do executável nada muda: em desenvolvimento serve-se a pasta frontend/ do
 # repositório, senão editar um arquivo não teria efeito nenhum.
 def _semear_painel(destino: str, origem: str) -> bool:
-    """Copia para `destino` o que faltar de `origem`. Não sobrescreve o que já existe."""
+    """Copia para `destino` o que faltar de `origem` — e o que lá estiver velho.
+
+    Nunca sobrescrever congelava para sempre o arquivo que a sincronização não
+    cobre: quem instalasse um agente novo continuava com o `csv-editor.js` da
+    primeira instalação, dez releases atrás. Agora a cópia embutida também
+    repõe o que for mais antigo que ela.
+
+    A comparação por mtime é segura nos dois sentidos: `copy2` preserva a data
+    do build, e `sincronizar_painel` grava com a data do download, sempre
+    posterior. Um arquivo recém-baixado da nuvem nunca volta para a versão do
+    build por causa desta função.
+    """
     try:
         os.makedirs(destino, exist_ok=True)
         for nome in os.listdir(origem):
             org = os.path.join(origem, nome)
             dst = os.path.join(destino, nome)
-            if os.path.isfile(org) and not os.path.exists(dst):
-                shutil.copy2(org, dst)
+            if not os.path.isfile(org):
+                continue
+            if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(org):
+                continue
+            shutil.copy2(org, dst)
         return os.path.isfile(os.path.join(destino, "index.html"))
     except Exception as e:
         print(f"[app] Não consegui semear o painel local: {e}", flush=True)
@@ -1224,21 +1257,33 @@ async def hotfolder_conferir(request: Request):
     restantes = hotfolder.conferir(data.get("paths") or [])
     return {"ok": True, "restantes": restantes}
 
+# 503 e nao 200-com-ok-false: "nao consegui perguntar ao banco" e "este usuario
+# nao tem permissao nenhuma" sao respostas MUITO diferentes, e o painel precisa
+# saber qual das duas recebeu antes de gravar qualquer coisa por cima.
 @app.get("/api/user/permissions/{user_id}")
 async def get_user_permissions_endpoint(user_id: str):
-    perms = db.get_user_permissions(user_id)
+    try:
+        perms = db.get_user_permissions(user_id)
+    except db.BancoIndisponivel as e:
+        raise HTTPException(status_code=503, detail=str(e))
     return {"ok": True, "permissions": perms}
 
 @app.get("/api/user/permissions")
 async def list_user_permissions_endpoint():
-    perms = db.list_all_user_permissions()
+    try:
+        perms = db.list_all_user_permissions()
+    except db.BancoIndisponivel as e:
+        raise HTTPException(status_code=503, detail=str(e))
     return {"ok": True, "permissions": perms}
 
 @app.post("/api/user/permissions")
 async def save_user_permissions_endpoint(request: Request):
     data = await request.json()
-    ok = db.upsert_user_permissions(data)
-    return {"ok": ok}
+    try:
+        linha = db.upsert_user_permissions(data)
+    except db.BancoIndisponivel as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"ok": True, "permissions": linha}
 
 @app.delete("/api/user/permissions/{user_id}")
 async def delete_user_permissions_endpoint(user_id: str):

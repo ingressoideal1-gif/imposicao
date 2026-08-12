@@ -69,6 +69,15 @@ PAINEL_BASE_URL = "https://imposicao.vercel.app"
 
 # Só o que a estação precisa. As fontes (fonts_local) ficam de fora: são ~140 MB
 # e já têm o próprio sincronismo, pelo Storage.
+#
+# A REGRA: todo arquivo local que index.html, producao.html ou cliente.html
+# carregam tem de estar aqui. Arquivo de fora desta lista nunca se atualiza na
+# estação — o `_semear_painel` do app.py o copia da cópia embutida e a
+# sincronização não o baixa. Se ele nasceu depois do build do agente, dá 404; se
+# mudou depois, fica congelado, e o `?v=NNN` do HTML ainda por cima anuncia a
+# versão nova. Foi assim que o `amostra-modal.js` passou a dar 404 em toda
+# estação e o `csv-editor.js` ficou três releases atrás sem ninguém notar.
+# `tests/test_painel_estacao.py` compara esta lista com o que o HTML pede.
 PAINEL_ARQUIVOS = [
     "index.html",
     "producao.html",
@@ -77,8 +86,11 @@ PAINEL_ARQUIVOS = [
     "pedido.js",
     "cliente.js",
     "criador-arte.js",
+    "csv-editor.js",
+    "amostra-modal.js",
     "mapas.js",
     "supabase-config.js",
+    "pdf-lib.min.js",
     "style.css",
 ]
 

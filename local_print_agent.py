@@ -63,6 +63,18 @@ async def add_pna_header(request: Request, call_next):
         response.headers["Access-Control-Allow-Private-Network"] = "true"
     return response
 
+
+# Mesma regra do app.py, pelo motivo que o cabeçalho deste módulo já avisa: os
+# dois servem o painel na 9000 e uma correção aplicada em um só não vale para o
+# outro. Sem `no-store`, o navegador da estação segura o index.html antigo — e
+# com ele o `?v=NNN` antigo — mesmo depois de o painel ser trocado no disco.
+@app.middleware("http")
+async def painel_html_sem_cache(request: Request, call_next):
+    response = await call_next(request)
+    if (response.headers.get("content-type") or "").lower().startswith("text/html"):
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+    return response
+
 # Montar frontend estático (mesma pasta que o exe ou repositório)
 _FRONTEND_DIR = None
 for _candidate in [

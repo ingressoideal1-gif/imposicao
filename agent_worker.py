@@ -3,6 +3,7 @@ import time
 import datetime
 import json
 import os
+import re
 import sys
 import uuid
 import shutil
@@ -135,11 +136,16 @@ def sync_heartbeat():
         # para nao exigir migracao na tabela print_agents — o local_ip ja segue
         # essa pratica. Sem isto nao ha como saber remotamente qual estacao
         # rodava qual versao.
+        #
+        # `version` e o executavel; `painel` e a tela que o operador ve. Os dois
+        # se atualizam por caminhos diferentes e ja divergiram em producao, entao
+        # um so dos numeros nao diz se a estacao esta em dia.
         printers_json = {
             "printers": printers,
             "capabilities": capabilities,
             "local_ip": get_local_ip(),
             "version": AGENT_VERSION,
+            "painel": versao_do_painel(),
             "fontes": diagnostico_fontes(),
             "ultimo_update": ultimo_update()
         }
@@ -497,6 +503,48 @@ def sincronizar_painel():
 def _sincronizar_painel_em_thread():
     import threading
     threading.Thread(target=sincronizar_painel, daemon=True, name="SyncPainel").start()
+
+
+def versao_do_painel(pasta: str = None) -> dict:
+    """Qual painel esta estacao serve ao operador. Entra no heartbeat.
+
+    O heartbeat reportava so a versao do executavel, e isso escondeu um
+    incidente inteiro: em 12/08/2026 uma estacao com o agente mais novo
+    (1.2.36) servia o painel da v528, e o Refazer Celula falhava la e
+    funcionava aqui. Da nuvem nao havia como ver a diferenca — era preciso ir
+    ate a maquina. Agente e painel tem ciclos de vida separados, entao os dois
+    numeros precisam viajar juntos.
+
+    A versao sai do carimbo `?v=NNN` que o proprio index.html poe nos scripts —
+    o mesmo numero do release do site. `quando` e a data do arquivo em disco,
+    que denuncia sincronizacao parada mesmo quando o carimbo nao muda.
+    """
+    resultado = {"versao": None, "quando": None}
+
+    if pasta:
+        candidatos = [pasta]
+    else:
+        # Sem painel sincronizado, o app.py serve a copia embutida — e e essa
+        # que o operador ve. Reportar a que esta no ar, nao a que deveria estar.
+        candidatos = [PAINEL_DIR, os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")]
+
+    for candidato in candidatos:
+        caminho = os.path.join(candidato, "index.html")
+        if not os.path.isfile(caminho):
+            continue
+        try:
+            resultado["quando"] = datetime.datetime.fromtimestamp(
+                os.path.getmtime(caminho), datetime.timezone.utc).isoformat()
+            with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+                cabeca = f.read(8000)
+            achado = re.search(r"\?v=(\d+)", cabeca)
+            if achado:
+                resultado["versao"] = achado.group(1)
+        except Exception as e:
+            print(f"[agent_worker] Nao consegui ler a versao do painel: {e}", flush=True)
+        break
+
+    return resultado
 
 
 def sincronizar_acessos():
