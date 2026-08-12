@@ -124,6 +124,10 @@ const state = {
 
     numCsvFilename: "",
 
+    // Endereco da planilha da web de onde este banco veio. Vazio = arquivo do
+    // computador, ou montado a mao pelo "Criar vazio".
+    numCsvUrl: "",
+
     loadedOSName: "",
 
     expectedArteName: "",
@@ -2853,6 +2857,8 @@ function editNumeracao(id) {
 
     state.numCsvData = n.csv_data || null;
 
+    state.numCsvUrl = n.csv_url || "";
+
 
 
     // Numeracao salva sem csv_headers mas com csv_data nao pode ficar sem
@@ -2980,6 +2986,7 @@ window.duplicateCatalogNumeracao = async function (id) {
             csv_filename: n.csv_filename || "",
             csv_headers: n.csv_headers || [],
             csv_data: n.csv_data || null,
+            csv_url: n.csv_url || "",
             svg_content: n.svg_content || "",
             svg_filename: n.svg_filename || "",
             pdf_content: n.pdf_content || "",
@@ -6354,6 +6361,8 @@ window.saveNumeracao = async function () {
             csv_headers: state.numCsvHeaders || [],
 
             csv_data: state.numCsvData || null,
+
+            csv_url: state.numCsvUrl || "",
 
             // Derivadas do primeiro elemento de cada tipo, por compatibilidade.
             svg_content: svgUrl || "",
@@ -10895,11 +10904,20 @@ async function handleNumCsvSelected() {
 
             state.numCsvFilename = file.name;
 
+            // O banco passou a vir deste arquivo: guardar ainda o link antigo
+            // faria a tela oferecer "atualizar pela planilha" um conteudo que
+            // ja nao veio dela.
+            state.numCsvUrl = "";
+
             
+
+            const campos = adicionarColunasComoElementos(headers);
 
             renderNumCsvInterface();
 
-            toast('CSV carregado no editor!', 'success');
+            toast(`${rows.length} linha(s) e ${headers.length} coluna(s).`
+
+                + fraseDosCampos(campos), 'success');
 
         } catch (e) {
 
@@ -10922,6 +10940,8 @@ window.clearNumCsvFile = function() {
     state.numCsvData = null;
 
     state.numCsvFilename = "";
+
+    state.numCsvUrl = "";
 
     
 
@@ -10969,6 +10989,8 @@ window.clearNumCsvFile = function() {
 
     if (colContainer) colContainer.style.display = 'none';
 
+    sincronizarLigacaoCsv(true);
+
     
 
     renderElementsList();
@@ -10976,6 +10998,142 @@ window.clearNumCsvFile = function() {
     drawCanvas();
 
 };
+
+
+
+/**
+ * Poe no ticket um campo para cada coluna do banco que ainda nao tem elemento.
+ *
+ * Trazer um banco de dados e so a metade do trabalho: sem elemento nenhum o
+ * canvas continua vazio, e nada indica que o CSV chegou. Quem ja conhece a tela
+ * sabe que precisa clicar nos botoes "📊 Coluna"; quem esta comecando conclui
+ * que a busca falhou. Entao o banco que chega ja se apresenta desenhado, e o
+ * operador arrasta o que quiser para o lugar.
+ *
+ * So entram colunas SEM elemento: reabrir, trocar o arquivo ou atualizar pela
+ * planilha nunca duplica um campo que ja esta posicionado, e nunca mexe em onde
+ * o operador ja o deixou. Numeracao antiga que tenha sido esvaziada de proposito
+ * volta a receber os campos ao trocar o banco — o preco de nao guardar a
+ * intencao de "nao quero nenhum", que nao vale uma coluna no banco de dados.
+ *
+ * Devolve quantos campos foram criados.
+ */
+function adicionarColunasComoElementos(headers) {
+
+    const jaTem = new Set((state.numElements || [])
+
+        .filter(el => el && el.source === 'database' && el.csv_column)
+
+        .map(el => el.csv_column));
+
+    const novas = (headers || []).filter(h => h && !jaTem.has(h));
+
+    if (!novas.length) return 0;
+
+    const altura = state.numFormato ? Number(state.numFormato.height_mm) || 0 : 0;
+
+    const largura = state.numFormato ? Number(state.numFormato.width_mm) || 0 : 0;
+
+    // Passo entre as linhas: nunca tao junto que os campos se cubram, nunca tao
+    // largo que estourem o ticket. Sem formato conhecido, um passo fixo.
+    const passo = altura
+
+        ? Math.max(5, Math.min(9, altura / (novas.length + 1)))
+
+        : 7;
+
+    // A base de onde comecar: com o ticket ainda sem campo de banco, o bloco
+    // nasce centrado na altura; com campos ja postos, os novos entram embaixo do
+    // mais baixo deles, para nao cair por cima do trabalho ja feito.
+    let base;
+
+    if (jaTem.size) {
+
+        let maisBaixo = 0;
+
+        for (const el of (state.numElements || [])) {
+
+            const y = Number(el && el.y_mm);
+
+            if (el && el.source === 'database' && Number.isFinite(y) && y > maisBaixo) maisBaixo = y;
+
+        }
+
+        base = maisBaixo + passo;
+
+    } else {
+
+        base = altura ? (altura - passo * (novas.length - 1)) / 2 : passo;
+
+    }
+
+    const centroX = largura ? largura / 2 : 5;
+
+    for (let i = 0; i < novas.length; i++) {
+
+        addCsvColumnElement(novas[i]);
+
+        const el = state.numElements[state.numElements.length - 1];
+
+        if (!el) continue;
+
+        el.x_mm = +centroX.toFixed(1);
+
+        const y = base + passo * i;
+
+        el.y_mm = +(altura ? Math.max(1, Math.min(altura - 1, y)) : y).toFixed(1);
+
+    }
+
+    renderElementsList();
+
+    drawCanvas();
+
+    return novas.length;
+
+}
+
+
+
+/** "3 campos" / "1 campo", para caber na mesma frase sem parecer robo. */
+function fraseDosCampos(n) {
+
+    if (!n) return '';
+
+    return n === 1 ? ' 1 campo já no ticket para posicionar.'
+
+        : ` ${n} campos já no ticket para posicionar.`;
+
+}
+
+
+
+/**
+ * Deixa a linha "Da web" contando a verdade sobre o banco que esta carregado:
+ * com planilha ligada aparecem o botao de atualizar e a explicacao; sem ela,
+ * so o campo vazio esperando um endereco novo.
+ *
+ * `limparCampo` so e verdadeiro quando quem chama sabe que o banco mudou de
+ * dono (remover, ou abrir outra numeracao). Numa renderizacao qualquer o campo
+ * nao pode ser apagado: o operador pode estar no meio de colar um link.
+ */
+function sincronizarLigacaoCsv(limparCampo) {
+
+    const campo = document.getElementById('num-csv-url');
+
+    const btnAtualizar = document.getElementById('btn-atualizar-num-csv');
+
+    const ligado = document.getElementById('num-csv-ligado');
+
+    const url = state.numCsvUrl || '';
+
+    if (campo && (url || limparCampo)) campo.value = url;
+
+    if (btnAtualizar) btnAtualizar.style.display = url ? 'inline-flex' : 'none';
+
+    if (ligado) ligado.style.display = url ? 'block' : 'none';
+
+}
 
 
 
@@ -11032,6 +11190,8 @@ function renderNumCsvInterface() {
         container.style.display = 'none';
 
     }
+
+    sincronizarLigacaoCsv(false);
 
     
 
@@ -11094,6 +11254,100 @@ function nomeDoContentDisposition(cd) {
 
 
 /**
+ * Baixa e interpreta o CSV de um endereco. Devolve { headers, rows, filename }.
+ *
+ * Os dois caminhos que trazem banco da web — buscar pela primeira vez e
+ * atualizar um banco ja ligado a uma planilha — passam por aqui, para que as
+ * mensagens de erro sejam as mesmas nos dois.
+ */
+async function baixarCsvDaWeb(link) {
+
+    const alvo = urlCsvDaPlanilha(link);
+
+    if (!alvo) throw new Error('Cole o link da planilha antes de buscar.');
+
+    if (!/^https?:\/\//i.test(alvo)) {
+
+        throw new Error('O link precisa começar com http:// ou https://');
+
+    }
+
+    let resp;
+
+    try {
+
+        resp = await fetch(alvo, { credentials: 'omit' });
+
+    } catch (_) {
+
+        // Erro de rede no fetch chega como TypeError sem detalhe: quase sempre e
+        // o link que nao permite leitura de outro site.
+        throw new Error('Não consegui ler esse endereço do navegador. '
+
+            + 'Se for Planilha Google, confira o compartilhamento por link.');
+
+    }
+
+    if (!resp.ok) {
+
+        throw new Error(resp.status === 404
+
+            ? 'Planilha não encontrada, ou não está compartilhada por link.'
+
+            : `O servidor respondeu ${resp.status}.`);
+
+    }
+
+    const texto = await resp.text();
+
+    // Planilha privada devolve a pagina de login, com 200. Sem esta guarda o
+    // parser aceitaria o HTML como se fosse uma tabela de uma coluna so.
+    if (/^\s*<(!doctype|html)/i.test(texto)) {
+
+        throw new Error('Veio uma página HTML, não um CSV. '
+
+            + 'Compartilhe a planilha como "Qualquer pessoa com o link".');
+
+    }
+
+    const parsed = window.CsvEditor.parseCsv(texto);
+
+    if (!parsed.rows.length) throw new Error('A planilha está vazia.');
+
+    return {
+
+        headers: parsed.headers,
+
+        rows: parsed.rows,
+
+        filename: nomeDoContentDisposition(resp.headers.get('content-disposition'))
+
+            || 'planilha-web.csv'
+
+    };
+
+}
+
+
+
+/** Trava o botao enquanto a rede responde, e devolve o rotulo dele no fim. */
+async function comBotaoOcupado(id, rotuloOcupado, tarefa) {
+
+    const botao = document.getElementById(id);
+
+    const rotulo = botao ? botao.textContent : '';
+
+    if (botao) { botao.disabled = true; botao.textContent = rotuloOcupado; }
+
+    try { return await tarefa(); }
+
+    finally { if (botao) { botao.disabled = false; botao.textContent = rotulo; } }
+
+}
+
+
+
+/**
  * Busca o banco de dados de um endereco da web e carrega no editor da
  * numeracao, do mesmo jeito que o upload de arquivo faz.
  */
@@ -11101,75 +11355,36 @@ window.buscarCsvDaWeb = async function() {
 
     const campo = document.getElementById('num-csv-url');
 
-    const botao = document.getElementById('btn-buscar-num-csv');
-
-    const alvo = urlCsvDaPlanilha(campo ? campo.value : '');
-
-    if (!alvo) {
-
-        toast('Cole o link da planilha antes de buscar.', 'error');
-
-        return;
-
-    }
-
-    if (!/^https?:\/\//i.test(alvo)) {
-
-        toast('O link precisa começar com http:// ou https://', 'error');
-
-        return;
-
-    }
-
-    const rotulo = botao ? botao.textContent : '';
-
-    if (botao) { botao.disabled = true; botao.textContent = '⏳ Buscando…'; }
+    const link = campo ? String(campo.value || '').trim() : '';
 
     try {
 
-        const resp = await fetch(alvo, { credentials: 'omit' });
+        const { headers, rows, filename } = await comBotaoOcupado(
 
-        if (!resp.ok) {
+            'btn-buscar-num-csv', '⏳ Buscando…', () => baixarCsvDaWeb(link));
 
-            throw new Error(resp.status === 404
+        state.numCsvHeaders = headers;
 
-                ? 'Planilha não encontrada, ou não está compartilhada por link.'
+        state.numCsvData = rows;
 
-                : `O servidor respondeu ${resp.status}.`);
+        state.numCsvFilename = filename;
 
-        }
+        // Guardar o endereco que o operador colou, e nao o de exportacao que o
+        // urlCsvDaPlanilha deriva: e este que ele reconhece quando reabre a
+        // numeracao meses depois.
+        state.numCsvUrl = link;
 
-        const texto = await resp.text();
-
-        // Planilha privada devolve a pagina de login, com 200. Sem esta guarda o
-        // parser aceitaria o HTML como se fosse uma tabela de uma coluna so.
-        if (/^\s*<(!doctype|html)/i.test(texto)) {
-
-            throw new Error('Veio uma página HTML, não um CSV. '
-
-                + 'Compartilhe a planilha como "Qualquer pessoa com o link".');
-
-        }
-
-        const parsed = window.CsvEditor.parseCsv(texto);
-
-        if (!parsed.rows.length) throw new Error('A planilha está vazia.');
-
-        state.numCsvHeaders = parsed.headers;
-
-        state.numCsvData = parsed.rows;
-
-        state.numCsvFilename = nomeDoContentDisposition(resp.headers.get('content-disposition'))
-
-            || 'planilha-web.csv';
+        const campos = adicionarColunasComoElementos(headers);
 
         renderNumCsvInterface();
 
         toast(
 
-            `${parsed.rows.length} linha(s) e ${parsed.headers.length} coluna(s) `
+            `${rows.length} linha(s) e ${headers.length} coluna(s) `
 
-            + `de "${state.numCsvFilename}". Salve a numeração para gravar.`,
+            + `de "${filename}".` + fraseDosCampos(campos)
+
+            + ' Salve a numeração para gravar.',
 
             'success'
 
@@ -11177,21 +11392,167 @@ window.buscarCsvDaWeb = async function() {
 
     } catch (e) {
 
-        // Erro de rede no fetch chega como TypeError sem detalhe: quase sempre e
-        // o link que nao permite leitura de outro site.
-        const msg = (e instanceof TypeError)
+        toast('Erro ao buscar: ' + e.message, 'error');
 
-            ? 'Não consegui ler esse endereço do navegador. '
+    }
 
-              + 'Se for Planilha Google, confira o compartilhamento por link.'
+};
 
-            : e.message;
 
-        toast('Erro ao buscar: ' + msg, 'error');
 
-    } finally {
+/**
+ * Traz de novo o conteudo da planilha ligada, por cima do banco atual.
+ *
+ * O cuidado que da razao de ser a esta funcao: cada linha do CSV carrega um
+ * `__id`, e e por ele que a fatia de cada modelo do pedido
+ * (`pedidos_modelos.csv_selecao`) sabe quais linhas imprimir. Uma planilha
+ * baixada de novo chega sem `__id` nenhum, e deixar o editor criar ids novos
+ * faria toda selecao ja feita apontar para o vazio. Entao o `__id` — e o
+ * `__ativo`, que diz se a linha imprime — sao herdados POSICAO A POSICAO: a 5a
+ * linha da planilha vira a 5a linha do banco, com a identidade que ela ja tinha.
+ *
+ * Isso esta certo enquanto a planilha so mudar de conteudo. Se linhas forem
+ * inseridas, apagadas ou reordenadas la, tudo abaixo do ponto anda um lugar e a
+ * selecao de um modelo passa a valer para outra pessoa. Por isso a confirmacao
+ * diz isso com todas as letras antes de trocar qualquer coisa.
+ */
+window.atualizarCsvDaPlanilha = async function() {
 
-        if (botao) { botao.disabled = false; botao.textContent = rotulo || '⬇ Buscar'; }
+    const campo = document.getElementById('num-csv-url');
+
+    const link = String(state.numCsvUrl || (campo ? campo.value : '') || '').trim();
+
+    if (!link) {
+
+        toast('Não há planilha ligada a este banco de dados.', 'error');
+
+        return;
+
+    }
+
+    try {
+
+        const { headers, rows, filename } = await comBotaoOcupado(
+
+            'btn-atualizar-num-csv', '⏳ Atualizando…', () => baixarCsvDaWeb(link));
+
+        const antigas = Array.isArray(state.numCsvData) ? state.numCsvData : [];
+
+        // Coluna que sumiu e algum elemento ainda usa: nao quebra o salvamento,
+        // mas imprime vazio — melhor o operador saber antes de trocar.
+        const perdidas = [...new Set((state.numElements || [])
+
+            .filter(el => el && el.source === 'database' && el.csv_column
+
+                && !headers.includes(el.csv_column))
+
+            .map(el => el.csv_column))];
+
+        const aviso = perdidas.length
+
+            ? `\n\nATENÇÃO: ${perdidas.map(c => `"${c}"`).join(', ')} `
+
+              + 'não existe mais na planilha, e há elemento da numeração usando essa coluna.'
+
+            : '';
+
+        const diferenca = rows.length === antigas.length
+
+            ? 'O número de linhas é o mesmo.'
+
+            : (rows.length > antigas.length
+
+                ? `Entram ${rows.length - antigas.length} linha(s) no fim.`
+
+                : `Saem ${antigas.length - rows.length} linha(s) do fim.`);
+
+        const ok = confirm(
+
+            'Atualizar o banco de dados pela planilha?\n\n'
+
+            + `Aqui: ${antigas.length} linha(s).    Na planilha: ${rows.length} linha(s).\n`
+
+            + diferenca + '\n\n'
+
+            + 'As linhas são reconhecidas pela POSIÇÃO: a 1ª da planilha é a 1ª daqui. '
+
+            + 'Se você inseriu, apagou ou reordenou linhas na planilha, a seleção de '
+
+            + 'linhas já feita nos pedidos passa a apontar para outra linha.\n\n'
+
+            + 'O que tiver sido editado à mão aqui no CSV é substituído.'
+
+            + aviso
+
+        );
+
+        if (!ok) { toast('Atualização cancelada. Nada mudou.', 'info'); return; }
+
+        // Ids nao sao reaproveitados: linha nova comeca depois do maior ja usado.
+        let proximo = 1;
+
+        for (const r of antigas) {
+
+            const v = Number(r && r.__id);
+
+            if (Number.isFinite(v) && v >= proximo) proximo = v + 1;
+
+        }
+
+        let herdadas = 0;
+
+        rows.forEach((linha, i) => {
+
+            const velha = antigas[i];
+
+            const id = velha ? Number(velha.__id) : NaN;
+
+            if (Number.isFinite(id) && id > 0) {
+
+                linha.__id = id;
+
+                // Ausencia da chave significa ativa: so a desmarcacao viaja.
+                if (velha.__ativo === false) linha.__ativo = false;
+
+                herdadas++;
+
+            } else {
+
+                linha.__id = proximo++;
+
+            }
+
+        });
+
+        state.numCsvHeaders = headers;
+
+        state.numCsvData = rows;
+
+        state.numCsvFilename = filename;
+
+        state.numCsvUrl = link;
+
+        // Coluna que a planilha ganhou desde a ultima vez entra como campo novo;
+        // as que ja tem elemento ficam onde o operador as deixou.
+        const campos = adicionarColunasComoElementos(headers);
+
+        renderNumCsvInterface();
+
+        toast(
+
+            `Banco atualizado: ${rows.length} linha(s), ${herdadas} mantendo a `
+
+            + 'identidade que já tinham.' + fraseDosCampos(campos)
+
+            + ' Salve a numeração para gravar.',
+
+            'success'
+
+        );
+
+    } catch (e) {
+
+        toast('Erro ao atualizar: ' + e.message, 'error');
 
     }
 
@@ -12221,6 +12582,30 @@ const ROLE_LABELS = {
 };
 
 /**
+ * Onde cada perfil começa o dia.
+ *
+ * Quem trabalha na arte abre na Lista de Arte; quem trabalha na máquina abre no
+ * Painel de Produção. Antes daqui havia um roteador fixo no fim do arquivo que
+ * mandava TODO MUNDO para o Painel de Produção 50 ms depois do DOMContentLoaded
+ * — antes de as permissões terem chegado do servidor, portanto sem chance
+ * nenhuma de olhar o perfil de quem entrou.
+ *
+ * A tela escolhida aqui ainda passa pelo porteiro `podeAbrirView`: perfil e
+ * permissão podem discordar (a grade é editável usuário a usuário), e quem manda
+ * é a grade. Perfil sem entrada nesta tabela cai no padrão.
+ */
+const ROLE_HOME = {
+    admin:        'view-lista-impressao',
+    gerente:      'view-lista-impressao',
+    impressor:    'view-lista-impressao',
+    financeiro:   'view-lista-impressao',
+    atendimento:  'view-lista-arte',
+    designer:     'view-lista-arte',
+    visualizador: 'view-lista-impressao',
+};
+const TELA_INICIAL_PADRAO = 'view-lista-impressao';
+
+/**
  * Perfil de quem entra pela primeira vez, quando já existem outros usuários.
  *
  * Precisa ser uma chave que exista em ROLE_DEFAULTS e em ROLE_LABELS. Antes daqui
@@ -12297,25 +12682,72 @@ function podeAbrirView(viewId) {
 }
 window.podeAbrirView = podeAbrirView;
 
-// Definição dos módulos para renderizar permissões no painel admin
+/**
+ * A tela em que este usuário deve abrir a aplicação.
+ *
+ * Tenta, nesta ordem: a tela do perfil dele, o padrão da casa, e por último
+ * qualquer tela que ele possa abrir. O último passo existe para o caso de um
+ * perfil enxuto — um Financeiro sem produção, por exemplo — não cair numa tela
+ * em branco por não poder ver nenhuma das duas primeiras.
+ */
+function telaInicialDoUsuario(role, perms) {
+    // Sem `perms`, vale a grade de quem está logado. Com `perms`, dá para
+    // perguntar pela tela inicial de OUTRA pessoa — é o que o card de Usuários
+    // faz para escrever "Abre em ..." na linha de cada uma.
+    const grade = perms || window._currentPerms;
+    const podeVer = viewId => {
+        if (!grade) return true;
+        const permKey = VIEW_PERM_REQUERIDA[viewId];
+        return !permKey || grade[permKey] === true;
+    };
+
+    const candidatas = [ROLE_HOME[role], TELA_INICIAL_PADRAO];
+    for (const viewId of candidatas) {
+        if (viewId && document.getElementById(viewId) && podeVer(viewId)) return viewId;
+    }
+    return Object.keys(VIEW_PERM_REQUERIDA)
+        .find(viewId => document.getElementById(viewId) && podeVer(viewId)) || null;
+}
+window.telaInicialDoUsuario = telaInicialDoUsuario;
+
+/**
+ * Abre a aplicação na tela do perfil de quem entrou.
+ *
+ * Chamada por CADA caminho de entrada (login do site, sessão já aberta, acesso
+ * local da estação, modo offline) e sempre DEPOIS de `applyPermissions`, porque
+ * é a grade já carregada que decide se a tela do perfil pode mesmo abrir.
+ */
+function abrirTelaInicial(role) {
+    const alvo = telaInicialDoUsuario(role);
+    if (alvo && typeof window.showView === 'function') window.showView(alvo);
+}
+window.abrirTelaInicial = abrirTelaInicial;
+
+// Definição dos módulos para renderizar permissões no painel admin.
+//
+// `tela` diz QUAL tela cada caixa abre, em português, e não é enfeite: um
+// Designer ficou trancado fora do próprio trabalho porque a caixa dizia só
+// "Pedidos", e nada na tela contava que era ela que abre a tela do pedido — a
+// principal do dia dele. Quem administra precisa poder ler a linha e saber o que
+// vai tirar de alguém.
 const PERM_MODULES = [
-    { key: 'imposicao',   icon: '🖨️', label: 'Imposição' },
-    { key: 'pedidos',     icon: '📦', label: 'Pedidos' },
-    { key: 'formatos',    icon: '📐', label: 'Formatos' },
-    { key: 'numeracao',   icon: '🔢', label: 'Numeração' },
-    { key: 'saidas',      icon: '📄', label: 'Saídas' },
-    { key: 'cores',       icon: '🎨', label: 'Cores' },
-    { key: 'fontes',      icon: '🔤', label: 'Fontes' },
-    { key: 'mapas',       icon: '🗺️', label: 'Mapas' },
-    { key: 'amostras',    icon: '🧪', label: 'Amostras' },
-    { key: 'impressoras', icon: '🖨️', label: 'Impressoras' },
-    { key: 'producao',    icon: '📋', label: 'Produção' },
-    { key: 'lista_arte',  icon: '🎨', label: 'Lista Arte' },
-    { key: 'admin',       icon: '🛡️', label: 'Admin' },
+    { key: 'producao',    icon: '📋', label: 'Painel de Produção', tela: 'a fila da impressora' },
+    { key: 'lista_arte',  icon: '🖼️', label: 'Lista de Arte',      tela: 'a fila da arte' },
+    { key: 'pedidos',     icon: '📦', label: 'Pedido',             tela: 'a tela onde o modelo é montado' },
+    { key: 'imposicao',   icon: '🧩', label: 'Imposição',          tela: 'montar a folha e imprimir' },
+    { key: 'amostras',    icon: '🧪', label: 'Amostras',           tela: 'amostras dos modelos' },
+    { key: 'numeracao',   icon: '🔢', label: 'Numeração',          tela: 'catálogo e editor de numeração' },
+    { key: 'cores',       icon: '🎨', label: 'Cores',              tela: 'catálogo de cores' },
+    { key: 'formatos',    icon: '📐', label: 'Formatos',           tela: 'formatos de papel' },
+    { key: 'saidas',      icon: '📄', label: 'Saídas',             tela: 'cadastro de saídas' },
+    { key: 'fontes',      icon: '🔤', label: 'Fontes',             tela: 'catálogo de fontes' },
+    { key: 'mapas',       icon: '🗺️', label: 'Mapas',              tela: 'mapas de teatro' },
+    { key: 'impressoras', icon: '🖨️', label: 'Impressoras',        tela: 'impressoras e estações' },
+    { key: 'admin',       icon: '🛡️', label: 'Usuários',           tela: 'esta tela, com os códigos de todos' },
 ];
 const PERM_ACTIONS = [
-    { key: 'gerar_pdf', icon: '📥', label: 'Gerar PDF' },
-    { key: 'imprimir',  icon: '🖨️', label: 'Imprimir' },
+    { key: 'gerar_pdf', icon: '📥', label: 'Gerar PDF',  tela: 'baixar o PDF imposto' },
+    { key: 'imprimir',  icon: '🖨️', label: 'Imprimir',   tela: 'mandar para a impressora' },
 ];
 
 // ──── Aplicar permissões na sidebar ────────────────────────────────────────
@@ -12347,29 +12779,81 @@ function applyPermissions(perms) {
 
 
 // ──── Carregar permissões do backend ───────────────────────────────────────
+/**
+ * Grava permissões e só volta se o motor confirmar.
+ *
+ * Espelha `salvarAcessoLocalNoMotor`, do card ao lado, que sempre fez isso
+ * certo. Aqui não fazia: os três pontos que gravam (conceder acesso, trocar
+ * perfil, marcar uma caixa) chamavam `fetch` e seguiam sem olhar a resposta. O
+ * motor responde 503 quando o Supabase recusa, e a tela avisava "✅ ativada"
+ * assim mesmo — o administrador saía convencido de ter arrumado o acesso de
+ * alguém que continuava trancado do lado de fora.
+ */
+async function salvarPermissoesNoMotor(payload) {
+    const resp = await fetch(`${API_BASE_URL}/api/user/permissions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+        throw new Error(data.detail || 'o motor não confirmou a gravação');
+    }
+    return data.permissions || payload;
+}
+
+/**
+ * Permissões de um usuário, distinguindo "não tem linha" de "não consegui
+ * perguntar".
+ *
+ * A diferença decide se é seguro gravar um perfil padrão por cima. Enquanto as
+ * duas respostas chegavam como `null`, o motor lento — o Render dorme, e a
+ * consulta tem 8 s de paciência — bastava para o painel achar que era primeiro
+ * acesso e rebaixar a pessoa a visualizador. Ela entrava no dia seguinte sem
+ * metade do menu, sem nada ter sido mexido de propósito.
+ *
+ * Devolve { estado: 'ok' | 'sem_linha' | 'indisponivel', perms }.
+ */
 async function loadUserPermissions(userId) {
     try {
         const resp = await fetch(`${API_BASE_URL}/api/user/permissions/${userId}`);
-        const data = await resp.json();
-        if (data.ok && data.permissions) {
-            return data.permissions;
+        if (!resp.ok) {
+            console.warn('[auth] O motor não respondeu as permissões:', resp.status);
+            return { estado: 'indisponivel' };
         }
+        const data = await resp.json();
+        if (!data.ok) return { estado: 'indisponivel' };
+        if (data.permissions) return { estado: 'ok', perms: data.permissions };
+        return { estado: 'sem_linha' };
     } catch (e) {
         console.warn('[auth] Erro ao carregar permissões:', e);
+        return { estado: 'indisponivel' };
     }
-    return null;
 }
 
 // ──── Auto-criar permissões para primeiro acesso ──────────────────────────
+/**
+ * Devolve as permissões de quem acabou de entrar, criando a linha só quando ela
+ * comprovadamente não existe.
+ *
+ * Quando o motor não responde, devolve `null`. Quem chama trata isso como
+ * "entrada bloqueada" — e não como "sem permissão nenhuma", nem como "libera
+ * tudo". As duas leituras erradas já causaram estrago: a primeira tranca quem
+ * tem direito, a segunda abre a aplicação inteira para quem não tem.
+ */
 async function ensureUserPermissions(userId, email) {
-    let perms = await loadUserPermissions(userId);
-    if (perms) return perms;
+    const r = await loadUserPermissions(userId);
+    if (r.estado === 'ok') return r.perms;
+    if (r.estado === 'indisponivel') return null;
 
-    // Primeiro acesso — verificar se existem outros usuários
+    // Só aqui é primeiro acesso de verdade: o motor respondeu, e disse que não
+    // há linha para este usuário.
     try {
         const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
+        if (!resp.ok) return null;
         const data = await resp.json();
-        const existingUsers = (data.ok && data.permissions) ? data.permissions : [];
+        if (!data.ok || !Array.isArray(data.permissions)) return null;
+        const existingUsers = data.permissions;
 
         // Se não tem ninguém, este é o primeiro → admin
         const role = existingUsers.length === 0 ? 'admin' : ROLE_PADRAO_NOVO_USUARIO;
@@ -12381,22 +12865,53 @@ async function ensureUserPermissions(userId, email) {
             ...defaults
         };
 
-        await fetch(`${API_BASE_URL}/api/user/permissions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newPerms)
-        });
+        await salvarPermissoesNoMotor(newPerms);
 
         console.log(`[auth] Permissões criadas para ${email}: role=${role}`);
         return { ...newPerms };
     } catch (e) {
         console.warn('[auth] Erro ao criar permissões:', e);
-        return {
-            ...ROLE_DEFAULTS[ROLE_PADRAO_NOVO_USUARIO],
-            role: ROLE_PADRAO_NOVO_USUARIO,
-            user_id: userId,
-        };
+        return null;
     }
+}
+
+/**
+ * Barra a entrada quando as permissões não puderam ser carregadas.
+ *
+ * Sem isto o caminho de falha caía em `_currentPerms` vazio, e `podeAbrirView`
+ * libera tudo quando não há grade — a aplicação inteira aberta justamente no
+ * momento em que ninguém sabe quem é a pessoa. Um botão de tentar de novo
+ * resolve o caso real, que é o motor dormindo no Render.
+ */
+function mostrarFalhaDePermissoes(email) {
+    let overlay = document.getElementById('auth-overlay-perms');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'auth-overlay-perms';
+        overlay.className = 'auth-overlay active';
+        overlay.innerHTML = `
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h2>🔒 Não deu para conferir seu acesso</h2>
+                    <p>O servidor não respondeu quais telas você pode abrir. Isso costuma
+                       acontecer quando ele estava dormindo — tentar de novo quase sempre resolve.</p>
+                </div>
+                <div style="color:var(--text-dim);font-size:0.8rem;text-align:center;margin-bottom:14px;">
+                    ${escapeHtml(email || '')}
+                </div>
+                <div class="auth-actions">
+                    <button class="btn btn-primary btn-full" onclick="location.reload()" style="height:42px;">🔄 Tentar de novo</button>
+                </div>
+                <div style="text-align:center;margin-top:12px;">
+                    <button class="btn btn-ghost btn-sm" onclick="handleSignOut()">Sair</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    } else {
+        overlay.classList.add('active');
+    }
+    document.body.classList.add('not-logged-in');
 }
 
 /**
@@ -12542,8 +13057,13 @@ window.handleLoginSubmit = async function(e) {
         const user = data.user;
         window._currentUser = user;
         const perms = await ensureUserPermissions(user.id, user.email);
+        if (!perms) {
+            mostrarFalhaDePermissoes(user.email);
+            return;
+        }
         applyPermissions(perms);
         updateProfileUI(user, perms);
+        abrirTelaInicial(perms.role);
         loadAll();
     } catch (err) {
         toast('Erro: ' + (err.message || err), 'error');
@@ -12596,6 +13116,7 @@ async function iniciarAcessoLocal(liberarUICompleta) {
     if (!exigirCodigo) {
         console.log('[acesso local] Nenhum código cadastrado nesta estação — entrada liberada.');
         liberarUICompleta();
+        abrirTelaInicial(null);
         loadAll();
         return;
     }
@@ -12722,6 +13243,7 @@ function aplicarAcessoLocal(sessao, liberarUICompleta) {
     }
     atualizarIdentidadeNoPainel(sessao.nome, sessao.role);
 
+    abrirTelaInicial(sessao.role);
     loadAll();
 }
 
@@ -12838,6 +13360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (window.location.protocol === 'file:') {
             console.log('[auth] file:// — bypass de autenticação');
             liberarUICompleta();
+            abrirTelaInicial(null);
             loadAll();
             return;
         }
@@ -12851,6 +13374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // há o que proteger — a UI segue liberada como antes.
         console.warn('[auth] Supabase não disponível — modo offline, sem autenticação');
         liberarUICompleta();
+        abrirTelaInicial(null);
         loadAll();
         return;
     }
@@ -12872,17 +13396,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Carregar/criar permissões
         const perms = await ensureUserPermissions(user.id, user.email);
+        if (!perms) {
+            // Motor sem resposta. Seguir daqui deixaria `_currentPerms` vazio, e
+            // grade vazia é passe livre em `podeAbrirView` — a aplicação inteira
+            // aberta no exato momento em que ninguém sabe quem é a pessoa.
+            mostrarFalhaDePermissoes(user.email);
+            return;
+        }
         window._currentPerms = perms;
 
         // Aplicar permissões na UI
         applyPermissions(perms);
         updateProfileUI(user, perms);
 
+        // Só agora, com a grade na mão, dá para saber onde este perfil abre.
+        abrirTelaInicial(perms.role);
+
         // Carregar dados
         loadAll();
 
     } catch (e) {
         console.error('[auth] Erro na verificação de sessão:', e);
+        abrirTelaInicial(null);
         loadAll();
     }
 
@@ -12909,41 +13444,124 @@ document.addEventListener('DOMContentLoaded', async () => {
  * grava num lugar diferente: toggleUserPerm vai para o Supabase por user_id,
  * toggleAcessoLocalPerm regrava o objeto de permissões do acesso local.
  */
-function renderGradePermissoes(perms, handler, id) {
+function renderGradePermissoes(perms, handler, id, aberto = false) {
     const p = perms || {};
     const alvo = escapeJsAttr(id);
 
-    const linhasModulo = PERM_MODULES.map(m => {
-        const vKey = `perm_${m.key}_view`;
-        const eKey = `perm_${m.key}_edit`;
-        return `<div style="display:contents;">
-            <span style="font-size:0.7rem;white-space:nowrap;color:var(--text-dim);">${m.icon} ${m.label}</span>
-            <label style="text-align:center;cursor:pointer;"><input type="checkbox" ${p[vKey] === true ? 'checked' : ''} onchange="${handler}('${alvo}','${vKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"></label>
-            <label style="text-align:center;cursor:pointer;"><input type="checkbox" ${p[eKey] === true ? 'checked' : ''} onchange="${handler}('${alvo}','${eKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"></label>
+    const linhaModulo = (m, vKey, eKey) => `
+        <div class="perm-linha">
+            <span class="perm-nome">
+                <strong>${m.icon} ${m.label}</strong>
+                <small>${m.tela}</small>
+            </span>
+            <label class="perm-caixa" title="Ver ${m.label}">
+                <input type="checkbox" data-perm-key="${vKey}" ${p[vKey] === true ? 'checked' : ''}
+                       onchange="${handler}('${alvo}','${vKey}',this.checked)">
+            </label>
+            <label class="perm-caixa" title="Editar em ${m.label}">
+                <input type="checkbox" data-perm-key="${eKey}" ${p[eKey] === true ? 'checked' : ''}
+                       onchange="${handler}('${alvo}','${eKey}',this.checked)">
+            </label>
         </div>`;
-    }).join('');
+
+    // Metade em cada coluna, na ordem em que os módulos estão listados — que é a
+    // ordem do trabalho na gráfica, e não a alfabética: produção, arte, pedido e
+    // imposição primeiro; cadastros e administração depois.
+    const meio = Math.ceil(PERM_MODULES.length / 2);
+    const coluna = lista => `
+        <div class="perm-grade-col">
+            <div class="perm-cabecalho">
+                <span>Módulo</span>
+                <span title="Pode abrir a tela">VER</span>
+                <span title="Pode alterar coisas dentro dela">EDITAR</span>
+            </div>
+            ${lista.map(m => linhaModulo(m, `perm_${m.key}_view`, `perm_${m.key}_edit`)).join('')}
+        </div>`;
+    const colunas = coluna(PERM_MODULES.slice(0, meio)) + coluna(PERM_MODULES.slice(meio));
 
     const linhasAcao = PERM_ACTIONS.map(a => {
         const aKey = `perm_${a.key}`;
-        return `<div style="display:contents;">
-            <span style="font-size:0.7rem;white-space:nowrap;color:var(--text-dim);">${a.icon} ${a.label}</span>
-            <label style="text-align:center;cursor:pointer;grid-column:span 2;"><input type="checkbox" ${p[aKey] === true ? 'checked' : ''} onchange="${handler}('${alvo}','${aKey}',this.checked)" style="cursor:pointer;width:13px;height:13px;"> Sim</label>
+        return `
+        <div class="perm-linha perm-linha-acao">
+            <span class="perm-nome">
+                <strong>${a.icon} ${a.label}</strong>
+                <small>${a.tela}</small>
+            </span>
+            <label class="perm-caixa perm-caixa-larga" title="${a.label}">
+                <input type="checkbox" data-perm-key="${aKey}" ${p[aKey] === true ? 'checked' : ''}
+                       onchange="${handler}('${alvo}','${aKey}',this.checked)">
+            </label>
         </div>`;
     }).join('');
 
-    // max-width: sem ela o `auto` da primeira coluna estica com a tabela e as
-    // caixas de marcar acabam a meia tela do nome do módulo a que pertencem.
+    // Duas colunas quando há espaço (`auto-fit`), uma só quando a janela aperta.
+    // Antes era uma coluna de 260px de largura fixa com tipo de 0.62rem: treze
+    // módulos em fila, letra que mal se lê, e as caixas de marcar de "ver" e
+    // "editar" a poucos pixels uma da outra — errar a coluna era o normal.
+    // Recolhida por padrão. Treze módulos abertos para cada pessoa davam uma
+    // página de rolagem por usuário — com quinze contas, ninguém conseguia
+    // comparar duas. O que fica sempre à vista é o resumo, que é o que se olha:
+    // qual perfil, onde abre, quantos módulos vê, e se a grade foi mexida.
     return `
-        <div style="display:grid;grid-template-columns:1fr 30px 30px;gap:2px 6px;align-items:center;max-width:260px;">
-            <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-transform:uppercase;">Módulo</span>
-            <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-align:center;" title="Visualizar">👁️</span>
-            <span style="font-size:0.62rem;font-weight:700;color:var(--blue);text-align:center;" title="Editar">✏️</span>
-            ${linhasModulo}
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 66px;gap:2px 6px;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);max-width:260px;">
-            <span style="font-size:0.62rem;font-weight:700;color:#f59e0b;text-transform:uppercase;grid-column:span 2;">Ações</span>
-            ${linhasAcao}
-        </div>`;
+        <details class="perm-detalhes" ${aberto ? 'open' : ''}>
+            <summary>Ajustar permissões</summary>
+            <div class="perm-grade">${colunas}</div>
+            <div class="perm-acoes">
+                <div class="perm-cabecalho perm-cabecalho-acao"><span>Ações</span><span>PODE</span></div>
+                ${linhasAcao}
+            </div>
+        </details>`;
+}
+
+/**
+ * Quantos módulos esta grade deixa ver, e se ela ainda é a do perfil.
+ *
+ * O segundo número é o que faltava na tela: a grade é editável caixa a caixa, e
+ * nada dizia que um "🎨 Designer" tinha, na prática, uma grade montada à mão que
+ * já não parecia com o perfil. Foi assim que quatro designers ficaram sem a tela
+ * do pedido com o crachá de Designer no peito.
+ */
+function resumoDaGrade(perms, role) {
+    const p = perms || {};
+    const total = PERM_MODULES.length;
+    const vendo = PERM_MODULES.filter(m => p[`perm_${m.key}_view`] === true).length;
+
+    const padrao = ROLE_DEFAULTS[role];
+    let personalizada = false;
+    if (padrao) {
+        const chaves = [
+            ...PERM_MODULES.flatMap(m => [`perm_${m.key}_view`, `perm_${m.key}_edit`]),
+            ...PERM_ACTIONS.map(a => `perm_${a.key}`),
+        ];
+        personalizada = chaves.some(k => (p[k] === true) !== (padrao[k] === true));
+    }
+    return { vendo, total, personalizada };
+}
+
+/**
+ * A grade de cada usuário que está na tela, para não reler o servidor a cada
+ * caixa marcada. Mesmo motivo de `_acessosLocais`, no card ao lado.
+ */
+let _permsUsuarios = {};
+
+/** O HTML do bloco "Vê N de 13 módulos" de uma linha. */
+function htmlResumoDaLinha(userId) {
+    const perms = _permsUsuarios[userId];
+    if (!perms) return '';
+    const role = perms.role;
+    const rl = ROLE_LABELS[role] || {};
+    const perfilQuebrado = !ROLE_LABELS[role];
+    const r = resumoDaGrade(perms, role);
+    return `Vê ${r.vendo} de ${r.total} módulos
+        ${r.personalizada && !perfilQuebrado ? `
+            <span class="perm-selo-custom" title="A grade abaixo foi editada à mão e já não é a do perfil.">✏️ grade personalizada</span>
+            <button class="btn btn-ghost btn-sm perm-btn-restaurar" onclick="changeUserRole('${escapeJsAttr(userId)}','${escapeJsAttr(role)}')"
+                    title="Devolve a grade ao padrão do perfil ${rl.label || role}">↩️ Restaurar padrão</button>` : ''}`;
+}
+
+function atualizarResumoDaLinha(userId) {
+    const alvo = document.querySelector(`tr[data-user-row="${userId}"] .perm-resumo`);
+    if (alvo) alvo.innerHTML = htmlResumoDaLinha(userId);
 }
 
 
@@ -12969,16 +13587,22 @@ window.loadAdminUsers = async function() {
         }
 
         // 2) Buscar permissões do Imposition
+        //
+        // Sem parar aqui, uma falha de rede desenhava a tela inteira com todo
+        // mundo em "SEM ACESSO" — e um administrador que acreditasse nisso sairia
+        // concedendo acesso de novo por cima de permissões que existiam.
         let permsMap = {};
-        try {
-            const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
-            const data = await resp.json();
-            if (data.ok && data.permissions) {
-                data.permissions.forEach(p => permsMap[p.user_id] = p);
-            }
-        } catch (e) {
-            console.warn('[admin] Erro ao buscar permissões:', e);
+        const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok || !Array.isArray(data.permissions)) {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:20px;">
+                Não deu para ler as permissões (${escapeHtml(data.detail || 'servidor sem resposta')}).<br>
+                <small style="color:var(--text-dim);">Nada foi alterado. Clique em Atualizar Lista para tentar de novo.</small>
+            </td></tr>`;
+            return;
         }
+        data.permissions.forEach(p => permsMap[p.user_id] = p);
+        _permsUsuarios = permsMap;
 
         if (!allUsers.length) {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-dim);">Nenhum usuário encontrado no sistema.</td></tr>';
@@ -13016,29 +13640,47 @@ window.loadAdminUsers = async function() {
                 ).join('');
 
             const roleSelect = hasAccess ? `
-                <select class="form-control" style="width:auto;display:inline-block;padding:3px 6px;font-size:0.78rem;height:28px;margin-top:4px;" onchange="changeUserRole('${userId}', this.value)">
+                <select class="form-control perm-perfil-select" onchange="changeUserRole('${userId}', this.value)">
                     ${roleOptions}
                 </select>` : `
-                <button class="btn btn-sm btn-secondary" onclick="grantUserAccess('${userId}', '${email}')" style="font-size:0.75rem;padding:3px 10px;margin-top:4px;">
+                <button class="btn btn-sm btn-secondary" onclick="grantUserAccess('${userId}', '${escapeJsAttr(email)}')" style="font-size:0.78rem;padding:5px 12px;margin-top:6px;">
                     ➕ Conceder Acesso
                 </button>`;
 
-            // Grid de permissões View/Edit por módulo
+            // Onde esta pessoa abre a aplicação. Fica escrito porque é uma regra
+            // que roda sozinha: sem esta linha, ninguém tem como saber por que o
+            // Designer entra na Lista de Arte e o Impressor no Painel.
+            const homeId = hasAccess ? telaInicialDoUsuario(role, perms) : null;
+            const homeLabel = { 'view-lista-arte': '🖼️ Lista de Arte', 'view-lista-impressao': '📋 Painel de Produção' }[homeId];
+            const homeHtml = homeLabel
+                ? `<div class="perm-abre-em" title="Tela em que este usuário abre a aplicação ao entrar">Abre em <strong>${homeLabel}</strong></div>`
+                : '';
+
+            const resumoHtml = hasAccess
+                ? `<div class="perm-resumo">${htmlResumoDaLinha(userId)}</div>`
+                : '';
+
+            // Grid de permissões View/Edit por módulo. Já aberta para a conta de
+            // perfil inválido: é a única que exige mesmo a atenção de quem entrou
+            // nesta tela, e escondê-la atrás de mais um clique seria esconder o
+            // problema junto.
             const permGrid = hasAccess
-                ? renderGradePermissoes(perms, 'toggleUserPerm', userId)
-                : '—';
+                ? renderGradePermissoes(perms, 'toggleUserPerm', userId, perfilQuebrado)
+                : '<span style="color:var(--text-dim);font-size:0.8rem;">Sem acesso ao Imposition.</span>';
 
             return `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);${!hasAccess ? 'opacity:0.55;' : ''}">
-                    <td style="padding:10px 12px;vertical-align:top;">
-                        <strong style="color:#fff;font-size:0.85rem;">${email}</strong>
-                        ${setor ? `<br><small style="color:var(--text-dim);font-size:0.72rem;">${setor}</small>` : ''}
+                <tr class="perm-linha-usuario" data-user-row="${escapeJsAttr(userId)}" style="${!hasAccess ? 'opacity:0.55;' : ''}">
+                    <td>
+                        <strong style="color:#fff;font-size:0.9rem;">${escapeHtml(email)}</strong>
+                        ${setor ? `<br><small style="color:var(--text-dim);font-size:0.75rem;">${escapeHtml(setor)}</small>` : ''}
                     </td>
-                    <td style="padding:10px 12px;vertical-align:top;">
-                        ${statusBadge}<br>
+                    <td>
+                        ${statusBadge}
                         ${roleSelect}
+                        ${homeHtml}
+                        ${resumoHtml}
                     </td>
-                    <td style="padding:10px 12px;vertical-align:top;">
+                    <td>
                         ${permGrid}
                     </td>
                 </tr>`;
@@ -13052,15 +13694,11 @@ window.loadAdminUsers = async function() {
 window.grantUserAccess = async function(userId, email) {
     try {
         const defaults = ROLE_DEFAULTS.visualizador;
-        await fetch(`${API_BASE_URL}/api/user/permissions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId, role: 'visualizador', ...defaults })
-        });
+        await salvarPermissoesNoMotor({ user_id: userId, role: 'visualizador', ...defaults });
         toast(`Acesso concedido para ${email}!`, 'success');
         loadAdminUsers();
     } catch (e) {
-        toast('Erro: ' + e.message, 'error');
+        toast(`Não deu para conceder acesso a ${email}: ${e.message}`, 'error');
     }
 };
 
@@ -13070,36 +13708,54 @@ window.changeUserRole = async function(userId, newRole) {
     // para eliminar.
     if (!ROLE_LABELS[newRole]) return;
     const rl = ROLE_LABELS[newRole];
-    if (!confirm(`Alterar perfil para ${rl.icon || ''} ${rl.label || newRole}?`)) {
+    const nome = `${rl.icon || ''} ${rl.label || newRole}`.trim();
+
+    // Dizer que a grade inteira volta ao padrão: quem clica aqui para consertar
+    // uma conta não espera perder ajustes finos feitos antes, e quem clica para
+    // reverter ajustes finos precisa da confirmação de que é isso mesmo.
+    const abre = { 'view-lista-arte': 'Lista de Arte', 'view-lista-impressao': 'Painel de Produção' }[ROLE_HOME[newRole]] || '';
+    if (!confirm(`Aplicar o perfil ${nome}?\n\nA grade de permissões deste usuário volta INTEIRA ao padrão do perfil${abre ? `, e ele passa a abrir a aplicação no ${abre}` : ''}.`)) {
         loadAdminUsers();
         return;
     }
     try {
         const defaults = ROLE_DEFAULTS[newRole] || ROLE_DEFAULTS.visualizador;
-        await fetch(`${API_BASE_URL}/api/user/permissions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId, role: newRole, ...defaults })
-        });
-        toast(`Perfil alterado para ${rl.icon || ''} ${rl.label || newRole}!`, 'success');
-        loadAdminUsers();
+        await salvarPermissoesNoMotor({ user_id: userId, role: newRole, ...defaults });
+        toast(`Perfil alterado para ${nome}`, 'success');
     } catch (e) {
-        toast('Erro: ' + e.message, 'error');
-        loadAdminUsers();
+        toast(`O perfil NÃO foi alterado: ${e.message}`, 'error');
     }
+    // Recarregar sempre: no sucesso mostra a grade nova, no erro devolve o
+    // seletor ao perfil que de fato está gravado — em vez de deixar na tela um
+    // perfil que só existe no <select>.
+    loadAdminUsers();
 };
 
+/**
+ * Marca ou desmarca UMA permissão de um usuário do sistema.
+ *
+ * Desmarca a caixa de volta quando a gravação não é confirmada. Sem isso a tela
+ * ficava mostrando o estado que o administrador queria, e não o que o banco
+ * tinha — e como o antigo `fetch` sem conferência sempre dizia "✅ ativada", não
+ * havia sequer o erro para percebê-lo.
+ */
 window.toggleUserPerm = async function(userId, permKey, value) {
+    const caixa = document.querySelector(
+        `tr[data-user-row="${userId}"] input[data-perm-key="${permKey}"]`);
+    const label = permKey.replace('perm_', '').replace(/_/g, ' ');
     try {
-        await fetch(`${API_BASE_URL}/api/user/permissions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId, [permKey]: value })
-        });
-        const label = permKey.replace('perm_', '').replace(/_/g, ' ');
+        await salvarPermissoesNoMotor({ user_id: userId, [permKey]: value });
         toast(`${label} ${value ? '✅ ativada' : '❌ desativada'}`, 'success');
+        // Só o resumo é redesenhado, e não a tabela inteira: quem está marcando
+        // seis caixas seguidas não pode ver a linha saltar embaixo do cursor a
+        // cada clique.
+        if (_permsUsuarios[userId]) {
+            _permsUsuarios[userId][permKey] = value;
+            atualizarResumoDaLinha(userId);
+        }
     } catch (e) {
-        toast('Erro: ' + e.message, 'error');
+        if (caixa) caixa.checked = !value;
+        toast(`${label} NÃO foi salva: ${e.message}`, 'error');
     }
 };
 
@@ -13155,8 +13811,8 @@ window.loadAcessosLocais = async function() {
             ).join('');
 
             return `
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);${inativo ? 'opacity:0.5;' : ''}">
-                <td style="padding:10px 12px;vertical-align:top;">
+            <tr class="perm-linha-usuario" style="${inativo ? 'opacity:0.5;' : ''}">
+                <td>
                     <strong style="color:#fff;font-size:0.88rem;">${escapeHtml(a.nome || '—')}</strong>
                     <br>
                     <label style="font-size:0.72rem;color:var(--text-dim);cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-top:6px;">
@@ -27650,14 +28306,16 @@ window.setFiltroStatus = setFiltroStatus;
 window.setFiltroSetorArte = setFiltroSetorArte;
 window.setFiltroStatusArte = setFiltroStatusArte;
 
-// - ROUTER: Garantir que a página principal da aplicação seja o Painel de Produção (ao entrar e no F5) -
+// Carregar catálogo de fontes no boot da aplicação para que esteja disponível
+// em todas as views (Criar Arte, Numerações, etc)
+//
+// Quem escolhe a tela inicial é `abrirTelaInicial`, chamada por cada caminho de
+// entrada depois que as permissões chegam — e não mais um showView fixo aqui.
+// Fixo aqui ele disparava 50 ms depois do DOMContentLoaded, com a grade de
+// permissões ainda em viagem: não havia como olhar o perfil de quem entrou, e
+// todo mundo abria no Painel de Produção.
 document.addEventListener('DOMContentLoaded', () => {
-    // Carregar catálogo de fontes no boot da aplicação para que esteja disponível
-    // em todas as views (Criar Arte, Numerações, etc)
     loadCatalogoFontes();
-    if (typeof window.showView === 'function') {
-        setTimeout(() => window.showView('view-lista-impressao'), 50);
-    }
 });
 
 

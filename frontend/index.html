@@ -7,7 +7,7 @@
     <title>Ideal Imposition — Sistema de Imposição Gráfica</title>
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
-    <link rel="stylesheet" href="/style.css?v=537">
+    <link rel="stylesheet" href="/style.css?v=538">
     <script src="pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -493,6 +493,15 @@
                                 <span style="font-size:0.78rem; color:var(--text-dim); white-space:nowrap;">🌐 Da web</span>
                                 <input type="text" id="num-csv-url" class="form-control" style="flex:1; min-width:280px; font-size:0.85rem; padding:6px 10px;" placeholder="Cole o link da Planilha Google, ou de um arquivo .csv" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCsvDaWeb();}">
                                 <button class="btn btn-sm btn-secondary" id="btn-buscar-num-csv" onclick="buscarCsvDaWeb()" title="Baixar o banco de dados desse endereço">⬇ Buscar</button>
+                                <button class="btn btn-sm btn-secondary" id="btn-atualizar-num-csv" style="display:none;" onclick="atualizarCsvDaPlanilha()" title="Trazer de novo o conteúdo desta planilha, por cima do banco atual">🔄 Atualizar da planilha</button>
+                            </div>
+                            <!-- So aparece quando a numeracao tem uma planilha ligada. O
+                                 aviso existe porque "atualizar" nao e obvio: ele troca o
+                                 conteudo, e a identidade das linhas segue a POSICAO. -->
+                            <div id="num-csv-ligado" style="display:none; font-size:0.75rem; color:var(--green, #22c55e); margin-top:6px; line-height:1.5;">
+                                🔗 Este banco veio da planilha acima. <b>🔄 Atualizar da planilha</b> troca o conteúdo pelo que estiver nela agora.
+                                As linhas são reconhecidas pela <b>posição</b>: evite inserir, apagar ou reordenar linhas na planilha
+                                depois de distribuí-las entre os modelos de um pedido.
                             </div>
                             <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px; line-height:1.5;">
                                 A planilha precisa estar compartilhada como <b>“Qualquer pessoa com o link”</b>.
@@ -2414,11 +2423,21 @@
                         <span class="card-title"><span class="icon">👥</span> Usuários e Permissões</span>
                         <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">🔄 Atualizar Lista</button>
                     </div>
+                    <div style="padding:12px 16px 0 16px;">
+                        <p style="color:var(--text-dim);font-size:0.84rem;margin:0 0 12px 0;">
+                            <strong>Perfil</strong> é um atalho: escolher um reescreve a grade inteira com o padrão daquele
+                            perfil e define em que tela a pessoa abre a aplicação. Depois disso a grade pode ser ajustada
+                            caixa a caixa — quando isso acontece, a linha passa a mostrar <em>grade personalizada</em>.
+                            <br>
+                            <strong>VER</strong> é poder abrir a tela; <strong>EDITAR</strong> é poder alterar o que há
+                            dentro dela. Cada mudança é gravada na hora, e a tela só confirma depois que o servidor confirma.
+                        </p>
+                    </div>
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th style="width:200px;">Email / Setor</th>
-                                <th style="width:200px;">Role</th>
+                                <th style="width:210px;">Email / Setor</th>
+                                <th style="width:230px;">Perfil e tela inicial</th>
                                 <th>Permissões por Módulo</th>
                             </tr>
                         </thead>
@@ -2602,12 +2621,12 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/supabase-config.js"></script>
-    <script src="mapas.js?v=537"></script>
-    <script src="csv-editor.js?v=537"></script>
-    <script src="amostra-modal.js?v=537"></script>
-    <script src="script.js?v=537"></script>
-    <script src="criador-arte.js?v=537"></script>
-    <script src="/pedido.js?v=537"></script>
+    <script src="mapas.js?v=538"></script>
+    <script src="csv-editor.js?v=538"></script>
+    <script src="amostra-modal.js?v=538"></script>
+    <script src="script.js?v=538"></script>
+    <script src="criador-arte.js?v=538"></script>
+    <script src="/pedido.js?v=538"></script>
 
 
 

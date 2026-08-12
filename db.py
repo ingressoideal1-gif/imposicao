@@ -1331,10 +1331,26 @@ def registrar_hot_folder(caminho: str) -> bool:
         return False
 
 
+class BancoIndisponivel(RuntimeError):
+    """Nao deu para perguntar ao banco. NAO significa 'nao existe'.
+
+    Existe porque as duas respostas chegavam iguais ao navegador — `null` para
+    "este usuario nao tem linha" e `null` para "o Supabase nao respondeu" — e o
+    painel tratava as duas como primeiro acesso. Com o motor lento (o Render
+    dorme, e o timeout aqui e de 8s), isso GRAVAVA o perfil visualizador por cima
+    das permissoes reais de quem so estava entrando de novo.
+    """
+
+
 def get_user_permissions(user_id):
-    """Busca permissões do Imposition para um usuário."""
+    """Permissoes do Imposition de um usuario.
+
+    Devolve None quando o usuario nao tem linha, e levanta BancoIndisponivel
+    quando a pergunta nao chegou ao banco. Quem chama PRECISA distinguir os dois
+    antes de gravar qualquer coisa.
+    """
     if not IS_SUPABASE_ACTIVE:
-        return None
+        raise BancoIndisponivel("Supabase desativado neste processo")
     try:
         url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?user_id=eq.{user_id}&select=*"
         req = urllib.request.Request(url, headers=_headers(), method='GET')
@@ -1343,13 +1359,18 @@ def get_user_permissions(user_id):
             return data[0] if data else None
     except Exception as e:
         print(f"[db] get_user_permissions erro: {e}")
-        return None
+        raise BancoIndisponivel(str(e)) from e
 
 
 def list_all_user_permissions():
-    """Lista todas as permissões de todos os usuários."""
+    """Lista as permissoes de todos os usuarios.
+
+    Tambem levanta BancoIndisponivel em vez de devolver lista vazia: uma lista
+    vazia por falha de rede significaria "nao ha nenhum usuario ainda", e e
+    exatamente isso que faz o painel conceder ADMIN ao proximo que entrar.
+    """
     if not IS_SUPABASE_ACTIVE:
-        return []
+        raise BancoIndisponivel("Supabase desativado neste processo")
     try:
         url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?select=*&order=created_at.asc"
         req = urllib.request.Request(url, headers=_headers(), method='GET')
@@ -1357,13 +1378,19 @@ def list_all_user_permissions():
             return json.loads(resp.read().decode('utf-8'))
     except Exception as e:
         print(f"[db] list_all_user_permissions erro: {e}")
-        return []
+        raise BancoIndisponivel(str(e)) from e
 
 
 def upsert_user_permissions(data):
-    """Salva/atualiza permissões do Imposition para um usuário (upsert por user_id)."""
+    """Grava as permissoes de um usuario (upsert por user_id) e devolve a linha.
+
+    Levanta BancoIndisponivel quando o Supabase recusa. Antes devolvia False, o
+    endpoint respondia {"ok": false} com HTTP 200, e o card de Usuarios — que nem
+    olhava a resposta — dizia "permissao ativada" para uma gravacao que nunca
+    aconteceu. Um administrador nao tem como desconfiar de um visto verde.
+    """
     if not IS_SUPABASE_ACTIVE:
-        return False
+        raise BancoIndisponivel("Supabase desativado neste processo")
     try:
         data['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         body = json.dumps(data).encode('utf-8')
@@ -1375,10 +1402,21 @@ def upsert_user_permissions(data):
         with urllib.request.urlopen(req, timeout=10) as resp:
             result = resp.read().decode('utf-8')
             print(f"[db] upsert_user_permissions: {resp.status} -> {result[:200]}")
-            return True
+            linhas = json.loads(result) if result.strip() else []
+            return linhas[0] if linhas else data
+    except urllib.error.HTTPError as e:
+        # O corpo do erro do PostgREST diz o motivo (coluna que nao existe,
+        # RLS ligado, chave unica). Sem ele a tela so poderia dizer "deu erro".
+        detalhe = ""
+        try:
+            detalhe = e.read().decode('utf-8')[:300]
+        except Exception:
+            pass
+        print(f"[db] upsert_user_permissions erro HTTP {e.code}: {detalhe}")
+        raise BancoIndisponivel(detalhe or f"HTTP {e.code}") from e
     except Exception as e:
         print(f"[db] upsert_user_permissions erro: {e}")
-        return False
+        raise BancoIndisponivel(str(e)) from e
 
 
 

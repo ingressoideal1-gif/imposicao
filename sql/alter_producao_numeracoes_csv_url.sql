@@ -1,0 +1,46 @@
+-- ════════════════════════════════════════════════════════════════════════════════
+-- SQL MIGRATION: lembrar de qual planilha da web veio o banco de dados (CSV)
+-- Execute no SQL Editor do Supabase (vwbtitjlpelrcnsytzqw)
+-- ════════════════════════════════════════════════════════════════════════════════
+--
+-- POR QUE
+-- Desde a v537 da para trazer o banco de dados direto de uma Planilha Google, pelo
+-- campo "🌐 Da web" da caixa Banco de Dados (CSV). Mas o endereco era usado uma vez
+-- e jogado fora: a numeracao guardava as linhas e esquecia de onde elas vieram.
+-- Quem quisesse trazer a versao mais nova da planilha tinha de achar o link de novo
+-- e colar de novo — e o operador nem tinha como saber se aquele banco tinha origem
+-- na web ou num arquivo solto do computador.
+--
+-- Com a coluna, a numeracao lembra o endereco, mostra na tela que esta ligada a uma
+-- planilha, e ganha o botao "🔄 Atualizar da planilha".
+--
+-- O QUE GUARDA
+-- O endereco que o operador colou, exatamente como ele colou — normalmente o link
+-- de compartilhamento, terminado em /edit?usp=sharing. NAO o endereco de exportacao
+-- (/export?format=csv), que e derivado na hora da busca por urlCsvDaPlanilha().
+-- Guardar o que o humano reconhece e deliberado: e o que ele vai conferir quando
+-- reabrir a numeracao meses depois.
+--
+-- VAZIO = BANCO SEM ORIGEM NA WEB
+-- Numeracao com CSV vindo de arquivo do computador, ou montado a mao pelo "➕ Criar
+-- vazio", fica com csv_url vazio, e a tela nao oferece atualizar. Por isso a
+-- migracao e aditiva: todo dado existente continua valendo sem conversao nenhuma.
+-- Trocar o banco por um arquivo local, ou remove-lo, limpa a coluna — deixar o link
+-- antigo apontando para um banco que ja nao veio dele seria mentira na tela.
+--
+-- ATENCAO AO ATUALIZAR
+-- Atualizar pela planilha reescreve csv_data, e cada linha carrega um `__id` que e a
+-- identidade usada por pedidos_modelos.csv_selecao para saber quais linhas cada
+-- modelo imprime. A planilha baixada de novo chega sem `__id` nenhum, entao o
+-- frontend herda `__id` e `__ativo` POSICAO A POSICAO. Isso preserva as selecoes
+-- enquanto a planilha so mudar de conteudo; inserir, apagar ou reordenar linhas la
+-- desloca tudo abaixo do ponto. A confirmacao na tela diz isso antes de trocar.
+--
+-- ORDEM DE PUBLICACAO
+-- Rode este ALTER ANTES de publicar o frontend que grava a coluna. O app escreve a
+-- numeracao direto no Supabase (frontend/script.js, funcao api()), sem passar pelo
+-- backend, entao salvar com uma coluna que ainda nao existe faz o PostgREST recusar
+-- o registro inteiro — e nenhuma numeracao seria salva ate o ALTER rodar.
+
+ALTER TABLE producao_numeracoes
+ADD COLUMN IF NOT EXISTS csv_url TEXT DEFAULT '';

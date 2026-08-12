@@ -2383,3 +2383,175 @@ input[type=number] {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
+
+
+/* ─── Tela de Usuários e Permissões ─────────────────────────────────────────
+   A grade antiga era uma coluna de 260px de largura fixa, com o nome do módulo
+   em 0.62rem e as duas caixas de marcar quase encostadas. Treze módulos assim
+   viravam uma parede de vistos: dava para ler, mas não dava para conferir — e
+   conferir é a única coisa que se faz nesta tela.
+   ------------------------------------------------------------------------- */
+
+.perm-linha-usuario { border-bottom: 1px solid var(--border); }
+.perm-linha-usuario > td { padding: 14px 14px; vertical-align: top; }
+
+.perm-perfil-select {
+    width: auto;
+    display: block;
+    margin-top: 8px;
+    padding: 5px 8px;
+    font-size: 0.82rem;
+    height: 32px;
+}
+
+/* Onde a pessoa abre a aplicação: uma regra que roda sozinha precisa estar
+   escrita em algum lugar da tela que a governa. */
+.perm-abre-em {
+    margin-top: 8px;
+    font-size: 0.74rem;
+    color: var(--text-dim);
+}
+.perm-abre-em strong { color: var(--text); font-weight: 600; }
+
+.perm-resumo {
+    margin-top: 8px;
+    font-size: 0.74rem;
+    color: var(--text-dim);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.perm-selo-custom {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: rgba(245, 158, 11, 0.16);
+    color: var(--amber);
+    white-space: nowrap;
+}
+.perm-btn-restaurar {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
+/* A grade fica recolhida: o que se lê na tela é o resumo, e só quem vai MEXER
+   em permissões precisa das 28 caixas de marcar abertas na frente. */
+.perm-detalhes > summary {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    list-style: none;
+    transition: all var(--transition);
+    user-select: none;
+}
+.perm-detalhes > summary::-webkit-details-marker { display: none; }
+.perm-detalhes > summary::before { content: '⚙️'; }
+.perm-detalhes > summary::after { content: '▸'; color: var(--text-faint); }
+.perm-detalhes[open] > summary::after { content: '▾'; }
+.perm-detalhes > summary:hover { color: var(--blue); border-color: var(--blue); }
+.perm-detalhes[open] > summary { margin-bottom: 14px; color: var(--blue); border-color: var(--blue); }
+
+/* Duas colunas quando cabe, uma quando não cabe. O `minmax` é o que impede a
+   coluna de encolher a ponto de o nome do módulo e as caixas se separarem. */
+.perm-grade {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 0 26px;
+    align-content: start;
+}
+/* Cada coluna carrega o PRÓPRIO cabeçalho VER/EDITAR. Uma tabela larga cujo
+   cabeçalho fica só na coluna da esquerda é como não ter cabeçalho nenhum. */
+.perm-grade-col { min-width: 0; }
+
+.perm-cabecalho,
+.perm-linha {
+    display: grid;
+    grid-template-columns: 1fr 52px 62px;
+    align-items: center;
+    gap: 8px;
+}
+.perm-cabecalho {
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--blue);
+    padding: 0 4px 6px 4px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--border);
+}
+.perm-cabecalho span:not(:first-child) { text-align: center; }
+
+.perm-linha {
+    padding: 5px 4px;
+    border-radius: 6px;
+    transition: background var(--transition);
+}
+.perm-linha:hover { background: rgba(148, 163, 184, 0.07); }
+
+.perm-nome { display: flex; flex-direction: column; min-width: 0; }
+.perm-nome strong {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* A frase que diz o que a caixa abre. É ela que impede alguém de desmarcar
+   "Pedido" sem perceber que está trancando o designer fora do trabalho dele. */
+.perm-nome small {
+    font-size: 0.68rem;
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Alvo de clique grande: a caixa tem 15px, mas o rótulo inteiro é clicável, e é
+   ele que separa a coluna VER da coluna EDITAR. */
+.perm-caixa {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 6px 0;
+    border-radius: 6px;
+}
+.perm-caixa:hover { background: var(--blue-dim); }
+.perm-caixa input {
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--blue);
+}
+.perm-caixa-larga input { accent-color: var(--amber); }
+
+.perm-acoes {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    max-width: 336px;
+}
+.perm-cabecalho-acao {
+    grid-template-columns: 1fr 62px;
+    color: var(--amber);
+}
+.perm-linha-acao { grid-template-columns: 1fr 62px; }
+.perm-linha-acao:hover { background: rgba(245, 158, 11, 0.08); }
+
+@media (max-width: 900px) {
+    .perm-linha-usuario > td { padding: 10px 8px; }
+    .perm-cabecalho, .perm-linha { grid-template-columns: 1fr 44px 52px; }
+    .perm-nome small { display: none; }
+}

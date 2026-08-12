@@ -8,6 +8,62 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v540 — 2026-08-12] — Permissoes: a tela parou de mentir sobre o que gravou
+
+Relatado: *"Nao esta funcionando corretamente o gerenciamento de usuarios,
+revisar, inclusive layout que esta bem ruim, regras por login pararam de
+funcionar tambem... Designers nao conseguem mais entrar na tela do pedido em
+arte"*.
+
+Eram quatro defeitos distintos, e o mais grave e o que ninguem tinha como ver.
+
+### O card de Usuarios dizia "salvo" para gravacoes que nao aconteceram
+
+Marcar uma caixa, trocar o perfil e conceder acesso chamavam `fetch` e **nunca
+olhavam a resposta**. O motor devolvia `{"ok": false}` com HTTP 200 quando o
+Supabase recusava, e a tela mostrava "✅ ativada" do mesmo jeito. Um
+administrador nao tem como desconfiar de um visto verde: ele aplicava o perfil
+Designer em quatro contas, via quatro confirmacoes, e as quatro continuavam com
+a grade antiga.
+
+O card de Acesso Local, ao lado, sempre fez isso certo (`salvarAcessoLocalNoMotor`
+lanca erro se o motor nao confirma). Agora os dois usam o mesmo desenho: o motor
+responde **503** com o motivo, e a caixa de marcar **volta sozinha** quando a
+gravacao nao e confirmada.
+
+### Motor lento rebaixava quem so estava entrando de novo
+
+`get_user_permissions` devolvia `None` tanto para "este usuario nao tem linha"
+quanto para "nao consegui perguntar ao banco" — e a consulta tem 8 s de
+paciencia, enquanto o Render dorme. Bastava um login numa hora ruim para o painel
+concluir "primeiro acesso" e **gravar o perfil visualizador por cima das
+permissoes reais**. As duas respostas agora sao diferentes (`BancoIndisponivel`
+→ 503), e o painel so cria a linha quando o banco confirma que ela nao existe.
+Quando a grade nao pode ser lida, a entrada e barrada com um botao de tentar de
+novo — antes esse caminho deixava a grade vazia, e grade vazia liberava tudo.
+
+### Cada perfil abre na sua tela
+
+Havia um roteador fixo no fim do `script.js` mandando **todo mundo** para o
+Painel de Producao, 50 ms depois do DOMContentLoaded — com a grade de permissoes
+ainda em viagem, portanto sem chance de olhar o perfil de quem entrou.
+Atendimento e Designer abrem na **Lista de Arte**; Impressor, Gerente, Financeiro
+e Admin, no **Painel de Producao**. A escolha ainda passa pelo porteiro: quem nao
+pode ver a tela do proprio perfil cai na primeira que puder.
+
+### A tela de permissoes ficou legivel
+
+Treze modulos numa coluna de 260 px com tipo de 0,62 rem viravam uma parede de
+vistos. Agora: duas colunas, cada uma com o proprio cabecalho VER/EDITAR, e cada
+modulo dizendo **que tela ele abre** — foi um rotulo so "Pedidos", sem explicar
+que era a tela onde o designer trabalha o dia inteiro, que deixou quatro
+designers trancados do lado de fora. A grade fica recolhida atras de "Ajustar
+permissoes", e o que fica a vista e o que se le: perfil, **em que tela a pessoa
+abre**, quantos modulos ela ve, e um selo **"grade personalizada"** com botao de
+restaurar quando a grade ja nao e a do perfil.
+
+---
+
 ## [v539 — 2026-08-12] — A estacao para de servir tela velha com motor novo | Agente **1.2.37**
 
 Relatado: *"Refazer Celula funciona perfeitamente na minha maquina, mas nao
@@ -73,6 +129,72 @@ precisam viajar juntos.
 > estacoes CESAR-CPD e PRD-ACABAMENTO estao abaixo da 1.2.7 (nao reportam versao)
 > e precisam do MSI instalado a mao uma vez — elas sao anteriores ao auto-update
 > por manifesto e nunca vao se atualizar sozinhas.
+
+---
+
+## [v538 — 2026-08-12] — O banco lembra a planilha, e ja se apresenta desenhado
+
+### O banco que chega poe os campos no ticket
+Relatado: *"quando clicar em buscar, deve add os elementos para posicionamento na
+janela de visualizacao"*.
+
+Trazer o banco era metade do trabalho: o ticket continuava em branco e apareciam
+so os botoes `📊 Pais`, `📊 Nome`, `📊 Cargo` para o operador clicar um a um. Quem
+conhece a tela sabe; quem nao conhece conclui que a busca falhou.
+
+Agora cada coluna vira um campo de texto assim que o banco entra — pelo upload,
+pela busca na web ou pela atualizacao —, ja desenhado com o dado da primeira
+linha, pronto para arrastar.
+
+- **So entra coluna sem elemento.** Reabrir, trocar o arquivo ou atualizar nunca
+  duplica um campo, e **nunca move** um que ja foi posicionado. Coluna nova entra
+  abaixo do campo de banco mais baixo.
+- **A distribuicao respeita o formato.** Sem campos ainda, o bloco nasce centrado
+  na altura, com passo entre 5 mm e 9 mm conforme couber, preso entre 1 mm e
+  `altura − 1`. Sem formato conhecido, passo fixo de 7 mm.
+
+Efeito colateral aceito: numeracao esvaziada de proposito volta a receber os
+campos ao trocar o banco.
+
+### A numeracao lembra de qual planilha veio o banco
+A busca da v537 era uma importacao de uma vez so: o endereco era usado e jogado
+fora. Agora a numeracao guarda o link em `producao_numeracoes.csv_url`, mostra na
+tela que esta ligada a uma planilha, e ganha o botao **🔄 Atualizar da planilha**.
+
+```
+🌐 Da web  [ …/spreadsheets/d/1_Yj…/edit?usp=sharing ]  ⬇ Buscar  🔄 Atualizar da planilha
+🔗 Este banco veio da planilha acima. 🔄 Atualizar troca o conteudo pelo que estiver nela agora.
+```
+
+Guarda-se **o link que o operador colou**, e nao o de exportacao derivado: e o
+que ele reconhece ao reabrir a numeracao meses depois. Banco vindo de arquivo do
+computador, ou montado a mao, fica sem link e sem botao — nao tem de onde
+atualizar. Trocar o CSV por um arquivo local, ou remove-lo, **limpa** a coluna.
+
+### O cuidado que sustenta o recurso
+Cada linha do CSV carrega um `__id`, e e por ele que
+`pedidos_modelos.csv_selecao` sabe quais linhas cada modelo do pedido imprime. A
+planilha baixada de novo chega **sem `__id` nenhum** — ids novos fariam toda
+selecao ja feita apontar para o vazio. Entao `__id` e `__ativo` sao herdados
+**posicao a posicao**, e so as linhas alem do fim do banco antigo recebem ids
+novos, continuando do maior ja usado.
+
+Isso vale enquanto a planilha so mudar de conteudo. Inserir, apagar ou reordenar
+linhas la desloca tudo abaixo do ponto. A confirmacao diz isso com todas as
+letras, mostra a contagem dos dois lados antes de trocar, avisa que o que foi
+editado a mao no CSV sera substituido, e aponta a coluna que sumiu quando algum
+elemento ainda a usa.
+
+### Migracao
+`sql/alter_producao_numeracoes_csv_url.sql` — rodado em producao em 12/08/2026,
+**antes** de publicar o frontend. O app escreve a numeracao direto no Supabase,
+entao salvar com uma coluna inexistente faria o PostgREST recusar o registro
+inteiro.
+
+### Arquivos
+`frontend/index.html`, `frontend/script.js`,
+`sql/alter_producao_numeracoes_csv_url.sql`, `docs/editor_de_csv.md`.
+So frontend — o agente nao precisa ser republicado.
 
 ---
 

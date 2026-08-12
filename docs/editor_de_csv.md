@@ -267,8 +267,12 @@ cola-se o link de uma Planilha Google (ou de qualquer `.csv` público) e o banco
 entra igual a um upload de arquivo.
 
 ```
-🌐 Da web  [ https://docs.google.com/spreadsheets/d/1_Yj…/edit?usp=sharing ]  ⬇ Buscar
+🌐 Da web  [ https://docs.google.com/spreadsheets/d/1_Yj…/edit?usp=sharing ]  ⬇ Buscar  🔄 Atualizar da planilha
+🔗 Este banco veio da planilha acima. 🔄 Atualizar da planilha troca o conteúdo…
 ```
+
+O botão de atualizar e a linha verde só aparecem quando a numeração tem uma
+planilha ligada — ver "O vínculo com a planilha", adiante.
 
 **Roda no navegador, sem servidor no meio.** O endereço de exportação do Google
 devolve `Access-Control-Allow-Origin`, então o `fetch` da página funciona — foi
@@ -305,9 +309,69 @@ e não com um rótulo genérico.
 Em qualquer falha **o banco que já estava carregado permanece**: buscar não
 apaga o que existe antes de ter o substituto em mãos.
 
-O endereço **não é guardado** na numeração — a busca é uma importação, não um
-vínculo. Para trazer as alterações que o cliente fez na planilha, cola-se o link
-de novo. Guardá-lo exigiria uma coluna nova em `producao_numeracoes`.
+### O banco que chega já se apresenta desenhado
+
+Trazer o banco de dados é só metade do trabalho. Até a v537, depois de buscar ou
+subir um CSV o ticket continuava em branco: apareciam os botões `📊 Pais`,
+`📊 Nome`, `📊 Cargo` e cabia ao operador clicar em cada um. Quem conhece a tela
+sabe; quem não conhece conclui que a busca falhou.
+
+Hoje `adicionarColunasComoElementos()` cria um campo de texto para cada coluna
+assim que o banco entra — pelo upload, pela busca na web ou pela atualização —, e
+os campos já aparecem no canvas com o dado da primeira linha, prontos para
+arrastar.
+
+Duas regras sustentam isso sem atrapalhar quem já trabalhou na numeração:
+
+- **Só entra coluna sem elemento.** Reabrir, trocar o arquivo ou atualizar pela
+  planilha nunca duplica um campo que já existe, e **nunca move** um campo que o
+  operador já posicionou. Coluna nova que a planilha ganhou entra abaixo do campo
+  de banco mais baixo.
+- **A distribuição respeita o formato.** Com o ticket ainda sem nenhum campo de
+  banco, o bloco nasce centrado na altura, com passo entre 5 mm e 9 mm conforme
+  couber; os campos ficam presos entre 1 mm e `altura − 1`, então uma planilha de
+  muitas colunas aperta mas não sai do ticket. Sem formato conhecido, passo fixo
+  de 7 mm a partir de x = 5.
+
+O efeito colateral aceito: uma numeração que tenha sido esvaziada de propósito
+volta a receber os campos ao trocar o banco. Guardar a intenção de "não quero
+nenhum campo" custaria uma coluna no banco de dados, e apagar três elementos é
+mais barato do que descobrir sozinho que eles deveriam existir.
+
+### O vínculo com a planilha
+
+O endereço fica guardado em `producao_numeracoes.csv_url` (migração
+`sql/alter_producao_numeracoes_csv_url.sql`). O que se guarda é **o link que o
+operador colou**, normalmente o de compartilhamento — e não o de exportação, que
+o `urlCsvDaPlanilha()` deriva na hora de buscar. É deliberado: o link de
+compartilhamento é o que um humano reconhece ao reabrir a numeração meses depois.
+
+Com a coluna preenchida a tela ganha o botão **🔄 Atualizar da planilha**. Vazia,
+o botão nem aparece — banco vindo de arquivo do computador ou montado à mão não
+tem de onde atualizar. Trocar o CSV por um arquivo local, ou removê-lo, **limpa**
+a coluna: deixar o link apontando para um banco que já não veio dele seria mentira
+na tela.
+
+**Atualizar preserva a identidade das linhas pela posição.** Este é o ponto que
+merece atenção. Cada linha carrega um `__id`, e é por ele que
+`pedidos_modelos.csv_selecao` sabe quais linhas cada modelo do pedido imprime. A
+planilha baixada de novo chega **sem `__id` nenhum** — deixar o editor criar ids
+novos faria toda seleção já feita apontar para o vazio. Então a 5ª linha da
+planilha herda o `__id` e o `__ativo` da 5ª linha do banco atual, e só as linhas
+além do fim do banco antigo recebem ids novos, continuando do maior já usado.
+
+Isso está correto **enquanto a planilha só mudar de conteúdo**. Inserir, apagar ou
+reordenar linhas lá desloca tudo abaixo do ponto, e a fatia de um modelo passa a
+valer para outra pessoa — impressão com o dado errado, que é exatamente o estrago
+que esta tela pode causar. Por isso a confirmação diz isso com todas as letras,
+mostra a contagem dos dois lados antes de trocar, e avisa quando uma coluna usada
+por algum elemento sumiu da planilha.
+
+A confirmação também avisa que **o que foi editado à mão no CSV é substituído**:
+atualizar traz a planilha inteira, não um merge.
+
+Como todo o resto do editor, atualizar **carrega no editor e não grava**: quem
+grava é o botão de salvar da numeração.
 
 ### O banco também se abre do card do modelo
 
