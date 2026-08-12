@@ -134,28 +134,71 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
 }
 
 
+/**
+ * Gêmea da `escapeHtml()` do `script.js` (~17295). Ela precisa existir aqui
+ * porque `cliente.html` não carrega o `script.js` — a página do cliente é
+ * autônoma. Nome de modelo vem de texto digitado: um apóstrofo já quebra a
+ * linha, e um "<" quebra o bloco inteiro.
+ */
+function escapeHtml(valor) {
+    if (valor === null || valor === undefined) return '';
+    return String(valor)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * O modelo tem alguma coisa para o cliente ver?
+ *
+ * Espelha as três saídas do template: o visualizador de PDF quer `arte_url`, o
+ * desenho ao vivo em canvas também, e a imagem aprovada quer um
+ * `amostra_arte_base64` que seja imagem de verdade. No carregamento do pedido
+ * esse campo cai para `arte_url` quando ainda não há snapshot renderizado, e um
+ * `.pdf` ali dentro vira um `<img>` quebrado — que na tela é indistinguível de
+ * um espaço vazio, sem nenhuma mensagem.
+ */
+function temArteVisivel(item) {
+    if (!item) return false;
+    if (item.arte_url) return true;
+    const img = item.amostra_arte_base64 || '';
+    if (!img) return false;
+    return !/\.pdf($|\?)/i.test(img) && !img.toLowerCase().startsWith('data:application/pdf');
+}
+
 function renderAmostrasOSItens(osId) {
     const os = state.ordens.find(o => o.id === osId);
     const osNum = os ? (os.numero || os.id_int || os.id) : osId;
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
-    const banner = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-banner' : 'cliente-os-banner');
+    const interno = containerId === 'amostras-itens-container';
+    // Só o painel interno tem banner; a página do cliente traz o número, o nome
+    // e a contagem soltos no cabeçalho do próprio HTML. Enquanto o preenchimento
+    // dos três dependia do banner existir, o link do cliente ficava sem contagem
+    // nenhuma — e um pedido que exibisse 3 de 8 modelos não tinha como ser
+    // percebido, nem pelo cliente nem por quem conferisse a tela.
+    const banner = interno ? document.getElementById('amostras-os-banner') : null;
     const avulsa = document.getElementById('amostra-combinada-avulsa');
 
     if (!os || !container) return;
 
     const itens = state.osItens[osId] || [];
 
-    // Mostrar banner, esconder card avulso se for painel interno
-    if (banner) {
-        banner.style.display = 'flex';
-        const numEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-numero' : 'cliente-pedido-numero');
-        const cliEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-cliente' : 'cliente-pedido-cliente');
-        const countEl = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-itens-count' : 'cliente-os-itens-count');
-        if (numEl) numEl.textContent = `#${os.numero}`;
-        if (cliEl) cliEl.textContent = os.cliente || '';
-        if (countEl) countEl.textContent = `${itens.length} ${itens.length === 1 ? 'modelo' : 'modelos'}`;
-    }
+    if (banner) banner.style.display = 'flex';
+
+    const numEl = document.getElementById(interno ? 'amostras-os-numero' : 'cliente-pedido-numero');
+    const cliEl = document.getElementById(interno ? 'amostras-os-cliente' : 'cliente-pedido-cliente');
+    const countEl = document.getElementById(interno ? 'amostras-os-itens-count' : 'cliente-os-itens-count');
+    if (numEl) numEl.textContent = `#${os.numero}`;
+    if (cliEl) cliEl.textContent = os.cliente || '';
+    if (countEl) countEl.textContent = `${itens.length} ${itens.length === 1 ? 'modelo' : 'modelos'}`;
+
+    // Modelos que não têm o que mostrar. O cliente enxerga o card, mas a área da
+    // arte fica vazia — sem este aviso, "faltou modelo" é indistinguível de
+    // "o pedido é menor do que eu lembrava".
+    const semArte = itens.filter(it => !temArteVisivel(it));
     if (containerId === 'amostras-itens-container' && avulsa) {
         avulsa.style.display = 'none';
     }
@@ -257,6 +300,14 @@ function renderAmostrasOSItens(osId) {
         // fora porque já tem o seletor de páginas dele.
         const temArteParaDesenhar = !!item.arte_url && (!item.verso || !!item.verso_arte_url);
         const paginaCsv = temCsvVariavel(numDoModelo) && !item.modo_pdf && temArteParaDesenhar;
+        // Se há de fato o que mostrar. Testar a verdade de `amostra_arte_base64`
+        // não bastava: no carregamento do pedido esse campo cai para `arte_url`
+        // quando ainda não há snapshot, então um modelo cuja arte é PDF entrava
+        // num `<img>`, não desenhava nada — e ainda escondia o aviso de vazio,
+        // por o campo estar preenchido. Sobrava um retângulo branco sem legenda.
+        const arteVisivel = temArteVisivel(item);
+        const versoVisivel = !!item.verso_amostra_arte_base64
+            && !/\.pdf($|\?)/i.test(item.verso_amostra_arte_base64);
 
         // Filtrar numerações com base no formato da cor selecionada
         const filteredNumeracoes = (state.numeracoes || []).filter(n => {
@@ -398,17 +449,17 @@ function renderAmostrasOSItens(osId) {
                                 ` : `
                                 ${paginaCsv ? `<canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-${idx}')"></canvas>` : `<img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />`}
                                 `}
-                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || item.amostra_arte_base64 || item.modo_pdf ? 'none' : 'block'};">
+                                <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Frente</p>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Arte da frente ainda não enviada</p>
                                 </div>
                             </div>
                             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; width: 100%;">
                                 <div style="font-size: 0.85rem; font-weight: 800; color: var(--amber); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">VERSO</div>
                                 ${paginaCsv ? `<canvas id="amostra-item-canvas-verso-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-canvas-verso-${idx}')"></canvas>` : `<img id="amostra-item-img-verso-${idx}" src="${item.verso_amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: ${item.verso_amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-verso-${idx}')" />`}
-                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || item.verso_amostra_arte_base64 ? 'none' : 'block'};">
+                                <div id="amostra-item-empty-verso-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || versoVisivel ? 'none' : 'block'};">
                                      <div style="font-size: 2.5rem; margin-bottom: 8px; opacity: 0.7;">🎨</div>
-                                     <p style="font-size: 0.85rem; font-weight: 600;">Sem Verso</p>
+                                     <p style="font-size: 0.85rem; font-weight: 600;">Arte do verso ainda não enviada</p>
                                 </div>
                             </div>
 
@@ -462,9 +513,10 @@ function renderAmostrasOSItens(osId) {
                                 </div>
                                 <div id="amostra-csv-resumo-${idx}" style="font-size:0.8rem; color:var(--text-dim); text-align:center;"></div>
                             </div>`}
-                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || item.amostra_arte_base64 || item.modo_pdf ? 'none' : 'block'};">
+                        <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${paginaCsv || arteVisivel || item.modo_pdf ? 'none' : 'block'};">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
-                             <p style="font-size: 0.95rem; font-weight: 600;">Aguardando visualização da Arte...</p>
+                             <p style="font-size: 0.95rem; font-weight: 600;">Arte ainda não enviada pela gráfica</p>
+                             <p style="font-size: 0.82rem; opacity: 0.8; margin-top: 4px;">Este modelo faz parte do pedido, mas ainda não há o que visualizar. Fale com o seu atendimento.</p>
                         </div>
                         `)
                     :
@@ -481,9 +533,36 @@ function renderAmostrasOSItens(osId) {
     }).join('');
 
     const isInternal = containerId === 'amostras-itens-container';
-    
+
     let finalHtml = itemsHtml;
-    
+
+    // Aviso de modelos sem arte — só no link do cliente. No painel interno o
+    // canvas desenha cor e numeração mesmo sem arte nenhuma, então lá o operador
+    // vê todos os modelos desenhados e nada denuncia a falta; quem sofre a falta
+    // é esta tela, e é aqui que ela precisa estar escrita.
+    if (!isInternal && semArte.length) {
+        const n = semArte.length;
+        const nomes = semArte
+            .map(it => escapeHtml(it.nome_modelo || `Modelo ${itens.indexOf(it) + 1}`))
+            .join(', ');
+        finalHtml = `
+            <div style="border: 1px solid var(--amber); border-left: 4px solid var(--amber); background: rgba(245,158,11,0.10); border-radius: var(--radius-sm); padding: 16px 18px; margin-bottom: 10px; display: flex; gap: 12px; align-items: flex-start;">
+                <div style="font-size: 1.5rem; line-height: 1.1;">⚠️</div>
+                <div style="min-width: 0;">
+                    <div style="font-weight: 800; color: var(--amber); font-size: 0.95rem; margin-bottom: 5px;">
+                        ${n === 1
+                            ? '1 modelo ainda está sem arte para você ver'
+                            : `${n} dos ${itens.length} modelos ainda estão sem arte para você ver`}
+                    </div>
+                    <div style="font-size: 0.88rem; color: var(--text-dim); line-height: 1.55;">
+                        ${n === 1 ? 'Ele aparece' : 'Eles aparecem'} na lista abaixo com o espaço da arte em branco:
+                        <strong style="color: var(--text);">${nomes}</strong>.
+                        Fale com o seu atendimento antes de aprovar o pedido.
+                    </div>
+                </div>
+            </div>` + finalHtml;
+    }
+
     if (isInternal) {
         let uniqueProductsMap = new Map();
         itens.forEach(item => {
@@ -1962,6 +2041,11 @@ async function precarregarArtesDosElementos(elementos) {
             }
         } catch (err) {
             console.warn('[Amostra Item] Erro pré-carregando a arte do elemento', el && el.id, err);
+            // Marca de falha permanente. Sem ela, o redesenho que vem logo
+            // depois chama o preload de novo, que tenta de novo, que falha de
+            // novo — um laço infinito que trava a aba do cliente. O elemento
+            // simplesmente não será desenhado nesta sessão.
+            el._preloadFalhou = true;
         } finally {
             delete el._pdfLoading;
             delete el._svgLoading;
@@ -1969,14 +2053,37 @@ async function precarregarArtesDosElementos(elementos) {
     }
 }
 
-/** Versão que não pode esperar: dispara o carregamento e manda redesenhar no fim. */
+/**
+ * Versão que não pode esperar: dispara o carregamento e manda redesenhar no fim.
+ *
+ * O objeto do elemento é o MESMO para todos os modelos que compartilham a
+ * numeração — ele vem de `state.numeracoes`, não é uma cópia por modelo. Antes,
+ * o primeiro modelo marcava `_pdfLoading` e agendava o próprio redesenho; os
+ * modelos seguintes encontravam a lista de pendentes vazia, voltavam em
+ * silêncio e nunca eram repintados. Ficavam com o retângulo escrito "PDF" no
+ * lugar do elemento gráfico, e num pedido em que vários modelos dividem a mesma
+ * numeração só o primeiro saía completo. Por isso todo modelo que depende do
+ * elemento entra numa lista de espera, e o fim do carregamento repinta todos.
+ */
 function preloadAmostraItemPdfElements(numeracao, idx, osId) {
     if (!numeracao || !numeracao.elements) return;
 
-    const pendentes = numeracao.elements.filter(el =>
-        (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) ||
-        (el.type === 'SVG' && el.svg_content && !el._svgImage && !el._svgLoading)
+    const necessarios = numeracao.elements.filter(el =>
+        !el._preloadFalhou && (
+            (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas) ||
+            (el.type === 'SVG' && el.svg_content && !el._svgImage)
+        )
     );
+    if (!necessarios.length) return;
+
+    const assinatura = idx + '|' + osId;
+    necessarios.forEach(el => {
+        (el._assinantes || (el._assinantes = new Set())).add(assinatura);
+    });
+
+    // Já há carregamento em voo para estes elementos: basta estar na lista de
+    // espera acima, que quem disparou repinta este modelo junto com o dele.
+    const pendentes = necessarios.filter(el => !el._pdfLoading && !el._svgLoading);
     if (!pendentes.length) return;
 
     pendentes.forEach(el => {
@@ -1985,8 +2092,25 @@ function preloadAmostraItemPdfElements(numeracao, idx, osId) {
 
     (async () => {
         await precarregarArtesDosElementos(pendentes);
-        renderItemAmostraCombinada(idx, osId);
+        repintarAssinantesDoPreload(pendentes);
     })();
+}
+
+/** Repinta TODO modelo que estava esperando estes elementos, não só o primeiro. */
+function repintarAssinantesDoPreload(elementos) {
+    const alvos = new Set();
+    (elementos || []).forEach(el => {
+        if (el._assinantes) el._assinantes.forEach(a => alvos.add(a));
+        delete el._assinantes;
+    });
+    alvos.forEach(a => {
+        // Corta na PRIMEIRA barra: o índice é sempre numérico, então o resto da
+        // string é o osId inteiro mesmo que um dia ele contenha uma barra.
+        const corte = a.indexOf('|');
+        const i = parseInt(a.slice(0, corte), 10);
+        const os = a.slice(corte + 1);
+        if (!isNaN(i)) renderItemAmostraCombinada(i, os);
+    });
 }
 
 // ===== QR CODE: usa biblioteca CDN qrcode-generator 1.4.4 (window.qrcode) carregada no HTML =====

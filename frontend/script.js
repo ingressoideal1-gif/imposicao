@@ -23921,46 +23921,86 @@ function limparVisualizadorPdf(idx) {
 }
 window.limparVisualizadorPdf = limparVisualizadorPdf;
 
+/**
+ * Pré-carrega os elementos PDF da numeração e repinta quem estava esperando.
+ *
+ * O objeto do elemento é o MESMO para todos os modelos que compartilham a
+ * numeração — ele vem de `state.numeracoes`, não é uma cópia por modelo. Antes,
+ * o primeiro modelo marcava `_pdfLoading` e agendava o próprio redesenho; os
+ * modelos seguintes caíam fora pela mesma flag e nunca eram repintados,
+ * ficando com o retângulo escrito "PDF" no lugar do elemento gráfico. Num
+ * pedido em que vários modelos dividem a numeração, só o primeiro saía
+ * completo. Agora todo modelo que depende do elemento assina a espera, e o fim
+ * do carregamento repinta todos. O gêmeo desta função vive no `cliente.js`.
+ */
 function preloadAmostraItemPdfElements(numeracao, idx, osId) {
     if (!numeracao || !numeracao.elements) return;
 
+    const assinatura = idx + '|' + osId;
+
     numeracao.elements.forEach(el => {
-        if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
-            el._pdfLoading = true;
-            (async () => {
-                try {
-                    let bytes;
-                    if (el.pdf_content.startsWith('http') || el.pdf_content.startsWith('/')) {
-                        bytes = await fetchPdfBytes(el.pdf_content);
-                    } else {
-                        const base64Data = el.pdf_content.includes('base64,') ? el.pdf_content.split('base64,')[1] : el.pdf_content;
-                        const binStr = atob(base64Data);
-                        bytes = new Uint8Array(binStr.length);
-                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                    }
+        if (el.type !== 'PDF' || !el.pdf_content || el._pdfCanvas || el._preloadFalhou) return;
 
-                    if (!bytes) throw new Error('Falha ao obter os bytes do PDF do elemento');
+        (el._assinantes || (el._assinantes = new Set())).add(assinatura);
 
-                    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
-                    const page = await pdf.getPage(1);
-                    const vp = page.getViewport({ scale: 2.0 });
+        // Já há carregamento em voo: a assinatura acima basta — quem disparou
+        // repinta este modelo junto com o dele.
+        if (el._pdfLoading) return;
+        el._pdfLoading = true;
 
-                    const offCanvas = document.createElement('canvas');
-                    offCanvas.width = Math.round(vp.width);
-                    offCanvas.height = Math.round(vp.height);
-                    const octx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
-                    await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
-
-                    el._pdfCanvas = offCanvas;
-                    delete el._pdfLoading;
-
-                    renderItemAmostraCombinada(idx, osId);
-                } catch (err) {
-                    console.error('[Amostra Item] Erro pré-carregando PDF do elemento:', err);
-                    delete el._pdfLoading;
+        (async () => {
+            try {
+                let bytes;
+                if (el.pdf_content.startsWith('http') || el.pdf_content.startsWith('/')) {
+                    bytes = await fetchPdfBytes(el.pdf_content);
+                } else {
+                    const base64Data = el.pdf_content.includes('base64,') ? el.pdf_content.split('base64,')[1] : el.pdf_content;
+                    const binStr = atob(base64Data);
+                    bytes = new Uint8Array(binStr.length);
+                    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
                 }
-            })();
-        }
+
+                if (!bytes) throw new Error('Falha ao obter os bytes do PDF do elemento');
+
+                const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+                const page = await pdf.getPage(1);
+                const vp = page.getViewport({ scale: 2.0 });
+
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = Math.round(vp.width);
+                offCanvas.height = Math.round(vp.height);
+                const octx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
+                await page.render({ canvasContext: octx, viewport: vp, background: 'rgba(0,0,0,0)' }).promise;
+
+                el._pdfCanvas = offCanvas;
+            } catch (err) {
+                console.error('[Amostra Item] Erro pré-carregando PDF do elemento:', err);
+                // Marca de falha permanente. Sem ela, o redesenho abaixo chama
+                // este preload de novo, que tenta de novo, que falha de novo —
+                // laço infinito. O elemento fica sem desenho nesta sessão.
+                el._preloadFalhou = true;
+            } finally {
+                delete el._pdfLoading;
+                repintarAssinantesDoPreload([el]);
+            }
+        })();
+    });
+}
+
+/** Repinta TODO modelo que estava esperando estes elementos, não só o primeiro. */
+function repintarAssinantesDoPreload(elementos) {
+    const alvos = new Set();
+    (elementos || []).forEach(el => {
+        if (el._assinantes) el._assinantes.forEach(a => alvos.add(a));
+        delete el._assinantes;
+    });
+    alvos.forEach(a => {
+        // Corta na PRIMEIRA barra: o índice é sempre numérico, então o resto da
+        // string é o osId inteiro mesmo que um dia ele contenha uma barra.
+        const corte = a.indexOf('|');
+        const i = parseInt(a.slice(0, corte), 10);
+        const os = a.slice(corte + 1);
+        if (!isNaN(i)) renderItemAmostraCombinada(i, os);
     });
 }
 

@@ -34,6 +34,13 @@ hot_folders.json
 # tempo de execucao, nao e fonte.
 painel/
 
+# A area de montagem da mesma sincronizacao. Ficava de fora desta lista, e o
+# resultado era a arvore sujar sozinha: o NewProd.exe roda em segundo plano,
+# apaga e reescreve arquivos aqui a cada sincronizacao, e como o publicar.ps1
+# commita com `git add -A`, essa mexida entrava no commit de quem estivesse
+# publicando na hora — sem ninguem ter editado nada.
+painel.novo/
+
 # Banco SQLite que o db.py cria ao subir o servidor. E estado de execucao de cada
 # maquina, nao conteudo do projeto.
 imposition.db
