@@ -88,6 +88,7 @@ PAINEL_ARQUIVOS = [
     "criador-arte.js",
     "cor-numeracao-do-modelo.js",
     "csv-editor.js",
+    "texto-ajuste.js",
     "amostra-modal.js",
     "mapas.js",
     "supabase-config.js",
