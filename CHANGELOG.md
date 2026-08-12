@@ -8,6 +8,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v536 — 2026-08-12] — A amostra entrava escura, como se multiplicasse duas vezes
+
+Relatado: *"toda vez que entro no pedido, quando contem elemento .csv na
+numeracao, a janela combinada aparece escura como se tivesse aplicado varios
+multiply sobre a arte, mas ao navegar e voltar pelo seletor de paginas ela volta
+ao normal"*.
+
+### A causa
+O `drawAmostraFace()` e `async` e espera a rede: o PDF da cor, a arte do Storage,
+as fontes. **Enquanto ele espera, outro desenho comeca no mesmo canvas** — ao
+abrir o pedido, o `preloadAmostraItemPdfElements()` termina de carregar o
+elemento PDF/SVG da numeracao e dispara um segundo `renderItemAmostraCombinada`
+com o primeiro ainda esperando a arte.
+
+Os dois chegam ao fim e executam o mesmo trecho:
+
+```js
+ctx.globalCompositeOperation = 'multiply';
+ctx.drawImage(grupoCanvas, 0, 0);
+```
+
+O grupo multiplica **duas vezes** sobre a mesma cor. Sumia ao navegar porque ai o
+elemento ja estava em cache e o desenho ficava sozinho.
+
+Nao era do CSV: era de numeracao com elemento PDF ou SVG mais arte lenta. O CSV
+so tornou o problema visivel, porque foi ele que trouxe o seletor de paginas que
+o consertava por acidente.
+
+### A correcao
+Um carimbo de geracao no proprio canvas: quem chega depois carimba, quem estava
+em voo desiste antes de encostar no contexto. Vale no painel e no link do
+cliente.
+
+Medido no mesmo cenario, luminancia media do canvas: **148 ao entrar contra 182
+depois de navegar** antes da correcao; **182 nos dois** depois dela.
+
+### Arquivos
+`frontend/script.js`, `frontend/cliente.js`, `docs/editor_de_arte.md`.
+So frontend — o agente nao precisa ser republicado.
+
+---
+
 ## [v535 — 2026-08-12] — Seletor de linhas: intervalo e semaforo verde/vermelho
 
 ### A coluna Modelo virou semaforo

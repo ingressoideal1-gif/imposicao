@@ -22810,6 +22810,18 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
     canvas.style.display = 'block';
     if (empty) empty.style.display = 'none';
 
+    // Dois desenhos podem se cruzar no MESMO canvas: enquanto o primeiro ainda
+    // espera a arte chegar do Storage, o carregamento de um elemento PDF/SVG da
+    // numeracao dispara outro. Sem controle, os dois chegam ao fim e compoem o
+    // grupo com 'multiply' sobre a mesma cor — a amostra sai escura, como se a
+    // arte tivesse sido multiplicada duas vezes. Some ao navegar porque ai o
+    // elemento ja esta em cache e o desenho fica sozinho.
+    //
+    // Quem chega depois carimba o canvas; quem estava em voo percebe o carimbo
+    // novo e desiste antes de encostar no contexto.
+    const _geracao = (canvas.__geracaoDesenho = (canvas.__geracaoDesenho || 0) + 1);
+    const _desatualizado = () => canvas.__geracaoDesenho !== _geracao;
+
     const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
     ctx.clearRect(0, 0, finalWidth, finalHeight);
     ctx.globalCompositeOperation = 'source-over';
@@ -22850,6 +22862,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             console.warn(`[Item ${idx} - Face ${face}] Erro ao renderizar cor PDF:`, e);
         }
     }
+    if (_desatualizado()) return;
+
     if (!corRendered) {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, finalWidth, finalHeight);
@@ -23220,6 +23234,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         grupoCtx.drawImage(numCanvas, ndx, ndy, numCanvas.width, numCanvas.height);
         grupoTemConteudo = true;
     }
+
+    if (_desatualizado()) return;
 
     // Agora sim: o grupo (arte + numeracao) multiplica, de uma vez so, sobre a cor.
     if (grupoTemConteudo) {

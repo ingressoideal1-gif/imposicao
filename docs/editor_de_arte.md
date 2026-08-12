@@ -266,6 +266,46 @@ renderizar com a fonte de fallback.
 
 ---
 
+## Dois desenhos não podem se cruzar no mesmo canvas
+
+O `drawAmostraFace()` é `async` e espera várias coisas pela rede: o PDF da cor, o
+PDF ou a imagem da arte, as fontes. Enquanto ele espera, **outro desenho pode
+começar no mesmo canvas** — é o que acontece ao abrir um pedido cuja numeração
+tem elemento PDF ou SVG: o `preloadAmostraItemPdfElements()` termina de carregar
+o elemento e chama `renderItemAmostraCombinada()` de novo, com o primeiro ainda
+esperando a arte chegar do Storage.
+
+Os dois então chegam ao fim e executam o mesmo trecho:
+
+```js
+ctx.globalCompositeOperation = 'multiply';
+ctx.drawImage(grupoCanvas, 0, 0);
+```
+
+O grupo multiplica **duas vezes** sobre a mesma cor, e a amostra sai escura. Some
+ao navegar pelas páginas do CSV porque aí o elemento já está em cache e o desenho
+fica sozinho — foi assim que o problema apareceu, relatado como *"aparece escura
+como se tivesse aplicado vários multiply sobre a arte"*. Medido no mesmo cenário:
+luminância média **148 ao entrar contra 182 depois de navegar**.
+
+A proteção é um carimbo de geração no próprio canvas, logo depois de o desenho
+reservar as dimensões:
+
+```js
+const _geracao = (canvas.__geracaoDesenho = (canvas.__geracaoDesenho || 0) + 1);
+const _desatualizado = () => canvas.__geracaoDesenho !== _geracao;
+```
+
+Quem chega depois carimba; quem estava em voo desiste antes de encostar no
+contexto — a checagem está antes da camada de cor e antes da composição final.
+Vale nos dois renderizadores: o do painel (`script.js`) e o do link do cliente
+(`cliente.js`).
+
+**Ao acrescentar qualquer `await` novo no `drawAmostraFace`, ponha um
+`if (_desatualizado()) return;` depois dele** se o trecho seguinte escrever no
+`ctx`. Sem isso o problema volta, e volta silencioso: nada quebra, a amostra só
+fica escura de vez em quando.
+
 ## Fragilidades conhecidas
 
 - **`arte_json` fora do banco** (acima) — a maior delas.
