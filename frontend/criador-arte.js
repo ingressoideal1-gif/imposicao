@@ -676,6 +676,14 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
             ctx.lineTo(0, l2.height - y);
             ctx.stroke();
             ctx.setLineDash([]);
+        } else if (el.type === 'FOTO') {
+            // O Criador de Arte reproduz o card do pedido: a janela de foto e
+            // desenhada pela mesma funcao que todas as outras janelas usam.
+            const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
+            const linhaFoto = (csvData && csvData[0]) ? csvData[0] : null;
+            if (typeof window.desenharElementoFoto === 'function') {
+                window.desenharElementoFoto(ctx, el, scalePx, false, linhaFoto, null);
+            }
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             const w = (el.width_mm || 20) * scalePx;
             const h = (el.height_mm || 20) * scalePx;

@@ -3663,6 +3663,28 @@ function drawImageContain(ctx, img, x, y, w, h) {
 }
 window.drawImageContain = drawImageContain;
 
+/**
+ * Cache de imagens de foto por URL, para todas as janelas do app.
+ *
+ * O cache é por URL e NÃO por elemento, de propósito: o objeto do elemento é o
+ * mesmo para todos os modelos que dividem a numeração (a armadilha que o
+ * `preloadAmostraItemPdfElements` documenta), mas a foto muda a cada LINHA do
+ * banco. Guardar a imagem no elemento faria a credencial de todo mundo sair com
+ * a foto da primeira pessoa.
+ */
+/**
+ * A linha do banco que serve de amostra para as janelas do editor.
+ * É sempre a primeira — a mesma que o texto variável já usa como amostra.
+ *
+ * O cache de imagens, o pré-carregamento e o desenho da janela de foto moram no
+ * `foto-lib.js`, que a página do cliente também carrega: as duas telas têm de
+ * mostrar o mesmo enquadramento.
+ */
+function linhaDeAmostra() {
+    const dados = state.csvData || state.numCsvData || null;
+    return (dados && dados[0]) ? dados[0] : null;
+}
+
 function drawElement(ctx, el, S) {
 
     const x = el.x_mm * S;
@@ -3895,6 +3917,10 @@ function drawElement(ctx, el, S) {
         ctx.stroke();
 
         ctx.setLineDash([]);
+
+    } else if (el.type === 'FOTO') {
+
+        desenharElementoFoto(ctx, el, S, isSelected, linhaDeAmostra(), () => drawCanvas());
 
     } else if (el.type === 'SVG' || el.type === 'PDF') {
 
@@ -4467,6 +4493,8 @@ function getElementSizeMM(el) {
 
     else if (el.type === 'PDF') { w = el.width_mm || 20; h = el.height_mm || 20; }
 
+    else if (el.type === 'FOTO') { w = el.width_mm || 25; h = el.height_mm || 32; }
+
     return { w, h };
 
 }
@@ -5014,7 +5042,13 @@ async function carregarImagemSvgDoElemento(el) {
  * Cada elemento carrega o próprio arquivo — não existe mais um arquivo único da
  * numeração servindo a todos.
  */
-async function precarregarArtesDosElementos(elementos) {
+async function precarregarArtesDosElementos(elementos, linhas) {
+    // As fotos entram junto: quem aguarda a arte dos elementos e a janela que
+    // desenha uma vez so, e uma foto que chega depois do traco nao aparece.
+    await window.precarregarFotosDosElementos(
+        elementos,
+        (linhas && linhas.length) ? linhas : (state.csvData || state.numCsvData || [])
+    );
     for (const el of (elementos || [])) {
         try {
             if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
@@ -5257,6 +5291,14 @@ window.addElement = function (type, extras) {
 
     if (type === 'PDF') Object.assign(base, { width_mm: 20, height_mm: 20, pdf_content: '', render_mode: 'print' });
 
+    // A janela de foto nasce 25x32 mm — a 3x4 de credencial — e ja apontando para
+    // o banco: uma foto que nao varia por linha nao e foto variavel, e arte de
+    // fundo. Por isso ela nunca tem origem "Sequencial".
+    if (type === 'FOTO') Object.assign(base, {
+        width_mm: 25, height_mm: 32, source: 'database', csv_column: '',
+        fit: 'cover', corner: 'square', render_mode: 'print'
+    });
+
     if (type === 'PICOTE') Object.assign(base, { name: 'Picote' });
     
     if (type === 'TEATRO_FILA') Object.assign(base, { font_size: 12, font_name: 'helv', prefix: 'Fileira: ' });
@@ -5322,7 +5364,7 @@ function renderElementsList() {
 
     // PDF faltava aqui desde sempre, e o card de todo elemento PDF exibia
     // "undefined" no selo — o typeBadge ao lado já tinha a entrada.
-    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PDF: '📄 PDF', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
+    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PDF: '📄 PDF', FOTO: '🖼️ Foto', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
 
     const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray', TEATRO_FILA: 'badge-purple', TEATRO_LUGAR: 'badge-purple', TEATRO_COMBO: 'badge-purple', CAMAROTE_LOCAL: 'badge-amber', CAMAROTE_PESSOA: 'badge-amber', CAMAROTE_PESSOA_TOTAL: 'badge-amber' };
 
@@ -5498,6 +5540,57 @@ function renderElementsList() {
 
                 <div class="form-group"><label>Sufixo</label><input class="form-control" type="text" value="${el.suffix || ''}" onchange="updateEl('${el.id}','suffix',this.value)"></div>`;
 
+        } else if (el.type === 'FOTO') {
+
+            // A janela de foto não tem "Origem": ela é sempre do banco. O que ela
+            // precisa é da coluna, do tamanho da janela e de como a foto se
+            // acomoda dentro dela.
+            const colunas = state.numCsvHeaders || [];
+            const linhaEx = linhaDeAmostra();
+            const metaEx = window.fotoDaLinha ? window.fotoDaLinha(el, linhaEx) : null;
+            const dimEx = metaEx ? window.dimensoesDaFoto(metaEx.url) : null;
+            const dpiEx = dimEx
+                ? window.dpiNaJanela(dimEx.w, dimEx.h, el.width_mm || 25, el.height_mm || 32,
+                    el.fit || 'cover', metaEx.zoom || 1)
+                : 0;
+
+            extraFields = `
+                <div class="form-group el-full">
+                    <label>Coluna do banco (a foto de cada linha)</label>
+                    ${colunas.length ? `
+                    <select class="form-control" onchange="updateEl('${el.id}','csv_column',this.value)">
+                        <option value="">-- Selecione --</option>
+                        ${colunas.map(col => `<option value="${col}" ${el.csv_column === col ? 'selected' : ''}>${col}</option>`).join('')}
+                    </select>
+                    ` : `
+                    <input class="form-control" type="text" value="${el.csv_column || ''}" placeholder="Ex: Foto" onchange="updateEl('${el.id}','csv_column',this.value)">
+                    `}
+                </div>
+
+                <div class="form-group"><label>Largura da janela (mm)</label><input class="form-control" type="number" value="${el.width_mm || 25}" min="5" max="200" step="0.5" onchange="updateEl('${el.id}','width_mm',+this.value)"></div>
+
+                <div class="form-group"><label>Altura da janela (mm)</label><input class="form-control" type="number" value="${el.height_mm || 32}" min="5" max="200" step="0.5" onchange="updateEl('${el.id}','height_mm',+this.value)"></div>
+
+                <div class="form-group"><label>Encaixe</label>
+                    <select class="form-control" onchange="updateEl('${el.id}','fit',this.value)">
+                        <option value="cover" ${(el.fit || 'cover') === 'cover' ? 'selected' : ''}>Cobrir (preenche e corta o excedente)</option>
+                        <option value="contain" ${el.fit === 'contain' ? 'selected' : ''}>Caber (foto inteira, com margem)</option>
+                    </select>
+                </div>
+
+                <div class="form-group"><label>Cantos</label>
+                    <select class="form-control" onchange="updateEl('${el.id}','corner',this.value)">
+                        <option value="square" ${(el.corner || 'square') === 'square' ? 'selected' : ''}>Reto</option>
+                        <option value="round" ${el.corner === 'round' ? 'selected' : ''}>Arredondado</option>
+                        <option value="circle" ${el.corner === 'circle' ? 'selected' : ''}>Círculo</option>
+                    </select>
+                </div>
+
+                <div class="form-group el-full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="abrirGerenciadorDeFotos('${el.id}')">🖼️ Gerenciar fotos do lote</button>
+                    ${dpiEx ? `<span style="font-size:0.75rem;color:${dpiEx < 150 ? '#ef4444' : 'var(--text-dim)'};">amostra: ${dpiEx} dpi nesta janela${dpiEx < 150 ? ' — baixa para impressão' : ''}</span>` : ''}
+                </div>`;
+
         } else if (el.type === 'SVG' || el.type === 'PDF') {
 
             // Escala: os dois tipos têm o mesmo controle. Largura e Altura andam
@@ -5664,7 +5757,7 @@ function renderElementsList() {
 
                 </div>
 
-                ${(el.type !== 'FIXED' && el.type !== 'SVG') ? `
+                ${(el.type !== 'FIXED' && el.type !== 'SVG' && el.type !== 'FOTO') ? `
 
                 <div class="form-group">
 
@@ -7981,6 +8074,17 @@ function drawPreview() {
 
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'alphabetic';
+
+                    } else if (el.type === 'FOTO') {
+
+                        // Previa de imposicao: a foto e a da LINHA daquele item, nao a
+                        // da primeira. E justamente aqui que o operador confere se cada
+                        // credencial recebeu a pessoa certa.
+                        desenharElementoFoto(
+                            ctx, el, MM2PT * scale, false,
+                            (state.csvData && state.csvData[item_index]) || null,
+                            () => drawPreview()
+                        );
 
                     } else if (el.type === 'SVG') {
 
@@ -23942,6 +24046,15 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             ctx.lineTo(0, canvasHeight - y);
             ctx.stroke();
             ctx.setLineDash([]);
+        } else if (el.type === 'FOTO') {
+            // Modo PDF (multipaginas): a pagina N mostra a linha N da FATIA deste
+            // modelo, nao do banco inteiro — a mesma regra do texto variavel logo
+            // acima. Indexar o banco inteiro faria o modelo cuja fatia comeca na
+            // linha 601 estampar o rosto da pessoa 1.
+            const _linhasFoto = (typeof linhasDaAmostra === 'function')
+                ? linhasDaAmostra(item, num)
+                : (num?.csv_data || item?.csv_data || []);
+            desenharElementoFoto(ctx, el, S, false, _linhasFoto[pageNum - 1] || null, null);
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             // Sem este ramo, o modo PDF (multipaginas) desenhava todos os outros tipos
             // e simplesmente pulava SVG e PDF: o forEach caia fora de todos os else-if
@@ -24681,6 +24794,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 numCtx.lineTo(0, numCanvas.height - y);
                 numCtx.stroke();
                 numCtx.setLineDash([]);
+            } else if (el.type === 'FOTO') {
+                desenharElementoFoto(numCtx, el, S, false, _linhaCsv, null);
             } else if (el.type === 'SVG' || el.type === 'PDF') {
                 const w = (el.width_mm || 20) * S;
                 const h = (el.height_mm || 20) * S;
@@ -29633,6 +29748,10 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
             numCtx.lineTo(0, numCanvas.height - y);
             numCtx.stroke();
             numCtx.setLineDash([]);
+        } else if (el.type === 'FOTO') {
+            // Gabarito rasterizado: desenha uma vez so. As fotos ja vieram pelo
+            // precarregarArtesDosElementos que o chamador aguarda.
+            desenharElementoFoto(numCtx, el, S, false, linhaDeAmostra(), null);
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             const w = (el.width_mm || 20) * S;
             const h = (el.height_mm || 20) * S;

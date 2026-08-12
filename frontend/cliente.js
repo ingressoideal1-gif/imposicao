@@ -2741,6 +2741,12 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 numCtx.lineTo(0, numCanvas.height - y);
                 numCtx.stroke();
                 numCtx.setLineDash([]);
+            } else if (el.type === 'FOTO') {
+                // Gêmeo do ramo do script.js: o cliente vê a mesma janela de foto,
+                // com o mesmo enquadramento, que vai ao papel.
+                if (typeof window.desenharElementoFoto === 'function') {
+                    window.desenharElementoFoto(numCtx, el, S, false, _linhaCsv, null);
+                }
             } else if (el.type === 'SVG' || el.type === 'PDF') {
                 const w = (el.width_mm || 20) * S;
                 const h = (el.height_mm || 20) * S;
@@ -3182,6 +3188,15 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             ctx.lineTo(0, canvasHeight - y);
             ctx.stroke();
             ctx.setLineDash([]);
+        } else if (el.type === 'FOTO') {
+            // Modo PDF (multipaginas): a pagina N mostra a linha N da FATIA deste
+            // modelo, como o texto variavel logo acima.
+            const _linhasFoto = (typeof linhasDaAmostra === 'function')
+                ? linhasDaAmostra(item, num)
+                : (num?.csv_data || item?.csv_data || []);
+            if (typeof window.desenharElementoFoto === 'function') {
+                window.desenharElementoFoto(ctx, el, S, false, _linhasFoto[pageNum - 1] || null, null);
+            }
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             // Sem este ramo, o modo PDF (multipaginas) desenhava todos os outros tipos
             // e pulava SVG e PDF. Espelha o mesmo ramo no script.js.
