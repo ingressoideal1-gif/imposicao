@@ -4,7 +4,48 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v539** — 2026-08-12 | Agente **1.2.37**
+## Versão atual: **v540** — 2026-08-12 | Agente **1.2.37**
+
+---
+
+## [v540 — 2026-08-12] — Cada um entra vendo o proprio trabalho
+
+Pedido: *"Login Designer, deve entrar sempre filtrando no drop o designer
+logado, Login Atendente deve sempre entrar filtrando o atendente logado no
+drop."*
+
+Na Lista de Arte, quem entra como **Designer** ja chega com o filtro de designer
+apontado para si; quem entra como **Atendimento**, com o filtro de atendente
+apontado para si. Admin, Gerente, Impressor, Financeiro e Visualizador continuam
+entrando sem filtro — o trabalho deles e justamente olhar a operacao inteira.
+
+### O que faltava
+
+Metade da regra ja estava escrita e nao acontecia: `populateDesignerFilter` tinha
+um parametro `forceDefault` que selecionava o designer logado, e **nenhuma
+chamada no projeto o passava**. O parametro saiu; a regra agora vive em
+`aplicarFiltroPadraoDoUsuario`, num lugar so.
+
+A outra metade nao existia. Reconhecer quem entrou exige e-mail ou `user_id`, e a
+lista de atendentes guardava so o nome — nao havia como casar a conta logada com
+a pessoa da lista. Agora `atendentesObjetosSupabase` tem a mesma forma que a dos
+designers, e a funcao que identifica o usuario logado passou a receber a lista
+como argumento, servindo aos dois filtros.
+
+### Duas coisas que o filtro nao faz
+
+**Nao briga com o operador.** Trocar para "Todos os Designers" vale pelo resto da
+sessao; o padrao so se aplica uma vez por carregamento. Sem essa trava ele
+voltaria a cada desenho, porque `renderOrdens` repopula os dois seletores toda
+vez que redesenha a lista.
+
+**Nao chuta quando os dados ainda nao chegaram.** O perfil vem das permissoes e a
+lista de pessoas vem do Supabase, por caminhos independentes. Sem os dois em
+mao, a funcao nao marca nada e tenta de novo no proximo desenho — e desiste de
+vez, sem filtro, se a lista carregar e a conta nao estiver nela.
+
+Na estacao, onde nao ha conta do site, o casamento e feito pelo nome do acesso
+local.
 
 ---
 

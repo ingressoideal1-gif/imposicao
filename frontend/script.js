@@ -144,6 +144,11 @@ let usuariosSupabase = [];
 let designersSupabase = [];
 let atendentesSupabase = [];
 let designersObjetosSupabase = [];
+// Mesma forma de designersObjetosSupabase (user_id, nome_usuario, email), e pelo
+// mesmo motivo: reconhecer quem entrou exige e-mail ou user_id, e a lista de
+// atendentes guardava só o nome — não dava para casar a conta logada com a
+// pessoa da lista.
+let atendentesObjetosSupabase = [];
 
 const VENDEDORES_LISTA = [
     'L. Martins',
@@ -17214,6 +17219,7 @@ async function loadUsuarios() {
             atendentesSupabase = [];
             usuariosSupabase = [];
             designersObjetosSupabase = [];
+            atendentesObjetosSupabase = [];
 
             data.forEach(u => {
                 const nome = (u.nome_usuario || '').trim();
@@ -17230,6 +17236,11 @@ async function loadUsuarios() {
                     });
                 } else if (setor.includes('atend') || setor === 'atendente' || setor === 'atendimento') {
                     atendentesSupabase.push(nome);
+                    atendentesObjetosSupabase.push({
+                        user_id: u.user_id || u.nome_usuario,
+                        nome_usuario: nome,
+                        email: u.email || ''
+                    });
                 }
             });
 
@@ -17319,6 +17330,7 @@ function setOSDesigner(osId, designerName, osNumero) {
 window.setOSDesigner = setOSDesigner;
 
 let _hasUserChangedDesignerFilter = false;
+let _usuarioMexeuNoFiltroAtendente = false;
 
 function onDesignerFilterChange() {
     _hasUserChangedDesignerFilter = true;
@@ -17326,7 +17338,88 @@ function onDesignerFilterChange() {
 }
 window.onDesignerFilterChange = onDesignerFilterChange;
 
-function getLoggedInDesignerName() {
+function onAtendenteFilterChange() {
+    // Marcar antes de renderizar: sem isto, o filtro padrão do perfil voltaria a
+    // se aplicar no render seguinte e desfaria a escolha no meio do trabalho.
+    _usuarioMexeuNoFiltroAtendente = true;
+    renderOrdens();
+}
+window.onAtendenteFilterChange = onAtendenteFilterChange;
+
+/**
+ * Quem entra vê primeiro o próprio trabalho.
+ *
+ * Designer abre a Lista de Arte já filtrada nele; Atendimento, já filtrada no
+ * atendente logado. Os demais perfis — Admin, Gerente, Impressor, Financeiro,
+ * Visualizador — entram sem filtro, porque o trabalho deles é justamente olhar a
+ * operação inteira.
+ *
+ * Roda UMA vez por carregamento e nunca por cima de uma escolha da pessoa: ela
+ * pode trocar para "Todos" e continuar lá pelo resto da sessão. É por isso que
+ * existem `_hasUserChangedDesignerFilter` e `_usuarioMexeuNoFiltroAtendente` —
+ * `renderOrdens` repopula os dois seletores a cada desenho, e sem essa trava o
+ * padrão brigaria com o operador a cada clique.
+ *
+ * Chamada de dentro de `renderOrdens`, depois de popular e ANTES de ler os
+ * valores. Ela depende de duas coisas que chegam por caminhos diferentes — o
+ * perfil (permissões) e a lista de usuários (Supabase) —, então é escrita para
+ * poder ser chamada cedo demais: sem os dois em mãos, não marca nada e tenta de
+ * novo no próximo desenho.
+ */
+let _filtroPadraoDoPerfilAplicado = false;
+
+function aplicarFiltroPadraoDoUsuario() {
+    if (_filtroPadraoDoPerfilAplicado) return;
+
+    const role = (window._currentPerms && window._currentPerms.role)
+              || (window._acessoLocal && window._acessoLocal.role)
+              || '';
+    if (!role) return;  // permissões ainda em viagem
+
+    const regras = {
+        designer:    { seletor: 'os-filter-designer',  nome: getLoggedInDesignerName,  lista: () => designersObjetosSupabase,  mexeu: () => _hasUserChangedDesignerFilter },
+        atendimento: { seletor: 'os-filter-atendente', nome: getLoggedInAtendenteName, lista: () => atendentesObjetosSupabase, mexeu: () => _usuarioMexeuNoFiltroAtendente },
+    };
+    const regra = regras[role];
+    if (!regra) { _filtroPadraoDoPerfilAplicado = true; return; }
+
+    const select = document.getElementById(regra.seletor);
+    if (!select) return;  // a Lista de Arte ainda não está no DOM
+
+    const nome = regra.nome();
+    if (!nome) {
+        // Sem a lista carregada, esperar. Com a lista carregada e ainda sem
+        // achar, desistir de vez: a conta não está cadastrada naquele setor, e
+        // insistir a cada desenho não mudaria isso.
+        if (regra.lista().length > 0) {
+            console.warn(`[filtro] Perfil ${role}, mas a conta logada não está na lista de ${role}s — entrando sem filtro.`);
+            _filtroPadraoDoPerfilAplicado = true;
+        }
+        return;
+    }
+
+    const temOpcao = [...select.options].some(o => o.value === nome);
+    if (!temOpcao) return;
+
+    if (!regra.mexeu()) select.value = nome;
+    _filtroPadraoDoPerfilAplicado = true;
+}
+window.aplicarFiltroPadraoDoUsuario = aplicarFiltroPadraoDoUsuario;
+
+/**
+ * O nome, dentro de uma lista de pessoas, de quem está usando a aplicação.
+ *
+ * Era escrita só para designers; agora serve aos dois filtros da Lista de Arte,
+ * porque reconhecer o atendente logado é exatamente o mesmo problema com outra
+ * lista. `lista` são objetos {user_id, nome_usuario, email}.
+ *
+ * Tenta, nesta ordem: e-mail ou user_id da conta do site, o nome que veio nos
+ * metadados da conta, e por último o nome do acesso local da estação — lá não há
+ * conta do Supabase, só o nome que o administrador cadastrou junto com o código.
+ */
+function nomeDoUsuarioLogadoEm(lista) {
+    if (!lista || !lista.length) return null;
+
     let userEmail = null;
     let userId = null;
 
@@ -17357,29 +17450,50 @@ function getLoggedInDesignerName() {
                     localStorage.getItem('loggedInUserEmail');
     }
 
-    if (designersObjetosSupabase && designersObjetosSupabase.length > 0) {
-        if (userEmail) {
-            const match = designersObjetosSupabase.find(d => 
-                (d.email && d.email.toLowerCase().trim() === userEmail.toLowerCase().trim()) ||
-                (d.user_id && String(d.user_id) === String(userId))
-            );
+    const igual = (a, b) => (a || '').toLowerCase().trim() === (b || '').toLowerCase().trim();
+
+    if (userEmail || userId) {
+        const match = lista.find(p =>
+            (p.email && igual(p.email, userEmail)) ||
+            (p.user_id && userId && String(p.user_id) === String(userId))
+        );
+        if (match) return match.nome_usuario;
+    }
+
+    if (window._currentUser && window._currentUser.user_metadata) {
+        const meta = window._currentUser.user_metadata;
+        const metaName = meta.name || meta.nome_usuario || meta.full_name;
+        if (metaName) {
+            const match = lista.find(p => igual(p.nome_usuario, metaName));
             if (match) return match.nome_usuario;
         }
+    }
 
-        if (window._currentUser && window._currentUser.user_metadata) {
-            const metaName = window._currentUser.user_metadata.name || window._currentUser.user_metadata.nome_usuario || window._currentUser.user_metadata.full_name;
-            if (metaName) {
-                const match = designersObjetosSupabase.find(d => d.nome_usuario.toLowerCase().trim() === metaName.toLowerCase().trim());
-                if (match) return match.nome_usuario;
-            }
-        }
+    // Estação: não há conta do site, e o nome do acesso local é tudo o que
+    // existe para identificar quem está na frente da máquina.
+    if (window._acessoLocal && window._acessoLocal.nome) {
+        const match = lista.find(p => igual(p.nome_usuario, window._acessoLocal.nome));
+        if (match) return match.nome_usuario;
     }
 
     return null;
 }
+
+function getLoggedInDesignerName() {
+    return nomeDoUsuarioLogadoEm(designersObjetosSupabase);
+}
 window.getLoggedInDesignerName = getLoggedInDesignerName;
 
-function populateDesignerFilter(forceDefault = false) {
+function getLoggedInAtendenteName() {
+    return nomeDoUsuarioLogadoEm(atendentesObjetosSupabase);
+}
+window.getLoggedInAtendenteName = getLoggedInAtendenteName;
+
+// Quem escolhe o valor inicial é `aplicarFiltroPadraoDoUsuario`; aqui só se
+// desenham as opções e se preserva o que já estava escolhido. Havia um parâmetro
+// `forceDefault` que selecionava o designer logado, mas nenhuma chamada no
+// projeto o passava — a regra existia no código e nunca acontecia na tela.
+function populateDesignerFilter() {
     const filterSelect = document.getElementById('os-filter-designer');
     if (!filterSelect) return;
 
@@ -17396,14 +17510,9 @@ function populateDesignerFilter(forceDefault = false) {
         filterSelect.appendChild(opt);
     });
 
-    const loggedInDesigner = getLoggedInDesignerName();
-
-    // Com forceDefault=true (chamada explícita de reset), auto-selecionar o designer logado.
-    // Sem forceDefault: SEMPRE preservar o valor atual do select — incluindo '' (Todos os Designers) —
+    // SEMPRE preservar o valor atual do select — incluindo '' (Todos os Designers) —
     // para garantir que o filtro seja consistente entre F5 e cliques de card sem sumiço silencioso.
-    if (forceDefault && loggedInDesigner && designersSupabase && designersSupabase.includes(loggedInDesigner)) {
-        filterSelect.value = loggedInDesigner;
-    } else if (currentValue && [...allDesigners].includes(currentValue)) {
+    if (currentValue && [...allDesigners].includes(currentValue)) {
         filterSelect.value = currentValue; // Restaurar a seleção anterior
     } else {
         filterSelect.value = ''; // Padrão: Todos os Designers
@@ -17976,6 +18085,11 @@ function renderOrdens() {
     // seguintes (após populateDesignerFilter ter setado o select), causando sumiço dos pedidos.
     populateDesignerFilter();
     populateAtendenteFilter();
+
+    // Depois de popular (as opções precisam existir) e antes de ler os valores
+    // (senão o primeiro desenho sairia sem o filtro do perfil e a lista piscaria
+    // inteira antes de encolher).
+    aplicarFiltroPadraoDoUsuario();
 
     const filterDesigner = (document.getElementById('os-filter-designer')?.value || '');
 
