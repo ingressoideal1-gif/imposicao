@@ -264,30 +264,62 @@ precise ler, lembre de incluí-la nessa lista — ela é explícita de propósit
 
 Chegar ao banco de dados exigia abrir o editor da numeração — uma tela de
 catálogo — enquanto o trabalho acontecia no pedido. Por isso o card de cada
-modelo, na Lista de Arte, ganhou dois botões ao lado do seletor de numeração,
-junto do 📋 e do ✏️ que já estavam lá:
+modelo, na Lista de Arte, ganhou uma faixa própria logo abaixo do seletor de
+numeração:
+
+```
+🗂️ Banco de dados: assentos.csv
+[ 📊 Ver / editar ]  [ 🧩 Linhas: 5 de 10 ]
+```
 
 | Botão | Abre | Grava em |
 |-------|------|----------|
-| 📊 | O editor comum: célula, coluna, quais linhas imprimem | `producao_numeracoes` (o banco é da numeração) |
-| 🧩 | A distribuição entre os modelos do pedido | `pedidos_modelos.csv_selecao` (a fatia é do modelo) |
+| 📊 Ver / editar | O editor comum: célula, coluna, quais linhas imprimem | `producao_numeracoes` (o banco é da numeração) |
+| 🧩 Linhas | A distribuição entre os modelos do pedido | `pedidos_modelos.csv_selecao` (a fatia é do modelo) |
 
 São dois trabalhos diferentes e por isso são duas telas — a mesma separação que o
 editor já fazia. Consertar o dado é uma coisa; repartir as linhas é outra.
 
-Os botões **só aparecem quando a numeração escolhida tem banco de dados**, e quem
+A faixa **só aparece quando a numeração escolhida tem banco de dados**, e quem
 decide isso é `atualizarBotoesCsvDaAmostra()`, a cada redesenho — não o template.
 A numeração muda pelo seletor sem redesenhar o card inteiro, então uma decisão
-tomada na montagem do HTML ficaria velha na primeira troca. O `title` do 🧩 diz
-quantas linhas o modelo leva ("5 de 10"), e ele fica vermelho quando o modelo
-está sem nenhuma — um modelo sem linha não imprime nada, e descobrir isso aqui é
-mais barato do que descobrir na frente da impressora.
+tomada na montagem do HTML ficaria velha na primeira troca.
+
+**A contagem fica no próprio botão** ("5 de 10"), e ele fica vermelho quando o
+modelo está sem nenhuma linha — modelo sem linha não imprime nada, e descobrir
+isso aqui é mais barato do que descobrir na frente da impressora.
+
+> A primeira versão eram dois emojis nus (📊 🧩) espremidos na linha do título
+> "Numeração Cadastrada". O usuário respondeu que não ficou claro — e, medindo, o
+> quarto botão da fila ficava cortado pela largura do painel. Rótulo em texto não
+> é enfeite aqui.
 
 O 🧩 abre a distribuição **já destacando o modelo de onde partiu** (o `foco` do
 `abrirEditorCsv`): com seis faixas coloridas na barra, achar a sua é o primeiro
 trabalho do operador. E a distribuição passou a valer **com um modelo só** —
 recortar uma fatia para o único modelo do pedido é legítimo, e antes não havia
 caminho para isso.
+
+### A tela de distribuir diz o que fazer
+
+A tela abria com os botões de modelo **apagados** e nada explicava por quê: quem
+não sabia que era preciso marcar as linhas primeiro via controles mortos. Agora
+uma faixa fixa no topo carrega o fluxo inteiro:
+
+```
+① Clique nas linhas que um modelo vai imprimir  →  ② Clique no nome do modelo
+                                                   3 linha(s) selecionada(s)
+Aqui só se reparte. Para corrigir o conteúdo das células, feche e use
+📊 Ver / editar no card do modelo.
+```
+
+O indicador da direita muda de estado: **âmbar** em "Nenhuma linha selecionada
+ainda", **verde** com a contagem assim que houver seleção. E o `title` dos botões
+de modelo diz por que estão apagados, em vez de só estarem apagados.
+
+A última linha existe porque as duas telas se parecem: a de distribuir **não**
+edita célula (é decisão de projeto — ver acima), e sem dizer isso o operador
+tenta, não consegue, e conclui que está quebrada.
 
 ### A janela ampliada
 

@@ -11680,33 +11680,43 @@ function atualizarNavCsvDaAmostra(idx, item, num, container, osId) {
  */
 function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
 
-    const bEditar = container.querySelector(`#btn-csv-editar-${idx}`);
+    const linha = container.querySelector(`#linha-csv-${idx}`);
 
-    const bFatia = container.querySelector(`#btn-csv-fatia-${idx}`);
-
-    if (!bEditar && !bFatia) return;
+    if (!linha) return;
 
     const temCsv = !!(num && num.csv_data && num.csv_data.length);
 
-    if (bEditar) bEditar.style.display = temCsv ? '' : 'none';
-
-    if (!bFatia) return;
-
-    bFatia.style.display = temCsv ? '' : 'none';
+    linha.style.display = temCsv ? 'flex' : 'none';
 
     if (!temCsv) return;
+
+    const nome = container.querySelector(`#csv-nome-${idx}`);
+
+    if (nome) nome.textContent = num.csv_filename || 'banco.csv';
 
     const minhas = fatiaCsvDoItem(item, num).length;
 
     const total = linhasAtivasCsv(num.csv_data).length;
 
-    bFatia.title = `Linhas do banco que ESTE modelo imprime: ${minhas} de ${total}.`
+    const conta = container.querySelector(`#csv-conta-${idx}`);
 
-        + ' Clique para escolher.';
+    if (conta) conta.textContent = `${minhas} de ${total}`;
+
+    const bFatia = container.querySelector(`#btn-csv-fatia-${idx}`);
+
+    if (!bFatia) return;
+
+    bFatia.title = minhas
+
+        ? `Este modelo imprime ${minhas} das ${total} linhas do banco. Clique para mudar.`
+
+        : 'Este modelo está SEM nenhuma linha — não imprimiria nada. Clique para escolher.';
 
     // Um modelo sem nenhuma linha não imprime nada — avisar aqui é mais barato
     // do que descobrir na frente da impressora.
     bFatia.style.color = minhas ? '' : 'var(--red, #ef4444)';
+
+    bFatia.style.borderColor = minhas ? '' : 'var(--red, #ef4444)';
 
 }
 
@@ -20388,10 +20398,6 @@ function renderAmostrasOSItens(osId) {
                                             <div style="display: flex; gap: 4px; align-items: center;">
                                                 <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
                                                 <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
-                                                <!-- Só aparecem quando a numeração tem banco de dados;
-                                                     quem decide é atualizarBotoesCsvDaAmostra(). -->
-                                                <button class="btn btn-sm btn-ghost" id="btn-csv-editar-${idx}" style="padding: 0 4px; font-size: 0.9rem; display: none;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'editar')" title="Ver e editar o banco de dados (CSV)">📊</button>
-                                                <button class="btn btn-sm btn-ghost" id="btn-csv-fatia-${idx}" style="padding: 0 4px; font-size: 0.9rem; display: none;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'distribuir')" title="Escolher as linhas do banco que este modelo imprime">🧩</button>
                                             </div>
                                         `}
                                     </div>
@@ -20399,6 +20405,21 @@ function renderAmostrasOSItens(osId) {
                                         <option value="">-- Selecione uma Numeração --</option>
                                         ${numOpts}
                                     </select>
+                                    <!-- Banco de dados (CSV) da numeração. Fica escondida
+                                         enquanto a numeração escolhida não tiver um; quem
+                                         mostra e preenche é atualizarBotoesCsvDaAmostra().
+                                         Nasceu com rótulo porque a versão anterior — dois
+                                         emojis nus ao lado do título — não se explicava. -->
+                                    <div id="linha-csv-${idx}" style="display:none; flex-direction:column; gap:8px; margin-top:8px; padding:8px 10px; background:rgba(15,23,42,0.55); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                        <span style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:5px; min-width:0;">
+                                            🗂️ Banco de dados:
+                                            <b id="csv-nome-${idx}" style="color:var(--text); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></b>
+                                        </span>
+                                        <div style="display:flex; gap:6px;">
+                                            <button class="btn btn-sm btn-secondary" id="btn-csv-editar-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'editar')" title="Abrir o banco como planilha: corrigir célula, coluna, e marcar quais linhas imprimem">📊 Ver / editar</button>
+                                            <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'distribuir')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">

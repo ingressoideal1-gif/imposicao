@@ -8,6 +8,46 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v534 — 2026-08-12] — A tela do banco de dados passou a se explicar
+
+Relatado direto: *"Não ficou claro a edição do .csv e a forma de seleção para
+cada modelo"*. O codigo estava certo; a interface e que nao dizia nada.
+
+### No card do modelo
+Eram dois emojis nus (📊 🧩) espremidos na linha do titulo "Numeracao
+Cadastrada" — sem texto, so tooltip. Medindo, o quarto botao da fila ainda
+ficava **cortado** pela largura do painel. Viraram uma faixa propria:
+
+```
+🗂️ Banco de dados: assentos.csv
+[ 📊 Ver / editar ]  [ 🧩 Linhas: 5 de 10 ]
+```
+
+A contagem saiu do tooltip e foi para dentro do botao. Modelo sem nenhuma linha
+fica com o botao vermelho — ele nao imprimiria nada.
+
+### Na tela de distribuir
+Ela abria com os botoes de modelo apagados e **nada** explicava por que. Ganhou
+uma faixa fixa no topo com o fluxo inteiro:
+
+```
+① Clique nas linhas que um modelo vai imprimir → ② Clique no nome do modelo
+                                                  3 linha(s) selecionada(s)
+Aqui só se reparte. Para corrigir o conteúdo das células, feche e use
+📊 Ver / editar no card do modelo.
+```
+
+O indicador da direita e ambar sem selecao e verde com a contagem. O `title` dos
+botoes de modelo passou a dizer por que estao apagados. E a ultima linha avisa o
+que aquela tela **nao** faz — sem isso o operador tenta editar celula, nao
+consegue, e conclui que esta quebrada.
+
+### Arquivos
+`frontend/script.js`, `frontend/csv-editor.js`, `docs/editor_de_csv.md`.
+So frontend — o agente nao precisa ser republicado.
+
+---
+
 ## [v534 — 2026-08-12] — O link do cliente pagina os ingressos, e ficou mais leve
 
 ### O problema

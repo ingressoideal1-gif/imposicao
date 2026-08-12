@@ -340,6 +340,16 @@
   color:var(--text,#e2e8f0);border-radius:8px;padding:5px 9px;font-size:.78rem;font-family:inherit}
 .csv-ed-in:focus{outline:none;border-color:#3b82f6}
 .csv-ed-sep{width:1px;align-self:stretch;background:var(--border,rgba(148,163,184,.25));margin:0 4px}
+.csv-ed-guia{align-items:center;gap:10px;padding:8px 12px;border-radius:10px;
+  background:rgba(30,41,59,.6);border:1px solid var(--border,rgba(148,163,184,.25))}
+.csv-ed-guia .passo{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;
+  color:var(--text,#e2e8f0)}
+.csv-ed-guia .num{display:inline-flex;align-items:center;justify-content:center;
+  width:19px;height:19px;border-radius:50%;background:#3b82f6;color:#fff;
+  font-size:.72rem;font-weight:800;flex-shrink:0}
+.csv-ed-guia .seta{color:var(--text-faint,#475569)}
+.csv-ed-guia .estado{margin-left:auto;font-size:.8rem;font-weight:700;white-space:nowrap}
+.csv-ed-guia .nota{flex-basis:100%;font-size:.75rem;color:var(--text-dim,#94a3b8)}
 
 .csv-ed-scroll{flex:1;overflow:auto;outline:none;background:rgba(10,15,30,.6)}
 .csv-ed-inner{position:relative}
@@ -1935,6 +1945,31 @@
     function renderBarrasDistribuicao(bars) {
         const c = cobertura();
 
+        // Sem esta faixa a tela abre com os botoes de modelo apagados e nada
+        // explica por que: o operador ve controles mortos e nao descobre que
+        // falta marcar as linhas. Foi exatamente a queixa que a criou.
+        const guia = document.createElement('div');
+        guia.className = 'csv-ed-bar csv-ed-guia';
+        guia.innerHTML =
+            '<span class="passo"><span class="num">1</span>'
+            + 'Clique nas linhas que um modelo vai imprimir</span>'
+            + '<span class="seta">\u2192</span>'
+            + '<span class="passo"><span class="num">2</span>'
+            + 'Clique no nome do modelo, na barra de baixo</span>'
+            + '<span class="nota">Aqui só se reparte. Para corrigir o conteúdo das '
+            + 'células, feche e use <b>📊 Ver / editar</b> no card do modelo.</span>';
+        const estado = document.createElement('span');
+        estado.className = 'estado';
+        if (ed.sel.size) {
+            estado.textContent = ed.sel.size.toLocaleString('pt-BR') + ' linha(s) selecionada(s)';
+            estado.style.color = '#22c55e';
+        } else {
+            estado.textContent = 'Nenhuma linha selecionada ainda';
+            estado.style.color = '#f59e0b';
+        }
+        guia.insertBefore(estado, guia.querySelector('.nota'));
+        bars.appendChild(guia);
+
         const b2 = document.createElement('div');
         b2.className = 'csv-ed-bar';
         const l = document.createElement('label');
@@ -1945,7 +1980,9 @@
         ed.modelos.forEach(m => {
             const b = document.createElement('button');
             b.className = 'csv-ed-b modelo';
-            b.title = `Dar as linhas selecionadas para ${m.nome}`;
+            b.title = ed.sel.size
+                ? `Dar as ${ed.sel.size} linha(s) selecionada(s) para ${m.nome}`
+                : 'Marque as linhas primeiro \u2014 clique nelas na tabela';
             const chip = document.createElement('span');
             chip.className = 'chip';
             chip.style.background = corDoModelo(m.id);
@@ -1963,7 +2000,9 @@
             b2.appendChild(b);
         });
 
-        const bNinguem = botao('— Sem modelo', 'Tirar o dono das linhas selecionadas',
+        const bNinguem = botao('— Sem modelo',
+            ed.sel.size ? 'Tirar o dono das linhas selecionadas'
+                        : 'Marque as linhas primeiro \u2014 clique nelas na tabela',
             () => atribuir(null));
         bNinguem.disabled = !ed.sel.size;
         b2.appendChild(bNinguem);
