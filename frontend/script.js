@@ -3736,46 +3736,36 @@ function drawElement(ctx, el, S) {
             label = `${el.prefix || ''}${dummyNum}${el.suffix || ''}`;
         }
 
-        // Desenhar texto centralizado no ponto de ancoragem (centro real do elemento).
-        // Para linha simples: textBaseline='middle' centraliza automaticamente (correto).
-        // Para multilinha: usar line_height = 1.2 × fs (igual ao engine.py) e
-        // posicionar cada linha manualmente a partir do topo do bloco.
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        // Desenho centralizado (multilinha 1.2 = engine.py) com ajuste de
+        // largura maxima — a mesma funcao usada por todas as janelas.
+        const aj = window.desenharTextoAjustado(
+            ctx, el, label, fs, S,
+            (fsPx) => buildCanvasFont(fsPx, el.font_name)
+        );
 
-        let mw = 0;
-        if (label.includes('\n')) {
-            const lines = label.split('\n');
-            const lineHeight = fs * 1.2;  // igual ao engine: font_size * 1.2
-            const totalH = lines.length * lineHeight;
-            // topo do bloco centrado em y=0 (ancoragem central)
-            const blockTop = -totalH / 2;
-            lines.forEach((line, i) => {
-                // centro visual da linha i: topo_da_linha + lineHeight/2
-                const lineCenter = blockTop + i * lineHeight + lineHeight / 2;
-                ctx.fillText(line, 0, lineCenter);
-                const lw = ctx.measureText(line).width;
-                if (lw > mw) mw = lw;
-            });
-        } else {
-            ctx.fillText(label, 0, 0);
-            mw = ctx.measureText(label).width;
+        // Guia do espaço delimitado: só no editor e só com o elemento selecionado.
+        if (isSelected && Number(el.max_width_mm) > 0) {
+            const guiaW = el.max_width_mm * S;
+            const guiaH = Math.max(aj.linhas.length * aj.corpo * 1.2, aj.corpo * 1.2);
+            ctx.strokeStyle = 'rgba(59,130,246,0.55)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 3]);
+            ctx.strokeRect(-guiaW / 2, -guiaH / 2, guiaW, guiaH);
+            ctx.setLineDash([]);
         }
 
-        // Indicador de seleção: underline sutil (sem box tracejado)
+        // Indicador de seleção: underline sutil (sem box tracejado).
+        // Âmbar quando travado — o aviso visual da trava no canvas.
         if (isSelected) {
-            const halfH = label.includes('\n') ? fs * 1.2 : fs / 2;
-            ctx.strokeStyle = '#3b82f6';
+            const mw = aj.larguraPx;
+            const halfH = aj.linhas.length > 1 ? (aj.linhas.length * aj.corpo * 1.2) / 2 : aj.corpo / 2;
+            ctx.strokeStyle = el.locked ? '#f59e0b' : '#3b82f6';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(-mw / 2, halfH + 3);
             ctx.lineTo(mw / 2, halfH + 3);
             ctx.stroke();
         }
-
-        // Restaurar defaults do canvas
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
 
 
 
@@ -4441,10 +4431,22 @@ function getElementSizeMM(el) {
             w = mw_px / S;
 
             h = el.font_size / 2.8346;
-            
+
             // TEATRO_COMBO em 2lines: dobrar a altura
             if (el.type === 'TEATRO_COMBO' && el.layout === '2lines') {
                 h *= 2.2;
+            }
+
+            // Largura maxima: a caixa de clique/alinhamento nao passa do espaço,
+            // e a altura acompanha as linhas quebradas.
+            if (Number(el.max_width_mm) > 0 && typeof window.ajustarTextoNaLargura === 'function') {
+                ctx.save();
+                const maxPx = el.max_width_mm * S;
+                const medir = (t, fsPx) => { ctx.font = buildCanvasFont(fsPx, el.font_name); return ctx.measureText(t).width; };
+                const aj = window.ajustarTextoNaLargura(medir, label, fs, maxPx, el.overflow === 'wrap' ? 'wrap' : 'shrink');
+                ctx.restore();
+                w = Math.min(w, el.max_width_mm);
+                h = aj.linhas.length > 1 ? (aj.linhas.length * aj.corpo * 1.2) / S : aj.corpo / S;
             }
 
         } else {
@@ -5700,6 +5702,36 @@ function renderElementsList() {
 
                 </div>
 
+                ${el.type === 'TEXT' ? `
+                <div class="form-group el-full" style="${el.source === 'database' ? '' : 'display:none;'} background: rgba(0,168,255,0.05); border-radius: 6px; padding: 8px;">
+                    <label>📏 Espaço do texto (dado variável)</label>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
+                        <div>
+                            <label style="font-size:0.72rem;">Largura máxima (mm)</label>
+                            <input class="form-control" type="number" min="0" max="1000" step="0.5" value="${el.max_width_mm > 0 ? el.max_width_mm : ''}" placeholder="livre" onchange="updateEl('${el.id}','max_width_mm', this.value === '' ? 0 : Math.max(0, +this.value))">
+                        </div>
+                        <div>
+                            <label style="font-size:0.72rem;">Se não couber</label>
+                            <select class="form-control" onchange="updateEl('${el.id}','overflow',this.value)">
+                                <option value="shrink" ${el.overflow !== 'wrap' ? 'selected' : ''}>Reduzir a fonte até caber</option>
+                                <option value="wrap" ${el.overflow === 'wrap' ? 'selected' : ''}>Quebrar em linhas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.72rem;">Alinhamento</label>
+                            <select class="form-control" onchange="updateEl('${el.id}','text_align',this.value)">
+                                <option value="center" ${!el.text_align || el.text_align === 'center' ? 'selected' : ''}>Centro</option>
+                                <option value="left" ${el.text_align === 'left' ? 'selected' : ''}>Esquerda</option>
+                                <option value="right" ${el.text_align === 'right' ? 'selected' : ''}>Direita</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="font-size:0.72rem; color:var(--text-dim); margin-top:4px;">
+                        Deixe vazio para texto livre. Com largura definida, o dado que não couber reduz a fonte ou quebra a linha — igual na tela e na impressão. Com o elemento selecionado, o espaço aparece tracejado no desenho.
+                    </div>
+                </div>
+                ` : ''}
+
                 ` : ''}
 
                 ${extraFields}
@@ -5895,6 +5927,12 @@ window.updateElSource = function (id, value) {
     if (value !== 'database') {
 
         delete el.csv_column;
+
+        delete el.max_width_mm;
+
+        delete el.overflow;
+
+        delete el.text_align;
 
     } else {
 
