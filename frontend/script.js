@@ -5702,35 +5702,7 @@ function renderElementsList() {
 
                 </div>
 
-                ${el.type === 'TEXT' ? `
-                <div class="form-group el-full" style="${el.source === 'database' ? '' : 'display:none;'} background: rgba(0,168,255,0.05); border-radius: 6px; padding: 8px;">
-                    <label>📏 Espaço do texto (dado variável)</label>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
-                        <div>
-                            <label style="font-size:0.72rem;">Largura máxima (mm)</label>
-                            <input class="form-control" type="number" min="0" max="1000" step="0.5" value="${el.max_width_mm > 0 ? el.max_width_mm : ''}" placeholder="livre" onchange="updateEl('${el.id}','max_width_mm', this.value === '' ? 0 : Math.max(0, +this.value))">
-                        </div>
-                        <div>
-                            <label style="font-size:0.72rem;">Se não couber</label>
-                            <select class="form-control" onchange="updateEl('${el.id}','overflow',this.value)">
-                                <option value="shrink" ${el.overflow !== 'wrap' ? 'selected' : ''}>Reduzir a fonte até caber</option>
-                                <option value="wrap" ${el.overflow === 'wrap' ? 'selected' : ''}>Quebrar em linhas</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="font-size:0.72rem;">Alinhamento</label>
-                            <select class="form-control" onchange="updateEl('${el.id}','text_align',this.value)">
-                                <option value="center" ${!el.text_align || el.text_align === 'center' ? 'selected' : ''}>Centro</option>
-                                <option value="left" ${el.text_align === 'left' ? 'selected' : ''}>Esquerda</option>
-                                <option value="right" ${el.text_align === 'right' ? 'selected' : ''}>Direita</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div style="font-size:0.72rem; color:var(--text-dim); margin-top:4px;">
-                        Deixe vazio para texto livre. Com largura definida, o dado que não couber reduz a fonte ou quebra a linha — igual na tela e na impressão. Com o elemento selecionado, o espaço aparece tracejado no desenho.
-                    </div>
-                </div>
-                ` : ''}
+                ${el.type === 'TEXT' ? boxEspacoDoTextoHTML(el) : ''}
 
                 ` : ''}
 
@@ -5806,6 +5778,167 @@ window.renderBoxArquivos = function () {
 
 
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📏 ESPAÇO DO TEXTO — largura máxima do dado variável e o conferidor do banco
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Abaixo disto o dado é ilegível no papel, e o operador precisa saber ANTES de
+// mandar imprimir. Serve de corte para o aviso, não trava nada.
+const CORPO_MINIMO_PT = 6;
+
+const AJUDA_OVERFLOW = {
+    shrink: 'A fonte diminui até o dado caber na largura.',
+    condense: 'As letras estreitam e a <b>altura fica igual</b> em todos os ingressos — as linhas do ticket continuam alinhadas. Passando de 25% de compressão a fonte também diminui, para não sair ilegível.',
+    wrap: 'O texto quebra em linhas dentro da largura; palavra maior que o espaço quebra no meio.'
+};
+
+/**
+ * Passa o banco inteiro pelo mesmo ajuste do desenho e devolve onde ele sofre.
+ * O resultado é guardado por elemento: `renderElementsList()` roda a cada
+ * tecla, e varrer 3.000 linhas a cada uma seria desperdício. A chave inclui a
+ * própria lista de linhas, então trocar o CSV (que sempre cria um array novo)
+ * invalida sozinho, sem precisar lembrar de limpar em cada caminho.
+ */
+const _cacheEstouro = new Map();
+
+function conferirEstouroDoElemento(el) {
+    if (!el || el.type !== 'TEXT' || el.source !== 'database' || !el.csv_column) return null;
+    if (typeof window.conferirEstouroDaColuna !== 'function') return null;
+    const linhas = state.numCsvData;
+    if (!Array.isArray(linhas) || !linhas.length) return null;
+
+    const canvas = document.getElementById('numeracao-canvas');
+    if (!canvas) return null;
+
+    const S = state.canvasScale || 3;
+    const fmt = state.numFormato;
+    const fs = (el.font_size || 12) * S / 2.8346;
+    const maxPx = Number(el.max_width_mm) > 0 ? el.max_width_mm * S : 0;
+    // O bloco cresce para os dois lados da âncora: o que sobra até a borda mais
+    // próxima é metade do espaço, então a altura utilizável é o dobro dela.
+    const alturaMm = fmt
+        ? Math.max(0, 2 * Math.min(el.y_mm, fmt.height_mm - el.y_mm))
+        : 0;
+
+    const chave = [
+        el.csv_column, el.max_width_mm || 0, el.overflow || 'shrink',
+        el.font_size, el.font_name || '', el.prefix || '', el.suffix || '',
+        Math.round(alturaMm * 10), Math.round(S * 100)
+    ].join('|');
+
+    const cache = _cacheEstouro.get(el.id);
+    if (cache && cache.chave === chave && cache.linhas === linhas) return cache.res;
+
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    const res = window.conferirEstouroDaColuna({
+        medir: (t, corpo) => { ctx.font = buildCanvasFont(corpo, el.font_name); return ctx.measureText(t).width; },
+        linhas,
+        coluna: el.csv_column,
+        prefixo: el.prefix || '',
+        sufixo: el.suffix || '',
+        corpoPx: fs,
+        larguraMaxPx: maxPx,
+        modo: el.overflow || 'shrink',
+        pxPorMm: S,
+        alturaDisponivelMm: alturaMm,
+        corpoMinimoPt: CORPO_MINIMO_PT
+    });
+    ctx.restore();
+
+    _cacheEstouro.set(el.id, { chave, linhas, res });
+    return res;
+}
+
+/** A linha de resultado do conferidor, dentro da box 📏. */
+function resumoEstouroHTML(el) {
+    const res = conferirEstouroDoElemento(el);
+    if (!res || !res.conferidas) return '';
+
+    const partes = [];
+    if (res.vazias.length) partes.push(`<b>${res.vazias.length}</b> com a coluna vazia`);
+    if (res.miudas.length) partes.push(`<b>${res.miudas.length}</b> abaixo de ${CORPO_MINIMO_PT} pt`);
+    if (res.altas.length) partes.push(`<b>${res.altas.length}</b> passando da altura do ticket`);
+
+    if (!partes.length) {
+        const menor = res.piorCorpoPt != null && Number(el.max_width_mm) > 0
+            ? ` — a mais apertada fica com ${res.piorCorpoPt.toFixed(1)} pt`
+            : '';
+        return `<div style="font-size:0.72rem;color:#22c55e;margin-top:6px;">
+            ✅ As ${res.conferidas.toLocaleString('pt-BR')} linhas do banco cabem no espaço${menor}.
+        </div>`;
+    }
+
+    return `<div style="font-size:0.72rem;color:var(--amber,#f59e0b);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>⚠️ De ${res.conferidas.toLocaleString('pt-BR')} linhas: ${partes.join(' · ')}.</span>
+        <button type="button" class="btn btn-sm btn-secondary" style="padding:1px 8px;font-size:0.72rem;"
+            onclick="verLinhasComEstouro('${el.id}');event.stopPropagation()"
+            title="Abre o banco de dados mostrando só essas linhas">🔍 Ver essas linhas</button>
+    </div>`;
+}
+
+/** A box 📏 inteira — só aparece em elemento de texto vindo do banco. */
+function boxEspacoDoTextoHTML(el) {
+    const modo = (el.overflow === 'wrap' || el.overflow === 'condense') ? el.overflow : 'shrink';
+    return `
+                <div class="form-group el-full" style="${el.source === 'database' ? '' : 'display:none;'} background: rgba(0,168,255,0.05); border-radius: 6px; padding: 8px;">
+                    <label>📏 Espaço do texto (dado variável)</label>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
+                        <div>
+                            <label style="font-size:0.72rem;">Largura máxima (mm)</label>
+                            <input class="form-control" type="number" min="0" max="1000" step="0.5" value="${el.max_width_mm > 0 ? el.max_width_mm : ''}" placeholder="livre" onchange="updateEl('${el.id}','max_width_mm', this.value === '' ? 0 : Math.max(0, +this.value))">
+                        </div>
+                        <div>
+                            <label style="font-size:0.72rem;">Se não couber</label>
+                            <select class="form-control" onchange="updateEl('${el.id}','overflow',this.value)">
+                                <option value="shrink" ${modo === 'shrink' ? 'selected' : ''}>Reduzir a fonte até caber</option>
+                                <option value="condense" ${modo === 'condense' ? 'selected' : ''}>Espremer as letras (mantém a altura)</option>
+                                <option value="wrap" ${modo === 'wrap' ? 'selected' : ''}>Quebrar em linhas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.72rem;">Alinhamento</label>
+                            <select class="form-control" onchange="updateEl('${el.id}','text_align',this.value)">
+                                <option value="center" ${!el.text_align || el.text_align === 'center' ? 'selected' : ''}>Centro</option>
+                                <option value="left" ${el.text_align === 'left' ? 'selected' : ''}>Esquerda</option>
+                                <option value="right" ${el.text_align === 'right' ? 'selected' : ''}>Direita</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="font-size:0.72rem; color:var(--text-dim); margin-top:4px;">
+                        Deixe a largura vazia para texto livre. ${AJUDA_OVERFLOW[modo]}
+                        Vale igual na tela e na impressão; com o elemento selecionado, o espaço aparece tracejado no desenho.
+                    </div>
+                    ${resumoEstouroHTML(el)}
+                </div>`;
+}
+
+/** Abre o banco de dados mostrando só as linhas que o conferidor apontou. */
+window.verLinhasComEstouro = function (id) {
+    const el = state.numElements.find(e => e.id === id);
+    if (!el) return;
+    const res = conferirEstouroDoElemento(el);
+    if (!res || !res.indices.length) {
+        toast('Nenhuma linha com problema nessa coluna.', 'info');
+        return;
+    }
+    const partes = [];
+    if (res.vazias.length) partes.push(`${res.vazias.length} com a coluna vazia`);
+    if (res.miudas.length) partes.push(`${res.miudas.length} com a fonte abaixo de ${CORPO_MINIMO_PT} pt`);
+    if (res.altas.length) partes.push(`${res.altas.length} passando da altura do ticket`);
+
+    _abrirEditorCsvDaNumeracao(
+        state.numCsvHeaders || [],
+        state.numCsvData,
+        state.numCsvFilename || 'banco.csv',
+        {
+            indices: res.indices,
+            motivo: `Coluna “${el.csv_column}”: ${partes.join(' · ')}. `
+                + 'Corrija o dado aqui ou dê mais espaço ao campo no ticket.'
+        }
+    );
+};
 
 let _ultimoAvisoTravado = 0;
 function avisarElementoTravado() {
@@ -12016,7 +12149,7 @@ window.criarCsvVazioDaNumeracao = function() {
 
 
 
-function _abrirEditorCsvDaNumeracao(headers, rows, filename) {
+function _abrirEditorCsvDaNumeracao(headers, rows, filename, destacar) {
 
     window.abrirEditorCsv({
 
@@ -12025,6 +12158,9 @@ function _abrirEditorCsvDaNumeracao(headers, rows, filename) {
         rows: rows,
 
         filename: filename,
+
+        // Quando o conferidor da box 📏 manda a tela abrir apontando linhas.
+        destacar: destacar || null,
 
         // Quantos elementos apontam para cada coluna, para o modal avisar antes
         // de renomear ou remover uma coluna em uso.

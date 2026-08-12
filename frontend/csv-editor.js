@@ -412,6 +412,10 @@
 .csv-ed-vazio .titulo{font-size:.95rem;color:var(--text,#e2e8f0);margin-bottom:6px;font-weight:600}
 .csv-ed-r.sel{background:rgba(59,130,246,.20)}
 .csv-ed-r.sel:hover{background:rgba(59,130,246,.26)}
+/* Linha apontada por quem abriu a tela: a marca fica mesmo com o filtro
+   desligado, senão o operador perderia de vista o que veio consertar. */
+.csv-ed-r.apontada{box-shadow:inset 3px 0 0 #f59e0b;background:rgba(245,158,11,.07)}
+.csv-ed-r.apontada:hover{background:rgba(245,158,11,.13)}
 .csv-ed-c.mod{gap:6px;font-size:.75rem}
 .csv-ed-c.mod.sem{color:#f59e0b}
 .csv-ed-c .chip,.csv-ed-b .chip{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
@@ -635,6 +639,7 @@
         for (let i = 0; i < ed.rows.length; i++) {
             const r = ed.rows[i];
             if (ed.soSemModelo && (!linhaAtiva(r) || donoDaLinha(r) != null)) continue;
+            if (ed.soDestacadas && ed.destacar && !ed.destacar.ids.has(Number(r[COL_ID]))) continue;
             if (fc && fv !== '' && String(r[fc] == null ? '' : r[fc]) !== fv) continue;
             if (busca) {
                 let achou = false;
@@ -660,7 +665,11 @@
     }
 
     function ordenacaoOuFiltroAtivo() {
-        return !!(ed.ordemCol || (ed.busca || '').trim() || (ed.filtroCol && ed.filtroVal !== ''));
+        // `soDestacadas` entra aqui pelo mesmo motivo dos outros: com a grade
+        // filtrada, a posição na tela não é a posição de impressão, e arrastar
+        // jogaria a linha num lugar que o operador não está vendo.
+        return !!(ed.ordemCol || (ed.busca || '').trim()
+            || (ed.filtroCol && ed.filtroVal !== '') || ed.soDestacadas);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -963,7 +972,9 @@
         if (ed.rows.length) {
             dom.vazio.textContent = ed.soSemModelo
                 ? 'Nenhuma linha sem modelo — está tudo distribuído.'
-                : 'Nenhuma linha casa com a busca e o filtro atuais.';
+                : ed.soDestacadas
+                    ? 'Nenhuma das linhas apontadas continua no banco.'
+                    : 'Nenhuma linha casa com a busca e o filtro atuais.';
             return;
         }
         if (ehDistribuicao()) {
@@ -1014,7 +1025,8 @@
         const selecionada = distrib && ed.sel.has(Number(row[COL_ID]));
         const el = document.createElement('div');
         el.className = 'csv-ed-r' + (linhaAtiva(row) ? '' : ' off')
-            + (selecionada ? ' sel' : '');
+            + (selecionada ? ' sel' : '')
+            + (ed.destacar && ed.destacar.ids.has(Number(row[COL_ID])) ? ' apontada' : '');
         el.style.top = (pos * ROW_H) + 'px';
         el.style.minWidth = larguraTotal() + 'px';
         el.dataset.ri = ri;
@@ -1192,6 +1204,38 @@
         const canceladas = ed.rows.length - c.ativas;
         dom.sub.textContent = `${ed.rows.length.toLocaleString('pt-BR')} linhas`
             + (canceladas ? ` · ${canceladas} canceladas` : '');
+    }
+
+    /**
+     * A faixa de quem chegou aqui apontando linhas — hoje, o conferidor de
+     * espaço do texto do editor de numeração. Sem ela a tela abriria filtrada
+     * e nada explicaria por que o banco "encolheu".
+     */
+    function renderFaixaApontadas(bars) {
+        if (!ed.destacar) return;
+        const n = ed.destacar.ids.size;
+        const faixa = document.createElement('div');
+        faixa.className = 'csv-ed-bar csv-ed-guia';
+        faixa.innerHTML = '<span class="nota" style="color:#f59e0b;">⚠️ '
+            + ed.destacar.motivo.replace(/[<>]/g, '') + '</span>';
+        faixa.appendChild(botao(
+            ed.soDestacadas
+                ? `✕ mostrando só as ${n} apontadas`
+                : `🔍 mostrar só as ${n} apontadas`,
+            ed.soDestacadas
+                ? 'Voltar a mostrar o banco inteiro'
+                : 'Filtrar a grade nas linhas apontadas',
+            alternarSoDestacadas));
+        bars.appendChild(faixa);
+    }
+
+    /** Liga e desliga o filtro das linhas apontadas. */
+    function alternarSoDestacadas() {
+        ed.busca = '';
+        ed.filtroCol = '';
+        ed.filtroVal = '';
+        ed.soDestacadas = !ed.soDestacadas;
+        recalcular();
     }
 
     /** Deixa na tela só as linhas ativas que ninguém pegou. */
@@ -1874,6 +1918,8 @@
         const bars = dom.bars;
         bars.innerHTML = '';
 
+        renderFaixaApontadas(bars);
+
         // Faixa 1 — busca, filtro, desfazer, arquivo
         const b1 = document.createElement('div');
         b1.className = 'csv-ed-bar';
@@ -2367,6 +2413,11 @@
             sel: new Set(),
             ultimoClique: null,
             soSemModelo: false,
+            // Linhas apontadas por quem abriu a tela (hoje, o conferidor de
+            // espaço do texto). Chegam como POSIÇÃO na lista e viram __id logo
+            // abaixo: id sobrevive a ordenar, filtrar e desfazer; posição não.
+            destacar: null,
+            soDestacadas: false,
             renomeacoes: [],
             busca: '', filtroCol: '', filtroVal: '',
             ordemCol: null, ordemDir: 1,
@@ -2375,6 +2426,19 @@
             undo: [], redo: [], sujo: false,
             editando: false, arrastando: null
         };
+
+        const dest = opts.destacar;
+        if (dest && Array.isArray(dest.indices) && dest.indices.length) {
+            const ids = new Set();
+            dest.indices.forEach(i => {
+                const r = ed.rows[i];
+                if (r && r[COL_ID] != null) ids.add(Number(r[COL_ID]));
+            });
+            if (ids.size) {
+                ed.destacar = { ids, motivo: String(dest.motivo || '') };
+                ed.soDestacadas = true;   // abre já mostrando o problema
+            }
+        }
 
         // Cada modelo chega com a fatia que ja tinha salva; o mapa inverte isso
         // para "linha -> dono", que e como a tela pergunta.
