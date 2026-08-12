@@ -59,22 +59,30 @@ DESCENDER_FRACTIONS = {
 _DESCENDER_DEFAULT = 0.21  # valor médio para fontes do sistema (TTF/OTF)
 
 
+# Ate onde as letras podem ser espremidas no modo "condense" antes de a fonte
+# tambem ter de encolher. Abaixo de ~75% o texto fica ilegivel no papel — e o
+# mesmo piso que os motores de VDP do mercado usam no copyfitting.
+PISO_CONDENSA = 0.75
+
+
 def _ajustar_texto_na_largura(medir, texto, corpo, largura_max, modo):
     """Ajusta texto variavel a um espaco de largura fixa.
 
     Espelho exato de window.ajustarTextoNaLargura (frontend/texto-ajuste.js);
     mudou aqui, muda la. `medir(texto, corpo)` e a regua de quem chama.
-    Devolve (corpo, linhas). Folga de 0,5% para a mesma palavra nao quebrar
-    diferente entre a regua do canvas e a do fitz.
+    Devolve (corpo, linhas, escala_x) — `escala_x` < 1 so no modo "condense",
+    e a compressao horizontal a aplicar na hora de desenhar. Folga de 0,5%
+    para a mesma palavra nao quebrar diferente entre a regua do canvas e a do
+    fitz.
     """
     paragrafos = str(texto).split("\n")
     try:
         largura_max = float(largura_max or 0)
         corpo = float(corpo)
     except (TypeError, ValueError):
-        return corpo, paragrafos
+        return corpo, paragrafos, 1.0
     if largura_max <= 0 or corpo <= 0:
-        return corpo, paragrafos
+        return corpo, paragrafos, 1.0
     alvo = largura_max * 0.995
 
     if modo == "wrap":
@@ -101,17 +109,29 @@ def _ajustar_texto_na_largura(medir, texto, corpo, largura_max, modo):
                 else:
                     atual = tentativa
             linhas.append(atual)
-        return corpo, linhas
+        return corpo, linhas, 1.0
 
-    # shrink (padrao): largura de texto e linear no corpo — uma divisao basta.
+    # A linha mais larga manda nos outros dois modos: largura de texto e linear
+    # no corpo, entao uma divisao resolve os dois sem laco de tentativa.
     maior = 0.0
     for p in paragrafos:
         w = medir(p, corpo)
         if w > maior:
             maior = w
-    if maior > alvo:
-        return corpo * (alvo / maior), paragrafos
-    return corpo, paragrafos
+    if maior <= alvo:
+        return corpo, paragrafos, 1.0
+
+    if modo == "condense":
+        escala = alvo / maior
+        if escala >= PISO_CONDENSA:
+            # Coube so espremendo: a ALTURA fica intacta, que e a razao de ser
+            # deste modo — as linhas seguem alinhadas de um ingresso ao outro.
+            return corpo, paragrafos, escala
+        # Nem no piso coube: espreme ate o piso e o resto vira corpo menor.
+        return corpo * (alvo / (maior * PISO_CONDENSA)), paragrafos, PISO_CONDENSA
+
+    # shrink (padrao)
+    return corpo * (alvo / maior), paragrafos, 1.0
 
 
 def _so_layout(el: dict) -> bool:
@@ -757,14 +777,17 @@ class ImpositionEngine:
             except (TypeError, ValueError):
                 _max_w_mm = 0.0
             _align = None
+            _escala_x = 1.0
             if _max_w_mm > 0:
                 if font_file:
                     _medir = lambda s, fs: fs * 0.55 * len(s)
                 else:
                     _medir = lambda s, fs: fitz.get_text_length(
                         s, fontname=font_name, fontsize=fs)
-                _modo = "wrap" if el.get("overflow") == "wrap" else "shrink"
-                font_size, _linhas_aj = _ajustar_texto_na_largura(
+                _modo = el.get("overflow")
+                if _modo not in ("wrap", "condense"):
+                    _modo = "shrink"
+                font_size, _linhas_aj, _escala_x = _ajustar_texto_na_largura(
                     _medir, val_str, font_size, _max_w_mm * MM2PT, _modo)
                 insert_kwargs["fontsize"] = font_size
                 val_str = "\n".join(_linhas_aj)
@@ -818,26 +841,38 @@ class ImpositionEngine:
                 else:
                     text_width = fitz.get_text_length(line_str, fontname=font_name, fontsize=font_size)
 
+                # No modo "condense" a linha sai espremida na horizontal, entao
+                # o que conta para alinhar e a largura JA comprimida.
+                largura_visual = text_width * _escala_x
+
                 if _align == "left":
-                    origin_x = cx - (_max_w_mm * MM2PT) / 2.0
+                    borda_esq = cx - (_max_w_mm * MM2PT) / 2.0
                 elif _align == "right":
-                    origin_x = cx + (_max_w_mm * MM2PT) / 2.0 - text_width
+                    borda_esq = cx + (_max_w_mm * MM2PT) / 2.0 - largura_visual
                 else:
-                    origin_x = cx - text_width / 2.0
+                    borda_esq = cx - largura_visual / 2.0
+
+                # A compressao acontece em torno do pivot (cx, cy), entao o
+                # ponto de insercao precisa ser pre-corrigido para a linha cair
+                # em `borda_esq` DEPOIS de comprimida:
+                #   final = cx + (origin_x - cx) * escala  ⇒  origin_x abaixo.
+                origin_x = cx + (borda_esq - cx) / _escala_x
 
                 # Centro visual da linha i
                 cy_line = block_top + (i * line_height) + (line_height / 2.0)
                 # Baseline = centro visual + offset (textBaseline='middle' → PDF baseline)
                 origin_y = cy_line + baseline_offset
 
-                if angle != 0:
-                    # O pivot de rotaçao e o centro do bloco de texto (cx, cy)
+                if angle != 0 or _escala_x != 1.0:
+                    # Um morph so para as duas transformacoes, no mesmo pivot:
+                    # comprime primeiro (no eixo do texto) e depois gira.
                     origin = fitz.Point(origin_x, origin_y)
                     pivot = fitz.Point(cx, cy)
+                    matriz = fitz.Matrix(_escala_x, 1) * fitz.Matrix(-angle)
                     page.insert_text(
                         origin,
                         line_str,
-                        morph=(pivot, fitz.Matrix(-angle)),
+                        morph=(pivot, matriz),
                         **insert_kwargs
                     )
                 else:
