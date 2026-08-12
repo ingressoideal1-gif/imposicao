@@ -2011,7 +2011,15 @@ function getFontCSS(font_name) {
  * não carrega. Quem puder esperar deve chamar esta — é o que faz a arte sair certa de
  * primeira, sem o vai-e-volta de carregar e mandar redesenhar.
  */
-async function precarregarArtesDosElementos(elementos) {
+async function precarregarArtesDosElementos(elementos, linhas) {
+    // As fotos entram junto com a arte. Sem isto, a página 2 em diante do link
+    // do cliente saía SEM a foto: cada página mostra a linha daquela página, e
+    // quem desenha aqui desenha uma vez só — a foto que chegasse depois do
+    // traço não teria como aparecer. A página 1 funcionava por acidente, porque
+    // o card do pedido já tinha carregado a foto da primeira linha.
+    if (typeof window.precarregarFotosDosElementos === 'function') {
+        try { await window.precarregarFotosDosElementos(elementos, linhas); } catch (e) { }
+    }
     for (const el of (elementos || [])) {
         try {
             if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas) {
@@ -3028,8 +3036,13 @@ async function desenharPaginaDoPdf(idx, pageNum) {
         }
         if (num && num.elements && num.elements.length > 0) {
             // A arte dos elementos SVG/PDF e aguardada antes de desenhar: esta funcao
-            // e async, entao sai certo de primeira.
-            await precarregarArtesDosElementos(num.elements);
+            // e async, entao sai certo de primeira. A foto vai junto, e e a foto
+            // DESTA pagina — baixar o lote inteiro para mostrar uma pagina seria
+            // fazer o cliente esperar por 499 fotos que ele nao esta vendo.
+            const _linhasPg = (typeof linhasDaAmostra === 'function')
+                ? linhasDaAmostra(item, num)
+                : (num.csv_data || item.csv_data || []);
+            await precarregarArtesDosElementos(num.elements, [_linhasPg[pageNum - 1]].filter(Boolean));
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
         }
 

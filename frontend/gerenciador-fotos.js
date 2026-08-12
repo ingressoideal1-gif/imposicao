@@ -42,6 +42,18 @@
     var colunaId = '';       // coluna que identifica a pessoa na tela
     var trocandoLinha = -1;  // linha cuja foto está sendo substituída
 
+    // Fotos que ainda não acharam dono, guardadas por numeração+coluna.
+    //
+    // Elas não pertencem a nenhuma linha, então não têm onde ser gravadas — e
+    // some daí a regra: gravar o lote NÃO pode fazê-las desaparecer. Numa
+    // gráfica, a foto sobrando quase sempre é de alguém que ainda vai entrar na
+    // lista, ou é a mesma pessoa com o nome escrito de outro jeito. Jogá-la fora
+    // obrigaria o operador a reimportar o pendrive inteiro.
+    //
+    // O limite honesto: isto vive na aba aberta. Recarregar a página perde o que
+    // não foi ligado a ninguém — por isso existe o relatório.
+    var sobrasGuardadas = new Map();
+
     // ══════════════════════════════════════════════════════════════════════
     // Normalização — EXIF, tamanho, formato
     // ══════════════════════════════════════════════════════════════════════
@@ -199,6 +211,11 @@
 .gf-lado b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .gf-rot{font-size:10px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gf-seta{color:#475569;flex:none}
+.gf-card.faltante{border-color:rgba(239,68,68,.55);background:rgba(239,68,68,.07)}
+.gf-semfoto{height:0;padding-bottom:128%;position:relative;border-radius:4px;
+  background:repeating-linear-gradient(45deg,rgba(239,68,68,.10) 0 8px,rgba(239,68,68,.22) 8px 16px);
+  color:#f87171;font-weight:700;font-size:11px;line-height:1.15;letter-spacing:.5px}
+.gf-semfoto::after{content:'SEM FOTO';position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 .gf-mini{margin-top:6px;width:100%;font-size:10px;padding:3px 6px;border-radius:5px;
   border:1px solid #334155;background:#1e293b;color:#94a3b8;cursor:pointer}
 .gf-mini:hover{background:#334155;color:#e2e8f0}
@@ -517,23 +534,26 @@
 
     function htmlEnquadrar() {
         var casadas = (resultado && resultado.casadas) || [];
-        if (!casadas.length) {
+        var faltantes = (resultado && resultado.semFoto) || [];
+        if (!casadas.length && !faltantes.length) {
             return '<div class="gf-vazio">Nenhuma foto casada ainda. Comece pela aba Importar.</div>';
         }
-        var paginas = Math.ceil(casadas.length / POR_PAGINA);
+        var paginas = Math.ceil(casadas.length / POR_PAGINA) || 1;
         var ini = pagina * POR_PAGINA;
         var fatia = casadas.slice(ini, ini + POR_PAGINA);
+        var ultimaPagina = pagina >= paginas - 1;
 
         return `
         <div class="gf-tag" style="margin-bottom:10px">
             Roda do mouse aproxima · arrastar move · as setas do teclado trocam de foto · duplo clique volta ao enquadramento automático.
             ${paginas > 1 ? ` · página ${pagina + 1} de ${paginas}` : ''}
+            ${faltantes.length ? ` · <b style="color:#f87171">${faltantes.length} sem foto</b>` : ''}
         </div>
         <div class="gf-grade">
             ${fatia.map(function (c, k) {
             var f = fotoDe(c.arquivo);
             var idx = ini + k;
-            var ruim = f && f.dpi < DPI_MINIMO;
+            var ruim = f && f.dpi && f.dpi < DPI_MINIMO;
             var id = identidadeDaLinha(c.linha);
             return `<div class="gf-card ${focoEnquadro === idx ? 'foco' : ''}" id="gf-card-${idx}">
                     <canvas id="gf-cv-${idx}" data-idx="${idx}"></canvas>
@@ -542,6 +562,18 @@
                     <button class="gf-mini" onclick="window.__gfTrocar(${c.linha})" title="substituir a foto desta pessoa">🔁 trocar</button>
                 </div>`;
         }).join('')}
+            ${ultimaPagina ? faltantes.map(function (li) {
+            // As faltantes ficam na MESMA grade, no fim: o operador percorre o
+            // lote inteiro numa tela só e vê os buracos junto com o resto, em
+            // vez de descobri-los na hora de imprimir.
+            var id = identidadeDaLinha(li);
+            return `<div class="gf-card faltante" title="${esc(id.coluna)}: ${esc(id.valor)}">
+                    <div class="gf-semfoto"></div>
+                    <div class="rot">${esc(id.valor)}</div>
+                    <div class="dpi">linha ${li + 1}</div>
+                    <button class="gf-mini" onclick="window.__gfTrocar(${li})">📎 anexar foto</button>
+                </div>`;
+        }).join('') : ''}
         </div>
         ${paginas > 1 ? `
         <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
@@ -723,7 +755,7 @@
             try {
                 // Foto que já está no banco não sobe de novo: reenquadrar 500
                 // credenciais não pode custar 500 uploads. Só o retângulo muda.
-                var url = f.blob ? await cfg.subirFoto(f.blob, f.hash) : f.url;
+                var url = f.noBanco ? (f.remota || f.url) : await cfg.subirFoto(f.blob, f.hash);
                 if (!url) throw new Error('o Storage não devolveu endereço');
                 var e = enquadroDe(c);
                 var linha = cfg.rows[c.linha];
@@ -739,6 +771,18 @@
                 // foto trocada precisa atualizar o nome, senão a célula passa a
                 // mentir sobre qual arquivo está impresso.
                 linha[cfg.coluna] = f.nome;
+
+                // Já subiu: a partir daqui ela é uma foto do banco, e gravar de
+                // novo (depois de reenquadrar) não repete o upload.
+                //
+                // O `url` fica guardado à parte e a tela CONTINUA desenhando a
+                // partir do arquivo que já está na memória. Trocar para o
+                // endereço da nuvem faria o navegador rebaixar, uma a uma, as
+                // fotos que ele acabou de enviar — e qualquer atraso de
+                // propagação do Storage deixaria a folha de contato preta.
+                f.remota = url;
+                f.noBanco = true;
+
                 gravadas++;
             } catch (ex) {
                 console.warn('[Fotos] falha ao subir', c.arquivo, ex);
@@ -748,20 +792,83 @@
         }
 
         if (btn) { btn.disabled = false; btn.textContent = '✔ Gravar no banco'; }
+        if (barra) barra.style.width = '0';
 
         cfg.onAplicar({
             gravadas: gravadas,
             falhas: falhas,
             semFoto: (resultado.semFoto || []).slice(),
+            sobrando: (resultado.sobrando || []).length,
             coluna: cfg.coluna
         });
 
-        if (falhas.length) {
-            aviso(gravadas + ' foto(s) gravadas, ' + falhas.length + ' falharam. As que falharam continuam no lote.');
-        } else {
-            fechar();
-        }
+        // A tela NÃO fecha ao gravar. Fechar levaria embora as fotos que
+        // sobraram — que não têm linha, logo não têm onde ser gravadas — e o
+        // operador teria de reimportar o lote para continuar de onde parou.
+        pintar();
+
+        var resumo = gravadas + ' foto(s) gravadas.';
+        if (falhas.length) resumo += ' ' + falhas.length + ' falharam e continuam no lote.';
+        if ((resultado.sobrando || []).length) resumo += ' ' + resultado.sobrando.length + ' foto(s) continuam sem linha, aqui na tela.';
+        if ((resultado.semFoto || []).length) resumo += ' ' + resultado.semFoto.length + ' linha(s) ainda sem foto.';
+        aviso(resumo);
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Relatório — o que falta e o que sobrou, para cobrar do cliente
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Uma tabela com as duas pendências, para abrir no Excel e mandar de volta a
+     * quem enviou o lote: quem ficou sem foto, e que fotos chegaram sem dono.
+     *
+     * É o que fecha o ciclo com o cliente — sem isso o operador copiava nome por
+     * nome da tela para um e-mail.
+     */
+    function baixarRelatorio() {
+        var r = resultado || { sobrando: [], semFoto: [] };
+        var col = colunaDeIdentidade();
+        var linhas = [['Pendencia', col, 'Linha', 'Detalhes', 'Arquivo']];
+
+        (r.semFoto || []).forEach(function (li) {
+            var id = identidadeDaLinha(li);
+            var extras = detalhesDaLinha(li, 6).map(function (e) { return e.coluna + ': ' + e.valor; }).join(' | ');
+            linhas.push(['Linha sem foto', id.valor, String(li + 1), extras, '']);
+        });
+
+        (r.sobrando || []).forEach(function (s) {
+            linhas.push(['Foto sem linha', '', '', '', s.nome]);
+        });
+
+        (r.ambiguas || []).forEach(function (a) {
+            linhas.push([
+                'Em duvida',
+                a.linhas.map(function (li) { return identidadeDaLinha(li).valor; }).join(' / '),
+                a.linhas.map(function (li) { return li + 1; }).join(' / '),
+                a.motivo,
+                a.candidatos.map(function (c) { return c.arquivo; }).join(' / ')
+            ]);
+        });
+
+        if (linhas.length === 1) { aviso('Nada pendente para relatar — o lote está fechado.'); return; }
+
+        // ; e BOM: é o que o Excel em português abre sem pedir nada.
+        var csv = '﻿' + linhas.map(function (l) {
+            return l.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(';');
+        }).join('\r\n');
+
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'fotos_pendentes.csv';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+
+        aviso('Relatório baixado: ' + (r.semFoto || []).length + ' linha(s) sem foto e '
+            + (r.sobrando || []).length + ' foto(s) sem linha.');
+    }
+    window.__gfRelatorio = baixarRelatorio;
 
     function aviso(txt) {
         var n = el('gf-msg');
@@ -876,7 +983,15 @@
             });
         });
         resultado = { casadas: casadas, ambiguas: [], sobrando: [], semFoto: semFoto };
-        if (casadas.length) aba = 'enquadrar';
+
+        // As fotos que sobraram da última vez voltam para a pilha delas, e
+        // disputam de novo as linhas que agora estão vazias — a lista de pessoas
+        // pode ter crescido desde então.
+        var guardadas = sobrasGuardadas.get(chaveDaSessao()) || [];
+        guardadas.forEach(function (f) { if (!fotoDe(f.nome)) fotos.push(f); });
+        if (guardadas.length) recasar();
+
+        if (resultado.casadas.length) aba = 'enquadrar';
     }
 
     function recasar() {
@@ -908,13 +1023,32 @@
         };
     }
 
+    function chaveDaSessao() {
+        return (cfg && (cfg.chave || (cfg.numId + '|' + cfg.coluna))) || 'sem-chave';
+    }
+
     function fechar() {
         var ov = el('gf-overlay');
         if (ov) ov.remove();
         document.removeEventListener('keydown', aoTeclado);
-        fotos.forEach(function (f) { try { URL.revokeObjectURL(f.url); } catch (e) { } });
+
+        // As fotos que ainda não acharam dono ficam guardadas para quando a tela
+        // for reaberta; as outras já estão no banco e podem sair da memória.
+        var sobrando = ((resultado && resultado.sobrando) || []).map(function (s) { return fotoDe(s.nome); })
+            .filter(Boolean);
+        if (cfg) {
+            if (sobrando.length) sobrasGuardadas.set(chaveDaSessao(), sobrando);
+            else sobrasGuardadas.delete(chaveDaSessao());
+        }
+        var manter = {};
+        sobrando.forEach(function (f) { manter[f.nome] = true; });
+        fotos.forEach(function (f) {
+            if (manter[f.nome]) return;
+            try { if (f.blob) URL.revokeObjectURL(f.url); } catch (e) { }
+        });
+
         fotos = []; resultado = null; selecionado = null; cfg = null;
-        aba = 'importar'; pagina = 0; focoEnquadro = -1;
+        aba = 'importar'; pagina = 0; focoEnquadro = -1; trocandoLinha = -1;
     }
 
     window.abrirGerenciadorDeFotos = function (config) {
@@ -950,6 +1084,7 @@
             <div class="gf-rodape">
                 <div id="gf-msg" class="gf-aviso" style="display:none;margin:0"></div>
                 <div class="gf-prog"><i id="gf-barra"></i></div>
+                <button class="gf-btn" onclick="window.__gfRelatorio()" title="Baixa uma planilha com quem ficou sem foto e que fotos chegaram sem dono">📋 Relatório de pendências</button>
                 <button class="gf-btn primario" id="gf-aplicar" disabled onclick="window.__gfAplicar()">✔ Gravar no banco</button>
             </div>
             <input type="file" id="gf-file" multiple accept="image/*" style="display:none">

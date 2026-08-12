@@ -34,6 +34,11 @@
     function colunaInterna(nome) {
         return COLS_INTERNAS.indexOf(nome) !== -1;
     }
+
+    /** Esta coluna é a janela de foto de algum elemento da numeração? */
+    function colunaDeFoto(nome) {
+        return !!(ed && ed.colunasDeFoto && ed.colunasDeFoto.indexOf(nome) !== -1);
+    }
     const ROW_H = 30;      // altura da linha, em px (fixa: a grade é virtualizada)
     const HEAD_H = 38;
     const W_DRAG = 26;
@@ -377,6 +382,10 @@
 .csv-ed-c{display:flex;align-items:center;padding:0 8px;font-size:.78rem;color:var(--text,#e2e8f0);
   border-right:1px solid rgba(148,163,184,.09);flex:none;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;cursor:cell}
+.csv-ed-c.sem-foto{background:rgba(239,68,68,.16);color:#f87171;font-weight:600;
+  box-shadow:inset 2px 0 0 #ef4444}
+.csv-ed-c.com-foto{color:#4ade80}
+.csv-ed-c.com-foto::before{content:'🖼️ ';font-size:.7rem}
 .csv-ed-c.idx{color:var(--text-faint,#475569);justify-content:flex-end;font-variant-numeric:tabular-nums;cursor:default}
 .csv-ed-c.chk,.csv-ed-c.dg{justify-content:center;cursor:pointer;padding:0}
 .csv-ed-c.dg{color:var(--text-faint,#475569);cursor:grab}
@@ -1146,6 +1155,22 @@
             cel.style.width = (ed.larguras[h] || 120) + 'px';
             const v = row[h];
             cel.textContent = v == null ? '' : String(v);
+
+            // Coluna de foto: a célula fica vermelha enquanto aquela pessoa não
+            // tem foto. O banco é a lista de quem vai imprimir, então é aqui —
+            // percorrendo a planilha — que o operador descobre os buracos, sem
+            // precisar abrir o Gerenciador de Fotos para saber quem falta.
+            if (colunaDeFoto(h)) {
+                const temFoto = !!(row.__fotos && row.__fotos[h] && String(row.__fotos[h].url || '').trim());
+                if (!temFoto) {
+                    cel.classList.add('sem-foto');
+                    cel.title = 'Sem foto: esta linha não vai imprimir enquanto a foto não for anexada.';
+                    if (!cel.textContent) cel.textContent = 'sem foto';
+                } else {
+                    cel.classList.add('com-foto');
+                    cel.title = 'Foto anexada' + (row.__fotos[h].dpi ? ' — ' + row.__fotos[h].dpi + ' dpi na janela' : '');
+                }
+            }
             // Tudo no mousedown, com preventDefault: assim o blur padrão do input
             // de edição não dispara depois de o cursor já ter mudado de célula —
             // o que gravaria o valor antigo na célula nova.
@@ -2411,6 +2436,10 @@
             filename: opts.filename || 'banco.csv',
             delim: opts.delimitador || ',',
             colunasEmUso: opts.colunasEmUso,
+            // Colunas que um elemento FOTO consome. A grade pinta de vermelho a
+            // célula de quem ainda não tem foto: é aqui, percorrendo a planilha,
+            // que o operador vê os buracos do lote.
+            colunasDeFoto: Array.isArray(opts.colunasDeFoto) ? opts.colunasDeFoto.slice() : [],
             onAplicar: opts.onAplicar,
             modelos: Array.isArray(opts.modelos) ? opts.modelos.slice() : null,
             // Modelo de onde a tela foi aberta. Só destaca — não restringe nada.

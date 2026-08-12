@@ -481,8 +481,40 @@
             ctx.clip();
         }
 
+        // Foto FALTANDO é diferente de foto que ainda não chegou, e a tela tem de
+        // dizer qual é qual sem o operador precisar abrir o gerenciador: a
+        // primeira é trabalho pendente, a segunda é só espera. A janela sem foto
+        // fica vermelha e riscada — some ao encostar a foto na linha.
+        var faltando = !!el.csv_column && !meta;
+
         if (img) {
             desenharJanelaFoto(ctx, img, -hw, -hh, w, h, meta, el.fit || 'cover');
+        } else if (faltando) {
+            ctx.fillStyle = 'rgba(239,68,68,0.14)';
+            ctx.fillRect(-hw, -hh, w, h);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-hw, -hh, w, h);
+            ctx.clip();
+            ctx.strokeStyle = 'rgba(239,68,68,0.5)';
+            ctx.lineWidth = Math.max(1, Math.min(w, h) * 0.02);
+            var passo = Math.max(6, Math.min(w, h) * 0.18);
+            for (var d = -h; d < w + h; d += passo) {
+                ctx.beginPath();
+                ctx.moveTo(-hw + d, -hh);
+                ctx.lineTo(-hw + d - h, hh);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            var fsF = Math.max(6, Math.min(13, h * 0.13));
+            ctx.font = 'bold ' + fsF + 'px Inter, sans-serif';
+            ctx.fillStyle = '#ef4444';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('SEM FOTO', 0, 0);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
         } else {
             ctx.fillStyle = 'rgba(148,163,184,0.18)';
             ctx.fillRect(-hw, -hh, w, h);
@@ -502,7 +534,6 @@
             // para um arquivo que o sistema ainda não tem.
             var rotulo;
             if (!el.csv_column) rotulo = '[escolha a coluna]';
-            else if (!meta) rotulo = '[sem foto]';
             else if (!urlCarregavel(meta.url)) rotulo = '⏳ ' + String(meta.arquivo || meta.url).split(/[\\/]/).pop();
             else rotulo = '[' + el.csv_column + ']';
 

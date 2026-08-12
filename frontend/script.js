@@ -5045,13 +5045,33 @@ async function carregarImagemSvgDoElemento(el) {
  * Cada elemento carrega o próprio arquivo — não existe mais um arquivo único da
  * numeração servindo a todos.
  */
+/**
+ * A(s) linha(s) que uma página do modo PDF vai desenhar.
+ *
+ * Existe para o pré-carregamento pedir a foto CERTA, e só ela: a página N mostra
+ * a linha N da fatia daquele modelo. Baixar o banco inteiro para mostrar uma
+ * página faria o operador — e o cliente, no link — esperar por 499 fotos que
+ * ninguém está olhando.
+ */
+function linhasDaPagina(num, item, pageNum) {
+    const linhas = (typeof linhasDaAmostra === 'function')
+        ? linhasDaAmostra(item, num)
+        : (num?.csv_data || item?.csv_data || []);
+    return [linhas[(pageNum || 1) - 1]].filter(Boolean);
+}
+window.linhasDaPagina = linhasDaPagina;
+
 async function precarregarArtesDosElementos(elementos, linhas) {
     // As fotos entram junto: quem aguarda a arte dos elementos e a janela que
     // desenha uma vez so, e uma foto que chega depois do traco nao aparece.
-    await window.precarregarFotosDosElementos(
-        elementos,
-        (linhas && linhas.length) ? linhas : (state.csvData || state.numCsvData || [])
-    );
+    //
+    // Sem `linhas`, so a PRIMEIRA do banco e carregada — que e a linha de
+    // amostra que as janelas de arte desenham. Carregar o banco inteiro aqui
+    // seria baixar centenas de fotos para mostrar uma.
+    const alvo = (linhas && linhas.length)
+        ? linhas
+        : [(state.csvData || state.numCsvData || [])[0]].filter(Boolean);
+    await window.precarregarFotosDosElementos(elementos, alvo);
     for (const el of (elementos || [])) {
         try {
             if (el.type === 'PDF' && el.pdf_content && !el._pdfCanvas && !el._pdfLoading) {
@@ -12281,6 +12301,10 @@ window.abrirFotosDoElemento = function (elId) {
 
         janela: { w_mm: el.width_mm || 25, h_mm: el.height_mm || 32, fit: el.fit || 'cover' },
 
+        // Identifica a sessão: é por ela que as fotos que sobraram voltam para a
+        // tela quando o gerenciador é reaberto nesta mesma numeração.
+        chave: numId + '|' + el.csv_column,
+
         coluna: el.csv_column,
 
         headers: state.numCsvHeaders || [],
@@ -12294,7 +12318,7 @@ window.abrirFotosDoElemento = function (elId) {
             objectPath: `fotos/${numId}/${hash}.jpg`
         }),
 
-        onAplicar: ({ gravadas, falhas, semFoto, coluna }) => {
+        onAplicar: ({ gravadas, falhas, semFoto, sobrando, coluna }) => {
 
             if (gravadas) {
 
@@ -12311,6 +12335,12 @@ window.abrirFotosDoElemento = function (elId) {
             if (semFoto && semFoto.length) {
 
                 toast(`${semFoto.length} linha(s) ainda estão sem foto — a impressão vai recusar.`, 'info');
+
+            }
+
+            if (sobrando) {
+
+                toast(`${sobrando} foto(s) continuam sem linha e seguem na tela do gerenciador.`, 'info');
 
             }
 
@@ -12368,6 +12398,15 @@ function _abrirEditorCsvDaNumeracao(headers, rows, filename, destacar) {
 
         // Quando o conferidor da box 📏 manda a tela abrir apontando linhas.
         destacar: destacar || null,
+
+        // Colunas que são janela de foto. A grade marca em vermelho a célula de
+        // quem ainda não tem foto — o banco é a lista de quem vai imprimir, e é
+        // percorrendo ele que o operador enxerga os buracos do lote.
+        colunasDeFoto: [...new Set(
+            (state.numElements || [])
+                .filter(el => el && el.type === 'FOTO' && el.csv_column)
+                .map(el => el.csv_column)
+        )],
 
         // Quantos elementos apontam para cada coluna, para o modal avisar antes
         // de renomear ou remover uma coluna em uso.
@@ -15260,6 +15299,14 @@ window.onAmostraNumeracaoSelect = function() {
                 ctx.lineTo(0, canvas.height - y);
 
                 ctx.stroke();
+
+            } else if (el.type === 'FOTO') {
+
+                // A janela de amostra também é uma janela de arte: sem este ramo
+                // a foto simplesmente não aparecia aqui, e o operador via o
+                // modelo montado sem o rosto que ele vai imprimir.
+                desenharElementoFoto(ctx, el, S, false, linhaDeAmostra(),
+                    window.repintor('amostra', renderAmostraCombinada));
 
             } else if (el.type === 'SVG') {
 
@@ -23955,7 +24002,7 @@ async function renderImageModeInPdfViewer(idx, imgUrl, item, osId) {
             // A arte dos elementos SVG/PDF precisa estar carregada ANTES de desenhar:
             // esta funcao e async, entao da para esperar de verdade e sair certo de
             // primeira, sem o vai-e-volta de carregar e mandar redesenhar.
-            await precarregarArtesDosElementos(num.elements);
+            await precarregarArtesDosElementos(num.elements, linhasDaPagina(num, item, 1));
             drawNumeracaoElementsOverCanvas(ctx, num, item, 1, canvas.width, canvas.height);
         }
 
@@ -24252,7 +24299,7 @@ async function renderPdfViewerPage(keyOrIdx, pageNum, idxParam = null) {
         if (num && num.elements && num.elements.length > 0) {
             // Ver o comentario em renderImageModeInPdfViewer: a arte dos elementos
             // SVG/PDF e aguardada aqui, antes de desenhar.
-            await precarregarArtesDosElementos(num.elements);
+            await precarregarArtesDosElementos(num.elements, linhasDaPagina(num, item, pageNum));
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
         }
 

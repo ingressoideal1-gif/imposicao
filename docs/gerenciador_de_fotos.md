@@ -107,6 +107,28 @@ Quatro coisas que a tela faz questão de garantir:
   Reenquadrar ou trocar a foto de uma pessoa é um clique, a qualquer momento.
   Foto que já está no banco **não sobe de novo**: reenquadrar 500 credenciais não
   pode custar 500 uploads.
+- **Gravar não faz a sobra desaparecer.** A tela continua aberta depois de
+  gravar, e a foto que ainda não achou dono continua na pilha dela — inclusive se
+  o gerenciador for fechado e reaberto na mesma sessão. Ela não tem linha, logo
+  não tem onde ser gravada; jogá-la fora obrigaria a reimportar o pendrive
+  inteiro. O limite honesto: recarregar a página perde o que não foi ligado a
+  ninguém, e é para isso que existe o relatório.
+
+### Onde a falta aparece
+
+Uma foto que falta não pode depender de alguém abrir o gerenciador para ser
+descoberta. Ela aparece em três lugares:
+
+| Onde | Como |
+|---|---|
+| Nas janelas de arte (editor, prévia, amostra, link do cliente) | a janela fica **vermelha e riscada**, escrito `SEM FOTO` |
+| Na folha de contato | um cartão marcado, na mesma grade das outras, com **📎 anexar foto** |
+| No editor de CSV | a célula da coluna de foto fica **vermelha**, com a dica de que aquela linha não vai imprimir; quem tem foto fica verde com 🖼️ |
+
+E o botão **📋 Relatório de pendências** baixa uma planilha (`.csv`, que o Excel
+em português abre direto) com quem ficou sem foto — nome, linha e as demais
+colunas —, que fotos chegaram sem dono, e o que ficou em dúvida. É o que fecha o
+ciclo com quem enviou o lote.
 
 ### 4. Folha de contato
 
