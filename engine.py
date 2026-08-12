@@ -1,6 +1,9 @@
+import base64
+import hashlib
 import math
 import os
 import io
+import tempfile
 import fitz       # PyMuPDF
 import qrcode
 from PIL import Image
@@ -149,6 +152,85 @@ def _so_layout(el: dict) -> bool:
     if el.get("type") not in ("SVG", "PDF"):
         return False
     return str(el.get("render_mode", "print")).strip().lower() == "layout"
+
+
+def _foto_cache_path(origem: str) -> str | None:
+    """Caminho do arquivo de cache em disco para uma foto baixada da nuvem.
+
+    O agente imprime a mesma tiragem varias vezes — prova, tiragem, reimpressao
+    de celula — e baixar de novo as 500 fotos em cada uma delas seria exatamente
+    o tempo de rede que o agente local existe para nao pagar. A chave e o hash da
+    origem, entao a foto trocada no Storage gera chave nova e nao volta velha do
+    cache.
+    """
+    try:
+        base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+        d = os.path.join(base, "NewProd", "cache", "fotos")
+        os.makedirs(d, exist_ok=True)
+        return os.path.join(d, hashlib.sha256(origem.encode("utf-8")).hexdigest() + ".bin")
+    except Exception:
+        return None
+
+
+def _foto_da_linha(el: dict, csv_row: dict | None) -> dict | None:
+    """Onde a foto daquela linha esta, e como ela foi enquadrada.
+
+    Dois caminhos, nesta ordem:
+
+      1. `__fotos[coluna]` — a chave de sistema que o Gerenciador de Fotos grava
+         dentro da propria linha, com a URL e o retangulo de recorte. E o caminho
+         normal, e e o que faz o enquadramento sobreviver a reordenar a tabela,
+         dividir a numeracao entre modelos e refazer uma celula.
+      2. O valor cru da coluna — uma URL ou um caminho de arquivo escrito na
+         propria celula, como o BarTender e o NiceLabel fazem. Serve para quem ja
+         tem as fotos organizadas e so quer apontar.
+    """
+    if csv_row is None:
+        return None
+    col = el.get("csv_column") or ""
+    meta = (csv_row.get("__fotos") or {}).get(col) if isinstance(csv_row.get("__fotos"), dict) else None
+    if isinstance(meta, dict) and str(meta.get("url") or "").strip():
+        return meta
+    bruto = str(csv_row.get(col, "") or "").strip()
+    if bruto:
+        return {"url": bruto}
+    return None
+
+
+def _foto_encaixe(iw: float, ih: float, w_pt: float, h_pt: float, fit: str,
+                  cx: float, cy: float, zoom: float, rot: int):
+    """Retangulo (x0, y0, larg, alt) em que a foto INTEIRA e desenhada dentro da
+    janela, de modo que o pedaco pedido apareca.
+
+    O recorte nao e feito na imagem: a foto e desenhada maior que a janela e o
+    que sobra fica fora da pagina temporaria, que e do tamanho exato da janela.
+    Assim os bytes originais entram no PDF sem recompressao — uma foto nao perde
+    qualidade por ter sido enquadrada.
+    """
+    if rot % 180 == 90:
+        iw, ih = ih, iw
+    if iw <= 0 or ih <= 0 or w_pt <= 0 or h_pt <= 0:
+        return None
+    if fit == "contain":
+        base = min(w_pt / iw, h_pt / ih)
+    else:
+        base = max(w_pt / iw, h_pt / ih)
+    esc = base * max(float(zoom or 1.0), 0.01)
+    dw, dh = iw * esc, ih * esc
+    if fit == "contain":
+        return (w_pt - dw) / 2, (h_pt - dh) / 2, dw, dh
+    # cobrir: o centro pedido manda, mas a janela nunca pode ficar com buraco
+    x0 = min(0.0, max(w_pt - dw, w_pt / 2 - cx * dw))
+    y0 = min(0.0, max(h_pt - dh, h_pt / 2 - cy * dh))
+    return x0, y0, dw, dh
+
+
+def _graus_90(angulo) -> int:
+    """PyMuPDF so aceita rotacao em multiplos de 90 ao inserir imagem."""
+    try:
+        return int(round(float(angulo or 0) / 90.0) * 90) % 360
+    except Exception:
+        return 0
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
@@ -504,6 +586,48 @@ class ImpositionEngine:
             self._url_cache[url] = data
             return data
 
+    def _get_foto_bytes(self, origem: str) -> bytes:
+        """Bytes da foto, de onde quer que ela venha, com dois niveis de cache.
+
+        Aceita URL da nuvem, `data:` embutido e caminho de arquivo local — os
+        tres casos existem: o Gerenciador de Fotos sobe para o Storage, uma
+        prova pode carregar a foto embutida, e quem organiza as fotos numa pasta
+        da estacao aponta o caminho direto na coluna.
+        """
+        if origem in self._url_cache:
+            return self._url_cache[origem]
+
+        if origem.startswith("data:"):
+            dados = base64.b64decode(origem.split(",", 1)[-1])
+        elif origem.startswith("http"):
+            cam = _foto_cache_path(origem)
+            dados = None
+            if cam and os.path.exists(cam):
+                try:
+                    with open(cam, "rb") as f:
+                        dados = f.read()
+                except Exception:
+                    dados = None
+            if dados is None:
+                dados = self._get_url_bytes(origem)
+                if cam:
+                    # Escrita em dois passos: um cache pela metade, deixado para
+                    # tras por uma queda de energia, viraria foto corrompida no
+                    # papel na proxima tiragem.
+                    try:
+                        tmp = cam + ".parcial"
+                        with open(tmp, "wb") as f:
+                            f.write(dados)
+                        os.replace(tmp, cam)
+                    except Exception:
+                        pass
+        else:
+            with open(origem, "rb") as f:
+                dados = f.read()
+
+        self._url_cache[origem] = dados
+        return dados
+
     def _load_base_as_pdf(self) -> fitz.Document:
         """Abre o arquivo base (PDF, JPG, PNG) como documento fitz com dimensões físicas precisas."""
         if not self.cfg.base_file:
@@ -601,7 +725,7 @@ class ImpositionEngine:
             h_pt = el.get("_h", 12 * MM2PT)
             hw = w_pt / 2.0
             hh = h_pt / 2.0
-        elif t in ("SVG", "PDF"):
+        elif t in ("SVG", "PDF", "FOTO"):
             w_pt = el.get("width_mm", 20) * MM2PT
             h_pt = el.get("height_mm", 20) * MM2PT
             hw = w_pt / 2.0
@@ -903,6 +1027,69 @@ class ImpositionEngine:
             rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
             py_rotate = (360 - angle) % 360
             page.insert_image(rect, stream=bc_bytes, rotate=py_rotate, keep_proportion=False)
+
+        elif t == "FOTO":
+            # A janela de foto da credencial. O retangulo do elemento E a janela:
+            # width_mm x height_mm. Quem decide o que aparece dentro dela e o
+            # enquadramento gravado na linha (cx, cy, zoom, rot).
+            meta = _foto_da_linha(el, csv_row)
+            if meta is None:
+                # Sem linha (previa da numeracao sem banco) nao ha o que pintar.
+                # Linha sem foto numa impressao de verdade nao chega ate aqui:
+                # `_conferir_fotos` interrompe antes, com a lista inteira.
+                if csv_row is None:
+                    return
+                raise RuntimeError(
+                    f"Elemento FOTO '{el.get('id', '?')}': a linha nao tem foto na "
+                    f"coluna '{el.get('csv_column', '')}'."
+                )
+
+            origem = str(meta.get("url") or "").strip()
+            w_pt = el.get("width_mm", 20) * MM2PT
+            h_pt = el.get("height_mm", 20) * MM2PT
+            try:
+                dados = self._get_foto_bytes(origem)
+                with Image.open(io.BytesIO(dados)) as im:
+                    iw, ih = im.size
+
+                rot_foto = _graus_90(meta.get("rot", 0))
+                geo = _foto_encaixe(
+                    iw, ih, w_pt, h_pt,
+                    str(el.get("fit", "cover") or "cover").lower(),
+                    float(meta.get("cx", 0.5) or 0.5),
+                    float(meta.get("cy", 0.5) or 0.5),
+                    float(meta.get("zoom", 1.0) or 1.0),
+                    rot_foto,
+                )
+                if geo is None:
+                    raise ValueError(f"foto com dimensoes invalidas ({iw}x{ih})")
+                gx, gy, gw, gh = geo
+
+                # Pagina temporaria do tamanho exato da janela: o que sobra da
+                # foto fica fora dela e nao e impresso. E o recorte sem tocar nos
+                # bytes da imagem.
+                jan = fitz.open()
+                pj = jan.new_page(width=w_pt, height=h_pt)
+                pj.insert_image(
+                    fitz.Rect(gx, gy, gx + gw, gy + gh),
+                    stream=dados,
+                    keep_proportion=True,
+                    rotate=(360 - rot_foto) % 360,
+                )
+                rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
+                page.show_pdf_page(
+                    rect, jan, 0,
+                    keep_proportion=True,
+                    rotate=_graus_90(360 - angle),
+                    clip=jan[0].rect,
+                )
+                jan.close()
+            except Exception as ex:
+                # Nao engolir: credencial impressa com a janela vazia e PVC no lixo.
+                raise RuntimeError(
+                    f"Erro ao impor a foto do elemento '{el.get('id', '?')}' "
+                    f"(origem: {origem[:120]}): {ex}"
+                ) from ex
 
         elif t == "SVG":
             svg_content = el.get("svg_content") or ""
