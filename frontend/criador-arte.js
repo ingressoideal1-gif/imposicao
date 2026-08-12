@@ -682,7 +682,16 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
             const csvData = num?.csv_data || item?.csv_data || state.csvData || state.numCsvData || null;
             const linhaFoto = (csvData && csvData[0]) ? csvData[0] : null;
             if (typeof window.desenharElementoFoto === 'function') {
-                window.desenharElementoFoto(ctx, el, scalePx, false, linhaFoto, null);
+                // Repintor NOMEADO: a camada é desenhada uma vez, então sem este
+                // aviso a janela ficaria com o marcador de espera até o operador
+                // mexer em alguma coisa. Nomeado porque um lote de fotos chegando
+                // tem de repintar a camada UMA vez, não uma vez por foto.
+                window.desenharElementoFoto(ctx, el, scalePx, false, linhaFoto,
+                    (window.repintor
+                        ? window.repintor('criador-arte', function () {
+                            renderEditorLayer2Numeracao(num, fmt, face);
+                        })
+                        : null));
             }
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             const w = (el.width_mm || 20) * scalePx;

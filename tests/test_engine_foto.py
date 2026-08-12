@@ -300,3 +300,70 @@ def test_valor_cru_da_coluna_tambem_serve(foto_metades):
     doc, page, pix = _pintar(el, linha)
     cont = _conta_cores(pix, *_janela_pt())
     assert cont["vermelho"] + cont["azul"] > 1000
+
+
+# ─── O que conta como origem de foto ──────────────────────────────────────────
+#
+# A celula pode trazer tres coisas: um endereco (o que o Gerenciador de Fotos
+# grava), um caminho de arquivo (o modo BarTender) ou um NOME SOLTO, que nao
+# aponta para lugar nenhum. O terceiro caso e o perigoso: ele parece preenchido
+# e engana a conferencia previa, ate a imposicao estourar no meio da tiragem.
+
+
+def test_nome_de_arquivo_solto_nao_e_origem():
+    """"JAQUE ROSSI.jpeg" nao e endereco nem caminho: e so um nome."""
+    from engine import _origem_de_foto
+    assert _origem_de_foto("JAQUE ROSSI.jpeg") == ""
+    assert _origem_de_foto("  ") == ""
+    assert _origem_de_foto("ana") == ""
+
+
+def test_endereco_e_caminho_continuam_sendo_origem():
+    from engine import _origem_de_foto
+    assert _origem_de_foto("https://x/y/ana.jpg")
+    assert _origem_de_foto("data:image/jpeg;base64,AAAA")
+    assert _origem_de_foto(r"C:\fotos\ana.jpg")
+    assert _origem_de_foto("fotos/ana.jpg")
+    assert _origem_de_foto(r"\\servidor\fotos\ana.jpg")
+
+
+def test_nome_solto_e_acusado_antes_de_imprimir(foto_metades):
+    """O caso real: a celula tinha o nome do arquivo e a tiragem morreu no meio.
+
+    A conferencia previa existe para acusar TODAS as pendencias de uma vez. Um
+    nome solto passava por ela como se fosse foto, e so estourava ao impor
+    aquele item — com o PVC ja na bandeja.
+    """
+    eng = _engine_fake([EL_FOTO], [
+        {"Nome": "Ana", "Foto": foto_metades},
+        {"Nome": "Jaque", "Foto": "JAQUE ROSSI.jpeg"},
+    ])
+    with pytest.raises(ValueError) as ex:
+        eng._conferir_e_aquecer_fotos()
+    msg = str(ex.value)
+    assert "linha 2" in msg
+    assert "JAQUE ROSSI.jpeg" in msg          # o operador precisa saber QUAL nome
+    assert "Gerenciador de Fotos" in msg      # e o que fazer a respeito
+
+
+def test_caminho_que_nao_existe_e_acusado_antes_de_imprimir(tmp_path, foto_metades):
+    """Modo BarTender com o arquivo fora do lugar: acusar agora, nao no meio."""
+    sumido = str(tmp_path / "pasta_que_nao_existe" / "ana.jpg")
+    eng = _engine_fake([EL_FOTO], [{"Foto": foto_metades}, {"Foto": sumido}])
+    with pytest.raises(ValueError) as ex:
+        eng._conferir_e_aquecer_fotos()
+    assert "ana.jpg" in str(ex.value)
+
+
+def test_caminho_local_que_existe_passa_na_conferencia(foto_metades):
+    """O modo BarTender continua valendo: arquivo que existe nao vira pendencia."""
+    eng = _engine_fake([EL_FOTO], [{"Foto": foto_metades}])
+    eng._conferir_e_aquecer_fotos()  # nao levanta
+
+
+def test_nome_solto_nao_vira_janela_pintada(foto_metades):
+    """Se escapar da conferencia, o render acusa em vez de inventar uma foto."""
+    el, linha = _el("JAQUE ROSSI.jpeg")
+    with pytest.raises(RuntimeError) as ex:
+        _pintar(el, linha)
+    assert "JAQUE ROSSI.jpeg" in str(ex.value)

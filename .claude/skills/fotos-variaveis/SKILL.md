@@ -1,6 +1,6 @@
 ---
 name: fotos-variaveis
-description: Leia ANTES de mexer em foto como dado variável — o elemento FOTO, o Gerenciador de Fotos, frontend/foto-lib.js, frontend/gerenciador-fotos.js, a chave __fotos das linhas do CSV, ou o ramo FOTO do engine.py. Cobre as cinco armadilhas do caminho e por que o agente sai junto.
+description: Leia ANTES de mexer em foto como dado variável — o elemento FOTO, o Gerenciador de Fotos, frontend/foto-lib.js, frontend/gerenciador-fotos.js, a chave __fotos das linhas do CSV, ou o ramo FOTO do engine.py. Cobre as sete armadilhas do caminho e por que o agente sai junto.
 ---
 
 # Antes de mexer em foto variável
@@ -41,7 +41,38 @@ pessoa quando a tabela é reordenada, dividida entre modelos ou tem uma célula
 refeita. Qualquer lugar que derive cabeçalhos das chaves da linha precisa
 filtrá-la — inclusive a reconstrução em `script.js` para CSVs antigos.
 
-## 5. Normalizar antes de subir é requisito, não otimização
+## 5. Nome de arquivo solto não é foto
+
+`_origem_de_foto` (engine.py) e `origemDeFoto` (foto-lib.js) são o segundo par de
+gêmeas deste caminho. Elas dizem se o valor cru da célula aponta para algum
+lugar: endereço (`https:`, `data:`) e caminho de arquivo valem; `JAQUE
+ROSSI.jpeg` não vale.
+
+Antes delas, a célula com um nome escrito passava pela conferência prévia como
+linha resolvida e a tiragem morria no meio, com o PVC na bandeja — enquanto a
+tela, que já usava `urlCarregavel`, mostrava um relógio de espera eterno. Três
+lugares com três réguas diferentes para a mesma pergunta.
+
+Corolário: **o vínculo `__fotos[coluna]` manda; a célula é legenda.** Qualquer
+edição do texto da célula (digitar, colar, renomear a coluna, remover a coluna)
+tem de tratar o vínculo junto, senão a grade mostra um nome e a credencial sai
+com outro rosto. O editor de CSV faz isso em `escreverCelula`, `renomearColuna`,
+`removerColuna` e `copiarLinha`.
+
+## 6. Ponto de desenho novo? Procure o gêmeo
+
+`drawVdpElements` existe **duas vezes**: em `script.js` e em `pedido.js` (a
+prévia do Painel de Produção). São dez os pontos que desenham elementos — a
+tabela está em `docs/gerenciador_de_fotos.md`. Um tipo novo que entre em nove
+deles faz a tela mentir sobre o papel exatamente na tela que ninguém testou.
+
+E toda página que carrega o `script.js` precisa carregar também `texto-ajuste.js`
+e `foto-lib.js`: ele chama `desenharTextoAjustado`, `desenharElementoFoto` e
+`repintor` **sem guarda**, então a falta de um dos arquivos não deixa de desenhar
+só aquele elemento — derruba o canvas inteiro. `index.html`, `cliente.html` e
+`producao.html`, as três.
+
+## 7. Normalizar antes de subir é requisito, não otimização
 
 Uma foto de celular tem 4 MB; um lote de 500 seriam 2 GB subindo e descendo.
 Reduzida no navegador para 300 dpi da janela com 30 % de folga, cada uma fica em

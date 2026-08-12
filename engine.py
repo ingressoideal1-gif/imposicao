@@ -172,6 +172,35 @@ def _foto_cache_path(origem: str) -> str | None:
         return None
 
 
+def _origem_de_foto(bruto) -> str:
+    """A celula aponta para uma foto de verdade, ou so tem um nome escrito nela?
+
+    Tres coisas podem estar na celula, e so duas delas levam a uma foto:
+
+      · um endereco (`https://…`, `data:…`) — o que o Gerenciador de Fotos grava;
+      · um caminho de arquivo (`C:\\fotos\\ana.jpg`, `fotos/ana.jpg`) — o modo
+        BarTender, para quem ja tem o lote organizado numa pasta;
+      · um NOME SOLTO (`JAQUE ROSSI.jpeg`), que nao aponta para lugar nenhum.
+
+    O terceiro caso e o traicoeiro: a celula parece preenchida, a conferencia
+    previa dava a linha por resolvida, e a imposicao so morria ao chegar naquele
+    item — com o operador de pe na frente da impressora. Um nome de arquivo
+    dentro da planilha nao e um vinculo; quem faz o vinculo e o Gerenciador.
+    """
+    v = str(bruto or "").strip().strip('"')
+    if not v:
+        return ""
+    if v.lower().startswith(("http://", "https://", "data:")):
+        return v
+    if v[0] in "/\\":                                    # /caminho ou \\servidor\...
+        return v
+    if len(v) > 2 and v[0].isalpha() and v[1] == ":" and v[2] in "/\\":
+        return v                                          # C:\fotos\ana.jpg
+    if "/" in v or "\\" in v:                             # caminho relativo
+        return v
+    return ""
+
+
 def _foto_da_linha(el: dict, csv_row: dict | None) -> dict | None:
     """Onde a foto daquela linha esta, e como ela foi enquadrada.
 
@@ -183,7 +212,8 @@ def _foto_da_linha(el: dict, csv_row: dict | None) -> dict | None:
          dividir a numeracao entre modelos e refazer uma celula.
       2. O valor cru da coluna — uma URL ou um caminho de arquivo escrito na
          propria celula, como o BarTender e o NiceLabel fazem. Serve para quem ja
-         tem as fotos organizadas e so quer apontar.
+         tem as fotos organizadas e so quer apontar. Um nome de arquivo solto NAO
+         vale: veja `_origem_de_foto`.
     """
     if csv_row is None:
         return None
@@ -191,7 +221,7 @@ def _foto_da_linha(el: dict, csv_row: dict | None) -> dict | None:
     meta = (csv_row.get("__fotos") or {}).get(col) if isinstance(csv_row.get("__fotos"), dict) else None
     if isinstance(meta, dict) and str(meta.get("url") or "").strip():
         return meta
-    bruto = str(csv_row.get(col, "") or "").strip()
+    bruto = _origem_de_foto(csv_row.get(col, ""))
     if bruto:
         return {"url": bruto}
     return None
@@ -654,19 +684,43 @@ class ImpositionEngine:
         origens = []
         for i, linha in enumerate(linhas, start=1):
             for el in els:
+                col = el.get("csv_column", "")
                 meta = _foto_da_linha(el, linha)
                 origem = str((meta or {}).get("url") or "").strip()
+
                 if not origem:
-                    faltando.append((i, el.get("csv_column", "")))
-                else:
-                    origens.append(origem)
+                    # Distinguir "celula vazia" de "celula com um nome escrito"
+                    # nao e preciosismo: sao dois trabalhos diferentes. A primeira
+                    # espera uma foto; a segunda ja tem a foto em algum lugar e o
+                    # que falta e ligar as duas pelo Gerenciador.
+                    bruto = str((linha or {}).get(col, "") or "").strip()
+                    faltando.append((
+                        i, col,
+                        f"a celula tem '{bruto[:60]}', que e so um nome de arquivo — "
+                        "nao um endereco nem um caminho" if bruto else "celula vazia"
+                    ))
+                    continue
+
+                # Modo BarTender: o caminho tem de existir NESTA estacao. Conferir
+                # agora e a diferenca entre uma lista de pendencias e uma tiragem
+                # que morre no meio.
+                if not origem.lower().startswith(("http", "data:")) and not os.path.exists(origem):
+                    # Cortar pelo COMECO: num caminho longo o que identifica a
+                    # pendencia e o nome do arquivo, que fica no fim.
+                    curto = origem if len(origem) <= 80 else "..." + origem[-80:]
+                    faltando.append((i, col, f"arquivo nao encontrado: '{curto}'"))
+                    continue
+
+                origens.append(origem)
 
         if faltando:
-            amostra = ", ".join(f"linha {i} (coluna '{c}')" for i, c in faltando[:10])
-            resto = f" e mais {len(faltando) - 10}" if len(faltando) > 10 else ""
+            amostra = "; ".join(f"linha {i} (coluna '{c}'): {m}" for i, c, m in faltando[:10])
+            resto = f"; e mais {len(faltando) - 10}" if len(faltando) > 10 else ""
             raise ValueError(
-                f"{len(faltando)} linha(s) do banco estao sem foto: {amostra}{resto}. "
-                "Abra o Gerenciador de Fotos e complete o lote antes de imprimir."
+                f"{len(faltando)} linha(s) do banco estao sem foto utilizavel - {amostra}{resto}. "
+                "Abra o Gerenciador de Fotos e ligue as fotos as linhas antes de imprimir: "
+                "o nome do arquivo digitado na celula nao basta, o motor precisa do "
+                "endereco da foto ou do caminho completo do arquivo."
             )
 
         # dict.fromkeys preserva a ordem e mata a repeticao: a credencial que usa
@@ -1100,13 +1154,20 @@ class ImpositionEngine:
             meta = _foto_da_linha(el, csv_row)
             if meta is None:
                 # Sem linha (previa da numeracao sem banco) nao ha o que pintar.
-                # Linha sem foto numa impressao de verdade nao chega ate aqui:
-                # `_conferir_fotos` interrompe antes, com a lista inteira.
+                # Numa impressao de verdade a linha sem foto nao chega ate aqui:
+                # `_conferir_e_aquecer_fotos` interrompe antes, com a lista
+                # inteira das pendencias.
                 if csv_row is None:
                     return
+                col_foto = el.get("csv_column", "")
+                bruto = str((csv_row or {}).get(col_foto, "") or "").strip()
+                detalhe = (
+                    f" A celula tem '{bruto[:60]}', que e so um nome de arquivo: "
+                    "ligue a foto a linha pelo Gerenciador de Fotos."
+                ) if bruto else ""
                 raise RuntimeError(
                     f"Elemento FOTO '{el.get('id', '?')}': a linha nao tem foto na "
-                    f"coluna '{el.get('csv_column', '')}'."
+                    f"coluna '{col_foto}'.{detalhe}"
                 )
 
             origem = str(meta.get("url") or "").strip()

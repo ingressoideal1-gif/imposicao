@@ -32,9 +32,24 @@ paleta do editor de numeração. Nasce em 25 × 32 mm — a 3×4 de credencial �
 | `border_mm` / `border_color` | contorno **impresso**, em milímetros e na cor escolhida. Zero é o padrão: a janela não ganha moldura que ninguém pediu |
 
 O elemento é desenhado por `desenharElementoFoto()`, no `foto-lib.js`, chamada
-pelos **sete** pontos de desenho do app: editor, prévia de imposição, modo PDF,
-amostra do item, gabarito rasterizado, Criador de Arte e a página do cliente. Um
-tipo novo que falte em um deles faz a tela mentir sobre o papel.
+pelos **dez** pontos de desenho do app:
+
+| arquivo | pontos |
+|---|---|
+| `script.js` | editor, prévia de imposição, amostra combinada, visualizador de PDF, card do pedido, gabarito rasterizado |
+| `pedido.js` | prévia de imposição do **Painel de Produção** |
+| `cliente.js` | card do pedido e visualizador de PDF da página do cliente |
+| `criador-arte.js` | Criador de Arte |
+
+Um tipo novo que falte em um deles faz a tela mentir sobre o papel — e foi o que
+aconteceu com o `pedido.js`, que é uma **cópia divergente** do `drawVdpElements`
+do `script.js`: a do `script.js` recebeu o tipo FOTO, a dele ficou para trás e
+desenhava tudo menos a foto. Ao mexer num, procure o gêmeo.
+
+Quem desenha uma vez só — o gabarito rasterizado, o visualizador de PDF — precisa
+**esperar** as fotos antes do primeiro traço (`precarregarFotosDosElementos`);
+quem repinta passa um `repintor` nomeado, para um lote inteiro chegando custar um
+redesenho e não trezentos.
 
 ### 2. `__fotos`: o enquadramento mora dentro da linha
 
@@ -64,6 +79,35 @@ ao lado de `__ativo` e `__id`:
 enquadramento acompanhar a pessoa quando a tabela é reordenada, quando a
 numeração é dividida entre modelos (`pedidos_modelos.csv_selecao`), e quando o
 operador refaz uma célula.
+
+### O que conta como foto
+
+A célula pode trazer três coisas, e só duas levam a uma foto:
+
+| na célula | vale? | por quê |
+|---|---|---|
+| `https://…`, `data:…` | sim | o endereço que o Gerenciador grava |
+| `C:\fotos\ana.jpg`, `fotos/ana.jpg` | sim | modo BarTender: o motor roda na estação e abre o arquivo |
+| `JAQUE ROSSI.jpeg` | **não** | um nome não aponta para lugar nenhum |
+
+O terceiro caso é o traiçoeiro, e já quebrou uma tiragem: a célula **parece**
+preenchida, a conferência prévia dava a linha por resolvida, e a imposição morria
+ao chegar naquele item. A regra vive em duas funções gêmeas — `_origem_de_foto`
+no `engine.py` e `origemDeFoto` no `foto-lib.js` — e mexer numa é mexer na outra.
+
+O motor vai além na conferência: para caminho de arquivo, ele exige que o arquivo
+**exista** naquela estação. As três pendências são acusadas com nomes diferentes,
+porque são trabalhos diferentes: *célula vazia*, *só um nome de arquivo* e
+*arquivo não encontrado*.
+
+**O vínculo manda, e a célula é legenda.** Quem decide o que imprime é
+`__fotos[coluna]`; o texto da célula existe para o operador reconhecer a foto na
+grade. Por isso o editor de CSV **desfaz o vínculo** quando o texto daquela
+célula muda — digitado ou colado. Deixá-lo de pé faria a grade dizer "MARIA.jpg"
+e a credencial sair com o rosto da Ana, o erro que só o cliente descobre.
+Renomear a coluna arrasta o vínculo junto; remover a coluna o apaga; duplicar
+linha dá a cada cópia o seu próprio; e desfazer volta atrás de verdade, porque o
+editor trabalha sobre uma cópia do `__fotos`, não sobre o objeto do banco vivo.
 
 ### 3. Importar e casar
 

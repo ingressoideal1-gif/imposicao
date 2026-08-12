@@ -39,6 +39,43 @@
     function colunaDeFoto(nome) {
         return !!(ed && ed.colunasDeFoto && ed.colunasDeFoto.indexOf(nome) !== -1);
     }
+
+    /**
+     * Escreve numa célula — e, na coluna de foto, desfaz o vínculo antigo.
+     *
+     * Quem manda na impressão é `__fotos[coluna]`, não o texto da célula. Trocar
+     * o texto e deixar o vínculo de pé faria a grade dizer "MARIA.jpg" e a
+     * credencial sair com a foto da Ana: o erro que só o cliente descobre. Ao
+     * mexer no texto, o vínculo cai — a célula fica vermelha e o operador
+     * reanexa a foto pelo Gerenciador. Na dúvida, não escolher.
+     */
+    /**
+     * Cópia de trabalho de uma linha.
+     *
+     * Rasa, como sempre foi — com uma exceção: `__fotos` é objeto, e uma cópia
+     * rasa o deixaria compartilhado com a linha do banco lá fora. Aí desfazer
+     * (ou fechar descartando) devolveria as células antigas e **não** o vínculo
+     * das fotos, que já teria sido alterado no banco vivo. O editor precisa ser
+     * capaz de jogar fora tudo o que fez.
+     */
+    function copiarLinha(r) {
+        const c = Object.assign({}, r);
+        if (c[COL_FOTOS] && typeof c[COL_FOTOS] === 'object') {
+            const m = {};
+            for (const k of Object.keys(c[COL_FOTOS])) {
+                m[k] = Object.assign({}, c[COL_FOTOS][k]);
+            }
+            c[COL_FOTOS] = m;
+        }
+        return c;
+    }
+
+    function escreverCelula(row, h, valor) {
+        const antes = row[h] == null ? '' : String(row[h]);
+        row[h] = valor;
+        if (antes === String(valor == null ? '' : valor)) return;
+        if (colunaDeFoto(h) && row[COL_FOTOS] && row[COL_FOTOS][h]) delete row[COL_FOTOS][h];
+    }
     const ROW_H = 30;      // altura da linha, em px (fixa: a grade é virtualizada)
     const HEAD_H = 38;
     const W_DRAG = 26;
@@ -606,7 +643,7 @@
     function snapshot() {
         ed.undo.push({
             headers: ed.headers.slice(),
-            rows: ed.rows.map(r => Object.assign({}, r)),
+            rows: ed.rows.map(copiarLinha),
             dono: new Map(ed.dono)
         });
         while (ed.undo.length > limiteUndo()) ed.undo.shift();
@@ -618,7 +655,7 @@
         if (!ed.undo.length) return;
         ed.redo.push({
             headers: ed.headers.slice(),
-            rows: ed.rows.map(r => Object.assign({}, r)),
+            rows: ed.rows.map(copiarLinha),
             dono: new Map(ed.dono)
         });
         const s = ed.undo.pop();
@@ -632,7 +669,7 @@
         if (!ed.redo.length) return;
         ed.undo.push({
             headers: ed.headers.slice(),
-            rows: ed.rows.map(r => Object.assign({}, r)),
+            rows: ed.rows.map(copiarLinha),
             dono: new Map(ed.dono)
         });
         const s = ed.redo.pop();
@@ -1161,11 +1198,23 @@
             // percorrendo a planilha — que o operador descobre os buracos, sem
             // precisar abrir o Gerenciador de Fotos para saber quem falta.
             if (colunaDeFoto(h)) {
-                const temFoto = !!(row.__fotos && row.__fotos[h] && String(row.__fotos[h].url || '').trim());
+                const ligada = !!(row.__fotos && row.__fotos[h] && String(row.__fotos[h].url || '').trim());
+                // Um caminho de arquivo escrito na célula (o modo BarTender) também
+                // imprime; um NOME solto, não — ele não aponta para lugar nenhum, e
+                // era exatamente esse o buraco que a célula verde escondia.
+                const caminho = !ligada && typeof window.origemDeFoto === 'function'
+                    && !!window.origemDeFoto(v);
+                const temFoto = ligada || caminho;
                 if (!temFoto) {
                     cel.classList.add('sem-foto');
-                    cel.title = 'Sem foto: esta linha não vai imprimir enquanto a foto não for anexada.';
+                    cel.title = String(v || '').trim()
+                        ? 'Isto é só um nome de arquivo: a foto ainda não foi ligada a esta linha. '
+                          + 'Abra o Gerenciador de Fotos para anexá-la.'
+                        : 'Sem foto: esta linha não vai imprimir enquanto a foto não for anexada.';
                     if (!cel.textContent) cel.textContent = 'sem foto';
+                } else if (caminho) {
+                    cel.classList.add('com-foto');
+                    cel.title = 'Caminho de arquivo: o motor abre este arquivo na própria estação.';
                 } else {
                     cel.classList.add('com-foto');
                     cel.title = 'Foto anexada' + (row.__fotos[h].dpi ? ' — ' + row.__fotos[h].dpi + ' dpi na janela' : '');
@@ -1320,7 +1369,7 @@
         dom.edit.style.display = 'none';
         if (ed.rows[r] && String(ed.rows[r][h] == null ? '' : ed.rows[r][h]) !== novo) {
             snapshot();
-            ed.rows[r][h] = novo;
+            escreverCelula(ed.rows[r], h, novo);
             recalcular();
         }
         dom.scroll.focus();
@@ -1380,7 +1429,7 @@
             const ri = ed.view[p];
             for (let j = 0; j < matriz[i].length; j++) {
                 const h = ed.headers[c0 + j];
-                if (h) ed.rows[ri][h] = matriz[i][j];
+                if (h) escreverCelula(ed.rows[ri], h, matriz[i][j]);
             }
         }
         recalcular();
@@ -1558,7 +1607,9 @@
     function duplicarLinha() {
         if (ed.cursor.r < 0 || !ed.rows[ed.cursor.r]) { aviso('Escolha uma linha primeiro.', 'error'); return; }
         snapshot();
-        const copia = Object.assign({}, ed.rows[ed.cursor.r]);
+        // `copiarLinha` também separa o `__fotos`: sem isso, reenquadrar a foto
+        // de uma das duas linhas mexeria na outra sem aviso.
+        const copia = copiarLinha(ed.rows[ed.cursor.r]);
         delete copia[COL_ID];        // a cópia é outra linha, com identidade própria
         ed.rows.splice(ed.cursor.r + 1, 0, copia);
         recalcular();
@@ -1764,6 +1815,17 @@
         ed.rows.forEach(r => {
             r[novo] = r[antigo];
             delete r[antigo];
+            // O vínculo da foto é guardado em `__fotos[coluna]`. Renomear a coluna
+            // sem levar essa chave junto deixava a célula com o nome do arquivo e
+            // o vínculo órfão — a linha parecia ter foto, a tela mostrava a espera
+            // e a imposição morria no meio da tiragem procurando um arquivo com
+            // aquele nome. É o mesmo motivo pelo qual a renomeação arrasta junto
+            // os elementos que apontam para a coluna.
+            if (r[COL_FOTOS] && typeof r[COL_FOTOS] === 'object'
+                && Object.prototype.hasOwnProperty.call(r[COL_FOTOS], antigo)) {
+                r[COL_FOTOS][novo] = r[COL_FOTOS][antigo];
+                delete r[COL_FOTOS][antigo];
+            }
         });
         ed.larguras[novo] = ed.larguras[antigo];
         delete ed.larguras[antigo];
@@ -1777,7 +1839,12 @@
         const nome = ed.headers[i];
         snapshot();
         ed.headers.splice(i, 1);
-        ed.rows.forEach(r => { delete r[nome]; });
+        ed.rows.forEach(r => {
+            delete r[nome];
+            // Sem a coluna não há foto ligada a ela: deixar o vínculo para trás
+            // engordaria o banco com endereços que ninguém mais lê.
+            if (r[COL_FOTOS] && typeof r[COL_FOTOS] === 'object') delete r[COL_FOTOS][nome];
+        });
         delete ed.larguras[nome];
         if (ed.ordemCol === nome) ed.ordemCol = null;
         if (ed.filtroCol === nome) { ed.filtroCol = ''; ed.filtroVal = ''; }
@@ -2423,7 +2490,7 @@
         injetarCss();
 
         const headers = Array.isArray(opts.headers) ? opts.headers.filter(h => !colunaInterna(h)) : [];
-        const rows = Array.isArray(opts.rows) ? opts.rows.map(r => Object.assign({}, r)) : [];
+        const rows = Array.isArray(opts.rows) ? opts.rows.map(copiarLinha) : [];
 
         // Um CSV salvo sem cabeçalho explícito ainda assim tem as chaves nas linhas.
         if (!headers.length && rows.length) {

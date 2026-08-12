@@ -4,7 +4,68 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v548** — 2026-08-12 | Agente **1.2.44**
+## Versão atual: **v553** — 2026-08-12 | Agente **1.2.50**
+
+---
+
+## [v553 — 2026-08-12] — Nome de arquivo não é foto
+
+Relato: *"Janela de visualização da imposição no Painel de Produção não mostra as
+fotos da lista, não gera o pdf e retorna: Erro ao impor a foto do elemento
+'el_18' (origem: JAQUE ROSSI.jpeg): No such file or directory"*.
+
+Dois defeitos independentes, com a mesma origem: **três lugares discordavam sobre
+o que conta como "esta linha tem foto"**.
+
+### A prévia do Painel de Produção pulava a foto
+
+`drawVdpElements` do `pedido.js` é uma cópia divergente da função homônima do
+`script.js`. A do `script.js` ganhou o tipo FOTO; esta ficou para trás e
+desenhava nome, cargo e código de barras — tudo menos a foto, justamente na peça
+em que a foto **é** o conteúdo. Agora ela desenha, com a linha daquele item, e um
+lote de fotos chegando repinta a janela uma vez só.
+
+### Um nome de arquivo na célula parecia foto
+
+A célula da coluna pode trazer um **endereço** (o que o Gerenciador grava), um
+**caminho de arquivo** (o modo BarTender, para quem já tem o lote numa pasta) ou
+só um **nome escrito**. O terceiro não aponta para lugar nenhum — mas a
+conferência prévia do motor o dava por resolvido, e a tiragem morria ao chegar
+naquele item, com o PVC na bandeja.
+
+Agora `_origem_de_foto` (motor) e `origemDeFoto` (tela) são gêmeas e recusam nome
+solto. A conferência acusa **antes do primeiro papel**, dizendo linha, coluna e
+motivo — "a célula tem 'JAQUE ROSSI.jpeg', que é só um nome de arquivo" é
+diferente de "célula vazia" e de "arquivo não encontrado". Na tela, essas linhas
+passam a mostrar o quadro vermelho com "?" em vez de um relógio de espera que
+nunca terminava.
+
+### O editor de CSV não podia mais trocar a foto em silêncio
+
+Quem manda na impressão é o vínculo `__fotos[coluna]`, não o texto da célula.
+Trocar o texto e deixar o vínculo de pé fazia a grade dizer "MARIA.jpg" e a
+credencial sair com a foto da Ana. Agora, mexer no texto da célula de foto
+**desfaz o vínculo** — a célula fica vermelha e o operador reanexa pelo
+Gerenciador.
+
+Na mesma linha: renomear a coluna arrasta o vínculo junto (antes ele ficava
+órfão, que é uma das maneiras de produzir exatamente o erro relatado), remover a
+coluna limpa o vínculo, duplicar linha não faz as duas dividirem o mesmo
+enquadramento, e desfazer/descartar volta atrás de verdade — o editor passou a
+trabalhar sobre cópia própria do `__fotos`, e não sobre o objeto do banco vivo.
+
+### E mais
+
+- A tela do pedido abre o editor de CSV com a lista de colunas de foto, que ela
+  não passava: lá as células não ficavam vermelhas e nenhuma das proteções valia.
+- O gabarito rasterizado espera as fotos antes de virar PNG — ele desenha uma vez
+  só, e uma janela vazia no PDF entregue à produção não seria descoberta olhando
+  a tela, que repinta.
+- O Criador de Arte repinta a camada quando a foto chega.
+- `producao.html` passou a carregar `texto-ajuste.js`, `foto-lib.js` e
+  `gerenciador-fotos.js`. O `script.js` chama funções desses três **sem guarda**:
+  faltando um, o primeiro elemento de texto ou de foto derrubava o desenho
+  inteiro do canvas naquela página.
 
 ---
 

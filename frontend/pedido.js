@@ -1886,6 +1886,25 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'alphabetic';
 
+                    } else if (el.type === 'FOTO') {
+
+                        // A foto é a da LINHA daquele item, não a da primeira: é
+                        // nesta janela que o operador confere, item a item, se cada
+                        // credencial recebeu a pessoa certa antes de mandar imprimir.
+                        //
+                        // Sem este ramo a prévia desenhava o nome e o cargo e pulava
+                        // a foto — a tela mentia sobre o papel justamente na peça em
+                        // que a foto É o conteúdo.
+                        if (typeof window.desenharElementoFoto === 'function') {
+
+                            window.desenharElementoFoto(
+                                ctx, el, MM2PT * scale, false,
+                                (state.csvData && state.csvData[item_index]) || null,
+                                window.repintor('ped-previa', drawPedPreview)
+                            );
+
+                        }
+
                     } else if (el.type === 'SVG') {
 
                         const sz_w = (el.width_mm || 20) * MM2PT * scale;

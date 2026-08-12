@@ -22,12 +22,35 @@
     var META_PADRAO = { cx: 0.5, cy: 0.5, zoom: 1, rot: 0 };
 
     /**
+     * A célula aponta para uma foto, ou só tem um nome escrito nela?
+     *
+     * Gêmea de `_origem_de_foto` no `engine.py`, e pela mesma razão: uma célula
+     * com `JAQUE ROSSI.jpeg` **parece** preenchida, mas esse nome não aponta
+     * para lugar nenhum. Quem faz o vínculo entre a pessoa e o arquivo é o
+     * Gerenciador de Fotos, que grava o endereço em `__fotos`.
+     *
+     * Valem: endereço (`https://…`, `data:…`, `blob:…`) e caminho de arquivo
+     * (`C:\fotos\ana.jpg`, `fotos/ana.jpg`, `/fotos/ana.jpg`) — o motor roda na
+     * estação e sabe abrir os dois. Não vale nome solto.
+     */
+    function origemDeFoto(bruto) {
+        var v = String(bruto == null ? '' : bruto).trim().replace(/^"|"$/g, '');
+        if (!v) return '';
+        if (/^(https?:|data:|blob:|file:)/i.test(v)) return v;
+        if (v.charAt(0) === '/' || v.charAt(0) === '\\') return v;
+        if (/^[a-z]:[\\/]/i.test(v)) return v;
+        if (v.indexOf('/') !== -1 || v.indexOf('\\') !== -1) return v;
+        return '';
+    }
+
+    /**
      * O enquadramento daquela linha, ou null se a linha não tem foto.
      *
      * Dois caminhos, na mesma ordem do engine:
      *   1. `__fotos[coluna]` — o que o Gerenciador de Fotos grava dentro da linha.
      *   2. o valor cru da coluna — uma URL ou caminho escrito na própria célula,
-     *      como BarTender e NiceLabel fazem.
+     *      como BarTender e NiceLabel fazem. Um nome de arquivo solto não conta:
+     *      veja `origemDeFoto`.
      */
     function fotoDaLinha(el, linha) {
         if (!el || !linha) return null;
@@ -39,7 +62,7 @@
                 return Object.assign({}, META_PADRAO, m);
             }
         }
-        var bruto = String(linha[col] == null ? '' : linha[col]).trim();
+        var bruto = origemDeFoto(linha[col]);
         if (bruto) return Object.assign({}, META_PADRAO, { url: bruto });
         return null;
     }
@@ -598,6 +621,7 @@
 
     var api = {
         META_PADRAO: META_PADRAO,
+        origemDeFoto: origemDeFoto,
         fotoDaLinha: fotoDaLinha,
         encaixeFoto: encaixeFoto,
         desenharJanelaFoto: desenharJanelaFoto,

@@ -79,6 +79,16 @@ o `__id`: é o que faz o enquadramento acompanhar a pessoa quando a tabela é
 reordenada, quando a numeração é dividida entre modelos, e quando uma célula é
 refeita.
 
+**O vínculo manda; a célula é legenda.** O que imprime é `__fotos[coluna]` — o
+texto da célula existe para o operador reconhecer a foto na grade. Por isso a
+edição da célula de uma coluna de foto (digitada ou colada) **desfaz o vínculo**,
+via `escreverCelula`: a célula fica vermelha e a foto é reanexada pelo
+Gerenciador. Sem isso, a grade diria "MARIA.jpg" e a credencial sairia com o
+rosto da Ana — o erro que só o cliente descobre. Pela mesma razão, renomear a
+coluna arrasta o vínculo junto, remover a coluna o apaga, duplicar linha dá a
+cada cópia o seu próprio, e `copiarLinha` separa o `__fotos` do objeto do banco
+vivo, para desfazer e descartar voltarem atrás de verdade.
+
 ## As quatro coisas que enganam
 
 ### 1. Uma linha desmarcada continua guardada

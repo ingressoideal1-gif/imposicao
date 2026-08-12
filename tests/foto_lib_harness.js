@@ -167,6 +167,28 @@ function casadaDe(r, nome) {
 
     ok(lib.fotoDaLinha(el, { Foto: '' }) === null, 'linha vazia devolve null');
     ok(lib.fotoDaLinha(el, { Foto: '', __fotos: { Foto: { url: '' } } }) === null, '__fotos vazio nao vale');
+
+    // O caso que quebrou uma tiragem: a celula tinha "JAQUE ROSSI.jpeg", um nome
+    // de arquivo digitado (ou vindo da planilha do cliente) que nao aponta para
+    // lugar nenhum. A tela dava a linha por resolvida e o motor estourava no meio
+    // da imposicao. Nome solto = linha SEM foto, nas duas pontas.
+    ok(lib.fotoDaLinha(el, { Foto: 'JAQUE ROSSI.jpeg' }) === null, 'nome solto nao e foto');
+})();
+
+// ─── 11b. origemDeFoto: gemea de _origem_de_foto no engine.py ────────────────
+
+(function origemUtilizavel() {
+    const nao = ['', '   ', 'ana', 'JAQUE ROSSI.jpeg', 'foto_01.png', '"IMG_4471.JPG"'];
+    nao.forEach(v => ok(lib.origemDeFoto(v) === '', 'nao e origem: ' + JSON.stringify(v)));
+
+    const sim = [
+        'https://x.co/a/ana.jpg', 'HTTP://x.co/ana.jpg', 'data:image/jpeg;base64,AAA',
+        'blob:http://localhost/abc', '/fotos/ana.jpg', 'C:\\fotos\\ana.jpg',
+        'c:/fotos/ana.jpg', '\\\\servidor\\fotos\\ana.jpg', 'fotos/ana.jpg',
+    ];
+    sim.forEach(v => ok(lib.origemDeFoto(v) !== '', 'e origem: ' + v));
+
+    ok(lib.origemDeFoto('  https://x/a.jpg  ') === 'https://x/a.jpg', 'apara o espaco em volta');
 })();
 
 // ─── 12. dpi na janela ────────────────────────────────────────────────────────

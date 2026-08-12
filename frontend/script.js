@@ -13076,6 +13076,16 @@ window.abrirCsvDoModelo = function(idx, osId, modo) {
 
         filename: num.csv_filename || 'banco.csv',
 
+        // Mesma lista que a ponte do editor de numeração entrega: é ela que faz
+        // a célula sem foto ficar vermelha e que desfaz o vínculo quando o texto
+        // da célula muda. Sem ela, esta tela — aberta pelo pedido — editava a
+        // coluna da foto sem nenhuma das duas proteções.
+        colunasDeFoto: [...new Set(
+            (num.elements || [])
+                .filter(el => el && el.type === 'FOTO' && el.csv_column)
+                .map(el => el.csv_column)
+        )],
+
         colunasEmUso: () => {
 
             const uso = {};
@@ -29834,7 +29844,14 @@ window.importarPdfMultipage = importarPdfMultipage;
 
 async function criarCanvasNumeracaoRasterizada(num, fmt) {
     if (!num || !num.elements || num.elements.length === 0) return null;
-    
+
+    // O gabarito desenha UMA vez e vira PNG: não há repinte quando a foto chega
+    // tarde. Sem esperar aqui, a janela sairia vazia no PDF entregue à produção —
+    // e ninguém descobriria olhando a tela, que repinta.
+    if (typeof window.precarregarFotosDosElementos === 'function') {
+        try { await window.precarregarFotosDosElementos(num.elements, [linhaDeAmostra()]); } catch (e) { }
+    }
+
     // Configurações base (S=8.0 para alta resolução: ~200 DPI)
     const S = 8.0; 
     
