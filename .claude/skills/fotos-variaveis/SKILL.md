@@ -1,6 +1,6 @@
 ---
 name: fotos-variaveis
-description: Leia ANTES de mexer em foto como dado variável — o elemento FOTO, o Gerenciador de Fotos, frontend/foto-lib.js, frontend/gerenciador-fotos.js, a chave __fotos das linhas do CSV, ou o ramo FOTO do engine.py. Cobre as sete armadilhas do caminho e por que o agente sai junto.
+description: Leia ANTES de mexer em foto como dado variável — o elemento FOTO, o Gerenciador de Fotos, frontend/foto-lib.js, frontend/gerenciador-fotos.js, a chave __fotos das linhas do CSV, ou o ramo FOTO do engine.py. Cobre as oito armadilhas do caminho e por que o agente sai junto.
 ---
 
 # Antes de mexer em foto variável
@@ -72,7 +72,27 @@ e `foto-lib.js`: ele chama `desenharTextoAjustado`, `desenharElementoFoto` e
 só aquele elemento — derruba o canvas inteiro. `index.html`, `cliente.html` e
 `producao.html`, as três.
 
-## 7. Normalizar antes de subir é requisito, não otimização
+## 7. Quem repinta a folha inteira não pode repintar por foto
+
+Toda foto que chega avisa quem a pediu. Numa janela pequena — o editor, um card —
+isso custa um redesenho barato, e o `repintor` nomeado já junta o lote num só.
+
+Numa **folha de imposição** a conta é outra: uma passada redesenha a folha
+inteira, com a arte rasterizada e todas as poses. Um trabalho de 88 credenciais
+vira dezenas de redesenhos completos, e a aba engasga — foi o que aconteceu entre
+a v553 e a v554 na prévia do Painel de Produção.
+
+O padrão certo, para quem desenha folha: colher as linhas **daquela folha**
+durante o desenho, chamar `precarregarFotosDosElementos` uma vez no fim e
+repintar uma vez. Duas ressalvas que não são opcionais:
+
+- **Só as linhas da folha.** Pedir as 88 fotos para mostrar as 21 que cabem é
+  rede paga à toa, e rede é o que o agente local existe para não pagar.
+- **`fotosPendentes` antes de pré-carregar.** Sem essa pergunta, o repinte pede
+  as fotos de novo, elas resolvem na hora (já em cache) e mandam repintar outra
+  vez — laço infinito.
+
+## 8. Normalizar antes de subir é requisito, não otimização
 
 Uma foto de celular tem 4 MB; um lote de 500 seriam 2 GB subindo e descendo.
 Reduzida no navegador para 300 dpi da janela com 30 % de folga, cada uma fica em

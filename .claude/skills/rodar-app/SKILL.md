@@ -86,6 +86,8 @@ page.on('request', req => {
   Se a última regra não for a última do arquivo, o parser morreu antes.
 - **Erro de console pré-existente e não relacionado:** `Erro ao checar print_agents no Supabase`, quando não há agente local respondendo. Não é regressão.
 - **`favicon.ico` 404** — o `frontend/` não tem favicon. Cosmético.
+- **Acento errado na tela (`SaÃ­da`, `â–¼`) está no ARQUIVO, não no cache nem no `Content-Type`.** Todas as páginas têm BOM UTF-8, que vence qualquer palpite do navegador; quando aparece mojibake, alguém salvou o `.js` relendo UTF-8 como cp1252 e gravou o resultado. O `pedido.js` carregou isso da v420 (`ab27911`) até a v554. O conserto é exato — `s.encode('cp1252').decode('utf-8')` sobre cada sequência —, mas com dois cuidados: o comprimento é determinado pelo primeiro caractere (`Ã`/`Â` levam 1 continuação, `â` leva 2), porque um quantificador guloso engole o começo do par seguinte e falha nos dois (`Ã§Ã£`); e vale conferir depois que a mudança mexeu **só** em acento — cada linha alterada tem de ser idêntica à anterior quando se removem os caracteres não-ASCII.
+- **A prévia do Painel de Produção desiste cedo se o formato não tiver `default_schema` e `default_saida_id`.** Ela desenha *"Erro: Regras de Imposição ausentes no Formato"* num canvas 300×200 e volta — nenhuma pose, nenhum elemento. Um cenário semeado sem esses dois campos mede o texto de erro achando que mede a arte; foi assim que um teste meu "viu" uma janela de foto que nunca foi desenhada.
 
 ## Publicar
 

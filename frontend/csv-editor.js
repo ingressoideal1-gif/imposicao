@@ -41,15 +41,6 @@
     }
 
     /**
-     * Escreve numa célula — e, na coluna de foto, desfaz o vínculo antigo.
-     *
-     * Quem manda na impressão é `__fotos[coluna]`, não o texto da célula. Trocar
-     * o texto e deixar o vínculo de pé faria a grade dizer "MARIA.jpg" e a
-     * credencial sair com a foto da Ana: o erro que só o cliente descobre. Ao
-     * mexer no texto, o vínculo cai — a célula fica vermelha e o operador
-     * reanexa a foto pelo Gerenciador. Na dúvida, não escolher.
-     */
-    /**
      * Cópia de trabalho de uma linha.
      *
      * Rasa, como sempre foi — com uma exceção: `__fotos` é objeto, e uma cópia
@@ -70,6 +61,15 @@
         return c;
     }
 
+    /**
+     * Escreve numa célula — e, na coluna de foto, desfaz o vínculo antigo.
+     *
+     * Quem manda na impressão é `__fotos[coluna]`, não o texto da célula. Trocar
+     * o texto e deixar o vínculo de pé faria a grade dizer "MARIA.jpg" e a
+     * credencial sair com a foto da Ana: o erro que só o cliente descobre. Ao
+     * mexer no texto, o vínculo cai — a célula fica vermelha e o operador
+     * reanexa a foto pelo Gerenciador. Na dúvida, não escolher.
+     */
     function escreverCelula(row, h, valor) {
         const antes = row[h] == null ? '' : String(row[h]);
         row[h] = valor;
