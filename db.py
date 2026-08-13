@@ -182,28 +182,44 @@ DEFAULT_DB = {
 DEFAULT_SUPABASE_URL = "https://vwbtitjlpelrcnsytzqw.supabase.co"
 DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3YnRpdGpscGVscmNuc3l0enF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5NzE5NTEsImV4cCI6MjA2NDU0Nzk1MX0.te1kg9RKJUQ-gBQ7YiXLDk-Ej8JMNcujIzIR-fTGR-o"
 
-SUPABASE_URL = None
-SUPABASE_KEY = None
+ENV_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
 
-env_local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
-if os.path.exists(env_local_path):
+
+def ler_env_local(chave: str, padrao=None):
+    """Lê uma chave do `.env.local` — o arquivo de segredos que o git ignora.
+
+    Existe como função nomeada porque o mesmo segredo tem três origens possíveis
+    conforme onde o código roda: variável de ambiente no Render, `.env.local` em
+    desenvolvimento, e nada na estação. Antes isso era um laço solto aqui em
+    cima que só conhecia duas chaves; o controle de acesso precisa de outras.
+
+    Devolve `padrao` quando o arquivo não existe ou a chave não está lá. Nunca
+    levanta: um `.env.local` malformado não pode impedir o app de subir.
+    """
+    if not os.path.exists(ENV_LOCAL):
+        return padrao
     try:
-        with open(env_local_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
+        with open(ENV_LOCAL, "r", encoding="utf-8") as f:
+            for linha in f:
+                linha = linha.strip()
+                if not linha or linha.startswith("#"):
                     continue
-                parts = line.split("=", 1)
-                if len(parts) == 2:
-                    k, v = parts[0].strip(), parts[1].strip()
-                    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
-                        v = v[1:-1]
-                    if k == "NEXT_PUBLIC_SUPABASE_URL":
-                        SUPABASE_URL = v
-                    elif k == "NEXT_PUBLIC_SUPABASE_ANON_KEY":
-                        SUPABASE_KEY = v
+                partes = linha.split("=", 1)
+                if len(partes) != 2:
+                    continue
+                k, v = partes[0].strip(), partes[1].strip()
+                if k != chave:
+                    continue
+                if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                    v = v[1:-1]
+                return v
     except Exception as e:
         print(f"[db.py] Erro ao ler .env.local: {e}")
+    return padrao
+
+
+SUPABASE_URL = ler_env_local("NEXT_PUBLIC_SUPABASE_URL")
+SUPABASE_KEY = ler_env_local("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 
 # Sobrescrever via variáveis de ambiente se presentes
 SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL)

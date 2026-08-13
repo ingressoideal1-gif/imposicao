@@ -51,6 +51,17 @@ import security_config
 # alias: dentro de _embed_system_fonts ja existe um dict local chamado font_cache
 import font_cache as font_cache_local
 
+# Controle de acesso: só onde a SUPABASE_SERVICE_KEY existe — quer dizer, no
+# Render, e não nas estações. O NewProd.exe embute o acesso_api.py mas não a
+# chave, e montar o router lá deixaria endpoints respondendo 503 a tudo, o que
+# só confunde quem for diagnosticar por que uma publicação não chegou.
+import acesso_api
+if acesso_api.disponivel():
+    app.include_router(acesso_api.router)
+    print("[app] Controle de acesso ativo.", flush=True)
+else:
+    print(f"[app] Controle de acesso inativo ({acesso_api.CHAVE_ENV} ausente).", flush=True)
+
 # allow_private_network permanece ligado: é o que autoriza a página HTTPS do
 # Vercel a falar com o agente local em 127.0.0.1:9000.
 # allow_credentials=False porque nenhuma chamada do frontend usa cookies/sessão
