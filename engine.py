@@ -867,6 +867,45 @@ class ImpositionEngine:
             return None
         return cfg.pool_qr.conteudo(cfg.pedido, modelo, val)
 
+    def _usa_qr_ideal(self) -> bool:
+        """Se algum elemento da numeracao e QR Ideal.
+
+        A trava abaixo so vale para quem usa o elemento: um trabalho de
+        numeracao comum com dois modelos na mesma coluna nao tem por que ser
+        recusado — coluna do pool nao significa nada para ele.
+        """
+        # `cfg.elements` ja e a lista achatada das duas numeracoes, montada no
+        # construtor — nao ha uma segunda lista para varrer.
+        return any(el.get("type") == "QR_IDEAL" for el in (self.cfg.elements or []))
+
+    def _conferir_colunas_qr_ideal(self):
+        """Duas artes da mesma folha nao podem cair na mesma coluna do pool.
+
+        Modelos cujos `id` diferem em exatamente 100 dao a MESMA coluna, e ai
+        sairiam QRs identicos no mesmo evento — o unico choque que o prefixo do
+        pedido nao separa, porque o pedido dos dois e o mesmo. Melhor recusar o
+        trabalho aqui do que descobrir na portaria, com a fila na porta.
+        """
+        cfg = self.cfg
+        if not cfg.pedido or not cfg.multi_artes or not self._usa_qr_ideal():
+            return
+        import qr_ideal as _qi
+        por_coluna = {}
+        for arte in cfg.multi_artes:
+            modelo = arte.get("modelo")
+            if modelo in (None, ""):
+                continue
+            modelo = str(modelo).strip()
+            col = _qi.coluna_do_modelo(cfg.pedido, modelo)
+            anterior = por_coluna.get(col)
+            if anterior is not None and anterior != modelo:
+                raise ValueError(
+                    f"QR Ideal: os modelos {anterior} e {modelo} caem na mesma coluna "
+                    f"({col}) do pool e produziriam ingressos com o MESMO codigo no "
+                    f"mesmo evento. Trabalho recusado."
+                )
+            por_coluna[col] = modelo
+
     def _injetar_qr_ideal(self, rotated_el: dict, val: int, item_index: int = None, item_data: dict = None):
         """Poe o conteudo do QR Ideal no elemento, logo antes de desenhar.
 
@@ -1458,6 +1497,10 @@ class ImpositionEngine:
         # Fotos primeiro: acusa as linhas sem foto e baixa o lote em paralelo,
         # antes de qualquer papel. Sem elemento FOTO, sai na primeira linha.
         self._conferir_e_aquecer_fotos()
+        # E antes de qualquer papel tambem: duas artes da mesma folha nao podem
+        # dividir a coluna do pool do QR Ideal. Sem elemento QR_IDEAL, sai na
+        # primeira linha.
+        self._conferir_colunas_qr_ideal()
         # ─── REFAZER ────────────────────────────────────────────────────────────
         # Reimpressão de parte de uma tiragem que já saiu. São dois modos, e eles
         # não se misturam:

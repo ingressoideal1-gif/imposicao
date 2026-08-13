@@ -180,6 +180,68 @@ def test_reimpressao_da_celula_7_traz_o_codigo_do_item_7(tmp_path, pool_sintetic
     assert do_item_1 not in desenhos
 
 
+def _engine_multi(pool, modelos, tmp_path):
+    cfg = ImpositionConfig(
+        base_file="base_ticket.pdf",
+        out_pdf=str(tmp_path / "multi.pdf"),
+        formato=FORMATO,
+        numeracao=_numeracao(),
+        saida=SAIDA,
+        seq_start=1, seq_end=len(modelos),
+        seq_increment=1,
+        layout_schema="multi_artes",
+        multi_artes=[{"modelo": m} for m in modelos],
+        pedido=20272, modelo=modelos[0],
+        pool_qr=qr_ideal.PoolQR(pool),
+    )
+    return ImpositionEngine(cfg)
+
+
+def test_modelos_consecutivos_caem_em_colunas_diferentes():
+    # Os modelos de um pedido nascem com ids consecutivos, e ai as colunas
+    # tambem sao consecutivas. E o caso normal.
+    assert qr_ideal.coluna_do_modelo(20272, 1000022) == 50
+    assert qr_ideal.coluna_do_modelo(20272, 1000023) == 49
+    assert qr_ideal.coluna_do_modelo(20272, 1000024) == 48
+
+
+def test_a_trava_deixa_passar_modelos_de_colunas_distintas(tmp_path, pool_sintetico):
+    motor = _engine_multi(pool_sintetico, ["1000022", "1000023"], tmp_path)
+    motor._conferir_colunas_qr_ideal()  # nao levanta
+
+
+def test_modelos_com_id_distante_100_sao_recusados(tmp_path, pool_sintetico):
+    """1000022 e 1000122 caem os dois na coluna 50 — QRs IDENTICOS no mesmo
+    evento, o unico choque que o prefixo do pedido nao separa."""
+    assert qr_ideal.coluna_do_modelo(20272, 1000022) == qr_ideal.coluna_do_modelo(20272, 1000122)
+
+    motor = _engine_multi(pool_sintetico, ["1000022", "1000122"], tmp_path)
+    with pytest.raises(ValueError, match="mesma coluna"):
+        motor.process()
+
+
+def test_trabalho_sem_qr_ideal_nao_e_afetado_pela_trava(tmp_path, pool_sintetico):
+    """A trava so vale para quem usa o elemento. Um trabalho de numeracao comum
+    com dois modelos na mesma coluna nao tem por que ser recusado."""
+    cfg = ImpositionConfig(
+        base_file="base_ticket.pdf",
+        out_pdf=str(tmp_path / "sem_qr.pdf"),
+        formato=FORMATO,
+        numeracao={"tipo": "SEQUENCIAL", "elements": [
+            {"id": "e1", "type": "TEXT", "x_mm": 50, "y_mm": 25,
+             "font_size": 12, "color": "#000000", "prefix": "N"}
+        ]},
+        saida=SAIDA,
+        seq_start=1, seq_end=2,
+        seq_increment=1,
+        layout_schema="multi_artes",
+        multi_artes=[{"modelo": "1000022"}, {"modelo": "1000122"}],
+        pedido=20272, modelo="1000022",
+        pool_qr=qr_ideal.PoolQR(pool_sintetico),
+    )
+    ImpositionEngine(cfg)._conferir_colunas_qr_ideal()  # nao levanta
+
+
 def test_pedido_terminado_em_zero_nao_perde_o_zero_no_papel(tmp_path, pool_sintetico):
     """Pedido 20270 vira "07202" no QR. Se algum trecho tratasse o prefixo
     como numero, ele viraria "7202" e o ingresso apontaria para outro pedido."""
