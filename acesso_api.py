@@ -34,14 +34,16 @@ monta este router. A estação simplesmente não serve `/api/acesso/*` — melho
 que servir endpoints que respondem 503 a tudo e confundem quem for diagnosticar.
 """
 
+import hmac
 import json
 import os
 import urllib.error
 import urllib.request
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 
 import db
+import qr_ideal
 
 router = APIRouter(prefix="/api/acesso", tags=["acesso"])
 
@@ -51,7 +53,18 @@ CHAVE_ENV = "SUPABASE_SERVICE_KEY"
 # (desenvolvimento). Na estação as duas faltam, e é assim que tem de ser.
 SERVICE_KEY = os.environ.get(CHAVE_ENV) or db.ler_env_local(CHAVE_ENV)
 
+# Segredo que o agente apresenta para publicar. Não é a mesma coisa que a
+# service_role: este só autoriza a publicar faixa de códigos, e é o único que
+# viaja para as estações — ver a seção "O que o segredo do agente protege",
+# mais abaixo.
+SEGREDO_ENV = "ACESSO_AGENTE_SEGREDO"
+AGENTE_SEGREDO = os.environ.get(SEGREDO_ENV) or db.ler_env_local(SEGREDO_ENV)
+
 TIMEOUT = 60
+
+# Lotes maiores estouram o corpo da requisição sem ganhar velocidade: o custo
+# está no KDF, que roda na estação, e não na rede.
+LOTE_MAXIMO = 500
 
 
 def disponivel() -> bool:
@@ -99,6 +112,187 @@ def supabase(method: str, path: str, body=None, prefer: str | None = None):
         except Exception:
             pass
         raise RuntimeError(f"Supabase {method} {path}: HTTP {e.code} {detalhe}") from e
+
+
+# ─── A publicação da faixa de códigos ─────────────────────────────────────────
+#
+# O agente chama três endpoints em sequência, sempre DEPOIS que o papel saiu:
+#
+#   1. abrir       → devolve o sal daquele pedido (sorteado na primeira vez)
+#   2. credenciais → envia {modelo_id, numero, hash} em lotes
+#   3. fechar      → carimba publicado_em e o total
+#
+# ## O que o segredo do agente protege
+#
+# Estes endpoints ESCREVEM, e vivem num backend público. Sem segredo, qualquer
+# um publicaria credencial para qualquer pedido — e o buraco não é cosmético:
+# como o `abrir` devolve o sal, quem chegasse até aqui poderia calcular o hash
+# de um conteúdo escolhido por ele e inserir um ingresso que a portaria
+# aceitaria. É a ÚNICA forma de forjar ingresso sem ter o pool.
+#
+# Por isso, três travas além do segredo:
+#
+#   - `numero` não pode passar da quantidade que o ERP registrou para aquele
+#     modelo, e `modelo_id` tem de ser mesmo daquele pedido. Nem com o segredo
+#     na mão dá para inventar o ingresso 99.999 de uma tiragem de 3.000.
+#   - publicação fechada não aceita mais lote. Reabrir é ato explícito.
+#   - a falha é FECHADA: servidor sem segredo configurado recusa tudo, em vez
+#     de virar porta aberta por esquecimento.
+#
+# Risco residual, registrado de propósito: quem tiver o segredo do agente e
+# pegar a janela entre `abrir` e `fechar` ainda consegue ocupar uma posição da
+# tiragem com um hash próprio. Endereçar isso é trabalho da parte 3 — a portaria
+# vai ter como cruzar o total publicado com o que o ERP encomendou.
+
+
+def _conferir_agente(segredo: str | None):
+    """Quem está publicando é mesmo um agente nosso?"""
+    if not AGENTE_SEGREDO:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"{SEGREDO_ENV} nao configurada neste servidor. A publicacao "
+                "fica fechada ate que esteja: endpoint de escrita sem segredo e "
+                "porta aberta."
+            ),
+        )
+    if not segredo or not hmac.compare_digest(str(segredo), AGENTE_SEGREDO):
+        raise HTTPException(status_code=401, detail="segredo do agente invalido")
+
+
+def _abrir_pedido(pedido_id_int: int) -> dict:
+    """Cria (ou reencontra) a linha do pedido e devolve o sal dele.
+
+    IDEMPOTENTE, e isto é o ponto: reabrir tem de devolver o MESMO sal. O
+    cliente reimprime 500 ingressos de um pedido de 5.000; sal novo invalidaria
+    os 4.500 que já estão na mão das pessoas, e ninguém descobriria antes da
+    portaria.
+
+    Reabrir também destrava a publicação que já tinha fechado — é o que permite
+    reimpressão. Voltar a aceitar lote é ato explícito, nunca efeito colateral.
+    """
+    achados = supabase(
+        "GET", f"producao_acesso_pedidos?pedido_id_int=eq.{int(pedido_id_int)}&select=*"
+    ) or []
+
+    if achados:
+        linha = achados[0]
+        estava_fechado = bool(linha.get("publicado_em"))
+        if estava_fechado:
+            supabase(
+                "PATCH",
+                f"producao_acesso_pedidos?pedido_id_int=eq.{int(pedido_id_int)}",
+                {"publicado_em": None},
+            )
+        return {"sal": linha["sal"], "reaberto": estava_fechado}
+
+    criado = supabase("POST", "producao_acesso_pedidos", {
+        "pedido_id_int": int(pedido_id_int),
+        "sal": qr_ideal.gerar_sal(),
+    })
+    return {"sal": criado[0]["sal"], "reaberto": False}
+
+
+def _tiragem_do_pedido(pedido_id_int: int) -> dict:
+    """{modelo_id: quantidade}, lido do ERP. É o teto de cada modelo.
+
+    Leitura de tabela do parceiro, que o REGRAS_BANCO.md autoriza.
+    """
+    linhas = supabase(
+        "GET", f"pedidos_modelos?id_int=eq.{int(pedido_id_int)}&select=id,quantidade"
+    ) or []
+    return {int(l["id"]): int(l.get("quantidade") or 0) for l in linhas}
+
+
+def _gravar_lote(pedido_id_int: int, itens: list) -> int:
+    """Grava um lote de credenciais, ignorando o que já existe.
+
+    `on_conflict=codigo_hash` é o que torna a publicação repetível: a rede cai
+    no meio, o agente reenvia o lote inteiro, e nada duplica. Conferido contra o
+    banco de verdade em 13/08/2026 — três envios do mesmo lote deixaram uma
+    linha só.
+    """
+    pedido_id_int = int(pedido_id_int)
+
+    linha = (supabase(
+        "GET", f"producao_acesso_pedidos?pedido_id_int=eq.{pedido_id_int}&select=*"
+    ) or [None])[0]
+    if not linha:
+        raise HTTPException(status_code=409, detail="publicacao nao foi aberta para este pedido")
+    if linha.get("publicado_em"):
+        raise HTTPException(
+            status_code=409,
+            detail="publicacao ja fechada; reabra antes de enviar mais lotes",
+        )
+
+    tiragem = _tiragem_do_pedido(pedido_id_int)
+    for i in itens:
+        modelo = int(i["modelo_id"])
+        numero = int(i["numero"])
+        if modelo not in tiragem:
+            raise HTTPException(
+                status_code=422,
+                detail=f"modelo {modelo} nao pertence ao pedido {pedido_id_int}",
+            )
+        if not (1 <= numero <= tiragem[modelo]):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"ingresso {numero} fora da tiragem do modelo {modelo} "
+                    f"(1..{tiragem[modelo]})"
+                ),
+            )
+
+    supabase(
+        "POST",
+        "producao_acesso_credenciais?on_conflict=codigo_hash",
+        [{
+            "pedido_id_int": pedido_id_int,
+            "modelo_id": int(i["modelo_id"]),
+            "numero": int(i["numero"]),
+            "codigo_hash": i["hash"],
+            "origem": "qr_ideal",
+        } for i in itens],
+        prefer="resolution=ignore-duplicates,return=minimal",
+    )
+    return len(itens)
+
+
+def _fechar_pedido(pedido_id_int: int) -> dict:
+    """Carimba o total publicado e trava a entrada de lotes novos."""
+    pedido_id_int = int(pedido_id_int)
+    gravadas = supabase(
+        "GET", f"producao_acesso_credenciais?pedido_id_int=eq.{pedido_id_int}&select=id"
+    ) or []
+    esperado = sum(_tiragem_do_pedido(pedido_id_int).values())
+    supabase("PATCH", f"producao_acesso_pedidos?pedido_id_int=eq.{pedido_id_int}", {
+        "publicado_em": "now()",
+        "total_credenciais": len(gravadas),
+    })
+    # `completo` é o que o agente olha para decidir se tenta de novo: um lote
+    # perdido por rede não pode passar por publicação terminada.
+    return {"total": len(gravadas), "esperado": esperado, "completo": len(gravadas) == esperado}
+
+
+@router.post("/pedidos/{pedido}/abrir")
+def abrir(pedido: int, x_agente_segredo: str = Header(None)):
+    _conferir_agente(x_agente_segredo)
+    return _abrir_pedido(pedido)
+
+
+@router.post("/pedidos/{pedido}/credenciais")
+def credenciais(pedido: int, corpo: dict, x_agente_segredo: str = Header(None)):
+    _conferir_agente(x_agente_segredo)
+    itens = corpo.get("itens") or []
+    if len(itens) > LOTE_MAXIMO:
+        raise HTTPException(status_code=413, detail=f"lote acima de {LOTE_MAXIMO} itens")
+    return {"gravadas": _gravar_lote(pedido, itens)}
+
+
+@router.post("/pedidos/{pedido}/fechar")
+def fechar(pedido: int, x_agente_segredo: str = Header(None)):
+    _conferir_agente(x_agente_segredo)
+    return _fechar_pedido(pedido)
 
 
 @router.get("/saude")

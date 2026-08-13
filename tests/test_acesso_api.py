@@ -99,3 +99,137 @@ def test_onde_nao_ha_chave_o_router_nem_existe():
     assert tem_rota == acesso_api.disponivel(), (
         f"router montado={tem_rota} mas chave presente={acesso_api.disponivel()}"
     )
+
+
+# ─── A publicação da faixa de códigos ─────────────────────────────────────────
+#
+# Três endpoints, chamados em sequência pelo agente depois que o papel saiu:
+# abrir (pega o sal), credenciais (envia em lotes), fechar (carimba o total).
+#
+# Eles ESCREVEM, e vivem num backend público. Sem segredo, qualquer um publicaria
+# credencial para qualquer pedido — e como o sal sai no `abrir`, quem tivesse
+# acesso poderia calcular o hash de um conteúdo escolhido por ele e inserir um
+# ingresso que a portaria aceitaria. É a única forma de forjar sem ter o pool.
+
+import pytest
+from fastapi import HTTPException
+
+
+class FakeBanco:
+    """Um Supabase de mentira, que guarda em dicionário o que foi gravado."""
+
+    def __init__(self, pedidos=None, modelos=None):
+        self.pedidos = pedidos or []
+        self.modelos = modelos or [{"id": 1000022, "quantidade": 3}]
+        self.credenciais = []
+        self.chamadas = []
+
+    def __call__(self, method, path, body=None, prefer=None):
+        self.chamadas.append((method, path))
+        if path.startswith("pedidos_modelos"):
+            return self.modelos
+        if path.startswith("producao_acesso_pedidos"):
+            if method == "GET":
+                return list(self.pedidos)
+            if method == "POST":
+                linha = dict(body)
+                linha.setdefault("publicado_em", None)
+                self.pedidos.append(linha)
+                return [linha]
+            if method == "PATCH":
+                for p in self.pedidos:
+                    p.update(body)
+                return self.pedidos
+        if path.startswith("producao_acesso_credenciais"):
+            if method == "GET":
+                return list(self.credenciais)
+            if method == "POST":
+                vistos = {c["codigo_hash"] for c in self.credenciais}
+                for linha in body:
+                    if linha["codigo_hash"] not in vistos:
+                        self.credenciais.append(linha)
+                        vistos.add(linha["codigo_hash"])
+                return []
+        return []
+
+
+@pytest.fixture
+def banco(monkeypatch):
+    b = FakeBanco()
+    monkeypatch.setattr(acesso_api, "supabase", b)
+    return b
+
+
+def test_reabrir_um_pedido_devolve_o_MESMO_sal(banco):
+    """Sal novo invalidaria todo hash já publicado.
+
+    O cliente reimprime 500 ingressos de um pedido de 5.000. Se a reabertura
+    sorteasse outro sal, os 4.500 que já estão na mão das pessoas parariam de
+    validar — e ninguém descobriria antes da portaria.
+    """
+    a = acesso_api._abrir_pedido(20272)
+    b = acesso_api._abrir_pedido(20272)
+    assert len(a["sal"]) == 64
+    assert a["sal"] == b["sal"]
+
+
+def test_reabrir_destrava_a_publicacao_que_ja_tinha_fechado(banco):
+    acesso_api._abrir_pedido(20272)
+    banco.pedidos[0]["publicado_em"] = "2026-08-13T00:00:00Z"
+    assert acesso_api._abrir_pedido(20272)["reaberto"] is True
+    assert banco.pedidos[0]["publicado_em"] is None
+
+
+def test_enviar_o_mesmo_lote_tres_vezes_nao_duplica(banco):
+    """A rede cai no meio e o agente reenvia. Conferido contra o banco real
+    em 13/08/2026: três envios do mesmo lote deixam uma linha só."""
+    acesso_api._abrir_pedido(20272)
+    itens = [{"modelo_id": 1000022, "numero": 1, "hash": "a" * 64}]
+    for _ in range(3):
+        acesso_api._gravar_lote(20272, itens)
+    assert len(banco.credenciais) == 1
+
+
+def test_numero_acima_da_tiragem_e_recusado(banco):
+    """Trava contra ingresso inventado.
+
+    A quantidade vem do ERP. Mesmo quem tivesse o segredo do agente não
+    conseguiria criar o ingresso 99.999 de uma tiragem de 3.
+    """
+    acesso_api._abrir_pedido(20272)
+    with pytest.raises(HTTPException) as e:
+        acesso_api._gravar_lote(20272, [{"modelo_id": 1000022, "numero": 99999, "hash": "b" * 64}])
+    assert e.value.status_code == 422
+
+
+def test_modelo_que_nao_e_do_pedido_e_recusado(banco):
+    acesso_api._abrir_pedido(20272)
+    with pytest.raises(HTTPException) as e:
+        acesso_api._gravar_lote(20272, [{"modelo_id": 7777777, "numero": 1, "hash": "c" * 64}])
+    assert e.value.status_code == 422
+
+
+def test_publicacao_fechada_nao_aceita_mais_lote(banco):
+    """Fecha a janela em que uma credencial forjada poderia entrar."""
+    acesso_api._abrir_pedido(20272)
+    banco.pedidos[0]["publicado_em"] = "2026-08-13T00:00:00Z"
+    with pytest.raises(HTTPException) as e:
+        acesso_api._gravar_lote(20272, [{"modelo_id": 1000022, "numero": 1, "hash": "d" * 64}])
+    assert e.value.status_code == 409
+
+
+def test_sem_segredo_configurado_o_endpoint_recusa(monkeypatch):
+    """Falha FECHADA. Servidor sem segredo não vira porta aberta."""
+    monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", None)
+    with pytest.raises(HTTPException) as e:
+        acesso_api._conferir_agente("qualquer coisa")
+    assert e.value.status_code == 503
+
+
+def test_segredo_errado_e_recusado(monkeypatch):
+    monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", "certo")
+    for tentativa in (None, "", "errado", "cert"):
+        with pytest.raises(HTTPException) as e:
+            acesso_api._conferir_agente(tentativa)
+        assert e.value.status_code == 401
+    acesso_api._conferir_agente("certo")  # não levanta
