@@ -373,12 +373,19 @@ ALTER TABLE producao_acesso_leituras             ENABLE ROW LEVEL SECURITY;
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 4. CONFERÊNCIA
 -- ══════════════════════════════════════════════════════════════════════════════
--- Rode depois. Tem de devolver 7 linhas, todas com rowsecurity = true.
+-- Esta consulta roda junto com o resto e fecha o script mostrando o resultado:
+-- 7 linhas, todas com rowsecurity = true.
+--
+-- Ela fica DESCOMENTADA de propósito. Na primeira versão deste arquivo ela
+-- estava comentada, o script terminou com "Success. No rows returned", e não
+-- havia como saber se tinha dado certo — o que é o oposto do que uma seção
+-- chamada "conferência" deve fazer. Só o bloco de desfazer, mais abaixo, é que
+-- continua comentado: aquele apaga tabela.
 
--- SELECT tablename, rowsecurity
---   FROM pg_tables
---  WHERE tablename LIKE 'producao_acesso_%'
---  ORDER BY tablename;
+SELECT tablename, rowsecurity
+  FROM pg_tables
+ WHERE tablename LIKE 'producao_acesso_%'
+ ORDER BY tablename;
 
 
 -- ══════════════════════════════════════════════════════════════════════════════
