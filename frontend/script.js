@@ -5469,9 +5469,11 @@ function renderElementsList() {
 
     // PDF faltava aqui desde sempre, e o card de todo elemento PDF exibia
     // "undefined" no selo — o typeBadge ao lado já tinha a entrada.
-    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PDF: '📄 PDF', FOTO: '🖼️ Foto', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
+    const typeLabel = { TEXT: '🔤 Numeração', FIXED: '🔠 Texto Fixo', QR: '📱 QR Code', QR_IDEAL: '🎟️ QR Ideal', BARCODE: '▌▌ Barcode', SVG: '🎨 SVG', PDF: '📄 PDF', FOTO: '🖼️ Foto', PICOTE: '✂️ Picote', TEATRO_FILA: '🎭 Fila', TEATRO_LUGAR: '🎭 Lugar', TEATRO_COMBO: '🎭 Fila & Lugar', CAMAROTE_LOCAL: '🏛️ Local', CAMAROTE_PESSOA: '👤 Pessoas', CAMAROTE_PESSOA_TOTAL: '👥 Pessoas 1/Total' };
 
-    const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray', TEATRO_FILA: 'badge-purple', TEATRO_LUGAR: 'badge-purple', TEATRO_COMBO: 'badge-purple', CAMAROTE_LOCAL: 'badge-amber', CAMAROTE_PESSOA: 'badge-amber', CAMAROTE_PESSOA_TOTAL: 'badge-amber' };
+    // FOTO entrou junto: faltava desde que a janela de foto foi criada, e o selo
+    // dela saía sem classe — a mesma falha que o comentário acima registra do PDF.
+    const typeBadge = { TEXT: 'badge-blue', FIXED: 'badge-amber', QR: 'badge-teal', QR_IDEAL: 'badge-teal', BARCODE: 'badge-purple', SVG: 'badge-green', FOTO: 'badge-green', PICOTE: 'badge-danger', PDF: 'badge-gray', TEATRO_FILA: 'badge-purple', TEATRO_LUGAR: 'badge-purple', TEATRO_COMBO: 'badge-purple', CAMAROTE_LOCAL: 'badge-amber', CAMAROTE_PESSOA: 'badge-amber', CAMAROTE_PESSOA_TOTAL: 'badge-amber' };
 
 
 
