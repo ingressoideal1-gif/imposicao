@@ -1,5 +1,5 @@
 #
-# O pool do QR Ideal tem que chegar as estacoes — e nao pode chegar pelo git.
+# O pool do QR Ideal tem que chegar as estacoes - e nao pode chegar pelo git.
 #
 # Sao 24 MB e e o segredo mestre do controle de acesso: quem tem o arquivo emite
 # ingresso valido para qualquer evento. Ele viaja pelo instalador do agente, e o
@@ -7,8 +7,14 @@
 #
 # O modo de falhar que estes testes previnem e silencioso e caro: um agente
 # publicado sem o pool instala normalmente, abre normalmente, e so quebra quando
-# alguem manda imprimir um trabalho com QR Ideal — provavelmente com a maquina
+# alguem manda imprimir um trabalho com QR Ideal - provavelmente com a maquina
 # ja parada esperando o papel.
+#
+# ATENCAO: este arquivo e ASCII puro de proposito. Um travessao escrito aqui ja
+# virou a sequencia mojibake que contem o caractere de aspa tipografica, e o
+# PowerShell 5.1 aceita aspa tipografica como delimitador de string - o arquivo
+# inteiro parou de compilar, com o erro apontando uma linha trinta linhas abaixo
+# da causa.
 #
 
 $raiz = Split-Path -Parent $PSScriptRoot
@@ -28,9 +34,25 @@ Describe "Pool do QR Ideal na publicacao" {
         $conteudo | Should Match "24000000"
     }
 
-    It "o instalador leva o pool para junto do executavel" {
+    It "o instalador Inno Setup leva o pool para junto do executavel" {
         $conteudo = Get-Content (Join-Path $raiz "installer.iss") -Raw
         $conteudo | Should Match "qr_ideal_pool\.bin"
+    }
+
+    It "o instalador MSI leva o pool - e e ELE que o publicar_agente.ps1 usa" {
+        # O installer.iss sozinho nao basta: quem sai para as estacoes pelo
+        # publicar_agente.ps1 e o MSI, montado pelo compilar_msi.ps1 a partir do
+        # agent_installer.wxs. Publicar o agente com o pool so no Inno Setup
+        # entregaria o motor novo SEM os codigos.
+        $wxs = Get-Content (Join-Path $raiz "agent_installer.wxs") -Raw
+        $wxs | Should Match "qr_ideal_pool\.bin"
+        $wxs | Should Match 'ComponentRef Id=.PoolQrIdeal.'
+    }
+
+    It "o compilador do MSI garante o pool em dist antes de empacotar" {
+        $conteudo = Get-Content (Join-Path $raiz "compilar_msi.ps1") -Raw
+        $conteudo | Should Match "qr_ideal_pool\.bin"
+        $conteudo | Should Match "24000000"
     }
 
     It "nenhum .bin esta versionado" {

@@ -10,6 +10,29 @@ if (-not (Test-Path "dist\NewProd.exe")) {
     powershell -ExecutionPolicy Bypass -File build_agent.ps1
 }
 
+# 1b. Pool do QR Ideal — o .wxs o empacota, e sem ele o `light.exe` falha.
+#
+# O build_agent.ps1 e quem copia o arquivo para dist\, mas ele so roda acima
+# quando o .exe esta faltando. Numa recompilacao com o .exe ja pronto o pool
+# ficaria para tras, e o agente sairia para as estacoes sem os codigos — o QR
+# Ideal so quebraria na hora de imprimir, com a maquina parada.
+$poolTamanhoEsperado = 24000000
+if (-not (Test-Path "dist\qr_ideal_pool.bin")) {
+    $poolOrigem = if ($env:POOL_QR_IDEAL) { $env:POOL_QR_IDEAL } else { "qr_ideal_pool.bin" }
+    if (-not (Test-Path $poolOrigem)) {
+        Write-Host "[ERRO] Pool do QR Ideal nao encontrado em: $poolOrigem" -ForegroundColor Red
+        Write-Host "       Gere com: python -m ferramentas.converter_pool `"Ideal Control/Ideal Control.xlsx`" qr_ideal_pool.bin" -ForegroundColor Yellow
+        exit 1
+    }
+    Copy-Item $poolOrigem "dist\qr_ideal_pool.bin" -Force
+}
+$poolTamanho = (Get-Item "dist\qr_ideal_pool.bin").Length
+if ($poolTamanho -ne $poolTamanhoEsperado) {
+    Write-Host "[ERRO] Pool do QR Ideal com $poolTamanho bytes; esperado $poolTamanhoEsperado." -ForegroundColor Red
+    exit 1
+}
+Write-Host "Pool do QR Ideal presente em dist\ ($poolTamanho bytes)." -ForegroundColor Green
+
 # 2. Procurar o WiX Toolset no sistema ou baixar versao portavel
 $wixCandle = $null
 $wixLight = $null
