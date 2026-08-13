@@ -50,6 +50,10 @@ Name: "startupicon";   Description: "Iniciar automaticamente com o &Windows"; Gr
 
 [Files]
 Source: "dist\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; Pool do QR Ideal: 3.000.000 de codigos de 8 bytes, lidos por posicao direta.
+; Vai AO LADO do executavel, e nao dentro dele: o agente e `onefile`, e dado
+; embutido seria extraido para pasta temporaria a cada abertura da estacao.
+Source: "dist\qr_ideal_pool.bin"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; {userstartmenu} e {userdesktop} nao exigem admin (apenas para o usuario atual)

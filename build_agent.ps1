@@ -26,4 +26,36 @@ if (Test-Path "dist") { Remove-Item -Recurse -Force "dist\NewProd.exe", "dist\Ne
 Write-Host "Compilando executável com PyInstaller..." -ForegroundColor Green
 .\venv\Scripts\python.exe -m PyInstaller --clean agent_tray.spec
 
+# 5. Pool do QR Ideal
+#
+# Os 24 MB de códigos NÃO estão no git — são o segredo mestre do controle de
+# acesso, e quem tem o arquivo emite ingresso válido para qualquer evento. Ele
+# vem de um caminho combinado fora do repositório (POOL_QR_IDEAL) ou da própria
+# raiz do projeto, e vai ao lado do executável, não dentro dele: o agente é
+# `onefile`, e dado embutido é extraído para pasta temporária a cada abertura.
+#
+# O build PARA se o arquivo não estiver lá. Um agente publicado sem pool instala
+# normal, abre normal, e só quebra na hora de imprimir — provavelmente com a
+# máquina já parada esperando o papel.
+$poolTamanhoEsperado = 24000000
+$poolOrigem = if ($env:POOL_QR_IDEAL) { $env:POOL_QR_IDEAL } else { Join-Path $PSScriptRoot "qr_ideal_pool.bin" }
+
+if (-not (Test-Path $poolOrigem)) {
+    Write-Host "`n[ERRO] Pool do QR Ideal nao encontrado em: $poolOrigem" -ForegroundColor Red
+    Write-Host "       Gere com:" -ForegroundColor Yellow
+    Write-Host "         python -m ferramentas.converter_pool `"Ideal Control/Ideal Control.xlsx`" qr_ideal_pool.bin" -ForegroundColor Yellow
+    Write-Host "       Ou aponte a variavel POOL_QR_IDEAL para o arquivo." -ForegroundColor Yellow
+    exit 1
+}
+
+$poolTamanho = (Get-Item $poolOrigem).Length
+if ($poolTamanho -ne $poolTamanhoEsperado) {
+    Write-Host "`n[ERRO] Pool do QR Ideal com $poolTamanho bytes; esperado $poolTamanhoEsperado." -ForegroundColor Red
+    Write-Host "       Sao 3.000.000 de codigos de 8 bytes. Arquivo truncado ou de outra versao." -ForegroundColor Yellow
+    exit 1
+}
+
+Copy-Item $poolOrigem (Join-Path $PSScriptRoot "dist\qr_ideal_pool.bin") -Force
+Write-Host "Pool do QR Ideal copiado para dist/ ($poolTamanho bytes)." -ForegroundColor Green
+
 Write-Host "`nSUCESSO! Binário compilado em dist/NewProd.exe" -ForegroundColor Green
