@@ -8,6 +8,49 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [não publicado] — Editor de Fotos e a régua de qualidade
+
+Pedido: destacar em vermelho abaixo de 200 dpi (era 150), desvincular foto da
+linha, editor de foto com IA, interpolar as fracas para 200, e reamostrar para
+300 o que passar de 350 depois de enquadrado.
+
+### A régua: 200 · 300 · 350
+
+Selo vermelho abaixo de **200 dpi**; corredor bom entre 200 e 350; acima de
+**350** no enquadramento decidido, o Gravar reamostra a foto que vai subir para
+**300** — arquivo menor e RIP mais rápido, sem mexer nas antigas do banco, que
+não pagam reupload. O botão **⬆ Interpolar fracas** é fixo na folha de contato
+e conta as fracas ao vivo; o cartão interpolado diz `interp.`, porque
+interpolação suaviza serrilhado e não recupera detalhe.
+
+### ✕ Desvincular, com memória
+
+Desfaz o vínculo: linha volta a "sem foto" com a célula limpa, foto volta a
+"sem linha" sem perder o upload, e a dupla entra na lista de **divórcios** — o
+casamento automático não os junta de novo, nem reabrindo a tela. Religar na
+mão anula o divórcio.
+
+### ✏️ Editor de Foto (`frontend/editor-foto.js`)
+
+Recorte com alça, girar, espelhar, brilho/contraste/saturação ao vivo, nitidez,
+auto-nível, reamostragem por dpi — e **remover fundo** com um modelo de
+segmentação leve rodando no navegador da estação, compondo sobre a cor
+escolhida. O modelo (u2netp, Apache-2.0) mora no nosso Storage, subido e
+conferido por sha256 pela ferramenta `subir_modelo_fundo.ps1` — asset de
+GitHub não manda CORS, e produção não depende de github.com no ar. Aplicar
+substitui o arquivo da pessoa mantendo o enquadramento; o envio continua
+acontecendo só no Gravar.
+
+**Eliminar objetos** e **completar fundo** ficam para a próxima etapa, com IA
+generativa por API externa — decisão de provedor e custo por imagem em aberto.
+
+Verificação: 72 casos no harness (inclui a conta da reamostragem), 31 testes de
+motor/painel, e dois drivers de navegador — o fluxo completo (selo, desvincular,
+interpolar, editor, queima no Gravar medida no blob subido: 610→300 dpi) e a
+remoção de fundo de verdade, com modelo baixado do Storage em ~3 s.
+
+---
+
 ## [não publicado] — O Acrobat rejeitava a máscara do canto redondo
 
 Relato: *"a geração aconteceu até o final, sem apresentar erros. Mas o pdf

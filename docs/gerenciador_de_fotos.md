@@ -189,6 +189,56 @@ em português abre direto) com quem ficou sem foto — nome, linha e as demais
 colunas —, que fotos chegaram sem dono, e o que ficou em dúvida. É o que fecha o
 ciclo com quem enviou o lote.
 
+### A régua de qualidade: 200 · 300 · 350
+
+| faixa | o que acontece |
+|---|---|
+| **abaixo de 200 dpi** | selo vermelho no cartão da folha de contato |
+| **200–350** | corredor bom — nada a fazer |
+| **acima de 350 depois de enquadrada** | no **Gravar**, a foto que vai subir é reamostrada para **300 dpi** no enquadramento decidido: arquivo menor, RIP mais rápido, impressão igual |
+
+A queima 350→300 acontece no Gravar, e não na importação, para preservar a
+folga de 30% enquanto o operador ainda enquadra. Ela só vale para fotos que já
+iam subir (novas, trocadas, editadas): as antigas do banco não pagam reupload.
+
+O botão **⬆ Interpolar fracas até 200 dpi** é fixo na barra da folha de contato
+e conta as fracas ao vivo. Interpolar suaviza o serrilhado — não recupera
+detalhe —, e por isso o cartão passa a dizer `interp.`: a tela não finge
+qualidade que não existe.
+
+**✕ desvincular**, em cada cartão, desfaz o vínculo: a linha volta para "Linhas
+sem foto" (célula limpa, vermelha nas outras telas), a foto volta para "Fotos
+sem linha" sem perder o upload já feito, e a dupla entra na lista de divórcios
+— o casamento automático não junta os dois de novo, nem quando a tela reabre.
+Religar na mão anula o divórcio: a última palavra é sempre do operador.
+
+### O Editor de Foto (`frontend/editor-foto.js`)
+
+O **✏️ editar** de cada cartão abre a foto num editor próprio, tudo no
+navegador — nada sobe para editar, o envio continua acontecendo só no Gravar:
+
+- **recorte** com alça, **girar** 90°, **espelhar**
+- **brilho / contraste / saturação** ao vivo, **nitidez** (máscara de
+  desfoque), **auto-nível** (estica o histograma entre os percentis 1–99)
+- **reamostrar** por dpi-na-janela (o rótulo mostra o dpi com o zoom do
+  enquadramento atual)
+- **remover fundo**: um modelo de segmentação leve (u2netp, Apache-2.0, ~4 MB)
+  separa a pessoa e compõe sobre a cor escolhida — o clássico da foto 3×4 com
+  fundo bagunçado
+
+O modelo mora no **nosso Storage**
+(`agent-releases/modelos/u2netp.onnx`, subido e conferido por sha256 pela
+ferramenta `ferramentas/subir_modelo_fundo.ps1`) — nunca no GitHub: asset de
+release não manda CORS e a produção não pode depender de github.com no ar. O
+runtime (onnxruntime-web) vem do jsDelivr, o mesmo CDN de que o app já depende.
+Se qualquer um dos dois faltar, o botão se declara indisponível e o resto do
+editor segue funcionando.
+
+Aplicar gera um arquivo novo (hash novo) que substitui o da pessoa **mantendo o
+enquadramento** — mesmo encanamento do 🔁 trocar. As operações **generativas**
+(eliminar objetos, completar fundo) ficam para a fase da API externa, com
+provedor e orçamento a escolher.
+
 ### 4. Folha de contato
 
 A aba **Enquadrar**: todas as fotos já renderizadas dentro da janela real do

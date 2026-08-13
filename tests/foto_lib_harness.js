@@ -302,6 +302,46 @@ assincronos.push(comImagemQueCarrega(function () {
     ok(!lib.urlCarregavel(''), 'vazio nao e carregavel');
 })();
 
+// ─── 16. A conta da reamostragem: o dpi e linear no tamanho do pixel ──────────
+//
+// Interpolar para 200 e queimar para 300 usam a MESMA conta: multiplicar as
+// dimensoes por (dpi alvo / dpi atual). Se dpiNaJanela deixar de ser linear,
+// o Gerenciador passa a entregar dpi errado nas duas operacoes.
+
+(function reamostragem() {
+    const JW = 25, JH = 32;
+
+    // Interpolar para cima: foto fraca (120 dpi) chega exata em 200.
+    const fraca = { w: 200, h: 280 };
+    const dpiFraca = lib.dpiNaJanela(fraca.w, fraca.h, JW, JH, 'cover', 1);
+    const kSobe = 200 / dpiFraca;
+    const dpiDepois = lib.dpiNaJanela(Math.round(fraca.w * kSobe), Math.round(fraca.h * kSobe), JW, JH, 'cover', 1);
+    ok(Math.abs(dpiDepois - 200) <= 2, 'interpolar leva a foto fraca a 200 dpi', { dpiFraca, dpiDepois });
+
+    // Queimar para baixo: foto gorda (>350) cai exata em 300.
+    const gorda = { w: 2000, h: 2600 };
+    const dpiGorda = lib.dpiNaJanela(gorda.w, gorda.h, JW, JH, 'cover', 1);
+    ok(dpiGorda > 350, 'a foto de teste esta mesmo acima do teto', dpiGorda);
+    const kDesce = 300 / dpiGorda;
+    const dpiEnxuta = lib.dpiNaJanela(Math.round(gorda.w * kDesce), Math.round(gorda.h * kDesce), JW, JH, 'cover', 1);
+    ok(Math.abs(dpiEnxuta - 300) <= 2, 'a queima leva a foto gorda a 300 dpi', dpiEnxuta);
+
+    // O zoom entra na conta: com zoom 2, o mesmo arquivo rende metade do dpi,
+    // entao o fator para chegar a 200 e o dobro.
+    const dpiZoom = lib.dpiNaJanela(fraca.w, fraca.h, JW, JH, 'cover', 2);
+    ok(Math.abs(dpiZoom * 2 - dpiFraca) <= 2, 'zoom 2 corta o dpi pela metade', { dpiFraca, dpiZoom });
+    const kZoom = 200 / dpiZoom;
+    const dpiZoomDepois = lib.dpiNaJanela(Math.round(fraca.w * kZoom), Math.round(fraca.h * kZoom), JW, JH, 'cover', 2);
+    ok(Math.abs(dpiZoomDepois - 200) <= 2, 'interpolar respeita o zoom do enquadramento', dpiZoomDepois);
+
+    // Dentro do corredor 200-350 nao ha o que fazer: o fator seria ~1.
+    // A janela de 25 mm tem ~1 polegada de largura, entao o corredor pede
+    // aproximadamente 200 a 350 px de largura util.
+    const boa = { w: 260, h: 340 };
+    const dpiBoa = lib.dpiNaJanela(boa.w, boa.h, JW, JH, 'cover', 1);
+    ok(dpiBoa >= 200 && dpiBoa <= 350, 'foto no corredor bom fica como esta', dpiBoa);
+})();
+
 Promise.all(assincronos).then(function () {
     console.log((total - falhas) + '/' + total + ' casos passaram');
     process.exit(falhas ? 1 : 0);

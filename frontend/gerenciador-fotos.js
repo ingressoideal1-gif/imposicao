@@ -28,7 +28,9 @@
 
     var DPI_ALVO = 300;      // resolução de impressão pretendida dentro da janela
     var FOLGA_ZOOM = 1.3;    // 30% a mais, para o operador aproximar sem borrar
-    var DPI_MINIMO = 150;    // abaixo disto, rosto borrado em PVC
+    var DPI_MINIMO = 200;    // abaixo disto, selo vermelho no cartão
+    var DPI_TETO = 350;      // acima disto depois de enquadrada, é excesso...
+    var DPI_QUEIMA = 300;    // ...e o Gravar reamostra para cá: arquivo menor, RIP mais rápido
     var POR_PAGINA = 48;     // cartões por página da folha de contato
     var QUALIDADE = 0.9;
 
@@ -41,6 +43,15 @@
     var focoEnquadro = -1;   // índice da linha em ajuste na folha de contato
     var colunaId = '';       // coluna que identifica a pessoa na tela
     var trocandoLinha = -1;  // linha cuja foto está sendo substituída
+
+    // Duplas separadas na mão ('arquivo|linha' → true). Sem esta memória o
+    // botão de desvincular seria inútil exatamente quando os nomes batem: o
+    // próximo recasamento automático juntaria os dois de novo.
+    var divorcios = {};
+
+    // Divórcios por sessão de numeração+coluna, para sobreviverem ao fechar e
+    // reabrir da tela — mesma vida útil das sobras logo abaixo.
+    var divorciosGuardados = new Map();
 
     // Fotos que ainda não acharam dono, guardadas por numeração+coluna.
     //
@@ -160,6 +171,71 @@
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    // Reamostragem — interpolar para cima, queimar para baixo, editar
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * O arquivo daquela foto, esteja onde estiver: o blob local do lote, ou o
+     * endereço no Storage (foto que veio do banco). O Storage responde com CORS
+     * liberado, então dá para trazer os bytes de volta e reprocessar.
+     */
+    async function bitmapDaFoto(f) {
+        var blob = f.blob;
+        if (!blob) {
+            var origem = f.remota || f.url;
+            if (!origem || !/^(https?:|blob:|data:)/i.test(origem)) throw new Error('foto sem arquivo acessível');
+            var resp = await fetch(origem);
+            if (!resp.ok) throw new Error('o Storage respondeu ' + resp.status);
+            blob = await resp.blob();
+        }
+        return { bmp: await carregarBitmap(blob), blob: blob };
+    }
+
+    /**
+     * Reamostra a foto por um fator e a põe no lugar da antiga, marcando para
+     * subir de novo no Gravar (hash novo). O fator é a conta inteira: o dpi na
+     * janela é linear no tamanho do pixel, então chegar ao dpi X a partir do
+     * dpi Y é multiplicar as dimensões por X/Y.
+     *
+     * Interpolar (fator > 1) suaviza o serrilhado, não recupera detalhe — quem
+     * chama marca `f.interpolada` para o cartão contar essa verdade.
+     */
+    async function reamostrarFoto(f, fator) {
+        var par = await bitmapDaFoto(f);
+        var bmp = par.bmp;
+        var lw = Math.max(1, Math.round(bmp.width * fator));
+        var lh = Math.max(1, Math.round(bmp.height * fator));
+
+        var cv = document.createElement('canvas');
+        cv.width = lw; cv.height = lh;
+        var ctx = cv.getContext('2d', { colorSpace: 'srgb' });
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(bmp, 0, 0, lw, lh);
+        if (bmp.close) bmp.close();
+
+        var blob = await new Promise(function (res) {
+            cv.toBlob(function (b) { res(b); }, 'image/jpeg', QUALIDADE);
+        });
+        if (!blob) throw new Error('o navegador não recodificou a imagem');
+
+        substituirArquivoDaFoto(f, blob, lw, lh, await hashDoBlob(blob));
+    }
+
+    /**
+     * Troca os bytes de uma foto mantendo o NOME — é pelo nome que os vínculos
+     * apontam. `noBanco` cai: bytes novos precisam subir no próximo Gravar.
+     */
+    function substituirArquivoDaFoto(f, blob, w, h, hash) {
+        try { if (f.blob) URL.revokeObjectURL(f.url); } catch (e) { }
+        f.blob = blob;
+        f.url = URL.createObjectURL(blob);
+        f.hash = hash;
+        f.w = w; f.h = h;
+        f.noBanco = false;
+        f.remota = null;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     // Estilo e casca do modal
     // ══════════════════════════════════════════════════════════════════════
 
@@ -219,6 +295,8 @@
 .gf-mini{margin-top:6px;width:100%;font-size:10px;padding:3px 6px;border-radius:5px;
   border:1px solid #334155;background:#1e293b;color:#94a3b8;cursor:pointer}
 .gf-mini:hover{background:#334155;color:#e2e8f0}
+.gf-acoes{display:flex;gap:4px}
+.gf-acoes .gf-mini{width:auto;flex:1}
 .gf-vazio{color:#64748b;padding:22px;text-align:center}
 .gf-aviso{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);color:#fbbf24;
   padding:8px 12px;border-radius:8px;margin-bottom:12px}
@@ -326,7 +404,7 @@
         if (primeiraVez && !r.casadas.length && !r.semFoto.length) return solta;
 
         return `
-        ${baixaRes ? `<div class="gf-aviso">⚠️ ${baixaRes} foto(s) abaixo de ${DPI_MINIMO} dpi nesta janela — vão sair borradas no PVC. Elas aparecem marcadas na aba Enquadrar.</div>` : ''}
+        ${baixaRes ? `<div class="gf-aviso">⚠️ ${baixaRes} foto(s) abaixo de ${DPI_MINIMO} dpi nesta janela — qualidade baixa para PVC. Elas aparecem marcadas em vermelho na aba Enquadrar, onde dá para interpolá-las.</div>` : ''}
         ${solta}
         <div style="display:flex;align-items:center;gap:10px;margin:12px 0 4px;flex-wrap:wrap">
             <span class="gf-tag">
@@ -504,10 +582,48 @@
         var i = resultado.casadas.findIndex(function (c) { return c.arquivo === arquivo; });
         if (i < 0) return;
         var c = resultado.casadas[i];
-        resultado.casadas.splice(i, 1);
-        resultado.sobrando.push({ nome: c.arquivo, ref: c.ref });
-        if (!linhaCasada(c.linha)) resultado.semFoto.push(c.linha);
+        separar(c);
+        pintar();
+    };
+
+    /**
+     * Desfaz um vínculo, decidido pelo operador — e portanto DEFINITIVO para o
+     * automático: a dupla vai para a lista de divórcios e não volta a casar
+     * sozinha, nem nesta sessão nem quando a tela reabrir.
+     *
+     * Se o vínculo já estava GRAVADO na linha, ele é removido agora: a célula
+     * esvazia, fica vermelha nas outras telas, e a impressão passa a acusar a
+     * linha — que é a verdade. Vale depois de salvar a numeração.
+     */
+    function separar(c) {
+        divorcios[c.arquivo + '|' + c.linha] = true;
+        resultado.casadas = resultado.casadas.filter(function (x) { return x !== c; });
+        if (!resultado.sobrando.some(function (s) { return s.nome === c.arquivo; })) {
+            resultado.sobrando.push({ nome: c.arquivo, ref: c.ref });
+        }
+        if (!linhaCasada(c.linha) && resultado.semFoto.indexOf(c.linha) === -1) {
+            resultado.semFoto.push(c.linha);
+        }
         resultado.semFoto.sort(function (a, b) { return a - b; });
+
+        var r = cfg.rows[c.linha];
+        if (r) {
+            var tinhaGravado = !!(r.__fotos && r.__fotos[cfg.coluna]);
+            if (tinhaGravado) delete r.__fotos[cfg.coluna];
+            if (r[cfg.coluna] != null && String(r[cfg.coluna]).trim()) r[cfg.coluna] = '';
+            if (tinhaGravado) {
+                aviso('Foto desvinculada de "' + rotuloDaLinha(c.linha) + '". '
+                    + 'Salve a numeração para o desfazer valer no banco.');
+            }
+        }
+    }
+
+    window.__gfDesvincular = function (linha) {
+        var c = (resultado.casadas || []).find(function (x) { return x.linha === linha; });
+        if (!c) return;
+        separar(c);
+        // A folha de contato some com o cartão; a pilha "Fotos sem linha" da
+        // aba Importar é onde a foto reaparece para ser religada.
         pintar();
     };
 
@@ -520,6 +636,9 @@
     }
 
     function ligar(arquivo, linha, regra) {
+        // Religar na mão anula o divórcio: a última palavra é sempre do
+        // operador, num sentido e no outro.
+        delete divorcios[arquivo + '|' + linha];
         resultado.casadas = resultado.casadas.filter(function (c) {
             return c.arquivo !== arquivo && c.linha !== linha;
         });
@@ -544,10 +663,15 @@
         var ultimaPagina = pagina >= paginas - 1;
 
         return `
-        <div class="gf-tag" style="margin-bottom:10px">
-            Roda do mouse aproxima · arrastar move · as setas do teclado trocam de foto · duplo clique volta ao enquadramento automático.
-            ${paginas > 1 ? ` · página ${pagina + 1} de ${paginas}` : ''}
-            ${faltantes.length ? ` · <b style="color:#f87171">${faltantes.length} sem foto</b>` : ''}
+        <div class="gf-tag" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span>
+                Roda do mouse aproxima · arrastar move · as setas do teclado trocam de foto · duplo clique volta ao enquadramento automático.
+                ${paginas > 1 ? ` · página ${pagina + 1} de ${paginas}` : ''}
+                ${faltantes.length ? ` · <b style="color:#f87171">${faltantes.length} sem foto</b>` : ''}
+            </span>
+            <button class="gf-btn" id="gf-interp" style="margin-left:auto" onclick="window.__gfInterpolar()"
+                title="Reamostra para ${DPI_MINIMO} dpi todas as fotos abaixo disso, no enquadramento atual. Interpolação suaviza o serrilhado — não recupera detalhe.">
+                ⬆ Interpolar fracas até ${DPI_MINIMO} dpi</button>
         </div>
         <div class="gf-grade">
             ${fatia.map(function (c, k) {
@@ -558,8 +682,12 @@
             return `<div class="gf-card ${focoEnquadro === idx ? 'foco' : ''}" id="gf-card-${idx}">
                     <canvas id="gf-cv-${idx}" data-idx="${idx}"></canvas>
                     <div class="rot" title="${esc(id.coluna)}: ${esc(id.valor)}">${esc(id.valor)}</div>
-                    <div class="dpi ${ruim ? 'ruim' : ''}">${f && f.dpi ? f.dpi + ' dpi' : ''}${ruim ? ' ⚠' : ''}</div>
-                    <button class="gf-mini" onclick="window.__gfTrocar(${c.linha})" title="substituir a foto desta pessoa">🔁 trocar</button>
+                    <div class="dpi ${ruim ? 'ruim' : ''}">${f && f.dpi ? f.dpi + ' dpi' : ''}${ruim ? ' ⚠' : ''}${f && f.interpolada ? ' · interp.' : ''}</div>
+                    <div class="gf-acoes">
+                        <button class="gf-mini" onclick="window.__gfTrocar(${c.linha})" title="Substituir a foto desta pessoa por outro arquivo">🔁 trocar</button>
+                        <button class="gf-mini" onclick="window.__gfEditar(${c.linha})" title="Abrir esta foto no editor: recorte, cores, nitidez, resolução, fundo">✏️ editar</button>
+                    </div>
+                    <button class="gf-mini" onclick="window.__gfDesvincular(${c.linha})" title="Desfazer o vínculo: a foto volta para 'Fotos sem linha' e a pessoa para 'Linhas sem foto'">✕ desvincular</button>
                 </div>`;
         }).join('')}
             ${ultimaPagina ? faltantes.map(function (li) {
@@ -588,6 +716,43 @@
     };
 
     /**
+     * Interpola para 200 dpi todas as fotos abaixo disso, no enquadramento de
+     * agora. É opcional e de lote: o operador decide se prefere o serrilhado
+     * honesto ou a suavização — e o cartão passa a dizer "interp." porque
+     * interpolação não recupera detalhe, só disfarça a falta dele.
+     */
+    window.__gfInterpolar = async function () {
+        var alvo = (resultado.casadas || []).filter(function (c) {
+            var d = dpiDoEnquadro(c);
+            return d > 0 && d < DPI_MINIMO;
+        });
+        if (!alvo.length) { aviso('Nenhuma foto abaixo de ' + DPI_MINIMO + ' dpi neste enquadramento.'); return; }
+
+        var barra = el('gf-barra');
+        var feitas = 0, falhas = 0;
+        for (var i = 0; i < alvo.length; i++) {
+            var c = alvo[i];
+            var f = fotoDe(c.arquivo);
+            var d = dpiDoEnquadro(c);
+            if (!f || !d) { falhas++; continue; }
+            try {
+                await reamostrarFoto(f, DPI_MINIMO / d);
+                f.interpolada = true;
+                feitas++;
+            } catch (ex) {
+                console.warn('[Fotos] interpolar falhou', c.arquivo, ex);
+                falhas++;
+            }
+            if (barra) barra.style.width = Math.round((i + 1) / alvo.length * 100) + '%';
+        }
+        if (barra) barra.style.width = '0';
+        pintar();
+        aviso(feitas + ' foto(s) interpoladas até ' + DPI_MINIMO + ' dpi'
+            + (falhas ? ' — ' + falhas + ' não deu (arquivo inacessível).' : '.')
+            + ' Elas sobem de novo no Gravar. Interpolação suaviza, não recupera detalhe.');
+    };
+
+    /**
      * Substituir a foto de UMA pessoa, a qualquer momento.
      *
      * O caso é corriqueiro numa gráfica: a foto veio tremida, o cliente mandou
@@ -597,6 +762,38 @@
     window.__gfTrocar = function (linha) {
         trocandoLinha = linha;
         el('gf-file-uma').click();
+    };
+
+    /**
+     * Abre a foto daquela pessoa no editor (recorte, cores, nitidez,
+     * resolução, fundo). O editor devolve um blob novo; a foto editada entra
+     * no lugar da antiga MANTENDO o enquadramento — só os bytes mudam — e
+     * sobe no próximo Gravar, como uma troca.
+     */
+    window.__gfEditar = async function (linha) {
+        var c = (resultado.casadas || []).find(function (x) { return x.linha === linha; });
+        if (!c) return;
+        var f = fotoDe(c.arquivo);
+        if (!f) return;
+        if (typeof window.abrirEditorDeFoto !== 'function') {
+            aviso('O editor de fotos (editor-foto.js) não carregou. Recarregue a página.');
+            return;
+        }
+        var id = identidadeDaLinha(linha);
+        window.abrirEditorDeFoto({
+            titulo: id.valor + ' — ' + f.nome,
+            janela: cfg.janela,
+            zoom: enquadroDe(c).zoom,
+            obterBitmap: function () {
+                return bitmapDaFoto(f).then(function (par) { return par.bmp; });
+            },
+            aoAplicar: async function (blob, w, h) {
+                substituirArquivoDaFoto(f, blob, w, h, await hashDoBlob(blob));
+                f.editada = true;
+                pintar();
+                aviso('Foto de "' + id.valor + '" editada. Ela sobe de novo no Gravar.');
+            }
+        });
     };
 
     async function receberTroca(file) {
@@ -677,14 +874,36 @@
         if (f) f.dpi = dpi;
         var cartao = el('gf-card-' + idx);
         var alvo = cartao ? cartao.querySelector('.dpi') : null;
-        if (!alvo) return;
+        if (!alvo) { atualizarBotaoInterpolar(); return; }
         var ruim = dpi < DPI_MINIMO;
         var z = enquadroDe(c).zoom;
-        alvo.textContent = dpi + ' dpi' + (z > 1.01 ? ' · ' + z.toFixed(1) + '×' : '') + (ruim ? ' ⚠' : '');
+        alvo.textContent = dpi + ' dpi' + (z > 1.01 ? ' · ' + z.toFixed(1) + '×' : '') + (ruim ? ' ⚠' : '')
+            + (f && f.interpolada ? ' · interp.' : '');
         alvo.className = 'dpi' + (ruim ? ' ruim' : '');
         alvo.title = ruim
-            ? 'Abaixo de ' + DPI_MINIMO + ' dpi nesta janela com este zoom — vai sair borrada no PVC.'
-            : 'Resolução da foto dentro da janela, já contando o zoom deste enquadramento.';
+            ? 'Abaixo de ' + DPI_MINIMO + ' dpi nesta janela com este zoom — qualidade baixa para PVC. O botão "Interpolar fracas" suaviza.'
+            : (f && f.interpolada
+                ? 'Interpolada até ' + DPI_MINIMO + ' dpi: o serrilhado foi suavizado, mas o detalhe original não volta.'
+                : 'Resolução da foto dentro da janela, já contando o zoom deste enquadramento.');
+        atualizarBotaoInterpolar();
+    }
+
+    /**
+     * O botão de interpolar é FIXO na barra e conta as fracas ao vivo. As
+     * dimensões das fotos do banco só chegam quando as imagens carregam, então
+     * a contagem não pode ser feita uma vez só na montagem da tela.
+     */
+    function atualizarBotaoInterpolar() {
+        var btn = el('gf-interp');
+        if (!btn) return;
+        var fracas = ((resultado && resultado.casadas) || []).filter(function (c) {
+            var d = dpiDoEnquadro(c);
+            return d > 0 && d < DPI_MINIMO;
+        }).length;
+        btn.disabled = !fracas;
+        btn.textContent = fracas
+            ? '⬆ Interpolar ' + fracas + ' foto(s) fracas até ' + DPI_MINIMO + ' dpi'
+            : '⬆ Nenhuma foto abaixo de ' + DPI_MINIMO + ' dpi';
     }
 
     /** O enquadramento vivo daquela linha (o que a folha de contato edita). */
@@ -779,6 +998,20 @@
             var c = casadas[i];
             var f = fotoDe(c.arquivo);
             if (!f) { falhas.push(c.arquivo); continue; }
+
+            // Excesso de resolução é custo sem ganho: acima de 350 dpi no
+            // enquadramento decidido, a foto que vai subir é reamostrada para
+            // 300 — arquivo menor, RIP mais rápido, impressão igual. Feito
+            // aqui, e não na importação, para preservar a folga de zoom
+            // enquanto o operador ainda está enquadrando. Só para fotos que
+            // já iam subir (blob): as antigas do banco não pagam reupload.
+            if (f.blob) {
+                var dpiExcesso = dpiDoEnquadro(c);
+                if (dpiExcesso > DPI_TETO) {
+                    try { await reamostrarFoto(f, DPI_QUEIMA / dpiExcesso); } catch (e) { }
+                }
+            }
+
             try {
                 // Foto que já está no banco não sobe de novo: reenquadrar 500
                 // credenciais não pode custar 500 uploads. Só o retângulo muda.
@@ -1042,6 +1275,20 @@
 
         var novo = window.casarFotos(novos, visiveis, colunas);
 
+        // Dupla divorciada não volta pelo automático. A foto segue livre para
+        // OUTRA linha e a linha para OUTRA foto — só aquele par está vetado.
+        var vetadas = novo.casadas.filter(function (c) { return divorcios[c.arquivo + '|' + c.linha]; });
+        if (vetadas.length) {
+            novo.casadas = novo.casadas.filter(function (c) { return vetadas.indexOf(c) === -1; });
+            vetadas.forEach(function (c) {
+                if (!novo.sobrando.some(function (s) { return s.nome === c.arquivo; })) {
+                    novo.sobrando.push({ nome: c.arquivo, ref: c.ref });
+                }
+                if (novo.semFoto.indexOf(c.linha) === -1) novo.semFoto.push(c.linha);
+            });
+            novo.semFoto.sort(function (a, b) { return a - b; });
+        }
+
         resultado = {
             casadas: jaCasadas.concat(novo.casadas),
             ambiguas: novo.ambiguas,
@@ -1066,6 +1313,9 @@
         if (cfg) {
             if (sobrando.length) sobrasGuardadas.set(chaveDaSessao(), sobrando);
             else sobrasGuardadas.delete(chaveDaSessao());
+            var vetos = Object.keys(divorcios);
+            if (vetos.length) divorciosGuardados.set(chaveDaSessao(), divorcios);
+            else divorciosGuardados.delete(chaveDaSessao());
         }
         var manter = {};
         sobrando.forEach(function (f) { manter[f.nome] = true; });
@@ -1087,6 +1337,7 @@
         fotos = []; resultado = null; selecionado = null;
         aba = 'importar'; pagina = 0; focoEnquadro = -1;
         colunaId = ''; trocandoLinha = -1;
+        divorcios = divorciosGuardados.get(cfg.chave || (cfg.numId + '|' + cfg.coluna)) || {};
 
         // O gerenciador nunca abre em branco: o que já está gravado nas linhas
         // volta para a tela, com o enquadramento que tem. É isso que permite
