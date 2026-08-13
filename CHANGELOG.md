@@ -8,6 +8,58 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [não publicado] — QR Ideal: o ingresso que a portaria sabe ler
+
+O elemento `QR` que existe desde sempre codifica o número sequencial do ingresso.
+É **adivinhável**: quem recebe o 1234 sabe que existe o 1235 e imprime. Serve para
+consulta; nunca serviu para portão.
+
+O **QR Ideal** é o elemento novo, e ele carrega um código de 8 caracteres tirado
+de uma lista de 3 milhões que só existe nas estações da gráfica. Não há campo
+para preencher: o código sai do número do pedido, do número do modelo e do número
+do ingresso.
+
+A regra da coluna é `(últimos2(pedido) − últimos2(modelo)) mod 100`, com o zero
+ocupando a coluna 100. O `mod` não é enfeite: a subtração crua vai de −99 a 99, e
+sem ele **50,5% das combinações não teriam coluna nenhuma** — além de a coluna 100
+ser inalcançável, porque a diferença máxima é 99. A linha é o número do ingresso,
+e a tiragem que passa de 30.000 avança sozinha para a coluna seguinte, porque o
+pool é lido como uma fita contínua de 3.000.000 de posições.
+
+A planilha de origem foi auditada célula a célula antes de qualquer código:
+30.000 linhas × 100 colunas, todos os códigos com 8 caracteres de `A–Z0–9`, e
+**zero repetidos**. Ela virou um arquivo binário de 24.000.000 de bytes exatos,
+lido por posição direta — `seek` e `read`, sem parser no caminho de quem está
+esperando o papel sair.
+
+O que fica gravado é `27202HM4IKCBY`: o pedido 20272 de trás para frente, colado
+no código. Os últimos 8 caracteres são sempre o código, o que torna a leitura
+não-ambígua. E o prefixo é **string do começo ao fim** — o pedido 20270 vira
+`07202`, e tratá-lo como número o transformaria em `2027`, outro pedido.
+
+Três travas, todas porque o erro aqui não aparece na tela nem na impressão:
+aparece na portaria, com a fila na porta. Dois modelos do mesmo pedido cujos `id`
+diferem em exatamente 100 caem na mesma coluna e sairiam com QRs **idênticos no
+mesmo evento** — o motor recusa a folha e o painel avisa sobre o pedido inteiro.
+Sem pedido ou sem modelo o trabalho falha em vez de imprimir em branco. E refazer
+a célula 7 imprime o código do item 7, mesmo caindo na primeira pose da folha
+compactada.
+
+O pool não entra no git — é o segredo mestre, e o `publicar.ps1` commita com
+`git add -A`. Ele viaja no instalador, ao lado do `NewProd.exe` e não dentro dele,
+porque o agente é `onefile` e dado embutido seria extraído a cada abertura da
+estação. O `build_agent.ps1` para se o arquivo faltar ou se o tamanho não bater.
+
+Fica para as próximas partes o **QR do Pedido** — o QR assinado que o atendente
+manda ao cliente e que é a única forma de cadastrar o evento no aplicativo — e o
+**Ideal Control**, a portaria offline com login de cliente, reentrada, setor,
+lotação ao vivo e relatórios.
+
+De quebra: o selo do elemento na lista mostrava `undefined` para o tipo novo, e
+mostrava para `FOTO` também, desde que a janela de foto foi criada.
+
+---
+
 ## [não publicado] — A foto escapava por fora do contorno no canto arredondado
 
 Com contorno e canto arredondado, a foto aparecia **por cima da moldura** ao

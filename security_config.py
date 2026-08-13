@@ -87,6 +87,7 @@ PAINEL_ARQUIVOS = [
     "cliente.js",
     "criador-arte.js",
     "cor-numeracao-do-modelo.js",
+    "qr-ideal-colunas.js",
     "csv-editor.js",
     "texto-ajuste.js",
     "foto-lib.js",
