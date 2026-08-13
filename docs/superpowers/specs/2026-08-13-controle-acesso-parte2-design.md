@@ -135,12 +135,27 @@ O DDL abaixo é o que precisa de aprovação formal antes de qualquer implementa
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- producao_update_updated_at() ja existe, criada no schema_catalogo.sql
 
+-- ATENCAO AO empresa_id. Conferido no banco em 13/08/2026: ele e NULO em
+-- 100% das linhas de TODAS as tabelas producao_* que existem hoje (12 formatos,
+-- 59 numeracoes, 24 cores, 12 saidas, 4 modelos). A coluna existe por convencao
+-- e o sistema opera com um inquilino so.
+--
+-- Consequencia que morde: em Postgres, NULO e DISTINTO de NULO dentro de um
+-- indice unico. Escrever UNIQUE (empresa_id, pedido_id_int) com empresa_id nulo
+-- nao garante nada -- o mesmo pedido entraria duas vezes sem uma reclamacao
+-- sequer. Por isso toda chave unica abaixo e um indice sobre COALESCE, que vale
+-- hoje com nulo e continua valendo no dia em que a coluna receber valor.
+CREATE OR REPLACE FUNCTION producao_acesso_empresa(e UUID)
+RETURNS UUID AS $$
+    SELECT COALESCE(e, '00000000-0000-0000-0000-000000000000'::uuid);
+$$ LANGUAGE sql IMMUTABLE;
+
 -- ── 1. producao_acesso_eventos ───────────────────────────────────────────────
 -- O evento do cliente. Pode reunir varios pedidos.
 CREATE TABLE IF NOT EXISTS producao_acesso_eventos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     empresa_id UUID,
-    id_cliente TEXT,                        -- FK logica para clientes do ERP
+    id_cliente INTEGER,                     -- clientes.id_cliente do ERP (int, conferido)
     dono_auth_id UUID NOT NULL,             -- conta que reivindicou o evento
     nome_evento TEXT NOT NULL,
     data_evento TIMESTAMPTZ,
@@ -171,13 +186,15 @@ CREATE TABLE IF NOT EXISTS producao_acesso_pedidos (
     total_credenciais INTEGER DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'ativo',   -- ativo | arquivado
     created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT unique_acesso_pedido UNIQUE (empresa_id, pedido_id_int)
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TRIGGER trg_producao_acesso_pedidos_updated
     BEFORE UPDATE ON producao_acesso_pedidos
     FOR EACH ROW EXECUTE FUNCTION producao_update_updated_at();
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_acesso_pedido
+    ON producao_acesso_pedidos (producao_acesso_empresa(empresa_id), pedido_id_int);
 
 -- ── 3. producao_acesso_setores ───────────────────────────────────────────────
 -- Um modelo = um setor. Nasce quando o cliente reivindica o pedido.
@@ -186,20 +203,24 @@ CREATE TABLE IF NOT EXISTS producao_acesso_setores (
     empresa_id UUID,
     evento_id UUID NOT NULL REFERENCES producao_acesso_eventos(id),
     pedido_id_int INTEGER,                  -- null quando o setor e so de staff
-    modelo_id BIGINT,                       -- pedidos_modelos.id
+    modelo_id INTEGER,                      -- pedidos_modelos.id (int, conferido)
     nome TEXT NOT NULL,                     -- nasce de nome_modelo; editavel
     quantidade INTEGER NOT NULL DEFAULT 0,
     lotacao INTEGER,                        -- null = sem limite
     tipo_uso TEXT NOT NULL DEFAULT 'unico', -- unico | reentrada
     status TEXT NOT NULL DEFAULT 'ativo',
     created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT unique_setor_por_modelo UNIQUE (empresa_id, modelo_id)
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TRIGGER trg_producao_acesso_setores_updated
     BEFORE UPDATE ON producao_acesso_setores
     FOR EACH ROW EXECUTE FUNCTION producao_update_updated_at();
+
+-- Parcial: setor de staff nao tem modelo, e varios nulos conviveriam.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_acesso_setor_por_modelo
+    ON producao_acesso_setores (producao_acesso_empresa(empresa_id), modelo_id)
+    WHERE modelo_id IS NOT NULL;
 
 -- ── 4. producao_acesso_credenciais ───────────────────────────────────────────
 -- Um ingresso. codigo_visivel SO existe quando origem='cliente'.
@@ -207,7 +228,7 @@ CREATE TABLE IF NOT EXISTS producao_acesso_credenciais (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     empresa_id UUID,
     pedido_id_int INTEGER,                  -- null quando origem='cliente'
-    modelo_id BIGINT,                       -- null quando origem='cliente'
+    modelo_id INTEGER,                      -- null quando origem='cliente'
     evento_id UUID REFERENCES producao_acesso_eventos(id),   -- null ate reivindicar
     setor_id UUID REFERENCES producao_acesso_setores(id),    -- null ate reivindicar
     numero INTEGER,                         -- posicao na tiragem
@@ -224,7 +245,7 @@ CREATE TRIGGER trg_producao_acesso_credenciais_updated
     FOR EACH ROW EXECUTE FUNCTION producao_update_updated_at();
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_acesso_credencial_hash
-    ON producao_acesso_credenciais (empresa_id, codigo_hash);
+    ON producao_acesso_credenciais (producao_acesso_empresa(empresa_id), codigo_hash);
 CREATE INDEX IF NOT EXISTS idx_acesso_credencial_evento
     ON producao_acesso_credenciais (evento_id, setor_id);
 CREATE INDEX IF NOT EXISTS idx_acesso_credencial_pedido
@@ -271,7 +292,11 @@ CREATE TABLE IF NOT EXISTS producao_acesso_leituras (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     empresa_id UUID,
     evento_id UUID NOT NULL REFERENCES producao_acesso_eventos(id),
-    dispositivo_id UUID REFERENCES producao_acesso_dispositivos(id),
+    -- NOT NULL de proposito: toda leitura vem de um aparelho, e este campo faz
+    -- parte da chave de idempotencia abaixo. Nulo aqui desligaria a chave e
+    -- deixaria a fila reenviada duplicar a lotacao -- exatamente o que ela existe
+    -- para impedir.
+    dispositivo_id UUID NOT NULL REFERENCES producao_acesso_dispositivos(id),
     credencial_id UUID REFERENCES producao_acesso_credenciais(id),  -- null se nao bateu
     setor_id UUID REFERENCES producao_acesso_setores(id),
     id_local TEXT NOT NULL,                 -- id gerado pelo aparelho; idempotencia
@@ -458,9 +483,32 @@ errado. Guardamos `recebido_em` junto, e o relatório mostra quando as duas dive
 um índice de busca — ele teria de testar 5.000 hashes por leitura. Sal por pedido mantém
 uma conta por leitura e já elimina precomputação e correlação entre eventos.
 
-## A verificar antes de implementar
+## O que a consulta ao banco resolveu
 
-- O tipo real de `clientes.id_cliente` no banco do parceiro, para o campo `id_cliente` de
-  `producao_acesso_eventos`.
-- Se `empresa_id` tem valor único conhecido neste ambiente ou vem do usuário logado, como
-  nas tabelas de catálogo.
+Consulta somente leitura em 13/08/2026, contra `vwbtitjlpelrcnsytzqw`.
+
+**`clientes.id_cliente` é `int`**, não texto — e existe um `clientes.id` separado, esse
+sim texto. O campo do evento virou `INTEGER`.
+
+**`pedidos_modelos.id` é `int`**, com valores na casa de 1.000.000 — longe do teto de
+`INTEGER`. Os campos `modelo_id` passaram de `BIGINT` para `INTEGER`, casando com a origem.
+
+**O caminho do pedido até o cliente existe e é direto:** `pedidos_modelos.id_int` é o mesmo
+número de `propostas.id_int` (conferido nos pedidos 20508 e 20596), e `propostas.id_cliente`
+dá o cliente. Não existe tabela `pedidos` neste banco — quem responde por pedido é
+`propostas`. O backend preenche `id_cliente` do evento por esse caminho, em leitura.
+
+**`empresa_id` é nulo em 100% das linhas `producao_*`** — todas as 111 linhas das cinco
+tabelas povoadas. A coluna existe por convenção e o sistema opera com um inquilino só.
+
+Esse último achado consertou um defeito que este DDL teria entregue: as chaves únicas
+estavam escritas como `UNIQUE (empresa_id, coluna)`, e em Postgres **nulo é distinto de
+nulo dentro de um índice único**. Com `empresa_id` sempre nulo, essas restrições não
+garantiriam nada — o mesmo pedido poderia ser publicado duas vezes, e a mesma credencial
+gravada duas vezes, sem uma reclamação sequer. Agora são índices sobre
+`producao_acesso_empresa(empresa_id)`, que valem hoje com nulo e continuam valendo se a
+coluna receber valor.
+
+> A mesma falha existe hoje em `producao_produtos_formatos`, que declara
+> `UNIQUE (empresa_id, id_produto)`. A tabela está vazia, então não há dado errado — mas a
+> restrição não faz o que o nome dela promete. Vale corrigir quando essa tabela for usada.
