@@ -1795,6 +1795,10 @@ function closeClienteLightbox() {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Dispara já: o catálogo de fontes é um JSON pequeno e a busca corre em
+    // paralelo com a do pedido, então na hora de desenhar ele normalmente já
+    // chegou. Quem desenha espera por ele de qualquer forma.
+    carregarCatalogoFontesWeb();
     checkClienteRoute();
 });
 
@@ -1984,23 +1988,11 @@ async function fetchPdfBytes(content) {
     }
 }
 
-function getFontCSS(font_name) {
-    if (!font_name || font_name === 'helv') return 'Arial, Helvetica, sans-serif';
-    if (font_name === 'helv-bold') return 'bold Arial, Helvetica, sans-serif';
-    if (font_name === 'times') return '"Times New Roman", Times, serif';
-    if (font_name === 'times-bold') return 'bold "Times New Roman", Times, serif';
-    if (font_name === 'cour') return '"Courier New", Courier, monospace';
-    if (font_name === 'cour-bold') return 'bold "Courier New", Courier, monospace';
-    // Fonte do sistema: "system:Arial Bold" → bold "Arial Bold"
-    if (font_name.startsWith('system:')) {
-        const parts = font_name.slice(7).split('|'); // "NomeFamilia|bold|italic"
-        const family = parts[0];
-        const bold = parts.includes('bold') ? 'bold ' : '';
-        const italic = parts.includes('italic') ? 'italic ' : '';
-        return `${italic}${bold}"${family}", sans-serif`;
-    }
-    return `"${font_name}", sans-serif`;
-}
+// `getFontCSS` e `buildCanvasFont` vêm do `fonte-canvas.js`, carregado pelo
+// `cliente.html` antes deste arquivo. Esta página tinha uma cópia só do
+// `getFontCSS` — e a falta do `buildCanvasFont`, que ninguém notava porque as
+// chamadas de desenho tinham um ramo de emergência, era o motivo de a
+// numeração sair com outra fonte só aqui.
 
 
 
@@ -2625,6 +2617,11 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         // sairia com a fila de uma linha e o assento de outra.
         const _linhaCsv = linhaDaAmostra(item, num);
 
+        // Canvas não reflui: uma fonte que chegue depois do traço não aparece
+        // mais. Esperar aqui é o que faz a numeração sair certa de primeira no
+        // navegador do cliente, que nunca tem as fontes da gráfica instaladas.
+        await garantirFontesCarregadas(fontesDosElementos(num.elements));
+
         const numCanvas = document.createElement('canvas');
         numCanvas.width = Math.round(fmt.width_mm * S);
         numCanvas.height = Math.round(fmt.height_mm * S);
@@ -2662,7 +2659,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
             if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
                 const fs = (el.font_size || 12) * S / 2.8346;
-                numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+                numCtx.font = buildCanvasFont(fs, el.font_name);
                 numCtx.fillStyle = color;
 
                 let label = '';
@@ -2723,7 +2720,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 }
                 window.desenharTextoAjustado(
                     numCtx, el, label, fs, S,
-                    (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+                    (f) => buildCanvasFont(f, el.font_name)
                 );
             } else if (el.type === 'QR') {
                 const sz = (el.size_mm || 15) * S;
@@ -3061,6 +3058,10 @@ async function desenharPaginaDoPdf(idx, pageNum) {
                 ? linhasDaAmostra(item, num)
                 : (num.csv_data || item.csv_data || []);
             await precarregarArtesDosElementos(num.elements, [_linhasPg[pageNum - 1]].filter(Boolean));
+            // Pelo mesmo motivo da face montada em canvas: a fonte tem de estar
+            // na máquina antes do traço, senão a página do PDF sai carimbada
+            // com uma genérica e assim fica.
+            await garantirFontesCarregadas(fontesDosElementos(num.elements));
             drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, viewport.width, viewport.height);
         }
 
@@ -3124,7 +3125,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
 
         if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
             const fs = (el.font_size || 12) * S / 2.8346;
-            ctx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+            ctx.font = buildCanvasFont(fs, el.font_name);
             ctx.fillStyle = color;
 
             let label = '';
@@ -3175,7 +3176,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
 
             window.desenharTextoAjustado(
                 ctx, el, label, fs, Sx,
-                (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+                (f) => buildCanvasFont(f, el.font_name)
             );
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * S;

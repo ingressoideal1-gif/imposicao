@@ -582,7 +582,7 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
 
         if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
             const fs = (el.font_size || 12) * scalePx / 2.8346;
-            ctx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+            ctx.font = buildCanvasFont(fs, el.font_name);
             ctx.fillStyle = color;
 
             let label = '';
@@ -632,7 +632,7 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
 
             window.desenharTextoAjustado(
                 ctx, el, label, fs, scalePx,
-                (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+                (f) => buildCanvasFont(f, el.font_name)
             );
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * scalePx;

@@ -189,28 +189,17 @@ async function fetchPdfBytes(content) {
         throw new Error(`Não foi possível buscar o PDF: ${directErr.message}`);
     }
 }
-// - Utility -- getFontCSS -
-// Converte font_name do elemento para string CSS para renderização no canvas.
-// IMPORTANTE: usar Arial (não Inter) como fallback de Helvetica — Arial tem métricas
-// mais próximas da Helvetica Base-14 usada pelo engine Python (PyMuPDF).
-// Isso garante que a visualização em canvas seja fiel ao PDF gerado.
-function getFontCSS(font_name) {
-    if (!font_name || font_name === 'helv') return 'Arial, Helvetica, sans-serif';
-    if (font_name === 'helv-bold') return 'bold Arial, Helvetica, sans-serif';
-    if (font_name === 'times') return '"Times New Roman", Times, serif';
-    if (font_name === 'times-bold') return 'bold "Times New Roman", Times, serif';
-    if (font_name === 'cour') return '"Courier New", Courier, monospace';
-    if (font_name === 'cour-bold') return 'bold "Courier New", Courier, monospace';
-    // Fonte do sistema: "system:Arial Bold" → bold "Arial Bold"
-    if (font_name.startsWith('system:')) {
-        const parts = font_name.slice(7).split('|'); // "NomeFamilia|bold|italic"
-        const family = parts[0];
-        const bold = parts.includes('bold') ? 'bold ' : '';
-        const italic = parts.includes('italic') ? 'italic ' : '';
-        return `${italic}${bold}"${family}", sans-serif`;
-    }
-    return `"${font_name}", sans-serif`;
-}
+// - Utility -- getFontCSS / buildCanvasFont / garantirFontesCarregadas -
+//
+// Moraram aqui até 13/08/2026 e mudaram para `fonte-canvas.js`, carregado antes
+// deste arquivo pelas três páginas. O motivo da mudança: o `cliente.html` não
+// carrega o `script.js`, então o link do cliente ficou sem `buildCanvasFont` e
+// desenhava a numeração com outra fonte. Enquanto houver uma cópia só, as
+// quatro telas concordam.
+//
+// Sobre a escolha de Arial (e não Inter) como substituta da Helvetica: Arial tem
+// métricas mais próximas da Helvetica Base-14 usada pelo engine Python
+// (PyMuPDF), e é isso que faz o canvas ser fiel ao PDF gerado.
 
 // Fração do ascender por família de fonte (ascender / em-size).
 // Deve espelhar ASCENDER_FRACTIONS do engine.py para que a posição vertical
@@ -224,20 +213,6 @@ const ASCENDER_CANVAS = {
 };
 const _ASCENDER_CANVAS_DEFAULT = 0.72;
 
-
-// Monta a string de font para ctx.font no Canvas 2D.
-// O canvas exige a ordem: [font-style] [font-weight] size family
-// getFontCSS pode retornar "bold Inter" ou "italic bold 'Montserrat'",
-// com weight/style misturados antes da family. Esta funcao reorganiza corretamente.
-function buildCanvasFont(fontSizePx, fontName) {
-    const css = getFontCSS(fontName);
-    let weight = '';
-    let style = '';
-    let family = css;
-    if (family.startsWith('italic ')) { style = 'italic '; family = family.slice(7); }
-    if (family.startsWith('bold '))   { weight = 'bold '; family = family.slice(5); }
-    return `${style}${weight}${fontSizePx}px ${family}`;
-}
 
 // - State -- Fontes do Sistema -
 const state_fonts = {
@@ -256,50 +231,14 @@ async function loadCatalogoFontes() {
         if (res.ok) {
             const list = await res.json();
             state_fonts.catalogo = list || [];
-            
-            let styleEl = document.getElementById('catalogo-fontes-css');
-            if (!styleEl) {
-                styleEl = document.createElement('style');
-                styleEl.id = 'catalogo-fontes-css';
-                document.head.appendChild(styleEl);
-            }
-            
-            // Cadeia de origens, na ordem em que o navegador tenta:
-            //   1. local()  — fonte já instalada no Windows: instantânea e offline.
-            //                 É por isso que a tela funcionava em máquinas com as
-            //                 fontes instaladas e falhava nas da gráfica.
-            //   2. agente   — só quando a página é servida pelo próprio agente
-            //                 (porta 9000): ele entrega do cache em disco, então
-            //                 a tela não depende de alcançar o Supabase a cada
-            //                 carregamento. Na nuvem seria mixed content e o
-            //                 navegador bloquearia, por isso o condicional.
-            //   3. Supabase — origem de verdade, usada na primeira vez.
-            const servidoPeloAgente = window.location.port === '9000';
-            const escapaAspas = (s) => String(s).replace(/'/g, "\\'");
 
-            let cssText = '';
-            for (const f of state_fonts.catalogo) {
-                if (f.arquivo_url && f.font_family) {
-                    const origens = [`local('${escapaAspas(f.font_family)}')`];
-                    if (f.nome && f.nome !== f.font_family) {
-                        origens.push(`local('${escapaAspas(f.nome)}')`);
-                    }
-                    if (servidoPeloAgente && f.arquivo_url.startsWith('http')) {
-                        origens.push(`url('/api/fonte?url=${encodeURIComponent(f.arquivo_url)}')`);
-                    }
-                    origens.push(`url('${f.arquivo_url}')`);
-
-                    cssText += `
-                    @font-face {
-                        font-family: '${escapaAspas(f.font_family)}';
-                        src: ${origens.join(', ')};
-                        font-display: swap;
-                    }\n`;
-                }
-            }
-            styleEl.textContent = cssText;
+            // As regras @font-face saem do `fonte-canvas.js` — a mesma montagem
+            // que a página do cliente usa. `definirCatalogoFontes` também avisa
+            // ao módulo que o catálogo já chegou, para que o
+            // `garantirFontesCarregadas` não busque o mesmo JSON de novo.
+            definirCatalogoFontes(state_fonts.catalogo);
             console.log(`[Fonts] Catálogo de fontes web carregado: ${state_fonts.catalogo.length} fonte(s)`);
-            
+
             // Atualiza a tabela na UI caso esteja renderizada
             if (typeof renderCatFontesUI === 'function') {
                 renderCatFontesUI();
@@ -7290,9 +7229,11 @@ function drawPreview() {
     // repete uma vez quando as fontes chegarem.
     try {
         const _nomes = fontesDosElementos(state.elements)
-            .filter(n => !_fontesJaCarregadas.has(n));
+            .filter(n => !fonteJaCarregada(n));
         if (_nomes.length) {
-            garantirFontesCarregadas(_nomes).then(() => drawPreview());
+            garantirFontesCarregadas(_nomes).then(novas => {
+                if (novas && novas.length) drawPreview();
+            });
         }
     } catch (_) { /* nunca impedir o desenho por causa disto */ }
 
@@ -24327,7 +24268,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
 
         if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
             const fs = (el.font_size || 12) * S / 2.8346;
-            ctx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+            ctx.font = buildCanvasFont(fs, el.font_name);
             ctx.fillStyle = color;
 
             let label = '';
@@ -24380,7 +24321,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
 
             window.desenharTextoAjustado(
                 ctx, el, label, fs, Sx,
-                (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+                (f) => buildCanvasFont(f, el.font_name)
             );
         } else if (el.type === 'QR_IDEAL') {
             // Aqui o pedido e o modelo existem: `item` é a linha de
@@ -25099,7 +25040,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
 
             if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
                 const fs = (el.font_size || 12) * S / 2.8346;
-                numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+                numCtx.font = buildCanvasFont(fs, el.font_name);
                 numCtx.fillStyle = color;
 
                 let label = '';
@@ -25161,7 +25102,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 }
                 window.desenharTextoAjustado(
                     numCtx, el, label, fs, S,
-                    (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+                    (f) => buildCanvasFont(f, el.font_name)
                 );
             } else if (el.type === 'QR_IDEAL') {
                 // O card do pedido conhece o pedido e o modelo. O número do
@@ -30118,7 +30059,7 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
 
         if (el.type === 'TEXT' || el.type === 'FIXED' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_')) {
             const fs = (el.font_size || 12) * S / 2.8346;
-            numCtx.font = typeof buildCanvasFont === 'function' ? buildCanvasFont(fs, el.font_name) : `${fs}px ${el.font_name || 'monospace'}`;
+            numCtx.font = buildCanvasFont(fs, el.font_name);
             numCtx.fillStyle = color;
 
             let label = '';
@@ -30148,7 +30089,7 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
             }
             window.desenharTextoAjustado(
                 numCtx, el, label, fs, S,
-                (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
+                (f) => buildCanvasFont(f, el.font_name)
             );
         } else if (el.type === 'QR_IDEAL') {
             // Este canvas vira PDF de produção, então vai SEM a logo do centro:
@@ -31168,37 +31109,6 @@ window.verificarAtualizacaoAgente = verificarAtualizacaoAgente;
 // navegador desenha com uma genérica e NÃO redesenha quando a fonte chega —
 // diferente de texto em HTML, que reflui sozinho.
 //
-// A corrida sempre existiu, mas era invisível enquanto as fontes vinham de
-// /fonts_local servido pelo próprio agente, em milissegundos. Com o catálogo no
-// Supabase o tempo de chegada cresceu e o defeito passou a aparecer em máquinas
-// sem cache do navegador — em quem já tinha as fontes carregadas, continuava
-// funcionando, o que mascarou o problema.
-const _fontesJaCarregadas = new Set();
-
-async function garantirFontesCarregadas(nomes) {
-    if (!document.fonts || !nomes || !nomes.length) return;
-
-    const pendentes = [];
-    for (const bruto of nomes) {
-        const nome = String(bruto || '').trim();
-        if (!nome || _fontesJaCarregadas.has(nome)) continue;
-        _fontesJaCarregadas.add(nome);
-        // A string precisa ser um shorthand de font válido, senão load() rejeita
-        const spec = buildCanvasFont(16, nome);
-        pendentes.push(
-            document.fonts.load(spec).catch(e =>
-                console.warn(`[Fonts] não carregou ${nome}:`, e && e.message))
-        );
-    }
-    if (pendentes.length) await Promise.all(pendentes);
-}
-
-// Extrai os nomes de fonte de uma lista de elementos de numeração.
-function fontesDosElementos(elementos) {
-    const nomes = new Set();
-    for (const el of (elementos || [])) {
-        const n = el && (el.font_name || el.font_family);
-        if (n) nomes.add(n);
-    }
-    return [...nomes];
-}
+// `garantirFontesCarregadas` e `fontesDosElementos` moram no `fonte-canvas.js`
+// desde 13/08/2026, porque a página do cliente precisa das mesmas duas e não
+// carrega este arquivo.
