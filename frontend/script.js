@@ -5611,13 +5611,12 @@ function renderElementsList() {
 
                 <div class="form-group el-full"><label>Tamanho (mm)</label><input class="form-control" type="number" value="${el.size_mm || 15}" min="5" max="100" step="0.5" onchange="updateEl('${el.id}','size_mm',+this.value)"></div>
 
-                <div class="form-group el-full" style="font-size:0.78rem; color:var(--text-dim); line-height:1.45; background:rgba(245,158,11,0.08); border-left:3px solid #f59e0b; padding:8px 10px; border-radius:4px;">
-                    <b style="color:#f59e0b;">Não há o que preencher aqui.</b><br>
-                    O código vem do <b>número do pedido</b>, do <b>número do modelo</b> e do
-                    <b>número do ingresso</b> — cada ingresso recebe um código diferente,
-                    tirado de uma lista de 3 milhões que fica na estação.<br>
-                    Na tela aparece um <b>exemplo</b> enquanto o editor não souber de que
-                    pedido é o trabalho.
+                <div class="form-group el-full">
+                    <p style="margin:0; font-size:0.78rem; color:var(--text-dim); line-height:1.5; background:rgba(245,158,11,0.08); border-left:3px solid #f59e0b; padding:9px 11px; border-radius:4px;">
+                        <b style="color:#f59e0b;">Não há o que preencher aqui.</b>
+                        Cada ingresso recebe um código único, gerado automaticamente na impressão.
+                        O que aparece na tela é um <b>exemplo</b>.
+                    </p>
                 </div>`;
 
         } else if (el.type === 'BARCODE') {
