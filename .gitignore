@@ -6,6 +6,15 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Pool de codigos do QR Ideal (3.000.000 de codigos de 8 caracteres). E o
+# SEGREDO MESTRE do controle de acesso: quem tem esta planilha consegue emitir
+# um ingresso valido para qualquer evento. Nunca versionar — o `publicar.ps1`
+# commita com `git add -A`, entao sem esta linha o arquivo iria para o GitHub
+# no proximo deploy. A distribuicao dele para o motor e para o validador e
+# assunto de arquitetura, nao de repositorio.
+Ideal Control/
+*.xlsx
 *.pdf
 .firebase/
 .firebaserc
