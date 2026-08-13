@@ -71,8 +71,9 @@ De 13/08/2026, nesta rodada:
   por ele.
 - **Cada aparelho valida apenas uma lista de setores.** Um lê só Pista, outro só Camarote,
   outro todos.
-- **Mudar essa lista exige a senha do dono.** Sem a senha, a tela de configuração do
-  aparelho é somente leitura; ler ingresso e registrar entrada continuam livres.
+- **Configurar o evento exige a senha do dono.** Sem ela é somente leitura — não muda
+  setor, lotação, aparelho nem permissão. Ler ingresso e registrar entrada continuam
+  livres, sem senha nenhuma.
 - **Um evento pode ter mais de um pedido.** Isto **reverte** a decisão anterior de que um
   pedido é um evento.
 
@@ -369,7 +370,7 @@ iterações, forjar por força bruta custa 2,8 × 10¹⁶ operações por pedido
 credenciais custa cerca de 15 segundos de linha de fundo, e uma leitura no celular custa
 milissegundos.
 
-## Os aparelhos e a senha do dono
+## Cada aparelho valida só os setores dele
 
 Cada aparelho valida **apenas os setores da lista dele**. Um lê só Pista, outro só Camarote,
 outro todos. A lista mora em `producao_acesso_dispositivo_setores`.
@@ -379,14 +380,37 @@ outro todos. A lista mora em `producao_acesso_dispositivo_setores`.
 opostas, e confundi-las faz o porteiro devolver um ingresso bom achando que é falso. A tela
 diz qual setor o ingresso é e quais setores aquele aparelho atende.
 
-**Mexer na lista exige a senha do dono, na hora.** Não basta sessão aberta: o app pede a
-senha, manda ao backend, o backend confere contra o Supabase Auth e só então aplica a
-mudança. A senha nunca é guardada no aparelho. Sem ela, a tela de configuração é somente
-leitura — o porteiro vê o que o aparelho atende, mas não muda. Ler ingresso e registrar
-entrada continuam livres, sem senha nenhuma.
-
 Isso não conflita com a regra de colisão escolhida: dois aparelhos podem atender o mesmo
 setor, e nesse caso a duplicidade offline continua passando e sendo apontada depois.
+
+## A senha do dono tranca a configuração do evento inteira
+
+Confirmado pelo usuário em 13/08/2026: *"sem a senha é somente leitura = não altera as
+configurações do evento"*. A trava **não** é só da lista de setores do aparelho.
+
+**Sem a senha, o aparelho opera e não configura.** Ler ingresso, registrar entrada e saída,
+ver a lotação e consultar quais setores aquele aparelho atende continuam livres — é o
+trabalho do porteiro, e pedir senha para isso pararia a fila. O que fica somente leitura é
+tudo que muda o evento:
+
+| Sempre livre | Só com a senha do dono |
+|---|---|
+| Ler ingresso e registrar entrada/saída | Nome, data e local do evento |
+| Ver lotação e contagem | Nome, lotação e tipo de uso de cada setor |
+| Ver quais setores o aparelho atende | Quais setores cada aparelho valida |
+| Ver a lista de aparelhos | Criar, renomear e revogar aparelho |
+| | Anexar ou desvincular pedido |
+| | Cancelar credencial e importar códigos do cliente |
+
+**A senha é conferida na hora, e nunca é guardada.** O app manda a senha ao backend, que
+confere contra o Supabase Auth e devolve uma **elevação de 15 minutos** válida só naquele
+aparelho. Elevação, e não sessão permanente, porque o aparelho está na mão do porteiro: uma
+autorização que não expira vira, na prática, um aparelho configurável para sempre.
+
+A elevação acaba antes dos 15 minutos ao sair da tela de configuração, e enquanto estiver
+ativa a tela **anuncia** que está — faixa "Modo configuração" com o tempo restante e um
+botão de sair. Uma trava que se desarma em silêncio é pior que nenhuma: o dono guarda o
+celular achando que trancou.
 
 ## Escopo desta spec
 
