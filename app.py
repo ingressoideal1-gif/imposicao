@@ -646,6 +646,33 @@ def _pool_qr_ou_none():
     return _POOL_QR or None
 
 
+@app.get("/api/qr-ideal")
+def qr_ideal_previa(pedido: str, modelo: str, item: int = 1):
+    """O codigo do QR Ideal de um ingresso, para a previa do editor.
+
+    Existe so onde o pool existe: na estacao, servida pelo proprio agente. Na
+    nuvem responde 503, e a tela desenha um QR de exemplo AVISADO — um QR falso
+    mudo seria pior que nenhum, porque o operador acharia que conferiu.
+
+    Devolve um codigo por vez, nunca a lista: quem tem a lista inteira consegue
+    emitir ingresso para qualquer evento, e ela nao sai da estacao.
+    """
+    pool = _pool_qr_ou_none()
+    if pool is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Pool do QR Ideal indisponivel nesta maquina."
+        )
+    import qr_ideal as _qi
+    idx = _qi.indice(pedido, modelo, item)
+    return {
+        "codigo": pool.codigo(pedido, modelo, item),
+        "conteudo": pool.conteudo(pedido, modelo, item),
+        "coluna": _qi.coluna_do_modelo(pedido, modelo),
+        "linha": (idx % _qi.LINHAS) + 1,
+    }
+
+
 # ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
 
 @app.post("/api/impose")
