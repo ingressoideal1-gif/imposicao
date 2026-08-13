@@ -4,11 +4,51 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v555** — 2026-08-13 | Agente **1.2.54**
+## Versão atual: **v557** — 2026-08-13 | Agente **1.2.56**
 
 ---
 
-## [não publicado] — QR Ideal: o ingresso que a portaria sabe ler
+## [não publicado] — O QR Ideal na tela: cor cheia e a logo no meio
+
+Duas correções no desenho do elemento, ambas pedidas depois de ver a tela.
+
+**A explicação de como o código é gerado saiu da interface.** Ela estava em dois
+lugares: o painel de propriedades do elemento e o balão do botão que o cria. Não
+é detalhe de redação — o QR Ideal só resiste a falsificação porque o código é
+imprevisível e a lista mestra não circula. Contar na tela que existe uma lista
+finita, e que a posição dentro dela vem de números impressos no próprio ingresso,
+entrega as duas primeiras peças de qualquer tentativa de forjar. A tela do editor
+aparece em print de suporte, em treinamento, e é servida também pela nuvem: não é
+lugar reservado. A explicação técnica continua completa em `docs/qr_ideal.md`, na
+skill `qr-ideal` e nos comentários do código.
+
+O texto do painel também estilhaçava numa linha por fragmento, porque
+`.form-group` é `display:flex; flex-direction:column` e cada `<b>` virava um item
+de flex. Agora é um `<p>` só, e o texto flui.
+
+**O desenho passou a sair igual ao que vai ao papel.** Antes, quando a tela não
+sabia o código — o editor de numeração não tem pedido —, o QR era pintado a 30%
+de opacidade com a palavra "exemplo" embaixo. Ficava desbotado e não dava para
+conferir cor nenhuma. Agora sai na cor escolhida no elemento, preto 100% por
+padrão, com opacidade cheia. Quem avisa que aquilo é exemplo é o painel, em
+texto.
+
+**E ganhou a logo no centro, como marca de layout.** Ela ocupa 30% do lado, sobre
+uma placa branca arredondada, e **nunca é impressa** — o QR é gerado com correção
+de erro baixa, então logo no papel apagaria módulos de verdade e o leitor
+recusaria o ingresso na portaria, com o lote já entregue. A separação se apoia em
+dois pontos: o `engine.py`, que é quem imprime, não sabe que ela existe; e
+`criarCanvasNumeracaoRasterizada` — o único canvas do frontend que vira PDF de
+produção — pede o QR sem logo explicitamente. `tests/test_qr_ideal_logo_de_tela.py`
+cobra os dois, e mais a cor e a opacidade.
+
+Nas demais janelas a logo aparece, e ali ainda ajuda: a imagem de amostra que o
+cliente recebe leva o QR com a marca por cima, o que impede extrair um código
+legível da imagem de aprovação.
+
+---
+
+## [v557] — QR Ideal: o ingresso que a portaria sabe ler
 
 O elemento `QR` que existe desde sempre codifica o número sequencial do ingresso.
 É **adivinhável**: quem recebe o 1234 sabe que existe o 1235 e imprime. Serve para
@@ -60,7 +100,7 @@ mostrava para `FOTO` também, desde que a janela de foto foi criada.
 
 ---
 
-## [não publicado] — A foto escapava por fora do contorno no canto arredondado
+## [v557] — A foto escapava por fora do contorno no canto arredondado
 
 Com contorno e canto arredondado, a foto aparecia **por cima da moldura** ao
 longo da curva dos cantos — meio milímetro de foto do lado de fora do traço.

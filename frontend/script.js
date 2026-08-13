@@ -3725,31 +3725,68 @@ window.qrIdealConteudo = function (pedido, modelo, item) {
 };
 
 /**
- * Desenha o QR Ideal — ou, quando o código ainda não é conhecido, um quadro
- * que SE ANUNCIA como exemplo.
+ * A logo do centro do QR Ideal — marca de TELA, que nunca vai ao papel.
  *
- * Um QR falso mudo é pior que nenhum: o operador olharia para ele e acharia
- * que conferiu. No editor de numeração não há pedido nenhum (a numeração é um
- * modelo reutilizável), então ali o exemplo é a resposta honesta.
+ * O QR é gerado com correção de erro baixa, então uma logo impressa por cima
+ * apagaria módulos de verdade e o leitor da portaria recusaria o ingresso. Ela
+ * existe só no desenho do navegador: quem gera PDF de produção
+ * (`criarCanvasNumeracaoRasterizada`) pede explicitamente para não desenhá-la,
+ * e o motor que imprime de fato (`engine.py`) nem sabe que ela existe.
+ *
+ * Carrega assim que o script é lido, porque o desenho no canvas é síncrono e
+ * não teria como esperar por ela. É o mesmo arquivo do cabeçalho das páginas,
+ * que já chega à estação junto com o painel.
  */
-window.desenharQRIdeal = function (ctx, el, sz, color, pedido, modelo, item) {
-    const conteudo = window.qrIdealConteudo(pedido, modelo, item);
-    if (conteudo) {
-        renderQRCodeOnCtx(ctx, conteudo, 0, 0, sz, color);
-        return;
+const _logoQrIdeal = new Image();
+_logoQrIdeal.onload = function () {
+    // Repinta o editor uma vez, para o caso de a logo chegar depois do
+    // primeiro desenho. As demais janelas repintam por conta própria.
+    if (typeof drawCanvas === 'function') { try { drawCanvas(); } catch (e) { } }
+};
+_logoQrIdeal.src = '/Logo Ideal Dark.png';
+
+function desenharLogoNoQrIdeal(ctx, sz) {
+    if (!_logoQrIdeal.complete || !_logoQrIdeal.naturalWidth) return;
+    // Abaixo disso o QR é uma miniatura e a logo viraria um borrão colorido no
+    // meio dela — atrapalha em vez de identificar.
+    if (sz < 24) return;
+
+    const lado = sz * 0.30;
+    const meia = lado / 2;
+    const raio = lado * 0.14;
+
+    ctx.save();
+    // A placa branca é o que faz a logo ler como marca, e não como sujeira em
+    // cima dos módulos.
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-meia, -meia, lado, lado, raio);
+    } else {
+        ctx.rect(-meia, -meia, lado, lado);
     }
-    const h = sz / 2;
-    ctx.save();
-    ctx.globalAlpha = 0.30;
-    renderQRCodeOnCtx(ctx, 'EXEMPLO', 0, 0, sz, color);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    const folga = lado * 0.10;
+    drawImageContain(ctx, _logoQrIdeal, -meia + folga, -meia + folga, lado - folga * 2, lado - folga * 2);
     ctx.restore();
-    ctx.save();
-    ctx.fillStyle = '#f59e0b';
-    ctx.font = `${Math.max(6, sz / 6)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('exemplo', 0, h + sz / 14);
-    ctx.restore();
+}
+
+/**
+ * Desenha o QR Ideal na cor escolhida no elemento — preto 100% por padrão.
+ *
+ * No editor de numeração não há pedido nenhum (a numeração é um modelo
+ * reutilizável), então ali o desenho é um exemplo. Quem avisa disso é o painel
+ * de propriedades, em texto; o desenho em si sai igual ao que vai ao papel,
+ * para o operador conferir tamanho, posição e cor de verdade.
+ *
+ * `opts.logo === false` desliga a logo do centro — é o que a rasterização do
+ * gabarito usa para não levá-la ao PDF de produção.
+ */
+window.desenharQRIdeal = function (ctx, el, sz, color, pedido, modelo, item, opts) {
+    const conteudo = window.qrIdealConteudo(pedido, modelo, item);
+    renderQRCodeOnCtx(ctx, conteudo || 'EXEMPLO', 0, 0, sz, color);
+    if (!opts || opts.logo !== false) desenharLogoNoQrIdeal(ctx, sz);
 };
 
 function drawElement(ctx, el, S) {
@@ -5615,7 +5652,8 @@ function renderElementsList() {
                     <p style="margin:0; font-size:0.78rem; color:var(--text-dim); line-height:1.5; background:rgba(245,158,11,0.08); border-left:3px solid #f59e0b; padding:9px 11px; border-radius:4px;">
                         <b style="color:#f59e0b;">Não há o que preencher aqui.</b>
                         Cada ingresso recebe um código único, gerado automaticamente na impressão.
-                        O que aparece na tela é um <b>exemplo</b>.
+                        O que aparece na tela é um <b>exemplo</b>, e a logo no centro dele é
+                        só marca de layout — ela não é impressa.
                     </p>
                 </div>`;
 
@@ -30113,8 +30151,10 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
                 (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
             );
         } else if (el.type === 'QR_IDEAL') {
-            // Rasterização da numeração isolada: sem pedido, exemplo avisado.
-            window.desenharQRIdeal(numCtx, el, (el.size_mm || 15) * S, color);
+            // Este canvas vira PDF de produção, então vai SEM a logo do centro:
+            // ela é marca de tela, e impressa apagaria módulos do código.
+            window.desenharQRIdeal(numCtx, el, (el.size_mm || 15) * S, color,
+                null, null, null, { logo: false });
 
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * S;

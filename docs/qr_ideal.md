@@ -99,13 +99,33 @@ GET /api/qr-ideal?pedido=20272&modelo=1000022&item=7
 → {"codigo":"HM4IKCBY","conteudo":"27202HM4IKCBY","coluna":50,"linha":7}
 ```
 
-Fora da estação o endpoint responde 503 e a tela desenha um QR de exemplo **que
-se anuncia como exemplo**. Um QR falso mudo seria pior que nenhum: o operador
-acharia que conferiu.
+Fora da estação o endpoint responde 503 e a tela desenha um QR de exemplo. O
+aviso de que aquilo é exemplo fica no **painel de propriedades**, em texto — não
+sobre o desenho. O desenho sai igual ao que vai ao papel, na cor escolhida no
+elemento (preto 100% por padrão) e sem transparência, justamente para o operador
+poder conferir tamanho, posição e cor de verdade.
 
 No **editor de numeração** o exemplo é a resposta certa sempre — a numeração é um
 modelo reutilizável e ali não existe pedido. O código real aparece no **card do
 pedido**, que sabe de que pedido o trabalho veio.
+
+### A logo do centro é marca de tela
+
+`desenharQRIdeal` põe a logo do app numa placa branca no meio do QR, ocupando 30%
+do lado. Ela **nunca é impressa**, e isso não é preferência estética: o QR sai com
+correção de erro baixa, então uma logo no papel apagaria módulos de verdade e o
+leitor recusaria o ingresso — na portaria, com o lote já entregue.
+
+A separação se sustenta em dois pontos:
+
+- o `engine.py`, que é quem imprime, não sabe que a logo existe;
+- `criarCanvasNumeracaoRasterizada` — o único canvas do frontend que vira PDF de
+  produção, pelo `exportarPdfGabarito` — chama `desenharQRIdeal(..., { logo: false })`.
+
+`tests/test_qr_ideal_logo_de_tela.py` cobra os dois. Nas demais janelas (editor,
+prévia de imposição, card do pedido, janela de amostra) a logo aparece, e ali ela
+ainda ajuda: o card que o cliente recebe leva o QR com a marca por cima, o que
+impede extrair um código legível da imagem de aprovação.
 
 ## As três travas
 

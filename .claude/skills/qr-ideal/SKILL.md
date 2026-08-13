@@ -54,9 +54,17 @@ ninguém percebe até o evento.
 
 **5. Falhar alto é a regra, não a exceção.** Sem pedido, sem modelo ou sem pool, o
 motor **levanta erro e o trabalho não sai**. Nunca imprimir QR em branco, nunca
-calcular com valor suposto, nunca "seguir sem o elemento". E a prévia que não sabe
-o código desenha um exemplo **que se anuncia como exemplo**: um QR falso mudo é
-pior que nenhum, porque o operador acha que conferiu.
+calcular com valor suposto, nunca "seguir sem o elemento". A prévia que não sabe o
+código desenha um exemplo, e quem avisa que é exemplo é o **painel de
+propriedades**, em texto: o desenho sai igual ao que vai ao papel — cor do
+elemento, opacidade cheia — para o operador conferir tamanho, posição e cor.
+
+**5b. A logo do centro é marca de tela e não pode ser impressa.** O QR sai com
+correção de erro baixa: logo no papel apaga módulos e o leitor recusa o ingresso,
+na portaria, com o lote já entregue. O `engine.py` não sabe que ela existe, e
+`criarCanvasNumeracaoRasterizada` — o único canvas do frontend que vira PDF de
+produção — chama `desenharQRIdeal(..., { logo: false })`. Mexeu no desenho do QR
+Ideal, rode `tests/test_qr_ideal_logo_de_tela.py`.
 
 **6. O pool não entra no git, e o agente não sai sem ele.** São 24 MB e é o
 segredo mestre do controle de acesso — quem tem o arquivo emite ingresso válido
