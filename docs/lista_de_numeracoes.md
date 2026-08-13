@@ -187,11 +187,30 @@ Três controles nos cartões de elemento do editor de numeração, todos gravado
 próprio elemento (`elements` da numeração), sem migração — a ausência do campo é
 o comportamento antigo:
 
-- **🔓/🔒 Travar** (`locked`): elemento travado continua selecionável e editável
-  pelo cartão, mas **não é arrastado** no canvas nem movido pelas ferramentas de
-  alinhamento. Seleção ou grupo com um travado não arrasta ninguém, para não
-  quebrar o layout relativo, e um toast explica. O sublinhado de seleção fica
-  âmbar. Duplicar copia a trava. O motor ignora o campo.
+- **🔓/🔒 Travar** (`locked`): elemento travado **não é arrastado** no canvas,
+  **não é movido** pelas ferramentas de alinhamento e **não é excluído** — nem
+  pelo ✕ do cartão, nem pelo ✕ da lista de arquivos, nem pela tecla Delete (os
+  três passam por `deleteSelectedElements`, que é onde mora a guarda). Continua
+  selecionável, editável pelos campos do cartão, duplicável e reordenável: nada
+  disso destrói o que já estava posicionado. O sublinhado de seleção fica âmbar,
+  o ✕ fica apagado com o motivo no `title`, e um toast responde a tentativa. O
+  motor ignora o campo.
+
+  Duas assimetrias deliberadas, e o critério é **o que se perde**:
+
+  - **Excluir para a operação inteira; alinhar apenas pula os travados.** Apagar
+    parte de uma seleção em silêncio é pior do que não apagar nada, enquanto
+    alinhar o resto não destrói nada. Grupo com um membro travado também não é
+    excluído, pela mesma razão do arrasto.
+  - **A cópia nasce destravada.** Duplicar é para reposicionar; herdando a
+    trava, a cópia nasceria imóvel e — depois que a trava passou a impedir a
+    exclusão — sem como sair da tela. O original continua protegido.
+
+  > A primeira versão travava só o arrasto, e eu havia registrado aqui que
+  > excluir seguia liberado por ser "ação deliberada". O usuário corrigiu:
+  > *"Elementos de numeração 'Travados' também não podem ser excluidos"*.
+  > Arrastar por engano e excluir por engano são o mesmo acidente para quem
+  > opera — perder trabalho já posicionado.
 
 - **⬆/⬇ Frente/trás**: os botões trocam o elemento com o vizinho no array
   `state.numElements` — e **a ordem do array É a ordem de desenho** em todas as

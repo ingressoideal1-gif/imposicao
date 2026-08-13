@@ -233,6 +233,11 @@
         f.w = w; f.h = h;
         f.noBanco = false;
         f.remota = null;
+        // Os marcadores descrevem os bytes ANTIGOS. Quem reamostra volta a
+        // marcar logo em seguida; quem edita no editor não deve herdar um
+        // "interp." que já não vale.
+        f.interpolada = false;
+        f.queimada = false;
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -275,6 +280,7 @@
 .gf-card .rot{font-size:11px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gf-card .dpi{font-size:10px;color:#64748b}
 .gf-card .dpi.ruim{color:#f87171;font-weight:600}
+.gf-card .dpi.alta{color:#38bdf8}
 .gf-drop.compacta{padding:12px;margin-bottom:4px}
 .gf-sel{background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:12px}
 .gf-duvida{padding:8px;border-bottom:1px solid #1e293b}
@@ -300,6 +306,9 @@
 .gf-vazio{color:#64748b;padding:22px;text-align:center}
 .gf-aviso{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);color:#fbbf24;
   padding:8px 12px;border-radius:8px;margin-bottom:12px}
+.gf-queima{font-size:11px;color:#64748b;margin:0 0 10px;padding:6px 10px;border-radius:8px;
+  border:1px solid #1e293b;background:#0f172a}
+.gf-queima.on{color:#7dd3fc;border-color:rgba(56,189,248,.4);background:rgba(56,189,248,.1)}
 .gf-prog{height:6px;background:#1e293b;border-radius:3px;overflow:hidden;flex:1;min-width:140px}
 .gf-prog i{display:block;height:100%;background:#3b82f6;width:0}
 `;
@@ -673,16 +682,17 @@
                 title="Reamostra para ${DPI_MINIMO} dpi todas as fotos abaixo disso, no enquadramento atual. Interpolação suaviza o serrilhado — não recupera detalhe.">
                 ⬆ Interpolar fracas até ${DPI_MINIMO} dpi</button>
         </div>
+        <div class="gf-queima" id="gf-queima"
+            title="Excesso de resolução é custo sem ganho: peso de arquivo, upload e RIP mais lentos, sem diferença no papel. Por isso a redução acontece no Gravar, e não na importação — enquanto você enquadra, a folga extra serve para aproximar sem borrar."></div>
         <div class="gf-grade">
             ${fatia.map(function (c, k) {
-            var f = fotoDe(c.arquivo);
             var idx = ini + k;
-            var ruim = f && f.dpi && f.dpi < DPI_MINIMO;
+            var selo = seloDpi(c);
             var id = identidadeDaLinha(c.linha);
             return `<div class="gf-card ${focoEnquadro === idx ? 'foco' : ''}" id="gf-card-${idx}">
                     <canvas id="gf-cv-${idx}" data-idx="${idx}"></canvas>
                     <div class="rot" title="${esc(id.coluna)}: ${esc(id.valor)}">${esc(id.valor)}</div>
-                    <div class="dpi ${ruim ? 'ruim' : ''}">${f && f.dpi ? f.dpi + ' dpi' : ''}${ruim ? ' ⚠' : ''}${f && f.interpolada ? ' · interp.' : ''}</div>
+                    <div class="${selo.classe}" title="${esc(selo.titulo)}">${esc(selo.texto)}</div>
                     <div class="gf-acoes">
                         <button class="gf-mini" onclick="window.__gfTrocar(${c.linha})" title="Substituir a foto desta pessoa por outro arquivo">🔁 trocar</button>
                         <button class="gf-mini" onclick="window.__gfEditar(${c.linha})" title="Abrir esta foto no editor: recorte, cores, nitidez, resolução, fundo">✏️ editar</button>
@@ -867,43 +877,116 @@
             cfg.janela.fit, enquadroDe(c).zoom);
     }
 
+    /**
+     * O quanto esta foto está ACIMA do teto — 0 quando não está, ou quando a
+     * queima não se aplica a ela.
+     *
+     * Só conta foto que ainda tem `blob`, isto é, que vai subir neste Gravar.
+     * Foto que já está no banco não é reamostrada mesmo que o operador afaste o
+     * zoom e a resolução dispare: rebaixá-la custaria um reupload por rosto e
+     * não mudaria nada no papel. Esta é a mesma condição que o `aplicar()` usa,
+     * de propósito — se o contador da tela usasse outra, ele prometeria uma
+     * redução que não aconteceria.
+     */
+    function dpiEmExcesso(c) {
+        var f = fotoDe(c.arquivo);
+        if (!f || !f.blob) return 0;
+        var d = dpiDoEnquadro(c);
+        return d > DPI_TETO ? d : 0;
+    }
+
+    /**
+     * O selo de qualidade do cartão — texto, cor e explicação — num lugar só.
+     * A primeira pintura e o recálculo ao vivo passam os dois por aqui: quando
+     * eram duas fórmulas separadas, o marcador "interp." sumia no primeiro
+     * arrasto do enquadramento.
+     */
+    function seloDpi(c) {
+        var f = fotoDe(c.arquivo);
+        var dpi = dpiDoEnquadro(c) || (f && f.dpi) || 0;
+        var z = enquadroDe(c).zoom;
+        var ruim = dpi > 0 && dpi < DPI_MINIMO;
+        var alta = dpiEmExcesso(c) > 0;
+
+        var titulo;
+        if (ruim) {
+            titulo = 'Abaixo de ' + DPI_MINIMO + ' dpi nesta janela com este zoom — qualidade baixa para PVC. O botão "Interpolar fracas" suaviza.';
+        } else if (alta) {
+            titulo = 'Acima de ' + DPI_TETO + ' dpi nesta janela: no Gravar esta foto sobe reamostrada para '
+                + DPI_QUEIMA + ' dpi. Arquivo menor, RIP mais rápido, impressão igual.';
+        } else if (f && f.queimada) {
+            titulo = 'Reduzida para ' + DPI_QUEIMA + ' dpi no Gravar, porque passava de ' + DPI_TETO + ' dpi neste enquadramento.';
+        } else if (f && f.interpolada) {
+            titulo = 'Interpolada até ' + DPI_MINIMO + ' dpi: o serrilhado foi suavizado, mas o detalhe original não volta.';
+        } else {
+            titulo = 'Resolução da foto dentro da janela, já contando o zoom deste enquadramento.';
+        }
+
+        return {
+            texto: (dpi ? dpi + ' dpi' : '')
+                + (z > 1.01 ? ' · ' + z.toFixed(1) + '×' : '')
+                + (ruim ? ' ⚠' : '')
+                + (alta ? ' · ⤓ ' + DPI_QUEIMA + ' no Gravar' : '')
+                + (f && f.interpolada ? ' · interp.' : '')
+                + (f && f.queimada ? ' · reduzida' : ''),
+            classe: 'dpi' + (ruim ? ' ruim' : (alta ? ' alta' : '')),
+            titulo: titulo
+        };
+    }
+
     function atualizarDpi(idx, c) {
         var dpi = dpiDoEnquadro(c);
-        if (!dpi) return;
+        // Sem dimensões ainda (foto do banco que não terminou de carregar) o
+        // cartão fica como está — mas a régua da barra recalcula assim mesmo,
+        // porque o cartão vizinho pode ter acabado de chegar.
+        if (!dpi) { atualizarReguaDeDpi(); return; }
         var f = fotoDe(c.arquivo);
         if (f) f.dpi = dpi;
         var cartao = el('gf-card-' + idx);
         var alvo = cartao ? cartao.querySelector('.dpi') : null;
-        if (!alvo) { atualizarBotaoInterpolar(); return; }
-        var ruim = dpi < DPI_MINIMO;
-        var z = enquadroDe(c).zoom;
-        alvo.textContent = dpi + ' dpi' + (z > 1.01 ? ' · ' + z.toFixed(1) + '×' : '') + (ruim ? ' ⚠' : '')
-            + (f && f.interpolada ? ' · interp.' : '');
-        alvo.className = 'dpi' + (ruim ? ' ruim' : '');
-        alvo.title = ruim
-            ? 'Abaixo de ' + DPI_MINIMO + ' dpi nesta janela com este zoom — qualidade baixa para PVC. O botão "Interpolar fracas" suaviza.'
-            : (f && f.interpolada
-                ? 'Interpolada até ' + DPI_MINIMO + ' dpi: o serrilhado foi suavizado, mas o detalhe original não volta.'
-                : 'Resolução da foto dentro da janela, já contando o zoom deste enquadramento.');
-        atualizarBotaoInterpolar();
+        if (alvo) {
+            var s = seloDpi(c);
+            alvo.textContent = s.texto;
+            alvo.className = s.classe;
+            alvo.title = s.titulo;
+        }
+        atualizarReguaDeDpi();
     }
 
     /**
-     * O botão de interpolar é FIXO na barra e conta as fracas ao vivo. As
-     * dimensões das fotos do banco só chegam quando as imagens carregam, então
-     * a contagem não pode ser feita uma vez só na montagem da tela.
+     * As duas pontas da régua contam ao vivo, na barra da folha de contato: o
+     * botão de interpolar (abaixo de 200) e o aviso da queima (acima de 350).
+     *
+     * Contar uma vez só na montagem não serve: as dimensões das fotos do banco
+     * chegam quando as imagens carregam, e qualquer arrasto de zoom muda os dois
+     * números. O aviso da queima aparece mesmo com contagem zero — é a única
+     * coisa na tela que conta ao operador que essa redução existe e é automática.
      */
-    function atualizarBotaoInterpolar() {
+    function atualizarReguaDeDpi() {
+        var casadas = (resultado && resultado.casadas) || [];
+
         var btn = el('gf-interp');
-        if (!btn) return;
-        var fracas = ((resultado && resultado.casadas) || []).filter(function (c) {
-            var d = dpiDoEnquadro(c);
-            return d > 0 && d < DPI_MINIMO;
-        }).length;
-        btn.disabled = !fracas;
-        btn.textContent = fracas
-            ? '⬆ Interpolar ' + fracas + ' foto(s) fracas até ' + DPI_MINIMO + ' dpi'
-            : '⬆ Nenhuma foto abaixo de ' + DPI_MINIMO + ' dpi';
+        if (btn) {
+            var fracas = casadas.filter(function (c) {
+                var d = dpiDoEnquadro(c);
+                return d > 0 && d < DPI_MINIMO;
+            }).length;
+            btn.disabled = !fracas;
+            btn.textContent = fracas
+                ? '⬆ Interpolar ' + fracas + ' foto(s) fracas até ' + DPI_MINIMO + ' dpi'
+                : '⬆ Nenhuma foto abaixo de ' + DPI_MINIMO + ' dpi';
+        }
+
+        var chip = el('gf-queima');
+        if (chip) {
+            var altas = casadas.filter(function (c) { return dpiEmExcesso(c) > 0; }).length;
+            chip.className = 'gf-queima' + (altas ? ' on' : '');
+            chip.textContent = altas
+                ? '⤓ ' + altas + ' foto(s) acima de ' + DPI_TETO + ' dpi neste enquadramento — o Gravar as reduz para '
+                + DPI_QUEIMA + ' dpi antes de subir. É automático, não há o que marcar.'
+                : '⤓ Acima de ' + DPI_TETO + ' dpi o Gravar reduz para ' + DPI_QUEIMA
+                + ' dpi automaticamente — nenhuma foto deste lote está acima.';
+        }
     }
 
     /** O enquadramento vivo daquela linha (o que a folha de contato edita). */
@@ -993,7 +1076,7 @@
         var barra = el('gf-barra');
         if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
 
-        var gravadas = 0, falhas = [];
+        var gravadas = 0, queimadas = 0, falhas = [];
         for (var i = 0; i < casadas.length; i++) {
             var c = casadas[i];
             var f = fotoDe(c.arquivo);
@@ -1005,10 +1088,16 @@
             // aqui, e não na importação, para preservar a folga de zoom
             // enquanto o operador ainda está enquadrando. Só para fotos que
             // já iam subir (blob): as antigas do banco não pagam reupload.
-            if (f.blob) {
-                var dpiExcesso = dpiDoEnquadro(c);
-                if (dpiExcesso > DPI_TETO) {
-                    try { await reamostrarFoto(f, DPI_QUEIMA / dpiExcesso); } catch (e) { }
+            var dpiExcesso = dpiEmExcesso(c);
+            if (dpiExcesso) {
+                try {
+                    await reamostrarFoto(f, DPI_QUEIMA / dpiExcesso);
+                    f.queimada = true;
+                    queimadas++;
+                } catch (e) {
+                    // Falhar em reduzir não impede de gravar: a foto sobe do
+                    // tamanho que veio e imprime igual, só mais pesada.
+                    console.warn('[Fotos] nao deu para reduzir', c.arquivo, e);
                 }
             }
 
@@ -1056,6 +1145,7 @@
 
         cfg.onAplicar({
             gravadas: gravadas,
+            queimadas: queimadas,
             falhas: falhas,
             semFoto: (resultado.semFoto || []).slice(),
             sobrando: (resultado.sobrando || []).length,
@@ -1156,7 +1246,7 @@
         }
 
         if (aba === 'importar') ligarDropZone();
-        else ligarInteracaoDosCartoes();
+        else { ligarInteracaoDosCartoes(); atualizarReguaDeDpi(); }
     }
 
     function ligarDropZone() {

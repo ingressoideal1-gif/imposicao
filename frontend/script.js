@@ -4164,7 +4164,7 @@ function onCanvasMouseDown(e) {
             .filter(Boolean);
         if (alvosSelecionados.some(el => el.locked)) {
             state.dragging = null;
-            avisarElementoTravado();
+            avisarElementoTravado(null, true);
         } else {
             state.dragging = {
                 targets: alvosSelecionados.map(el => ({
@@ -4567,7 +4567,7 @@ window.alignSelectedElement = function (alignment) {
         }
     });
 
-    if (pulados > 0 && !mutated) avisarElementoTravado();
+    if (pulados > 0 && !mutated) avisarElementoTravado(null, true);
 
     if (mutated) saveNumHistory();
 
@@ -5430,11 +5430,11 @@ function renderElementsList() {
 
                     <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;" onclick="moverElOrdem('${el.id}','tras');event.stopPropagation()" title="Enviar para trás: este elemento passa a ficar POR BAIXO na sobreposição">⬇</button>
 
-                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado no desenho. Clique para destravar.' : 'Clique para travar e impedir arrasto por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado nem excluído. Clique para destravar.' : 'Clique para travar: o elemento deixa de ser arrastado ou excluído por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
 
                     <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">⧉</button>
 
-                        <button class="btn btn-danger btn-sm" style="padding: 2px 8px;" onclick="removeEl('${el.id}');event.stopPropagation()" title="Excluir">✕</button>
+                        <button class="btn btn-danger btn-sm" style="padding: 2px 8px;${el.locked ? 'opacity:.45;' : ''}" onclick="removeEl('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: destrave para poder excluir' : 'Excluir'}">✕</button>
 
                     </div>
 
@@ -5743,11 +5743,11 @@ function renderElementsList() {
 
                     <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;" onclick="moverElOrdem('${el.id}','tras');event.stopPropagation()" title="Enviar para trás: este elemento passa a ficar POR BAIXO na sobreposição">⬇</button>
 
-                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado no desenho. Clique para destravar.' : 'Clique para travar e impedir arrasto por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
+                    <button class="btn btn-secondary btn-sm" style="padding: 2px 8px;${el.locked ? 'color:#f59e0b;border-color:#f59e0b;' : ''}" onclick="toggleElLock('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: não é arrastado nem excluído. Clique para destravar.' : 'Clique para travar: o elemento deixa de ser arrastado ou excluído por engano. Os campos continuam editáveis.'}">${el.locked ? '🔒 Travado' : '🔓'}</button>
 
                     <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 1rem;" onclick="duplicateEl('${el.id}');event.stopPropagation()" title="Duplicar">⧉</button>
 
-                    <button class="btn btn-danger btn-sm" style="padding: 2px 8px;" onclick="removeEl('${el.id}');event.stopPropagation()" title="Excluir">✕</button>
+                    <button class="btn btn-danger btn-sm" style="padding: 2px 8px;${el.locked ? 'opacity:.45;' : ''}" onclick="removeEl('${el.id}');event.stopPropagation()" title="${el.locked ? 'Travado: destrave para poder excluir' : 'Excluir'}">✕</button>
 
                 </div>
 
@@ -5900,8 +5900,9 @@ window.renderBoxArquivos = function () {
             <span class="num-arquivo-icone">${icone}</span>
             <span class="num-arquivo-nome">${nome}</span>
             ${selo}
+            ${el.locked ? `<span style="font-size:0.68rem;color:var(--amber, #f59e0b);" title="Travado: não é arrastado nem excluído">🔒</span>` : ''}
             <span class="num-arquivo-dim">${w} × ${h} mm</span>
-            <button class="btn btn-sm btn-ghost btn-danger" style="padding:2px 6px;" onclick="event.stopPropagation(); removeEl('${el.id}')" title="Remover este elemento">✕</button>
+            <button class="btn btn-sm btn-ghost btn-danger" style="padding:2px 6px;${el.locked ? 'opacity:.45;' : ''}" onclick="event.stopPropagation(); removeEl('${el.id}')" title="${el.locked ? 'Travado: destrave no cartão para poder excluir' : 'Remover este elemento'}">✕</button>
         </div>`;
     }).join('');
 };
@@ -6072,11 +6073,18 @@ window.verLinhasComEstouro = function (id) {
 };
 
 let _ultimoAvisoTravado = 0;
-function avisarElementoTravado() {
-    const agora = Date.now();
-    if (agora - _ultimoAvisoTravado < 2500) return;   // não metralhar a cada mousedown
-    _ultimoAvisoTravado = agora;
-    toast('🔒 Elemento travado — destrave no cartão para mover', 'error');
+/**
+ * O aviso da trava. `arrastando` liga o freio de repetição, porque o mousedown
+ * dispara a cada tentativa e o operador levaria uma chuva de toasts. Num clique
+ * deliberado — o ✕ de excluir — o aviso sai sempre: ele é a resposta ao clique.
+ */
+function avisarElementoTravado(msg, arrastando) {
+    if (arrastando) {
+        const agora = Date.now();
+        if (agora - _ultimoAvisoTravado < 2500) return;
+        _ultimoAvisoTravado = agora;
+    }
+    toast(msg || '🔒 Elemento travado — destrave no cartão para mover', 'error');
 }
 
 window.toggleElLock = function (id) {
@@ -6226,6 +6234,20 @@ window.deleteSelectedElements = function () {
         }
     });
 
+    // Travado não some. Arrastar por engano e excluir por engano são o mesmo
+    // acidente para quem opera — perder trabalho já posicionado —, então a
+    // trava cobre os dois. Aqui a operação para INTEIRA, em vez de excluir os
+    // destravados e deixar os outros: apagar parte de uma seleção em silêncio é
+    // pior do que não apagar nada. (No alinhamento os travados são só pulados,
+    // porque lá nada é destruído.)
+    const travados = state.numElements.filter(e => idsToDelete.has(e.id) && e.locked);
+    if (travados.length) {
+        avisarElementoTravado(travados.length === 1
+            ? '🔒 Elemento travado — destrave no cartão para excluir'
+            : `🔒 ${travados.length} elementos travados na seleção — destrave para excluir`);
+        return;
+    }
+
     state.numElements = state.numElements.filter(e => !idsToDelete.has(e.id));
     state.selectedElIds = [];
     state.selectedElId = null;
@@ -6265,6 +6287,11 @@ window.duplicateSelectedElements = function () {
         
         const clone = JSON.parse(JSON.stringify(el));
         clone.id = newId;
+
+        // A cópia nasce DESTRAVADA. Duplicar é para reposicionar; herdando a
+        // trava, a cópia nasceria imóvel e — desde que a trava passou a impedir
+        // excluir — sem como sair da tela. O original continua protegido.
+        delete clone.locked;
         
         if (state.numFormato && clone.type !== 'PICOTE') {
             clone.x_mm = state.numFormato.width_mm / 2;
@@ -12323,9 +12350,17 @@ window.abrirFotosDoElemento = function (elId) {
             objectPath: `fotos/${numId}/${hash}.jpg`
         }),
 
-        onAplicar: ({ gravadas, falhas, semFoto, sobrando, coluna }) => {
+        onAplicar: ({ gravadas, queimadas, falhas, semFoto, sobrando, coluna }) => {
 
             if (gravadas) {
+
+                // A redução 350→300 é automática e acontece durante o envio,
+                // sem nada para marcar. Se ela não for dita aqui, o operador
+                // não tem como saber que aconteceu — e já veio perguntar onde
+                // ela estava.
+                const reduzidas = queimadas
+                    ? ` ${queimadas} passava(m) de 350 dpi e subiu(ram) reamostrada(s) para 300.`
+                    : '';
 
                 // "Ligadas" sem o aviso do Salvar é meia verdade: o vínculo é
                 // escrito nas linhas do RASCUNHO do editor, e só o Salvar da
@@ -12333,7 +12368,7 @@ window.abrirFotosDoElemento = function (elId) {
                 // tela já as desenha, então tudo PARECE pronto — mas um F5 antes
                 // de salvar joga fora os vínculos, e a impressão volta a acusar
                 // as mesmas pessoas. Já aconteceu.
-                toast(`${gravadas} foto(s) ligadas à coluna “${coluna}”. Salve a numeração para ficar gravado.`, 'success');
+                toast(`${gravadas} foto(s) ligadas à coluna “${coluna}”.${reduzidas} Salve a numeração para ficar gravado.`, 'success');
 
             }
 

@@ -4,6 +4,30 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-13] — Elemento travado também não pode ser excluído
+
+A trava (🔒) dos elementos de numeração impedia apenas o arrasto e o alinhamento. Agora
+impede também **excluir**, pelos três caminhos: o ✕ do cartão, o ✕ da lista "Adicionar Pdf
+e Svg" e a tecla Delete — os três passam por `deleteSelectedElements`, que é onde a guarda
+foi posta. O ✕ fica apagado com o motivo no `title`, e a tentativa responde com um toast.
+
+Arrastar por engano e excluir por engano são o mesmo acidente para quem opera: perder
+trabalho já posicionado. Numa gráfica isso só aparece quando o material saiu errado da
+impressora.
+
+Duas decisões que acompanham, com o critério de **o que se perde**:
+
+- Excluir **para a operação inteira** quando há um travado na seleção (ou no grupo);
+  apagar parte de uma seleção em silêncio é pior do que não apagar nada. O alinhamento
+  continua apenas pulando os travados, porque lá nada é destruído.
+- **A cópia nasce destravada.** Herdando a trava, uma cópia nasceria imóvel e — com a
+  regra nova — sem como sair da tela. O original continua protegido.
+
+Continuam liberados: selecionar, editar os campos do cartão, duplicar e mudar a ordem de
+sobreposição.
+
+---
+
 ## [2026-08-12] — Dado variável em espaço limitado: espremer as letras e conferir o banco antes de imprimir
 
 As duas ideias que ficaram anotadas no release anterior.
