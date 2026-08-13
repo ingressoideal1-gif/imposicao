@@ -7,6 +7,11 @@ __pycache__/
 .env.*
 !.env.example
 
+# Gerado pelo build_agent.ps1 a cada compilacao do agente: e o segredo que
+# autoriza a estacao a publicar a faixa de codigos do QR Ideal. Vai embutido no
+# NewProd.exe e some do repositorio.
+acesso_segredo.py
+
 # Pool de codigos do QR Ideal (3.000.000 de codigos de 8 caracteres). E o
 # SEGREDO MESTRE do controle de acesso: quem tem esta planilha consegue emitir
 # um ingresso valido para qualquer evento. Nunca versionar — o `publicar.ps1`

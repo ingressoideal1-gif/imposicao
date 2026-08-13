@@ -65,6 +65,29 @@ Describe "Pool do QR Ideal na publicacao" {
         $rastreados | Should BeNullOrEmpty
     }
 
+    It "o build exige o segredo do agente antes de compilar" {
+        # Sem ele o agente imprime normalmente e nao publica faixa nenhuma. E o
+        # mesmo modo de falhar do pool: silencioso ate a portaria do evento.
+        $conteudo = Get-Content (Join-Path $raiz "build_agent.ps1") -Raw
+        $conteudo | Should Match "ACESSO_AGENTE_SEGREDO"
+        $conteudo | Should Match "acesso_segredo\.py"
+    }
+
+    It "o segredo do agente nunca fica versionado" {
+        $conteudo = Get-Content (Join-Path $raiz ".gitignore") -Raw
+        $conteudo | Should Match "acesso_segredo\.py"
+        $rastreados = & git -C $raiz ls-files "acesso_segredo.py"
+        $rastreados | Should BeNullOrEmpty
+    }
+
+    It "o PyInstaller e avisado do modulo gerado" {
+        # acesso_publicacao.py importa acesso_segredo DENTRO de uma funcao, entao
+        # o PyInstaller nao o encontra varrendo o codigo. Sem o hiddenimports o
+        # agente sai sem o segredo, e sem erro nenhum.
+        $spec = Get-Content (Join-Path $raiz "agent_tray.spec") -Raw
+        $spec | Should Match "'acesso_segredo'"
+    }
+
     It "o .gitignore protege o pool nos dois formatos" {
         $conteudo = Get-Content (Join-Path $raiz ".gitignore") -Raw
         $conteudo | Should Match "\*\.xlsx"

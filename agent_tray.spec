@@ -35,6 +35,11 @@ a = Analysis(
         ('Logo Ideal Dark.png', '.'),
     ] + _frontend_datas,
     hiddenimports=[
+        # Gerado pelo build_agent.ps1 e importado so dentro de uma funcao do
+        # acesso_publicacao.py, entao o PyInstaller nao o acha varrendo o
+        # codigo. Sem esta linha o agente sai sem o segredo e nao publica faixa
+        # nenhuma -- sem erro, sem aviso, ate a portaria do evento.
+        'acesso_segredo',
         'uvicorn.logging',
         'uvicorn.loops',
         'uvicorn.loops.auto',

@@ -175,6 +175,11 @@ def _abrir_pedido(pedido_id_int: int) -> dict:
         "GET", f"producao_acesso_pedidos?pedido_id_int=eq.{int(pedido_id_int)}&select=*"
     ) or []
 
+    # A tiragem vai junto com o sal, numa resposta só. O agente precisa das duas
+    # coisas para calcular a faixa, e quem sabe a quantidade é o ERP — não ele.
+    # Duas idas à rede aqui seriam duas chances de falhar.
+    tiragem = _tiragem_do_pedido(pedido_id_int)
+
     if achados:
         linha = achados[0]
         estava_fechado = bool(linha.get("publicado_em"))
@@ -184,13 +189,13 @@ def _abrir_pedido(pedido_id_int: int) -> dict:
                 f"producao_acesso_pedidos?pedido_id_int=eq.{int(pedido_id_int)}",
                 {"publicado_em": None},
             )
-        return {"sal": linha["sal"], "reaberto": estava_fechado}
+        return {"sal": linha["sal"], "reaberto": estava_fechado, "tiragem": tiragem}
 
     criado = supabase("POST", "producao_acesso_pedidos", {
         "pedido_id_int": int(pedido_id_int),
         "sal": qr_ideal.gerar_sal(),
     })
-    return {"sal": criado[0]["sal"], "reaberto": False}
+    return {"sal": criado[0]["sal"], "reaberto": False, "tiragem": tiragem}
 
 
 def _tiragem_do_pedido(pedido_id_int: int) -> dict:

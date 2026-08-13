@@ -657,6 +657,35 @@ def _pool_qr_ou_none():
     return _POOL_QR or None
 
 
+def _publicar_faixa_qr_ideal(config, data):
+    """Manda a faixa de codigos para a nuvem — DEPOIS que os PDFs sairam.
+
+    Chamada logo apos `engine.process()` terminar com sucesso, nos dois
+    caminhos de `/api/impose` (o com stream e o sincrono). Ela devolve na hora:
+    o calculo dos hashes e o envio acontecem numa thread de fundo, porque o
+    operador esta de pe na frente da impressora e o agente existe por causa
+    disso.
+
+    Nao levanta nunca. Uma falha aqui nao pode derrubar um trabalho cujo papel
+    ja saiu — o pior que acontece e a faixa subir na proxima impressao, e o
+    evento e dias depois.
+    """
+    try:
+        if not data.get("pedido"):
+            return
+        # So publica quem realmente usa o elemento. Um trabalho de numeracao
+        # comum nao tem faixa nenhuma para publicar, e calcular hash de uma
+        # tiragem inteira a toa seria desperdicio puro.
+        if not any(el.get("type") == "QR_IDEAL" for el in (config.elements or [])):
+            return
+        if not _pool_qr_ou_none():
+            return
+        import acesso_publicacao
+        acesso_publicacao.publicar_em_fundo(data["pedido"], _pool_qr_ou_none)
+    except Exception as e:
+        print(f"[acesso] Nao consegui iniciar a publicacao da faixa: {e}", flush=True)
+
+
 @app.get("/api/qr-ideal")
 def qr_ideal_previa(pedido: str, modelo: str, item: int = 1):
     """O codigo do QR Ideal de um ingresso, para a previa do editor.
@@ -1013,6 +1042,7 @@ async def impose_file(
             async def run_engine_task():
                 try:
                     await asyncio.to_thread(engine.process)
+                    _publicar_faixa_qr_ideal(config, data)
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
@@ -1066,6 +1096,7 @@ async def impose_file(
         engine = ImpositionEngine(config)
         print(f"[DIAG impose] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r} sheets_per_block={data.get('sheets_per_block')!r} multi_artes_count={len(multi_artes_list)} has_cover={formato.get('has_cover')}")
         engine.process()
+        _publicar_faixa_qr_ideal(config, data)
 
         suffix_fn = f"CSV_{len(csv_data)}" if csv_data else f"{data.get('seq_start', 1)}-{data.get('seq_end', 100)}"
         download_name = f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
