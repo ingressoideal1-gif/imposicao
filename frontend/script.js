@@ -3685,6 +3685,73 @@ function linhaDeAmostra() {
     return (dados && dados[0]) ? dados[0] : null;
 }
 
+/* ── QR IDEAL ──────────────────────────────────────────────────────────────
+ *
+ * O conteúdo do QR Ideal não se digita: ele vem de (pedido, modelo, número do
+ * ingresso). Quem sabe calcular é o agente da estação, que tem o pool de
+ * 3 milhões de códigos ao lado do executável — o navegador nunca recebe essa
+ * lista.
+ *
+ * O desenho no canvas é síncrono e a consulta é assíncrona, então
+ * `qrIdealConteudo` devolve `null` na primeira chamada, dispara a busca e
+ * repinta quando a resposta chega. Fora da estação (painel aberto pela Vercel)
+ * o endpoint não existe e ela devolve `null` para sempre.
+ */
+const _qrIdealCache = new Map();
+const _qrIdealRepintar = new Set();
+
+window.qrIdealConteudo = function (pedido, modelo, item) {
+    if (!pedido || !modelo) return null;
+    const chave = `${pedido}|${modelo}|${item || 1}`;
+    if (_qrIdealCache.has(chave)) return _qrIdealCache.get(chave);
+    _qrIdealCache.set(chave, null);
+
+    const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+    fetch(`${base}/api/qr-ideal?pedido=${encodeURIComponent(pedido)}&modelo=${encodeURIComponent(modelo)}&item=${item || 1}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(j => {
+            if (j && j.conteudo) {
+                _qrIdealCache.set(chave, j.conteudo);
+                // Repinta uma vez por chave, e não a cada resposta: uma tiragem
+                // desenha dezenas de QRs, e repintar em cada uma engasgaria a tela.
+                if (!_qrIdealRepintar.has(chave)) {
+                    _qrIdealRepintar.add(chave);
+                    if (typeof drawCanvas === 'function') { try { drawCanvas(); } catch (e) { } }
+                }
+            }
+        })
+        .catch(() => { });
+    return null;
+};
+
+/**
+ * Desenha o QR Ideal — ou, quando o código ainda não é conhecido, um quadro
+ * que SE ANUNCIA como exemplo.
+ *
+ * Um QR falso mudo é pior que nenhum: o operador olharia para ele e acharia
+ * que conferiu. No editor de numeração não há pedido nenhum (a numeração é um
+ * modelo reutilizável), então ali o exemplo é a resposta honesta.
+ */
+window.desenharQRIdeal = function (ctx, el, sz, color, pedido, modelo, item) {
+    const conteudo = window.qrIdealConteudo(pedido, modelo, item);
+    if (conteudo) {
+        renderQRCodeOnCtx(ctx, conteudo, 0, 0, sz, color);
+        return;
+    }
+    const h = sz / 2;
+    ctx.save();
+    ctx.globalAlpha = 0.30;
+    renderQRCodeOnCtx(ctx, 'EXEMPLO', 0, 0, sz, color);
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = '#f59e0b';
+    ctx.font = `${Math.max(6, sz / 6)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('exemplo', 0, h + sz / 14);
+    ctx.restore();
+};
+
 function drawElement(ctx, el, S) {
 
     const x = el.x_mm * S;
@@ -3708,7 +3775,7 @@ function drawElement(ctx, el, S) {
 
     const SAMPLE = el.type === 'FIXED' ? (el.fixed_value || 'TEXTO') :
         el.type === 'TEXT' ? String(el.ticket_pos || 1).padStart(el.pad || 6, '0') :
-            el.type === 'QR' ? null :
+            (el.type === 'QR' || el.type === 'QR_IDEAL') ? null :
                 el.type === 'BARCODE' ? null : String(el.ticket_pos || 1).padStart(el.pad || 6, '0');
 
 
@@ -3790,6 +3857,12 @@ function drawElement(ctx, el, S) {
         }
 
 
+
+    } else if (el.type === 'QR_IDEAL') {
+        // O editor de numeração é um MODELO reutilizável: aqui não existe pedido
+        // nenhum, então o desenho honesto é o exemplo avisado. O código real
+        // aparece no card do pedido, que sabe de que pedido o trabalho veio.
+        window.desenharQRIdeal(ctx, el, (el.size_mm || 15) * S, el.color || '#000000');
 
     } else if (el.type === 'QR') {
         const sz = (el.size_mm || 15) * S;
@@ -4488,7 +4561,7 @@ function getElementSizeMM(el) {
 
     }
 
-    else if (el.type === 'QR') { w = el.size_mm || 15; h = w; }
+    else if (el.type === 'QR' || el.type === 'QR_IDEAL') { w = el.size_mm || 15; h = w; }
 
     else if (el.type === 'BARCODE') { w = el.width_mm || 40; h = el.height_mm || 10; }
 
@@ -5305,6 +5378,12 @@ window.addElement = function (type, extras) {
 
     if (type === 'QR') Object.assign(base, { size_mm: 15, pad: 4, prefix: '', suffix: '' });
 
+    // QR Ideal: o conteúdo é calculado a partir de (pedido, modelo, número do
+    // ingresso), e nenhuma das três coisas se digita. Por isso não tem prefixo,
+    // sufixo, zeros nem origem de dado — só tamanho e cor. É exatamente essa
+    // ausência de campo que impede dois ingressos de saírem iguais.
+    if (type === 'QR_IDEAL') Object.assign(base, { size_mm: 15, render_mode: 'print' });
+
     if (type === 'BARCODE') Object.assign(base, { width_mm: 40, height_mm: 10, barcode_format: 'code128', pad: 4, prefix: '', suffix: '' });
 
     // SVG e PDF nascem vazios: quem os cria e a box "Adicionar Pdf e Svg", passando
@@ -5524,6 +5603,21 @@ function renderElementsList() {
 
                 <div class="form-group"><label>Sufixo</label><input class="form-control" type="text" value="${el.suffix || ''}" onchange="updateEl('${el.id}','suffix',this.value)"></div>`;
 
+        } else if (el.type === 'QR_IDEAL') {
+
+            extraFields = `
+
+                <div class="form-group el-full"><label>Tamanho (mm)</label><input class="form-control" type="number" value="${el.size_mm || 15}" min="5" max="100" step="0.5" onchange="updateEl('${el.id}','size_mm',+this.value)"></div>
+
+                <div class="form-group el-full" style="font-size:0.78rem; color:var(--text-dim); line-height:1.45; background:rgba(245,158,11,0.08); border-left:3px solid #f59e0b; padding:8px 10px; border-radius:4px;">
+                    <b style="color:#f59e0b;">Não há o que preencher aqui.</b><br>
+                    O código vem do <b>número do pedido</b>, do <b>número do modelo</b> e do
+                    <b>número do ingresso</b> — cada ingresso recebe um código diferente,
+                    tirado de uma lista de 3 milhões que fica na estação.<br>
+                    Na tela aparece um <b>exemplo</b> enquanto o editor não souber de que
+                    pedido é o trabalho.
+                </div>`;
+
         } else if (el.type === 'BARCODE') {
 
             extraFields = `
@@ -5707,7 +5801,7 @@ function renderElementsList() {
         
         let ticketPosHTML = '';
         const numTipoSelect = document.getElementById('num-tipo');
-        if (numTipoSelect && numTipoSelect.value === 'TICKET' && ['TEXT', 'QR', 'BARCODE'].includes(el.type)) {
+        if (numTipoSelect && numTipoSelect.value === 'TICKET' && ['TEXT', 'QR', 'QR_IDEAL', 'BARCODE'].includes(el.type)) {
             const ticketQtd = parseInt(document.getElementById('num-ticket-qtd').value) || 1;
             let options = '';
             for (let i = 1; i <= ticketQtd; i++) {
@@ -8092,6 +8186,10 @@ function drawPreview() {
                             ctx, el, val_str, fs, scale * 2.8346,
                             (f) => buildCanvasFont(f, el.font_name)
                         );
+
+                    } else if (el.type === 'QR_IDEAL') {
+
+                        window.desenharQRIdeal(ctx, el, (el.size_mm || 15) * MM2PT * scale, color);
 
                     } else if (el.type === 'QR') {
 
@@ -15298,6 +15396,10 @@ window.onAmostraNumeracaoSelect = function() {
                     ctx, el, label, fs, S,
                     (f) => buildCanvasFont(f, el.font_name)
                 );
+
+            } else if (el.type === 'QR_IDEAL') {
+
+                window.desenharQRIdeal(ctx, el, (el.size_mm || 15) * S, el.color || '#000000');
 
             } else if (el.type === 'QR') {
 
@@ -24208,6 +24310,22 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 ctx, el, label, fs, Sx,
                 (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
             );
+        } else if (el.type === 'QR_IDEAL') {
+            // Aqui o pedido e o modelo existem: `item` é a linha de
+            // `pedidos_modelos`, com `id_int` (pedido) e `id` (modelo). O número
+            // do ingresso segue a MESMA conta do elemento de numeração acima —
+            // se divergissem, a tela mostraria um código e o papel sairia outro.
+            let _qiVal = seqStart + (pageNum - 1);
+            if (num && num.tipo === "TICKET") {
+                const _qiPos = parseInt(el.ticket_pos) || 1;
+                const _qiQtd = parseInt(num.ticket_qtd) || 1;
+                _qiVal = seqStart + ((pageNum - 1) * _qiQtd) + (_qiPos - 1);
+            }
+            window.desenharQRIdeal(
+                ctx, el, (el.size_mm || 15) * S, el.color || '#000000',
+                item?.id_int, item?.id, _qiVal
+            );
+
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * S;
             let qrText = '';
@@ -24973,6 +25091,22 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     numCtx, el, label, fs, S,
                     (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
                 );
+            } else if (el.type === 'QR_IDEAL') {
+                // O card do pedido conhece o pedido e o modelo. O número do
+                // ingresso segue a mesma conta do elemento de numeração acima.
+                const _qiStart = parseInt(
+                    item?.numeracao_inicio || item?.num_inicial ||
+                    item?.NUMERACAO_INICIO || 1
+                ) || 1;
+                let _qiVal = _qiStart;
+                if (num && num.tipo === "TICKET") {
+                    _qiVal = _qiStart + ((parseInt(el.ticket_pos) || 1) - 1);
+                }
+                window.desenharQRIdeal(
+                    numCtx, el, (el.size_mm || 15) * S, el.color || '#000000',
+                    item?.id_int, item?.id, _qiVal
+                );
+
             } else if (el.type === 'QR') {
                 const sz = (el.size_mm || 15) * S;
                 let qrText = '';
@@ -29944,6 +30078,10 @@ async function criarCanvasNumeracaoRasterizada(num, fmt) {
                 numCtx, el, label, fs, S,
                 (f) => typeof buildCanvasFont === 'function' ? buildCanvasFont(f, el.font_name) : `${f}px ${el.font_name || 'monospace'}`
             );
+        } else if (el.type === 'QR_IDEAL') {
+            // Rasterização da numeração isolada: sem pedido, exemplo avisado.
+            window.desenharQRIdeal(numCtx, el, (el.size_mm || 15) * S, color);
+
         } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * S;
             const hsz = sz / 2;
