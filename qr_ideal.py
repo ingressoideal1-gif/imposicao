@@ -23,7 +23,9 @@ O que distingue este QR do elemento `QR` antigo e que aquele codifica o
 numero sequencial — quem tem o ingresso 1234 imprime o 1235. Este codifica um
 sorteio de 8 caracteres que so existe na planilha mestra.
 """
+import hashlib
 import os
+import secrets
 import sys
 
 COLUNAS = 100
@@ -32,6 +34,11 @@ TAMANHO = 8
 TOTAL = COLUNAS * LINHAS  # 3.000.000
 
 NOME_ARQUIVO = "qr_ideal_pool.bin"
+
+# Voltas do PBKDF2. Mexer aqui muda TODO hash ja publicado, e os ingressos que
+# ja estao na mao dos clientes param de validar na portaria. So se mexe com
+# migracao planejada dos dados existentes.
+ITERACOES = 10_000
 
 
 def ultimos2(n) -> int:
@@ -72,6 +79,45 @@ def caminho_padrao() -> str:
     else:
         base = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base, NOME_ARQUIVO)
+
+
+def gerar_sal() -> str:
+    """32 bytes sorteados, em hexadecimal. Um por pedido, nunca reaproveitado.
+
+    Nao e segredo: o celular da portaria baixa o sal junto com a faixa do
+    evento. O que ele faz e impedir que o mesmo codigo do pool produza o mesmo
+    hash em eventos diferentes. Como o pool e reutilizado por desenho, sem sal
+    por pedido daria para correlacionar eventos so olhando o banco.
+    """
+    return secrets.token_hex(32)
+
+
+def hash_codigo(conteudo: str, sal: str) -> str:
+    """O que a nuvem guarda no lugar do codigo. O codigo em si nunca sai daqui.
+
+    `conteudo` e o texto INTEIRO do QR — prefixo do pedido mais os 8 caracteres
+    do pool —, e nao so o codigo. E isso que impede a colisao de coluna entre
+    dois pedidos de virar colisao de verdade na portaria.
+
+    PBKDF2-HMAC-SHA256 porque existe pronto nos dois lados que precisam dele:
+    `hashlib` aqui, `crypto.subtle.deriveBits` no navegador. Nenhuma dependencia
+    nova, nem no agente nem no celular.
+
+    A 10.000 voltas, uma leitura no celular custa milissegundos e uma busca por
+    forca bruta custa 2,8 x 10^16 operacoes por pedido — quer dizer, um
+    vazamento do banco nao entrega codigo nenhum.
+
+    ARMADILHA: o sal entra como os BYTES do hexadecimal, nao como o texto dele.
+    O navegador tem de fazer a mesma coisa. E o erro mais facil de cometer aqui,
+    e ele so apareceria na portaria do evento.
+    """
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        conteudo.encode("utf-8"),
+        bytes.fromhex(sal),
+        ITERACOES,
+        dklen=32,
+    ).hex()
 
 
 class PoolQR:
