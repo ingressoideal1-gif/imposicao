@@ -1,6 +1,6 @@
 ---
 name: fotos-variaveis
-description: Leia ANTES de mexer em foto como dado variável — o elemento FOTO, o Gerenciador de Fotos, frontend/foto-lib.js, frontend/gerenciador-fotos.js, a chave __fotos das linhas do CSV, ou o ramo FOTO do engine.py. Cobre as oito armadilhas do caminho e por que o agente sai junto.
+description: Leia ANTES de mexer em foto como dado variável — o elemento FOTO, o Gerenciador de Fotos, frontend/foto-lib.js, frontend/gerenciador-fotos.js, a chave __fotos das linhas do CSV, ou o ramo FOTO do engine.py. Cobre as nove armadilhas do caminho e por que o agente sai junto.
 ---
 
 # Antes de mexer em foto variável
@@ -92,7 +92,25 @@ repintar uma vez. Duas ressalvas que não são opcionais:
   as fotos de novo, elas resolvem na hora (já em cache) e mandam repintar outra
   vez — laço infinito.
 
-## 8. Normalizar antes de subir é requisito, não otimização
+## 8. O MuPDF renderiza o que o Acrobat rejeita
+
+Medir pixel do PDF rasterizado prova que a **tinta** está certa, não que o
+**arquivo** vale. O caso real: o canto arredondado gerava a foto com SMask em
+ColorSpace ICCBased de 1 bit — a especificação exige SMask em **DeviceGray** —,
+o MuPDF mostrava tudo perfeito (na tela, nos testes e na prévia), e o Acrobat
+descartava todas as fotos da página com "Há um erro nesta página". O operador
+recebeu um lote de credenciais sem rosto tendo conferido a prévia.
+
+Duas regras ficaram:
+
+- **Nunca `insert_image(mask=PNG)`**: o PyMuPDF guarda o PNG da máscara como
+  veio. Transparência entra como canal alfa do pixmap (`fitz.Pixmap(pix, 1)` +
+  `set_alpha`), e o MuPDF escreve a SMask canônica.
+- Todo caminho novo que **escreva** objeto de PDF precisa de um teste que leia o
+  **arquivo salvo** e confira a estrutura contra a especificação — além do teste
+  de pixel. `test_canto_redondo_gera_smask_devicegray` é o modelo.
+
+## 9. Normalizar antes de subir é requisito, não otimização
 
 Uma foto de celular tem 4 MB; um lote de 500 seriam 2 GB subindo e descendo.
 Reduzida no navegador para 300 dpi da janela com 30 % de folga, cada uma fica em

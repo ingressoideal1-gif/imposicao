@@ -370,3 +370,56 @@ def test_nome_solto_nao_vira_janela_pintada(foto_metades):
     with pytest.raises(RuntimeError) as ex:
         _pintar(el, linha)
     assert "JAQUE ROSSI.jpeg" in str(ex.value)
+
+
+# ─── O PDF precisa valer para o Acrobat, nao so para o MuPDF ─────────────────
+#
+# O MuPDF renderiza o que o Acrobat rejeita — medir pixel prova a tinta, nao a
+# validade. O caso real: canto redondo gerava a foto com SMask em ColorSpace
+# ICCBased de 1 bit; a especificacao exige DeviceGray, o Acrobat descartava
+# todas as fotos da pagina ("Ha um erro nesta pagina") e o operador recebia um
+# lote de credenciais sem rosto — com o MuPDF (e a tela) mostrando tudo certo.
+
+
+def _smasks_do_pdf(doc):
+    """[(xref_da_imagem, objeto_da_smask)] de todas as imagens com mascara."""
+    import re
+    achadas = []
+    for pno in range(len(doc)):
+        for img in doc[pno].get_images(full=True):
+            obj = doc.xref_object(img[0], compressed=True)
+            m = re.search(r"/SMask (\d+) 0 R", obj)
+            if m:
+                achadas.append((img[0], doc.xref_object(int(m.group(1)), compressed=True)))
+    return achadas
+
+
+@pytest.mark.parametrize("canto", ["round", "circle"])
+def test_canto_redondo_gera_smask_devicegray(foto_metades, canto):
+    """A mascara do recorte tem de ser SMask /DeviceGray — regra do Acrobat."""
+    el, linha = _el(foto_metades, corner=canto)
+    doc, page, pix = _pintar(el, linha)
+    # O defeito so aparece no arquivo SALVO (e o que o cliente abre), nao no
+    # documento vivo.
+    dados = doc.tobytes(garbage=4, deflate=True)
+    salvo = fitz.open("pdf", dados)
+    smasks = _smasks_do_pdf(salvo)
+    assert smasks, "canto redondo sem nenhuma SMask: o recorte sumiu"
+    for xref_img, obj in smasks:
+        assert "/DeviceGray" in obj and "ICCBased" not in obj, (
+            f"SMask da imagem {xref_img} fora da especificacao (Acrobat rejeita): {obj[:200]}"
+        )
+    salvo.close()
+
+
+def test_canto_redondo_continua_recortando(foto_metades):
+    """A correcao da SMask nao pode devolver o canto quadrado: os cantos da
+    janela devem ficar brancos (recortados) e o miolo pintado."""
+    el, linha = _el(foto_metades, corner="circle")
+    doc, page, pix = _pintar(el, linha)
+    x0, y0, x1, y1 = _janela_pt()
+    canto_sup = _conta_cores(pix, x0, y0, x0 + 4, y0 + 4)
+    assert canto_sup["vermelho"] + canto_sup["azul"] == 0, canto_sup
+    miolo = _conta_cores(pix, (x0 + x1) / 2 - 8, (y0 + y1) / 2 - 8,
+                         (x0 + x1) / 2 + 8, (y0 + y1) / 2 + 8)
+    assert miolo["vermelho"] + miolo["azul"] > 100, miolo

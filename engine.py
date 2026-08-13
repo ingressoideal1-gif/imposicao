@@ -1236,9 +1236,9 @@ class ImpositionEngine:
                 if canto in ("round", "circle"):
                     # Canto arredondado exige recorte, e recorte por caminho nao
                     # existe no show_pdf_page. Entao a janela e rasterizada e
-                    # entra como imagem com mascara na forma escolhida — o custo
-                    # so aparece para quem escolheu canto redondo, e sem isto a
-                    # tela mostraria um circulo e o PVC sairia quadrado.
+                    # entra como imagem com a forma escolhida virando TRANSPARENCIA
+                    # — o custo so aparece para quem escolheu o canto redondo, e
+                    # sem isto a tela mostraria um circulo e o PVC sairia quadrado.
                     pix = pj.get_pixmap(dpi=300, alpha=False)
                     from PIL import ImageDraw
                     mascara = Image.new("L", (pix.width, pix.height), 0)
@@ -1250,10 +1250,18 @@ class ImpositionEngine:
                             [0, 0, pix.width - 1, pix.height - 1],
                             radius=int(min(pix.width, pix.height) * 0.12), fill=255
                         )
-                    buf = io.BytesIO()
-                    mascara.save(buf, format="PNG")
+                    # A mascara entra como CANAL ALFA do proprio pixmap, nunca
+                    # como PNG em `mask=`: por esse segundo caminho o PyMuPDF
+                    # guarda o PNG como veio, e a SMask sai com ColorSpace
+                    # ICCBased de 1 bit — o MuPDF renderiza, mas a especificacao
+                    # exige SMask em DeviceGray, e o Acrobat descarta TODAS as
+                    # fotos da pagina com "Ha um erro nesta pagina". Foi um lote
+                    # inteiro de credenciais sem rosto no cliente. Pelo canal
+                    # alfa, o proprio MuPDF escreve a SMask canonica.
+                    com_alfa = fitz.Pixmap(pix, 1)
+                    com_alfa.set_alpha(mascara.tobytes())
                     page.insert_image(
-                        rect, stream=pix.tobytes("png"), mask=buf.getvalue(),
+                        rect, pixmap=com_alfa,
                         rotate=py_rotate, keep_proportion=False,
                     )
                 else:

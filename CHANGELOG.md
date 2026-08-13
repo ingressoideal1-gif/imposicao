@@ -8,6 +8,37 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [não publicado] — O Acrobat rejeitava a máscara do canto redondo
+
+Relato: *"a geração aconteceu até o final, sem apresentar erros. Mas o pdf
+gerado está sem as fotos, que aparecem na janela de preview da imposição"* — e o
+Acrobat abrindo o arquivo com *"Há um erro nesta página"*.
+
+O PDF **tinha** as fotos: o MuPDF (e portanto todas as telas do app) as
+renderizava perfeitamente. O que o Acrobat rejeitava era a **máscara do canto
+arredondado**: o caminho `insert_image(mask=PNG)` do PyMuPDF guardava o PNG como
+veio, e a SMask saía com ColorSpace ICCBased de 1 bit — a especificação PDF
+exige SMask em **DeviceGray**. O Acrobat, estrito, descartava todas as fotos da
+página e mostrava o aviso; o MuPDF, tolerante, mostrava tudo certo. A tela não
+tinha como avisar: ela concorda com o MuPDF.
+
+Agora a forma do recorte entra como **canal alfa do próprio pixmap**
+(`Pixmap.set_alpha`), e é o MuPDF que escreve a SMask canônica — DeviceGray,
+como toda imagem com transparência que ele produz. Dois testes novos prendem a
+regra: um lê a SMask do arquivo salvo e exige DeviceGray sem ICC; o outro mede
+pixel para garantir que o recorte continua recortando.
+
+Lição de método, registrada na skill: **medir pixel com MuPDF prova a tinta, não
+a validade**. O validador de PDF agora combina qpdf (estrutura) com a regra da
+SMask (semântica que só o Acrobat aplicava).
+
+O `1000287.pdf` do trabalho real foi consertado no lugar
+(`1000287_corrigido.pdf`, na mesma pasta): a máscara única — compartilhada pelas
+88 fotos via `garbage=4` — foi reescrita como DeviceGray de 8 bits, sem tocar em
+nenhum outro objeto.
+
+---
+
 ## [v554 — 2026-08-12] — A prévia parou de repintar a cada foto, e os acentos voltaram
 
 Relato: *"Ficou tudo muito pesado e lento, problemas com o cache?"*, e um print
