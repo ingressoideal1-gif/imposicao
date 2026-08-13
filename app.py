@@ -618,6 +618,34 @@ def _embed_system_fonts(numeracao_obj):
         except Exception as ex:
             print(f"[impose] Erro ao embutir fonte {family} de {url}: {ex}")
 
+# ─── QR IDEAL ─────────────────────────────────────────────────────────────────
+
+_POOL_QR = None
+
+
+def _pool_qr_ou_none():
+    """O pool do QR Ideal, aberto uma vez por processo.
+
+    Devolve None quando o arquivo nao esta na maquina — o que e o normal no
+    servidor da nuvem, que nao imprime. Quem cobra a falta e o ramo QR_IDEAL
+    do motor, e so quando o trabalho realmente usa o elemento: um trabalho sem
+    QR Ideal nao pode falhar por causa de um arquivo que ele nao usa.
+
+    O `False` guardado no lugar de None e proposital: sem ele, cada chamada
+    tentaria abrir de novo um arquivo que ja se sabe ausente.
+    """
+    global _POOL_QR
+    if _POOL_QR is None:
+        try:
+            import qr_ideal
+            _POOL_QR = qr_ideal.PoolQR()
+            print(f"[qr-ideal] pool carregado de {_POOL_QR.caminho}")
+        except (FileNotFoundError, ValueError) as e:
+            print(f"[qr-ideal] pool indisponivel: {e}")
+            _POOL_QR = False
+    return _POOL_QR or None
+
+
 # ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
 
 @app.post("/api/impose")
@@ -896,7 +924,13 @@ async def impose_file(
             refazer_de=int(data.get("refazer_de", 0) or 0),
             refazer_ate=int(data.get("refazer_ate", 0) or 0),
             refazer_set=int(data.get("refazer_set", 1) or 1),
-            refazer_celulas=data.get("refazer_celulas") or []
+            refazer_celulas=data.get("refazer_celulas") or [],
+            # QR Ideal: `pedido` e `pedidos_modelos.id_int`, `modelo` e
+            # `pedidos_modelos.id`. Chegam do frontend porque so ele sabe de que
+            # pedido o trabalho veio; o motor so calcula.
+            pedido=data.get("pedido"),
+            modelo=data.get("modelo"),
+            pool_qr=_pool_qr_ou_none()
         )
 
         wants_stream = data.get("stream", False)

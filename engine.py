@@ -380,7 +380,10 @@ class ImpositionConfig:
                  refazer_de: int = 0,
                  refazer_ate: int = 0,
                  refazer_set: int = 1,
-                 refazer_celulas: list = None):
+                 refazer_celulas: list = None,
+                 pedido=None,
+                 modelo=None,
+                 pool_qr=None):
 
         self.base_file = base_file
         self.out_pdf = out_pdf
@@ -393,6 +396,15 @@ class ImpositionConfig:
         self.cut_stack_mode = cut_stack_mode
         self.sheets_per_block = sheets_per_block
         self.block_depth = block_depth
+
+        # QR Ideal: as duas chaves que dao o codigo de cada ingresso.
+        # `pedido` e `pedidos_modelos.id_int` e `modelo` e `pedidos_modelos.id`.
+        # Guardados como STRING sempre: o pedido 20270 vai invertido no QR e
+        # vira "07202" — como inteiro perderia o zero, viraria 7202, e o
+        # ingresso apontaria para outro pedido.
+        self.pedido = str(pedido).strip() if pedido not in (None, "") else None
+        self.modelo = str(modelo).strip() if modelo not in (None, "") else None
+        self.pool_qr = pool_qr
 
         self.has_cover = bool(formato.get("has_cover", False))
         self.cover_scale = float(formato.get("cover_scale", 80.0))
@@ -814,6 +826,60 @@ class ImpositionEngine:
             return arte_data.get("local_idx", item_index), arte_data.get("l_cam"), arte_data.get("c_ini"), arte_data.get("start_base")
         return item_index, None, None, None
 
+    def _multi_map_qr(self):
+        """A lista de artes, quando a folha mistura modelos. None caso contrario."""
+        cfg = self.cfg
+        if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0):
+            return cfg.multi_artes
+        return None
+
+    def _modelo_do_item(self, item_index: int, multi_map: list = None):
+        """O modelo (id de 7 digitos) deste item.
+
+        Numa folha `multi_artes` cada arte e um modelo diferente — e como um
+        modelo e um setor do evento, cada arte usa uma coluna diferente do
+        pool. Fora desse caso, o modelo e o do trabalho inteiro.
+        """
+        if multi_map and item_index < len(multi_map):
+            m = multi_map[item_index].get("modelo")
+            if m not in (None, ""):
+                return str(m).strip()
+        return self.cfg.modelo
+
+    def _conteudo_qr_ideal(self, val: int, item_index: int = None, item_data: dict = None):
+        """A string que vai gravada no QR deste ingresso, ou None se faltar dado.
+
+        `val` e o numero sequencial do item — o MESMO que a numeracao imprime.
+        Usar `val` e nao a posicao na folha e o que faz a reimpressao parcial
+        sair certa: refazer a celula 7 imprime o codigo do item 7, mesmo que
+        ele caia na primeira pose da folha compactada.
+
+        O modelo chega por dois caminhos, porque os laços de imposicao
+        identificam o item de dois jeitos: uns tem o indice e o mapa de artes,
+        outros ja tem a arte na mao (`item_data`).
+        """
+        cfg = self.cfg
+        if item_data is not None and item_data.get("modelo") not in (None, ""):
+            modelo = str(item_data["modelo"]).strip()
+        else:
+            modelo = self._modelo_do_item(item_index or 0, self._multi_map_qr())
+        if not cfg.pedido or not modelo or cfg.pool_qr is None:
+            return None
+        return cfg.pool_qr.conteudo(cfg.pedido, modelo, val)
+
+    def _injetar_qr_ideal(self, rotated_el: dict, val: int, item_index: int = None, item_data: dict = None):
+        """Poe o conteudo do QR Ideal no elemento, logo antes de desenhar.
+
+        Fica fora do `_render_element` porque so os lacos de imposicao sabem
+        de que arte aquele item veio — e numa folha `multi_artes` cada arte e
+        um modelo, portanto uma coluna diferente do pool.
+        """
+        if rotated_el.get("type") != "QR_IDEAL":
+            return
+        rotated_el["_qr_ideal_conteudo"] = self._conteudo_qr_ideal(
+            val, item_index=item_index, item_data=item_data
+        )
+
     def _render_element(self, page: fitz.Page, el: dict, cell_x0: float, cell_y0: float, val: int, csv_row: dict | None = None):
         """Renderiza um elemento VDP na posicao absoluta da celula."""
         # Guarda final: um elemento de Layout nunca chega ao papel. Os tres pontos
@@ -839,7 +905,7 @@ class ImpositionEngine:
             # Mas para o PyMuPDF, precisamos do ponto de insercao baseado no centro
             hh = font_size / 2.0
             # hw sera calculado depois para o text_length real
-        elif t == "QR":
+        elif t in ("QR", "QR_IDEAL"):
             s = el.get("_size", 42.5)
             hw = s / 2.0
             hh = s / 2.0
@@ -1133,6 +1199,25 @@ class ImpositionEngine:
         elif t == "QR":
             size = el.get("_size", 42.5)
             qr_bytes = _generate_qr(val_str, color)
+            rect = fitz.Rect(el_x, el_y, el_x + size, el_y + size)
+            py_rotate = (360 - angle) % 360
+            if py_rotate != 0:
+                page.insert_image(rect, stream=qr_bytes, rotate=py_rotate)
+            else:
+                page.insert_image(rect, stream=qr_bytes)
+
+        elif t == "QR_IDEAL":
+            # O conteudo e CALCULADO, nunca digitado. Quem injeta e o chamador,
+            # que e o unico que sabe o modelo daquele item numa folha multi_artes.
+            conteudo_qr = el.get("_qr_ideal_conteudo")
+            if not conteudo_qr:
+                raise ValueError(
+                    "QR Ideal sem pedido ou modelo: o trabalho nao pode ser "
+                    "impresso. Um QR em branco, ou calculado com valor suposto, "
+                    "so apareceria na portaria — quando ja nao da para consertar."
+                )
+            size = el.get("_size", 42.5)
+            qr_bytes = _generate_qr(conteudo_qr, color)
             rect = fitz.Rect(el_x, el_y, el_x + size, el_y + size)
             py_rotate = (360 - angle) % 360
             if py_rotate != 0:
@@ -2135,6 +2220,7 @@ class ImpositionEngine:
                             if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
                                 c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
                                 current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
+                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index)
                             self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
 
                     else:
@@ -2181,6 +2267,7 @@ class ImpositionEngine:
                             if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
                                 c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
                                 current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
+                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index)
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
                         if arte_nome:
@@ -2384,6 +2471,7 @@ class ImpositionEngine:
                                 N = item_ticket_qtd
                                 current_val = item_start_base + (item_local_idx * N) + (pos - 1)
 
+                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index)
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
                         # 2. Impor a pagina temporaria de verso na folha final
@@ -2656,6 +2744,7 @@ class ImpositionEngine:
                     c_c_ini = item_data.get("c_ini")
                     c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
+                self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
                 self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
             temp_doc = fitz.open()
@@ -2689,6 +2778,7 @@ class ImpositionEngine:
                     c_c_ini = item_data.get("c_ini")
                     c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
+                self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
                 self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
             if arte_nome:
@@ -2811,6 +2901,7 @@ class ImpositionEngine:
                     c_c_ini = item_data.get("c_ini")
                     c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
+                self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
                 self._render_element(out_page_back, rotated_el, cell_x0, cell_y0, current_val, csv_row)
         else:
             temp_doc = fitz.open()
@@ -2844,6 +2935,7 @@ class ImpositionEngine:
                     c_c_ini = item_data.get("c_ini")
                     c_start = item_data.get("start_base")
                     current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
+                self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
                 self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
             if arte_nome:
