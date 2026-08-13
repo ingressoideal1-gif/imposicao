@@ -10,22 +10,20 @@
 --   Supabase → SQL Editor → cole tudo → Run. Leva menos de um segundo, e a
 --   tabela está vazia, então não há dado para migrar. Pode rodar duas vezes.
 --
--- POR QUE
+-- POR QUE — E O QUE ESTA MIGRAÇÃO **NÃO** CONSERTA
 --
---   O agente publica a faixa de códigos em lotes, e a publicação precisa ser
---   REPETÍVEL: se a rede cair no meio, ele reenvia o lote inteiro sem duplicar
---   nada. Quem garante isso é o `ON CONFLICT` do Postgres, que o PostgREST
---   expõe como `?on_conflict=codigo_hash`.
+--   Ela é limpeza, não conserto. A primeira versão deste arquivo dizia que a
+--   publicação em lote quebraria com o índice de duas expressões, porque o
+--   `?on_conflict=codigo_hash` não casaria com ele. **Testei contra o banco em
+--   13/08/2026 e isso é falso**: a gravação funciona, e três envios do mesmo
+--   lote deixam uma linha só. O texto ficou aqui para ninguém refazer o
+--   raciocínio achando que já está conferido.
 --
---   Só que o Postgres exige que a lista do ON CONFLICT case EXATAMENTE com a de
---   algum índice único. O índice criado no schema_acesso.sql tem dois elementos
---   — `producao_acesso_empresa(empresa_id)` e `codigo_hash` —, então
---   `ON CONFLICT (codigo_hash)`, com um elemento só, nunca casaria. E o
---   PostgREST só aceita nome de coluna no parâmetro, não expressão: não há como
---   escrever o índice inteiro na URL.
+--   O que sobra, e que ainda vale a pena: a chave certa da credencial é o
+--   `codigo_hash` sozinho, e ter os dois índices é peso morto — o de duas
+--   expressões nunca vai barrar nada que o simples já não barre.
 --
---   O resultado seria a publicação falhar inteira, com um erro obscuro sobre
---   "no unique or exclusion constraint matching the ON CONFLICT specification".
+--   Se você não rodar esta migração, nada quebra.
 --
 -- POR QUE PODE SER SÓ codigo_hash
 --

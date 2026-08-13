@@ -308,23 +308,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_acesso_setor_por_modelo
 -- A mesma credencial não pode ser gravada duas vezes. Também é o que torna a
 -- publicação da faixa idempotente: reenviar o lote não duplica nada.
 --
--- COLUNA SIMPLES, e não a expressão com empresa_id que as duas acima usam. São
--- duas razões, e a segunda é obrigatória:
+-- COLUNA SIMPLES, e não a expressão com empresa_id que as duas acima usam.
 --
---   1. O hash já é único sem o empresa_id, e não por sorte: o sal é sorteado
---      POR PEDIDO, e número de pedido não se repete. Duas empresas nunca
---      partiriam do mesmo sal. Nas outras duas tabelas o empresa_id de fato
---      separa, porque lá o pedido e o modelo PODEM se repetir entre empresas.
+-- O hash já é único sem o empresa_id, e não por sorte: o sal é sorteado POR
+-- PEDIDO, e número de pedido não se repete. Duas empresas nunca partiriam do
+-- mesmo sal. Nas outras duas tabelas o empresa_id de fato separa, porque lá o
+-- pedido e o modelo PODEM se repetir entre empresas.
 --
---   2. A publicação em lote usa `?on_conflict=codigo_hash`, e o Postgres exige
---      que a lista do ON CONFLICT case exatamente com a de algum índice único.
---      Um índice de dois elementos nunca casaria com um ON CONFLICT de um, e o
---      PostgREST não aceita expressão no parâmetro. A publicação falharia
---      inteira, com erro obscuro sobre "no unique or exclusion constraint
---      matching the ON CONFLICT specification".
+-- NOTA HONESTA. A primeira versão deste comentário afirmava uma segunda razão:
+-- que a publicação em lote, que usa `?on_conflict=codigo_hash`, quebraria com um
+-- índice de duas expressões. **Isso foi testado contra o banco em 13/08/2026 e é
+-- falso** — a gravação funcionou e três envios do mesmo lote deixaram uma linha
+-- só. Ficou registrado aqui para ninguém repetir o raciocínio achando que é
+-- conhecido. A coluna simples continua sendo a chave certa, pelo primeiro
+-- motivo; só não é obrigatória pelo segundo.
 --
--- Quem já rodou a versão anterior deste arquivo aplica a migração
--- `schema_acesso_02_credencial_hash_unico.sql`, que troca um índice pelo outro.
+-- Quem já rodou a versão anterior deste arquivo pode aplicar a migração
+-- `schema_acesso_02_credencial_hash_unico.sql`, que só faz limpeza do índice
+-- redundante.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_acesso_credencial_hash_simples
     ON producao_acesso_credenciais (codigo_hash);
 
