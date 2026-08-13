@@ -17350,8 +17350,41 @@ async function carregarModelosGlobais() {
             state.modelosGlobais[m.id_int].push(m);
         });
         console.log(`[Modelos] ${todosModelos.length} modelos carregados globalmente para contagem.`);
+        conferirColunasQrIdealDosPedidos();
     } catch (e) {
         console.warn('[Modelos] Erro ao carregar modelos globais:', e.message);
+    }
+}
+
+/**
+ * Avisa quando dois modelos do mesmo pedido caem na mesma coluna do pool do
+ * QR Ideal.
+ *
+ * Dois modelos cujos `id` diferem em exatamente 100 recebem os MESMOS códigos,
+ * e como o número do pedido gravado no QR é o mesmo para os dois, nada os
+ * separa: sairiam dois ingressos idênticos no mesmo evento. O motor recusa a
+ * folha quando isso acontece dentro de um trabalho, mas só o painel conhece o
+ * pedido inteiro — é aqui que dá para avisar antes de alguém imprimir.
+ */
+function conferirColunasQrIdealDosPedidos() {
+    if (typeof window.conferirColunasQrIdeal !== 'function') return;
+    const avisados = [];
+    Object.keys(state.modelosGlobais || {}).forEach((pedido) => {
+        const modelos = (state.modelosGlobais[pedido] || []).map(m => m.id);
+        if (modelos.length < 2) return;
+        const choques = window.conferirColunasQrIdeal(pedido, modelos);
+        choques.forEach(c => avisados.push(
+            `pedido ${pedido}, coluna ${c.coluna}: modelos ${c.modelos.join(' e ')}`
+        ));
+    });
+    if (!avisados.length) return;
+    console.warn('[QR Ideal] choque de coluna:', avisados);
+    if (typeof showToast === 'function') {
+        showToast(
+            `⚠️ QR Ideal — ${avisados.join('; ')}. Estes modelos gerariam ingressos ` +
+            `com o mesmo código no mesmo evento. Não imprimir com QR Ideal antes de resolver.`,
+            'error'
+        );
     }
 }
 
