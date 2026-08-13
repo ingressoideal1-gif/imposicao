@@ -589,12 +589,25 @@
         // aparecia uma moldura em volta de toda foto que ninguém tinha pedido.
         var esp = Number(el.border_mm) || 0;
         if (esp > 0) {
-            // `S` é px por mm: a espessura acompanha o zoom da janela, como
-            // qualquer outra medida da arte.
+            // O contorno mora DENTRO da janela, nunca para fora dela — a mesma
+            // regra do `engine.py`, e a razão é a mesma: a foto tem de ficar por
+            // baixo da moldura, sem escapar por nenhum lado.
+            //
+            // O jeito de garantir isso é traçar CENTRADO na borda da janela com
+            // o DOBRO da espessura e recortar pela própria janela: a metade de
+            // fora vai embora e sobra exatamente `esp` para dentro. Assim a
+            // borda externa do traço é, por construção, a mesma curva que
+            // recorta a foto — inclusive no canto arredondado, onde qualquer
+            // caminho recuado teria raio menor e deixaria a foto aparecer por
+            // fora ao longo da curva. `S` é px por mm.
+            ctx.save();
+            caminhoDaJanela(ctx, el, -hw, -hh, w, h);
+            ctx.clip();
             ctx.strokeStyle = el.border_color || '#000000';
-            ctx.lineWidth = Math.max(0.5, esp * S);
+            ctx.lineWidth = Math.max(1, esp * S * 2);
             caminhoDaJanela(ctx, el, -hw, -hh, w, h);
             ctx.stroke();
+            ctx.restore();
         }
 
         // Seleção: só no editor, e nunca no papel.

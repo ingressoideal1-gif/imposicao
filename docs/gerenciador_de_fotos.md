@@ -31,6 +31,25 @@ paleta do editor de numeração. Nasce em 25 × 32 mm — a 3×4 de credencial �
 | `corner` | `square`, `round` ou `circle`. Canto arredondado ou círculo **recorta de verdade no papel**: a janela é rasterizada e entra com máscara, porque recorte por caminho não existe no `show_pdf_page`. O custo só aparece para quem escolhe o canto redondo |
 | `border_mm` / `border_color` | contorno **impresso**, em milímetros e na cor escolhida. Zero é o padrão: a janela não ganha moldura que ninguém pediu |
 
+**O contorno mora dentro da janela, e a foto fica por baixo dele.** O elemento
+ocupa exatamente `width_mm × height_mm`; a moldura come a faixa mais externa
+desse retângulo, para dentro. Nem na tela nem no papel ela cresce para fora.
+
+O jeito de garantir isso é o mesmo nos dois lados: traçar **centrado na borda da
+janela, com o dobro da espessura**, e deixar a metade de fora ser aparada — pela
+página da janela no `engine.py`, pelo `clip` no `foto-lib.js`. Sobra exatamente
+`border_mm` para dentro, e a borda externa do traço passa a ser, **por
+construção**, a mesma curva que recorta a foto.
+
+Isso não é elegância: é a correção de um defeito real. O contorno era desenhado
+num retângulo recuado meia espessura, e o raio do canto arredondado desse
+retângulo saía menor e deslocado em relação ao raio da máscara — 2,76 mm contra
+3,0 mm numa janela 25×32 com contorno de 2 mm. Nas retas os dois coincidiam, e
+por isso todos os testes passavam; **ao longo da curva sobrava meio milímetro de
+foto do lado de fora da moldura**. O teste que segura isso agora
+(`test_contorno_nao_deixa_a_foto_escapar_no_canto`) varre linha a linha e exige
+que, vindo do papel para dentro, quem apareça primeiro seja sempre o contorno.
+
 O elemento é desenhado por `desenharElementoFoto()`, no `foto-lib.js`, chamada
 pelos **dez** pontos de desenho do app:
 

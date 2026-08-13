@@ -213,6 +213,58 @@ def test_contorno_pedido_aparece_na_cor_e_espessura(foto_metades):
     assert meio["verde"] < sum(meio.values()) * 0.05
 
 
+def _primeira_tinta_da_linha(pix, py, x0_pt, x1_pt, do_fim=False):
+    """Primeira cor reconhecivel encontrada varrendo a linha para dentro.
+
+    Ignora o branco do papel e as misturas de anti-aliasing: interessa apenas
+    quem chega primeiro — o contorno ou a foto.
+    """
+    f = pix.width / PAG_W
+    faixa = range(int(x0_pt * f) - 12, int(x1_pt * f) + 12)
+    for px in (reversed(faixa) if do_fim else faixa):
+        if px < 0 or px >= pix.width:
+            continue
+        r, g, b = pix.pixel(px, py)[:3]
+        if g > 120 and r < 150 and b < 120:
+            return "contorno"
+        if r > 150 and g < 100 and b < 100:
+            return "foto"
+        if b > 150 and r < 100 and g < 100:
+            return "foto"
+    return None
+
+
+@pytest.mark.parametrize("canto", ["round", "circle"])
+def test_contorno_nao_deixa_a_foto_escapar_no_canto(foto_metades, canto):
+    """A foto fica POR BAIXO do contorno, sem ultrapassa-lo em lugar nenhum.
+
+    O caso real: o contorno era desenhado recuado meia espessura, entao o raio
+    do canto do traco saia menor e deslocado em relacao ao raio da mascara que
+    recorta a foto (2,76 mm contra 3,0 mm numa janela 25x32 com contorno de
+    2 mm). Nas retas os dois coincidiam — e por isso todos os testes passavam —,
+    mas ao longo da curva sobrava meio milimetro de foto do lado de fora da
+    moldura. Numa credencial impressa, e a foto passando por cima da borda.
+
+    A varredura e linha a linha: quem aparece primeiro, vindo do papel para
+    dentro, tem de ser SEMPRE o contorno.
+    """
+    el, linha = _el(foto_metades, corner=canto, border_mm=2, border_color="#00C800")
+    doc, page, pix = _pintar(el, linha)
+    x0, y0, x1, y1 = _janela_pt()
+    f = pix.height / PAG_H
+
+    vazamentos = []
+    for py in range(int(y0 * f) + 2, int(y1 * f) - 2):
+        for do_fim in (False, True):
+            quem = _primeira_tinta_da_linha(pix, py, x0, x1, do_fim)
+            if quem == "foto":
+                vazamentos.append((py, "direita" if do_fim else "esquerda"))
+    assert not vazamentos, (
+        f"canto '{canto}': a foto aparece fora do contorno em "
+        f"{len(vazamentos)} linha(s), a primeira em {vazamentos[0]}"
+    )
+
+
 def test_canto_circulo_recorta_de_verdade(foto_metades):
     """Circulo na tela tem de ser circulo no papel.
 

@@ -19,6 +19,15 @@ Quem mexe numa mexe na outra, e prova nos dois lados:
 `tests/test_engine_foto.py` (mede pixel da página rasterizada) e
 `tests/foto_lib_harness.js` (mede a geometria em node).
 
+Corolário do canto arredondado: **quem desenha o contorno e quem recorta a foto
+têm de produzir a MESMA curva.** Não basta usarem o mesmo raio nominal — um
+retângulo recuado meia espessura tem raio menor e centro deslocado, e ao longo da
+curva sobra foto do lado de fora da moldura (meio milímetro numa janela 25×32 com
+contorno de 2 mm). Nas retas coincide, então medir faixa reta não pega nada: o
+traço vai **centrado na borda da janela com o dobro da espessura**, e a metade de
+fora é aparada pelo mesmo recorte que a foto — aí a concentricidade é por
+construção, não por conta batida.
+
 ## 2. O cache de imagem é por URL, nunca por elemento
 
 O objeto do elemento é o **mesmo** para todos os modelos que dividem a numeração

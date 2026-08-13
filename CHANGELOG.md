@@ -8,6 +8,29 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [não publicado] — A foto escapava por fora do contorno no canto arredondado
+
+Com contorno e canto arredondado, a foto aparecia **por cima da moldura** ao
+longo da curva dos cantos — meio milímetro de foto do lado de fora do traço.
+
+A causa: o contorno era desenhado num retângulo recuado meia espessura, e o raio
+do canto desse retângulo saía menor e deslocado em relação ao raio da máscara que
+recorta a foto — 2,76 mm contra 3,0 mm numa janela 25×32 com contorno de 2 mm.
+Nas retas os dois coincidiam, e é por isso que nenhum teste pegou: todos mediam
+faixas retas.
+
+Agora o traço vai **centrado na borda da janela com o dobro da espessura**, e a
+metade de fora é aparada pela própria janela — pela página no `engine.py`, pelo
+`clip` no `foto-lib.js`. Sobra exatamente a espessura pedida para dentro, e a
+borda externa do contorno passa a ser, por construção, a mesma curva que recorta
+a foto. De quebra, a tela e o papel passaram a concordar: antes o contorno da
+tela crescia meia espessura **para fora** do retângulo do elemento.
+
+O teste novo varre linha a linha e exige que, vindo do papel para dentro, quem
+apareça primeiro seja sempre o contorno. Ele falha no motor antigo em 60 linhas.
+
+---
+
 ## [não publicado] — Ampliar a tela da foto e completar o fundo
 
 A foto que chega **enquadrada demais** é o problema mais comum de credencial:

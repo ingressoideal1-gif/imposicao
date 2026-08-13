@@ -1208,27 +1208,38 @@ class ImpositionEngine:
                 )
 
                 # Contorno: e arte, nao enfeite de tela. Desenhado DENTRO da
-                # pagina da janela, recuado meia espessura para nao ter metade do
-                # traco cortada pela borda da pagina — e assim ele acompanha a
-                # rotacao do elemento junto com a foto.
+                # pagina da janela, para acompanhar a rotacao do elemento junto
+                # com a foto.
+                #
+                # O traco vai CENTRADO na borda da janela e com o DOBRO da
+                # espessura: a metade de fora e aparada pela propria pagina (e,
+                # no canto redondo, pela mascara), sobrando exatamente `esp`
+                # para dentro. O ganho nao e economia de codigo — e que a borda
+                # externa do contorno passa a ser, por construcao, a MESMA curva
+                # que recorta a foto.
+                #
+                # Antes o retangulo era recuado meia espessura, e o raio do seu
+                # canto saia menor e deslocado em relacao ao raio da mascara
+                # (2,76 mm contra 3,0 mm numa janela 25x32 com contorno de
+                # 2 mm). Nas retas os dois coincidiam; ao longo da curva sobrava
+                # ate meio milimetro de FOTO do lado de fora do contorno. Numa
+                # credencial, isso e a foto passando por cima da moldura.
                 esp = float(el.get("border_mm", 0) or 0) * MM2PT
                 canto = str(el.get("corner", "square") or "square").lower()
                 if esp > 0:
                     cor = _hex_to_rgb(el.get("border_color", "#000000") or "#000000")
-                    meia = esp / 2.0
-                    r_borda = fitz.Rect(meia, meia, w_pt - meia, h_pt - meia)
+                    r_borda = fitz.Rect(0, 0, w_pt, h_pt)
                     if canto == "circle":
-                        pj.draw_oval(r_borda, color=cor, width=esp)
+                        pj.draw_oval(r_borda, color=cor, width=esp * 2)
                     else:
                         try:
-                            raio = min(w_pt, h_pt) * 0.12 if canto == "round" else 0
-                            if raio:
-                                pj.draw_rect(r_borda, color=cor, width=esp, radius=0.12)
+                            if canto == "round":
+                                pj.draw_rect(r_borda, color=cor, width=esp * 2, radius=0.12)
                             else:
-                                pj.draw_rect(r_borda, color=cor, width=esp)
+                                pj.draw_rect(r_borda, color=cor, width=esp * 2)
                         except (TypeError, ValueError):
                             # PyMuPDF sem `radius`: canto reto e melhor que erro.
-                            pj.draw_rect(r_borda, color=cor, width=esp)
+                            pj.draw_rect(r_borda, color=cor, width=esp * 2)
 
                 rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
                 py_rotate = _graus_90(360 - angle)
