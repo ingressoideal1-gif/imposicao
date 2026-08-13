@@ -199,7 +199,29 @@ ciclo com quem enviou o lote.
 
 A queima 350→300 acontece no Gravar, e não na importação, para preservar a
 folga de 30% enquanto o operador ainda enquadra. Ela só vale para fotos que já
-iam subir (novas, trocadas, editadas): as antigas do banco não pagam reupload.
+iam subir (novas, trocadas, editadas): as antigas do banco não pagam reupload —
+é a condição `f.blob`, e `dpiEmExcesso()` repete exatamente essa condição, de
+propósito, para que o contador da tela não prometa uma redução que não vai
+acontecer.
+
+**Onde a queima aparece.** Ela é automática e não tem botão, então precisa de
+voz — sem isso o operador não descobre que existe, e já veio perguntar onde
+estava. São três lugares, todos escritos por `atualizarReguaDeDpi()` e
+`seloDpi()`:
+
+- a **faixa fixa** logo abaixo da barra da folha de contato, que diz a regra
+  mesmo com contagem zero (`⤓ Acima de 350 dpi o Gravar reduz para 300
+  dpi automaticamente — nenhuma foto deste lote está acima`) e acende em azul
+  com a contagem viva quando há alguma;
+- o **selo do cartão**, que passa de `390 dpi` para `390 dpi · ⤓ 300 no Gravar`
+  em azul antes, e `300 dpi · reduzida` depois;
+- o **aviso do Gravar**, que soma quantas subiram reamostradas.
+
+Como a importação já normaliza para 300 dpi **com 30% de folga**, uma foto
+recém-importada chega a 390 dpi: acima do teto. Ou seja, a faixa acende na
+importação por definição, e o que ela está dizendo é "a folga que você não usou
+para aproximar vai embora no Gravar". Zoom de 1,15× ou mais consome a folga e a
+faixa se apaga sozinha.
 
 O botão **⬆ Interpolar fracas até 200 dpi** é fixo na barra da folha de contato
 e conta as fracas ao vivo. Interpolar suaviza o serrilhado — não recupera
@@ -225,19 +247,80 @@ navegador — nada sobe para editar, o envio continua acontecendo só no Gravar:
 - **remover fundo**: um modelo de segmentação leve (u2netp, Apache-2.0, ~4 MB)
   separa a pessoa e compõe sobre a cor escolhida — o clássico da foto 3×4 com
   fundo bagunçado
+- **ampliar a tela**: cresce a moldura e completa o fundo que passou a faltar
 
-O modelo mora no **nosso Storage**
-(`agent-releases/modelos/u2netp.onnx`, subido e conferido por sha256 pela
-ferramenta `ferramentas/subir_modelo_fundo.ps1`) — nunca no GitHub: asset de
-release não manda CORS e a produção não pode depender de github.com no ar. O
+#### Ampliar a tela (mais fundo em volta)
+
+O problema que ela resolve é o mais comum de credencial: a foto chega
+**enquadrada demais**. Não sobra fundo para o recorte da janela, e a única saída
+antes disto era cortar mais — ou seja, cortar o ombro, ou o alto da cabeça.
+Ampliar inverte a conta: a moldura cresce e a foto inteira cabe.
+
+Dois caminhos, no mesmo bloco:
+
+| botão | o que faz |
+|---|---|
+| **⤢ Ampliar** | margem igual dos quatro lados, em % do **menor** lado (numa 3×4, usar o próprio lado deixaria a moldura visivelmente mais grossa em cima e embaixo) |
+| **⧉ Caber na janela** | cresce **só o eixo que falta** até a foto ficar na proporção da janela desta credencial: nada é cortado, e o rosto continua centrado onde estava |
+
+E três maneiras de completar o que ficou vazio:
+
+- **Borda esticada** (instantânea): estica a linha e a coluna da borda para
+  fora. É a melhor para parede, fundo de estúdio e degradê — continua a cor
+  exata do encontro, sem repetir forma nenhuma.
+- **Espelhado** (instantânea): reflete a foto nos quatro lados e nos quatro
+  cantos. Preserva textura (folhagem, tijolo), ao custo da simetria.
+- **IA** (LaMa, Apache-2.0, 88 MB): inventa o fundo de verdade.
+
+Três decisões de desenho que não devem ser desfeitas sem pensar:
+
+1. **Só o anel novo vem do modelo.** O LaMa tem entrada fixa de 512×512, então
+   a tela inteira é reduzida a 512 para ele olhar. Se a saída dele virasse a
+   foto, o trabalho sairia com 512 px de resolução. Não vira: o resultado é
+   recortado pela máscara e colado **apenas na moldura**, com a costura
+   suavizada. Todo pixel que veio da câmera continua com a resolução que tinha —
+   e o driver de teste prova isso comparando pixels do rosto e do ombro antes e
+   depois.
+2. **O borrão do anel acontece antes de a foto entrar.** O fundo inventado cobre
+   a tela toda, é borrado, e só então a foto original é colada por cima,
+   inteira. Assim o borrão nunca encosta num pixel original.
+3. **O fundo sem borrão fica por baixo** (`destination-over`). O filtro de
+   desfoque chupa transparência de fora da tela e deixa a beirada
+   semitransparente, que no JPEG final vira uma **vinheta preta**. Já aconteceu;
+   o teste pega pelo canal alfa das quatro beiradas.
+
+O tempo da IA é o que decide se ela serve: **~20 s por foto** só no
+processador (a página não é isolada por origem, então o WASM roda em uma thread
+só — isolá-la quebraria o Supabase e os CDNs), e poucos segundos onde há
+**WebGPU**, que é tentado primeiro e cai para o processador sozinho. Os dois
+modos instantâneos existem exatamente para o operador não precisar dessa espera
+quando o fundo é liso. A mensagem na tela diz os dois números antes de começar.
+
+O modelo de completar é baixado uma vez e guardado no **Cache Storage** do
+navegador (`ideal-modelos-ia`), não só no cache HTTP: 88 MB rebaixados no meio
+de um trabalho porque o navegador resolveu limpar a casa seria inaceitável.
+Sobe pela ferramenta `ferramentas/subir_modelo_completar.ps1`, com a mesma
+conferência de sha256.
+
+A função `inpaintarRegiao(tela, mascara)` recebe qualquer máscara. Ampliar é só
+o primeiro uso: um pincel de **eliminar objetos** é a mesma máquina com outra
+máscara, e é o passo seguinte natural.
+
+Os modelos moram no **nosso Storage**
+(`agent-releases/modelos/`, subidos e conferidos por sha256 pelas ferramentas
+`ferramentas/subir_modelo_fundo.ps1` e `subir_modelo_completar.ps1`) — nunca no
+GitHub nem no Hugging Face: asset de release não manda CORS e a produção não
+pode depender de site de terceiro estar no ar. Trocar de modelo exige **nome de
+arquivo novo**: o Storage fica atrás do CDN da Cloudflare, e reusar o nome faz a
+borda continuar servindo o arquivo antigo. O
 runtime (onnxruntime-web) vem do jsDelivr, o mesmo CDN de que o app já depende.
 Se qualquer um dos dois faltar, o botão se declara indisponível e o resto do
 editor segue funcionando.
 
 Aplicar gera um arquivo novo (hash novo) que substitui o da pessoa **mantendo o
-enquadramento** — mesmo encanamento do 🔁 trocar. As operações **generativas**
-(eliminar objetos, completar fundo) ficam para a fase da API externa, com
-provedor e orçamento a escolher.
+enquadramento** — mesmo encanamento do 🔁 trocar. **Eliminar objetos com
+pincel** continua sem interface; a API externa só ficaria necessária para
+edições que peçam um modelo generativo grande demais para a estação.
 
 ### 4. Folha de contato
 

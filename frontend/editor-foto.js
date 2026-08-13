@@ -11,9 +11,16 @@
      · reamostrar por dpi-na-janela
      · remover o fundo (modelo de segmentação leve, baixado uma vez) e
        preencher com uma cor — o clássico da foto 3×4 com fundo bagunçado
+     · AMPLIAR a tela e completar o fundo que passou a faltar, por borda
+       esticada, espelho ou IA (LaMa, modelo de inpainting Apache-2.0)
 
-   As operações GENERATIVAS (eliminar objetos, completar fundo) ficam para a
-   fase da API externa: exigem modelo generativo, que não roda nas estações.
+   A foto que chega enquadrada demais é o problema mais comum de credencial: não
+   sobra fundo para o recorte da janela, e cortar mais significa cortar o ombro
+   ou a cabeça. Ampliar a tela inverte isso — a foto inteira cabe, e o que falta
+   é inventado só na moldura.
+
+   Eliminar objetos com pincel usa a mesma máquina (`inpaintarRegiao`) e é o
+   passo seguinte natural; ele ainda não tem interface.
 
    API:
      window.abrirEditorDeFoto({
@@ -67,6 +74,7 @@
   padding:6px 10px;border-radius:6px;font-size:12px;display:none}
 #ef-cv{cursor:crosshair}
 .ef-num{width:64px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:4px 6px;font-size:12px}
+.ef-sel{flex:1;min-width:0;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:4px 6px;font-size:12px}
 `;
 
     function el(id) { return document.getElementById(id); }
@@ -284,6 +292,154 @@
         desenhar();
     }
 
+    // ── ampliar a tela (mais fundo em volta) ──────────────────────────────
+
+    /**
+     * Margens iguais dos quatro lados, em pixels, para uma ampliação de `pct`
+     * por cento. A conta é sobre o MENOR lado de propósito: usando o próprio
+     * lado de cada eixo, uma foto 3×4 ganharia uma moldura visivelmente mais
+     * grossa em cima e embaixo do que nas laterais.
+     */
+    function margensUniformes(pct) {
+        var m = Math.max(1, Math.round(Math.min(base.width, base.height) * pct / 100));
+        return { topo: m, dir: m, baixo: m, esq: m };
+    }
+
+    /**
+     * Margens que fazem a foto INTEIRA caber na janela sem corte nenhum.
+     *
+     * A janela recorta o que sobra (`fit: cover`), então basta igualar a
+     * proporção: só o eixo que está faltando cresce, e ele cresce metade para
+     * cada lado, para o rosto continuar centrado onde estava.
+     */
+    function margensParaCaberNaJanela() {
+        var zero = { topo: 0, dir: 0, baixo: 0, esq: 0 };
+        if (!cfg || !cfg.janela || !cfg.janela.w_mm || !cfg.janela.h_mm) return zero;
+        var alvo = cfg.janela.w_mm / cfg.janela.h_mm;
+        var atual = base.width / base.height;
+        if (Math.abs(alvo - atual) < 0.005) return zero;
+        if (atual > alvo) {
+            var falta = Math.round((base.width / alvo - base.height) / 2);
+            return { topo: falta, dir: 0, baixo: falta, esq: 0 };
+        }
+        var f = Math.round((base.height * alvo - base.width) / 2);
+        return { topo: 0, dir: f, baixo: 0, esq: f };
+    }
+
+    /**
+     * Cobre a tela inteira com um fundo inventado a partir da própria foto.
+     * Cobre inclusive onde a foto original vai entrar — quem chama desenha a
+     * foto por cima depois, e é isso que garante que ela saia daqui com todos
+     * os pixels que tinha.
+     *
+     *   'borda'   — estica a linha/coluna da borda para fora. É o melhor para
+     *               fundo de estúdio, parede e degradê: continua a cor exata do
+     *               encontro, sem repetir forma nenhuma.
+     *   'espelho' — reflete a foto nos quatro lados e nos quatro cantos.
+     *               Preserva textura (folhagem, tijolo), ao custo da simetria.
+     */
+    function preencherFundo(ctx, larg, alt, m, modo) {
+        var w = base.width, h = base.height, x = m.esq, y = m.topo;
+
+        if (modo === 'espelho') {
+            // Nove ladrilhos. O truque de cada reflexo é a âncora: com
+            // scale(-1) o desenho cresce para a ESQUERDA do ponto transladado,
+            // então a aba da esquerda ancora em x (e cobre x-w..x) e a da
+            // direita ancora em x+2w (e cobre x+w..x+2w). Desenhar em (0,0)
+            // nos dois casos é o que faz a conta fechar.
+            for (var col = -1; col <= 1; col++) {
+                for (var lin = -1; lin <= 1; lin++) {
+                    ctx.save();
+                    ctx.translate(x + (col === 1 ? 2 * w : 0), y + (lin === 1 ? 2 * h : 0));
+                    ctx.scale(col === 0 ? 1 : -1, lin === 0 ? 1 : -1);
+                    ctx.drawImage(base, 0, 0);
+                    ctx.restore();
+                }
+            }
+            return;
+        }
+
+        var dir = larg - (x + w), baixo = alt - (y + h);
+        if (y > 0) ctx.drawImage(base, 0, 0, w, 1, x, 0, w, y);
+        if (baixo > 0) ctx.drawImage(base, 0, h - 1, w, 1, x, y + h, w, baixo);
+        if (x > 0) ctx.drawImage(base, 0, 0, 1, h, 0, y, x, h);
+        if (dir > 0) ctx.drawImage(base, w - 1, 0, 1, h, x + w, y, dir, h);
+        if (x > 0 && y > 0) ctx.drawImage(base, 0, 0, 1, 1, 0, 0, x, y);
+        if (dir > 0 && y > 0) ctx.drawImage(base, w - 1, 0, 1, 1, x + w, 0, dir, y);
+        if (x > 0 && baixo > 0) ctx.drawImage(base, 0, h - 1, 1, 1, 0, y + h, x, baixo);
+        if (dir > 0 && baixo > 0) ctx.drawImage(base, w - 1, h - 1, 1, 1, x + w, y + h, dir, baixo);
+    }
+
+    /**
+     * Canvas alfa com o ANEL novo opaco e o retângulo da foto transparente —
+     * é o "buraco a preencher" na linguagem do modelo de inpainting, e o
+     * recorte do borrão nos modos instantâneos.
+     *
+     * `avanco` come alguns pixels para dentro da foto: a costura fica coberta,
+     * em vez de virar uma linha visível no encontro do inventado com o real.
+     */
+    function mascaraDoAnel(larg, alt, m, avanco, suavizar) {
+        var mk = canvasDe(larg, alt);
+        var c = mk.getContext('2d');
+        c.fillStyle = '#ffffff';
+        c.fillRect(0, 0, larg, alt);
+        c.globalCompositeOperation = 'destination-out';
+        if (suavizar) c.filter = 'blur(' + suavizar + 'px)';
+        c.fillRect(m.esq + avanco, m.topo + avanco,
+            Math.max(1, base.width - 2 * avanco), Math.max(1, base.height - 2 * avanco));
+        return mk;
+    }
+
+    /**
+     * Amplia a tela e completa o que passou a faltar.
+     *
+     * A ordem importa: o fundo inventado cobre a tela inteira e é borrado
+     * ANTES de a foto entrar. Assim o borrão nunca encosta num pixel original
+     * — a foto é colada por cima, inteira, no fim.
+     */
+    async function ampliar(m, modo) {
+        if (!base) { aviso('A foto ainda não carregou.'); return; }
+        if (!m.topo && !m.dir && !m.baixo && !m.esq) {
+            aviso('Não há o que ampliar: a foto já está na proporção da janela.');
+            return;
+        }
+        assarAjustes();
+
+        var larg = base.width + m.esq + m.dir;
+        var alt = base.height + m.topo + m.baixo;
+
+        var fundo = canvasDe(larg, alt);
+        var fc = fundo.getContext('2d');
+        fc.imageSmoothingQuality = 'high';
+        preencherFundo(fc, larg, alt, m, modo === 'espelho' ? 'espelho' : 'borda');
+
+        var maior = Math.max(m.topo, m.dir, m.baixo, m.esq);
+        var raio = Math.max(1, Math.min(24, Math.round(maior / 8)));
+        var borrado = canvasDe(larg, alt);
+        var bc = borrado.getContext('2d');
+        bc.filter = 'blur(' + raio + 'px)';
+        bc.drawImage(fundo, 0, 0);
+
+        var novo = canvasDe(larg, alt);
+        var ctx = novo.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(borrado, 0, 0);
+        // O borrão chupa transparência de fora da tela e deixa a beirada
+        // semitransparente — que no JPEG final vira uma vinheta preta. O fundo
+        // sem borrão por baixo tapa exatamente essa faixa, com a mesma cor.
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.drawImage(fundo, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+
+        ctx.drawImage(base, m.esq, m.topo);
+
+        if (modo === 'ia') await completarComIa(novo, m);
+
+        base = novo;
+        recorte = null;   // as frações do recorte eram da tela antiga
+        desenhar();
+    }
+
     // ── remover fundo (modelo leve, baixado uma vez) ──────────────────────
 
     var ORT_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/';
@@ -291,8 +447,10 @@
     // navegador recusa), e a producao nao pode depender de github.com no ar.
     // Subido e conferido por sha256 pela ferramenta subir_modelo_fundo.ps1;
     // para trocar de modelo, suba com OUTRO nome (CDN da Cloudflare na frente).
-    var MODELO_URL = 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/modelos/u2netp.onnx';
-    var modeloSessao = null;
+    var MODELOS = 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/modelos/';
+    var MODELO_FUNDO = MODELOS + 'u2netp.onnx';          // segmentar a pessoa (4 MB)
+    var MODELO_COMPLETAR = MODELOS + 'lama-inpaint-512.onnx';  // completar buraco (92 MB)
+    var sessoes = {};
 
     function carregarOrt() {
         if (window.ort) return Promise.resolve();
@@ -308,16 +466,133 @@
         });
     }
 
-    async function carregarModelo() {
-        if (modeloSessao) return modeloSessao;
+    /**
+     * Bytes do modelo, guardados no Cache Storage do navegador.
+     *
+     * O de completar tem 92 MB. Depender só do cache HTTP significaria
+     * rebaixá-lo toda vez que o navegador decidisse limpar a casa — e o
+     * operador esperaria de novo, no meio de um trabalho. O Cache Storage
+     * sobrevive a isso. Onde ele não existe (janela sem contexto seguro), o
+     * download direto continua valendo.
+     */
+    async function bytesDoModelo(url) {
+        try {
+            var cache = await caches.open('ideal-modelos-ia');
+            var guardado = await cache.match(url);
+            if (guardado) return new Uint8Array(await guardado.arrayBuffer());
+            var resp = await fetch(url);
+            if (!resp.ok) throw new Error('o modelo respondeu ' + resp.status);
+            try { await cache.put(url, resp.clone()); } catch (e) { }
+            return new Uint8Array(await resp.arrayBuffer());
+        } catch (e) {
+            var r = await fetch(url);
+            if (!r.ok) throw new Error('o modelo respondeu ' + r.status);
+            return new Uint8Array(await r.arrayBuffer());
+        }
+    }
+
+    /**
+     * Sessão do modelo, preferindo a GPU.
+     *
+     * No WASM a página roda em uma thread só (habilitar mais exigiria isolar a
+     * origem, o que quebraria o Supabase e as bibliotecas de CDN), e o LaMa
+     * leva ~20 s por foto assim. Na GPU cai para poucos segundos. Nem toda
+     * estação tem WebGPU, então a queda para o WASM é obrigatória — e é ela que
+     * mantém a promessa de funcionar em qualquer máquina.
+     */
+    async function carregarModelo(url) {
+        if (sessoes[url]) return sessoes[url];
         await carregarOrt();
-        var resp = await fetch(MODELO_URL);
-        if (!resp.ok) throw new Error('o modelo respondeu ' + resp.status);
-        var bytes = new Uint8Array(await resp.arrayBuffer());
-        modeloSessao = await window.ort.InferenceSession.create(bytes, {
+        var bytes = await bytesDoModelo(url);
+        if (navigator.gpu) {
+            try {
+                sessoes[url] = await window.ort.InferenceSession.create(bytes, {
+                    executionProviders: ['webgpu']
+                });
+                return sessoes[url];
+            } catch (e) {
+                console.warn('[EditorFoto] WebGPU indisponivel, indo de CPU', e);
+            }
+        }
+        sessoes[url] = await window.ort.InferenceSession.create(bytes, {
             executionProviders: ['wasm']
         });
-        return modeloSessao;
+        return sessoes[url];
+    }
+
+    /**
+     * Completa por IA a região marcada na máscara, e SÓ ela.
+     *
+     * O modelo é o LaMa (Apache-2.0), de entrada fixa 512×512. Isso significa
+     * que a foto inteira é reduzida a 512 para ele olhar — o que seria uma
+     * perda inaceitável se a saída dele virasse a foto. Não vira: o resultado é
+     * recortado pela máscara e colado só no anel novo, com a borda suavizada.
+     * Todo pixel que veio da câmera continua com a resolução que tinha.
+     *
+     * `mascara` é um canvas do tamanho da tela onde o alfa opaco marca o
+     * buraco. Serve tanto para a moldura da ampliação quanto, no futuro, para
+     * um pincel de eliminar objetos — a máquina é a mesma.
+     */
+    async function inpaintarRegiao(tela, mascara) {
+        var sess = await carregarModelo(MODELO_COMPLETAR);
+        var N = 512;
+
+        var mini = canvasDe(N, N);
+        mini.getContext('2d').drawImage(tela, 0, 0, N, N);
+        var px = mini.getContext('2d').getImageData(0, 0, N, N).data;
+
+        var mm = canvasDe(N, N);
+        mm.getContext('2d').drawImage(mascara, 0, 0, N, N);
+        var mp = mm.getContext('2d').getImageData(0, 0, N, N).data;
+
+        // CHW em 0..1 (a dieta do LaMa) e a máscara em 1 = buraco.
+        var img = new Float32Array(3 * N * N);
+        var msk = new Float32Array(N * N);
+        for (var i = 0; i < N * N; i++) {
+            img[i] = px[i * 4] / 255;
+            img[N * N + i] = px[i * 4 + 1] / 255;
+            img[2 * N * N + i] = px[i * 4 + 2] / 255;
+            msk[i] = mp[i * 4 + 3] > 8 ? 1 : 0;
+        }
+
+        var nomes = sess.inputNames;
+        var nImg = nomes.filter(function (n) { return /mask/i.test(n); }).length
+            ? nomes.filter(function (n) { return !/mask/i.test(n); })[0] : nomes[0];
+        var nMsk = nomes.filter(function (n) { return /mask/i.test(n); })[0] || nomes[1];
+
+        var entrada = {};
+        entrada[nImg] = new window.ort.Tensor('float32', img, [1, 3, N, N]);
+        entrada[nMsk] = new window.ort.Tensor('float32', msk, [1, 1, N, N]);
+        var saida = (await sess.run(entrada))[sess.outputNames[0]].data;
+
+        // A saída do LaMa já vem em 0..255; o clamp é contra o estouro do GAN.
+        var rcv = canvasDe(N, N);
+        var rimg = rcv.getContext('2d').createImageData(N, N);
+        for (var p = 0; p < N * N; p++) {
+            rimg.data[p * 4] = Math.max(0, Math.min(255, saida[p]));
+            rimg.data[p * 4 + 1] = Math.max(0, Math.min(255, saida[N * N + p]));
+            rimg.data[p * 4 + 2] = Math.max(0, Math.min(255, saida[2 * N * N + p]));
+            rimg.data[p * 4 + 3] = 255;
+        }
+        rcv.getContext('2d').putImageData(rimg, 0, 0);
+        return rcv;
+    }
+
+    /** Ampliação por IA: o anel da moldura é o buraco a completar. */
+    async function completarComIa(tela, m) {
+        var larg = tela.width, alt = tela.height;
+        var avanco = Math.max(2, Math.round(Math.min(larg, alt) / 120));
+        var buraco = mascaraDoAnel(larg, alt, m, avanco, 0);
+        var pintado = await inpaintarRegiao(tela, buraco);
+
+        // Volta só o anel, com a costura suavizada.
+        var recorteIa = canvasDe(larg, alt);
+        var rc = recorteIa.getContext('2d');
+        rc.imageSmoothingQuality = 'high';
+        rc.drawImage(pintado, 0, 0, larg, alt);
+        rc.globalCompositeOperation = 'destination-in';
+        rc.drawImage(mascaraDoAnel(larg, alt, m, avanco, Math.max(2, avanco)), 0, 0);
+        tela.getContext('2d').drawImage(recorteIa, 0, 0);
     }
 
     /**
@@ -327,7 +602,7 @@
     async function removerFundo(corHex) {
         if (!base) { aviso('A foto ainda não carregou.'); return; }
         assarAjustes();
-        var sess = await carregarModelo();
+        var sess = await carregarModelo(MODELO_FUNDO);
 
         var N = 320;
         var mini = canvasDe(N, N);
@@ -487,6 +762,31 @@
                     </div>
                 </div>
                 <div class="ef-bloco">
+                    <h3>Ampliar a tela (mais fundo)</h3>
+                    <div class="ef-tag" style="margin-bottom:8px">
+                        Foto enquadrada demais? Em vez de cortar o ombro, cresça a moldura e complete o fundo que passou a faltar.
+                    </div>
+                    <div class="ef-linha">
+                        <label>Margem</label>
+                        <input type="number" class="ef-num" id="ef-margem" min="1" max="100" step="5" value="20">
+                        <span class="ef-tag">% do menor lado</span>
+                    </div>
+                    <div class="ef-linha">
+                        <label>Completar com</label>
+                        <select class="ef-sel" id="ef-modo-ampliar">
+                            <option value="borda">Borda esticada — instantâneo</option>
+                            <option value="espelho">Espelhado — instantâneo</option>
+                            <option value="ia">IA (baixa 92 MB na 1ª vez)</option>
+                        </select>
+                    </div>
+                    <div class="ef-botoes">
+                        <button class="ef-btn" id="ef-ampliar" onclick="window.__efAmpliar()"
+                            title="Cresce a moldura pela margem escolhida, dos quatro lados">⤢ Ampliar</button>
+                        <button class="ef-btn" id="ef-caber" onclick="window.__efCaberNaJanela()"
+                            title="Cresce só o que falta para a foto INTEIRA caber na janela desta credencial, sem corte nenhum">⧉ Caber na janela</button>
+                    </div>
+                </div>
+                <div class="ef-bloco">
                     <h3>Cores e luz</h3>
                     <div class="ef-linha"><label>Brilho</label><input type="range" id="ef-brilho" min="-60" max="60" value="0"><span class="val" id="ef-brilho-v">0</span></div>
                     <div class="ef-linha"><label>Contraste</label><input type="range" id="ef-contraste" min="-60" max="60" value="0"><span class="val" id="ef-contraste-v">0</span></div>
@@ -513,7 +813,7 @@
                         <button class="ef-btn" id="ef-fundo" onclick="window.__efRemoverFundo()"
                             title="Separa a pessoa do fundo (modelo baixado uma vez, roda neste computador) e preenche com a cor">🪄 Remover fundo</button>
                     </div>
-                    <div class="ef-tag">Eliminar objetos e completar fundo chegam na próxima etapa, com IA generativa.</div>
+                    <div class="ef-tag">Para completar fundo que falta, use “Ampliar a tela”. Eliminar objetos com pincel é a próxima etapa.</div>
                 </div>
                 <div class="ef-bloco">
                     <div class="ef-botoes">
@@ -577,6 +877,48 @@
         var alvo = Number(el('ef-dpi-alvo').value) || 300;
         reamostrarParaDpi(Math.max(72, Math.min(600, alvo)));
     };
+    /**
+     * As duas portas da ampliação. A demora só existe no modo IA, e ela é
+     * dita antes de começar: 92 MB na primeira vez de cada estação, e uns
+     * segundos de conta a cada foto. Botão que trava sem explicar parece
+     * defeito.
+     */
+    async function correrAmpliacao(m) {
+        if (ocupado) return;
+        var modo = (el('ef-modo-ampliar') || {}).value || 'borda';
+        var botoes = [el('ef-ampliar'), el('ef-caber')];
+        ocupado = true;
+        botoes.forEach(function (b) { if (b) b.disabled = true; });
+        if (modo === 'ia') {
+            aviso('Completando com IA… Na primeira vez desta estação o modelo baixa (88 MB) e fica guardado. '
+                + 'Com placa de vídeo são poucos segundos; só no processador, uns 20 s por foto. '
+                + 'Se for pressa, “Borda esticada” é instantâneo e resolve fundo liso.');
+        }
+        try {
+            await ampliar(m, modo);
+            if (modo === 'ia') aviso('');
+        } catch (ex) {
+            console.warn('[EditorFoto] ampliar falhou', ex);
+            aviso(modo === 'ia'
+                ? 'A IA não completou agora (' + ex.message + '). Escolha “Borda esticada” ou “Espelhado” — são instantâneos e não dependem de rede.'
+                : 'Não deu para ampliar: ' + ex.message);
+        } finally {
+            ocupado = false;
+            botoes.forEach(function (b) { if (b) b.disabled = false; });
+        }
+    }
+
+    window.__efAmpliar = function () {
+        if (!base) { aviso('A foto ainda não carregou.'); return; }
+        var pct = Math.max(1, Math.min(100, Number((el('ef-margem') || {}).value) || 20));
+        return correrAmpliacao(margensUniformes(pct));
+    };
+
+    window.__efCaberNaJanela = function () {
+        if (!base) { aviso('A foto ainda não carregou.'); return; }
+        return correrAmpliacao(margensParaCaberNaJanela());
+    };
+
     window.__efRemoverFundo = async function () {
         if (ocupado) return;
         ocupado = true;

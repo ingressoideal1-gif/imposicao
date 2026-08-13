@@ -4,11 +4,67 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v554** — 2026-08-12 | Agente **1.2.51**
+## Versão atual: **v555** — 2026-08-13 | Agente **1.2.54**
 
 ---
 
-## [não publicado] — Editor de Fotos e a régua de qualidade
+## [não publicado] — Ampliar a tela da foto e completar o fundo
+
+A foto que chega **enquadrada demais** é o problema mais comum de credencial:
+não sobra fundo para o recorte da janela, e a única saída era cortar mais — o
+ombro, ou o alto da cabeça. Agora o editor cresce a moldura e completa o que
+passou a faltar.
+
+- **⤢ Ampliar**: margem igual dos quatro lados, em % do menor lado.
+- **⧉ Caber na janela**: cresce só o eixo que falta até a foto ficar na
+  proporção da janela daquela credencial. Nada é cortado.
+- Três preenchimentos: **borda esticada** e **espelhado**, instantâneos, e
+  **IA** — LaMa (Apache-2.0, 88 MB), rodando na própria estação.
+
+**Só o anel novo vem do modelo.** O LaMa olha a tela reduzida a 512×512; se a
+saída dele virasse a foto, o trabalho sairia com 512 px. O resultado é recortado
+pela máscara e colado apenas na moldura, com a costura suavizada — os pixels da
+câmera continuam intactos, e o teste prova isso comparando rosto e ombro antes e
+depois.
+
+Tempo: **~20 s por foto** só no processador, poucos segundos onde há WebGPU (que
+é tentado primeiro e cai para o processador sozinho). Os modos instantâneos
+existem para o operador não pagar essa espera quando o fundo é liso, e a
+mensagem diz os dois números antes de começar. O modelo é baixado uma vez por
+estação e guardado no Cache Storage, não só no cache HTTP.
+
+Dois defeitos encontrados pelo teste antes de existirem em produção: o desfoque
+do anel chupava transparência de fora da tela e deixava a beirada
+semitransparente — vinheta preta no JPEG final —, e o modo espelhado ancorava as
+abas laterais fora da tela, deixando o anel vazio dos dois lados.
+
+---
+
+## [não publicado] — A queima 350→300 passou a aparecer na tela
+
+A redução automática para 300 dpi existia desde o v555 e funcionava, mas era
+**muda**: acontecia durante o envio, sem selo, sem contador e sem aviso. O
+operador foi procurá-la na tela e não achou — do ponto de vista dele, o recurso
+não existia.
+
+Agora ela tem três vozes, todas contando o mesmo número ao vivo:
+
+- uma **faixa fixa** abaixo da barra da folha de contato, que enuncia a regra
+  mesmo quando não há nenhuma foto acima do teto, e acende em azul com a
+  contagem quando há;
+- o **selo do cartão**, que passa a `390 dpi · ⤓ 300 no Gravar` antes e
+  `300 dpi · reduzida` depois;
+- o **aviso do Gravar**, que soma quantas subiram reamostradas.
+
+O contador usa `dpiEmExcesso()`, que repete a mesma condição do `aplicar()` —
+só foto que ainda vai subir (`blob`) — para não prometer redução que não
+aconteceria nas fotos já gravadas no banco. De quebra, o selo do cartão saiu de
+duas fórmulas duplicadas para uma só (`seloDpi()`): era essa duplicação que
+apagava o marcador `interp.` no primeiro arrasto do enquadramento.
+
+---
+
+## [v555 — 2026-08-13] — Editor de Fotos e a régua de qualidade
 
 Pedido: destacar em vermelho abaixo de 200 dpi (era 150), desvincular foto da
 linha, editor de foto com IA, interpolar as fracas para 200, e reamostrar para
@@ -51,7 +107,7 @@ remoção de fundo de verdade, com modelo baixado do Storage em ~3 s.
 
 ---
 
-## [não publicado] — O Acrobat rejeitava a máscara do canto redondo
+## [v555 — 2026-08-13] — O Acrobat rejeitava a máscara do canto redondo
 
 Relato: *"a geração aconteceu até o final, sem apresentar erros. Mas o pdf
 gerado está sem as fotos, que aparecem na janela de preview da imposição"* — e o

@@ -1,6 +1,6 @@
 ---
 name: fotos-variaveis
-description: Leia ANTES de mexer em foto como dado variável — o elemento FOTO, o Gerenciador de Fotos, frontend/foto-lib.js, frontend/gerenciador-fotos.js, a chave __fotos das linhas do CSV, ou o ramo FOTO do engine.py. Cobre as nove armadilhas do caminho e por que o agente sai junto.
+description: Leia ANTES de mexer em foto como dado variável — o elemento FOTO, o Gerenciador de Fotos, frontend/foto-lib.js, frontend/gerenciador-fotos.js, a chave __fotos das linhas do CSV, ou o ramo FOTO do engine.py. Cobre as dez armadilhas do caminho e por que o agente sai junto.
 ---
 
 # Antes de mexer em foto variável
@@ -119,6 +119,32 @@ de rede que o agente local existe para não pagar.
 
 Pelo mesmo motivo, o `engine.py` **baixa em paralelo antes do laço** e cacheia em
 disco por hash. Não mova o download para dentro do laço.
+
+## 10. Modelo de IA olha pequeno — não deixe a saída dele virar a foto
+
+O LaMa, que completa fundo em `editor-foto.js`, tem entrada **fixa de 512×512**.
+A tela inteira é reduzida a 512 para ele olhar. Se a saída virasse a foto, o
+trabalho sairia com 512 px de resolução, e ninguém perceberia até o PVC estar
+impresso. O resultado é recortado pela máscara e colado **só na região
+inventada**; o que veio da câmera nunca é reprocessado.
+
+Vale para qualquer modelo que venha depois. O teste que segura isso compara
+pixels do rosto e do ombro antes e depois — igualdade exata, não semelhança.
+
+Duas armadilhas de canvas do mesmo caminho, ambas descobertas por teste:
+
+- **`ctx.filter = 'blur()'` chupa transparência de fora da tela.** Borrar um
+  canvas deixa as quatro beiradas semitransparentes, e no JPEG final isso vira
+  vinheta preta. Redesenhe a versão sem borrão por baixo
+  (`destination-over`) antes de considerar pronto.
+- **Com `scale(-1)`, o desenho cresce para a esquerda do ponto transladado.**
+  Ladrilho espelhado ancora no ponto e desenha em `(0,0)`; corrigir a âncora com
+  um deslocamento `-w` joga a aba para fora da tela e o anel fica vazio.
+
+Modelo novo mora no **nosso Storage**, com nome de arquivo próprio (o CDN da
+Cloudflare serve o antigo se você reusar o nome) e ferramenta de upload que
+confere sha256 pelo endereço público. Baixado uma vez e guardado no Cache
+Storage: 88 MB rebaixados no meio de um trabalho é tempo de produção perdido.
 
 ## Duas regras de produto
 
