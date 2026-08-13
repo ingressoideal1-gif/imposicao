@@ -65,18 +65,26 @@ def test_a_chave_de_servico_nunca_aparece_no_frontend():
     assert not achados, f"arquivo(s) do frontend citando a chave de servico: {achados}"
 
 
-def test_o_modulo_nao_usa_a_chave_anonima_por_engano():
+def test_a_conversa_com_as_TABELAS_nunca_usa_a_chave_anonima():
     """Escrever com a anônima daria erro de permissão, não erro claro.
 
     Com RLS ligado e sem política, o Supabase responde 200 e zero linhas em
     leitura, e recusa a escrita. O diagnóstico seria caro justamente por não
     parecer um problema de chave.
+
+    A regra é da função `supabase()`, e não do arquivo inteiro: a conferência
+    de sessão (`_usuario_logado`) usa a chave anônima de propósito e
+    corretamente — a API de autenticação do Supabase EXIGE o `apikey` anônimo
+    no cabeçalho, e ali não se toca em tabela nenhuma. A primeira versão deste
+    teste varria o arquivo todo e reprovava esse uso legítimo.
     """
     import inspect
-    fonte = inspect.getsource(acesso_api)
-    assert "SUPABASE_KEY" not in fonte, (
-        "acesso_api nao pode tocar em db.SUPABASE_KEY, que e a chave anonima"
+    corpo = inspect.getsource(acesso_api.supabase)
+    assert "SUPABASE_KEY" not in corpo, (
+        "supabase() nao pode usar db.SUPABASE_KEY: a chave anonima nao le nem "
+        "escreve nas tabelas producao_acesso_*"
     )
+    assert "SERVICE_KEY" in corpo
 
 
 def test_onde_nao_ha_chave_o_router_nem_existe():
@@ -233,3 +241,55 @@ def test_segredo_errado_e_recusado(monkeypatch):
             acesso_api._conferir_agente(tentativa)
         assert e.value.status_code == 401
     acesso_api._conferir_agente("certo")  # não levanta
+
+
+# ─── O QR do Pedido ───────────────────────────────────────────────────────────
+#
+# Este endpoint minta acesso: o token que ele devolve é o que permite reivindicar
+# o evento. Aberto, ele desfaria tudo que as travas anteriores construíram.
+
+
+def test_gerar_qr_sem_login_e_recusado():
+    """O `get_current_user` do app.py não serve de proteção aqui.
+
+    Ele devolve admin para todo mundo sem conferir nada — "sem auth por
+    enquanto", diz o comentário. Um endpoint que minta acesso não pode se apoiar
+    nisso.
+    """
+    for cabecalho in (None, "", "Basic abc", "Bearer", "bearer "):
+        with pytest.raises(HTTPException) as e:
+            acesso_api._usuario_logado(cabecalho)
+        assert e.value.status_code == 401
+
+
+def test_token_de_sessao_invalido_e_recusado(monkeypatch):
+    """Conferimos com o Supabase de verdade, não confiamos no que chega."""
+    import urllib.error
+
+    def recusa(*a, **k):
+        raise urllib.error.HTTPError("u", 401, "no", None, None)
+
+    monkeypatch.setattr(acesso_api.urllib.request, "urlopen", recusa)
+    with pytest.raises(HTTPException) as e:
+        acesso_api._usuario_logado("Bearer token-inventado")
+    assert e.value.status_code == 401
+    assert "sessao" in e.value.detail
+
+
+def test_rede_fora_nao_vira_credencial_invalida(monkeypatch):
+    """Confundir os dois manda o atendente procurar a senha à toa."""
+    def cai(*a, **k):
+        raise ConnectionError("rede fora")
+
+    monkeypatch.setattr(acesso_api.urllib.request, "urlopen", cai)
+    with pytest.raises(HTTPException) as e:
+        acesso_api._usuario_logado("Bearer qualquer")
+    assert e.value.status_code == 503
+
+
+def test_a_url_do_qr_aponta_para_a_origem_do_painel():
+    """Tem de ser o domínio que a estação e a Vercel servem de verdade."""
+    import security_config
+    url = acesso_api._url_do_evento("20272.123.abc")
+    assert url.startswith(security_config.PAINEL_BASE_URL)
+    assert url.endswith("evento.html?t=20272.123.abc")

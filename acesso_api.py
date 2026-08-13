@@ -34,6 +34,7 @@ monta este router. A estação simplesmente não serve `/api/acesso/*` — melho
 que servir endpoints que respondem 503 a tudo e confundem quem for diagnosticar.
 """
 
+import hashlib
 import hmac
 import json
 import os
@@ -298,6 +299,76 @@ def credenciais(pedido: int, corpo: dict, x_agente_segredo: str = Header(None)):
 def fechar(pedido: int, x_agente_segredo: str = Header(None)):
     _conferir_agente(x_agente_segredo)
     return _fechar_pedido(pedido)
+
+
+# ─── O QR do Pedido ───────────────────────────────────────────────────────────
+#
+# Este endpoint MINTA acesso: o token que ele devolve é o que permite reivindicar
+# o evento de um pedido. Deixá-lo aberto desfaria tudo que as travas anteriores
+# construíram — qualquer um geraria o QR do pedido alheio e tomaria o evento.
+#
+# O `get_current_user` do app.py não serve aqui: ele é um carimbo, devolve admin
+# para todo mundo sem conferir nada ("sem auth por enquanto", diz o comentário
+# de lá). Então conferimos o token do Supabase de verdade, perguntando ao próprio
+# Supabase quem é o dono dele. Uma ida à rede por QR gerado, o que é raro.
+
+
+def _usuario_logado(authorization: str | None) -> dict:
+    """Quem está pedindo está mesmo logado no painel da gráfica?"""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="faca login para gerar o QR do evento")
+    token = authorization.split(" ", 1)[1].strip()
+
+    req = urllib.request.Request(
+        f"{db.SUPABASE_URL}/auth/v1/user",
+        headers={"apikey": db.SUPABASE_KEY, "Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError:
+        raise HTTPException(status_code=401, detail="sessao expirada; entre de novo")
+    except Exception as e:
+        # Rede fora não é o mesmo que credencial inválida, e confundir os dois
+        # manda o atendente procurar a senha quando o problema é outro.
+        raise HTTPException(status_code=503, detail=f"nao consegui conferir a sessao: {e}")
+
+
+def _url_do_evento(token: str) -> str:
+    base = os.environ.get("PAINEL_BASE_URL")
+    if not base:
+        import security_config
+        base = security_config.PAINEL_BASE_URL
+    return f"{base.rstrip('/')}/evento.html?t={token}"
+
+
+@router.post("/pedidos/{pedido}/qr")
+def gerar_qr(pedido: int, authorization: str = Header(None)):
+    """Gera o QR do evento e REVOGA o anterior.
+
+    Revogar é o conserto de quando o QR cai na conta errada: o QR viaja por
+    WhatsApp, e quem receber a imagem consegue reivindicar o pedido — uma vez.
+    Se cair no cliente errado, o atendente gera outro e o primeiro morre na hora.
+    """
+    import qr_pedido
+
+    usuario = _usuario_logado(authorization)
+    if not qr_pedido.configurado():
+        raise HTTPException(
+            status_code=503,
+            detail=f"{qr_pedido.SEGREDO_ENV} nao configurada neste servidor",
+        )
+
+    token = qr_pedido.gerar(pedido)
+    _abrir_pedido(pedido)  # garante a linha e o sal, mesmo antes de imprimir
+
+    supabase("PATCH", f"producao_acesso_pedidos?pedido_id_int=eq.{int(pedido)}", {
+        "qr_token_hash": hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        "qr_gerado_em": "now()",
+        "qr_revogado_em": None,
+    })
+    print(f"[acesso] QR do pedido {pedido} gerado por {usuario.get('email')}", flush=True)
+    return {"url": _url_do_evento(token), "pedido": pedido}
 
 
 @router.get("/saude")
