@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS producao_acesso_eventos (
     dono_auth_id UUID NOT NULL,             -- conta que reivindicou o evento
     nome_evento TEXT NOT NULL,
     data_evento TIMESTAMPTZ,
-    local TEXT,
+    local_evento TEXT,                      -- `local` sozinho e palavra-chave do SQL
     sal TEXT NOT NULL,                      -- sal dos codigos fornecidos pelo cliente
     status TEXT NOT NULL DEFAULT 'ativo',   -- ativo | encerrado | excluido
     created_at TIMESTAMPTZ DEFAULT now(),
