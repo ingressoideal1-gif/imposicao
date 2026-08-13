@@ -343,7 +343,10 @@ def test_nome_solto_e_acusado_antes_de_imprimir(foto_metades):
     msg = str(ex.value)
     assert "linha 2" in msg
     assert "JAQUE ROSSI.jpeg" in msg          # o operador precisa saber QUAL nome
-    assert "Gerenciador de Fotos" in msg      # e o que fazer a respeito
+    assert "Gerenciador de Fotos" in msg      # o que fazer a respeito
+    assert "desmarque as linhas" in msg       # e como imprimir os prontos JA:
+    # a mensagem e a interface do freio, e um freio sem saida de emergencia
+    # obriga a grafica a parar 83 credenciais prontas por causa de 5 pendentes.
 
 
 def test_caminho_que_nao_existe_e_acusado_antes_de_imprimir(tmp_path, foto_metades):

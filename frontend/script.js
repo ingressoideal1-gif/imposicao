@@ -12327,7 +12327,13 @@ window.abrirFotosDoElemento = function (elId) {
 
             if (gravadas) {
 
-                toast(`${gravadas} foto(s) ligadas à coluna “${coluna}”.`, 'success');
+                // "Ligadas" sem o aviso do Salvar é meia verdade: o vínculo é
+                // escrito nas linhas do RASCUNHO do editor, e só o Salvar da
+                // numeração o leva ao banco. As fotos já subiram ao Storage e a
+                // tela já as desenha, então tudo PARECE pronto — mas um F5 antes
+                // de salvar joga fora os vínculos, e a impressão volta a acusar
+                // as mesmas pessoas. Já aconteceu.
+                toast(`${gravadas} foto(s) ligadas à coluna “${coluna}”. Salve a numeração para ficar gravado.`, 'success');
 
             }
 

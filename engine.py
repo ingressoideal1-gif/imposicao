@@ -720,7 +720,11 @@ class ImpositionEngine:
                 f"{len(faltando)} linha(s) do banco estao sem foto utilizavel - {amostra}{resto}. "
                 "Abra o Gerenciador de Fotos e ligue as fotos as linhas antes de imprimir: "
                 "o nome do arquivo digitado na celula nao basta, o motor precisa do "
-                "endereco da foto ou do caminho completo do arquivo."
+                "endereco da foto ou do caminho completo do arquivo. "
+                "Para imprimir agora SEM essas pessoas, desmarque as linhas delas no "
+                "editor de CSV (as celulas vermelhas da coluna de foto mostram quem "
+                "falta) - elas ficam guardadas, e quando as fotos chegarem voce as "
+                "remarca e imprime so o que faltou."
             )
 
         # dict.fromkeys preserva a ordem e mata a repeticao: a credencial que usa
