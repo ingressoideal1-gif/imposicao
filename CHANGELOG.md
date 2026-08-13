@@ -4,7 +4,45 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v553** — 2026-08-12 | Agente **1.2.50**
+## Versão atual: **v554** — 2026-08-12 | Agente **1.2.51**
+
+---
+
+## [v554 — 2026-08-12] — A prévia parou de repintar a cada foto, e os acentos voltaram
+
+Relato: *"Ficou tudo muito pesado e lento, problemas com o cache?"*, e um print
+com `— SaÃ­da —` na caixa da fila de OS.
+
+Cache não deixa lento — deixa **errado**. Eram duas causas, e a primeira era da
+v553.
+
+### Uma foto chegando redesenhava a folha inteira
+
+A prévia do Painel de Produção passou a desenhar fotos na v553, e cada foto que
+chegava do Storage pedia um repinte. Só que uma passada dessa prévia redesenha a
+**folha toda** — arte rasterizada, todas as poses, os dois gabaritos. Com 88
+pessoas, são dezenas de redesenhos completos disputando a mesma aba.
+
+Agora as linhas daquela folha são colhidas durante o desenho, as fotos **dessa
+folha** são carregadas de uma vez e a prévia repinta **uma** vez. Só as da folha:
+pedir as 88 para mostrar as 21 que cabem é rede paga à toa.
+
+### Depuração esquecida no código
+
+`[CAPA-DEBUG]` despejava a numeração inteira — as 88 linhas do banco, com as URLs
+das fotos — no console a cada atualização do resumo, e o `drawPedPreview CALLED`
+marcava cada passada. Com o console aberto, isso pesa sozinho. Os dois saíram.
+
+### Acentos gravados errados desde a v420
+
+`— SaÃ­da —`, `â–¼`, `cÃ©lula`, `100Ã—60`: o `pedido.js` teve os acentos
+gravados em dupla codificação no commit `ab27911` (v420) e desde então mostrava
+isso na tela. Reparadas as 44 linhas, conferindo que a mudança mexeu **só** em
+acento — cada linha alterada é idêntica à anterior quando se removem os
+caracteres não-ASCII.
+
+O defeito só apareceu agora porque a caixa que o exibe fica na `producao.html`,
+que estava sem dois scripts e nem chegava a montá-la.
 
 ---
 

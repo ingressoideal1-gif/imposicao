@@ -51,6 +51,16 @@ Quem desenha uma vez só — o gabarito rasterizado, o visualizador de PDF — p
 quem repinta passa um `repintor` nomeado, para um lote inteiro chegando custar um
 redesenho e não trezentos.
 
+E quem desenha uma **folha inteira** não faz nem uma coisa nem outra: colhe as
+linhas daquela folha durante o desenho, carrega as fotos **dessas** linhas de uma
+vez e repinta **uma** vez. É o caso da prévia do Painel de Produção, onde uma
+passada custa a folha toda — arte rasterizada e todas as poses. Com o repintor
+por elemento, um trabalho de 88 credenciais virava dezenas de redesenhos
+completos e a aba engasgava (v553 → v554). Carregar as 88 fotos para mostrar as
+21 que cabem na folha também não serve: é rede paga à toa. E o guarda do laço é o
+`fotosPendentes` — sem ele, o repinte pede as fotos de novo, elas resolvem na
+hora (já em cache) e mandam repintar outra vez, para sempre.
+
 ### 2. `__fotos`: o enquadramento mora dentro da linha
 
 A célula da coluna mostra o nome do arquivo — legível na grade. O que o motor

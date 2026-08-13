@@ -19,7 +19,7 @@ function applyPedFormatoDefaults() {
         }
     }
     
-    // Aplica a SaÃ­da se houver
+    // Aplica a Saída se houver
     if (fmt.default_saida_id) {
         const saidaSel = document.getElementById('ped-saida');
         if (saidaSel) {
@@ -244,7 +244,7 @@ async function loadPedArtFile(file) {
 
             if (typeof pdfjsLib === 'undefined') {
 
-                return toast('PDF.js não disponÃ­vel. Use JPG/PNG.', 'error');
+                return toast('PDF.js não disponível. Use JPG/PNG.', 'error');
 
             }
 
@@ -258,7 +258,7 @@ async function loadPedArtFile(file) {
 
             
 
-            // Salvar documento PDF e inicializar caches para paginação especial de Pdf MÃºltiplo
+            // Salvar documento PDF e inicializar caches para paginação especial de Pdf Múltiplo
 
             state.pedArtPdfDoc = pdf;
 
@@ -300,7 +300,7 @@ async function loadPedArtFile(file) {
 
             
 
-            // Se estiver em Pdf MÃºltiplo, atualiza limites
+            // Se estiver em Pdf Múltiplo, atualiza limites
 
             const schema = document.getElementById('ped-schema').value;
 
@@ -366,7 +366,7 @@ async function loadPedArtFile(file) {
 
         toast('Arte carregada para preview!', 'success');
 
-        updatePedSummary(); // Recalcular sumÃ¡rio e forÃ§ar redesenho do preview
+        updatePedSummary(); // Recalcular sumário e forçar redesenho do preview
 
     } catch (e) {
 
@@ -387,7 +387,7 @@ async function loadPedArtFile(file) {
 }
 window.loadPedArtFile = loadPedArtFile;
 
-function drawPedPreview() { console.log('drawPedPreview CALLED');
+function drawPedPreview() {
 
     let fmtId, numId, saiId, start, end, schema = 'sequential', item_local_index, item_arte_index;
     const activeItem = state.activeOSItem;
@@ -594,7 +594,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
             ctx.fillStyle = '#ef4444';
             ctx.font = '12px Inter, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Erro: ParÃ¢metros Cut & Stack ausentes.', 150, 100);
+            ctx.fillText('Erro: Parâmetros Cut & Stack ausentes.', 150, 100);
             document.getElementById('ped-preview-sheet-num').textContent = 'Erro de Regra';
             return;
         }
@@ -628,7 +628,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 optionsHtml += '<option value="contracapa">Contracapa</option>';
             }
             
-            // SÃ³ atualizar o HTML se as opções mudaram para evitar loops de re-renderização
+            // Só atualizar o HTML se as opções mudaram para evitar loops de re-renderização
             const existingOptions = Array.from(previewPartEl.options).map(o => o.value).join(',');
             const newOptions = isDuplex 
                 ? (fmt.has_cover ? 'miolo,miolo_verso,capa,contracapa' : 'miolo,miolo_verso')
@@ -835,7 +835,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     const currentSet = setSelect && setSelect.style.display !== 'none' ? parseInt(setSelect.value) || 1 : 1;
     
-    // Determinar o total de folhas visÃ­veis neste set
+    // Determinar o total de folhas visíveis neste set
     let visible_sheets = total_sheets;
     if (is_strict_mode) {
         if (window.currentAssemblySets) {
@@ -906,6 +906,10 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
     // Quantos elementos de numeração cada pose pintou nesta passada (ver o aviso no fim)
     const posesDesenhadas = [];
+
+    // As linhas cujas fotos esta folha precisa. Colhidas durante o desenho e
+    // usadas UMA vez no fim: ver o bloco "Fotos" antes da borda da folha.
+    const _linhasFoto = [];
 
     // Célula de saída sem item — a folha inteira logo que se marca "Refazer
     // Célula", e a sobra do fim quando a conta não fecha redondo.
@@ -1021,7 +1025,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-            // Centro da cÃ©lula para rotação
+            // Centro da célula para rotação
 
             const centerX = (cell_x0 + item_w / 2) * scale;
 
@@ -1029,7 +1033,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
             
 
-            // Inverter a rotação da cÃ©lula no verso para bater frente/verso
+            // Inverter a rotação da célula no verso para bater frente/verso
 
             const cellRotationFrente = fmt.rotations ? (parseInt(fmt.rotations[P]) || 0) : 0;
 
@@ -1254,8 +1258,8 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
             if (activeImage || activePdfDoc) {
-                // Centralizar a arte na cÃ©lula + aplicar offset do formato (em relação ao centro da cÃ©lula que Ã© 0,0)
-                // (positivo H = direita, positivo V = para cima â†’ negar Y)
+                // Centralizar a arte na célula + aplicar offset do formato (em relação ao centro da célula que é 0,0)
+                // (positivo H = direita, positivo V = para cima → negar Y)
                 let offH = fmt_off_h * scale;
                 let offV = -fmt_off_v * scale;
                 
@@ -1433,7 +1437,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                         if (isBack) {
 
-                            // Imagem Ãºnica não tem verso de arte
+                            // Imagem única não tem verso de arte
 
                             ctx.fillStyle = '#ffffff';
 
@@ -1478,7 +1482,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
                 ctx.textBaseline = 'middle';
 
-                ctx.fillText(`PosiÃ§Ã£o ${P + 1}`, 0, 0);
+                ctx.fillText(`Posição ${P + 1}`, 0, 0);
 
             }
 
@@ -1616,13 +1620,13 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 gctx.fillStyle = nomeColor;
                 gctx.textAlign = 'center';
                 gctx.textBaseline = 'middle';
-                // PosiÃ§Ã£o X: 0mm da lateral esquerda da cÃ©lula
-                // ApÃ³s rotação -90Â°, textBaseline='middle' centraliza horizontalmente,
-                // entÃ£o o ponto de translate Ã© o CENTRO do texto rotacionado.
+                // Posição X: 0mm da lateral esquerda da célula
+                // Após rotação -90°, textBaseline='middle' centraliza horizontalmente,
+                // então o ponto de translate é o CENTRO do texto rotacionado.
                 // Para a borda esquerda do texto ficar a 0mm: center_x = -cw/2 + fontSize/2
                 gctx.translate(-cw / 2 + nomeFontSizePx / 2, 0);
                 gctx.rotate(-Math.PI / 2);
-                // textAlign='center' centraliza o texto verticalmente (eixo X pré-rotação = eixo Y pÃ³s-rotação)
+                // textAlign='center' centraliza o texto verticalmente (eixo X pré-rotação = eixo Y pós-rotação)
                 gctx.fillText(nomeTxt, 0, 0);
                 gctx.restore();
             }
@@ -1695,7 +1699,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                     // A contagem alimenta o aviso de pose sem numeração, no fim do desenho.
                     vdpDesenhados++;
 
-                    // PosiÃ§Ã£o do elemento relativa ao canto superior esquerdo da cÃ©lula
+                    // Posição do elemento relativa ao canto superior esquerdo da célula
 
                     const el_x = el.x_mm * MM2PT * scale;
 
@@ -1703,7 +1707,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
 
 
-                    // Converter para coordenadas relativas ao centro da cÃ©lula (0,0)
+                    // Converter para coordenadas relativas ao centro da célula (0,0)
 
                     const el_x_rel = el_x - cw / 2;
 
@@ -1897,11 +1901,17 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                         // que a foto É o conteúdo.
                         if (typeof window.desenharElementoFoto === 'function') {
 
-                            window.desenharElementoFoto(
-                                ctx, el, MM2PT * scale, false,
-                                (state.csvData && state.csvData[item_index]) || null,
-                                window.repintor('ped-previa', drawPedPreview)
-                            );
+                            const _lf = (state.csvData && state.csvData[item_index]) || null;
+                            if (_lf && _linhasFoto.indexOf(_lf) === -1) _linhasFoto.push(_lf);
+
+                            // Sem repintor por elemento, de propósito. Cada foto que
+                            // chegasse mandaria a prévia INTEIRA se redesenhar — e uma
+                            // passada da prévia redesenha a folha toda, com a arte
+                            // rasterizada e todas as poses. Com uma credencial por
+                            // pessoa isso vira dezenas de redesenhos completos e a aba
+                            // engasga. Quem espera as fotos é o bloco no fim da função,
+                            // que carrega todas e redesenha uma vez só.
+                            window.desenharElementoFoto(ctx, el, MM2PT * scale, false, _lf, null);
 
                         }
 
@@ -2063,7 +2073,7 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
 
         };
 
-        // Para multi_artes ou imposição combinada, usar a numeração especÃ­fica de cada arte se disponÃ­vel
+        // Para multi_artes ou imposição combinada, usar a numeração específica de cada arte se disponível
         const artNum1 = multiArteItem ? (multiArteItem.numeracao || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num1_id))) : null;
         const artNum2 = multiArteItem ? (multiArteItem.numeracao_2 || state.numeracoes.find(n => String(n.id) === String(multiArteItem.num2_id))) : null;
         if (multiArteItem) {
@@ -2182,6 +2192,33 @@ function drawPedPreview() { console.log('drawPedPreview CALLED');
                 elementos_no_gabarito: (num && num.elements) ? num.elements.length : 0,
             }
         );
+    }
+
+    // ─── Fotos: carregar o lote da folha e repintar UMA vez ────────────────────
+    //
+    // Só as linhas DESTA folha: com 88 pessoas, pedir as 88 fotos para mostrar as
+    // 21 que cabem na folha é rede paga à toa.
+    //
+    // `fotosPendentes` é o que fecha o laço: sem ele, o repinte pediria as fotos
+    // de novo, elas resolveriam na hora (já em cache) e mandariam repintar outra
+    // vez, para sempre.
+    if (_linhasFoto.length && typeof window.fotosPendentes === 'function') {
+
+        const _elsFoto = [];
+
+        [num, num2].forEach(n => {
+            if (n && Array.isArray(n.elements)) _elsFoto.push(...n.elements);
+        });
+
+        if (_elsFoto.some(e => e && e.type === 'FOTO')
+            && window.fotosPendentes(_elsFoto, _linhasFoto).length) {
+
+            window.precarregarFotosDosElementos(_elsFoto, _linhasFoto)
+                .then(() => drawPedPreview())
+                .catch(() => { });
+
+        }
+
     }
 
     // Borda da folha
@@ -2687,7 +2724,7 @@ function updatePedSummary() {
 
     }
 
-    // PrÃ©-carregar canvas de cada elemento PDF da numeração selecionada
+    // Pré-carregar canvas de cada elemento PDF da numeração selecionada
 
     function preloadNumPdfElements(numeracao) {
 
@@ -3007,9 +3044,9 @@ function updatePedSummary() {
 
     box.style.display = 'grid';
 
-    document.getElementById('ped-sum-formato').textContent = `${fmt.name} (${fmt.width_mm}Ã—${fmt.height_mm}mm)`;
+    document.getElementById('ped-sum-formato').textContent = `${fmt.name} (${fmt.width_mm}×${fmt.height_mm}mm)`;
 
-    document.getElementById('ped-sum-grade').textContent = `${fmt.cols} Ã— ${fmt.rows} = ${perSheet} itens/folha`;
+    document.getElementById('ped-sum-grade').textContent = `${fmt.cols} × ${fmt.rows} = ${perSheet} itens/folha`;
 
     document.getElementById('ped-sum-total').textContent = total.toLocaleString('pt-BR');
 
@@ -3338,7 +3375,7 @@ window.togglePedItemSelection = function(itemId, osId) {
             const thisColor = (item.cor || item.padrao || '').toLowerCase().trim();
             
             if (firstColor !== thisColor) {
-                toast('SÃ³ Ã© possível selecionar modelos que compartilhem da mesma COR.', 'warning');
+                toast('Só é possível selecionar modelos que compartilhem da mesma COR.', 'warning');
                 return;
             }
         }
@@ -3369,7 +3406,7 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
             if (sub) sub.textContent = `Processando modelos combinados...`;
             
             // Verificar se algum item tem blocagem definida e configurar os dropdowns antes de chamar runImposition
-            // item.blocos = flag 'S'/'N', item.bloco = valor numÃ©rico do tamanho do bloco
+            // item.blocos = flag 'S'/'N', item.bloco = valor numérico do tamanho do bloco
             const anyHasBloco = state.selectedOSItems.some(sel => {
                 const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
                 console.log('[pedQueueGerarPDFMulti] Item check:', sItem?.modelo, 'bloco=', sItem?.bloco, 'blocos=', sItem?.blocos, 'qtd=', sItem?.qtd);
@@ -3377,8 +3414,8 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                 const hasBlocosFlag = sItem && sItem.blocos && sItem.blocos !== 'N' && sItem.blocos !== 'n';
                 return hasBlocoNum || hasBlocosFlag;
             });
-            // Sempre forÃ§ar cut_stack + strict_assembly para multi-seleção com modelos combinados
-            // pois Ã© a regra padrão quando se combinam modelos
+            // Sempre forçar cut_stack + strict_assembly para multi-seleção com modelos combinados
+            // pois é a regra padrão quando se combinam modelos
             const forceStrictAssembly = anyHasBloco || state.selectedOSItems.length > 1;
             if (forceStrictAssembly) {
                 const schemaSel = document.getElementById('ped-schema');
@@ -3395,7 +3432,7 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                     const sheetsInp = document.getElementById('ped-sheets-per-block');
                     if (sheetsInp && blocItem?.bloco) sheetsInp.value = parseInt(blocItem.bloco);
                 }
-                console.log('[pedQueueGerarPDFMulti] ForÃ§ando schema=cut_stack, mode=strict_assembly, anyHasBloco=', anyHasBloco);
+                console.log('[pedQueueGerarPDFMulti] Forçando schema=cut_stack, mode=strict_assembly, anyHasBloco=', anyHasBloco);
             }
             
             const blob = await runImposition('', true);
@@ -3497,8 +3534,8 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
             }
         }
     } catch (e) {
-        console.error("Erro no processo de PDF mÃºltiplo:", e);
-        toast("Erro ao gerar PDFs mÃºltiplos: " + e.message, 'error');
+        console.error("Erro no processo de PDF múltiplo:", e);
+        toast("Erro ao gerar PDFs múltiplos: " + e.message, 'error');
     } finally {
         if (overlay) overlay.classList.remove('active');
         state.activeOSItem = originalActive;
@@ -3624,15 +3661,15 @@ function renderPedOSQueue() {
                     onclick="pedQueueImprimirMulti()">
                     🖨️  Imp. Sel.
                 </button>
-                <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato PadrÃ£o do Produto">
+                <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato Padrão do Produto">
                     <option value="">— Formato —</option>
                     ${formatosOptions}
                 </select>
-                <select style="${selectHeaderStyle}" onchange="updateBoxSaida('${osId}', '${prodId}', this.value)" title="SaÃ­da PadrÃ£o do Produto">
-                    <option value="">— SaÃ­da —</option>
+                <select style="${selectHeaderStyle}" onchange="updateBoxSaida('${osId}', '${prodId}', this.value)" title="Saída Padrão do Produto">
+                    <option value="">— Saída —</option>
                     ${saidasOptions}
                 </select>
-                <span id="box-arrow-${prodId}-renderPedOSQueue" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">â–¼</span>
+                <span id="box-arrow-${prodId}-renderPedOSQueue" style="color:var(--text-dim); font-size:0.8rem; transition: transform 0.2s; margin-left:5px; cursor:pointer;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">▼</span>
             </div>
         `;
 
@@ -3983,10 +4020,10 @@ function togglePedOSQueue() {
     if (!body) return;
     if (body.style.display === 'none') {
         body.style.display = '';
-        if (arrow) arrow.textContent = 'â–¼';
+        if (arrow) arrow.textContent = '▼';
     } else {
         body.style.display = 'none';
-        if (arrow) arrow.textContent = 'â–¶';
+        if (arrow) arrow.textContent = '▶';
     }
 }
 window.togglePedOSQueue = togglePedOSQueue;
@@ -4246,13 +4283,13 @@ window.runPedImposition = async function (mode, isRefazer) {
 
     if (!fmtId) return desistir('Selecione um Formato.');
 
-    if (!saiId) return desistir('Selecione uma SaÃ­da.');
+    if (!saiId) return desistir('Selecione uma Saída.');
 
     
 
     if (schema === 'multi_artes' || isMultiSelected) {
 
-        // Valida se todas as artes da lista tÃªm PDF carregado, caso não seja multi seleção virtual
+        // Valida se todas as artes da lista têm PDF carregado, caso não seja multi seleção virtual
 
         const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
         if (!isMultiSelected) {
@@ -4260,7 +4297,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
                 if (!artesList[i].pdf_url || (artesList[i].pdf_url === 'local_file' && !artesList[i].rawFile)) {
 
-                    return desistir(`Arte ${i + 1}: faÃ§a o upload do PDF da arte (necessário a cada sessão).`);
+                    return desistir(`Arte ${i + 1}: faça o upload do PDF da arte (necessário a cada sessão).`);
 
                 }
 
@@ -4274,7 +4311,7 @@ window.runPedImposition = async function (mode, isRefazer) {
         }
 
     } else {
-        // NÃ£o exige arte, permite gerar apenas com a numeração
+        // Não exige arte, permite gerar apenas com a numeração
     }
 
     
@@ -4531,7 +4568,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
     formData.append('payload', JSON.stringify(payload, (key, value) => {
 
-        // Filtrar propriedades internas do frontend (não-serializÃ¡veis ou irrelevantes ao backend)
+        // Filtrar propriedades internas do frontend (não-serializáveis ou irrelevantes ao backend)
 
         if (key === '_svgImage' || key === '_pdfPreview' || key === '_pdfCanvas' || key === '_pdfLoading' ||
 
@@ -5109,10 +5146,10 @@ window.toggleBox = function(bodyId, arrowId) {
     if (!body) return;
     if (body.style.display === 'none') {
         body.style.display = '';
-        if (arrow) arrow.textContent = 'â–¼';
+        if (arrow) arrow.textContent = '▼';
     } else {
         body.style.display = 'none';
-        if (arrow) arrow.textContent = 'â–¶';
+        if (arrow) arrow.textContent = '▶';
     }
 };
 
