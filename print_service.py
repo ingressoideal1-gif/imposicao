@@ -344,6 +344,18 @@ def _find_ghostscript():
     return None
 
 
+def _rotulo_cor(cor_cfg):
+    """Sufixo da mensagem de retorno dizendo o que foi aplicado de cor."""
+    if not cor_cfg:
+        return ""
+    partes = []
+    if cor_cfg.get("path"):
+        partes.append(cor_cfg.get("nome") or "perfil")
+    if cor_cfg.get("ajustes"):
+        partes.append("ajustes")
+    return f" [cores: {' + '.join(partes)}]" if partes else ""
+
+
 def _send_pdf_raw(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
     """
     Envia o PDF diretamente ao spooler como dados RAW.
@@ -359,7 +371,7 @@ def _send_pdf_raw(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
         return True, "[MOCK] PDF RAW simulado com sucesso."
 
     pdf_temporario = None
-    if cor_cfg:
+    if cor_cfg and cor_cfg.get("path"):
         try:
             pdf_temporario = color_profiles.pdf_com_output_intent(pdf_path, cor_cfg)
             pdf_path = pdf_temporario
@@ -393,7 +405,7 @@ def _send_pdf_raw(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
 
         size_mb = os.path.getsize(pdf_path) / (1024 * 1024)
         print(f"[print][PDF-RAW] Job enviado: {size_mb:.1f} MB para '{printer_name}'")
-        sufixo_cor = f" [cores: {cor_cfg['nome']}]" if cor_cfg else ""
+        sufixo_cor = _rotulo_cor(cor_cfg) if cor_cfg and cor_cfg.get("path") else ""
         return True, f"PDF enviado diretamente (RAW) para '{printer_name}' ({size_mb:.1f} MB).{sufixo_cor}"
     except Exception as e:
         err = f"Erro no envio PDF RAW: {e}"
@@ -476,7 +488,7 @@ def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title, cor_cfg=Non
             win32print.ClosePrinter(hPrinter)
 
         print(f"[print][GS-PS] Job enviado com sucesso para '{printer_name}'")
-        sufixo_cor = f" [cores: {cor_cfg['nome']}]" if cor_cfg else ""
+        sufixo_cor = _rotulo_cor(cor_cfg) if cor_cfg and cor_cfg.get("path") else ""
         return True, f"PDF convertido para PostScript (Ghostscript) e enviado para '{printer_name}' ({ps_size_mb:.1f} MB).{sufixo_cor}"
 
     except subprocess.TimeoutExpired:
@@ -530,12 +542,18 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
                 # todas as folhas; falha vira aviso e o job segue sem cor
                 # gerenciada — producao nunca para por causa de perfil.
                 transform_cor = None
-                if cor_cfg:
+                if cor_cfg and cor_cfg.get("path"):
                     try:
                         transform_cor = color_profiles.transform_para_gdi(cor_cfg)
                         print(f"[print][GDI] Gerenciamento de cores ativo: {cor_cfg['nome']} ({cor_cfg['classe']}, {cor_cfg['intento']})")
                     except Exception as e:
                         print(f"[print][GDI] Aviso: transformacao de cor falhou ({e}); imprimindo sem gerenciamento")
+                ajustes_cor = (cor_cfg or {}).get("ajustes")
+                if ajustes_cor:
+                    print(f"[print][GDI] Ajustes de cor ativos: "
+                          f"saturacao={ajustes_cor.get('saturacao', 100)} "
+                          f"brilho={ajustes_cor.get('brilho', 0)} "
+                          f"contraste={ajustes_cor.get('contraste', 0)}")
 
                 doc = fitz.open(pdf_path)
                 total_pages = len(doc)
@@ -547,6 +565,12 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
 
                     pix = page.get_pixmap(dpi=render_dpi)
                     img = Image.open(_io.BytesIO(pix.tobytes("png")))
+                    # Ordem obrigatoria: ajustes em sRGB ANTES do perfil ICC
+                    # (mesma ordem da previa na tela)
+                    if ajustes_cor:
+                        if img.mode != "RGB":
+                            img = img.convert("RGB")
+                        img = color_profiles.aplicar_ajustes(img, ajustes_cor)
                     if transform_cor is not None:
                         from PIL import ImageCms as _cms
                         if img.mode != "RGB":
@@ -578,8 +602,7 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
         finally:
             win32print.ClosePrinter(hPrinter)
 
-        sufixo_cor = f" [cores: {cor_cfg['nome']}]" if cor_cfg else ""
-        return True, f"PDF enviado via GDI (raster) para '{printer_name}'.{sufixo_cor}"
+        return True, f"PDF enviado via GDI (raster) para '{printer_name}'.{_rotulo_cor(cor_cfg)}"
     except Exception as e:
         import traceback
         err = f"Erro na impressao GDI: {e}\n{traceback.format_exc()}"
