@@ -19,6 +19,7 @@ mas isso é a parte 3b, e não passa por aqui.
 """
 
 import json
+import secrets
 import urllib.error
 import urllib.request
 
@@ -26,6 +27,7 @@ from fastapi import APIRouter, Header, HTTPException
 
 import acesso_elevacao
 import db
+import qr_ideal
 from acesso_api import _usuario_logado, contar, supabase
 
 router = APIRouter(prefix="/api/acesso", tags=["acesso"])
@@ -303,3 +305,154 @@ def gravar_setor(setor_id: str, corpo: dict, authorization: str = Header(None),
                  x_elevacao: str = Header(None), x_navegador: str = Header(None)):
     return _gravar_setor(setor_id, _usuario_logado(authorization),
                          x_elevacao, x_navegador, corpo)
+
+
+# ── Os aparelhos da portaria ─────────────────────────────────────────────────
+#
+# Cada celular da portaria nasce com um nome, um código curto que o porteiro
+# digita uma vez para conectar, e a lista de setores que ele tem permissão de
+# validar — um aparelho no portão A precisa recusar um ingresso VIP, e dizer
+# isso com uma cara diferente da que usa para um ingresso forjado (parte 3b).
+#
+# Sem `0`, `O`, `1`, `I` e `L`: o porteiro lê este código de um papel, e esses
+# cinco caracteres são erro garantido. São 31 símbolos, e 31^6 ≈ 8,9 x 10^8.
+ALFABETO_CODIGO = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+TAMANHO_CODIGO = 6
+
+
+def _sortear_codigo() -> str:
+    return "".join(secrets.choice(ALFABETO_CODIGO) for _ in range(TAMANHO_CODIGO))
+
+
+def _sal_do_evento(evento_id: str) -> str:
+    linha = (supabase(
+        "GET", f"producao_acesso_eventos?id=eq.{evento_id}&select=sal",
+    ) or [None])[0]
+    if not linha or not linha.get("sal"):
+        raise HTTPException(status_code=409, detail="evento sem sal; recadastre o pedido")
+    return linha["sal"]
+
+
+def _hash_do_codigo(codigo: str, sal: str) -> str:
+    """O mesmo PBKDF2 de 10.000 voltas do QR Ideal, com o sal do evento.
+
+    Um código de seis caracteres é curto. O custo do KDF é o que torna caro
+    tentar em massa contra o endpoint de entrada do aparelho, na parte 3b.
+    """
+    return qr_ideal.hash_codigo(codigo.strip().upper(), sal)
+
+
+def _setores_do_evento(evento_id: str) -> set:
+    return {str(s["id"]) for s in (supabase(
+        "GET", f"producao_acesso_setores?evento_id=eq.{evento_id}&select=id") or [])}
+
+
+def _conferir_setores(evento_id: str, setores) -> list:
+    pedidos = [str(s) for s in (setores or [])]
+    validos = _setores_do_evento(evento_id)
+    intrusos = [s for s in pedidos if s not in validos]
+    if intrusos:
+        raise HTTPException(
+            status_code=422,
+            detail="ha setor que nao e deste evento na lista do aparelho",
+        )
+    return pedidos
+
+
+def _trocar_setores(aparelho_id: str, setores: list) -> None:
+    supabase("DELETE",
+             f"producao_acesso_dispositivo_setores?dispositivo_id=eq.{aparelho_id}",
+             prefer="return=minimal")
+    if setores:
+        supabase("POST", "producao_acesso_dispositivo_setores",
+                 [{"dispositivo_id": aparelho_id, "setor_id": s} for s in setores],
+                 prefer="return=minimal")
+
+
+def _aparelho_do_dono(aparelho_id: str, usuario: dict) -> dict:
+    linha = (supabase(
+        "GET", f"producao_acesso_dispositivos?id=eq.{aparelho_id}&select=id,evento_id",
+    ) or [None])[0]
+    if not linha:
+        raise HTTPException(status_code=403, detail="aparelho nao encontrado nesta conta")
+    _evento_do_dono(linha["evento_id"], usuario)
+    return linha
+
+
+def _criar_aparelho(evento_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    _evento_do_dono(evento_id, usuario)
+    _exigir_elevacao(evento_id, usuario, elevacao, navegador)
+
+    nome = _texto(corpo.get("nome"), "nome do aparelho", 1, 60)
+    setores = _conferir_setores(evento_id, corpo.get("setores"))
+    codigo = _sortear_codigo()
+
+    criado = supabase("POST", "producao_acesso_dispositivos", {
+        "evento_id": evento_id,
+        "nome": nome,
+        "codigo_hash": _hash_do_codigo(codigo, _sal_do_evento(evento_id)),
+    })[0]
+    _trocar_setores(criado["id"], setores)
+
+    # O código volta AQUI e nunca mais: o que fica guardado é o hash.
+    return {"id": criado["id"], "nome": nome, "codigo": codigo}
+
+
+def _gravar_aparelho(aparelho_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    aparelho = _aparelho_do_dono(aparelho_id, usuario)
+    _exigir_elevacao(aparelho["evento_id"], usuario, elevacao, navegador)
+
+    mudanca = {}
+    if "nome" in corpo:
+        mudanca["nome"] = _texto(corpo["nome"], "nome do aparelho", 1, 60)
+    if "status" in corpo:
+        if corpo["status"] not in ("ativo", "revogado"):
+            raise HTTPException(status_code=422, detail="status: ativo ou revogado")
+        mudanca["status"] = corpo["status"]
+    if mudanca:
+        supabase("PATCH", f"producao_acesso_dispositivos?id=eq.{aparelho_id}", mudanca,
+                 prefer="return=minimal")
+
+    if "setores" in corpo:
+        _trocar_setores(aparelho_id,
+                        _conferir_setores(aparelho["evento_id"], corpo["setores"]))
+    return {"ok": True}
+
+
+def _novo_codigo(aparelho_id, usuario, elevacao, navegador) -> dict:
+    """Gera outro código curto. NÃO mexe no `token_hash`, de propósito.
+
+    Quem mantém o aparelho conectado é o token dele. Se gerar código novo o
+    apagasse, o dono derrubaria a portaria no meio do evento só por ter
+    esquecido um código — e a tela, que promete o contrário em texto, estaria
+    mentindo. Desligar o aparelho é a outra ação, separada: revogar.
+    """
+    aparelho = _aparelho_do_dono(aparelho_id, usuario)
+    _exigir_elevacao(aparelho["evento_id"], usuario, elevacao, navegador)
+
+    codigo = _sortear_codigo()
+    supabase("PATCH", f"producao_acesso_dispositivos?id=eq.{aparelho_id}",
+             {"codigo_hash": _hash_do_codigo(codigo, _sal_do_evento(aparelho["evento_id"]))},
+             prefer="return=minimal")
+    return {"codigo": codigo}
+
+
+@router.post("/eventos/{evento_id}/aparelhos")
+def criar_aparelho(evento_id: str, corpo: dict, authorization: str = Header(None),
+                   x_elevacao: str = Header(None), x_navegador: str = Header(None)):
+    return _criar_aparelho(evento_id, _usuario_logado(authorization),
+                           x_elevacao, x_navegador, corpo)
+
+
+@router.patch("/aparelhos/{aparelho_id}")
+def gravar_aparelho(aparelho_id: str, corpo: dict, authorization: str = Header(None),
+                    x_elevacao: str = Header(None), x_navegador: str = Header(None)):
+    return _gravar_aparelho(aparelho_id, _usuario_logado(authorization),
+                            x_elevacao, x_navegador, corpo)
+
+
+@router.post("/aparelhos/{aparelho_id}/codigo")
+def novo_codigo(aparelho_id: str, authorization: str = Header(None),
+                x_elevacao: str = Header(None), x_navegador: str = Header(None)):
+    return _novo_codigo(aparelho_id, _usuario_logado(authorization),
+                        x_elevacao, x_navegador)

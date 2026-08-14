@@ -118,7 +118,17 @@ class FakeBanco:
                 linha.update(body)
             return alcancadas
         if method == "DELETE":
-            alvo.clear()
+            # A Tarefa 6 troca a lista de setores de UM aparelho apagando e
+            # regravando os vinculos dele — nunca a tabela inteira. Sem este
+            # filtro, revogar os setores de um aparelho apagaria tambem os
+            # vinculos de qualquer outro aparelho do mesmo evento.
+            if "dispositivo_id=eq." in path:
+                alvo_id = path.split("dispositivo_id=eq.")[1].split("&")[0]
+                sobrando = [l for l in alvo if str(l["dispositivo_id"]) != alvo_id]
+                alvo.clear()
+                alvo.extend(sobrando)
+            else:
+                alvo.clear()
             return []
         return []
 
@@ -406,3 +416,84 @@ def test_gravar_um_setor_nao_atinge_o_outro(banco, elevado):
     outro = next(s for s in banco.setores if s["id"] == outro_setor)
     assert outro["lotacao"] is None
     assert outro["tipo_uso"] == "unico"
+
+
+# ── Os aparelhos ────────────────────────────────────────────────────────────
+
+def test_o_codigo_do_aparelho_nao_tem_caractere_ambiguo():
+    """O porteiro le do papel. `0` e `O`, `1` e `I` e `L` sao erro garantido."""
+    for _ in range(200):
+        codigo = cfg._sortear_codigo()
+        assert len(codigo) == 6
+        assert not set(codigo) & set("01OIL")
+
+
+def test_criar_aparelho_devolve_o_codigo_UMA_vez(banco, elevado):
+    r = cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao A",
+                                                         "setores": [SETOR]})
+    assert len(r["codigo"]) == 6
+    assert banco.dispositivos[0]["nome"] == "Portao A"
+    # O que fica guardado e o hash, nunca o codigo.
+    assert r["codigo"] not in str(banco.dispositivos[0])
+    assert len(banco.dispositivos[0]["codigo_hash"]) == 64
+
+
+def test_o_codigo_nao_volta_em_leitura_nenhuma(banco, elevado):
+    r = cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao A", "setores": [SETOR]})
+    import json
+    painel = json.dumps(cfg._painel(EVENTO))
+    assert "codigo_hash" not in painel
+    # Não `"codigo" not in painel`: o painel já tem o campo legítimo
+    # `codigos_cliente` (da leitura da tela, Tarefa 3), e essa string colide
+    # como substring. O que importa de verdade é o valor SORTEADO nunca
+    # aparecer numa leitura.
+    assert r["codigo"] not in painel
+
+
+def test_o_aparelho_nasce_com_a_lista_de_setores(banco, elevado):
+    cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao A", "setores": [SETOR]})
+    assert cfg._painel(EVENTO)["aparelhos"][0]["setores"] == [SETOR]
+
+
+def test_aparelho_com_setor_de_outro_evento_e_recusado(banco, elevado):
+    """Seria a mesma tiragem valendo em duas portas."""
+    with pytest.raises(HTTPException) as e:
+        cfg._criar_aparelho(EVENTO, DONO, elevado, NAV,
+                            {"nome": "Portao A", "setores": ["setor-de-outro-evento"]})
+    assert e.value.status_code == 422
+
+
+def test_trocar_a_lista_de_setores_substitui_a_anterior(banco, elevado):
+    cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao A", "setores": [SETOR]})
+    aparelho = banco.dispositivos[0]["id"]
+    cfg._gravar_aparelho(aparelho, DONO, elevado, NAV, {"setores": []})
+    assert cfg._painel(EVENTO)["aparelhos"][0]["setores"] == []
+
+
+def test_revogar_o_aparelho(banco, elevado):
+    cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao A", "setores": [SETOR]})
+    aparelho = banco.dispositivos[0]["id"]
+    cfg._gravar_aparelho(aparelho, DONO, elevado, NAV, {"status": "revogado"})
+    assert banco.dispositivos[0]["status"] == "revogado"
+
+
+def test_gerar_outro_codigo_NAO_desconecta_quem_ja_entrou(banco, elevado):
+    """A frase que a tela promete tem de ser verdade no codigo.
+
+    Quem mantem o aparelho conectado e o `token_hash`. Se gerar codigo novo o
+    apagasse, o dono derrubaria a portaria no meio do evento tentando so lembrar
+    um codigo — e a tela estaria mentindo.
+    """
+    cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao A", "setores": [SETOR]})
+    banco.dispositivos[0]["token_hash"] = "token-de-um-aparelho-conectado"
+    aparelho = banco.dispositivos[0]["id"]
+
+    novo = cfg._novo_codigo(aparelho, DONO, elevado, NAV)
+    assert len(novo["codigo"]) == 6
+    assert banco.dispositivos[0]["token_hash"] == "token-de-um-aparelho-conectado"
+
+
+def test_criar_aparelho_sem_elevacao_e_recusado(banco):
+    with pytest.raises(HTTPException) as e:
+        cfg._criar_aparelho(EVENTO, DONO, None, NAV, {"nome": "X", "setores": []})
+    assert e.value.status_code == 401
