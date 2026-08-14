@@ -84,7 +84,7 @@ PAINEL_FALSO = {
 }
 
 
-def _no_navegador(script_extra):
+def _no_navegador(script_extra, aceitar_dialogo=False):
     """Abre o controle.html num Chrome de verdade, com o backend interceptado.
 
     O `controle.html` referencia os scripts por caminho ABSOLUTO (`/controle.js`),
@@ -92,6 +92,10 @@ def _no_navegador(script_extra):
     a raiz do disco, e a página carregaria vazia — sem erro nenhum, o que é o
     pior modo de falhar num teste. Por isso o driver intercepta cada pedido e
     responde com o arquivo lido de `frontend/`.
+
+    `aceitar_dialogo=True` faz o `window.confirm`/`window.prompt` responder OK
+    em vez de Cancelar -- é o único jeito de exercitar o caminho em que o dono
+    ACEITA a confirmação de "Revogar", e não só o caminho em que recusa.
     """
     driver = f"""
 const fs = require('fs');
@@ -109,12 +113,16 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
   const erros = [];
   page.on('pageerror', e => erros.push(String(e)));
 
-  // `abrirCaixaDeSenha()` usa `window.prompt`, de propósito -- é a única caixa
-  // que o navegador não guarda em preenchimento automático. Sem tratar o
-  // evento `dialog`, o CDP prende a página esperando alguém decidir, e o
-  // teste trava. Descartar sempre equivale a tocar em "Cancelar": é o caminho
-  // que o dono segue quando não tem a senha em mãos no momento.
-  page.on('dialog', dialog => dialog.dismiss());
+  // `abrirCaixaDeSenha()` usa `window.prompt`, e o botão de revogar usa
+  // `window.confirm` -- de propósito, são as únicas caixas que o navegador
+  // não guarda em preenchimento automático. Sem tratar o evento `dialog`, o
+  // CDP prende a página esperando alguém decidir, e o teste trava. Por
+  // padrão descartamos (equivale a tocar em "Cancelar": o caminho que o
+  // dono segue quando não tem a senha em mãos, ou quando desiste de
+  // revogar); `aceitar_dialogo=True` inverte para "OK", para o teste que
+  // precisa exercitar quem aceita a confirmação de verdade.
+  page.on('dialog', dialog => {json.dumps(bool(aceitar_dialogo))}
+    ? dialog.accept() : dialog.dismiss());
 
   // Sob `file://` a página tem origem "null", que nenhum backend real permite —
   // é um artefato só deste arnês. O backend de verdade libera CORS pela lista
@@ -657,6 +665,114 @@ def test_revogar_pelo_botao_pede_confirmacao_antes_de_desligar():
         return { chamou };
     """)
     assert saida["chamou"] is False
+
+
+def test_salvar_manda_so_os_setores_quando_so_o_setor_muda():
+    """Dirige o controle de verdade -- marca uma caixa no cartao do
+    aparelho e clica em "Salvar" -- em vez de chamar `trocarSetoresDoAparelho`
+    direto. Um teste que so chama a funcao nao pega o botao desligado: foi
+    essa a licao da rodada anterior, e era exatamente este ramo do handler
+    que continuava sem nenhum teste tocando nele."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        // O aparelho a1 comeca validando so o setor s1; o dono marca o s2
+        // tambem, sem tocar no nome.
+        document.getElementById('aparelho-setor-a1-s2').checked = true;
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        document.getElementById('aparelho-salvar-a1').click();
+        await new Promise(r => setTimeout(r, 50));
+        return { chamadas };
+    """)
+    assert len(saida["chamadas"]) == 1
+    chamada = saida["chamadas"][0]
+    assert chamada["caminho"] == "/aparelhos/a1"
+    assert sorted(chamada["corpo"]["setores"]) == ["s1", "s2"]
+    assert "nome" not in chamada["corpo"]
+
+
+def test_salvar_manda_so_o_nome_quando_so_o_nome_muda():
+    """O outro ramo do mesmo handler: aqui o dono so mexe no campo de nome,
+    sem tocar nas caixas de setor -- `trocarSetoresDoAparelho` nao pode ser
+    chamada."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        document.getElementById('aparelho-nome-a1').value = 'Portao A renomeado';
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        document.getElementById('aparelho-salvar-a1').click();
+        await new Promise(r => setTimeout(r, 50));
+        return { chamadas };
+    """)
+    assert len(saida["chamadas"]) == 1
+    chamada = saida["chamadas"][0]
+    assert chamada["caminho"] == "/aparelhos/a1"
+    assert chamada["corpo"]["nome"] == "Portao A renomeado"
+    assert "setores" not in chamada["corpo"]
+
+
+def test_salvar_nao_manda_nada_quando_nada_mudou():
+    """O terceiro ramo: o dono abre o formulario e clica em Salvar sem
+    editar nada. Nenhum PATCH vazio."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        document.getElementById('aparelho-salvar-a1').click();
+        await new Promise(r => setTimeout(r, 50));
+        return { chamadas };
+    """)
+    assert saida["chamadas"] == []
+
+
+def test_revogar_aceito_manda_status_revogado_pelo_botao():
+    """O teste anterior so provava o Cancelar. Aqui o `dialog` do arnes
+    ACEITA -- `page.on('dialog', d => d.accept())` -- para provar que quem
+    confirma de verdade desliga o aparelho de verdade."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        let enviado = null;
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
+            return { ok: true };
+        };
+        document.getElementById('aparelho-revogar-a1').click();
+        await new Promise(r => setTimeout(r, 50));
+        return { enviado };
+    """, aceitar_dialogo=True)
+    assert saida["enviado"] is not None
+    assert saida["enviado"]["caminho"] == "/aparelhos/a1"
+    assert saida["enviado"]["corpo"]["status"] == "revogado"
 
 
 def test_sem_supabase_a_tela_explica_em_vez_de_ficar_em_branco():
