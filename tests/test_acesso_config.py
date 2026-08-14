@@ -56,6 +56,25 @@ class FakeBanco:
         }[nome]
 
     @staticmethod
+    def _id_filtrado(path):
+        """O valor de `id=eq.<...>` na URL, se a chamada trouxer um.
+
+        Só este filtro é honrado aqui: os outros que o código de produção usa
+        em PATCH (`pedido_id_int=eq.`, e futuramente `dispositivo_id=eq.` na
+        Tarefa 6) não aparecem em nenhuma tabela com mais de uma linha nesta
+        fixture hoje, e resolvê-los fica para quando isso mudar. Sem este
+        filtro, um PATCH gravava a tabela inteira e nenhum teste conseguia
+        distinguir "mirou o id certo" de "mirou todo mundo" — a tabela nunca
+        tinha uma segunda linha para denunciar a diferença.
+        """
+        if "?" not in path:
+            return None
+        for par in path.split("?", 1)[1].split("&"):
+            if par.startswith("id=eq."):
+                return par[len("id=eq."):]
+        return None
+
+    @staticmethod
     def _campos_selecionados(path):
         """O `select=` do PostgREST devolve só as colunas pedidas.
 
@@ -90,9 +109,14 @@ class FakeBanco:
                 criadas.append(linha)
             return criadas
         if method == "PATCH":
-            for linha in alvo:
+            id_alvo = self._id_filtrado(path)
+            # Sem filtro de `id`, mantém o comportamento antigo (grava a
+            # tabela inteira) — nenhuma chamada de produção faz isso hoje,
+            # mas não é este o filtro que esta correção resolve.
+            alcancadas = [l for l in alvo if id_alvo is None or str(l.get("id")) == id_alvo]
+            for linha in alcancadas:
                 linha.update(body)
-            return alvo
+            return alcancadas
         if method == "DELETE":
             alvo.clear()
             return []
@@ -357,3 +381,28 @@ def test_gravar_sem_elevacao_e_recusado(banco):
     with pytest.raises(HTTPException) as e:
         cfg._gravar_setor(SETOR, DONO, None, NAV, {"lotacao": 10})
     assert e.value.status_code == 401
+
+
+def test_gravar_um_setor_nao_atinge_o_outro(banco, elevado):
+    """Regressao da fixture, nao so do codigo de producao.
+
+    Com uma linha so em `banco.setores`, nenhum teste acima provava que o
+    PATCH mirava o id certo — só provava que a tabela inteira tinha o valor
+    esperado. Uma segunda linha aqui é o que faria um bug (trocar `setor_id`
+    por outra coisa na URL, por exemplo) aparecer: ela vazaria a gravação
+    para o setor errado, e este teste pegaria.
+    """
+    outro_setor = "77777777-7777-7777-7777-777777777777"
+    banco.setores.append({
+        "id": outro_setor, "evento_id": EVENTO, "nome": "VIP", "quantidade": 200,
+        "lotacao": None, "tipo_uso": "unico", "pedido_id_int": 18560,
+        "modelo_id": 1000110, "status": "ativo",
+    })
+
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"lotacao": 4800, "tipo_uso": "reentrada"})
+
+    assert banco.setores[0]["lotacao"] == 4800
+    assert banco.setores[0]["tipo_uso"] == "reentrada"
+    outro = next(s for s in banco.setores if s["id"] == outro_setor)
+    assert outro["lotacao"] is None
+    assert outro["tipo_uso"] == "unico"
