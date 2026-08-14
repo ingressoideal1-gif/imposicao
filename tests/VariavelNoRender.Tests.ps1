@@ -35,21 +35,21 @@ Describe "Escolha do servico no Render" {
             # A API devolveu os dois porque o filtro dela e por prefixo. So um
             # se chama exatamente 'imposicao'.
             $resposta = @((Servico 'imposicao-antiga' 'srv-velho'), (Servico 'imposicao' 'srv-certo'))
-            $escolha = Escolher-Servico -Resposta $resposta -Nome 'imposicao'
+            $escolha = Select-ServicoDoRender -Resposta $resposta -Nome 'imposicao'
             $escolha.Erro | Should Be ''
             $escolha.Servico.id | Should Be 'srv-certo'
         }
 
         It "para quando so existe o de nome parecido, em vez de escrever nele" {
             $resposta = @((Servico 'imposicao-antiga' 'srv-velho'))
-            $escolha = Escolher-Servico -Resposta $resposta -Nome 'imposicao'
+            $escolha = Select-ServicoDoRender -Resposta $resposta -Nome 'imposicao'
             $escolha.Servico | Should Be $null
             $escolha.Erro | Should Match 'nao achei'
         }
 
         It "diz quais nomes viu, para quem estiver diagnosticando" {
             $resposta = @((Servico 'imposicao-antiga'), (Servico 'ideal-imposition-api'))
-            $escolha = Escolher-Servico -Resposta $resposta -Nome 'imposicao'
+            $escolha = Select-ServicoDoRender -Resposta $resposta -Nome 'imposicao'
             $escolha.Erro | Should Match 'imposicao-antiga'
             $escolha.Erro | Should Match 'ideal-imposition-api'
         }
@@ -58,20 +58,20 @@ Describe "Escolha do servico no Render" {
     Context "os casos de borda da resposta" {
 
         It "acha o servico quando ele e o unico" {
-            $escolha = Escolher-Servico -Resposta @((Servico 'imposicao' 'srv-abc')) -Nome 'imposicao'
+            $escolha = Select-ServicoDoRender -Resposta @((Servico 'imposicao' 'srv-abc')) -Nome 'imposicao'
             $escolha.Erro | Should Be ''
             $escolha.Servico.id | Should Be 'srv-abc'
         }
 
         It "para com lista vazia em vez de estourar" {
-            $escolha = Escolher-Servico -Resposta @() -Nome 'imposicao'
+            $escolha = Select-ServicoDoRender -Resposta @() -Nome 'imposicao'
             $escolha.Servico | Should Be $null
             $escolha.Erro | Should Match 'nenhum'
         }
 
         It "para quando ha dois com o nome IGUAL, em vez de escolher um" {
             $resposta = @((Servico 'imposicao' 'srv-1'), (Servico 'imposicao' 'srv-2'))
-            $escolha = Escolher-Servico -Resposta $resposta -Nome 'imposicao'
+            $escolha = Select-ServicoDoRender -Resposta $resposta -Nome 'imposicao'
             $escolha.Servico | Should Be $null
             $escolha.Erro | Should Match '2 servicos'
         }
@@ -84,7 +84,7 @@ Describe "Leitura do .env.local" {
         $tmp = Join-Path $env:TEMP "envlocal-$([guid]::NewGuid()).txt"
         Set-Content -Path $tmp -Value @('RENDER_API_KEY=rnd_abc123') -Encoding ASCII
         try {
-            (Ler-EnvLocal -Caminho $tmp)['RENDER_API_KEY'] | Should Be 'rnd_abc123'
+            (Get-VariaveisDoEnv -Caminho $tmp)['RENDER_API_KEY'] | Should Be 'rnd_abc123'
         } finally { Remove-Item $tmp -Force }
     }
 
@@ -92,7 +92,7 @@ Describe "Leitura do .env.local" {
         $tmp = Join-Path $env:TEMP "envlocal-$([guid]::NewGuid()).txt"
         Set-Content -Path $tmp -Value @('# comentario', '', 'A=1') -Encoding ASCII
         try {
-            $v = Ler-EnvLocal -Caminho $tmp
+            $v = Get-VariaveisDoEnv -Caminho $tmp
             $v.Count | Should Be 1
             $v['A'] | Should Be '1'
         } finally { Remove-Item $tmp -Force }
@@ -102,12 +102,12 @@ Describe "Leitura do .env.local" {
         $tmp = Join-Path $env:TEMP "envlocal-$([guid]::NewGuid()).txt"
         Set-Content -Path $tmp -Value @('X=aaa=bbb==') -Encoding ASCII
         try {
-            (Ler-EnvLocal -Caminho $tmp)['X'] | Should Be 'aaa=bbb=='
+            (Get-VariaveisDoEnv -Caminho $tmp)['X'] | Should Be 'aaa=bbb=='
         } finally { Remove-Item $tmp -Force }
     }
 
     It "devolve vazio quando o arquivo nao existe, sem estourar" {
-        (Ler-EnvLocal -Caminho 'C:\nao\existe\.env.local').Count | Should Be 0
+        (Get-VariaveisDoEnv -Caminho 'C:\nao\existe\.env.local').Count | Should Be 0
     }
 }
 

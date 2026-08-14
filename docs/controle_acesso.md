@@ -297,11 +297,11 @@ UUID zerado.
 
 ## O que falta (a partir da parte 3b)
 
-A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**. Ela traz: login do
-cliente, lotação e tipo de uso por setor, os aparelhos da portaria com lista de setores
-própria, e a senha do dono travando a configuração do evento. Falta a variável
-`ACESSO_ELEVACAO_SEGREDO` no Render — sem ela a tela abre mas não grava; o estado atual
-está em [STATUS_PROJETO.md](STATUS_PROJETO.md).
+A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**, com a
+`ACESSO_ELEVACAO_SEGREDO` já no Render — o `/api/acesso/saude` responde as quatro em `true`.
+Ela traz: login do cliente, lotação e tipo de uso por setor, os aparelhos da portaria com
+lista de setores própria, e a senha do dono travando a configuração do evento. O estado
+atual está em [STATUS_PROJETO.md](STATUS_PROJETO.md).
 
 O que falta é o aplicativo da PORTARIA (parte 3b): IndexedDB com validação local de
 verdade, leitura de QR e registro de entrada sem depender de rede, e reentrada em uso de

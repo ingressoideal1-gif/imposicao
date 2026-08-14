@@ -60,7 +60,7 @@ $raiz = Split-Path -Parent $PSScriptRoot
 $envLocal = Join-Path $raiz '.env.local'
 $API = 'https://api.render.com/v1'
 
-function Ler-EnvLocal {
+function Get-VariaveisDoEnv {
     param([string]$Caminho)
     $valores = @{}
     if (-not (Test-Path $Caminho)) { return $valores }
@@ -73,7 +73,7 @@ function Ler-EnvLocal {
     return $valores
 }
 
-function Escolher-Servico {
+function Select-ServicoDoRender {
     <#
       Da lista que a API devolveu, qual e o servico alvo.
 
@@ -130,7 +130,7 @@ if (-not (Test-Path $envLocal)) {
           'Este script le o valor de la. Sem ele nao ha o que escrever.'
 }
 
-$valores = Ler-EnvLocal -Caminho $envLocal
+$valores = Get-VariaveisDoEnv -Caminho $envLocal
 
 $chaveApi = $valores['RENDER_API_KEY']
 if ([string]::IsNullOrWhiteSpace($chaveApi)) {
@@ -171,7 +171,7 @@ catch {
 }
 
 # A API devolve [{cursor, service:{...}}].
-$escolha = Escolher-Servico -Resposta @($achados) -Nome $Servico
+$escolha = Select-ServicoDoRender -Resposta @($achados) -Nome $Servico
 if ($escolha.Erro -ne '') {
     Parar "No Render: $($escolha.Erro)." `
           'Passe o nome certo em -Servico, ou desfaca a ambiguidade no painel do Render.'
@@ -217,7 +217,14 @@ try {
     $deploy = Invoke-RestMethod -Method Post -Headers $cabecalhos -TimeoutSec 90 `
         -ContentType 'application/json' -Body (@{ clearCache = 'do_not_clear' } | ConvertTo-Json -Compress) `
         -Uri "$API/services/$($alvo.id)/deploys"
-    Write-Host "  [ok] deploy $($deploy.id) em andamento." -ForegroundColor Green
+    # O id vem vazio quando a API responde num formato diferente do esperado.
+    # Imprimir "deploy  em andamento", com o buraco no meio, faz parecer que
+    # alguma coisa falhou -- quando o deploy foi aceito normalmente.
+    if ($deploy -and $deploy.id) {
+        Write-Host "  [ok] deploy $($deploy.id) em andamento." -ForegroundColor Green
+    } else {
+        Write-Host '  [ok] redeploy pedido.' -ForegroundColor Green
+    }
 }
 catch {
     Write-Host "  Nao consegui pedir o deploy: $($_.Exception.Message)" -ForegroundColor Yellow

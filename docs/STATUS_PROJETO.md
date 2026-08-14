@@ -17,21 +17,19 @@ retomando depois de um tempo, comece por aqui.
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
 
-**O controle de acesso está ativo no servidor, faltando uma variável.** Conferido em 14/08
+**O controle de acesso está inteiro no servidor — as quatro variáveis.** Conferido em 14/08
 contra o Render, não assumido:
 
 ```
-GET /api/acesso/saude  →  503
-{"detail":{"ok":false,"variaveis":{"SUPABASE_SERVICE_KEY":true,"ACESSO_AGENTE_SEGREDO":true,
- "QR_PEDIDO_SEGREDO":true,"ACESSO_ELEVACAO_SEGREDO":false},
- "faltando":["ACESSO_ELEVACAO_SEGREDO"]}}
+GET /api/acesso/saude  →  200
+{"ok":true,"variaveis":{"SUPABASE_SERVICE_KEY":true,"ACESSO_AGENTE_SEGREDO":true,
+ "QR_PEDIDO_SEGREDO":true,"ACESSO_ELEVACAO_SEGREDO":true},"faltando":[],"banco":"ok"}
 ```
 
-O 503 é a resposta certa, não uma pane: o endpoint recusa dizer "ok" enquanto faltar
-qualquer uma das quatro. As três primeiras seguram tudo o que a parte 2 faz; a quarta é a
-que libera a escrita na tela do dono (parte 3a). Enquanto ela não estiver no Render, a
-`controle.html` abre, mostra tudo e **não grava nada** — o dono digita a senha certa e
-recebe erro.
+Se algum dia esse endpoint responder **503**, não é pane: é ele se recusando a dizer "ok"
+com alguma das quatro faltando, e o corpo da resposta diz qual. As três primeiras seguram o
+que a parte 2 faz; a quarta libera a escrita na tela do dono (parte 3a) — sem ela a
+`controle.html` abre, mostra tudo e não grava nada.
 
 As oito rotas `/api/acesso/*` respondem, e as quatro travas seguraram: publicar faixa sem o
 segredo do agente, gerar QR sem login, listar eventos sem login e trocar um token falso
@@ -73,7 +71,7 @@ Spec: [docs/superpowers/specs/2026-08-13-controle-acesso-parte2-design.md](super
 
 **As sete tabelas `producao_acesso_*` já existem no banco** e foram conferidas uma a uma.
 
-### 🔑 Parte 3a — o dono configura o evento (**no ar desde a v570, aguardando a quarta variável**)
+### ✅ Parte 3a — o dono configura o evento (**no ar desde a v570**)
 
 O dono do evento configura tudo em [frontend/controle.html](../frontend/controle.html): dados
 do evento, lotação e tipo de uso de cada setor, aparelhos da portaria — inclusive renomear e
@@ -94,16 +92,20 @@ conseguiria ocupar uma posição da tiragem com um hash próprio.
 Plano: [docs/superpowers/plans/2026-08-14-controle-acesso-parte3a.md](superpowers/plans/2026-08-14-controle-acesso-parte3a.md)
 Spec: [docs/superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md](superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md)
 
-**O servidor agora precisa de quatro variáveis, não três**: `SUPABASE_SERVICE_KEY`,
-`ACESSO_AGENTE_SEGREDO`, `QR_PEDIDO_SEGREDO` e `ACESSO_ELEVACAO_SEGREDO`.
+**O servidor precisa de quatro variáveis, não três**: `SUPABASE_SERVICE_KEY`,
+`ACESSO_AGENTE_SEGREDO`, `QR_PEDIDO_SEGREDO` e `ACESSO_ELEVACAO_SEGREDO` — as quatro estão
+no Render desde 14/08, conferidas pelo `/api/acesso/saude` acima.
 
-**O código está publicado; a quarta variável, não.** Site e motor saíram na v569 e o agente
-na 1.2.68 — e a v570 / 1.2.69 os reafirmam (tabela no topo deste documento). Isso já leva
-`controle.html`, `controle.js`,
-`controle.css` e `acesso-conta.js` às estações pela `PAINEL_ARQUIVOS`. Falta só colar
-`ACESSO_ELEVACAO_SEGREDO` no Render — serviço **`imposicao`** — e conferir
-`/api/acesso/saude` com as quatro em `true`. Colocar a variável é ação do usuário; até lá a
-tela abre em modo somente leitura de fato, porque toda gravação depende da elevação.
+O código saiu na v569, e a v570 / 1.2.69 o reafirmam (tabela no topo deste documento). A
+`PAINEL_ARQUIVOS` leva `controle.html`, `controle.js`, `controle.css` e `acesso-conta.js`
+às estações.
+
+**Falta o teste com um dono de verdade.** O caminho foi provado por fora, endpoint por
+endpoint, mas nenhum cliente ainda entrou, digitou a senha, mudou uma lotação e cadastrou um
+aparelho. Um detalhe conhecido e ainda em aberto: **não há como reativar um aparelho
+revogado.** Revogar é o botão de pânico da portaria, e botão de pânico é apertado por
+engano; hoje o conserto é criar outro aparelho e digitar um código novo no celular. O
+backend já aceitaria a reativação — falta a decisão do usuário e o botão.
 
 ### ⏳ Parte 3b — a portaria (**não começou**)
 
@@ -136,16 +138,11 @@ inteiro ainda**. Este é o passo que falta:
 Depois, imprimir um trabalho com QR Ideal e conferir que `producao_acesso_credenciais`
 recebeu a faixa daquele pedido.
 
-### 2. A quarta variável no Render
+### 2. A parte 3a com um cliente de verdade
 
-O código da parte 3a já está no ar; falta a chave que libera a escrita:
-
-```powershell
-.\ferramentas\copiar_para_render.ps1 -Somente ACESSO_ELEVACAO_SEGREDO
-```
-
-Colar no Render (serviço **`imposicao`** → Environment → Add Environment Variable),
-**Save, rebuild, and deploy**, e conferir `/api/acesso/saude` com as quatro em `true`.
+Depois do teste acima, o dono do evento abre a `controle.html`, entra com a conta que ele já
+tem no ERP Vibe, ajusta a lotação de um setor, cadastra um aparelho e lê o código no celular.
+É o único jeito de saber se a tela se explica sozinha.
 
 ### 3. Então: parte 3b e 3c
 
@@ -155,12 +152,24 @@ Cada uma merece a própria spec, como a 3a teve.
 
 ## Como configurar as variáveis do Render (para a próxima vez)
 
-As três primeiras foram feitas em 14/08. A quarta, `ACESSO_ELEVACAO_SEGREDO`, é a pendência
-aberta — ver "Por onde continuar", acima. Este passo a passo fica registrado porque um
-serviço novo, uma troca de segredo, ou justamente essa variável pendente, refazem este
-caminho.
+As quatro foram feitas em 14/08. Este passo a passo fica registrado porque um serviço novo
+ou uma troca de segredo refazem o caminho.
 
-São quatro, todas com o valor que já está no `.env.local` desta máquina:
+**O jeito curto, sem abrir o navegador:**
+
+```powershell
+.\ferramentas\variavel_no_render.ps1 ACESSO_ELEVACAO_SEGREDO -Conferir   # só mostra o alvo
+.\ferramentas\variavel_no_render.ps1 ACESSO_ELEVACAO_SEGREDO             # grava e redeploya
+```
+
+Ele lê o valor do `.env.local`, acha o serviço pelo **nome exato** (o filtro da API do
+Render casa por prefixo, e pegar o primeiro da lista repetiria o acidente descrito no
+começo deste documento), grava, pede o redeploy e nunca imprime o valor. Depende de
+`RENDER_API_KEY` no `.env.local` — Render → foto do perfil → Account Settings → API Keys.
+Essa chave abre a conta inteira do Render; trate-a como a `service_role`.
+
+**O jeito manual**, se preferir o painel. São quatro variáveis, todas com o valor que já
+está no `.env.local` desta máquina:
 
 - `SUPABASE_SERVICE_KEY` — sem ela o router `/api/acesso/*` nem é montado
 - `ACESSO_AGENTE_SEGREDO` — sem ela a faixa de códigos nunca chega à nuvem
