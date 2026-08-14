@@ -20,6 +20,14 @@
 
 .PARAMETER SemFreio
     Pula as conferencias. So para emergencia — imprime aviso.
+
+.PARAMETER Sim
+    Responde "s" a pergunta final, sem pular conferencia nenhuma. Existe para
+    quem roda o script de um terminal sem teclado — um agente, uma automacao —
+    onde o Read-Host falha com "modo NonInteractive" DEPOIS de as conferencias
+    ja terem passado. Sem este parametro, a unica saida seria o -SemFreio, que
+    e justamente o que nao se deve usar: ele pularia os freios para resolver um
+    problema que nao tem nada a ver com eles.
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0,
@@ -27,7 +35,9 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$Mensagem,
 
-    [switch]$SemFreio
+    [switch]$SemFreio,
+
+    [switch]$Sim
 )
 
 $ErrorActionPreference = "Stop"
@@ -134,10 +144,17 @@ if (-not $SemFreio) {
     Write-Host "  Versao   : v$proxima" -ForegroundColor White
     Write-Host "  Publica  : o SITE (Vercel) e o MOTOR (Render) — os dois, juntos." -ForegroundColor Yellow
     Write-Host ""
-    $resp = Read-Host "  Publicar? (s/n)"
-    if ($resp -notmatch '^[sS]') {
-        Write-Host "  Cancelado. Nada foi ao ar." -ForegroundColor Gray
-        exit 0
+    if ($Sim) {
+        # As conferencias acima JA rodaram e passaram: o -Sim responde a
+        # pergunta, nao dispensa nenhum freio.
+        Write-Host "  Publicar? (s/n) s   [confirmado por -Sim]" -ForegroundColor Gray
+    }
+    else {
+        $resp = Read-Host "  Publicar? (s/n)"
+        if ($resp -notmatch '^[sS]') {
+            Write-Host "  Cancelado. Nada foi ao ar." -ForegroundColor Gray
+            exit 0
+        }
     }
 }
 

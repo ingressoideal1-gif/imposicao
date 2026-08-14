@@ -191,3 +191,44 @@ Describe "Get-TagAnterior" {
         Get-TagAnterior $tags 'v999' | Should Be ''
     }
 }
+
+Describe "Confirmacao do publicar.ps1" {
+
+    # O -Sim existe porque o Read-Host falha em terminal sem teclado, e a unica
+    # alternativa seria o -SemFreio -- que pularia TODAS as conferencias para
+    # resolver um problema que nao tem nada a ver com elas. Os dois nao podem
+    # se confundir.
+
+    $raizPub = Split-Path -Parent $PSScriptRoot
+    $textoPub = Get-Content (Join-Path $raizPub "publicar.ps1") -Raw
+
+    It "aceita -Sim como parametro" {
+        $textoPub | Should Match '\[switch\]\$Sim'
+    }
+
+    It "o -Sim vive DENTRO do bloco que so roda com os freios ligados" {
+        # Se ele estivesse fora do 'if (-not $SemFreio)', confirmar passaria a
+        # significar tambem pular conferencia.
+        $i = $textoPub.IndexOf('if (-not $SemFreio) {')
+        $j = $textoPub.IndexOf('if ($Sim) {')
+        $i | Should Not Be -1
+        $j | Should Not Be -1
+        ($j -gt $i) | Should Be $true
+    }
+
+    It "sem -Sim continua perguntando" {
+        $textoPub | Should Match 'Read-Host\s+"\s*Publicar\? \(s/n\)"'
+    }
+
+    It "o -SemFreio continua existindo e separado" {
+        $textoPub | Should Match '\[switch\]\$SemFreio'
+    }
+
+    It "as conferencias continuam antes da confirmacao" {
+        # A ordem importa: confirmar o que nao foi conferido nao vale nada.
+        $motor = $textoPub.IndexOf('Conferindo se o motor sobe')
+        $conf  = $textoPub.IndexOf('Publicar? (s/n)')
+        $motor | Should Not Be -1
+        ($motor -lt $conf) | Should Be $true
+    }
+}
