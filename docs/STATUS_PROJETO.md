@@ -66,16 +66,52 @@ Spec: [docs/superpowers/specs/2026-08-13-controle-acesso-parte2-design.md](super
 
 **As sete tabelas `producao_acesso_*` já existem no banco** e foram conferidas uma a uma.
 
-### ⏳ Parte 3 — o aplicativo da portaria (**não começou**)
+### ✅ Parte 3a — o dono configura o evento (**commitada em 14/08/2026, ainda não publicada**)
 
-É a maior das três. O que ela precisa entregar está no fim do
+O dono do evento configura tudo em [frontend/controle.html](../frontend/controle.html): dados
+do evento, lotação e tipo de uso de cada setor, aparelhos da portaria — inclusive renomear e
+revogar cada um, com a lista de setores de cada aparelho — e os códigos próprios de staff e
+cortesia. Gerar um código novo para um aparelho **não desconecta** o aparelho que já está
+trabalhando.
+
+Toda escrita — sem exceção — exige uma elevação de 15 minutos obtida com a senha do dono,
+assinada com `ACESSO_ELEVACAO_SEGREDO` e presa ao navegador. Sem ela os campos ficam
+genuinamente `disabled`, não só apagados na tela: um `disabled` de verdade, não uma opacidade
+que engana o olho e deixa o toque passar. Cancelar a caixa de senha, perder a rede, ou a
+elevação vencer no meio de uma edição — nenhum dos três apaga o que o dono digitou.
+
+Cada setor mostra lado a lado quanto o ERP encomendou e quanto está publicado. É por aí que
+apareceria o risco residual que a parte 2 registrou: quem tivesse o segredo do agente
+conseguiria ocupar uma posição da tiragem com um hash próprio.
+
+Plano: [docs/superpowers/plans/2026-08-14-controle-acesso-parte3a.md](superpowers/plans/2026-08-14-controle-acesso-parte3a.md)
+Spec: [docs/superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md](superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md)
+
+**O servidor agora precisa de quatro variáveis, não três**: `SUPABASE_SERVICE_KEY`,
+`ACESSO_AGENTE_SEGREDO`, `QR_PEDIDO_SEGREDO` e `ACESSO_ELEVACAO_SEGREDO`. O
+`/api/acesso/saude` já reporta as quatro, mas **a quarta ainda não foi colocada no Render** —
+essa é ação do usuário, não deste plano. Sem ela publicada, o dono digitaria a senha certa e
+nada aconteceria.
+
+**Este código está commitado, mas não publicado.** O site, o motor e o agente no ar
+continuam sendo os da parte 2 (v561 / 1.2.60, tabela no topo deste documento). Publicar exige,
+nesta ordem: colocar `ACESSO_ELEVACAO_SEGREDO` no Render, conferir `/api/acesso/saude` com as
+quatro variáveis em `true`, e então `.\publicar.ps1` **e** `.\publicar_agente.ps1` na mesma
+leva — a lista de arquivos que a estação baixa (`PAINEL_ARQUIVOS`) mudou.
+
+### ⏳ Parte 3b — a portaria (**não começou**)
+
+Ler o QR, validar **local de verdade** com IndexedDB (o `sw.js` de hoje só guarda os arquivos
+da tela — a portaria para quando a rede cai), fila de leituras.
+
+### ⏳ Parte 3c — painel ao vivo e relatórios (**não começou**)
+
+Lotação ao vivo, relatórios, e a mudança do Ideal Control (hoje em
+`../ideal-IdealControl/`) para dentro deste repositório. Cancelar credencial e desvincular
+pedido do evento também esperam esta parte.
+
+O que a parte 3 inteira precisa entregar está no fim do
 [docs/controle_acesso.md](controle_acesso.md), com as decisões que o usuário já tomou.
-
-Em resumo: validação **local de verdade** com IndexedDB (o `sw.js` de hoje só guarda os
-arquivos da tela — a portaria para quando a rede cai), login do cliente, aparelhos com
-lista de setores própria, senha do dono travando a configuração do evento, reentrada,
-lotação ao vivo e relatórios. Mais a mudança do Ideal Control (hoje em
-`../ideal-IdealControl/`) para dentro deste repositório.
 
 ---
 
@@ -94,9 +130,14 @@ inteiro ainda**. Este é o passo que falta:
 Depois, imprimir um trabalho com QR Ideal e conferir que `producao_acesso_credenciais`
 recebeu a faixa daquele pedido.
 
-### 2. Então: parte 3
+### 2. Publicar a parte 3a
 
-Ela merece a própria spec, como as anteriores.
+Ver os três passos no fim da seção da parte 3a, acima — variável no Render, conferir a
+saúde, depois `.\publicar.ps1` e `.\publicar_agente.ps1` juntos.
+
+### 3. Então: parte 3b e 3c
+
+Cada uma merece a própria spec, como a 3a teve.
 
 ---
 

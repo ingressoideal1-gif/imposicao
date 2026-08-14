@@ -169,6 +169,9 @@
             $('pronto-texto').textContent = d.novo
                 ? 'O evento "' + d.nome_evento + '" foi criado com os setores deste pedido.'
                 : 'Este pedido foi anexado ao evento "' + d.nome_evento + '".';
+            // Vai direto para ESTE evento, nunca para a lista: o cliente acabou
+            // de criar ou anexar o pedido e não deveria ter de procurá-lo de novo.
+            $('ir-para-controle').href = '/controle.html?evento=' + encodeURIComponent(d.evento_id);
         }).catch(function (e) {
             $('btn-cadastrar').disabled = false;
             $('btn-cadastrar').textContent = 'Cadastrar evento';

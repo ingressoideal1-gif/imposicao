@@ -65,6 +65,23 @@ def test_todo_botao_tem_rotulo_em_texto():
         assert len(letras) >= 3, f"botao sem rotulo em texto: {botao.strip()[:60]}"
 
 
+def test_a_tela_do_QR_leva_a_tela_do_dono():
+    """A promessa da ultima tela do evento.html passa a ter porta."""
+    assert "controle.html" in _ler("frontend/evento.html")
+
+
+def test_a_porta_carrega_o_evento_recem_cadastrado():
+    """Cair na lista de eventos depois de cadastrar um seria mandar o cliente
+    procurar o que ele acabou de criar."""
+    assert "controle.html?evento=" in _ler("frontend/evento.js")
+
+
+def test_o_status_do_projeto_conhece_a_tela_nova():
+    texto = _ler("docs/STATUS_PROJETO.md")
+    assert "controle.html" in texto
+    assert "ACESSO_ELEVACAO_SEGREDO" in texto
+
+
 # ── No navegador ────────────────────────────────────────────────────────────
 
 PAINEL_FALSO = {
