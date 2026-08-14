@@ -293,3 +293,112 @@ def test_a_url_do_qr_aponta_para_a_origem_do_painel():
     url = acesso_api._url_do_evento("20272.123.abc")
     assert url.startswith(security_config.PAINEL_BASE_URL)
     assert url.endswith("evento.html?t=20272.123.abc")
+
+
+# ─── Trocar o token pelo esqueleto do evento ──────────────────────────────────
+#
+# Este endpoint é PÚBLICO: o cliente ainda não tem conta quando lê o QR, então o
+# token é a credencial. Tudo que protege o evento está aqui dentro.
+
+import hashlib as _hashlib
+
+import qr_pedido
+
+
+class BancoComPedido(FakeBanco):
+    """FakeBanco com um pedido já registrado, como fica depois de gerar o QR."""
+
+    def __init__(self, token=None, revogado=None, evento_id=None):
+        super().__init__(modelos=[
+            {"id": 1000287, "nome_modelo": "PISTA", "quantidade": 88},
+            {"id": 1000288, "nome_modelo": "CAMAROTE", "quantidade": 12},
+        ])
+        self.pedidos = [{
+            "pedido_id_int": 20272,
+            "sal": "00" * 32,
+            "publicado_em": None,
+            "evento_id": evento_id,
+            "qr_revogado_em": revogado,
+            "qr_token_hash": _hashlib.sha256((token or "").encode()).hexdigest(),
+        }]
+        self.propostas = [{"id_int": 20272, "id_cliente": 6}]
+
+    def __call__(self, method, path, body=None, prefer=None):
+        if path.startswith("propostas"):
+            return self.propostas
+        return super().__call__(method, path, body, prefer)
+
+
+def test_o_esqueleto_vem_do_ERP_e_nao_do_token(monkeypatch):
+    """O QR não carrega os dados do evento, e é por isso que ele nunca envelhece.
+
+    Se a lista de setores viajasse dentro do token, ela continuaria afirmando a
+    quantidade velha depois que o pedido mudasse no ERP.
+    """
+    token = qr_pedido.gerar(20272)
+    banco = BancoComPedido(token=token)
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+
+    esqueleto = acesso_api._esqueleto(token)
+    assert esqueleto["pedido"] == 20272
+    assert esqueleto["id_cliente"] == 6
+    assert esqueleto["ja_reivindicado"] is False
+    assert [(s["modelo_id"], s["nome"], s["quantidade"]) for s in esqueleto["setores"]] == [
+        (1000287, "PISTA", 88), (1000288, "CAMAROTE", 12),
+    ]
+    assert esqueleto["total"] == 100
+    assert any("pedidos_modelos" in p for _m, p in banco.chamadas)
+
+
+def test_token_de_outro_QR_e_recusado(monkeypatch):
+    """Gerar um QR novo mata o anterior — e o anterior continua assinado.
+
+    Este é o caso que a revogação existe para cobrir: o QR foi para a pessoa
+    errada, o atendente gerou outro, e o primeiro tem de parar de funcionar
+    mesmo sendo criptograficamente válido.
+    """
+    antigo = qr_pedido.gerar(20272)
+    novo = qr_pedido.gerar(20272, dias=179)  # assinatura diferente
+    assert antigo != novo
+    monkeypatch.setattr(acesso_api, "supabase", BancoComPedido(token=novo))
+
+    with pytest.raises(HTTPException) as e:
+        acesso_api._esqueleto(antigo)
+    assert e.value.status_code == 403
+
+
+def test_qr_revogado_e_recusado(monkeypatch):
+    token = qr_pedido.gerar(20272)
+    monkeypatch.setattr(acesso_api, "supabase",
+                        BancoComPedido(token=token, revogado="2026-08-13T00:00:00Z"))
+    with pytest.raises(HTTPException) as e:
+        acesso_api._esqueleto(token)
+    assert e.value.status_code == 403
+
+
+def test_token_adulterado_ou_vencido_e_recusado(monkeypatch):
+    monkeypatch.setattr(acesso_api, "supabase", BancoComPedido(token="x"))
+    for ruim in (qr_pedido.gerar(20272, dias=-1), "20272.999.assinaturafalsa", "lixo"):
+        with pytest.raises(HTTPException) as e:
+            acesso_api._esqueleto(ruim)
+        assert e.value.status_code == 401
+
+
+def test_pedido_sem_QR_gerado_e_recusado(monkeypatch):
+    """Token válido para um pedido que nunca teve QR: não existe linha."""
+    banco = BancoComPedido(token="x")
+    banco.pedidos = []
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+    with pytest.raises(HTTPException) as e:
+        acesso_api._esqueleto(qr_pedido.gerar(20272))
+    assert e.value.status_code == 404
+
+
+def test_pedido_ja_reivindicado_se_anuncia(monkeypatch):
+    """O app precisa saber, para oferecer 'anexar' em vez de 'criar'."""
+    token = qr_pedido.gerar(20272)
+    monkeypatch.setattr(acesso_api, "supabase",
+                        BancoComPedido(token=token, evento_id="evt-1"))
+    esqueleto = acesso_api._esqueleto(token)
+    assert esqueleto["ja_reivindicado"] is True
+    assert esqueleto["evento_id"] == "evt-1"

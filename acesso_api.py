@@ -371,6 +371,82 @@ def gerar_qr(pedido: int, authorization: str = Header(None)):
     return {"url": _url_do_evento(token), "pedido": pedido}
 
 
+# ─── Trocar o token pelo esqueleto do evento ──────────────────────────────────
+#
+# PÚBLICO de propósito: quando o cliente lê o QR ele ainda não tem conta, então
+# o token É a credencial. Tudo que protege o evento está nas travas abaixo.
+#
+# O esqueleto é lido do ERP na hora, nunca do token. É o que faz o QR não
+# envelhecer: se a lista de setores viajasse dentro dele, continuaria afirmando
+# a quantidade velha depois que o pedido mudasse.
+
+
+def _esqueleto(token: str) -> dict:
+    """O que o app mostra ao cliente antes de ele decidir cadastrar."""
+    import qr_pedido
+
+    # 1. É autêntico? (assinatura e validade — pura criptografia)
+    try:
+        pedido = qr_pedido.conferir(token)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=f"QR invalido: {e}")
+
+    # 2. Ainda vale? (revogação — só o banco sabe)
+    linha = (supabase(
+        "GET", f"producao_acesso_pedidos?pedido_id_int=eq.{pedido}&select=*"
+    ) or [None])[0]
+    if not linha:
+        raise HTTPException(status_code=404, detail="pedido sem QR gerado")
+
+    if linha.get("qr_revogado_em"):
+        raise HTTPException(
+            status_code=403,
+            detail="este QR foi cancelado; peca um novo a quem o enviou",
+        )
+
+    # Gerar um QR novo troca o hash guardado. O anterior continua assinado e
+    # valido para sempre — e e exatamente por isso que a comparacao existe.
+    esperado = linha.get("qr_token_hash") or ""
+    atual = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(esperado, atual):
+        raise HTTPException(
+            status_code=403,
+            detail="este QR foi substituido por outro; use o mais recente",
+        )
+
+    # 3. O que o ERP diz HOJE sobre este pedido.
+    modelos = supabase(
+        "GET",
+        f"pedidos_modelos?id_int=eq.{pedido}&select=id,nome_modelo,quantidade&order=ordem.asc",
+    ) or []
+    setores = [{
+        "modelo_id": int(m["id"]),
+        # O setor do evento sai de `nome_modelo`. O campo `setor` de
+        # pedidos_modelos ja esta ocupado com o setor de PRODUCAO
+        # (FLEXO, TEXTIL, PVC, LASER) e nao serve aqui.
+        "nome": (m.get("nome_modelo") or f"Setor {m['id']}").strip(),
+        "quantidade": int(m.get("quantidade") or 0),
+    } for m in modelos]
+
+    proposta = (supabase(
+        "GET", f"propostas?id_int=eq.{pedido}&select=id_cliente"
+    ) or [None])[0]
+
+    return {
+        "pedido": pedido,
+        "id_cliente": (proposta or {}).get("id_cliente"),
+        "ja_reivindicado": bool(linha.get("evento_id")),
+        "evento_id": linha.get("evento_id"),
+        "setores": setores,
+        "total": sum(s["quantidade"] for s in setores),
+    }
+
+
+@router.get("/evento")
+def evento(t: str = ""):
+    return _esqueleto(t)
+
+
 @router.get("/saude")
 def saude():
     """Diz se este servidor consegue mesmo falar com as tabelas.
