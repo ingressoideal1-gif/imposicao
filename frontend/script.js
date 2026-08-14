@@ -22418,20 +22418,20 @@ function renderAmostrasOSItens(osId) {
                     <div class="amostra-config-panel" style="padding: 14px 16px;">
                         <div style="display: flex; flex-direction: column; gap: 10px;">
                             <div style="display: flex; gap: 10px; align-items: flex-start;">
-                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; flex: 0.9; min-width: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
-                                    <label style="display: flex; align-items: center; min-height: 24px; margin-bottom: 4px; text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor</label>
+                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; flex: 0.72; min-width: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
+                                    <label style="display: flex; align-items: center; height: 24px; margin-bottom: 4px; text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor</label>
                                     <select class="form-control" style="width: 100%; height: 40px; padding-top: 0; padding-bottom: 0;" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
                                         <option value="">-- Selecione uma Cor --</option>
                                         ${corsOpts}
                                     </select>
                                 </div>
                                 <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0; flex: 0.9; min-width: 0;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; min-height: 24px; margin-bottom: 4px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; height: 24px; margin-bottom: 4px;">
                                         <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração</label>
                                         ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                                             <div style="display: flex; gap: 4px; align-items: center;">
-                                                <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
-                                                <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
+                                                <button class="btn btn-sm btn-ghost" style="height: 22px; padding: 0 4px; display: inline-flex; align-items: center; font-size: 0.85rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
+                                                <button class="btn btn-sm btn-ghost" style="height: 22px; padding: 0 4px; display: inline-flex; align-items: center; font-size: 0.85rem;" onclick="editCustomNumeracao(${idx}, '${osId}', '${item.id}')" title="Editar Numeração exclusivamente para este Modelo">✏️</button>
                                             </div>
                                         `}
                                     </div>
@@ -22441,8 +22441,8 @@ function renderAmostrasOSItens(osId) {
                                     </select>
                                 </div>
                                 <div class="form-group" style="margin-bottom: 0; flex: 2.2; min-width: 0;">
-                                    <div style="display: flex; align-items: center; min-height: 24px; margin-bottom: 4px;">
-                                        <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 1px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
+                                    <div style="display: flex; align-items: center; height: 24px; margin-bottom: 4px;">
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; height: 22px; font-size: 0.8rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
                                             <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
                                             <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
                                         </span>
@@ -22451,8 +22451,8 @@ function renderAmostrasOSItens(osId) {
                                     <div style="display:flex; flex-direction: column; gap:8px;">
                                         <div style="display:flex; gap:6px; align-items: center; flex-wrap: wrap;">
                                             <span class="badge badge-blue" style="font-size: 0.7rem; font-weight: 700; width: 60px; height: 40px; display: inline-flex; align-items: center; justify-content: center;">FRENTE</span>
-                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte da frente (PDF, JPG, PNG)">
-                                                🖼️ Upload Arte
+                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte da frente (PDF, JPG, PNG)">
+                                                🖼️ Arte
                                             </label>
                                             <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                                 onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
@@ -22465,8 +22465,8 @@ function renderAmostrasOSItens(osId) {
                                         </div>
                                         <div style="display:${item.modo_pdf ? 'none' : 'flex'}; gap:6px; align-items: center; flex-wrap: wrap;">
                                             <span class="badge badge-amber" style="font-size: 0.7rem; font-weight: 700; width: 60px; height: 40px; display: inline-flex; align-items: center; justify-content: center;">VERSO</span>
-                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-verso-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte do verso (PDF, JPG, PNG)">
-                                                🖼️ Upload Verso
+                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-verso-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte do verso (PDF, JPG, PNG)">
+                                                🖼️ Verso
                                             </label>
                                             <input type="file" id="amostra-item-arte-verso-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                                 onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'verso')">
@@ -22479,8 +22479,8 @@ function renderAmostrasOSItens(osId) {
                                     </div>
                                     ` : `
                                     <div style="display:flex; gap:6px; align-items: center; flex-wrap: wrap;">
-                                        <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte (PDF, JPG, PNG)">
-                                            🖼️ Upload Arte
+                                        <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; margin: 0; cursor: pointer; font-weight: 600; white-space: nowrap;" title="Enviar arquivo de arte (PDF, JPG, PNG)">
+                                            🖼️ Arte
                                         </label>
                                         <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
                                             onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
@@ -22513,7 +22513,7 @@ function renderAmostrasOSItens(osId) {
                     </div>
                     `}
                 </div>
-                <div class="amostra-preview-container" style="margin-top: 12px;">
+                <div class="amostra-preview-container" style="margin-top: 12px; min-height: 0; justify-content: flex-start;">
                     <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
                         <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
                             ${item.nome_modelo || `Modelo ${idx + 1}`}
@@ -22560,7 +22560,7 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
-                        <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
+                        <img id="amostra-item-img-${idx}" src="${item.amostra_arte_base64 || ''}" style="max-width: 100%; max-height: 375px; object-fit: contain; margin: 0 auto; display: ${item.amostra_arte_base64 ? 'block' : 'none'}; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="openClienteLightbox('amostra-item-img-${idx}')" />
                         <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px; display: ${item.amostra_arte_base64 ? 'none' : 'block'};">
                              <div style="font-size: 3.5rem; margin-bottom: 12px; opacity: 0.7;">🎨</div>
                              <p style="font-size: 0.95rem; font-weight: 600;">Aguardando visualização da Arte...</p>
@@ -22618,7 +22618,7 @@ function renderAmostrasOSItens(osId) {
                             </div>
                         </div>
                         ` : `
-                        <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 250px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
+                        <canvas id="amostra-item-canvas-${idx}" style="max-width: 100%; max-height: 375px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); border: 1px solid var(--border); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
 
                             <!-- Navegacao das linhas do CSV. Fica escondida ate
                                  a numeracao ter elemento de banco de dados; quem
