@@ -470,6 +470,26 @@ def test_trocar_a_lista_de_setores_substitui_a_anterior(banco, elevado):
     assert cfg._painel(EVENTO)["aparelhos"][0]["setores"] == []
 
 
+def test_esvaziar_os_setores_de_um_aparelho_nao_atinge_o_outro(banco, elevado):
+    """Regressao da fixture, nao so do codigo de producao.
+
+    Com um aparelho so, `test_trocar_a_lista_de_setores_substitui_a_anterior`
+    nao distingue um DELETE escopado por `dispositivo_id` de um bug que
+    limpasse `producao_acesso_dispositivo_setores` inteira: nos dois casos a
+    lista do unico aparelho fica vazia. Um segundo aparelho, com vinculo
+    proprio, e o que faz essa regressao aparecer.
+    """
+    cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao A", "setores": [SETOR]})
+    cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao B", "setores": [SETOR]})
+    aparelho_a, aparelho_b = (d["id"] for d in banco.dispositivos)
+
+    cfg._gravar_aparelho(aparelho_a, DONO, elevado, NAV, {"setores": []})
+
+    setores_por_aparelho = {a["id"]: a["setores"] for a in cfg._painel(EVENTO)["aparelhos"]}
+    assert setores_por_aparelho[aparelho_a] == []
+    assert setores_por_aparelho[aparelho_b] == [SETOR]
+
+
 def test_revogar_o_aparelho(banco, elevado):
     cfg._criar_aparelho(EVENTO, DONO, elevado, NAV, {"nome": "Portao A", "setores": [SETOR]})
     aparelho = banco.dispositivos[0]["id"]
