@@ -906,6 +906,47 @@ class ImpositionEngine:
                 )
             por_coluna[col] = modelo
 
+    def _conferir_dados_do_qr_ideal(self):
+        """Recusa ANTES do papel, dizendo qual das tres coisas falta.
+
+        Sao tres, e a mensagem antiga citava duas: pedido, modelo e o pool. A
+        terceira e a mais confusa de diagnosticar, porque a estacao sem o
+        arquivo de 24 MB parece identica a uma com ele — ate imprimir.
+
+        Sem esta conferencia o trabalho falhava la dentro, no meio da montagem
+        das paginas, e a mensagem mandava procurar pedido ou modelo mesmo
+        quando os dois estavam certos.
+        """
+        cfg = self.cfg
+        if not self._usa_qr_ideal():
+            return
+
+        faltando = []
+        if not cfg.pedido:
+            faltando.append("o numero do pedido")
+        if cfg.pool_qr is None:
+            faltando.append("a lista de codigos (qr_ideal_pool.bin) desta estacao")
+
+        # O modelo vem por arte na folha multi_artes, e do config fora dela.
+        if cfg.multi_artes:
+            sem_modelo = [
+                (a.get("nome") or f"arte {i + 1}")
+                for i, a in enumerate(cfg.multi_artes)
+                if a.get("modelo") in (None, "")
+            ]
+            if sem_modelo:
+                faltando.append("o modelo de: " + ", ".join(sem_modelo))
+        elif not cfg.modelo:
+            faltando.append("o numero do modelo")
+
+        if faltando:
+            raise ValueError(
+                "QR Ideal: o trabalho nao pode ser impresso porque falta "
+                + "; ".join(faltando)
+                + ". Um QR em branco, ou calculado com valor suposto, so "
+                "apareceria na portaria — quando ja nao da para consertar."
+            )
+
     def _injetar_qr_ideal(self, rotated_el: dict, val: int, item_index: int = None, item_data: dict = None):
         """Poe o conteudo do QR Ideal no elemento, logo antes de desenhar.
 
@@ -1501,6 +1542,7 @@ class ImpositionEngine:
         # dividir a coluna do pool do QR Ideal. Sem elemento QR_IDEAL, sai na
         # primeira linha.
         self._conferir_colunas_qr_ideal()
+        self._conferir_dados_do_qr_ideal()
         # ─── REFAZER ────────────────────────────────────────────────────────────
         # Reimpressão de parte de uma tiragem que já saiu. São dois modos, e eles
         # não se misturam:

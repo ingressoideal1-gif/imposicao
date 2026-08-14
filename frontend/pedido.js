@@ -509,7 +509,10 @@ function drawPedPreview() {
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
                 pdfDoc: pdfDoc,
                 pdfVersoDoc: pdfVersoDoc,
-                bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null
+                bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
+                // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
+                // coluna do pool por modelo; sem isto o motor recusa a folha.
+                modelo: s.itemId || (sItem ? sItem.id : null)
             };
         });
     }
@@ -4271,7 +4274,10 @@ window.runPedImposition = async function (mode, isRefazer) {
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
                 pdfDoc: pdfDoc,
                 pdfVersoDoc: pdfVersoDoc,
-                bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null
+                bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
+                // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
+                // coluna do pool por modelo; sem isto o motor recusa a folha.
+                modelo: s.itemId || (sItem ? sItem.id : null)
             };
         });
     }
@@ -4438,7 +4444,13 @@ window.runPedImposition = async function (mode, isRefazer) {
 
                 q_cam: arte.q_cam || 0,
 
-                l_cam: arte.l_cam || 1
+                l_cam: arte.l_cam || 1,
+
+                // O modelo de CADA arte. Numa folha multi-artes o QR Ideal tira
+                // uma coluna diferente do pool por modelo, então o motor precisa
+                // saber de qual arte veio cada item. Sem isto ele recusa o
+                // trabalho inteiro — e por isto o QR Ideal nunca imprimiu.
+                modelo: arte.modelo || null
 
             };
 
@@ -4467,7 +4479,27 @@ window.runPedImposition = async function (mode, isRefazer) {
         if (ma.numeracao_2) ma.numeracao_2 = _semLayout(ma.numeracao_2);
     }
 
+    // ── QR Ideal: o pedido e o modelo ───────────────────────────────────────
+    //
+    // `pedido` e `pedidos_modelos.id_int` (o numero da OS) e `modelo` e
+    // `pedidos_modelos.id`. Sao os dois eixos da conta que tira o codigo do
+    // pool, e so o frontend sabe de que pedido o trabalho veio — o motor
+    // apenas calcula.
+    //
+    // Ficaram de fora do payload desde o inicio, e o efeito foi que TODO
+    // trabalho com QR Ideal era recusado pelo motor. A tela desenhava o QR
+    // normalmente, porque ali o codigo e calculado aqui mesmo; a falha so
+    // aparecia ao impor.
+    const _osDoTrabalho = state.activeOSItem && state.ordens
+        ? state.ordens.find(o => String(o.id) === String(state.activeOSItem.osId))
+        : null;
+    const _pedidoQr = _osDoTrabalho ? _osDoTrabalho.numero : null;
+    const _modeloQr = state.activeOSItem ? state.activeOSItem.itemId : null;
+
     const payload = {
+
+        pedido: _pedidoQr,
+        modelo: _modeloQr,
 
         formato_id: fmtId,
 

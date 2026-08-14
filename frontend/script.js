@@ -9712,7 +9712,14 @@ window.runImposition = async function (mode, returnBlob = false) {
 
                 numeracao_2: state.numeracoes.find(n => String(n.id) === String(arte.num2_id)) || null,
 
-                has_raw_file: !!arte.rawFile
+                has_raw_file: !!arte.rawFile,
+
+                // `pedidos_modelos.id` desta arte. Numa folha multi-artes cada
+                // modelo tira uma coluna diferente do pool do QR Ideal, entao o
+                // motor precisa saber de qual arte veio cada item. Arte montada
+                // a mao (Lista de Imposicao) nao tem modelo, e ai o motor recusa
+                // o trabalho — que e o certo: sem modelo o codigo nao existe.
+                modelo: arte.modelo || arte._itemId || null
 
             };
 
@@ -9764,7 +9771,24 @@ window.runImposition = async function (mode, returnBlob = false) {
         if (ma.numeracao_2) ma.numeracao_2 = numeracaoSemElementosDeLayout(ma.numeracao_2);
     }
 
+    // ── QR Ideal: o pedido e o modelo ───────────────────────────────────────
+    //
+    // `pedido` e `pedidos_modelos.id_int` (o numero da OS) e `modelo` e
+    // `pedidos_modelos.id`. Sao os dois eixos da conta que tira o codigo do
+    // pool, e so o frontend sabe de que pedido o trabalho veio.
+    //
+    // Ficaram de fora do payload desde o inicio, e o efeito foi que TODO
+    // trabalho com QR Ideal era recusado pelo motor. A tela desenhava o QR
+    // normalmente, porque ali o codigo e calculado aqui mesmo; a falha so
+    // aparecia ao impor.
+    const _osDoTrabalho = state.activeOSItem && state.ordens
+        ? state.ordens.find(o => String(o.id) === String(state.activeOSItem.osId))
+        : null;
+
     const payload = {
+
+        pedido: _osDoTrabalho ? _osDoTrabalho.numero : null,
+        modelo: state.activeOSItem ? state.activeOSItem.itemId : null,
 
         formato_id: fmtId,
 
@@ -9775,7 +9799,7 @@ window.runImposition = async function (mode, returnBlob = false) {
         numeracao_id: numId || null,
 
         numeracao_2_id: num2Id || null,
-        
+
         mapa_teatro_id: document.getElementById('imp-mapa-teatro')?.value || null,
 
         saida_id: saiId,
