@@ -86,6 +86,53 @@ conferido contra o banco real: três envios do mesmo lote deixaram uma linha.
 `fechar` devolve `esperado` e `completo`. É por aí que o agente sabe que um lote se perdeu
 na rede, em vez de dar a publicação por terminada.
 
+### Nem todo ingresso tem QR Ideal
+
+Regra do usuário, 14/08/2026: **o Ideal Control tem de funcionar com qualquer ingresso que
+tenha QR ou código de barras**, mesmo sem o elemento QR Ideal — lendo o dado do próprio
+elemento de numeração. Não é hipótese: das 59 numerações do catálogo, **32 já têm um
+elemento QR** e só uma tem QR Ideal.
+
+Dá para fazer porque o `engine._render_element` desenha o QR e o código de barras a partir
+do mesmo `val_str`: `prefixo + numero.zfill(pad) + sufixo`. O agente recalcula esse texto
+para a tiragem inteira, sem pool nenhum. `acesso_publicacao.conteudo_numeracao()` é a
+réplica dessa conta — **se as duas divergirem, todo ingresso do evento é recusado**, e só
+dá para descobrir na portaria.
+
+Por modelo, vale o primeiro que existir nesta ordem:
+
+| Elemento | Conteúdo |
+|---|---|
+| `QR_IDEAL` | código do pool |
+| `QR` / `BARCODE` | `prefixo + numero.zfill(pad) + sufixo` |
+| alimentado por coluna do CSV | **não publica** — o conteúdo vem da linha, não do número |
+
+O agente não conhece a numeração: ele recebe do servidor só `{modelo: quantidade}`, o que
+bastava enquanto o código saía do pool por fórmula. Quem entrega o mapa é o
+`app._numeracoes_por_modelo()`, o único ponto que sabe ao mesmo tempo **quais** modelos
+estão na folha e **qual** numeração cada um usa.
+
+Daí uma consequência que precisa ficar dita: **cada modelo publica quando é impresso.** Um
+pedido com VIP e Camarote em que só o VIP foi à máquina publica a tiragem inteira do VIP e
+nada do Camarote. A garantia que importa continua de pé — tiragem inteira do modelo, nunca
+só a folha —, e supor a numeração do modelo ausente seria pior do que não publicar: gravaria
+hash errado, e reimprimir não consertaria, porque o servidor ignora duplicata.
+
+> **A proteção muda de natureza, e isso foi decidido com os números na mesa.** O código do
+> pool tem 2,82 trilhões de combinações. O `0002` de uma numeração comum é adivinhável por
+> quem tem o `0001` — mas não é *inventável*: ele pertence a um ingresso de verdade, na mão
+> de outra pessoa. A fraude deixa de ser falsificação e vira **clonagem**, e quem a pega é a
+> detecção de entrada repetida na portaria, não o sigilo do código.
+
+**A ambiguidade, e a decisão que a resolve.** Com `prefix=''` e `pad=4` — que é como o
+acervo inteiro está —, o item 1 do VIP e o item 1 do CAMAROTE são os dois `0001`, no mesmo
+evento. E como o sal é por pedido, os dois dão o **mesmo hash**.
+
+Decisão do usuário: **o aparelho resolve pelo setor dele.** Cada aparelho valida uma lista
+de setores, e o código é lido nesse contexto. Quando o aparelho valida vários setores e o
+código casa em mais de um, a portaria pergunta qual, mostrando só os que casaram — um toque,
+e fica registrado. Isso é trabalho da parte 3.
+
 ### O segredo do agente
 
 Os três endpoints escrevem, e vivem num backend público. Sem segredo, qualquer um
@@ -261,4 +308,7 @@ Decisões já tomadas pelo usuário e registradas na
 - mudar configuração do evento exige a **senha do dono**, conferida na hora;
 - duas leituras offline do mesmo ingresso **deixam os dois entrarem**, e a duplicidade é
   apontada na sincronização — ninguém fica parado no portão por causa de rede;
-- o cliente pode **carregar códigos próprios** para staff e cortesia.
+- o cliente pode **carregar códigos próprios** para staff e cortesia;
+- **o aparelho resolve o setor pela lista dele.** Com numeração comum, dois setores do mesmo
+  evento têm o mesmo `0001` e o mesmo hash. O aparelho configurado para um setor só não tem
+  dúvida; o que valida vários precisa perguntar qual, mostrando só os que casaram.

@@ -84,7 +84,78 @@ def _post(caminho: str, corpo=None):
         return json.loads(texto) if texto else None
 
 
-def itens_do_pedido(pedido, tiragem: dict, sal: str, pool):
+# ── De onde sai o código de cada ingresso ────────────────────────────────────
+#
+# O QR Ideal tira o código de um pool de 3 milhões. Mas a portaria também
+# precisa funcionar com numeração comum: 32 das 59 numerações do catálogo já
+# têm um elemento QR, e o cliente que imprimiu com ele espera que o ingresso
+# abra a porta.
+#
+# Isso é possível porque o `engine._render_element` desenha o QR e o código de
+# barras a partir do MESMO `val_str` — `prefixo + numero.zfill(pad) + sufixo`.
+# A conta abaixo é a réplica dela. Se as duas divergirem, todo ingresso do
+# evento é recusado, e só dá para descobrir na portaria.
+#
+# O que muda é a natureza da proteção, e está registrado de propósito: o `0002`
+# é adivinhável por quem tem o `0001`. Mas não é inventável — ele pertence a um
+# ingresso de verdade, na mão de outra pessoa. A fraude vira clonagem, e quem a
+# pega é a detecção de entrada repetida, não o sigilo do código.
+
+# Ordem de preferência: o seguro primeiro. QR e BARCODE imprimem o mesmo texto,
+# então entre os dois a escolha é indiferente — mas a ordem tem de ser fixa
+# para o resultado não depender da ordem em que os elementos foram salvos.
+_TIPOS_DE_CODIGO = ("QR_IDEAL", "QR", "BARCODE")
+
+
+def numeracao_do_modelo(elements):
+    """O elemento que a portaria vai ler, ou None se não houver.
+
+    Devolve um dicionário achatado — `tipo`, `prefix`, `pad`, `suffix` — em vez
+    do elemento cru, para o resto do módulo não depender do formato do editor.
+
+    Recusa o elemento alimentado por coluna do CSV: ali o conteúdo vem da linha,
+    e não do número do item. Publicar a conta sequencial gravaria um hash que
+    NÃO corresponde ao que foi impresso — todo ingresso recusado, e a causa
+    invisível. Melhor não publicar e dizer por quê.
+    """
+    por_tipo = {}
+    for el in (elements or []):
+        if not isinstance(el, dict):
+            continue
+        t = el.get("type")
+        if t not in _TIPOS_DE_CODIGO or t in por_tipo:
+            continue
+        if el.get("source") == "database":
+            continue
+        if el.get("fixed"):
+            # Valor fixo é o mesmo em todos os ingressos: não identifica nada.
+            continue
+        por_tipo[t] = {
+            "tipo": t,
+            "prefix": str(el.get("prefix", "") or ""),
+            "pad": int(el.get("pad", 0) or 0),
+            "suffix": str(el.get("suffix", "") or ""),
+        }
+
+    for t in _TIPOS_DE_CODIGO:
+        if t in por_tipo:
+            return por_tipo[t]
+    return None
+
+
+def conteudo_numeracao(numeracao: dict, numero: int) -> str:
+    """O texto que foi impresso no QR ou no código de barras daquele item.
+
+    Réplica de `engine._render_element`, ramo final do `val_str`. O `zfill`
+    preenche mas nunca trunca: numa tiragem de 12.000 com `pad=4`, o item
+    12.000 sai `12000` — e é isso que vai ao papel.
+    """
+    pad = int(numeracao.get("pad", 0) or 0)
+    cru = str(numero).zfill(pad) if pad > 0 else str(numero)
+    return f"{numeracao.get('prefix', '')}{cru}{numeracao.get('suffix', '')}"
+
+
+def itens_do_pedido(pedido, tiragem: dict, sal: str, pool, numeracoes: dict = None):
     """Gera {modelo_id, numero, hash} da TIRAGEM INTEIRA de cada modelo.
 
     A quantidade vem do ERP, e NÃO do intervalo de folhas deste trabalho. É a
@@ -92,12 +163,32 @@ def itens_do_pedido(pedido, tiragem: dict, sal: str, pool):
     na semana que vem ficaria com 2.000 ingressos válidos e 3.000 recusados na
     porta se a faixa seguisse a folha.
 
+    `numeracoes` é `{modelo_id: numeracao_achatada}`, montado por quem chama a
+    partir do trabalho que está sendo impresso — é o único lugar que conhece a
+    numeração de cada modelo. Sem ele, todo modelo sai do pool, que é o
+    comportamento anterior.
+
+    Modelo cuja numeração este trabalho não conhece é **pulado**: ele publica
+    quando for impresso. Publicar com uma conta suposta seria pior do que não
+    publicar — gravaria hash errado, e reimprimir não consertaria, porque o
+    servidor ignora duplicata.
+
     Gerador, e não lista: uma tiragem de 30.000 são 30.000 hashes, e não há
     razão para segurar todos na memória antes de começar a enviar.
     """
     for modelo_id, quantidade in tiragem.items():
+        num = (numeracoes or {}).get(modelo_id) or (numeracoes or {}).get(str(modelo_id))
+        if numeracoes is not None and num is None:
+            continue
+        usa_pool = num is None or num.get("tipo") == "QR_IDEAL"
+        if usa_pool and pool is None:
+            continue
+
         for numero in range(1, int(quantidade) + 1):
-            conteudo = pool.conteudo(pedido, modelo_id, numero)
+            if usa_pool:
+                conteudo = pool.conteudo(pedido, modelo_id, numero)
+            else:
+                conteudo = conteudo_numeracao(num, numero)
             yield {
                 "modelo_id": int(modelo_id),
                 "numero": numero,
@@ -105,7 +196,7 @@ def itens_do_pedido(pedido, tiragem: dict, sal: str, pool):
             }
 
 
-def publicar(pedido, pool) -> dict:
+def publicar(pedido, pool, numeracoes: dict = None) -> dict:
     """Abre, envia em lotes e fecha. Devolve o resumo do que o servidor viu."""
     abertura = _post(f"pedidos/{pedido}/abrir")
     sal = abertura["sal"]
@@ -115,7 +206,7 @@ def publicar(pedido, pool) -> dict:
 
     enviadas = 0
     lote = []
-    for item in itens_do_pedido(pedido, tiragem, sal, pool):
+    for item in itens_do_pedido(pedido, tiragem, sal, pool, numeracoes):
         lote.append(item)
         if len(lote) >= LOTE:
             _post(f"pedidos/{pedido}/credenciais", {"itens": lote})
@@ -130,7 +221,14 @@ def publicar(pedido, pool) -> dict:
     return resumo
 
 
-def _publicar_protegido(pedido, pool_factory):
+def _precisa_do_pool(numeracoes) -> bool:
+    """Só o QR Ideal depende do pool. Numeração comum se basta."""
+    if not numeracoes:
+        return True
+    return any((n or {}).get("tipo") == "QR_IDEAL" for n in numeracoes.values())
+
+
+def _publicar_protegido(pedido, pool_factory, numeracoes=None):
     """O que a thread roda. NUNCA levanta: ela morreria sozinha e em silêncio."""
     try:
         if not _segredo():
@@ -142,11 +240,22 @@ def _publicar_protegido(pedido, pool_factory):
             )
             return
         pool = pool_factory()
-        if pool is None:
+        if pool is None and _precisa_do_pool(numeracoes):
+            # Sem pool, um trabalho de QR Ideal nao tem codigo nenhum a publicar.
+            # Um de numeracao comum tem, e por isso a falta do pool deixou de ser
+            # motivo para desistir de tudo.
             print(f"[acesso] Faixa do pedido {pedido} NAO publicada: pool ausente.", flush=True)
             return
-        resumo = publicar(pedido, pool)
-        if resumo.get("completo"):
+        resumo = publicar(pedido, pool, numeracoes)
+        if resumo.get("erro"):
+            print(f"[acesso] Faixa do pedido {pedido} NAO publicada: {resumo['erro']}", flush=True)
+        elif resumo.get("enviadas") == 0:
+            print(
+                f"[acesso] Faixa do pedido {pedido} vazia: nenhum modelo deste "
+                "trabalho tem QR ou codigo de barras que a portaria leia.",
+                flush=True,
+            )
+        elif resumo.get("completo"):
             print(f"[acesso] Faixa do pedido {pedido} publicada: {resumo.get('total')} codigos.", flush=True)
         else:
             print(
@@ -166,15 +275,18 @@ def _publicar_protegido(pedido, pool_factory):
         print(f"[acesso] Falha ao publicar a faixa do pedido {pedido}: {e}", flush=True)
 
 
-def publicar_em_fundo(pedido, pool_factory):
+def publicar_em_fundo(pedido, pool_factory, numeracoes=None):
     """Devolve NA HORA. O trabalho de verdade acontece numa thread.
 
     `pool_factory` é chamável em vez de o pool já aberto: quem chama não deve
     pagar nem a abertura do arquivo de 24 MB no caminho do operador.
+
+    `numeracoes` é `{modelo_id: numeracao_achatada}` do trabalho impresso. Sem
+    ele, tudo sai do pool — o comportamento de quando só existia QR Ideal.
     """
     threading.Thread(
         target=_publicar_protegido,
-        args=(pedido, pool_factory),
+        args=(pedido, pool_factory, numeracoes),
         daemon=True,
         name=f"PublicarAcesso-{pedido}",
     ).start()

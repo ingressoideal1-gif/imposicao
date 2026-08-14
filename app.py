@@ -673,17 +673,60 @@ def _publicar_faixa_qr_ideal(config, data):
     try:
         if not data.get("pedido"):
             return
-        # So publica quem realmente usa o elemento. Um trabalho de numeracao
-        # comum nao tem faixa nenhuma para publicar, e calcular hash de uma
-        # tiragem inteira a toa seria desperdicio puro.
-        if not any(el.get("type") == "QR_IDEAL" for el in (config.elements or [])):
-            return
-        if not _pool_qr_ou_none():
-            return
         import acesso_publicacao
-        acesso_publicacao.publicar_em_fundo(data["pedido"], _pool_qr_ou_none)
+
+        numeracoes = _numeracoes_por_modelo(config)
+        if not numeracoes:
+            # Nenhum modelo deste trabalho tem QR, QR Ideal ou codigo de barras:
+            # nao ha o que a portaria leia, e calcular hash de uma tiragem
+            # inteira a toa seria desperdicio puro.
+            return
+        if acesso_publicacao._precisa_do_pool(numeracoes) and not _pool_qr_ou_none():
+            return
+        acesso_publicacao.publicar_em_fundo(
+            data["pedido"], _pool_qr_ou_none, numeracoes
+        )
     except Exception as e:
         print(f"[acesso] Nao consegui iniciar a publicacao da faixa: {e}", flush=True)
+
+
+def _numeracoes_por_modelo(config):
+    """`{modelo_id: numeracao_achatada}` do trabalho que acabou de ser impresso.
+
+    Este e o unico ponto do sistema que sabe, ao mesmo tempo, QUAIS modelos
+    estao na folha e QUAL numeracao cada um usa. O agente nao sabe: ele recebe
+    do servidor so `{modelo: quantidade}`, o que bastava enquanto o codigo saia
+    do pool por formula.
+
+    Numa folha `multi_artes` cada arte e um modelo com a numeracao dele. Fora
+    dela ha um modelo so, e os elementos sao os do proprio `config`.
+
+    As DUAS numeracoes da arte entram na conta: o QR pode estar no verso, e o
+    `ImpositionConfig` achata as duas na mesma lista justamente porque, para o
+    papel, elas sao um conjunto so.
+    """
+    import acesso_publicacao
+
+    mapa = {}
+    artes = getattr(config, "multi_artes", None) or []
+    if artes:
+        for arte in artes:
+            modelo = arte.get("modelo")
+            if modelo in (None, ""):
+                continue
+            els = []
+            for chave in ("numeracao", "numeracao_2"):
+                els.extend(((arte.get(chave) or {}).get("elements")) or [])
+            achatada = acesso_publicacao.numeracao_do_modelo(els)
+            if achatada:
+                mapa[int(modelo)] = achatada
+        return mapa
+
+    modelo = getattr(config, "modelo", None)
+    if modelo in (None, ""):
+        return {}
+    achatada = acesso_publicacao.numeracao_do_modelo(config.elements)
+    return {int(modelo): achatada} if achatada else {}
 
 
 @app.get("/api/qr-ideal")

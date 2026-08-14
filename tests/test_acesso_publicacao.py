@@ -15,6 +15,7 @@ do evento:
      pela metade sem ninguém saber.
 """
 
+import threading
 import time
 
 import pytest
@@ -35,13 +36,20 @@ def test_publicar_em_fundo_devolve_na_hora(monkeypatch):
     Se um dia alguém trocar a thread por chamada direta, o operador passa a
     esperar a nuvem para receber um PDF que já está pronto.
     """
-    def demorada(pedido, pool_factory):
+    # `*a` de proposito: uma assinatura fixa aqui morre em silencio quando a
+    # de verdade ganha um parametro. A thread levanta TypeError, ninguem ve, e
+    # este teste continua passando porque so mede tempo. Ja aconteceu.
+    entrou = threading.Event()
+
+    def demorada(*a):
+        entrou.set()
         time.sleep(2)
 
     monkeypatch.setattr(acesso_publicacao, "_publicar_protegido", demorada)
     comeco = time.time()
     acesso_publicacao.publicar_em_fundo(20272, PoolFalso)
     assert time.time() - comeco < 0.5, "a publicacao segurou quem chamou"
+    assert entrou.wait(3), "a thread nem chegou a rodar"
 
 
 def test_publica_a_TIRAGEM_INTEIRA_e_nao_a_folha_impressa():
@@ -141,8 +149,10 @@ def test_faixa_incompleta_e_anunciada(monkeypatch, capsys):
 
 
 class ConfigFalso:
-    def __init__(self, elements):
+    def __init__(self, elements, modelo="1000105", multi_artes=None):
         self.elements = elements
+        self.modelo = modelo
+        self.multi_artes = multi_artes or []
 
 
 def _espionar(monkeypatch):
@@ -162,22 +172,52 @@ def test_o_gancho_nao_dispara_sem_pedido(monkeypatch):
     assert not chamadas
 
 
-def test_o_gancho_nao_dispara_sem_elemento_qr_ideal(monkeypatch):
-    """Numeração comum não tem faixa. Publicar seria queimar CPU à toa."""
+def test_o_gancho_dispara_com_qr_comum(monkeypatch):
+    """Mudou em 14/08: QR comum tambem alimenta a portaria.
+
+    Antes o gancho exigia o elemento QR_IDEAL. A regra do usuario passou a ser
+    que o Ideal Control funcione com qualquer ingresso que tenha QR ou codigo
+    de barras, lendo o dado do proprio elemento de numeracao.
+    """
     import app
     chamadas = _espionar(monkeypatch)
     monkeypatch.setattr(app, "_pool_qr_ou_none", lambda: object())
-    app._publicar_faixa_qr_ideal(ConfigFalso([{"type": "TEXT"}, {"type": "QR"}]), {"pedido": 20272})
+    app._publicar_faixa_qr_ideal(ConfigFalso([{"type": "TEXT"}, {"type": "QR", "pad": 4}]),
+                                 {"pedido": 20272})
+    assert len(chamadas) == 1
+
+
+def test_o_gancho_nao_dispara_sem_codigo_nenhum(monkeypatch):
+    """Etiqueta com texto e picote nao tem o que a portaria leia."""
+    import app
+    chamadas = _espionar(monkeypatch)
+    monkeypatch.setattr(app, "_pool_qr_ou_none", lambda: object())
+    app._publicar_faixa_qr_ideal(ConfigFalso([{"type": "TEXT"}, {"type": "PICOTE"}]),
+                                 {"pedido": 20272})
     assert not chamadas
 
 
-def test_o_gancho_nao_dispara_sem_pool(monkeypatch):
-    """Sem pool não há como calcular hash nenhum — é o caso do motor na nuvem."""
+def test_o_gancho_nao_dispara_sem_pool_QUANDO_e_qr_ideal(monkeypatch):
+    """Sem pool não há como calcular o código do QR Ideal — motor na nuvem."""
     import app
     chamadas = _espionar(monkeypatch)
     monkeypatch.setattr(app, "_pool_qr_ou_none", lambda: None)
     app._publicar_faixa_qr_ideal(ConfigFalso([{"type": "QR_IDEAL"}]), {"pedido": 20272})
     assert not chamadas
+
+
+def test_sem_pool_o_qr_comum_publica_do_mesmo_jeito(monkeypatch):
+    """A numeracao comum nao depende do pool: a conta sai do proprio elemento.
+
+    Antes a falta do pool desistia de tudo. Continuar desistindo deixaria a
+    estacao sem o arquivo de 24 MB sem controle de acesso nenhum, mesmo nos
+    trabalhos que nao precisam dele.
+    """
+    import app
+    chamadas = _espionar(monkeypatch)
+    monkeypatch.setattr(app, "_pool_qr_ou_none", lambda: None)
+    app._publicar_faixa_qr_ideal(ConfigFalso([{"type": "QR", "pad": 4}]), {"pedido": 20272})
+    assert len(chamadas) == 1
 
 
 def test_o_gancho_dispara_quando_as_tres_condicoes_batem(monkeypatch):
@@ -188,6 +228,33 @@ def test_o_gancho_dispara_quando_as_tres_condicoes_batem(monkeypatch):
                                  {"pedido": 20272})
     assert len(chamadas) == 1
     assert chamadas[0][0] == 20272
+
+
+def test_o_gancho_leva_a_numeracao_de_cada_modelo(monkeypatch):
+    """O agente nao conhece a numeracao: quem a entrega e o app.py.
+
+    Sem esse mapa, o agente calcularia tudo pelo pool — e um modelo de QR
+    comum receberia hash que nao corresponde ao papel.
+    """
+    import app
+    chamadas = _espionar(monkeypatch)
+    monkeypatch.setattr(app, "_pool_qr_ou_none", lambda: object())
+    app._publicar_faixa_qr_ideal(
+        ConfigFalso([{"type": "QR", "pad": 4, "prefix": "V"}], modelo="1000105"),
+        {"pedido": 20272})
+    assert chamadas[0][2] == {
+        1000105: {"tipo": "QR", "prefix": "V", "pad": 4, "suffix": ""}
+    }
+
+
+def test_modelo_ausente_nao_publica(monkeypatch):
+    """Sem modelo nao ha a que amarrar o codigo, e supor seria pior."""
+    import app
+    chamadas = _espionar(monkeypatch)
+    monkeypatch.setattr(app, "_pool_qr_ou_none", lambda: object())
+    app._publicar_faixa_qr_ideal(ConfigFalso([{"type": "QR", "pad": 4}], modelo=None),
+                                 {"pedido": 20272})
+    assert not chamadas
 
 
 def test_o_gancho_nunca_derruba_um_trabalho_ja_impresso(monkeypatch, capsys):
