@@ -565,27 +565,33 @@ def reivindicar(corpo: dict, authorization: str = Header(None)):
 
 @router.get("/saude")
 def saude():
-    """Diz se este servidor tem as três variáveis e se fala com as tabelas.
+    """Diz se este servidor tem as quatro variáveis e se fala com as tabelas.
 
     Existe para a estação e o Render darem respostas diferentes e óbvias quando
     alguém for diagnosticar por que uma publicação não chegou.
 
-    As três precisam estar juntas, e cada uma falha num lugar diferente e tarde:
-    sem a `SUPABASE_SERVICE_KEY` este router nem é montado; sem o
+    As quatro precisam estar juntas, e cada uma falha num lugar diferente e
+    tarde: sem a `SUPABASE_SERVICE_KEY` este router nem é montado; sem o
     `ACESSO_AGENTE_SEGREDO` a faixa de códigos é recusada no meio de uma
     impressão que já terminou; sem o `QR_PEDIDO_SEGREDO` o atendente descobre na
-    frente do cliente que não sai QR. Conferir as três aqui é a única chance de
-    saber antes.
+    frente do cliente que não sai QR. Conferir as quatro aqui é a única chance
+    de saber antes.
 
     A resposta diz **se** cada variável existe, nunca o que ela vale — este
     endpoint não pede login.
+
+    A quarta, `ACESSO_ELEVACAO_SEGREDO`, falha do jeito mais silencioso de
+    todos: o dono entra na tela do evento, digita a senha certa, e nada
+    acontece — porque o servidor não tem como assinar a elevação.
     """
     import qr_pedido
+    import acesso_elevacao
 
     presenca = {
         CHAVE_ENV: bool(SERVICE_KEY),
         SEGREDO_ENV: bool(AGENTE_SEGREDO),
         qr_pedido.SEGREDO_ENV: qr_pedido.configurado(),
+        acesso_elevacao.SEGREDO_ENV: acesso_elevacao.configurado(),
     }
     faltando = [nome for nome, tem in presenca.items() if not tem]
     if faltando:

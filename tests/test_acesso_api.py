@@ -536,20 +536,29 @@ def test_a_mensagem_de_QR_invalido_e_para_gente(monkeypatch):
         assert "token" not in e.value.detail.lower()
 
 
-# --- /saude: a tela de diagnóstico das três variáveis ---------------------
+# --- /saude: a tela de diagnóstico das quatro variáveis --------------------
 #
 # Ela existe para o momento em que alguém acabou de configurar o Render e quer
 # saber se acertou. Se ela responder "ok" com dois segredos faltando, manda a
 # pessoa embora achando que terminou — e o erro só aparece depois, na hora de
 # gerar um QR ou de publicar uma faixa, longe daqui.
 
+import acesso_elevacao
+
 
 def _saude_com_banco_bom(monkeypatch):
     monkeypatch.setattr(acesso_api, "supabase", lambda *a, **k: [])
 
 
-def test_saude_relata_as_tres_variaveis(monkeypatch):
+def _saude_com_elevacao_presente(monkeypatch):
+    # A elevação é a quarta variável: sem mocá-la, este teste dependeria do
+    # que estiver de verdade no .env.local da máquina que roda o teste.
+    monkeypatch.setattr(acesso_elevacao, "_SEGREDO_CACHE", "segredo-elevacao-teste")
+
+
+def test_saude_relata_as_quatro_variaveis(monkeypatch):
     _saude_com_banco_bom(monkeypatch)
+    _saude_com_elevacao_presente(monkeypatch)
     monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave")
     monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", "segredo")
     monkeypatch.setenv(qr_pedido.SEGREDO_ENV, "segredo-qr")
@@ -562,6 +571,7 @@ def test_saude_relata_as_tres_variaveis(monkeypatch):
         "SUPABASE_SERVICE_KEY",
         "ACESSO_AGENTE_SEGREDO",
         "QR_PEDIDO_SEGREDO",
+        "ACESSO_ELEVACAO_SEGREDO",
     }
     assert all(r["variaveis"].values())
 
@@ -569,6 +579,7 @@ def test_saude_relata_as_tres_variaveis(monkeypatch):
 def test_saude_aponta_o_segredo_do_agente_que_falta(monkeypatch):
     """Sem ele a faixa nunca é publicada, e nada avisa."""
     _saude_com_banco_bom(monkeypatch)
+    _saude_com_elevacao_presente(monkeypatch)
     monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave")
     monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", None)
     monkeypatch.setenv(qr_pedido.SEGREDO_ENV, "segredo-qr")
@@ -582,6 +593,7 @@ def test_saude_aponta_o_segredo_do_agente_que_falta(monkeypatch):
 
 def test_saude_aponta_o_segredo_do_qr_que_falta(monkeypatch):
     _saude_com_banco_bom(monkeypatch)
+    _saude_com_elevacao_presente(monkeypatch)
     monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave")
     monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", "segredo")
     monkeypatch.setattr(qr_pedido, "configurado", lambda: False)
@@ -597,6 +609,7 @@ def test_saude_nao_toca_no_banco_se_falta_variavel(monkeypatch):
         raise AssertionError("nao devia consultar o banco sem as variaveis")
 
     monkeypatch.setattr(acesso_api, "supabase", explodir)
+    _saude_com_elevacao_presente(monkeypatch)
     monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave")
     monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", None)
     monkeypatch.setattr(qr_pedido, "configurado", lambda: False)
@@ -617,7 +630,11 @@ def test_saude_nunca_devolve_o_valor_de_um_segredo(monkeypatch):
     monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", "segredo-do-agente")
     monkeypatch.setenv(qr_pedido.SEGREDO_ENV, "segredo-do-qr")
     monkeypatch.setattr(qr_pedido, "_SEGREDO_CACHE", None)
+    monkeypatch.setattr(acesso_elevacao, "_SEGREDO_CACHE", "segredo-da-elevacao")
 
     texto = json.dumps(acesso_api.saude())
-    for valor in ("chave-secreta-do-banco", "segredo-do-agente", "segredo-do-qr"):
+    for valor in (
+        "chave-secreta-do-banco", "segredo-do-agente", "segredo-do-qr",
+        "segredo-da-elevacao",
+    ):
         assert valor not in texto

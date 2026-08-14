@@ -122,17 +122,18 @@ Describe "Conferencia das variaveis do controle de acesso" {
         }
     }
 
-    Context "as tres variaveis certas" {
+    Context "as quatro variaveis certas" {
 
-        It "confere exatamente as tres que o Render precisa" {
+        It "confere exatamente as quatro que o Render precisa" {
             $nomes = $VARIAVEIS | ForEach-Object { $_.Nome }
             $nomes -contains 'SUPABASE_SERVICE_KEY' | Should Be $true
             $nomes -contains 'ACESSO_AGENTE_SEGREDO' | Should Be $true
             $nomes -contains 'QR_PEDIDO_SEGREDO' | Should Be $true
-            $nomes.Count | Should Be 3
+            $nomes -contains 'ACESSO_ELEVACAO_SEGREDO' | Should Be $true
+            $nomes.Count | Should Be 4
         }
 
-        It "o -Somente aceita as mesmas tres, e nada alem" {
+        It "o -Somente aceita as mesmas quatro, e nada alem" {
             # Se as duas listas saissem de sincronia, -Somente recusaria uma
             # variavel que o script precisa copiar, ou aceitaria um nome que
             # nao existe no .env.local e copiaria vazio.
@@ -159,5 +160,23 @@ Describe "Conferencia das variaveis do controle de acesso" {
             $texto = Get-Content $script -Raw
             $texto | Should Match "liberada pelo copiar_para_render"
         }
+    }
+}
+
+Describe 'A quarta variavel' {
+    $script:fonte = Get-Content (Join-Path $PSScriptRoot '..\ferramentas\copiar_para_render.ps1') -Raw
+
+    It 'conhece a ACESSO_ELEVACAO_SEGREDO' {
+        $script:fonte | Should Match 'ACESSO_ELEVACAO_SEGREDO'
+    }
+
+    It 'aceita a nova no -Somente' {
+        # Sem isto o parametro recusaria justamente a variavel nova, e quem
+        # fosse recopiar so ela levaria um erro de validacao sem explicacao.
+        $script:fonte | Should Match "ValidateSet\([^)]*ACESSO_ELEVACAO_SEGREDO"
+    }
+
+    It 'nao manda ninguem para o projeto errado do Render' {
+        $script:fonte | Should Not Match 'ideal-imposition-api'
     }
 }

@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-  Confere as tres variaveis do controle de acesso e copia uma de cada vez para
-  a area de transferencia, para colar no painel do Render.
+  Confere as quatro variaveis do controle de acesso e copia uma de cada vez
+  para a area de transferencia, para colar no painel do Render.
 
 .DESCRIPTION
   Existe por causa de uma armadilha ja vivida: ao copiar a SUPABASE_SERVICE_KEY
@@ -32,7 +32,7 @@
 param(
     [switch]$Conferir,
 
-    [ValidateSet('SUPABASE_SERVICE_KEY', 'ACESSO_AGENTE_SEGREDO', 'QR_PEDIDO_SEGREDO')]
+    [ValidateSet('SUPABASE_SERVICE_KEY', 'ACESSO_AGENTE_SEGREDO', 'QR_PEDIDO_SEGREDO', 'ACESSO_ELEVACAO_SEGREDO')]
     [string]$Somente
 )
 
@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent $PSScriptRoot
 $envLocal = Join-Path $raiz '.env.local'
 
-# As tres, na ordem em que o servidor precisa delas.
+# As quatro, na ordem em que o servidor precisa delas.
 $VARIAVEIS = @(
     @{ Nome = 'SUPABASE_SERVICE_KEY'
        Sem  = 'o router /api/acesso/* nem e montado'
@@ -50,6 +50,9 @@ $VARIAVEIS = @(
        Tipo = 'segredo' }
     @{ Nome = 'QR_PEDIDO_SEGREDO'
        Sem  = 'nao da para gerar o QR do evento'
+       Tipo = 'segredo' }
+    @{ Nome = 'ACESSO_ELEVACAO_SEGREDO'
+       Sem  = 'o dono nao configura o evento -- a tela fica somente leitura'
        Tipo = 'segredo' }
 )
 
@@ -158,11 +161,11 @@ if ($reprovadas -gt 0) {
 }
 
 if ($Conferir) {
-    Write-Host '  As tres passaram. Rode sem -Conferir para copiar uma a uma.' -ForegroundColor Green
+    Write-Host '  As quatro passaram. Rode sem -Conferir para copiar uma a uma.' -ForegroundColor Green
     exit 0
 }
 
-Write-Host '  No Render: Dashboard -> ideal-imposition-api -> Environment.' -ForegroundColor Yellow
+Write-Host '  No Render: Dashboard -> imposicao -> Environment.' -ForegroundColor Yellow
 Write-Host '  Para cada uma: Add Environment Variable, cole o nome e o valor.'
 Write-Host ''
 
