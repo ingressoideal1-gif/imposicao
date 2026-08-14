@@ -66,7 +66,7 @@ Spec: [docs/superpowers/specs/2026-08-13-controle-acesso-parte2-design.md](super
 
 **As sete tabelas `producao_acesso_*` já existem no banco** e foram conferidas uma a uma.
 
-### ✅ Parte 3a — o dono configura o evento (**commitada em 14/08/2026, ainda não publicada**)
+### 📦 Parte 3a — o dono configura o evento (**commitada em 14/08/2026, ainda não publicada**)
 
 O dono do evento configura tudo em [frontend/controle.html](../frontend/controle.html): dados
 do evento, lotação e tipo de uso de cada setor, aparelhos da portaria — inclusive renomear e
@@ -143,20 +143,24 @@ Cada uma merece a própria spec, como a 3a teve.
 
 ## Como configurar as variáveis do Render (para a próxima vez)
 
-Já feito em 14/08. Fica registrado porque um serviço novo, ou uma troca de segredo, refaz
-este caminho.
+As três primeiras já foram feitas em 14/08. A quarta, `ACESSO_ELEVACAO_SEGREDO`, ainda não
+foi colocada — ver a seção da parte 3a, acima; colocá-la é ação pendente do usuário. Este
+passo a passo fica registrado porque um serviço novo, uma troca de segredo, ou justamente
+essa variável pendente, refazem este caminho.
 
-São três, todas com o valor que já está no `.env.local` desta máquina:
+São quatro, todas com o valor que já está no `.env.local` desta máquina:
 
 - `SUPABASE_SERVICE_KEY` — sem ela o router `/api/acesso/*` nem é montado
-- `ACESSO_AGENTE_SEGREDO` — sem ela a faixa de códigos nunca é publicada
+- `ACESSO_AGENTE_SEGREDO` — sem ela a faixa de códigos nunca chega à nuvem
 - `QR_PEDIDO_SEGREDO` — sem ela não dá para gerar o QR do evento
+- `ACESSO_ELEVACAO_SEGREDO` — sem ela o dono não configura o evento; a tela fica somente
+  leitura
 
 ```powershell
 .\ferramentas\copiar_para_render.ps1
 ```
 
-Ele confere as três, põe uma de cada vez na área de transferência (o valor **não** aparece
+Ele confere as quatro, põe uma de cada vez na área de transferência (o valor **não** aparece
 na tela) e espera você colar no Render antes de passar para a próxima. Com `-Conferir`, só
 confere e sai; com `-Somente <NOME>`, copia uma e não limpa nada.
 
