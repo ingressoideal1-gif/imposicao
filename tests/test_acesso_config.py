@@ -289,3 +289,71 @@ def test_servidor_sem_segredo_de_elevacao_recusa_elevar(banco, senha_certa, monk
         cfg._elevar(EVENTO, DONO, "boa", NAV)
     assert e.value.status_code == 503
     assert "ACESSO_ELEVACAO_SEGREDO" in str(e.value.detail)
+
+
+# ── Gravar evento e setor ───────────────────────────────────────────────────
+
+@pytest.fixture
+def elevado(banco, segredo_da_elevacao, senha_certa):
+    return cfg._elevar(EVENTO, DONO, "boa", NAV)["token"]
+
+
+def test_gravar_o_nome_do_evento(banco, elevado):
+    cfg._gravar_evento(EVENTO, DONO, elevado, NAV,
+                       {"nome_evento": "Baile do Hawaii", "local_evento": "Clube"})
+    assert banco.eventos[0]["nome_evento"] == "Baile do Hawaii"
+    assert banco.eventos[0]["local_evento"] == "Clube"
+
+
+def test_nome_de_evento_vazio_e_recusado(banco, elevado):
+    with pytest.raises(HTTPException) as e:
+        cfg._gravar_evento(EVENTO, DONO, elevado, NAV, {"nome_evento": "   "})
+    assert e.value.status_code == 422
+
+
+def test_gravar_lotacao_e_tipo_de_uso_do_setor(banco, elevado):
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV,
+                      {"lotacao": 4800, "tipo_uso": "reentrada"})
+    assert banco.setores[0]["lotacao"] == 4800
+    assert banco.setores[0]["tipo_uso"] == "reentrada"
+
+
+def test_lotacao_pode_ser_apagada(banco, elevado):
+    """Nulo quer dizer sem limite, e o dono precisa poder voltar atras."""
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"lotacao": 4800})
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"lotacao": None})
+    assert banco.setores[0]["lotacao"] is None
+
+
+def test_lotacao_negativa_e_recusada(banco, elevado):
+    with pytest.raises(HTTPException) as e:
+        cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"lotacao": -1})
+    assert e.value.status_code == 422
+
+
+def test_tipo_de_uso_inventado_e_recusado(banco, elevado):
+    """So `unico` e `reentrada` existem. Um terceiro valor passaria pelo banco,
+    que aceita texto livre, e a portaria decidiria errado na hora da fila."""
+    with pytest.raises(HTTPException) as e:
+        cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"tipo_uso": "as_vezes"})
+    assert e.value.status_code == 422
+
+
+def test_a_quantidade_do_setor_nao_e_editavel(banco, elevado):
+    """Quem manda na tiragem e o ERP. Aceitar o campo aqui deixaria a tela
+    'corrigir' um numero que nao e dela, e a divergencia com o publicado — que e
+    justamente o alarme — passaria a ser silenciada pelo proprio alarme."""
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"quantidade": 1})
+    assert banco.setores[0]["quantidade"] == 5000
+
+
+def test_setor_de_evento_alheio_e_recusado(banco, elevado):
+    with pytest.raises(HTTPException) as e:
+        cfg._gravar_setor(SETOR, ESTRANHO, elevado, NAV, {"lotacao": 10})
+    assert e.value.status_code == 403
+
+
+def test_gravar_sem_elevacao_e_recusado(banco):
+    with pytest.raises(HTTPException) as e:
+        cfg._gravar_setor(SETOR, DONO, None, NAV, {"lotacao": 10})
+    assert e.value.status_code == 401

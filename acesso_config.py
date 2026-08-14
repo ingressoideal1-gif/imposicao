@@ -187,3 +187,119 @@ def elevar(evento_id: str, corpo: dict, authorization: str = Header(None)):
         corpo.get("senha") or "",
         corpo.get("navegador") or "",
     )
+
+
+# ── Gravar evento e setor ───────────────────────────────────────────────────
+#
+# Toda escrita passa por aqui: confere o dono, exige a elevação, valida cada
+# campo, e só então toca o banco. `if "campo" in corpo` em vez de `corpo.get`
+# é o que permite gravar um campo de cada vez sem apagar os outros — a tela
+# manda só o que o dono mudou.
+
+TIPOS_DE_USO = ("unico", "reentrada")  # a portaria decide a fila por isto; nada mais existe
+
+LOTACAO_MAXIMA = 10_000_000
+
+
+def _texto(valor, campo: str, minimo: int, maximo: int) -> str:
+    """Apara espaços e checa tamanho. `campo` entra na mensagem para o dono
+    saber o que corrigir sem precisar adivinhar qual caixa da tela errou."""
+    limpo = str(valor or "").strip()
+    if not (minimo <= len(limpo) <= maximo):
+        raise HTTPException(
+            status_code=422,
+            detail=f"{campo}: escreva de {minimo} a {maximo} caracteres",
+        )
+    return limpo
+
+
+def _lotacao(valor):
+    """`None` e `""` são o mesmo pedido — sem limite — porque o dono precisa
+    de um jeito de voltar atrás depois de ter digitado um número. `0` não cai
+    aqui: é lotação zero de verdade, não ausência de valor."""
+    if valor is None or valor == "":
+        return None          # sem limite
+    try:
+        n = int(valor)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="lotacao: escreva um numero inteiro")
+    if not (0 <= n <= LOTACAO_MAXIMA):
+        raise HTTPException(
+            status_code=422,
+            detail=f"lotacao: escreva de 0 a {LOTACAO_MAXIMA}, ou deixe vazio para sem limite",
+        )
+    return n
+
+
+def _setor_do_dono(setor_id: str, usuario: dict) -> dict:
+    """O setor, se o evento dele for desta conta. Reaproveita `_evento_do_dono`
+    em vez de repetir a checagem, para que só exista um lugar respondendo
+    "este evento é seu?"."""
+    linha = (supabase(
+        "GET", f"producao_acesso_setores?id=eq.{setor_id}&select=id,evento_id",
+    ) or [None])[0]
+    if not linha:
+        raise HTTPException(status_code=403, detail="setor nao encontrado nesta conta")
+    _evento_do_dono(linha["evento_id"], usuario)
+    return linha
+
+
+def _gravar_evento(evento_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    _evento_do_dono(evento_id, usuario)
+    _exigir_elevacao(evento_id, usuario, elevacao, navegador)
+
+    mudanca = {}
+    if "nome_evento" in corpo:
+        mudanca["nome_evento"] = _texto(corpo["nome_evento"], "nome do evento", 1, 120)
+    if "local_evento" in corpo:
+        mudanca["local_evento"] = _texto(corpo["local_evento"], "local", 0, 200) or None
+    if "data_evento" in corpo:
+        mudanca["data_evento"] = corpo["data_evento"] or None
+
+    if mudanca:
+        supabase("PATCH", f"producao_acesso_eventos?id=eq.{evento_id}", mudanca,
+                 prefer="return=minimal")
+    return {"ok": True, "gravado": sorted(mudanca)}
+
+
+def _gravar_setor(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    # A elevação é exigida contra o evento DO SETOR, achado agora — nunca
+    # contra um evento_id que o chamador tivesse mandado por fora, o que
+    # deixaria a senha de um evento abrir a escrita de outro.
+    setor = _setor_do_dono(setor_id, usuario)
+    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
+
+    # `quantidade` NÃO entra: quem manda na tiragem é o ERP. Aceitá-la aqui
+    # deixaria a tela silenciar a divergência que ela existe para mostrar.
+    mudanca = {}
+    if "nome" in corpo:
+        mudanca["nome"] = _texto(corpo["nome"], "nome do setor", 1, 60)
+    if "lotacao" in corpo:
+        mudanca["lotacao"] = _lotacao(corpo["lotacao"])
+    if "tipo_uso" in corpo:
+        tipo = str(corpo["tipo_uso"] or "").strip()
+        if tipo not in TIPOS_DE_USO:
+            raise HTTPException(
+                status_code=422,
+                detail="tipo de uso: escolha entre uma entrada so ou permite reentrada",
+            )
+        mudanca["tipo_uso"] = tipo
+
+    if mudanca:
+        supabase("PATCH", f"producao_acesso_setores?id=eq.{setor_id}", mudanca,
+                 prefer="return=minimal")
+    return {"ok": True, "gravado": sorted(mudanca)}
+
+
+@router.patch("/eventos/{evento_id}")
+def gravar_evento(evento_id: str, corpo: dict, authorization: str = Header(None),
+                  x_elevacao: str = Header(None), x_navegador: str = Header(None)):
+    return _gravar_evento(evento_id, _usuario_logado(authorization),
+                          x_elevacao, x_navegador, corpo)
+
+
+@router.patch("/setores/{setor_id}")
+def gravar_setor(setor_id: str, corpo: dict, authorization: str = Header(None),
+                 x_elevacao: str = Header(None), x_navegador: str = Header(None)):
+    return _gravar_setor(setor_id, _usuario_logado(authorization),
+                         x_elevacao, x_navegador, corpo)
