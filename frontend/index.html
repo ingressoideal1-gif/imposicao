@@ -693,27 +693,24 @@
                     <div class="card-header">
                         <span class="card-title"><span class="icon">➕</span> Cadastrar Nova Fonte</span>
                     </div>
-                    <div class="form-grid" style="grid-template-columns: 1.5fr 1fr 1fr 1fr auto;">
+                    <div class="form-grid" style="grid-template-columns: 2fr 1fr auto;">
                         <div class="form-group">
-                            <label>Nome da Fonte (Display)</label>
-                            <input type="text" class="form-control" id="fonte-name" placeholder="Ex: Helvetica Bold">
+                            <label>Arquivos de fonte (.ttf, .otf, .woff) — pode selecionar vários</label>
+                            <input type="file" class="form-control" id="fonte-file" accept=".ttf,.otf,.woff,.woff2" multiple>
                         </div>
                         <div class="form-group">
-                            <label>Família CSS (font-family)</label>
-                            <input type="text" class="form-control" id="fonte-family" placeholder="Ex: Helvetica">
-                        </div>
-                        <div class="form-group">
-                            <label>Categoria</label>
+                            <label>Categoria (opcional)</label>
                             <input type="text" class="form-control" id="fonte-categoria" placeholder="Ex: Geral, Moderna" value="Geral">
                         </div>
-                        <div class="form-group">
-                            <label>Arquivo (.ttf, .otf)</label>
-                            <input type="file" class="form-control" id="fonte-file" accept=".ttf,.otf,.woff,.woff2">
-                        </div>
                         <div class="form-group" style="display:flex; align-items:flex-end;">
-                            <button class="btn btn-primary" onclick="salvarNovaFonteWeb()" id="btn-salvar-fonte">📤 Fazer Upload</button>
+                            <button class="btn btn-primary" onclick="salvarNovaFonteWeb()" id="btn-salvar-fonte">📤 Carregar Fontes</button>
                         </div>
                     </div>
+                    <p style="margin:8px 0 0; color:var(--text-dim); font-size:0.85rem;">
+                        O nome de cada fonte é lido de dentro do próprio arquivo — não precisa digitar nada.
+                        Fontes com nome já cadastrado são puladas.
+                    </p>
+                    <div id="fonte-upload-resultado" style="display:none; margin-top:12px; padding:10px 12px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; font-size:0.9rem;"></div>
                 </div>
 
                 <div class="card">
@@ -2629,6 +2626,7 @@
     <script src="arte-de-impressao.js?v=566"></script>
     <script src="qr-canvas.js?v=566"></script>
     <script src="fonte-canvas.js?v=566"></script>
+    <script src="fonte-nome.js?v=566"></script>
     <script src="qr-ideal-colunas.js?v=566"></script>
     <script src="csv-editor.js?v=566"></script>
     <script src="amostra-modal.js?v=566"></script>

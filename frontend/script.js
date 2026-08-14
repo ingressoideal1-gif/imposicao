@@ -295,72 +295,93 @@ async function renderCatFontesUI() {
 }
 window.renderCatFontesUI = renderCatFontesUI;
 
+// Upload em lote: o nome sai de dentro de cada arquivo (fonte-nome.js), a
+// digitacao acabou. Duplicata (mesmo nome ja no catalogo ou repetido dentro do
+// proprio lote) e PULADA, nunca substituida — substituir trocaria em silencio o
+// binario de uma fonte ja usada em artes aprovadas.
 async function salvarNovaFonteWeb() {
-    const nome = document.getElementById('fonte-name').value.trim();
-    const family = document.getElementById('fonte-family').value.trim();
-    const categoria = document.getElementById('fonte-categoria').value.trim() || 'Geral';
     const fileInput = document.getElementById('fonte-file');
-    
-    if (!nome || !family || !fileInput.files || fileInput.files.length === 0) {
-        alert('Por favor, preencha o Nome, a Família CSS e selecione um arquivo de fonte (.ttf, .otf, .woff).');
+    const categoria = (document.getElementById('fonte-categoria').value || '').trim() || 'Geral';
+    const arquivos = Array.from((fileInput && fileInput.files) || []);
+
+    if (!arquivos.length) {
+        alert('Selecione um ou mais arquivos de fonte (.ttf, .otf, .woff).');
         return;
     }
-    
-    const file = fileInput.files[0];
+
     const btn = document.getElementById('btn-salvar-fonte');
     btn.disabled = true;
-    btn.innerText = '⏳ Enviando...';
-    
-    try {
-        const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const timestamp = Date.now();
-        const storagePath = `fontes/${timestamp}_${safeName}`;
-        
-        const { error: uploadError } = await supabaseClient.storage
-            .from('chat-ideal')
-            .upload(storagePath, file, { upsert: true });
-            
-        if (uploadError) throw uploadError;
-        
-        const { data: publicUrlData } = supabaseClient.storage
-            .from('chat-ideal')
-            .getPublicUrl(storagePath);
-            
-        const arquivo_url = publicUrlData.publicUrl;
-        
-        const payload = {
-            nome: nome,
-            font_family: family,
-            categoria: categoria,
-            arquivo_url: arquivo_url,
-            ativo: true
-        };
-        
-        const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-        const res = await fetch(`${apiBase}/api/fontes`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        
-        if (!res.ok) throw new Error('Erro ao salvar no banco');
-        
-        document.getElementById('fonte-name').value = '';
-        document.getElementById('fonte-family').value = '';
-        document.getElementById('fonte-file').value = '';
-        
-        await loadCatalogoFontes();
-        renderCatFontesUI();
-        
-        alert('Fonte cadastrada com sucesso!');
-        
-    } catch (e) {
-        console.error('[Fontes] Erro no upload:', e);
-        alert('Erro ao fazer upload da fonte: ' + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = '📤 Fazer Upload';
+
+    // nome E font_family das entradas existentes contam como "ja existe"
+    const chavesExistentes = new Set();
+    for (const f of (state_fonts.catalogo || [])) {
+        if (f.nome) chavesExistentes.add(chaveDeDuplicata(f.nome));
+        if (f.font_family) chavesExistentes.add(chaveDeDuplicata(f.font_family));
     }
+
+    const cadastradas = [], puladas = [], falhas = [];
+    const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
+
+    for (let i = 0; i < arquivos.length; i++) {
+        const arquivo = arquivos[i];
+        btn.innerText = `⏳ ${i + 1}/${arquivos.length} — ${arquivo.name}`;
+        try {
+            const dados = await arquivo.arrayBuffer();
+            const nome = await nomeDaFonte(dados, arquivo.name);
+            const chave = chaveDeDuplicata(nome);
+            if (chavesExistentes.has(chave)) {
+                puladas.push(nome);
+                continue;
+            }
+
+            const safeName = arquivo.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const storagePath = `fontes/${Date.now()}_${i}_${safeName}`;
+            const { error: uploadError } = await supabaseClient.storage
+                .from('chat-ideal')
+                .upload(storagePath, arquivo, { upsert: true });
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = supabaseClient.storage
+                .from('chat-ideal')
+                .getPublicUrl(storagePath);
+
+            const res = await fetch(`${apiBase}/api/fontes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nome: nome,
+                    font_family: nome,   // iguais de proposito: mata o desvio nome != familia
+                    categoria: categoria,
+                    arquivo_url: publicUrlData.publicUrl,
+                    ativo: true
+                })
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status} ao salvar no banco`);
+
+            chavesExistentes.add(chave); // repetido DENTRO do lote tambem pula
+            cadastradas.push(nome);
+        } catch (e) {
+            console.error('[Fontes] Falha em', arquivo.name, e);
+            falhas.push(`${arquivo.name}: ${e.message || e}`);
+        }
+    }
+
+    fileInput.value = '';
+    await loadCatalogoFontes(); // ja rerrenderiza a tabela e o badge
+
+    // O resultado fica ESCRITO na tela, nao so num alert que some.
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const resumo = document.getElementById('fonte-upload-resultado');
+    if (resumo) {
+        const partes = [`<b>${cadastradas.length}</b> cadastrada(s)${cadastradas.length ? ': ' + esc(cadastradas.join(', ')) : ''}`];
+        if (puladas.length) partes.push(`<b>${puladas.length}</b> pulada(s) — já existia(m): ${esc(puladas.join(', '))}`);
+        if (falhas.length) partes.push(`<b>${falhas.length}</b> com erro: ${esc(falhas.join('; '))}`);
+        resumo.innerHTML = partes.join('<br>');
+        resumo.style.display = 'block';
+    }
+
+    btn.disabled = false;
+    btn.innerText = '📤 Carregar Fontes';
 }
 window.salvarNovaFonteWeb = salvarNovaFonteWeb;
 

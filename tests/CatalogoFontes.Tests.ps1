@@ -16,3 +16,28 @@ Describe 'catalogo de fontes -- o Excluir fala com a rota que existe' {
         ($js -match 'api/fontes\?id=') | Should Be $false
     }
 }
+
+$html = Get-Content "$repo\frontend\index.html" -Raw
+
+Describe 'catalogo de fontes -- upload em lote, sem digitacao' {
+    It 'nao existe mais campo para digitar o nome' {
+        ($html -match 'id="fonte-name"') | Should Be $false
+    }
+    It 'nao existe mais campo para digitar a familia CSS' {
+        ($html -match 'id="fonte-family"') | Should Be $false
+    }
+    It 'o input de arquivo aceita varios de uma vez' {
+        ($html -match 'id="fonte-file"[^>]*multiple') | Should Be $true
+    }
+    It 'a pagina carrega o fonte-nome.js antes do script.js' {
+        $iNome   = $html.IndexOf('fonte-nome.js')
+        $iScript = $html.IndexOf('script.js')
+        ($iNome -ge 0 -and $iNome -lt $iScript) | Should Be $true
+    }
+    It 'ha lugar para o resultado do lote aparecer na tela' {
+        ($html -match 'id="fonte-upload-resultado"') | Should Be $true
+    }
+    It 'o cadastro usa o nome extraido como nome E familia' {
+        ($js -match 'font_family:\s*nome') | Should Be $true
+    }
+}
