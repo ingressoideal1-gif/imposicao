@@ -18,8 +18,14 @@ ingresso e registrar entrada, que é o trabalho do porteiro, nunca pedem senha �
 mas isso é a parte 3b, e não passa por aqui.
 """
 
+import json
+import urllib.error
+import urllib.request
+
 from fastapi import APIRouter, Header, HTTPException
 
+import acesso_elevacao
+import db
 from acesso_api import _usuario_logado, contar, supabase
 
 router = APIRouter(prefix="/api/acesso", tags=["acesso"])
@@ -104,3 +110,80 @@ def _painel(evento_id: str) -> dict:
 def ver_evento(evento_id: str, authorization: str = Header(None)):
     _evento_do_dono(evento_id, _usuario_logado(authorization))
     return _painel(evento_id)
+
+
+# ── A elevação pela senha do dono ───────────────────────────────────────────
+#
+# Ler exige só o JWT. Escrever exige, além dele, a prova de que a senha do
+# dono foi digitada nos últimos 15 minutos, naquele navegador — porque o
+# celular da portaria fica na mão do porteiro, logado com a conta do cliente.
+
+def _conferir_senha(email: str, senha: str) -> bool:
+    """A senha do dono está certa? Quem sabe é o Supabase.
+
+    Usa a chave anônima de propósito: a API de autenticação a exige, e aqui não
+    se toca em tabela nenhuma. Uma sessão nova nasce desta chamada e é
+    descartada — não há efeito colateral.
+    """
+    corpo = json.dumps({"email": email, "password": senha}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{db.SUPABASE_URL}/auth/v1/token?grant_type=password",
+        data=corpo,
+        headers={"apikey": db.SUPABASE_KEY, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return bool(json.loads(resp.read().decode("utf-8")).get("access_token"))
+    except urllib.error.HTTPError:
+        return False
+    except Exception as e:
+        # Rede fora não é senha errada, e confundir os dois manda o dono
+        # procurar um papel com a senha quando o problema é outro.
+        raise HTTPException(
+            status_code=503, detail=f"nao consegui conferir a senha agora: {e}"
+        )
+
+
+def _elevar(evento_id: str, usuario: dict, senha: str, navegador: str) -> dict:
+    _evento_do_dono(evento_id, usuario)
+
+    if not acesso_elevacao.configurado():
+        raise HTTPException(
+            status_code=503,
+            detail=f"{acesso_elevacao.SEGREDO_ENV} nao configurada neste servidor",
+        )
+    if not _conferir_senha(usuario.get("email") or "", senha or ""):
+        # Uma frase só: não dizer se o problema foi o e-mail ou a senha.
+        raise HTTPException(status_code=401, detail="senha nao confere")
+
+    token, expira = acesso_elevacao.gerar(evento_id, usuario["id"], navegador)
+    return {"token": token, "expira_em": expira,
+            "minutos": acesso_elevacao.VALIDADE_MINUTOS}
+
+
+def _exigir_elevacao(evento_id: str, usuario: dict, elevacao, navegador) -> None:
+    """A porta de toda escrita. Silêncio é aprovação.
+
+    O 401 vem com um código próprio porque a tela precisa distinguir "a sessão
+    caiu" de "a elevação venceu": são consertos diferentes, e confundi-los faz a
+    tela deslogar quem só precisava digitar a senha de novo.
+    """
+    try:
+        acesso_elevacao.conferir(elevacao, evento_id, usuario.get("id"), navegador)
+    except ValueError:
+        raise HTTPException(
+            status_code=401,
+            detail={"codigo": "elevacao_expirada",
+                    "mensagem": "digite a senha do dono para alterar o evento"},
+        )
+
+
+@router.post("/eventos/{evento_id}/elevar")
+def elevar(evento_id: str, corpo: dict, authorization: str = Header(None)):
+    return _elevar(
+        evento_id,
+        _usuario_logado(authorization),
+        corpo.get("senha") or "",
+        corpo.get("navegador") or "",
+    )

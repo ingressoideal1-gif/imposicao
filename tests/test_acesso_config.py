@@ -218,3 +218,74 @@ def test_o_router_da_configuracao_acompanha_o_da_publicacao():
     tem_rota = any(getattr(r, "path", "") == "/api/acesso/eventos/{evento_id}"
                    for r in app.app.routes)
     assert tem_rota == acesso_api.disponivel()
+
+
+# ── A elevação ──────────────────────────────────────────────────────────────
+
+NAV = "55555555-5555-5555-5555-555555555555"
+
+
+@pytest.fixture
+def segredo_da_elevacao(monkeypatch):
+    import acesso_elevacao
+    monkeypatch.setattr(acesso_elevacao, "_SEGREDO_CACHE", "segredo-de-teste-longo-o-bastante")
+
+
+@pytest.fixture
+def senha_certa(monkeypatch):
+    monkeypatch.setattr(cfg, "_conferir_senha", lambda email, senha: senha == "boa")
+
+
+def test_a_senha_certa_eleva_por_quinze_minutos(banco, segredo_da_elevacao, senha_certa):
+    import time
+    r = cfg._elevar(EVENTO, DONO, "boa", NAV)
+    assert r["token"]
+    assert 14 * 60 < r["expira_em"] - time.time() <= 15 * 60
+
+
+def test_a_senha_errada_nao_eleva(banco, segredo_da_elevacao, senha_certa):
+    with pytest.raises(HTTPException) as e:
+        cfg._elevar(EVENTO, DONO, "ruim", NAV)
+    assert e.value.status_code == 401
+
+
+def test_nao_eleva_para_evento_alheio_nem_com_a_senha_certa(banco, segredo_da_elevacao, senha_certa):
+    with pytest.raises(HTTPException) as e:
+        cfg._elevar(EVENTO, ESTRANHO, "boa", NAV)
+    assert e.value.status_code == 403
+
+
+def test_a_elevacao_recem_emitida_e_aceita(banco, segredo_da_elevacao, senha_certa):
+    token = cfg._elevar(EVENTO, DONO, "boa", NAV)["token"]
+    cfg._exigir_elevacao(EVENTO, DONO, token, NAV)   # não levanta
+
+
+def test_escrita_sem_elevacao_e_recusada_com_codigo_proprio(banco, segredo_da_elevacao):
+    """A tela precisa distinguir 'sessao caiu' de 'elevacao venceu'.
+
+    Sao consertos diferentes: um manda entrar de novo, o outro so pede a senha
+    do dono. Confundi-los faz a tela deslogar quem nao precisava.
+    """
+    with pytest.raises(HTTPException) as e:
+        cfg._exigir_elevacao(EVENTO, DONO, None, NAV)
+    assert e.value.status_code == 401
+    assert e.value.detail["codigo"] == "elevacao_expirada"
+
+
+def test_elevacao_de_outro_navegador_e_recusada(banco, segredo_da_elevacao, senha_certa):
+    token = cfg._elevar(EVENTO, DONO, "boa", NAV)["token"]
+    with pytest.raises(HTTPException) as e:
+        cfg._exigir_elevacao(EVENTO, DONO, token, "66666666-6666-6666-6666-666666666666")
+    assert e.value.detail["codigo"] == "elevacao_expirada"
+
+
+def test_servidor_sem_segredo_de_elevacao_recusa_elevar(banco, senha_certa, monkeypatch):
+    """Falha FECHADA, e com o nome da variavel na mensagem."""
+    import acesso_elevacao
+    monkeypatch.setattr(acesso_elevacao, "_SEGREDO_CACHE", None)
+    monkeypatch.setattr(acesso_elevacao.db, "ler_env_local", lambda _n: None)
+    monkeypatch.delenv(acesso_elevacao.SEGREDO_ENV, raising=False)
+    with pytest.raises(HTTPException) as e:
+        cfg._elevar(EVENTO, DONO, "boa", NAV)
+    assert e.value.status_code == 503
+    assert "ACESSO_ELEVACAO_SEGREDO" in str(e.value.detail)
