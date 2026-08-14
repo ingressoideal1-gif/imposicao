@@ -3573,6 +3573,29 @@ window.descreverErroHttp = descreverErroHttp;
  * mesmo que o campo apareça por acidente no JSON. Elemento sem o campo é
  * impressão, que é como todo o acervo anterior a esta versão foi gravado.
  */
+/**
+ * Rede de segurança para a janela de sincronização do painel.
+ *
+ * O `arte-de-impressao.js` é um arquivo NOVO. A estação baixa o painel usando a
+ * lista `PAINEL_ARQUIVOS` que está **embutida no agente instalado** — e um
+ * agente anterior à 1.2.64 não conhece esse nome. Ele já sincroniza o
+ * `index.html` novo, que referencia o script, mas não busca o script. Nessa
+ * janela o arquivo dá 404 e `arteDeImpressao` fica indefinida.
+ *
+ * Sem esta guarda, a montagem do trabalho lançaria `ReferenceError` e a
+ * imposição pararia por completo naquela estação — trocaríamos um defeito de
+ * arte por uma parada de produção.
+ *
+ * A regra é repetida aqui de propósito, e é uma linha: melhor duplicar um
+ * `indexOf` do que deixar a estação sem imposição, ou deixá-la voltar a
+ * imprimir a amostra de aprovação.
+ */
+function arteParaImpor(url) {
+    if (typeof arteDeImpressao === 'function') return arteDeImpressao(url);
+    return (url && String(url).indexOf('amostras_renderizadas') === -1) ? url : null;
+}
+window.arteParaImpor = arteParaImpor;
+
 function elementoSoLayout(el) {
     return !!el && (el.type === 'SVG' || el.type === 'PDF')
         && String(el.render_mode || 'print').trim().toLowerCase() === 'layout';
@@ -9456,11 +9479,11 @@ window.runImposition = async function (mode, returnBlob = false) {
             // Só arte de verdade vai ao motor. A amostra de aprovação e a Cor
             // ficam de fora — ver frontend/arte-de-impressao.js. Sem arte, o
             // trabalho sai só com numeração, que é o correto e o que sempre foi.
-            const itemArteUrl = arteDeImpressao(sItem ? sItem.arte_url : null);
+            const itemArteUrl = arteParaImpor(sItem ? sItem.arte_url : null);
 
             const wantsDuplex = sItem ? !!(sItem.verso_tipo && sItem.verso_tipo !== 'Frente') : false;
             const itemArteVersoUrl = (sItem && wantsDuplex)
-                ? arteDeImpressao(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
+                ? arteParaImpor(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
                 : null;
             
             const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')

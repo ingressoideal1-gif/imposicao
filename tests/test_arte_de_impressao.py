@@ -147,3 +147,58 @@ def test_a_versao_do_script_acompanha_as_outras():
         texto = _ler(pagina)
         versoes = set(re.findall(r'\.js\?v=(\d+)', texto))
         assert len(versoes) == 1, f"{pagina} tem versoes misturadas: {sorted(versoes)}"
+
+
+# ── A janela de sincronizacao do painel ─────────────────────────────────────
+#
+# O `arte-de-impressao.js` e um arquivo NOVO, e a estacao baixa o painel usando
+# a lista `PAINEL_ARQUIVOS` **embutida no agente instalado**. Um agente anterior
+# a 1.2.64 nao conhece esse nome: ele sincroniza o index.html e o producao.html
+# novos, que referenciam o script, mas nao busca o script.
+#
+# Nessa janela o arquivo da 404 e `arteDeImpressao` fica indefinida. Sem guarda,
+# a montagem do trabalho lancaria ReferenceError e a imposicao PARARIA naquela
+# estacao — trocariamos um defeito de arte por uma parada de producao.
+
+@pytest.mark.parametrize("arquivo", ["frontend/script.js", "frontend/pedido.js"])
+def test_a_chamada_sobrevive_sem_o_modulo(arquivo):
+    texto = _ler(arquivo)
+    assert "function arteParaImpor(" in texto, (
+        f"{arquivo} chama o filtro sem rede de seguranca para a janela de sync"
+    )
+    assert "typeof arteDeImpressao === 'function'" in texto
+
+
+@pytest.mark.parametrize("arquivo", ["frontend/script.js", "frontend/pedido.js"])
+def test_a_imposicao_usa_o_invólucro_e_nao_o_modulo_direto(arquivo):
+    """Chamar `arteDeImpressao` direto reabre a janela de ReferenceError."""
+    texto = _ler(arquivo)
+    assert "arteDeImpressao(sItem" not in texto
+    assert "arteParaImpor(sItem" in texto
+
+
+@pytest.mark.parametrize("arquivo", ["frontend/script.js", "frontend/pedido.js"])
+def test_o_plano_B_aplica_a_MESMA_regra(arquivo):
+    """Cair para o comportamento antigo faria a estacao voltar a imprimir a
+    amostra de aprovacao durante a janela. O plano B repete a regra."""
+    texto = _ler(arquivo)
+    trecho = texto[texto.index("function arteParaImpor("):]
+    trecho = trecho[:trecho.index("\n}")]
+    assert "amostras_renderizadas" in trecho
+
+
+def test_o_plano_B_funciona_de_verdade():
+    """Roda o invólucro num Node SEM o módulo carregado."""
+    fonte = _ler("frontend/pedido.js")
+    corpo = fonte[fonte.index("function arteParaImpor("):]
+    corpo = corpo[:corpo.index("\n}") + 2]
+    amostra = json.dumps(AMOSTRA)
+    arte = json.dumps(ARTE)
+    script = (
+        corpo
+        + f"console.log(JSON.stringify([arteParaImpor({amostra}), "
+          f"arteParaImpor({arte}), arteParaImpor(null)]));"
+    )
+    r = subprocess.run(["node", "-e", script], capture_output=True, text=True, cwd=RAIZ)
+    assert r.returncode == 0, r.stderr[:300]
+    assert json.loads(r.stdout.strip()) == [None, ARTE, None]

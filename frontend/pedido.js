@@ -1,5 +1,28 @@
 // PEDIDO.JS - GERADO AUTOMATICAMENTE POR CLONAGEM DE SCRIPT.JS
 
+/**
+ * Rede de segurança para a janela de sincronização do painel.
+ *
+ * O `arte-de-impressao.js` é um arquivo NOVO. A estação baixa o painel usando a
+ * lista `PAINEL_ARQUIVOS` que está **embutida no agente instalado** — e um
+ * agente anterior à 1.2.64 não conhece esse nome. Ele já sincroniza o
+ * `index.html` e o `producao.html` novos, que referenciam o script, mas não
+ * busca o script. Nessa janela o arquivo dá 404 e `arteDeImpressao` fica
+ * indefinida.
+ *
+ * Sem esta guarda, a montagem do trabalho lançaria `ReferenceError` e a
+ * imposição pararia por completo naquela estação — trocaríamos um defeito de
+ * arte por uma parada de produção.
+ *
+ * A regra é repetida aqui de propósito, e é uma linha: melhor duplicar um
+ * `indexOf` do que deixar a estação sem imposição, ou deixá-la voltar a
+ * imprimir a amostra de aprovação.
+ */
+function arteParaImpor(url) {
+    if (typeof arteDeImpressao === 'function') return arteDeImpressao(url);
+    return (url && String(url).indexOf('amostras_renderizadas') === -1) ? url : null;
+}
+
 function applyPedFormatoDefaults() {
     const fmtSel = document.getElementById('ped-formato');
     if (!fmtSel) return;
@@ -463,11 +486,11 @@ function drawPedPreview() {
             // Vale para a previa tambem, e de proposito: `itemArteUrl` alimenta
             // o cache de PDF que ela desenha. A previa tem de mostrar o que sai
             // no papel — se exibisse a amostra, prometeria o que nao sai.
-            const itemArteUrl = arteDeImpressao(sItem ? sItem.arte_url : null);
+            const itemArteUrl = arteParaImpor(sItem ? sItem.arte_url : null);
 
             const wantsDuplex = sItem ? (sItem.verso_tipo === 'FxVerso' || sItem.verso === true) : false;
             const itemArteVersoUrl = (sItem && wantsDuplex)
-                ? arteDeImpressao(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
+                ? arteParaImpor(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
                 : null;
 
             let pdfDoc = null;
@@ -4246,11 +4269,11 @@ window.runPedImposition = async function (mode, isRefazer) {
             // Vale para a previa tambem, e de proposito: `itemArteUrl` alimenta
             // o cache de PDF que ela desenha. A previa tem de mostrar o que sai
             // no papel — se exibisse a amostra, prometeria o que nao sai.
-            const itemArteUrl = arteDeImpressao(sItem ? sItem.arte_url : null);
+            const itemArteUrl = arteParaImpor(sItem ? sItem.arte_url : null);
 
             const wantsDuplex = sItem ? (sItem.verso_tipo === 'FxVerso' || sItem.verso === true) : false;
             const itemArteVersoUrl = (sItem && wantsDuplex)
-                ? arteDeImpressao(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
+                ? arteParaImpor(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
                 : null;
 
             let pdfDoc = null;
