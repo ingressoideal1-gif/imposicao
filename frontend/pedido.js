@@ -456,12 +456,19 @@ function drawPedPreview() {
             const corObj = sItem && sItem.amostra_cor_id
                 ? (state.cores || []).find(c => String(c.id) === String(sItem.amostra_cor_id))
                 : (sItem ? (state.cores || []).find(c => globalFuzzyMatch(c.name, sItem.cor || sItem.padrao || '')) : null);
-            const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
-            const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
-            
+            // So arte de verdade vai ao motor. A amostra de aprovacao e a Cor
+            // ficam de fora — ver frontend/arte-de-impressao.js. Sem arte, o
+            // trabalho sai so com numeracao, que e o correto e o que sempre foi.
+            //
+            // Vale para a previa tambem, e de proposito: `itemArteUrl` alimenta
+            // o cache de PDF que ela desenha. A previa tem de mostrar o que sai
+            // no papel — se exibisse a amostra, prometeria o que nao sai.
+            const itemArteUrl = arteDeImpressao(sItem ? sItem.arte_url : null);
+
             const wantsDuplex = sItem ? (sItem.verso_tipo === 'FxVerso' || sItem.verso === true) : false;
-            const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
-            const itemArteVersoUrl = (sItem && wantsDuplex) ? (sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor) : null;
+            const itemArteVersoUrl = (sItem && wantsDuplex)
+                ? arteDeImpressao(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
+                : null;
 
             let pdfDoc = null;
             if (itemArteUrl && state.multiArtesPdfCache[itemArteUrl]) {
@@ -4221,12 +4228,19 @@ window.runPedImposition = async function (mode, isRefazer) {
             const corObj = sItem && sItem.amostra_cor_id
                 ? (state.cores || []).find(c => String(c.id) === String(sItem.amostra_cor_id))
                 : (sItem ? (state.cores || []).find(c => globalFuzzyMatch(c.name, sItem.cor || sItem.padrao || '')) : null);
-            const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
-            const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
-            
+            // So arte de verdade vai ao motor. A amostra de aprovacao e a Cor
+            // ficam de fora — ver frontend/arte-de-impressao.js. Sem arte, o
+            // trabalho sai so com numeracao, que e o correto e o que sempre foi.
+            //
+            // Vale para a previa tambem, e de proposito: `itemArteUrl` alimenta
+            // o cache de PDF que ela desenha. A previa tem de mostrar o que sai
+            // no papel — se exibisse a amostra, prometeria o que nao sai.
+            const itemArteUrl = arteDeImpressao(sItem ? sItem.arte_url : null);
+
             const wantsDuplex = sItem ? (sItem.verso_tipo === 'FxVerso' || sItem.verso === true) : false;
-            const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
-            const itemArteVersoUrl = (sItem && wantsDuplex) ? (sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor) : null;
+            const itemArteVersoUrl = (sItem && wantsDuplex)
+                ? arteDeImpressao(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
+                : null;
 
             let pdfDoc = null;
             if (itemArteUrl && state.multiArtesPdfCache[itemArteUrl]) {

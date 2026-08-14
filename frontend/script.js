@@ -9453,12 +9453,15 @@ window.runImposition = async function (mode, returnBlob = false) {
             const corObj = sItem && sItem.amostra_cor_id
                 ? (state.cores || []).find(c => String(c.id) === String(sItem.amostra_cor_id))
                 : (sItem ? (state.cores || []).find(c => globalFuzzyMatch(c.name, sItem.cor || sItem.padrao || '')) : null);
-            const arteViaCor = corObj ? (corObj.pdf_url || null) : null;
-            const itemArteUrl = sItem ? sItem.arte_url || arteViaCor : null;
-            
+            // Só arte de verdade vai ao motor. A amostra de aprovação e a Cor
+            // ficam de fora — ver frontend/arte-de-impressao.js. Sem arte, o
+            // trabalho sai só com numeração, que é o correto e o que sempre foi.
+            const itemArteUrl = arteDeImpressao(sItem ? sItem.arte_url : null);
+
             const wantsDuplex = sItem ? !!(sItem.verso_tipo && sItem.verso_tipo !== 'Frente') : false;
-            const arteVersoViaCor = corObj ? (corObj.pdf_verso_base64 || corObj.pdf_verso_url || null) : null;
-            const itemArteVersoUrl = (sItem && wantsDuplex) ? (sItem.verso_arte_url || sItem.url_arquivo_arte_verso || arteVersoViaCor) : null;
+            const itemArteVersoUrl = (sItem && wantsDuplex)
+                ? arteDeImpressao(sItem.verso_arte_url || sItem.url_arquivo_arte_verso)
+                : null;
             
             const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
                 ? decodeURIComponent(itemArteUrl.split('/').pop().split('?')[0])
