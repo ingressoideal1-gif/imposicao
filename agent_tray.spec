@@ -56,6 +56,10 @@ a = Analysis(
         'PIL',
         'PIL.Image',
         'PIL.ImageDraw',
+        # A extensao C _imagingcms (LittleCMS) so e achada pelo PyInstaller com
+        # o import explicito — sem esta linha o agente sobe, mas a primeira
+        # impressao com gerenciamento de cores morre com ImportError no log.
+        'PIL.ImageCms',
         'fastapi',
         'starlette',
         'starlette.routing',
@@ -80,6 +84,7 @@ a = Analysis(
         'db',
         'ppd_parser',
         'print_service',
+        'color_profiles',
         'hotfolder',
         'acesso_local',
         'local_print_agent',

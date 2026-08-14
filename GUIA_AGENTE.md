@@ -50,6 +50,29 @@ e o MSI **nunca os substitui** — ele instala apenas o `NewProd.exe`:
 | `hot_folders.json` | pastas observadas por RIP que esta estação autorizou a receber PDF |
 | `agent_config.json` | identidade do agente (`AGENT_ID`) |
 | `fonts_cache/` | fontes baixadas do Storage |
+| `perfis_icc/` | perfis ICC (`.icm`/`.icc`) das impressoras, enviados pela box "Gerenciamento de Cores" |
+| `printer_icc_map.json` | mapa impressora → perfil/intento do gerenciamento de cores |
+
+### Gerenciamento de cores (perfis .icm)
+
+A configuração é **por impressora**, na box "Gerenciamento de Cores" da janela de
+impressão. Sem perfil configurado (ou com a chave desligada) **nada muda** — a
+impressão sai como sempre saiu. Com perfil ativo:
+
+- **GDI (padrão):** o raster sRGB passa pela transformação LittleCMS
+  (`PIL.ImageCms`) do perfil antes de ir ao driver;
+- **Ghostscript:** a conversão é colorimétrica via flags ICC
+  (`-sOutputICCProfile`, `-sColorConversionStrategy`, `-dRenderIntent`);
+- **PDF RAW:** o perfil é embutido como OutputIntent e a controladora
+  (Fiery/Konica/Ricoh) converte no RIP dela;
+- **Hot Folder:** intocado — o RIP da Epson já gerencia pelo preset da pasta.
+
+Além disso, todo PDF gerado pelo `engine.py` sai com **OutputIntent sRGB**
+declarando o que o RGB significa. Perfil sumido ou corrompido na hora de
+imprimir vira **aviso** na mensagem de retorno e o trabalho sai sem
+gerenciamento — nunca bloqueia a produção. Tudo isso é código embutido no
+executável (`color_profiles.py`, `PIL.ImageCms` no `agent_tray.spec`): mexeu
+aqui, **o agente publica junto com o site**.
 
 **Corrigir o arquivo no repositório não corrige o agente instalado.** Uma migração
 de dado só chega à estação se for **código que roda lá** — ver
