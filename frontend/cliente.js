@@ -366,8 +366,8 @@ function renderAmostrasOSItens(osId) {
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
                                 ? `
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px #22c55e;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
-                                    ${status === 'APROVADA' ? '✅ APROVADO' : 'APROVAR'}
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                                    ${status === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
                                 </button>
                                 ` 
                                 : `
@@ -376,8 +376,8 @@ function renderAmostrasOSItens(osId) {
                                 </button>
                                 `
                             }
-                            <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
-                                ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : 'ALTERAR'}
+                            <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
                             </button>
                         </div>
                     </div>
