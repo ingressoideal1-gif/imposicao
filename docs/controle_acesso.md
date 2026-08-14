@@ -296,15 +296,22 @@ UUID zerado.
 
 ## O que falta (a partir da parte 3b)
 
-A tela do dono (`controle.html`, parte 3a) já existe e está publicada: login do cliente,
-lotação e tipo de uso por setor, os aparelhos da portaria com lista de setores própria, e a
-senha do dono travando a configuração do evento. O controle de acesso também já mora dentro
-deste repositório — a mudança que tirou o Ideal Control antigo de fora dele.
+A tela do dono (`controle.html`, parte 3a) **está construída e commitada, mas ainda não
+publicada** — o site, o motor e o agente no ar continuam sendo os da parte 2. Ela traz:
+login do cliente, lotação e tipo de uso por setor, os aparelhos da portaria com lista de
+setores própria, e a senha do dono travando a configuração do evento. Publicar exige antes
+a variável `ACESSO_ELEVACAO_SEGREDO` no Render; o estado atual está em
+[STATUS_PROJETO.md](STATUS_PROJETO.md).
 
 O que falta é o aplicativo da PORTARIA (parte 3b): IndexedDB com validação local de
-verdade, leitura de QR e registro de entrada sem depender de rede, reentrada em uso de
-verdade, e a limpeza do `sw.js`, que ainda referencia SDKs do Firebase removidos. Painel ao
-vivo, relatórios e cancelar credencial ficam para a parte 3c.
+verdade, leitura de QR e registro de entrada sem depender de rede, e reentrada em uso de
+verdade. Painel ao vivo, relatórios e cancelar credencial ficam para a parte 3c.
+
+**O Ideal Control antigo continua fora deste repositório**, em `../ideal-IdealControl/`.
+Trazê-lo para cá é trabalho da parte 3c, e a parte 3a reverteu o plano de evoluí-lo: o
+layout foi refeito do zero, por decisão do usuário. Enquanto ele não vier, o `sw.js` que
+ainda referencia SDKs do Firebase removidos mora lá, não aqui — não há `sw.js` em
+`frontend/`.
 
 Decisões já tomadas pelo usuário e registradas na
 [spec](superpowers/specs/2026-08-13-controle-acesso-parte2-design.md):
