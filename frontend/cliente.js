@@ -2143,48 +2143,27 @@ function repintarAssinantesDoPreload(elementos) {
 
 // ===== QR CODE: usa biblioteca CDN qrcode-generator 1.4.4 (window.qrcode) carregada no HTML =====
 
-function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
-    try {
-        text = String(text || '0001');
-        bgColor = bgColor || '#ffffff';
-        color = color || '#000000';
-
-        var qr = qrcode(0, 'L');
-        qr.addData(text);
-        qr.make();
-
-        var moduleCount = qr.getModuleCount();
-        var margin = 2; // Margem oficial de Quiet Zone (2 módulos)
-        var totalCount = moduleCount + margin * 2;
-        var cellSize = sz / totalCount;
-        var hsz = sz / 2;
-
-        // Fundo Branco incluindo a Quiet Zone (margem)
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(x - hsz, y - hsz, sz, sz);
-
-        ctx.fillStyle = color;
-        for (var r = 0; r < moduleCount; r++) {
-            for (var c = 0; c < moduleCount; c++) {
-                if (qr.isDark(r, c)) {
-                    ctx.fillRect(
-                        x - hsz + (c + margin) * cellSize,
-                        y - hsz + (r + margin) * cellSize,
-                        cellSize + 0.35,
-                        cellSize + 0.35
-                    );
-                }
-            }
-        }
-    } catch (e) {
-        console.error('[QR Code] Erro ao gerar QR Code:', e);
-        var hsz = sz / 2;
+// `renderQRCodeOnCtx` vive agora em frontend/qr-canvas.js — a mesma funcao que
+// o editor, o card do pedido e a previa de imposicao usam. Havia TRES copias
+// dela neste projeto, e copia que divergiu ja custou dois defeitos de producao
+// nesta semana.
+//
+// Rede de seguranca para a janela de sincronizacao do painel: se o modulo nao
+// tiver chegado a estacao, o QR nao desenha — mas a pagina do cliente continua
+// de pe, em vez de morrer com ReferenceError na frente dele.
+if (typeof window.renderQRCodeOnCtx !== 'function') {
+    console.error('[QR] qr-canvas.js nao carregou. O QR nao sera desenhado.');
+    window.renderQRCodeOnCtx = function (ctx, text, x, y, sz) {
+        var h = sz / 2;
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x - hsz, y - hsz, sz, sz);
+        ctx.fillRect(x - h, y - h, sz, sz);
         ctx.strokeStyle = '#ef4444';
         ctx.lineWidth = 1;
-        ctx.strokeRect(x - hsz, y - hsz, sz, sz);
-    }
+        ctx.strokeRect(x - h, y - h, sz, sz);
+    };
+    window.desenharQRIdeal = function (ctx, el, sz, color) {
+        window.renderQRCodeOnCtx(ctx, '', 0, 0, sz, color);
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2722,6 +2701,16 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     numCtx, el, label, fs, S,
                     (f) => buildCanvasFont(f, el.font_name)
                 );
+            } else if (el.type === 'QR_IDEAL') {
+                // O cliente precisa VER o elemento que vai no ingresso dele.
+                // Ate 14/08/2026 esta tela descartava o QR Ideal em silencio:
+                // a arte era aprovada sem ele, e ele saia impresso.
+                //
+                // O codigo sai do pool, que so existe na estacao — aqui o
+                // desenho e um exemplo, e a logo por cima ja impede extrair
+                // um codigo legivel da imagem de aprovacao.
+                window.desenharQRIdeal(ctx, el, (el.size_mm || 15) * S,
+                                       el.color || '#000000', null, null, 1);
             } else if (el.type === 'QR') {
                 const sz = (el.size_mm || 15) * S;
                 let qrText = '';
@@ -3178,7 +3167,17 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 ctx, el, label, fs, Sx,
                 (f) => buildCanvasFont(f, el.font_name)
             );
-        } else if (el.type === 'QR') {
+        } else if (el.type === 'QR_IDEAL') {
+                // O cliente precisa VER o elemento que vai no ingresso dele.
+                // Ate 14/08/2026 esta tela descartava o QR Ideal em silencio:
+                // a arte era aprovada sem ele, e ele saia impresso.
+                //
+                // O codigo sai do pool, que so existe na estacao — aqui o
+                // desenho e um exemplo, e a logo por cima ja impede extrair
+                // um codigo legivel da imagem de aprovacao.
+                window.desenharQRIdeal(ctx, el, (el.size_mm || 15) * S,
+                                       el.color || '#000000', null, null, 1);
+            } else if (el.type === 'QR') {
             const sz = (el.size_mm || 15) * S;
             let qrText = '';
             if (el.fixed) {

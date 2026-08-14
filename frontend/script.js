@@ -3430,54 +3430,41 @@ function drawCanvas() {
 
 // ===== QR CODE: usa biblioteca CDN qrcode-generator 1.4.4 (window.qrcode) carregada no HTML =====
 
-function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
-    try {
-        text = String(text || '0001');
-        bgColor = bgColor || '#ffffff';
-        color = color || '#000000';
-
-        var qr = qrcode(0, 'L');
-        qr.addData(text);
-        qr.make();
-
-        var moduleCount = qr.getModuleCount();
-        var margin = 2;
-        var totalCount = moduleCount + margin * 2;
-        var cellSize = sz / totalCount;
-        var hsz = sz / 2;
-
-        // Fundo branco incluindo a Quiet Zone (margem)
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(x - hsz, y - hsz, sz, sz);
-
-        ctx.fillStyle = color;
-        for (var r = 0; r < moduleCount; r++) {
-            for (var c = 0; c < moduleCount; c++) {
-                if (qr.isDark(r, c)) {
-                    ctx.fillRect(
-                        x - hsz + (c + margin) * cellSize,
-                        y - hsz + (r + margin) * cellSize,
-                        cellSize + 0.35,
-                        cellSize + 0.35
-                    );
-                }
-            }
-        }
-    } catch (e) {
-        console.error('[QR Code] Erro ao gerar QR Code:', e);
-        var hsz = sz / 2;
+/**
+ * Rede de segurança para a janela de sincronização do painel.
+ *
+ * O `qr-canvas.js` é um arquivo NOVO, e a estação baixa o painel usando a lista
+ * `PAINEL_ARQUIVOS` embutida no agente instalado. Um agente anterior à 1.2.65
+ * não conhece esse nome: ele sincroniza o `index.html` novo, que referencia o
+ * script, e não busca o script.
+ *
+ * Nessa janela o QR não desenha — o que é ruim, mas visível e sem consequência
+ * no papel. Sem esta guarda, cada janela que desenha um ingresso lançaria
+ * `ReferenceError` e o editor inteiro pararia de pintar, que é muito pior.
+ */
+if (typeof window.renderQRCodeOnCtx !== 'function') {
+    console.error('[QR] qr-canvas.js nao carregou. O QR nao sera desenhado nesta sessao.');
+    window.renderQRCodeOnCtx = function (ctx, text, x, y, sz) {
+        var h = sz / 2;
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x - hsz, y - hsz, sz, sz);
+        ctx.fillRect(x - h, y - h, sz, sz);
         ctx.strokeStyle = '#ef4444';
         ctx.lineWidth = 2;
-        ctx.strokeRect(x - hsz + 1, y - hsz + 1, sz - 2, sz - 2);
-        // Escrever mensagem de erro visível
-        ctx.fillStyle = '#ef4444';
-        ctx.font = '10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('QR ERR', x, y);
-    }
+        ctx.strokeRect(x - h + 1, y - h + 1, sz - 2, sz - 2);
+    };
+    window.qrIdealConteudo = function () { return null; };
+    window.desenharQRIdeal = function (ctx, el, sz, color) {
+        window.renderQRCodeOnCtx(ctx, '', 0, 0, sz, color);
+    };
+    window.desenharLogoNoQrIdeal = function () { };
 }
+
+// `renderQRCodeOnCtx` vive agora em frontend/qr-canvas.js, junto com o desenho
+// do QR Ideal. Sao as MESMAS janelas desenhando o mesmo ingresso — editor,
+// card do pedido, link do cliente e previa de imposicao —, espalhadas por
+// script.js, pedido.js, cliente.js e criador-arte.js. Duas copias
+// divergiriam, e divergencia entre desenhadores ja custou dois defeitos de
+// producao nesta semana.
 
 /**
  * Desenha uma imagem (Image ou canvas) encaixada na caixa (x, y, w, h) SEM distorcer,
@@ -3659,32 +3646,6 @@ function linhaDeAmostra() {
  * repinta quando a resposta chega. Fora da estação (painel aberto pela Vercel)
  * o endpoint não existe e ela devolve `null` para sempre.
  */
-const _qrIdealCache = new Map();
-const _qrIdealRepintar = new Set();
-
-window.qrIdealConteudo = function (pedido, modelo, item) {
-    if (!pedido || !modelo) return null;
-    const chave = `${pedido}|${modelo}|${item || 1}`;
-    if (_qrIdealCache.has(chave)) return _qrIdealCache.get(chave);
-    _qrIdealCache.set(chave, null);
-
-    const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
-    fetch(`${base}/api/qr-ideal?pedido=${encodeURIComponent(pedido)}&modelo=${encodeURIComponent(modelo)}&item=${item || 1}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(j => {
-            if (j && j.conteudo) {
-                _qrIdealCache.set(chave, j.conteudo);
-                // Repinta uma vez por chave, e não a cada resposta: uma tiragem
-                // desenha dezenas de QRs, e repintar em cada uma engasgaria a tela.
-                if (!_qrIdealRepintar.has(chave)) {
-                    _qrIdealRepintar.add(chave);
-                    if (typeof drawCanvas === 'function') { try { drawCanvas(); } catch (e) { } }
-                }
-            }
-        })
-        .catch(() => { });
-    return null;
-};
 
 /**
  * A logo do centro do QR Ideal — marca de TELA, que nunca vai ao papel.
@@ -3699,57 +3660,6 @@ window.qrIdealConteudo = function (pedido, modelo, item) {
  * não teria como esperar por ela. É o mesmo arquivo do cabeçalho das páginas,
  * que já chega à estação junto com o painel.
  */
-const _logoQrIdeal = new Image();
-_logoQrIdeal.onload = function () {
-    // Repinta o editor uma vez, para o caso de a logo chegar depois do
-    // primeiro desenho. As demais janelas repintam por conta própria.
-    if (typeof drawCanvas === 'function') { try { drawCanvas(); } catch (e) { } }
-};
-_logoQrIdeal.src = '/Logo Ideal Dark.png';
-
-function desenharLogoNoQrIdeal(ctx, sz) {
-    if (!_logoQrIdeal.complete || !_logoQrIdeal.naturalWidth) return;
-    // Abaixo disso o QR é uma miniatura e a logo viraria um borrão colorido no
-    // meio dela — atrapalha em vez de identificar.
-    if (sz < 24) return;
-
-    const lado = sz * 0.30;
-    const meia = lado / 2;
-    const raio = lado * 0.14;
-
-    ctx.save();
-    // A placa branca é o que faz a logo ler como marca, e não como sujeira em
-    // cima dos módulos.
-    ctx.beginPath();
-    if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(-meia, -meia, lado, lado, raio);
-    } else {
-        ctx.rect(-meia, -meia, lado, lado);
-    }
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-
-    const folga = lado * 0.10;
-    drawImageContain(ctx, _logoQrIdeal, -meia + folga, -meia + folga, lado - folga * 2, lado - folga * 2);
-    ctx.restore();
-}
-
-/**
- * Desenha o QR Ideal na cor escolhida no elemento — preto 100% por padrão.
- *
- * No editor de numeração não há pedido nenhum (a numeração é um modelo
- * reutilizável), então ali o desenho é um exemplo. Quem avisa disso é o painel
- * de propriedades, em texto; o desenho em si sai igual ao que vai ao papel,
- * para o operador conferir tamanho, posição e cor de verdade.
- *
- * `opts.logo === false` desliga a logo do centro — é o que a rasterização do
- * gabarito usa para não levá-la ao PDF de produção.
- */
-window.desenharQRIdeal = function (ctx, el, sz, color, pedido, modelo, item, opts) {
-    const conteudo = window.qrIdealConteudo(pedido, modelo, item);
-    renderQRCodeOnCtx(ctx, conteudo || 'EXEMPLO', 0, 0, sz, color);
-    if (!opts || opts.logo !== false) desenharLogoNoQrIdeal(ctx, sz);
-};
 
 function drawElement(ctx, el, S) {
 

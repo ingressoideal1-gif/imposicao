@@ -18,6 +18,11 @@ import re
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT_JS = os.path.join(RAIZ, "frontend", "script.js")
+# O desenho do QR Ideal mudou de casa em 14/08/2026: saiu do `script.js` e foi
+# para o `qr-canvas.js`, que e a fonte unica de todas as janelas. Este teste
+# quase passou a olhar o lugar errado — o stub da rede de seguranca que ficou
+# no `script.js` — e teria aprovado um desenho sem logo nenhuma.
+QR_CANVAS_JS = os.path.join(RAIZ, "frontend", "qr-canvas.js")
 ENGINE_PY = os.path.join(RAIZ, "engine.py")
 
 
@@ -66,14 +71,29 @@ def test_o_desenho_padrao_do_qr_ideal_leva_a_logo():
     elemento.
     """
     corpo = _corpo_da_funcao(
-        _fonte(SCRIPT_JS),
-        "window.desenharQRIdeal = function",
-        "\n};",
+        _fonte(QR_CANVAS_JS),
+        "function desenharQRIdeal(",
+        "\n    }",
     )
     assert "desenharLogoNoQrIdeal" in corpo
     assert re.search(r"opts\s*\.\s*logo\s*!==\s*false", corpo), (
         "a logo tem de ser o padrao: so quem passa { logo: false } fica sem ela"
     )
+
+
+def test_o_desenho_do_qr_ideal_tem_um_dono_so():
+    """A guarda que impede este arquivo de voltar a olhar o lugar errado.
+
+    O `script.js` guarda um stub de `desenharQRIdeal` para a janela em que o
+    modulo ainda nao chegou a estacao. Esse stub NAO desenha logo — e e certo
+    que nao desenhe. Se um dia a funcao de verdade voltar para la, este teste
+    quebra e obriga a decidir qual das duas manda.
+    """
+    fonte_script = _fonte(SCRIPT_JS)
+    assert "function desenharQRIdeal(" not in fonte_script, (
+        "o desenho do QR Ideal voltou ao script.js; o dono e o qr-canvas.js"
+    )
+    assert "function desenharQRIdeal(" in _fonte(QR_CANVAS_JS)
 
 
 def test_o_qr_ideal_sai_na_cor_do_elemento_e_sem_transparencia():

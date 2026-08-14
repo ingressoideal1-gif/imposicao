@@ -35,6 +35,7 @@ TIPOS_QUE_VAO_AO_PAPEL = {"TEXT", "FIXED", "QR", "QR_IDEAL", "BARCODE"}
 DESENHADORES = [
     ("frontend/pedido.js", "prévia do Painel de Produção"),
     ("frontend/script.js", "editor, card do pedido e prévia de imposição"),
+    ("frontend/cliente.js", "link de aprovação do cliente"),
 ]
 
 

@@ -24,8 +24,8 @@ nem amostra, e **15** tinham amostra sem arte — esses 15 imprimiam a amostra.
 ## Por que o filtro mora num arquivo próprio
 
 `arte_url` é lido em ~28 lugares, quase todos de tela. Mudar o significado dela
-consertaria a impressão e quebraria a interface. O `producao.html` também não
-carrega o `script.js`, então o filtro precisa ser um módulo sem dependências.
+consertaria a impressão e quebraria a interface. O filtro é um módulo sem
+dependências para carregar cedo e não poder falhar por causa de outro arquivo.
 """
 
 import json

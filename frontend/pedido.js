@@ -1853,55 +1853,42 @@ function drawPedPreview() {
 
                     } else if (el.type === 'QR' || el.type === 'QR_IDEAL') {
 
-                        // O QR Ideal entra pelo MESMO ramo do QR comum, e nao
-                        // por um proprio. Os dois ocupam a mesma area (size_mm,
-                        // padrao 15) e, nesta tela, o desenho e uma REPRESENTACAO
-                        // — tres marcas de canto, nao um QR legivel. O que a
-                        // previa do Painel responde e "cabe, esta no lugar, esta
-                        // na cor certa"; quem mostra o codigo de verdade e o card
-                        // do pedido, que sabe de que pedido o trabalho veio.
-                        //
-                        // Ate 14/08/2026 o QR Ideal nao caia em ramo nenhum e
-                        // simplesmente sumia daqui: o operador via a folha sem
-                        // ele e o PDF saia com ele.
+                        // QR de VERDADE, pelo mesmo desenhador do card do pedido
+                        // e do link do cliente (frontend/qr-canvas.js). Ate
+                        // 14/08/2026 esta janela desenhava tres marcas de canto
+                        // — uma representacao —, e o QR Ideal nem isso: ele nao
+                        // caia em ramo nenhum e sumia da tela enquanto saia no
+                        // papel.
                         const sz = (el.size_mm || 15) * MM2PT * scale;
-                        const hsz = sz / 2;
 
-                        const offCanvas = document.createElement('canvas');
+                        if (el.type === 'QR_IDEAL') {
+                            // O numero do ingresso segue a MESMA conta do
+                            // elemento de numeracao, incluindo o caso TICKET. Se
+                            // divergissem, a tela mostraria um codigo e o papel
+                            // sairia outro — e so a portaria descobriria.
+                            let _qiVal = val;
+                            if (currentNum && currentNum.tipo === "TICKET") {
+                                const _pos = parseInt(el.ticket_pos) || 1;
+                                const _N = parseInt(currentNum.ticket_qtd) || 1;
+                                _qiVal = effectiveStart + (val_index * _N) + (_pos - 1);
+                            }
 
-                        offCanvas.width = sz;
+                            // O codigo sai do pool, que so existe na estacao.
+                            // Fora dela `qrIdealConteudo` devolve null e o
+                            // desenho vira exemplo — o mesmo que o editor faz.
+                            const _os = (state.activeOSItem && state.ordens)
+                                ? state.ordens.find(o => String(o.id) === String(state.activeOSItem.osId))
+                                : null;
+                            const _modelo = (multiArteItem && multiArteItem.modelo)
+                                || (state.activeOSItem ? state.activeOSItem.itemId : null);
 
-                        offCanvas.height = sz;
-
-                        const offCtx = offCanvas.getContext('2d');
-
-
-
-                        offCtx.fillStyle = color;
-
-                        offCtx.fillRect(0, 0, sz, sz);
-
-
-
-                        offCtx.fillStyle = '#ffffff';
-
-                        const cell = sz / 7;
-
-                        for (const [cx, cy] of [[0, 0], [4, 0], [0, 4]]) {
-
-                            offCtx.fillStyle = '#ffffff';
-
-                            offCtx.fillRect(cx * cell, cy * cell, 3 * cell, 3 * cell);
-
-                            offCtx.fillStyle = color;
-
-                            offCtx.fillRect(cx * cell + cell * 0.5, cy * cell + cell * 0.5, 2 * cell, 2 * cell);
-
+                            window.desenharQRIdeal(
+                                ctx, el, sz, color,
+                                _os ? _os.numero : null, _modelo, _qiVal
+                            );
+                        } else {
+                            window.renderQRCodeOnCtx(ctx, val_str, 0, 0, sz, color);
                         }
-
-
-
-                        ctx.drawImage(offCanvas, -hsz, -hsz, sz, sz);
 
                     } else if (el.type === 'BARCODE') {
 

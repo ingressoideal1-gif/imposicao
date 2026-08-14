@@ -49,8 +49,11 @@
  * tem `pdf_url`, entao esse caminho nunca produzia nada — remove-lo cumpre a
  * regra sem mudar um unico trabalho.
  *
- * Este arquivo nao tem dependencia nenhuma de proposito: o `producao.html` nao
- * carrega o `script.js`, e os dois precisam da mesma resposta.
+ * Este arquivo nao tem dependencia nenhuma de proposito. As duas paginas
+ * carregam o `script.js`, entao nao e uma questao de alcance — e de ordem e
+ * de risco: um modulo pequeno e sem dependencia carrega cedo, nao pode
+ * quebrar por causa de outra coisa, e da para ler inteiro de uma vez quando
+ * alguem precisar auditar por que uma arte foi ou nao para o papel.
  */
 (function (raiz) {
     'use strict';

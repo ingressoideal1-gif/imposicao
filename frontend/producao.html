@@ -2050,6 +2050,13 @@
     <script src="mapas.js?v=565"></script>
     <script src="/cor-numeracao-do-modelo.js?v=565"></script>
     <script src="/arte-de-impressao.js?v=565"></script>
+    <!-- qrcode-generator: a mesma biblioteca do index.html e do cliente.html.
+         A `qrcodejs` do topo desta pagina expoe `QRCode` (maiusculo) e serve a
+         outra coisa; o desenho no canvas usa `qrcode(0, 'L')`, que so existe
+         aqui. Sem esta linha o QR do Painel sairia como o quadrado vermelho de
+         erro -- conferido no navegador em 14/08/2026. -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script src="/qr-canvas.js?v=565"></script>
     <script src="/fonte-canvas.js?v=565"></script>
     <!-- Estes três o script.js e o pedido.js chamam SEM guarda
          (desenharTextoAjustado, desenharElementoFoto, repintor): faltando um

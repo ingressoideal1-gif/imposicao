@@ -90,6 +90,7 @@ PAINEL_ARQUIVOS = [
     "criador-arte.js",
     "cor-numeracao-do-modelo.js",
     "arte-de-impressao.js",
+    "qr-canvas.js",
     "qr-ideal-colunas.js",
     "qr-ideal-hash.js",
     "fonte-canvas.js",
