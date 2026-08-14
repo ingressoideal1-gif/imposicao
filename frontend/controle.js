@@ -103,6 +103,46 @@
 
         $('codigos-total').textContent = p.codigos_cliente + ' códigos carregados';
 
+        // As caixas de setor do formulário de aparelho, e o seletor de setor dos
+        // códigos. Redesenhadas junto com o painel para nunca oferecerem um setor
+        // que deixou de existir.
+        //
+        // Guardar o que já estava marcado/selecionado ANTES de recriar: um
+        // `gravar()' de outro cartão desta mesma tela chama `carregarPainel()`
+        // por baixo do dono, e sem isto ele perderia os setores que tinha
+        // acabado de marcar aqui — sem nunca ter tocado neste formulário.
+        var marcadosAntes = Array.prototype.slice
+            .call(document.querySelectorAll('#novo-aparelho-setores input:checked'))
+            .map(function (c) { return c.value; });
+        var setorCodigosAntes = $('codigos-setor').value;
+
+        $('novo-aparelho-setores').innerHTML = '';
+        $('codigos-setor').innerHTML = '';
+        p.setores.forEach(function (s) {
+            var linha = document.createElement('div');
+            linha.className = 'opcao';
+            var caixa = document.createElement('input');
+            caixa.type = 'checkbox';
+            caixa.value = s.id;
+            caixa.id = 'novo-setor-' + s.id;
+            caixa.checked = marcadosAntes.indexOf(s.id) >= 0;
+            var rot = document.createElement('label');
+            rot.setAttribute('for', caixa.id);
+            rot.textContent = s.nome;
+            linha.appendChild(caixa);
+            linha.appendChild(rot);
+            $('novo-aparelho-setores').appendChild(linha);
+
+            var op = document.createElement('option');
+            op.value = s.id;
+            op.textContent = s.nome;
+            $('codigos-setor').appendChild(op);
+        });
+        // Só restaura a seleção do <select> se o setor escolhido continuar
+        // existindo depois do redesenho — senão o navegador cai sozinho na
+        // primeira opção, o que já é o comportamento certo.
+        if (setorCodigosAntes) { $('codigos-setor').value = setorCodigosAntes; }
+
         // Depois dos cartões de setor existirem no DOM: são eles que trazem os
         // campos de lotação e uso que a trava também precisa desligar.
         travarCampos();
@@ -178,6 +218,60 @@
             caixa.appendChild(linha);
         });
         return caixa;
+    }
+
+    /**
+     * Mostra o código curto UMA vez.
+     *
+     * Ele não está guardado em lugar nenhum — o que fica é um resumo dele. Se a
+     * tela não disser isso em texto, o dono fecha a caixa achando que consulta
+     * depois, e descobre na porta do evento que não dá.
+     */
+    function mostrarCodigo(codigo) {
+        $('codigo-valor').textContent = codigo;
+        $('caixa-codigo').classList.remove('sumindo');
+    }
+
+    function criarAparelho(nome, setores) {
+        return gravar('/eventos/' + estado.evento_id + '/aparelhos',
+                      { nome: nome, setores: setores }, 'POST')
+            .then(function (r) {
+                mostrarCodigo(r.codigo);
+                return carregarPainel().then(function () { return r; });
+            });
+    }
+
+    function novoCodigo(aparelho_id) {
+        return gravar('/aparelhos/' + aparelho_id + '/codigo', {}, 'POST')
+            .then(function (r) { mostrarCodigo(r.codigo); return r; });
+    }
+
+    function trocarSetoresDoAparelho(aparelho_id, setores) {
+        return gravar('/aparelhos/' + aparelho_id, { setores: setores }, 'PATCH')
+            .then(carregarPainel);
+    }
+
+    function revogarAparelho(aparelho_id) {
+        return gravar('/aparelhos/' + aparelho_id, { status: 'revogado' }, 'PATCH')
+            .then(carregarPainel);
+    }
+
+    /**
+     * O cliente cola de uma planilha, do WhatsApp, de onde for. Linha vazia e
+     * espaço em volta não são erro dele — são como o texto chega.
+     */
+    function importarCodigos(texto, setor_id) {
+        var codigos = String(texto || '')
+            .split(/[\r\n]+/)
+            .map(function (l) { return l.trim(); })
+            .filter(function (l) { return l.length > 0; });
+
+        return gravar('/eventos/' + estado.evento_id + '/codigos',
+                      { codigos: codigos, setor_id: setor_id }, 'POST')
+            .then(function (r) {
+                avisar(r.gravados + ' códigos entraram na lista deste setor.', 'ok');
+                return carregarPainel().then(function () { return r; });
+            });
     }
 
     function cartaoDeAparelho(a) {
@@ -445,6 +539,27 @@
                 erro.classList.remove('sumindo');
             });
         });
+
+        $('btn-fechar-codigo').addEventListener('click', function () {
+            $('caixa-codigo').classList.add('sumindo');
+            $('codigo-valor').textContent = '';
+        });
+
+        $('btn-criar-aparelho').addEventListener('click', function () {
+            var marcados = Array.prototype.slice
+                .call(document.querySelectorAll('#novo-aparelho-setores input:checked'))
+                .map(function (c) { return c.value; });
+            criarAparelho($('novo-aparelho-nome').value, marcados)
+                .then(function () { $('novo-aparelho-nome').value = ''; })
+                .catch(function () { /* já avisado */ });
+        });
+
+        $('btn-importar-codigos').addEventListener('click', function () {
+            importarCodigos($('codigos-texto').value, $('codigos-setor').value)
+                .then(function () { $('codigos-texto').value = ''; })
+                .catch(function () { /* já avisado */ });
+        });
+
         abrir();
     });
 
@@ -456,6 +571,12 @@
         abrir: abrir,
         elevar: elevar,
         gravar: gravar,
-        sairDaConfiguracao: sairDaConfiguracao
+        sairDaConfiguracao: sairDaConfiguracao,
+        mostrarCodigo: mostrarCodigo,
+        criarAparelho: criarAparelho,
+        novoCodigo: novoCodigo,
+        trocarSetoresDoAparelho: trocarSetoresDoAparelho,
+        revogarAparelho: revogarAparelho,
+        importarCodigos: importarCodigos
     };
 })();

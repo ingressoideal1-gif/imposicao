@@ -176,7 +176,14 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
   console.log(JSON.stringify({{ saida, erros }}));
 }})();
 """
-    r = subprocess.run(["node", "-e", driver], capture_output=True, text=True, cwd=RAIZ)
+    # `encoding='utf-8'` explicito, e nao so `text=True`: sem isto, o Python
+    # decodifica o stdout do Node com `locale.getpreferredencoding()`, que
+    # numa maquina Windows em cp1252 troca cada acento por dois caracteres
+    # errados -- silencioso, porque cp1252 aceita qualquer byte. O `console.log`
+    # do driver sempre escreve UTF-8, e por isso a leitura tem de ser UTF-8 na
+    # mesma moeda, nao a da configuracao regional da estacao que roda o teste.
+    r = subprocess.run(["node", "-e", driver], capture_output=True,
+                        encoding="utf-8", cwd=RAIZ)
     if r.returncode != 0:
         raise AssertionError(r.stderr[:800])
     resultado = json.loads(r.stdout.strip().splitlines()[-1])
@@ -452,6 +459,86 @@ def test_cancelar_o_pedido_de_senha_avisa_e_nao_perde_o_que_foi_digitado():
     assert "cancel" in saida["aviso"].lower()
     assert "digitou" in saida["aviso"].lower() or "continua" in saida["aviso"].lower()
     assert saida["digitado"] == "Nome que eu digitei"
+
+
+def test_o_codigo_novo_aparece_uma_vez_com_o_aviso_de_que_nao_volta():
+    """Ele nao esta guardado em lugar nenhum. Se a tela nao avisar, o dono
+    fecha a caixa achando que consulta depois."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.mostrarCodigo('K7M2QP');
+        const caixa = document.getElementById('caixa-codigo');
+        return {
+            codigo: document.getElementById('codigo-valor').textContent,
+            texto: caixa.textContent.replace(/\\s+/g, ' ').toLowerCase(),
+        };
+    """)
+    assert saida["codigo"] == "K7M2QP"
+    assert "não" in saida["texto"] and ("de novo" in saida["texto"] or "outra vez" in saida["texto"])
+
+
+def test_a_tela_diz_que_gerar_outro_codigo_nao_derruba_a_portaria():
+    """Sem essa frase o dono nao gera com medo, e fica sem o codigo.
+
+    A frase tem de ser verdade no backend, e o
+    `test_gerar_outro_codigo_NAO_desconecta_quem_ja_entrou` cobra o outro lado.
+    """
+    html = _ler("frontend/controle.html").lower()
+    assert "não desconecta" in html or "nao desconecta" in html
+
+
+def test_criar_aparelho_manda_a_lista_de_setores_escolhida():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        let enviado = null;
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
+            return { id: 'a2', nome: 'Portao B', codigo: 'ABC234' };
+        };
+        await Controle.criarAparelho('Portao B', ['s1', 's2']);
+        return enviado;
+    """)
+    assert saida["caminho"] == "/eventos/ev-1/aparelhos"
+    assert saida["corpo"]["nome"] == "Portao B"
+    assert saida["corpo"]["setores"] == ["s1", "s2"]
+
+
+def test_importar_codigos_quebra_o_texto_colado_em_linhas():
+    """O cliente cola de uma planilha. Linha vazia nao e erro dele."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        let enviado = null;
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            enviado = JSON.parse(opcoes.body);
+            return { gravados: 3 };
+        };
+        await Controle.importarCodigos('STAFF01\\n\\nSTAFF02\\r\\n  STAFF03  \\n', 's1');
+        return enviado;
+    """)
+    assert saida["codigos"] == ["STAFF01", "STAFF02", "STAFF03"]
+    assert saida["setor_id"] == "s1"
+
+
+def test_importar_anuncia_QUANTOS_entraram():
+    """Regra do projeto: importar dados tem de produzir resultado visivel."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle._pedirParaTeste = async () => ({ gravados: 3 });
+        await Controle.importarCodigos('A\\nB\\nC', 's1');
+        return { aviso: document.getElementById('aviso-gravacao').textContent };
+    """)
+    assert "3" in saida["aviso"]
 
 
 def test_sem_supabase_a_tela_explica_em_vez_de_ficar_em_branco():
