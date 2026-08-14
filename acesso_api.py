@@ -386,10 +386,23 @@ def _esqueleto(token: str) -> dict:
     import qr_pedido
 
     # 1. É autêntico? (assinatura e validade — pura criptografia)
+    #
+    # As mensagens do `qr_pedido` são técnicas de propósito: elas vão para log e
+    # para teste. Quem lê ESTA resposta é o cliente, no celular dele, e
+    # "token malformado" não é frase para ninguém que não escreva software.
+    # A tradução mora aqui, e não lá, para o módulo de criptografia continuar
+    # dizendo exatamente o que houve.
     try:
         pedido = qr_pedido.conferir(token)
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=f"QR invalido: {e}")
+        motivo = str(e)
+        humano = {
+            "token malformado": "Este endereco nao parece um QR do controle de acesso. "
+                                "Leia o QR de novo com a camera.",
+            "assinatura invalida": "Este QR nao e valido. Peca um novo a quem o enviou.",
+            "token vencido": "Este QR venceu. Peca um novo a quem o enviou.",
+        }.get(motivo, "Nao consegui abrir este QR.")
+        raise HTTPException(status_code=401, detail=humano)
 
     # 2. Ainda vale? (revogação — só o banco sabe)
     linha = (supabase(
@@ -445,6 +458,109 @@ def _esqueleto(token: str) -> dict:
 @router.get("/evento")
 def evento(t: str = ""):
     return _esqueleto(t)
+
+
+# ─── Reivindicar: criar evento novo ou anexar a um que já existe ──────────────
+#
+# O QR viaja por WhatsApp, então quem receber a imagem consegue reivindicar o
+# pedido — UMA vez. A primeira reivindicação trava o pedido na conta que
+# cadastrou, e uma segunda conta é recusada. Se cair no cliente errado, o
+# atendente gera outro QR: o anterior morre e o vínculo se desfaz.
+#
+# Um evento pode reunir VÁRIOS pedidos — a pista num, o camarote noutro. Por
+# isso "anexar" existe ao lado de "criar".
+
+
+def _meus_eventos(dono_auth_id: str) -> list:
+    return supabase(
+        "GET",
+        f"producao_acesso_eventos?dono_auth_id=eq.{dono_auth_id}"
+        "&status=eq.ativo&select=id,nome_evento,data_evento&order=created_at.desc",
+    ) or []
+
+
+def _reivindicar(token: str, usuario: dict, evento_id=None, nome_evento="") -> dict:
+    esqueleto = _esqueleto(token)
+    pedido = esqueleto["pedido"]
+    dono = usuario.get("id")
+    if not dono:
+        raise HTTPException(status_code=401, detail="sessao sem identificacao")
+
+    if esqueleto["ja_reivindicado"]:
+        # Já é deste dono? Então não é erro — é a pessoa relendo o próprio QR.
+        atual = (supabase(
+            "GET",
+            f"producao_acesso_eventos?id=eq.{esqueleto['evento_id']}&select=id,dono_auth_id,nome_evento",
+        ) or [None])[0]
+        if atual and str(atual.get("dono_auth_id")) == str(dono):
+            return {"evento_id": atual["id"], "nome_evento": atual.get("nome_evento"), "novo": False}
+        raise HTTPException(
+            status_code=409,
+            detail="este pedido ja foi cadastrado por outra conta; peca um QR novo ao atendente",
+        )
+
+    if evento_id:
+        alvo = (supabase(
+            "GET", f"producao_acesso_eventos?id=eq.{evento_id}&select=id,dono_auth_id,nome_evento",
+        ) or [None])[0]
+        if not alvo or str(alvo.get("dono_auth_id")) != str(dono):
+            raise HTTPException(status_code=403, detail="evento nao e desta conta")
+        novo = False
+    else:
+        nome = (nome_evento or "").strip() or f"Evento do pedido {pedido}"
+        alvo = supabase("POST", "producao_acesso_eventos", {
+            "id_cliente": esqueleto.get("id_cliente"),
+            "dono_auth_id": dono,
+            "nome_evento": nome,
+            # Sal do evento: serve aos códigos que o próprio cliente carregar
+            # (staff, cortesia). Os do QR Ideal usam o sal do pedido.
+            "sal": qr_ideal.gerar_sal(),
+        })[0]
+        novo = True
+
+    evento = alvo["id"]
+
+    # Um modelo = um setor. Nunca se fundem, mesmo com nome igual vindo de dois
+    # pedidos: quantidade e reimpressão são por modelo.
+    for s in esqueleto["setores"]:
+        criado = supabase("POST", "producao_acesso_setores", {
+            "evento_id": evento,
+            "pedido_id_int": pedido,
+            "modelo_id": s["modelo_id"],
+            "nome": s["nome"],
+            "quantidade": s["quantidade"],
+        })
+        setor_id = criado[0]["id"]
+        # Carimba as credenciais que o agente já publicou. As que vierem depois
+        # nascem sem evento e são carimbadas na mesma conta — por isso o
+        # `fechar` do agente não depende desta ordem.
+        supabase(
+            "PATCH",
+            f"producao_acesso_credenciais?pedido_id_int=eq.{pedido}&modelo_id=eq.{s['modelo_id']}",
+            {"evento_id": evento, "setor_id": setor_id},
+            prefer="return=minimal",
+        )
+
+    supabase("PATCH", f"producao_acesso_pedidos?pedido_id_int=eq.{pedido}",
+             {"evento_id": evento})
+
+    return {"evento_id": evento, "nome_evento": alvo.get("nome_evento"), "novo": novo}
+
+
+@router.get("/meus-eventos")
+def meus_eventos(authorization: str = Header(None)):
+    return {"eventos": _meus_eventos(_usuario_logado(authorization).get("id"))}
+
+
+@router.post("/reivindicar")
+def reivindicar(corpo: dict, authorization: str = Header(None)):
+    usuario = _usuario_logado(authorization)
+    return _reivindicar(
+        corpo.get("token") or "",
+        usuario,
+        corpo.get("evento_id"),
+        corpo.get("nome_evento") or "",
+    )
 
 
 @router.get("/saude")

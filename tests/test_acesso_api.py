@@ -402,3 +402,133 @@ def test_pedido_ja_reivindicado_se_anuncia(monkeypatch):
     esqueleto = acesso_api._esqueleto(token)
     assert esqueleto["ja_reivindicado"] is True
     assert esqueleto["evento_id"] == "evt-1"
+
+
+# ─── Reivindicar o pedido ─────────────────────────────────────────────────────
+
+
+class BancoParaReivindicar(BancoComPedido):
+    def __init__(self, token, evento_id=None, dono_do_evento=None):
+        super().__init__(token=token, evento_id=evento_id)
+        self.eventos = ([{"id": evento_id, "dono_auth_id": dono_do_evento,
+                          "nome_evento": "Festa"}] if evento_id else [])
+        self.setores = []
+        self.carimbos = []
+
+    def __call__(self, method, path, body=None, prefer=None):
+        if path.startswith("producao_acesso_eventos"):
+            if method == "GET":
+                return list(self.eventos)
+            if method == "POST":
+                linha = dict(body, id=f"evt-{len(self.eventos) + 1}")
+                self.eventos.append(linha)
+                return [linha]
+        if path.startswith("producao_acesso_setores"):
+            if method == "POST":
+                linha = dict(body, id=f"set-{len(self.setores) + 1}")
+                self.setores.append(linha)
+                return [linha]
+            return list(self.setores)
+        if path.startswith("producao_acesso_credenciais") and method == "PATCH":
+            self.carimbos.append(path)
+            return []
+        return super().__call__(method, path, body, prefer)
+
+
+USUARIO = {"id": "conta-1", "email": "cliente@exemplo.com"}
+OUTRO = {"id": "conta-2", "email": "outro@exemplo.com"}
+
+
+def test_reivindicar_cria_o_evento_e_um_setor_por_modelo(monkeypatch):
+    token = qr_pedido.gerar(20272)
+    banco = BancoParaReivindicar(token)
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+
+    r = acesso_api._reivindicar(token, USUARIO, nome_evento="Réveillon")
+    assert r["novo"] is True
+    assert banco.eventos[0]["nome_evento"] == "Réveillon"
+    assert banco.eventos[0]["dono_auth_id"] == "conta-1"
+    assert [(s["modelo_id"], s["nome"], s["quantidade"]) for s in banco.setores] == [
+        (1000287, "PISTA", 88), (1000288, "CAMAROTE", 12),
+    ]
+    # As credenciais que o agente já publicou têm de receber evento e setor.
+    assert len(banco.carimbos) == 2
+
+
+def test_o_evento_nasce_com_sal_proprio(monkeypatch):
+    """O sal do evento serve aos códigos que o próprio cliente carregar."""
+    token = qr_pedido.gerar(20272)
+    banco = BancoParaReivindicar(token)
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+    acesso_api._reivindicar(token, USUARIO)
+    assert len(banco.eventos[0]["sal"]) == 64
+
+
+def test_sem_nome_o_evento_ganha_um_que_identifica(monkeypatch):
+    token = qr_pedido.gerar(20272)
+    banco = BancoParaReivindicar(token)
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+    acesso_api._reivindicar(token, USUARIO, nome_evento="   ")
+    assert "20272" in banco.eventos[0]["nome_evento"]
+
+
+def test_segunda_conta_e_recusada(monkeypatch):
+    """O QR anda por WhatsApp: quem receber a imagem cadastra — UMA vez."""
+    token = qr_pedido.gerar(20272)
+    banco = BancoParaReivindicar(token, evento_id="evt-1", dono_do_evento="conta-1")
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+    with pytest.raises(HTTPException) as e:
+        acesso_api._reivindicar(token, OUTRO)
+    assert e.value.status_code == 409
+    assert "outra conta" in e.value.detail
+
+
+def test_o_proprio_dono_relendo_o_QR_nao_e_erro(monkeypatch):
+    """Ele já cadastrou e leu de novo. Mostrar erro seria mentira."""
+    token = qr_pedido.gerar(20272)
+    banco = BancoParaReivindicar(token, evento_id="evt-1", dono_do_evento="conta-1")
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+    r = acesso_api._reivindicar(token, USUARIO)
+    assert r == {"evento_id": "evt-1", "nome_evento": "Festa", "novo": False}
+
+
+def test_anexar_a_evento_de_outra_conta_e_recusado(monkeypatch):
+    token = qr_pedido.gerar(20272)
+    banco = BancoParaReivindicar(token)
+    banco.eventos = [{"id": "evt-9", "dono_auth_id": "conta-2", "nome_evento": "Alheio"}]
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+    with pytest.raises(HTTPException) as e:
+        acesso_api._reivindicar(token, USUARIO, evento_id="evt-9")
+    assert e.value.status_code == 403
+
+
+def test_anexar_um_segundo_pedido_reusa_o_evento(monkeypatch):
+    """A pista veio num pedido, o camarote noutro: um evento só."""
+    token = qr_pedido.gerar(20272)
+    banco = BancoParaReivindicar(token)
+    banco.eventos = [{"id": "evt-1", "dono_auth_id": "conta-1", "nome_evento": "Festa"}]
+    monkeypatch.setattr(acesso_api, "supabase", banco)
+    r = acesso_api._reivindicar(token, USUARIO, evento_id="evt-1")
+    assert r["novo"] is False
+    assert len(banco.eventos) == 1, "nao pode criar evento novo ao anexar"
+    assert all(s["evento_id"] == "evt-1" for s in banco.setores)
+
+
+def test_a_mensagem_de_QR_invalido_e_para_gente(monkeypatch):
+    """Quem lê esta resposta é o cliente, no celular dele.
+
+    O `qr_pedido` fala técnico de propósito — as mensagens dele vão para log e
+    para teste. A tradução para português de gente mora no endpoint, e é por
+    isso que "token malformado" não pode chegar à tela.
+    """
+    monkeypatch.setattr(acesso_api, "supabase", BancoComPedido(token="x"))
+    esperado = {
+        "": "nao parece um QR",
+        "20272.999.assinaturafalsa": "nao e valido",
+        qr_pedido.gerar(20272, dias=-1): "venceu",
+    }
+    for ruim, trecho in esperado.items():
+        with pytest.raises(HTTPException) as e:
+            acesso_api._esqueleto(ruim)
+        assert trecho in e.value.detail, e.value.detail
+        assert "token" not in e.value.detail.lower()
