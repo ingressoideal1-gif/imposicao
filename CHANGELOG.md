@@ -49,7 +49,10 @@ ele, pela mesma razão do pool.
 Detalhes em [docs/controle_acesso.md](docs/controle_acesso.md).
 
 **Antes de publicar:** três variáveis no Render — `SUPABASE_SERVICE_KEY`,
-`ACESSO_AGENTE_SEGREDO` e `QR_PEDIDO_SEGREDO`.
+`ACESSO_AGENTE_SEGREDO` e `QR_PEDIDO_SEGREDO`. Rode
+`.\ferramentas\copiar_para_render.ps1`: ele confere o formato das três e põe uma de cada
+vez na área de transferência, sem mostrar o valor na tela. Depois de salvar,
+`GET /api/acesso/saude` responde as três de uma vez e diz quais faltam.
 
 ---
 

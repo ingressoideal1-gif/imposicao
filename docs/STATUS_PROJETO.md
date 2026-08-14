@@ -66,12 +66,23 @@ Todas com o valor que **já está** no `.env.local` desta máquina:
 - `ACESSO_AGENTE_SEGREDO` — sem ela a faixa de códigos nunca é publicada
 - `QR_PEDIDO_SEGREDO` — sem ela não dá para gerar o QR do evento
 
-`GET /api/acesso/saude` diz qual está faltando.
+```powershell
+.\ferramentas\copiar_para_render.ps1
+```
 
-> **Armadilha já vivida.** Ao copiar a `SUPABASE_SERVICE_KEY`, um caractere sobrando no
-> começo ou um `=` no fim fazem o Supabase responder `401 Invalid API key` — e a chave
-> *parece* certa, com `role: service_role` e validade em 2035. A assinatura de um JWT tem
-> **43 caracteres** e nunca termina em `=`. Isso já custou meia hora de investigação.
+Ele confere as três, põe uma de cada vez na área de transferência (o valor **não** aparece
+na tela) e espera você colar no Render antes de passar para a próxima. Com `-Conferir`, só
+confere e sai.
+
+Depois de salvar no Render, `GET /api/acesso/saude` responde as três de uma vez e diz quais
+faltam.
+
+> **Armadilha já vivida, e a razão de o script existir.** Ao copiar a
+> `SUPABASE_SERVICE_KEY` com o mouse, um caractere sobrando no começo ou um `=` no fim fazem
+> o Supabase responder `401 Invalid API key` — e a chave *parece* certa, com
+> `role: service_role` e validade em 2035. A assinatura de um JWT tem **43 caracteres** e
+> nunca termina em `=`. Isso já custou meia hora de investigação, e o script pega as duas
+> violações.
 
 ### 2. Publicar
 
@@ -125,8 +136,9 @@ ela, nada quebra.
 
 ## Saúde do repositório
 
-- **223 testes pytest + 107 Pester**, todos passando. `pytest tests/` roda inteiro, sem
-  exclusão, em 11 segundos.
+- **228 testes pytest + 120 Pester**, todos passando. `pytest tests/` roda inteiro, sem
+  exclusão, em cerca de 20 segundos — quase metade num teste só, o que publica 1.200
+  credenciais de verdade pelo KDF lento.
 - Em 13/08 a suíte foi recuperada: **dez** arquivos não rodavam, e um deles disparava um
   POST de verdade contra o Render de produção a cada execução.
   `tests/test_a_suite_esta_sa.py` impede a reincidência.

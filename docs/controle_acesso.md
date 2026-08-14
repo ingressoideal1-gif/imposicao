@@ -172,12 +172,27 @@ malformado" não é frase para o cliente ler no celular.
 | `ACESSO_AGENTE_SEGREDO` | Render **e** no build do agente | a faixa nunca é publicada |
 | `QR_PEDIDO_SEGREDO` | Render | não dá para gerar QR do evento |
 
-`GET /api/acesso/saude` diz qual está faltando.
+`GET /api/acesso/saude` responde as três de uma vez — presença de cada variável e se o
+banco responde:
+
+```json
+{"ok": true, "variaveis": {"SUPABASE_SERVICE_KEY": true, "...": true},
+ "faltando": [], "banco": "ok"}
+```
+
+Ele diz **se** cada uma existe, nunca o que ela vale: o endpoint é público. E confere as
+variáveis **antes** de tocar no banco, senão um erro de rede esconderia o de configuração,
+que é o que a pessoa veio ver.
 
 > Uma armadilha já vivida: ao copiar a `SUPABASE_SERVICE_KEY` do painel do Supabase, um
 > caractere sobrando no começo ou um `=` no fim fazem o Supabase responder `401 Invalid API
 > key` — e a chave *parece* certa, com `role: service_role` e validade em 2035. A
 > assinatura de um JWT tem **43 caracteres** e nunca termina em `=`.
+>
+> `.\ferramentas\copiar_para_render.ps1` tira o mouse do caminho: lê o valor exato do
+> `.env.local`, confere o formato (as 3 partes, o `eyJ` do começo, os 43 caracteres da
+> assinatura) e põe na área de transferência **sem mostrar na tela**. Com `-Conferir`, só
+> confere.
 
 ## As sete tabelas
 

@@ -565,18 +565,47 @@ def reivindicar(corpo: dict, authorization: str = Header(None)):
 
 @router.get("/saude")
 def saude():
-    """Diz se este servidor consegue mesmo falar com as tabelas.
+    """Diz se este servidor tem as três variáveis e se fala com as tabelas.
 
     Existe para a estação e o Render darem respostas diferentes e óbvias quando
     alguém for diagnosticar por que uma publicação não chegou.
+
+    As três precisam estar juntas, e cada uma falha num lugar diferente e tarde:
+    sem a `SUPABASE_SERVICE_KEY` este router nem é montado; sem o
+    `ACESSO_AGENTE_SEGREDO` a faixa de códigos é recusada no meio de uma
+    impressão que já terminou; sem o `QR_PEDIDO_SEGREDO` o atendente descobre na
+    frente do cliente que não sai QR. Conferir as três aqui é a única chance de
+    saber antes.
+
+    A resposta diz **se** cada variável existe, nunca o que ela vale — este
+    endpoint não pede login.
     """
-    if not disponivel():
+    import qr_pedido
+
+    presenca = {
+        CHAVE_ENV: bool(SERVICE_KEY),
+        SEGREDO_ENV: bool(AGENTE_SEGREDO),
+        qr_pedido.SEGREDO_ENV: qr_pedido.configurado(),
+    }
+    faltando = [nome for nome, tem in presenca.items() if not tem]
+    if faltando:
+        # Antes de tocar no banco: um erro de rede aqui esconderia o de
+        # configuração, que é o que a pessoa veio ver.
         raise HTTPException(
             status_code=503,
-            detail=f"{CHAVE_ENV} nao configurada neste servidor",
+            detail={"ok": False, "variaveis": presenca, "faltando": faltando},
         )
+
     try:
         supabase("GET", "producao_acesso_pedidos?select=id&limit=1")
     except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e)[:300])
-    return {"ok": True}
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "variaveis": presenca,
+                "faltando": [],
+                "banco": str(e)[:300],
+            },
+        )
+    return {"ok": True, "variaveis": presenca, "faltando": [], "banco": "ok"}

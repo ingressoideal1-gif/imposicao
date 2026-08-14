@@ -119,6 +119,8 @@ def test_onde_nao_ha_chave_o_router_nem_existe():
 # acesso poderia calcular o hash de um conteúdo escolhido por ele e inserir um
 # ingresso que a portaria aceitaria. É a única forma de forjar sem ter o pool.
 
+import json
+
 import pytest
 from fastapi import HTTPException
 
@@ -532,3 +534,90 @@ def test_a_mensagem_de_QR_invalido_e_para_gente(monkeypatch):
             acesso_api._esqueleto(ruim)
         assert trecho in e.value.detail, e.value.detail
         assert "token" not in e.value.detail.lower()
+
+
+# --- /saude: a tela de diagnóstico das três variáveis ---------------------
+#
+# Ela existe para o momento em que alguém acabou de configurar o Render e quer
+# saber se acertou. Se ela responder "ok" com dois segredos faltando, manda a
+# pessoa embora achando que terminou — e o erro só aparece depois, na hora de
+# gerar um QR ou de publicar uma faixa, longe daqui.
+
+
+def _saude_com_banco_bom(monkeypatch):
+    monkeypatch.setattr(acesso_api, "supabase", lambda *a, **k: [])
+
+
+def test_saude_relata_as_tres_variaveis(monkeypatch):
+    _saude_com_banco_bom(monkeypatch)
+    monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave")
+    monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", "segredo")
+    monkeypatch.setenv(qr_pedido.SEGREDO_ENV, "segredo-qr")
+    monkeypatch.setattr(qr_pedido, "_SEGREDO_CACHE", None)
+
+    r = acesso_api.saude()
+
+    assert r["ok"] is True
+    assert set(r["variaveis"]) == {
+        "SUPABASE_SERVICE_KEY",
+        "ACESSO_AGENTE_SEGREDO",
+        "QR_PEDIDO_SEGREDO",
+    }
+    assert all(r["variaveis"].values())
+
+
+def test_saude_aponta_o_segredo_do_agente_que_falta(monkeypatch):
+    """Sem ele a faixa nunca é publicada, e nada avisa."""
+    _saude_com_banco_bom(monkeypatch)
+    monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave")
+    monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", None)
+    monkeypatch.setenv(qr_pedido.SEGREDO_ENV, "segredo-qr")
+    monkeypatch.setattr(qr_pedido, "_SEGREDO_CACHE", None)
+
+    with pytest.raises(HTTPException) as e:
+        acesso_api.saude()
+    assert e.value.status_code == 503
+    assert e.value.detail["faltando"] == ["ACESSO_AGENTE_SEGREDO"]
+
+
+def test_saude_aponta_o_segredo_do_qr_que_falta(monkeypatch):
+    _saude_com_banco_bom(monkeypatch)
+    monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave")
+    monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", "segredo")
+    monkeypatch.setattr(qr_pedido, "configurado", lambda: False)
+
+    with pytest.raises(HTTPException) as e:
+        acesso_api.saude()
+    assert e.value.detail["faltando"] == ["QR_PEDIDO_SEGREDO"]
+
+
+def test_saude_nao_toca_no_banco_se_falta_variavel(monkeypatch):
+    """Diagnóstico primeiro, rede depois: o erro de rede esconderia o de config."""
+    def explodir(*a, **k):
+        raise AssertionError("nao devia consultar o banco sem as variaveis")
+
+    monkeypatch.setattr(acesso_api, "supabase", explodir)
+    monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave")
+    monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", None)
+    monkeypatch.setattr(qr_pedido, "configurado", lambda: False)
+
+    with pytest.raises(HTTPException) as e:
+        acesso_api.saude()
+    assert e.value.detail["faltando"] == ["ACESSO_AGENTE_SEGREDO", "QR_PEDIDO_SEGREDO"]
+
+
+def test_saude_nunca_devolve_o_valor_de_um_segredo(monkeypatch):
+    """Ela é pública: `/api/acesso/saude` não pede login.
+
+    Dizer *se* a variável existe é diagnóstico; dizer *o que* ela vale entregaria
+    o servidor a quem abriu a URL por curiosidade.
+    """
+    _saude_com_banco_bom(monkeypatch)
+    monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave-secreta-do-banco")
+    monkeypatch.setattr(acesso_api, "AGENTE_SEGREDO", "segredo-do-agente")
+    monkeypatch.setenv(qr_pedido.SEGREDO_ENV, "segredo-do-qr")
+    monkeypatch.setattr(qr_pedido, "_SEGREDO_CACHE", None)
+
+    texto = json.dumps(acesso_api.saude())
+    for valor in ("chave-secreta-do-banco", "segredo-do-agente", "segredo-do-qr"):
+        assert valor not in texto

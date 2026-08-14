@@ -7,3 +7,14 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
+
+      # As tres do controle de acesso. `sync: false` = o valor e digitado no
+      # painel do Render e nunca entra no git. Estao declaradas aqui para que
+      # a lista do que este servico precisa exista em algum lugar versionado;
+      # `GET /api/acesso/saude` diz quais estao faltando de verdade.
+      - key: SUPABASE_SERVICE_KEY # sem ela o router /api/acesso/* nem e montado
+        sync: false
+      - key: ACESSO_AGENTE_SEGREDO # sem ela a faixa de codigos nunca e publicada
+        sync: false
+      - key: QR_PEDIDO_SEGREDO # sem ela nao da para gerar o QR do evento
+        sync: false
