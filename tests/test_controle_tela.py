@@ -87,11 +87,14 @@ def test_o_status_do_projeto_conhece_a_tela_nova():
 PAINEL_FALSO = {
     "evento": {"id": "ev-1", "nome_evento": "Baile do Hawaii",
                "data_evento": None, "local_evento": "Clube"},
+    # Sem `lotacao` e sem `publicadas`: o `_painel` real parou de devolver as
+    # duas em 14/08/2026, e uma fixture mais generosa que o servidor deixaria
+    # a tela poder ler um campo que nunca chega em producao.
     "setores": [
-        {"id": "s1", "nome": "PISTA", "quantidade": 5000, "publicadas": 5000,
-         "lotacao": None, "tipo_uso": "unico", "pedido_id_int": 18560, "modelo_id": 1000110},
-        {"id": "s2", "nome": "VIP", "quantidade": 800, "publicadas": 640,
-         "lotacao": 700, "tipo_uso": "reentrada", "pedido_id_int": 18560, "modelo_id": 1000111},
+        {"id": "s1", "nome": "PISTA", "quantidade": 5000,
+         "tipo_uso": "unico", "pedido_id_int": 18560, "modelo_id": 1000110},
+        {"id": "s2", "nome": "VIP", "quantidade": 800,
+         "tipo_uso": "reentrada", "pedido_id_int": 18560, "modelo_id": 1000111},
     ],
     "aparelhos": [{"id": "a1", "nome": "Portao A", "status": "ativo",
                    "ultimo_visto": None, "setores": ["s1"]}],
@@ -234,12 +237,12 @@ def test_a_tela_desenha_setores_aparelhos_e_codigos():
     assert "42" in saida["codigos"]
 
 
-def test_a_divergencia_entre_encomendado_e_publicado_aparece_EM_TEXTO():
-    """O VIP tem 800 encomendados e 640 publicados.
+def test_o_setor_mostra_a_quantidade_contratada_EM_TEXTO():
+    """O VIP contratou 800 ingressos, e esse numero E a lotacao do setor.
 
-    Esse numero e a unica pista visivel de que ou a impressao nao terminou de
-    publicar, ou alguem publicou o que nao devia. Escondê-lo transformaria a
-    tela num relatorio que confirma o que o dono ja acha.
+    Ele aparece em texto e nao so como numero solto: "800" sozinho nao diz ao
+    dono o que esta contando. Formatado em pt-BR, porque e assim que o resto da
+    tela escreve numero.
     """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
@@ -248,8 +251,8 @@ def test_a_divergencia_entre_encomendado_e_publicado_aparece_EM_TEXTO():
         const vip = document.querySelectorAll('#setores .cartao')[1];
         return { texto: vip.textContent.replace(/\\s+/g, ' ') };
     """)
-    assert "640" in saida["texto"] and "800" in saida["texto"]
-    assert "confer" in saida["texto"].lower() or "falta" in saida["texto"].lower()
+    assert "800 ingressos contratados" in saida["texto"]
+    assert "VIP" in saida["texto"]
 
 
 def test_a_quantidade_impressa_nao_e_editavel():
@@ -283,8 +286,12 @@ def test_somente_leitura_desabilita_os_campos_de_verdade():
     """A opacidade em CSS so avisa aos olhos.
 
     Sem `disabled`, o campo aceita o toque e nao grava nada -- a mesma
-    armadilha que o cabecalho do arquivo condena. O dono digita uma nova
-    lotacao ou muda o uso do ingresso, ve a tela reagir, e nada persiste.
+    armadilha que o cabecalho do arquivo condena. O dono muda o uso do
+    ingresso, ve o radio marcar, e nada persiste.
+
+    O botao "Configurar" fica de FORA da trava de proposito: abrir o painel e
+    so mostrar, e travar isso esconderia do dono qual uso o setor tem hoje ate
+    ele digitar a senha. Quem recusa o toque sao os radios la dentro.
     """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
@@ -292,8 +299,8 @@ def test_somente_leitura_desabilita_os_campos_de_verdade():
         await Controle.carregarPainel();
         const semSenha = {
             nome: document.getElementById('campo-nome-evento').disabled,
-            lotacao: document.getElementById('lotacao-s1').disabled,
             uso: document.getElementById('uso-s1-unico').disabled,
+            configurar: document.getElementById('setor-configurar-s1').disabled,
             gravar: document.getElementById('btn-gravar-evento').disabled,
             elevar: document.getElementById('btn-elevar').disabled,
         };
@@ -301,21 +308,49 @@ def test_somente_leitura_desabilita_os_campos_de_verdade():
         Controle.desenhar();
         const comSenha = {
             nome: document.getElementById('campo-nome-evento').disabled,
-            lotacao: document.getElementById('lotacao-s1').disabled,
             uso: document.getElementById('uso-s1-unico').disabled,
             gravar: document.getElementById('btn-gravar-evento').disabled,
         };
         return { semSenha, comSenha };
     """)
     assert saida["semSenha"]["nome"] is True
-    assert saida["semSenha"]["lotacao"] is True
     assert saida["semSenha"]["uso"] is True
+    assert saida["semSenha"]["configurar"] is False
     assert saida["semSenha"]["gravar"] is True
     assert saida["semSenha"]["elevar"] is False
     assert saida["comSenha"]["nome"] is False
-    assert saida["comSenha"]["lotacao"] is False
     assert saida["comSenha"]["uso"] is False
     assert saida["comSenha"]["gravar"] is False
+
+
+def test_a_faixa_de_configuracao_some_de_verdade_sem_elevacao():
+    """A faixa ambar dizia "Modo configuracao" o tempo TODO, inclusive em modo
+    leitura -- e ainda oferecia "Sair do modo configuracao".
+
+    A causa e de especificidade, nao de logica: `desenharFaixa()` poe a classe
+    `sumindo` certinho, mas `.sumindo { display: none }` (0,1,0) perde para
+    `#faixa-elevacao { display: flex }` (1,0,0), e o navegador ignora o none em
+    silencio. Nenhum teste pegava porque todos perguntavam pela CLASSE, que
+    estava la, em vez de perguntar se o elemento sumiu.
+
+    Por isso este teste le o estilo COMPUTADO, e varre todo elemento que usa
+    `sumindo` -- a proxima regra de id com `display` cairia na mesma armadilha.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const visiveis = [...document.querySelectorAll('.sumindo')]
+            .filter(el => getComputedStyle(el).display !== 'none')
+            .map(el => el.id || el.className);
+        return {
+            visiveis,
+            faixaTemAClasse: document.getElementById('faixa-elevacao')
+                .classList.contains('sumindo'),
+        };
+    """)
+    assert saida["faixaTemAClasse"] is True
+    assert saida["visiveis"] == []
 
 
 def test_a_faixa_de_configuracao_mostra_o_tempo_e_um_botao_de_sair():
@@ -792,11 +827,87 @@ def test_revogar_aceito_manda_status_revogado_pelo_botao():
     assert saida["enviado"]["corpo"]["status"] == "revogado"
 
 
-def test_salvar_do_setor_manda_so_a_lotacao_quando_so_ela_muda():
-    """CRITICAL da revisao final: `PATCH /setores/{id}` nao tinha chamador
-    nenhum no frontend -- lotacao e tipo de uso nunca eram gravados, e o
-    valor sumia no proximo redesenho sem aviso nenhum. Dirige o botao de
-    verdade, no mesmo padrao que ja prova o Salvar do aparelho."""
+def test_o_cartao_do_setor_nao_tem_campo_de_lotacao_nem_botao_de_salvar():
+    """Regra do usuario, 14/08/2026: "a lotacao sera sempre a contratada, sem
+    campo para digitar lotacao nem botao de salvar".
+
+    Le o DOM montado, e nao o texto do arquivo: um campo que sobrevivesse
+    escondido atras de outro nome continuaria sendo um segundo numero que
+    discorda do contrato.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const cartao = document.getElementById('setor-configurar-s1').parentElement;
+        return {
+            campos: cartao.querySelectorAll('input[type="number"], input[type="text"]').length,
+            lotacaoPorId: !!document.getElementById('lotacao-s1'),
+            salvarPorId: !!document.getElementById('setor-salvar-s1'),
+            texto: cartao.textContent,
+        };
+    """)
+    assert saida["campos"] == 0
+    assert saida["lotacaoPorId"] is False
+    assert saida["salvarPorId"] is False
+    assert "lotação" not in saida["texto"].lower()
+    assert "5.000 ingressos contratados" in saida["texto"]
+
+
+def test_o_cartao_do_setor_nao_mostra_mais_a_comparacao_com_o_publicado():
+    """Decisao do usuario, 14/08/2026: a linha laranja saiu.
+
+    Ela acendia sozinha pelo motivo mais banal — cada modelo publica quando e
+    impresso, entao um pedido pela metade diverge legitimamente —, e mandava o
+    dono "conferir com a grafica" quase sempre.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        return {
+            divergentes: document.querySelectorAll('.divergente, .confere').length,
+            texto: document.getElementById('setores').textContent,
+        };
+    """)
+    assert saida["divergentes"] == 0
+    assert "no ar" not in saida["texto"]
+    assert "gráfica" not in saida["texto"]
+
+
+def test_configurar_abre_e_fecha_o_painel_do_setor():
+    """O rotulo tem de acompanhar o estado: um botao que continua dizendo
+    "Configurar" com o painel ja aberto convida o dono a toca-lo de novo, e o
+    proximo toque FECHA o que ele veio configurar."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const botao = document.getElementById('setor-configurar-s1');
+        const painel = document.getElementById('setor-config-s1');
+        const fechado = { some: painel.classList.contains('sumindo'), rotulo: botao.textContent };
+        botao.click();
+        const aberto = { some: painel.classList.contains('sumindo'), rotulo: botao.textContent,
+                         aria: botao.getAttribute('aria-expanded') };
+        botao.click();
+        const defechado = { some: painel.classList.contains('sumindo'), rotulo: botao.textContent };
+        return { fechado, aberto, defechado };
+    """)
+    assert saida["fechado"]["some"] is True
+    assert saida["fechado"]["rotulo"] == "Configurar"
+    assert saida["aberto"]["some"] is False
+    assert saida["aberto"]["rotulo"] == "Fechar"
+    assert saida["aberto"]["aria"] == "true"
+    assert saida["defechado"]["some"] is True
+    assert saida["defechado"]["rotulo"] == "Configurar"
+
+
+def test_escolher_o_uso_grava_sozinho_sem_botao_de_salvar():
+    """Nao ha botao de confirmar: escolher o radio E a gravacao.
+
+    Manda so `tipo_uso` -- `lotacao` nao existe mais nem como campo do corpo,
+    e o backend recusaria em silencio (ignora a chave) se ela voltasse.
+    """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -804,49 +915,28 @@ def test_salvar_do_setor_manda_so_a_lotacao_quando_so_ela_muda():
         Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
         Controle.desenhar();
 
-        document.getElementById('lotacao-s1').value = '4800';
-
         const chamadas = [];
         Controle._pedirParaTeste = async (caminho, opcoes) => {
-            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
             return { ok: true };
         };
-        document.getElementById('setor-salvar-s1').click();
-        await new Promise(r => setTimeout(r, 50));
+        document.getElementById('setor-configurar-s1').click();
+        const radio = document.getElementById('uso-s1-reentrada');
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change'));
+        await new Promise(r => setTimeout(r, 80));
         return { chamadas };
     """)
     assert len(saida["chamadas"]) == 1
-    chamada = saida["chamadas"][0]
-    assert chamada["caminho"] == "/setores/s1"
-    assert chamada["corpo"] == {"lotacao": 4800}
+    assert saida["chamadas"][0]["caminho"] == "/setores/s1"
+    assert saida["chamadas"][0]["corpo"] == {"tipo_uso": "reentrada"}
 
 
-def test_salvar_do_setor_manda_so_o_tipo_de_uso_quando_so_ele_muda():
-    saida = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle.desenhar();
-
-        document.getElementById('uso-s1-reentrada').checked = true;
-
-        const chamadas = [];
-        Controle._pedirParaTeste = async (caminho, opcoes) => {
-            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
-            return { ok: true };
-        };
-        document.getElementById('setor-salvar-s1').click();
-        await new Promise(r => setTimeout(r, 50));
-        return { chamadas };
-    """)
-    assert len(saida["chamadas"]) == 1
-    chamada = saida["chamadas"][0]
-    assert chamada["caminho"] == "/setores/s1"
-    assert chamada["corpo"] == {"tipo_uso": "reentrada"}
-
-
-def test_salvar_do_setor_nao_manda_nada_quando_nada_mudou():
+def test_escolher_o_uso_que_ja_estava_marcado_nao_grava_nada():
+    """Sem esta guarda, um redesenho que remarca o radio dispararia um PATCH a
+    cada vez -- e o dono que so abre o painel para olhar escreveria no banco."""
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -856,31 +946,65 @@ def test_salvar_do_setor_nao_manda_nada_quando_nada_mudou():
 
         const chamadas = [];
         Controle._pedirParaTeste = async (caminho, opcoes) => {
-            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
             return { ok: true };
         };
-        document.getElementById('setor-salvar-s1').click();
-        await new Promise(r => setTimeout(r, 50));
+        document.getElementById('setor-configurar-s1').click();
+        const radio = document.getElementById('uso-s1-unico');   // ja e o atual
+        radio.dispatchEvent(new Event('change'));
+        await new Promise(r => setTimeout(r, 80));
         return { chamadas };
     """)
     assert saida["chamadas"] == []
 
 
-def test_botao_salvar_do_setor_tem_rotulo_e_entra_na_trava():
+def test_o_painel_do_setor_continua_aberto_depois_de_gravar():
+    """Gravar chama `carregarPainel()`, que reconstroi o cartao inteiro.
+
+    Sem restaurar o estado aberto, o painel se fecharia no instante seguinte ao
+    toque do dono -- e o "✓ salvo" apareceria dentro de um painel que ninguem
+    ve mais. O aviso e procurado pelo id DEPOIS do redesenho, que e onde ele
+    passa a existir.
+    """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
         await Controle.carregarPainel();
-        const semSenha = document.getElementById('setor-salvar-s1').disabled;
-        const rotulo = document.getElementById('setor-salvar-s1').textContent.trim();
         Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
         Controle.desenhar();
-        const comSenha = document.getElementById('setor-salvar-s1').disabled;
-        return { semSenha, comSenha, rotulo };
+
+        Controle._pedirParaTeste = async (caminho, opcoes) => ({ ok: true });
+        document.getElementById('setor-configurar-s1').click();
+
+        // Antes de gravar o aviso NAO pode estar na tela: um "✓ salvo" que ja
+        // nasce aceso nao confirma nada. Estilo computado, e nao a classe --
+        // foi exatamente assim que a faixa de elevacao enganou os testes.
+        const antes = getComputedStyle(document.getElementById('setor-salvo-s1')).display;
+
+        const radio = document.getElementById('uso-s1-reentrada');
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change'));
+        await new Promise(r => setTimeout(r, 120));
+
+        const painel = document.getElementById('setor-config-s1');
+        const aviso = document.getElementById('setor-salvo-s1');
+        return {
+            aberto: !painel.classList.contains('sumindo'),
+            rotulo: document.getElementById('setor-configurar-s1').textContent,
+            avisoAntes: antes,
+            avisoDepois: aviso ? getComputedStyle(aviso).display : 'sem-elemento',
+            avisoTexto: aviso ? aviso.textContent : '',
+            outroFechado: document.getElementById('setor-config-s2').classList.contains('sumindo'),
+        };
     """)
-    assert len(saida["rotulo"]) > 3
-    assert saida["semSenha"] is True
-    assert saida["comSenha"] is False
+    assert saida["aberto"] is True
+    assert saida["rotulo"] == "Fechar"
+    assert saida["avisoAntes"] == "none"
+    assert saida["avisoDepois"] != "none"
+    assert "salvo" in saida["avisoTexto"]
+    assert saida["outroFechado"] is True
 
 
 def test_navegador_id_e_memorizado_quando_o_localstorage_falha_ao_escrever():
@@ -982,24 +1106,28 @@ def test_desenhar_de_novo_nao_apaga_os_dados_do_evento_sendo_digitados():
     assert saida["local"] == "Local novo"
 
 
-def test_desenhar_de_novo_nao_apaga_a_lotacao_e_o_uso_sendo_editados():
-    """Mesmo achado, no cartao de setor -- interage com o CRITICAL da mesma
-    revisao: uma vez que o setor passa a ser salvavel, a edicao nao salva
-    dele tambem precisa sobreviver a um redesenho disparado por OUTRO
-    cartao desta tela."""
+def test_desenhar_de_novo_nao_fecha_o_painel_nem_desmarca_o_uso():
+    """Mesmo achado, no cartao de setor.
+
+    Um redesenho disparado por OUTRO cartao desta tela nao pode fechar o painel
+    de configuracao que o dono deixou aberto, nem devolver o radio ao valor do
+    servidor por baixo da escolha dele.
+    """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
         await Controle.carregarPainel();
-        document.getElementById('lotacao-s1').value = '4800';
+        document.getElementById('setor-configurar-s1').click();
         document.getElementById('uso-s1-reentrada').checked = true;
         Controle.desenhar();
         return {
-            lotacao: document.getElementById('lotacao-s1').value,
+            aberto: !document.getElementById('setor-config-s1').classList.contains('sumindo'),
+            rotulo: document.getElementById('setor-configurar-s1').textContent,
             reentrada: document.getElementById('uso-s1-reentrada').checked,
         };
     """)
-    assert saida["lotacao"] == "4800"
+    assert saida["aberto"] is True
+    assert saida["rotulo"] == "Fechar"
     assert saida["reentrada"] is True
 
 

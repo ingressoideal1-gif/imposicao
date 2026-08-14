@@ -74,7 +74,7 @@ Spec: [docs/superpowers/specs/2026-08-13-controle-acesso-parte2-design.md](super
 ### ✅ Parte 3a — o dono configura o evento (**no ar desde a v570**)
 
 O dono do evento configura tudo em [frontend/controle.html](../frontend/controle.html): dados
-do evento, lotação e tipo de uso de cada setor, aparelhos da portaria — inclusive renomear e
+do evento, tipo de uso de cada setor, aparelhos da portaria — inclusive renomear e
 revogar cada um, com a lista de setores de cada aparelho — e os códigos próprios de staff e
 cortesia. Gerar um código novo para um aparelho **não desconecta** o aparelho que já está
 trabalhando.
@@ -85,9 +85,16 @@ genuinamente `disabled`, não só apagados na tela: um `disabled` de verdade, n�
 que engana o olho e deixa o toque passar. Cancelar a caixa de senha, perder a rede, ou a
 elevação vencer no meio de uma edição — nenhum dos três apaga o que o dono digitou.
 
-Cada setor mostra lado a lado quanto o ERP encomendou e quanto está publicado. É por aí que
-apareceria o risco residual que a parte 2 registrou: quem tivesse o segredo do agente
-conseguiria ocupar uma posição da tiragem com um hash próprio.
+Cada setor mostra a quantidade contratada e um botão **Configurar** — nada mais. A lotação
+de um setor **é** essa quantidade, decisão do usuário em 14/08: um campo à parte criaria um
+segundo número, que discorda do contrato assim que o cliente aumenta o pedido no ERP.
+
+Na mesma decisão saiu a comparação "encomendado × publicado", que era o sinal do risco
+residual da parte 2 — quem tivesse o segredo do agente ocuparia uma posição da tiragem com
+um hash próprio. Ela acendia sozinha pelo motivo mais banal: como cada modelo publica
+quando é impresso, um pedido pela metade divergia legitimamente e o aviso mandava "conferir
+com a gráfica" quase sempre. **O risco continua registrado e agora não tem onde aparecer**;
+se voltar, volta no painel ao vivo da parte 3c, onde cabe um relatório e não um alarme.
 
 Plano: [docs/superpowers/plans/2026-08-14-controle-acesso-parte3a.md](superpowers/plans/2026-08-14-controle-acesso-parte3a.md)
 Spec: [docs/superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md](superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md)
@@ -101,7 +108,7 @@ O código saiu na v569, e a v570 / 1.2.69 o reafirmam (tabela no topo deste docu
 às estações.
 
 **Falta o teste com um dono de verdade.** O caminho foi provado por fora, endpoint por
-endpoint, mas nenhum cliente ainda entrou, digitou a senha, mudou uma lotação e cadastrou um
+endpoint, mas nenhum cliente ainda entrou, digitou a senha, mudou o uso de um setor e cadastrou um
 aparelho. Um detalhe conhecido e ainda em aberto: **não há como reativar um aparelho
 revogado.** Revogar é o botão de pânico da portaria, e botão de pânico é apertado por
 engano; hoje o conserto é criar outro aparelho e digitar um código novo no celular. O
@@ -141,7 +148,7 @@ recebeu a faixa daquele pedido.
 ### 2. A parte 3a com um cliente de verdade
 
 Depois do teste acima, o dono do evento abre a `controle.html`, entra com a conta que ele já
-tem no ERP Vibe, ajusta a lotação de um setor, cadastra um aparelho e lê o código no celular.
+tem no ERP Vibe, muda o uso de um setor, cadastra um aparelho e lê o código no celular.
 É o único jeito de saber se a tela se explica sozinha.
 
 ### 3. Então: parte 3b e 3c

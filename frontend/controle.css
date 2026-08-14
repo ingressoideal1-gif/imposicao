@@ -110,7 +110,14 @@ button.secundario { background: transparent; color: var(--dim); border: 1px soli
 .aviso.erro { border-left-color: var(--red); background: rgba(239, 68, 68, 0.09); }
 .aviso.ok { border-left-color: var(--teal); background: rgba(20, 184, 166, 0.09); }
 
-.sumindo { display: none; }
+/* `!important` de propósito, e é a única ocorrência do arquivo.
+   `sumindo` é o "não está na tela" desta página, e nada pode ganhar dele. Sem
+   isto ele perde de qualquer regra mais específica sem avisar: `#faixa-elevacao
+   { display: flex }` (1,0,0) vencia `.sumindo` (0,1,0), e a faixa âmbar dizia
+   "Modo configuração" o tempo todo — inclusive em modo leitura, sob o aviso de
+   que a tela estava só para olhar. Um empate também bastava para quebrar: entre
+   duas classes, ganha a que vier depois no arquivo. */
+.sumindo { display: none !important; }
 
 .girando {
     width: 26px; height: 26px; margin: 30px auto;
@@ -147,7 +154,12 @@ h3 { font-size: 1rem; margin: 0 0 4px; }
     position: sticky; top: 0; z-index: 5;
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 10px 14px; margin: 0 -16px 16px;
-    background: rgba(245, 158, 11, .16);
+    /* Duas camadas, e a de baixo é OPACA. Só o âmbar translúcido deixava o
+       conteúdo passar por baixo enquanto a página rola — e como a faixa é
+       `sticky`, é justamente por baixo dela que tudo passa. O nome do setor
+       aparecia atravessado no meio de "Modo configuração · 14:59 restante". */
+    background: linear-gradient(rgba(245, 158, 11, .16), rgba(245, 158, 11, .16)),
+                var(--bg);
     border-bottom: 1px solid var(--amber);
     font-size: .84rem;
 }
@@ -159,8 +171,23 @@ body.somente-leitura input,
 body.somente-leitura select,
 body.somente-leitura .so-com-senha { opacity: .55; }
 
-.divergente { color: var(--amber); font-weight: 600; }
-.confere { color: var(--dim); }
+/* A quantidade contratada no ERP — que É a lotação do setor. Informação, não
+   alarme: cor de texto comum, sem o âmbar que a tela reserva para a faixa do
+   modo configuração. */
+.contratado { color: var(--dim); font-size: .84rem; margin: 2px 0 12px; }
+
+/* O painel que o "Configurar" abre dentro do próprio cartão. O recuo e a linha
+   à esquerda são o que diz, sem legenda, que o que está ali dentro pertence a
+   ESTE setor e não ao cartão seguinte. */
+.config-setor {
+    margin-top: 14px; padding-left: 12px;
+    border-left: 2px solid var(--border);
+}
+.config-titulo { margin: 0 0 6px; font-size: .82rem; color: var(--dim); }
+
+/* Não há botão de salvar: escolher a opção grava. Este "✓ salvo" é o que
+   impede que gravar sozinho vire gravar em silêncio. */
+.salvo { display: inline-block; margin-top: 8px; font-size: .82rem; color: var(--teal); }
 
 .opcao { display: flex; align-items: center; gap: 9px; margin: 7px 0; }
 .opcao input[type="radio"] { width: auto; min-height: 0; }

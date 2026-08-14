@@ -1,10 +1,10 @@
 /**
  * A tela do dono do evento.
  *
- * Ela mostra dois números lado a lado em cada setor: o que o ERP encomendou e o
- * que está publicado. Divergência entre os dois é a única pista visível de que
- * ou a impressão ainda não terminou de publicar, ou alguém publicou o que não
- * devia — e por isso ela aparece em texto, nunca só numa cor.
+ * Cada setor mostra o que o ERP contratou e nada mais: a lotação de um setor É
+ * a quantidade contratada, então não há onde digitar outra. O que se configura
+ * por setor fica atrás do botão "Configurar", num painel que abre no próprio
+ * cartão.
  *
  * Enquanto não houver elevação, a tela se declara somente leitura. Aceitar o
  * toque e não gravar seria a pior das combinações.
@@ -115,16 +115,18 @@
 
         // Mesma ideia dos cartões de aparelho, um degrau abaixo: cada cartão
         // de setor é reconstruído a cada painel, e sem capturar o que já
-        // estava em tela ANTES de apagar, o dono editando lotação ou tipo de
-        // uso perderia os dois se qualquer outro cartão desta tela disparar
-        // um redesenho por baixo dele.
+        // estava em tela ANTES de apagar, o dono perderia o que tinha acabado
+        // de escolher — e o painel de configuração se fecharia sozinho — se
+        // qualquer outro cartão desta tela disparar um redesenho por baixo
+        // dele. Gravar uma opção JÁ é um desses redesenhos: `gravarSetor`
+        // termina em `carregarPainel()`.
         var edicoesDeSetorAntes = {};
         p.setores.forEach(function (s) {
-            var campoLotacao = $('lotacao-' + s.id);
-            if (!campoLotacao) { return; }
+            var painelConfig = $('setor-config-' + s.id);
+            if (!painelConfig) { return; }
             var marcado = document.querySelector('input[name="uso-' + s.id + '"]:checked');
             edicoesDeSetorAntes[s.id] = {
-                lotacao: campoLotacao.value,
+                aberto: !painelConfig.classList.contains('sumindo'),
                 tipo_uso: marcado ? marcado.value : s.tipo_uso
             };
         });
@@ -219,81 +221,80 @@
         titulo.textContent = s.nome;            // vem do ERP: TEXTO, nunca HTML
         el.appendChild(titulo);
 
-        var contagem = document.createElement('p');
-        contagem.style.fontSize = '.84rem';
-        if (s.publicadas === s.quantidade) {
-            contagem.className = 'confere';
-            contagem.textContent = s.quantidade.toLocaleString('pt-BR')
-                + ' ingressos encomendados, e os mesmos ' + s.publicadas.toLocaleString('pt-BR')
-                + ' já estão no ar. Confere.';
-        } else {
-            contagem.className = 'divergente';
-            contagem.textContent = s.quantidade.toLocaleString('pt-BR')
-                + ' ingressos encomendados, mas ' + s.publicadas.toLocaleString('pt-BR')
-                + ' estão no ar. Faltam ' + (s.quantidade - s.publicadas).toLocaleString('pt-BR')
-                + ' — confira com a gráfica antes do evento.';
-        }
-        el.appendChild(contagem);
+        // A lotação do setor É a quantidade contratada. Por isso ela aparece
+        // como informação e não como campo: um número digitado à parte seria
+        // uma segunda fonte da verdade, que discorda do contrato assim que o
+        // cliente aumenta o pedido no ERP.
+        var contratado = document.createElement('p');
+        contratado.className = 'contratado';
+        contratado.textContent = s.quantidade.toLocaleString('pt-BR') + ' ingressos contratados';
+        el.appendChild(contratado);
 
-        var rotulo = document.createElement('label');
-        rotulo.setAttribute('for', 'lotacao-' + s.id);
-        rotulo.textContent = 'Lotação máxima (deixe vazio para sem limite)';
-        el.appendChild(rotulo);
-
-        var campo = document.createElement('input');
-        campo.id = 'lotacao-' + s.id;
-        campo.type = 'number';
-        campo.min = '0';
-        campo.inputMode = 'numeric';
-        campo.value = edicaoAnterior ? edicaoAnterior.lotacao
-            : ((s.lotacao === null || s.lotacao === undefined) ? '' : s.lotacao);
-        el.appendChild(campo);
-
-        // A quantidade encomendada NÃO vira campo: quem manda nela é o ERP.
-        el.appendChild(opcoesDeUso(s, edicaoAnterior));
-
-        // ── Salvar lotação e tipo de uso ─────────────────────────────────────
+        // ── Configurar ───────────────────────────────────────────────────────
         //
-        // CRITICAL da revisão final: `PATCH /setores/{id}` já existia e já
-        // tinha dez testes no backend, mas nenhum botão desta tela o chamava
-        // — o dono digitava a lotação, via o campo reagir, e o valor sumia
-        // no próximo redesenho sem aviso nenhum.
-        var btnSalvar = document.createElement('button');
-        btnSalvar.type = 'button';
-        btnSalvar.className = 'so-com-senha';
-        btnSalvar.id = 'setor-salvar-' + s.id;
-        btnSalvar.textContent = 'Salvar lotação e uso do ingresso';
-        btnSalvar.addEventListener('click', function () {
-            var lotacaoServidor = (s.lotacao === null || s.lotacao === undefined) ? null : s.lotacao;
-            var lotacaoDigitada = campo.value === '' ? null : parseInt(campo.value, 10);
-            var marcado = document.querySelector('input[name="uso-' + s.id + '"]:checked');
-            var tipoEscolhido = marcado ? marcado.value : s.tipo_uso;
+        // O painel nasce fechado e vive DENTRO do cartão, sem modal: a tela é
+        // de uma coluna, usada no celular, e uma janela por cima esconderia
+        // qual setor está sendo configurado bem na hora de escolher.
+        var painel = document.createElement('div');
+        painel.id = 'setor-config-' + s.id;
+        painel.className = 'config-setor sumindo';
 
-            // Só manda o que de fato mudou, igual ao Salvar do aparelho: menos
-            // pedido, e nenhum PATCH vazio se o dono só olhou o cartão.
-            var corpo = {};
-            if (lotacaoDigitada !== lotacaoServidor) { corpo.lotacao = lotacaoDigitada; }
-            if (tipoEscolhido !== s.tipo_uso) { corpo.tipo_uso = tipoEscolhido; }
-
-            if (Object.keys(corpo).length) {
-                gravarSetor(s.id, corpo).catch(function () { /* já avisado */ });
-            }
+        // Sem `so-com-senha`: abrir o painel é só mostrar, e o resto da tela
+        // já segue essa regra — os campos do evento aparecem preenchidos e
+        // `disabled` no modo leitura. Travar o botão esconderia do dono qual
+        // uso o setor tem hoje até ele digitar a senha, o que é pior. Quem
+        // recusa o toque são os rádios lá dentro, que `travarCampos()` desliga.
+        var btnConfigurar = document.createElement('button');
+        btnConfigurar.type = 'button';
+        btnConfigurar.className = 'secundario';
+        btnConfigurar.id = 'setor-configurar-' + s.id;
+        btnConfigurar.textContent = 'Configurar';
+        btnConfigurar.setAttribute('aria-expanded', 'false');
+        btnConfigurar.setAttribute('aria-controls', painel.id);
+        btnConfigurar.addEventListener('click', function () {
+            var fechado = painel.classList.toggle('sumindo');
+            btnConfigurar.textContent = fechado ? 'Configurar' : 'Fechar';
+            btnConfigurar.setAttribute('aria-expanded', fechado ? 'false' : 'true');
         });
-        el.appendChild(btnSalvar);
+        el.appendChild(btnConfigurar);
+
+        // Reabre sozinho depois de um redesenho, senão gravar uma opção — que
+        // chama `carregarPainel()` — fecharia o painel debaixo do dono, no
+        // instante seguinte ao toque dele.
+        if (edicaoAnterior && edicaoAnterior.aberto) {
+            painel.classList.remove('sumindo');
+            btnConfigurar.textContent = 'Fechar';
+            btnConfigurar.setAttribute('aria-expanded', 'true');
+        }
+
+        painel.appendChild(opcoesDeUso(s, edicaoAnterior));
+        el.appendChild(painel);
 
         return el;
     }
 
+    /**
+     * As opções de uso do ingresso, que gravam ao serem escolhidas.
+     *
+     * Não há botão de salvar: o cartão tem uma escolha só, e um botão para
+     * confirmar um rádio é um passo a mais para o dono errar esquecendo de
+     * tocá-lo. O "✓ salvo" ao lado é o que impede que gravar sozinho vire
+     * gravar em silêncio.
+     */
     function opcoesDeUso(s, edicaoAnterior) {
         var tipoAtual = edicaoAnterior ? edicaoAnterior.tipo_uso : s.tipo_uso;
 
         var caixa = document.createElement('div');
         var titulo = document.createElement('p');
+        titulo.className = 'config-titulo';
         titulo.textContent = 'Uso do ingresso';
-        titulo.style.margin = '14px 0 4px';
-        titulo.style.fontSize = '.82rem';
-        titulo.style.color = 'var(--dim)';
         caixa.appendChild(titulo);
+
+        var recado = document.createElement('span');
+        recado.className = 'salvo sumindo';
+        recado.id = 'setor-salvo-' + s.id;
+        recado.setAttribute('role', 'status');
+        recado.textContent = '✓ salvo';
 
         [['unico', 'Vale uma entrada só'],
          ['reentrada', 'Permite sair e voltar']].forEach(function (par) {
@@ -305,6 +306,21 @@
             radio.id = 'uso-' + s.id + '-' + par[0];
             radio.value = par[0];
             radio.checked = (tipoAtual === par[0]);
+            radio.addEventListener('change', function () {
+                if (radio.value === s.tipo_uso) { return; }   // nada mudou de verdade
+                recado.classList.add('sumindo');
+                gravarSetor(s.id, { tipo_uso: radio.value })
+                    .then(function () {
+                        // `gravarSetor` termina em `carregarPainel()`, que
+                        // reconstrói o cartão inteiro: o `recado` capturado
+                        // aqui já saiu do documento nesta altura, e mexer
+                        // nele não apareceria na tela. Quem recebe o aviso é
+                        // o elemento NOVO, achado pelo mesmo id.
+                        var atual = $('setor-salvo-' + s.id);
+                        if (atual) { atual.classList.remove('sumindo'); }
+                    })
+                    .catch(function () { /* `gravar()` já avisou na tela */ });
+            });
             var rot = document.createElement('label');
             rot.setAttribute('for', radio.id);
             rot.textContent = par[1];
@@ -312,6 +328,8 @@
             linha.appendChild(rot);
             caixa.appendChild(linha);
         });
+
+        caixa.appendChild(recado);
         return caixa;
     }
 

@@ -14,7 +14,7 @@ aplicativo da portaria — ainda não começou.
 2. o atendente clica no painel →  QR do Pedido gerado, o anterior morre
 3. o cliente lê com a câmera   →  troca o token pelo esqueleto, lido do ERP
 4. o cliente entra e cadastra  →  evento criado, credenciais carimbadas
-5. o dono configura o evento   →  lotação, tipo de uso, aparelhos da portaria (parte 3a)
+5. o dono configura o evento   →  tipo de uso e aparelhos da portaria (parte 3a)
 6. (parte 3b) a portaria lê    →  ainda não existe
 ```
 
@@ -278,7 +278,7 @@ Criadas por [sql/schema_acesso.sql](../sql/schema_acesso.sql), pronto para colar
 |---|---|
 | `_eventos` | o evento do cliente; pode reunir vários pedidos |
 | `_pedidos` | sal, token do QR e estado da publicação. Nasce **antes** do evento |
-| `_setores` | um por modelo; nome e lotação editáveis pelo cliente |
+| `_setores` | um por modelo; a lotação É a `quantidade` do ERP, não um campo |
 | `_credenciais` | `codigo_hash` sempre; `codigo_visivel` só quando `origem='cliente'` |
 | `_dispositivos` | os aparelhos da portaria (parte 3) |
 | `_dispositivo_setores` | em quais setores cada aparelho valida (parte 3) |
@@ -299,9 +299,11 @@ UUID zerado.
 
 A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**, com a
 `ACESSO_ELEVACAO_SEGREDO` já no Render — o `/api/acesso/saude` responde as quatro em `true`.
-Ela traz: login do cliente, lotação e tipo de uso por setor, os aparelhos da portaria com
-lista de setores própria, e a senha do dono travando a configuração do evento. O estado
-atual está em [STATUS_PROJETO.md](STATUS_PROJETO.md).
+Ela traz: login do cliente, tipo de uso por setor atrás de um botão **Configurar**, os
+aparelhos da portaria com lista de setores própria, e a senha do dono travando a
+configuração do evento. **A lotação de um setor é a quantidade contratada no ERP**,
+mostrada como informação e nunca como campo — não existe um segundo número que possa
+discordar do contrato. O estado atual está em [STATUS_PROJETO.md](STATUS_PROJETO.md).
 
 O que falta é o aplicativo da PORTARIA (parte 3b): IndexedDB com validação local de
 verdade, leitura de QR e registro de entrada sem depender de rede, e reentrada em uso de

@@ -222,17 +222,31 @@ def test_o_painel_traz_setores_aparelhos_e_pedidos(banco):
     assert painel["pedidos"][0]["pedido_id_int"] == 18560
 
 
-def test_o_painel_compara_o_encomendado_com_o_publicado(banco):
-    """A conferencia que a parte 2 prometeu.
+def test_o_painel_nao_conta_credencial_por_setor(banco):
+    """Decisao do usuario, 14/08/2026: a comparacao "encomendado x publicado"
+    saiu da tela do dono.
 
-    Quem tivesse o segredo do agente conseguiria ocupar uma posicao da tiragem
-    com um hash proprio. A divergencia entre o que o ERP encomendou e o que esta
-    publicado e onde isso apareceria.
+    Ela era o sinal do risco residual da parte 2 — quem tivesse o segredo do
+    agente ocuparia uma posicao da tiragem com um hash proprio —, mas acendia
+    sozinha pelo motivo mais banal: cada modelo publica quando e impresso,
+    entao um pedido pela metade divergia legitimamente e o aviso gritava quase
+    sempre.
+
+    Sem leitor, a contagem seria uma consulta por setor a cada abertura do
+    painel. Este teste guarda o custo, nao so o layout: se `publicadas`
+    reaparecer sem alguem para mostra-lo, ele reprova.
     """
     banco.credenciais = [{"id": f"c{i}", "setor_id": SETOR} for i in range(4999)]
     painel = cfg._painel(EVENTO)
-    assert painel["setores"][0]["publicadas"] == 4999
+    assert "publicadas" not in painel["setores"][0]
     assert painel["setores"][0]["quantidade"] == 5000
+
+
+def test_o_painel_nao_devolve_lotacao(banco):
+    """A lotacao de um setor E a quantidade contratada. Devolver uma coluna
+    `lotacao` a parte convidaria a tela a mostrar dois numeros que podem
+    discordar — e o que o cliente contratou no ERP e o unico que vale."""
+    assert "lotacao" not in cfg._painel(EVENTO)["setores"][0]
 
 
 def test_o_painel_nunca_devolve_o_sal_do_evento(banco):
@@ -253,22 +267,19 @@ def test_o_painel_conta_os_codigos_do_cliente(banco):
     assert cfg._painel(EVENTO)["codigos_cliente"] == 1
 
 
-def test_publicadas_nao_conta_os_codigos_do_cliente(banco):
-    """Achado CRITICAL da revisao final.
+def test_o_total_de_codigos_do_cliente_ignora_o_que_o_qr_ideal_publicou(banco):
+    """O unico numero de credencial que a tela ainda mostra.
 
-    `publicadas` comparava com `quantidade` sem filtrar `origem`, entao
-    importar 42 codigos de staff (origem='cliente') num setor com a tiragem
-    toda publicada fazia o cartao dizer "5042 no ar" -- um alarme falso
-    permanente que o dono nunca consegue zerar, porque o proprio staff dele
-    faz o numero divergir de novo a cada importacao.
+    Ele conta so `origem='cliente'` — os codigos de staff e cortesia que o
+    proprio dono importou. Sem esse filtro, o contador subiria com a tiragem
+    inteira do QR Ideal e o dono leria "5042 codigos carregados" logo depois de
+    colar 42 linhas.
     """
     banco.credenciais = (
         [{"id": f"c{i}", "setor_id": SETOR, "origem": "qr_ideal"} for i in range(5000)]
         + [{"id": f"staff{i}", "setor_id": SETOR, "origem": "cliente"} for i in range(42)]
     )
-    painel = cfg._painel(EVENTO)
-    assert painel["setores"][0]["publicadas"] == 5000
-    assert painel["setores"][0]["quantidade"] == 5000
+    assert cfg._painel(EVENTO)["codigos_cliente"] == 42
 
 
 def test_evento_sem_aparelho_nao_consulta_vinculos(banco):
@@ -480,24 +491,18 @@ def test_nome_de_evento_vazio_e_recusado(banco, elevado):
     assert e.value.status_code == 422
 
 
-def test_gravar_lotacao_e_tipo_de_uso_do_setor(banco, elevado):
-    cfg._gravar_setor(SETOR, DONO, elevado, NAV,
-                      {"lotacao": 4800, "tipo_uso": "reentrada"})
-    assert banco.setores[0]["lotacao"] == 4800
+def test_gravar_tipo_de_uso_do_setor(banco, elevado):
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"tipo_uso": "reentrada"})
     assert banco.setores[0]["tipo_uso"] == "reentrada"
 
 
-def test_lotacao_pode_ser_apagada(banco, elevado):
-    """Nulo quer dizer sem limite, e o dono precisa poder voltar atras."""
+def test_a_lotacao_do_setor_nao_e_editavel(banco, elevado):
+    """Regra do usuario, 14/08/2026: a lotacao de um setor E a quantidade
+    contratada no ERP. Aceitar um numero digitado aqui criaria uma segunda
+    fonte da verdade, que discorda do contrato no instante em que o cliente
+    aumenta o pedido — e a tela nem oferece mais onde digitar."""
     cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"lotacao": 4800})
-    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"lotacao": None})
-    assert banco.setores[0]["lotacao"] is None
-
-
-def test_lotacao_negativa_e_recusada(banco, elevado):
-    with pytest.raises(HTTPException) as e:
-        cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"lotacao": -1})
-    assert e.value.status_code == 422
+    assert banco.setores[0].get("lotacao") is None
 
 
 def test_tipo_de_uso_inventado_e_recusado(banco, elevado):
@@ -510,21 +515,21 @@ def test_tipo_de_uso_inventado_e_recusado(banco, elevado):
 
 def test_a_quantidade_do_setor_nao_e_editavel(banco, elevado):
     """Quem manda na tiragem e o ERP. Aceitar o campo aqui deixaria a tela
-    'corrigir' um numero que nao e dela, e a divergencia com o publicado — que e
-    justamente o alarme — passaria a ser silenciada pelo proprio alarme."""
+    'corrigir' um numero que nao e dela — e como a lotacao do setor E essa
+    tiragem, seria a lotacao inteira mudando por um caminho lateral."""
     cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"quantidade": 1})
     assert banco.setores[0]["quantidade"] == 5000
 
 
 def test_setor_de_evento_alheio_e_recusado(banco, elevado):
     with pytest.raises(HTTPException) as e:
-        cfg._gravar_setor(SETOR, ESTRANHO, elevado, NAV, {"lotacao": 10})
+        cfg._gravar_setor(SETOR, ESTRANHO, elevado, NAV, {"tipo_uso": "reentrada"})
     assert e.value.status_code == 403
 
 
 def test_gravar_sem_elevacao_e_recusado(banco):
     with pytest.raises(HTTPException) as e:
-        cfg._gravar_setor(SETOR, DONO, None, NAV, {"lotacao": 10})
+        cfg._gravar_setor(SETOR, DONO, None, NAV, {"tipo_uso": "reentrada"})
     assert e.value.status_code == 401
 
 
@@ -544,12 +549,10 @@ def test_gravar_um_setor_nao_atinge_o_outro(banco, elevado):
         "modelo_id": 1000110, "status": "ativo",
     })
 
-    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"lotacao": 4800, "tipo_uso": "reentrada"})
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"tipo_uso": "reentrada"})
 
-    assert banco.setores[0]["lotacao"] == 4800
     assert banco.setores[0]["tipo_uso"] == "reentrada"
     outro = next(s for s in banco.setores if s["id"] == outro_setor)
-    assert outro["lotacao"] is None
     assert outro["tipo_uso"] == "unico"
 
 

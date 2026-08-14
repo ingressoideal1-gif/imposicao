@@ -58,26 +58,23 @@ def _painel(evento_id: str) -> dict:
         "&select=id,nome_evento,data_evento,local_evento,status",
     ) or [None])[0]
 
+    # `lotacao` NÃO entra no select, e a razão é a regra do negócio: a lotação
+    # de um setor É a quantidade contratada no ERP. Não existe um segundo
+    # número, digitado à parte, que possa discordar do contrato — ele
+    # envelheceria no instante em que o cliente aumentasse o pedido.
+    #
+    # Também não há contagem de publicadas por setor. Ela existia para uma
+    # comparação "encomendado × publicado" que o usuário tirou da tela em
+    # 14/08/2026: como cada modelo publica quando é impresso, um pedido pela
+    # metade acusava divergência pelo motivo mais banal do mundo, e o aviso
+    # gritava quase sempre. Sem ninguém para mostrar o número, a contagem era
+    # uma consulta por setor a cada abertura do painel, sem leitor.
     setores = supabase(
         "GET",
         f"producao_acesso_setores?evento_id=eq.{evento_id}&status=eq.ativo"
-        "&select=id,nome,quantidade,lotacao,tipo_uso,pedido_id_int,modelo_id"
+        "&select=id,nome,quantidade,tipo_uso,pedido_id_int,modelo_id"
         "&order=nome.asc",
     ) or []
-    for s in setores:
-        # O número que a tela compara com `quantidade`. Divergência aqui é ou
-        # impressão que ainda não terminou de publicar, ou credencial que
-        # alguém publicou sem dever. `origem=eq.qr_ideal` é o que falta para
-        # essa comparação fazer sentido: sem ele, os códigos de staff que o
-        # PRÓPRIO dono importa (`origem='cliente'`) entravam na contagem e
-        # deslocavam o alarme para sempre — importar 42 códigos de staff num
-        # setor com a tiragem toda publicada fazia o cartão dizer "5042 no
-        # ar" permanentemente, porque a única forma de "corrigir" o número
-        # seria desimportar o próprio staff.
-        s["publicadas"] = contar(
-            f"producao_acesso_credenciais?setor_id=eq.{s['id']}"
-            "&status=eq.ativo&origem=eq.qr_ideal"
-        )
 
     aparelhos = supabase(
         "GET",
@@ -225,8 +222,6 @@ def elevar(evento_id: str, corpo: dict, authorization: str = Header(None)):
 
 TIPOS_DE_USO = ("unico", "reentrada")  # a portaria decide a fila por isto; nada mais existe
 
-LOTACAO_MAXIMA = 10_000_000
-
 
 def _texto(valor, campo: str, minimo: int, maximo: int) -> str:
     """Apara espaços e checa tamanho. `campo` entra na mensagem para o dono
@@ -238,24 +233,6 @@ def _texto(valor, campo: str, minimo: int, maximo: int) -> str:
             detail=f"{campo}: escreva de {minimo} a {maximo} caracteres",
         )
     return limpo
-
-
-def _lotacao(valor):
-    """`None` e `""` são o mesmo pedido — sem limite — porque o dono precisa
-    de um jeito de voltar atrás depois de ter digitado um número. `0` não cai
-    aqui: é lotação zero de verdade, não ausência de valor."""
-    if valor is None or valor == "":
-        return None          # sem limite
-    try:
-        n = int(valor)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=422, detail="lotacao: escreva um numero inteiro")
-    if not (0 <= n <= LOTACAO_MAXIMA):
-        raise HTTPException(
-            status_code=422,
-            detail=f"lotacao: escreva de 0 a {LOTACAO_MAXIMA}, ou deixe vazio para sem limite",
-        )
-    return n
 
 
 def _setor_do_dono(setor_id: str, usuario: dict) -> dict:
@@ -296,13 +273,14 @@ def _gravar_setor(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
     setor = _setor_do_dono(setor_id, usuario)
     _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
 
-    # `quantidade` NÃO entra: quem manda na tiragem é o ERP. Aceitá-la aqui
-    # deixaria a tela silenciar a divergência que ela existe para mostrar.
+    # Nem `quantidade` nem `lotacao` entram, e é a mesma razão para as duas:
+    # quem manda na tiragem contratada é o ERP, e a lotação do setor É essa
+    # tiragem. Aceitar qualquer uma delas aqui criaria uma segunda fonte da
+    # verdade, que passa a discordar do contrato no instante em que o cliente
+    # aumenta o pedido — e a tela nem oferece mais onde digitar.
     mudanca = {}
     if "nome" in corpo:
         mudanca["nome"] = _texto(corpo["nome"], "nome do setor", 1, 60)
-    if "lotacao" in corpo:
-        mudanca["lotacao"] = _lotacao(corpo["lotacao"])
     if "tipo_uso" in corpo:
         tipo = str(corpo["tipo_uso"] or "").strip()
         if tipo not in TIPOS_DE_USO:
