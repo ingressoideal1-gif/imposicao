@@ -8,6 +8,8 @@ import fitz       # PyMuPDF
 import qrcode
 from PIL import Image
 
+import color_profiles
+
 # svglib/reportlab sao obrigatorios para impor elementos de tipo SVG.
 # O import fica no topo (e nao dentro do try do render) de proposito: ate a v488
 # ele estava dentro do bloco protegido, entao uma dependencia ausente virava um
@@ -353,6 +355,21 @@ def _rotate_rect(rect: fitz.Rect, angle: int, page: fitz.Page) -> tuple[fitz.Rec
                                 math.sin(math.radians(angle)),  math.cos(math.radians(angle)), 0, 0)
         mat = mat * fitz.Matrix(1, 0, 0, 1, cx, cy)
     return mat
+
+
+def _salvar_pdf(doc, out_name):
+    """Funil unico de gravacao dos PDFs de saida do engine.
+
+    Embute o OutputIntent sRGB (declara ao RIP o que o RGB significa) e so
+    entao grava. Falha no metadado nao pode parar a producao: o PDF sai sem
+    intent e o aviso vai para o log.
+    """
+    try:
+        color_profiles.embutir_output_intent(
+            doc, color_profiles.srgb_icc_bytes(), "sRGB IEC61966-2.1", "RGB")
+    except Exception as e:
+        print(f"[engine] aviso: OutputIntent sRGB nao embutido: {e}")
+    doc.save(out_name, garbage=4, deflate=True)
 
 
 class ImpositionConfig:
@@ -2034,7 +2051,7 @@ class ImpositionEngine:
 
                 if len(doc_out) > 0:
                     out_name = cfg.out_pdf.replace(".pdf", "_02_miolo.pdf")
-                    doc_out.save(out_name, garbage=4, deflate=True)
+                    _salvar_pdf(doc_out, out_name)
                     self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                 doc_out.close()
 
@@ -2099,7 +2116,7 @@ class ImpositionEngine:
                     # 3. Salvar miolo para o layer (apenas se gerou alguma folha)
                     if len(doc_out) > 0:
                         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_02_miolo.pdf")
-                        doc_out.save(out_name, garbage=4, deflate=True)
+                        _salvar_pdf(doc_out, out_name)
                         doc_out.close()
                         self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                     else:
@@ -2142,7 +2159,7 @@ class ImpositionEngine:
                     # em silêncio sempre que um filtro deixasse mais de um set passar.
                     if len(doc_out) > 0 and cfg.has_cover:
                         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
-                        doc_out.save(out_name, garbage=4, deflate=True)
+                        _salvar_pdf(doc_out, out_name)
                         self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                         if not refazendo:
                             self._generate_contracapa(set_idx_current, cfg, doc_base)
@@ -2579,13 +2596,13 @@ class ImpositionEngine:
             if set_idx_current != -1 and doc_out:
                 if len(doc_out) > 0:
                     out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
-                    doc_out.save(out_name, garbage=4, deflate=True)
+                    _salvar_pdf(doc_out, out_name)
                     self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                     if not refazendo:
                         self._generate_contracapa(set_idx_current, cfg, doc_base)
         else:
             if len(doc_out) > 0:
-                doc_out.save(cfg.out_pdf, garbage=4, deflate=True)
+                _salvar_pdf(doc_out, cfg.out_pdf)
                 self.generated_files.append({"type": "single", "path": cfg.out_pdf, "name": os.path.basename(cfg.out_pdf)})
         
         self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels)
@@ -2604,7 +2621,7 @@ class ImpositionEngine:
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
         if self.rotate_angle > 0: p.set_rotation(self.rotate_angle)
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_03_contracapa.pdf")
-        doc_c.save(out_name, garbage=4, deflate=True)
+        _salvar_pdf(doc_c, out_name)
         doc_c.close()
         self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
 
@@ -2754,7 +2771,7 @@ class ImpositionEngine:
                 p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
 
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_01_capa.pdf")
-        doc_c.save(out_name, garbage=4, deflate=True)
+        _salvar_pdf(doc_c, out_name)
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 
@@ -3076,7 +3093,7 @@ class ImpositionEngine:
         if self.rotate_angle > 0:
             p.set_rotation(self.rotate_angle)
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_03_contracapa.pdf")
-        doc_c.save(out_name, garbage=4, deflate=True)
+        _salvar_pdf(doc_c, out_name)
         doc_c.close()
         self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
 
@@ -3200,7 +3217,7 @@ class ImpositionEngine:
                 p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
 
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_01_capa.pdf")
-        doc_c.save(out_name, garbage=4, deflate=True)
+        _salvar_pdf(doc_c, out_name)
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 
