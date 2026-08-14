@@ -4,7 +4,7 @@ O QR Ideal ([docs/qr_ideal.md](qr_ideal.md)) põe no ingresso um código que nin
 adivinha. Este documento é a outra metade: como esse código chega à nuvem, como o cliente
 cadastra o evento dele, e o que protege cada passo.
 
-Estado em 13/08/2026: **parte 2 pronta e testada**, aguardando publicação. A parte 3 — o
+Estado em 14/08/2026: **partes 2 e 3a no ar** (site v569, agente 1.2.68). A parte 3b — o
 aplicativo da portaria — ainda não começou.
 
 ## O caminho inteiro, em ordem
@@ -14,7 +14,8 @@ aplicativo da portaria — ainda não começou.
 2. o atendente clica no painel →  QR do Pedido gerado, o anterior morre
 3. o cliente lê com a câmera   →  troca o token pelo esqueleto, lido do ERP
 4. o cliente entra e cadastra  →  evento criado, credenciais carimbadas
-5. (parte 3) a portaria lê     →  ainda não existe
+5. o dono configura o evento   →  lotação, tipo de uso, aparelhos da portaria (parte 3a)
+6. (parte 3b) a portaria lê    →  ainda não existe
 ```
 
 ## A regra que decide tudo: quem fala com o banco
@@ -296,12 +297,11 @@ UUID zerado.
 
 ## O que falta (a partir da parte 3b)
 
-A tela do dono (`controle.html`, parte 3a) **está construída e commitada, mas ainda não
-publicada** — o site, o motor e o agente no ar continuam sendo os da parte 2. Ela traz:
-login do cliente, lotação e tipo de uso por setor, os aparelhos da portaria com lista de
-setores própria, e a senha do dono travando a configuração do evento. Publicar exige antes
-a variável `ACESSO_ELEVACAO_SEGREDO` no Render; o estado atual está em
-[STATUS_PROJETO.md](STATUS_PROJETO.md).
+A tela do dono (`controle.html`, parte 3a) **está no ar desde a v569**. Ela traz: login do
+cliente, lotação e tipo de uso por setor, os aparelhos da portaria com lista de setores
+própria, e a senha do dono travando a configuração do evento. Falta a variável
+`ACESSO_ELEVACAO_SEGREDO` no Render — sem ela a tela abre mas não grava; o estado atual
+está em [STATUS_PROJETO.md](STATUS_PROJETO.md).
 
 O que falta é o aplicativo da PORTARIA (parte 3b): IndexedDB com validação local de
 verdade, leitura de QR e registro de entrada sem depender de rede, e reentrada em uso de

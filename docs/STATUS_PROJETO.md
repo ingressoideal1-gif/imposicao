@@ -11,20 +11,27 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + motor | **v561** | 14/08/2026 |
-| Agente NewProd | **1.2.60** | 14/08/2026 |
+| Site + motor | **v569** | 14/08/2026 |
+| Agente NewProd | **1.2.68** | 14/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
 
-**O controle de acesso está ativo no servidor.** Conferido em 14/08 contra o Render, não
-assumido:
+**O controle de acesso está ativo no servidor, faltando uma variável.** Conferido em 14/08
+contra o Render, não assumido:
 
 ```
-GET /api/acesso/saude
-{"ok":true,"variaveis":{"SUPABASE_SERVICE_KEY":true,"ACESSO_AGENTE_SEGREDO":true,
- "QR_PEDIDO_SEGREDO":true},"faltando":[],"banco":"ok"}
+GET /api/acesso/saude  →  503
+{"detail":{"ok":false,"variaveis":{"SUPABASE_SERVICE_KEY":true,"ACESSO_AGENTE_SEGREDO":true,
+ "QR_PEDIDO_SEGREDO":true,"ACESSO_ELEVACAO_SEGREDO":false},
+ "faltando":["ACESSO_ELEVACAO_SEGREDO"]}}
 ```
+
+O 503 é a resposta certa, não uma pane: o endpoint recusa dizer "ok" enquanto faltar
+qualquer uma das quatro. As três primeiras seguram tudo o que a parte 2 faz; a quarta é a
+que libera a escrita na tela do dono (parte 3a). Enquanto ela não estiver no Render, a
+`controle.html` abre, mostra tudo e **não grava nada** — o dono digita a senha certa e
+recebe erro.
 
 As oito rotas `/api/acesso/*` respondem, e as quatro travas seguraram: publicar faixa sem o
 segredo do agente, gerar QR sem login, listar eventos sem login e trocar um token falso
@@ -66,7 +73,7 @@ Spec: [docs/superpowers/specs/2026-08-13-controle-acesso-parte2-design.md](super
 
 **As sete tabelas `producao_acesso_*` já existem no banco** e foram conferidas uma a uma.
 
-### 📦 Parte 3a — o dono configura o evento (**commitada em 14/08/2026, ainda não publicada**)
+### 🔑 Parte 3a — o dono configura o evento (**no ar desde a v569, aguardando a quarta variável**)
 
 O dono do evento configura tudo em [frontend/controle.html](../frontend/controle.html): dados
 do evento, lotação e tipo de uso de cada setor, aparelhos da portaria — inclusive renomear e
@@ -88,16 +95,14 @@ Plano: [docs/superpowers/plans/2026-08-14-controle-acesso-parte3a.md](superpower
 Spec: [docs/superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md](superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md)
 
 **O servidor agora precisa de quatro variáveis, não três**: `SUPABASE_SERVICE_KEY`,
-`ACESSO_AGENTE_SEGREDO`, `QR_PEDIDO_SEGREDO` e `ACESSO_ELEVACAO_SEGREDO`. O
-`/api/acesso/saude` já reporta as quatro, mas **a quarta ainda não foi colocada no Render** —
-essa é ação do usuário, não deste plano. Sem ela publicada, o dono digitaria a senha certa e
-nada aconteceria.
+`ACESSO_AGENTE_SEGREDO`, `QR_PEDIDO_SEGREDO` e `ACESSO_ELEVACAO_SEGREDO`.
 
-**Este código está commitado, mas não publicado.** O site, o motor e o agente no ar
-continuam sendo os da parte 2 (v561 / 1.2.60, tabela no topo deste documento). Publicar exige,
-nesta ordem: colocar `ACESSO_ELEVACAO_SEGREDO` no Render, conferir `/api/acesso/saude` com as
-quatro variáveis em `true`, e então `.\publicar.ps1` **e** `.\publicar_agente.ps1` na mesma
-leva — a lista de arquivos que a estação baixa (`PAINEL_ARQUIVOS`) mudou.
+**O código está publicado; a quarta variável, não.** Site e motor saíram na v569 e o agente
+na 1.2.68 (tabela no topo deste documento), o que já leva `controle.html`, `controle.js`,
+`controle.css` e `acesso-conta.js` às estações pela `PAINEL_ARQUIVOS`. Falta só colar
+`ACESSO_ELEVACAO_SEGREDO` no Render — serviço **`imposicao`** — e conferir
+`/api/acesso/saude` com as quatro em `true`. Colocar a variável é ação do usuário; até lá a
+tela abre em modo somente leitura de fato, porque toda gravação depende da elevação.
 
 ### ⏳ Parte 3b — a portaria (**não começou**)
 
@@ -130,10 +135,16 @@ inteiro ainda**. Este é o passo que falta:
 Depois, imprimir um trabalho com QR Ideal e conferir que `producao_acesso_credenciais`
 recebeu a faixa daquele pedido.
 
-### 2. Publicar a parte 3a
+### 2. A quarta variável no Render
 
-Ver os três passos no fim da seção da parte 3a, acima — variável no Render, conferir a
-saúde, depois `.\publicar.ps1` e `.\publicar_agente.ps1` juntos.
+O código da parte 3a já está no ar; falta a chave que libera a escrita:
+
+```powershell
+.\ferramentas\copiar_para_render.ps1 -Somente ACESSO_ELEVACAO_SEGREDO
+```
+
+Colar no Render (serviço **`imposicao`** → Environment → Add Environment Variable),
+**Save, rebuild, and deploy**, e conferir `/api/acesso/saude` com as quatro em `true`.
 
 ### 3. Então: parte 3b e 3c
 
@@ -143,10 +154,10 @@ Cada uma merece a própria spec, como a 3a teve.
 
 ## Como configurar as variáveis do Render (para a próxima vez)
 
-As três primeiras já foram feitas em 14/08. A quarta, `ACESSO_ELEVACAO_SEGREDO`, ainda não
-foi colocada — ver a seção da parte 3a, acima; colocá-la é ação pendente do usuário. Este
-passo a passo fica registrado porque um serviço novo, uma troca de segredo, ou justamente
-essa variável pendente, refazem este caminho.
+As três primeiras foram feitas em 14/08. A quarta, `ACESSO_ELEVACAO_SEGREDO`, é a pendência
+aberta — ver "Por onde continuar", acima. Este passo a passo fica registrado porque um
+serviço novo, uma troca de segredo, ou justamente essa variável pendente, refazem este
+caminho.
 
 São quatro, todas com o valor que já está no `.env.local` desta máquina:
 
