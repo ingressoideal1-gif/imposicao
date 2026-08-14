@@ -166,13 +166,14 @@ mas a restrição não faz o que o nome promete.
 **A migração `sql/schema_acesso_02` é opcional.** Ela só remove um índice redundante. Sem
 ela, nada quebra.
 
-**O `catalogo_fontes` promete uma coisa e o código faz outra.** O
-`sql/schema_catalogo_fontes.sql` existe desde 30/07 e **nunca foi aplicado**, então o
-Supabase responde 404 e o [db.py:1095](../db.py#L1095) desiste na primeira tentativa e usa o
-catálogo local — que é o que sempre funcionou de verdade. Nada quebra, mas cada arranque
-imprime duas linhas vermelhas no log, e log vermelho rotineiro treina qualquer um a ignorar
-log vermelho. Duas saídas: aplicar o SQL e reiniciar, ou apagar o arquivo e assumir que o
-catálogo é local por decisão. Hoje temos o pior dos dois.
+**O `catalogo_fontes` era o pior dos dois mundos, e foi resolvido em 14/08.** O
+`sql/schema_catalogo_fontes.sql` existia desde 30/07 e nunca foi aplicado, então o Supabase
+respondia 404 e o código caía no catálogo local — que é o que sempre funcionou de verdade.
+Nada quebrava, mas cada arranque imprimia duas linhas vermelhas no log, e log vermelho
+rotineiro treina qualquer um a ignorar log vermelho. O usuário escolheu **apagar o SQL**: o
+catálogo é local por decisão, mora no `formats_db.json`, e o [db.py](../db.py) não faz mais
+nenhuma chamada remota por causa dele. Os binários das fontes seguem no Storage, com o
+próprio sincronismo — o que se decidiu foi só onde mora a lista.
 
 ---
 

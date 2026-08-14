@@ -1092,52 +1092,32 @@ def delete_mapa_teatro(mapa_id: str):
         db["mapas_teatro"] = [m for m in db["mapas_teatro"] if m["id"] != mapa_id]
         _save_db(db)
 
-# A tabela catalogo_fontes nunca foi criada no Supabase (o schema_catalogo_fontes.sql
-# nao chegou a ser aplicado). Sem esta trava, toda consulta ao catalogo gastava uma
-# requisicao para receber 404 e cair no arquivo local — varias vezes por imposicao.
-# Ao primeiro 404 paramos de tentar ate o proximo reinicio; se a tabela for criada,
-# basta reiniciar o agente.
-_CATALOGO_FONTES_REMOTO = True
-
-
+# ─── Catálogo de fontes: local por decisão ────────────────────────────────────
+#
+# A tabela `catalogo_fontes` NUNCA existiu no Supabase. O `schema_catalogo_fontes.sql`
+# ficou escrito e não aplicado de 30/07/2026 a 14/08/2026, e nesse tempo o código
+# tentava a tabela a cada arranque, tomava 404 e caía no catálogo local — que é o que
+# sempre funcionou de verdade. Custo: duas linhas vermelhas no log a cada partida do
+# motor, e log vermelho rotineiro treina qualquer um a ignorar log vermelho.
+#
+# Em 14/08/2026 o usuário decidiu: **apagar o SQL**. O catálogo é local, e ponto. Ele
+# vive no `formats_db.json`, versionado no repositório, e a estação recebe uma cópia
+# junto com o executável (ver `_semear_db`). Os binários das fontes continuam no
+# Storage do Supabase, com o próprio sincronismo — o que se decidiu aqui é só onde
+# mora a LISTA.
+#
+# Por isso não há mais chamada remota nenhuma nas três funções abaixo. Se um dia o
+# catálogo precisar ser compartilhado entre estações, isso volta como decisão nova,
+# com a tabela criada antes do código que a consulta — não depois.
 def get_catalogo_fontes() -> list:
-    """Retorna lista de fontes do catálogo centralizado, mesclando Supabase e local."""
-    global _CATALOGO_FONTES_REMOTO
-    supa_fonts = []
-    if IS_SUPABASE_ACTIVE and _CATALOGO_FONTES_REMOTO:
-        try:
-            res = _supabase_request("GET", "catalogo_fontes?order=nome.asc")
-            if res:
-                supa_fonts = res
-            else:
-                _CATALOGO_FONTES_REMOTO = False
-                print("[db] catalogo_fontes indisponivel no Supabase; "
-                      "usando apenas o catalogo local (nao tentarei de novo)")
-        except Exception as e:
-            _CATALOGO_FONTES_REMOTO = False
-            print(f"[db] catalogo_fontes indisponivel ({e}); usando apenas o local")
-            
-    db = _get_db()
-    local_fonts = db.get("catalogo_fontes", [])
-    
-    # Mesclar mantendo Supabase como prioridade em caso de conflito de ID
-    merged = { f.get("id"): f for f in local_fonts if f.get("id") }
-    for f in supa_fonts:
-        if f.get("id"):
-            merged[f.get("id")] = f
-            
-    return list(merged.values())
+    """Lista as fontes do catálogo. Fonte da verdade: o banco local."""
+    return list(_get_db().get("catalogo_fontes", []))
+
 
 def save_catalogo_fonte(fonte_data: dict) -> dict:
-    """Salva ou atualiza uma fonte no catálogo centralizado."""
+    """Salva ou atualiza uma fonte no catálogo."""
     fid = fonte_data.get("id") or str(uuid.uuid4())
     fonte_data["id"] = fid
-    if IS_SUPABASE_ACTIVE:
-        try:
-            res = _supabase_request("POST", "catalogo_fontes", fonte_data)
-            return res or fonte_data
-        except Exception as e:
-            print(f"[db] Erro ao salvar fonte no Supabase: {e}")
     db = _get_db()
     if "catalogo_fontes" not in db:
         db["catalogo_fontes"] = []
@@ -1146,14 +1126,9 @@ def save_catalogo_fonte(fonte_data: dict) -> dict:
     _save_db(db)
     return fonte_data
 
+
 def delete_catalogo_fonte(fonte_id: str):
-    """Remove uma fonte do catálogo centralizado."""
-    if IS_SUPABASE_ACTIVE:
-        try:
-            _supabase_request("DELETE", f"catalogo_fontes?id=eq.{fonte_id}")
-            return
-        except Exception as e:
-            print(f"[db] Erro ao deletar fonte no Supabase: {e}")
+    """Remove uma fonte do catálogo."""
     db = _get_db()
     if "catalogo_fontes" in db:
         db["catalogo_fontes"] = [f for f in db["catalogo_fontes"] if f.get("id") != fonte_id]
