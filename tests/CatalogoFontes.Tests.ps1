@@ -41,3 +41,17 @@ Describe 'catalogo de fontes -- upload em lote, sem digitacao' {
         ($js -match 'font_family:\s*nome') | Should Be $true
     }
 }
+
+Describe 'catalogo de fontes -- ordem, busca e amostra' {
+    It 'o catalogo e ordenado por nome ao carregar' {
+        # a ordenacao tem de ser a do catalogo (state_fonts.catalogo), nao um
+        # localeCompare qualquer de outra tela
+        ($js -match "(?s)state_fonts\.catalogo\s*=\s*\(list \|\| \[\]\)\.slice\(\)\.sort") | Should Be $true
+    }
+    It 'existe o campo de busca da tabela' {
+        ($html -match 'id="busca-fontes"') | Should Be $true
+    }
+    It 'a tabela tem coluna de amostra' {
+        ($html -match '<th>AMOSTRA</th>') | Should Be $true
+    }
+}

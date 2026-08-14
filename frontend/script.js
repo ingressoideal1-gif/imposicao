@@ -230,7 +230,11 @@ async function loadCatalogoFontes() {
         const res = await fetch(`${apiBase}/api/fontes`);
         if (res.ok) {
             const list = await res.json();
-            state_fonts.catalogo = list || [];
+            // Ordem alfabetica UMA vez, aqui: tabela, font picker e o select do
+            // Criar Arte leem todos de state_fonts.catalogo e herdam a ordem.
+            state_fonts.catalogo = (list || []).slice().sort((a, b) =>
+                String(a.nome || a.font_family || '').localeCompare(
+                    String(b.nome || b.font_family || ''), 'pt-BR', { sensitivity: 'base' }));
 
             // As regras @font-face saem do `fonte-canvas.js` — a mesma montagem
             // que a página do cliente usa. `definirCatalogoFontes` também avisa
@@ -266,23 +270,42 @@ async function loadCatalogoFontes() {
     }
 }
 // --- Fontes Web Manager ---
-async function renderCatFontesUI() {
+// O filtro vem do input #busca-fontes (quando existir); os chamadores antigos
+// continuam chamando sem argumento. A amostra usa a propria fonte: o
+// @font-face ja foi injetado pelo definirCatalogoFontes antes deste render.
+function renderCatFontesUI() {
     const tbody = document.getElementById('tbody-fontes');
     const empty = document.getElementById('empty-fontes');
     if (!tbody || !empty) return;
-    
-    if (!state_fonts.catalogo || state_fonts.catalogo.length === 0) {
+
+    const campoBusca = document.getElementById('busca-fontes');
+    const filtro = chaveDeDuplicata(campoBusca ? campoBusca.value : '');
+    const todas = state_fonts.catalogo || [];
+    const fontes = !filtro ? todas : todas.filter(f =>
+        chaveDeDuplicata(f.nome).includes(filtro) ||
+        chaveDeDuplicata(f.font_family).includes(filtro) ||
+        chaveDeDuplicata(f.categoria || 'Geral').includes(filtro));
+
+    if (!fontes.length) {
         tbody.innerHTML = '';
         empty.style.display = 'flex';
+        empty.querySelector('p').textContent = todas.length
+            ? 'Nenhuma fonte encontrada para a busca.'
+            : 'Nenhuma fonte cadastrada na biblioteca web.';
         return;
     }
     empty.style.display = 'none';
+
     let html = '';
-    state_fonts.catalogo.forEach(f => {
+    fontes.forEach(f => {
+        const fam = String(f.font_family || f.nome || '').replace(/'/g, "\\'");
         html += `
             <tr>
-                <td style="font-family: '${f.font_family}', sans-serif; font-size: 1.2rem;">${f.nome}</td>
-                <td><code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">${f.font_family}</code></td>
+                <td>
+                    <div style="font-family: '${fam}', sans-serif; font-size: 1.1rem;">${f.nome}</div>
+                    <code style="background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-size: 0.72rem; color: var(--text-dim);">${f.font_family}</code>
+                </td>
+                <td style="font-family: '${fam}', sans-serif; font-size: 22px; white-space: nowrap;">AaBbCc 0123456789</td>
                 <td><span class="badge" style="background: var(--gray-lighter); color: var(--text-dim);">${f.categoria || 'Geral'}</span></td>
                 <td><span style="color: #10b981;">●</span> Ativo</td>
                 <td class="text-right">

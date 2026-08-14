@@ -714,14 +714,18 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header" style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
                         <span class="card-title"><span class="icon">🔤</span> Fontes Cadastradas</span>
+                        <input type="text" class="form-control" id="busca-fontes"
+                               placeholder="🔍 Buscar fonte por nome, família ou categoria..."
+                               style="max-width:340px; margin-left:auto;"
+                               oninput="renderCatFontesUI()">
                     </div>
                     <table class="data-table" id="table-fontes">
                         <thead>
                             <tr>
                                 <th>NOME DA FONTE</th>
-                                <th>FAMÍLIA CSS</th>
+                                <th>AMOSTRA</th>
                                 <th>CATEGORIA</th>
                                 <th>STATUS</th>
                                 <th class="text-right">AÇÕES</th>
