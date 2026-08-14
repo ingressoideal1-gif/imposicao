@@ -89,6 +89,18 @@ milhões. Ele usa só a biblioteca padrão — `openpyxl` e `pandas` não estão
 pelo instalador, e o `build_agent.ps1` **para** se não encontrar o arquivo ou se
 o tamanho não for exatamente 24.000.000 bytes.
 
+## O que acontece com o código depois
+
+Este documento cobre o código no papel. O caminho dele até a portaria — como o agente
+publica a faixa na nuvem, o QR do Pedido, e como o cliente cadastra o evento — está em
+[docs/controle_acesso.md](controle_acesso.md).
+
+Um ponto de contato que vale saber daqui: a nuvem **nunca** guarda o código. Guarda um hash
+lento com sal por pedido, calculado em `qr_ideal.hash_codigo()`. O celular da portaria
+confere calculando o mesmo hash do que leu, com o gêmeo em `frontend/qr-ideal-hash.js`. Se
+os dois divergirem, todo ingresso do evento é recusado — `tests/test_qr_ideal_hash.py` roda
+os dois lados e compara.
+
 ## A prévia na tela
 
 O painel do editor é servido pelo próprio agente na estação, então a prévia pede

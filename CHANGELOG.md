@@ -4,11 +4,75 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v557** — 2026-08-13 | Agente **1.2.56**
+## Versão atual: **v560** — 2026-08-13 | Agente **1.2.59**
 
 ---
 
-## [não publicado] — O QR Ideal na tela: cor cheia e a logo no meio
+## [não publicado] — Controle de acesso, parte 2: o código chega à nuvem
+
+O ingresso já saía da impressora com o QR Ideal, mas aquele código não existia em lugar
+nenhum fora da estação que o imprimiu. O cliente não tinha como cadastrar o evento, e a
+nuvem não sabia que aqueles ingressos existiam. Esta parte é a ponte.
+
+**Sete tabelas novas** (`producao_acesso_*`), criadas por
+[sql/schema_acesso.sql](sql/schema_acesso.sql). Elas nascem com RLS ligado e **zero
+políticas**: com a chave anônima — que é pública — não se lê nem se escreve uma linha.
+Verificado contra o banco, não assumido: uma escrita anônima volta `42501, new row violates
+row-level security policy`.
+
+**A nuvem nunca vê o código.** Guarda um hash lento com sal por pedido. O sal é por pedido,
+e não por evento, porque o agente publica quando imprime — e nessa hora o evento pode nem
+existir. O teste que mais importa do projeto roda o hash do navegador dentro de um
+navegador de verdade e compara com o do Python: se os dois divergirem, todo ingresso do
+evento é recusado na portaria, e não há como descobrir antes.
+
+**O agente publica sozinho ao fechar a impressão**, em thread de fundo, depois que os PDFs
+saíram — o operador está de pé na frente da impressora. Publica a **tiragem inteira**, não
+a folha impressa: quem imprime 2.000 hoje e 3.000 na semana que vem ficaria com 3.000
+ingressos recusados na porta. Reabrir devolve o **mesmo** sal, senão os ingressos já
+entregues parariam de validar. Reenviar o mesmo lote não duplica nada.
+
+**O QR do Pedido** é uma URL curta com token assinado, gerada por um botão no painel. Ele
+não carrega os dados do evento de propósito: o app lê o esqueleto do ERP na hora, então o
+QR nunca envelhece. Gerar um novo mata o anterior — é o conserto de quando ele cai na
+pessoa errada.
+
+**A tela onde o QR cai** (`evento.html`) é auto-contida e feita para telefone: o cliente
+chega pela câmera, quase sempre no 4G. Dois passos numerados, campos de 16px para o iOS não
+dar zoom, alvos de toque de 48px. Um evento pode reunir vários pedidos — a pista num, o
+camarote noutro.
+
+A chave-mestra do banco **não vai para as estações**: o agente publica falando com o Render,
+e se identifica com um segredo que só autoriza publicar faixa. O build do agente para sem
+ele, pela mesma razão do pool.
+
+Detalhes em [docs/controle_acesso.md](docs/controle_acesso.md).
+
+**Antes de publicar:** três variáveis no Render — `SUPABASE_SERVICE_KEY`,
+`ACESSO_AGENTE_SEGREDO` e `QR_PEDIDO_SEGREDO`.
+
+---
+
+## [não publicado] — A suíte de testes voltou a rodar inteira
+
+Eram **dez** arquivos em `tests/` que não rodavam. Nove eram scripts de depuração que uma
+faxina varreu para lá em 09/08 — nenhum com uma única asserção, e cinco chamando APIs do
+motor que já não existiam. O décimo era um teste de verdade, gravado em cp1252 declarando
+utf-8, que o Python recusava compilar.
+
+O pior deles disparava um **POST de verdade contra o Render de produção** no momento em que
+o pytest o importava, com timeout de 60 segundos. Era ele quem fazia a suíte demorar 32
+segundos; agora ela roda inteira em 11.
+
+O estrago nunca foi o arquivo quebrado em si. É que o pytest reporta erro de coleta no meio
+de muita saída, e a pessoa aprende a ignorar: com dez erros permanentes na tela, o décimo
+primeiro — que seria regressão de verdade — passaria batido.
+
+`tests/test_a_suite_esta_sa.py` trava as três formas de isso voltar.
+
+---
+
+## [v558] — O QR Ideal na tela: cor cheia e a logo no meio
 
 Duas correções no desenho do elemento, ambas pedidas depois de ver a tela.
 
@@ -123,7 +187,7 @@ apareça primeiro seja sempre o contorno. Ele falha no motor antigo em 60 linhas
 
 ---
 
-## [não publicado] — Ampliar a tela da foto e completar o fundo
+## [v556] — Ampliar a tela da foto e completar o fundo
 
 A foto que chega **enquadrada demais** é o problema mais comum de credencial:
 não sobra fundo para o recorte da janela, e a única saída era cortar mais — o
@@ -155,7 +219,7 @@ abas laterais fora da tela, deixando o anel vazio dos dois lados.
 
 ---
 
-## [não publicado] — A queima 350→300 passou a aparecer na tela
+## [v556] — A queima 350→300 passou a aparecer na tela
 
 A redução automática para 300 dpi existia desde o v555 e funcionava, mas era
 **muda**: acontecia durante o envio, sem selo, sem contador e sem aviso. O

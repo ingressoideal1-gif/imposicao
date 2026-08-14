@@ -1,5 +1,16 @@
 # Controle de acesso, parte 2 — Plano de implementação
 
+> **CONCLUÍDO em 13/08/2026.** As oito tarefas estão implementadas e testadas (223 testes
+> pytest, 107 Pester). As sete tabelas foram criadas no banco e conferidas. Falta apenas
+> publicar, o que depende de três variáveis de ambiente no Render —
+> `SUPABASE_SERVICE_KEY`, `ACESSO_AGENTE_SEGREDO` e `QR_PEDIDO_SEGREDO`.
+>
+> O que a implementação decidiu diferente do plano está registrado em
+> [docs/controle_acesso.md](../../controle_acesso.md); em resumo: a `service_role` não vai
+> para as estações, os endpoints de publicação ganharam segredo próprio com falha fechada,
+> o `abrir` devolve a tiragem junto com o sal, e o endpoint que gera o QR exige login de
+> verdade em vez do `get_current_user`, que é um carimbo.
+
 > **Para quem executa:** use `superpowers:subagent-driven-development` ou
 > `superpowers:executing-plans` para tocar tarefa por tarefa. Os passos usam
 > caixinhas (`- [ ]`) para marcação.
