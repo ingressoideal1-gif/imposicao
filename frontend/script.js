@@ -22384,18 +22384,14 @@ function renderAmostrasOSItens(osId) {
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <span class="card-title">🧪 <strong>Produto: ${item.nome_produto_real || item.produto || '--'}</strong></span>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                    <span class="badge" style="font-size: 0.72rem;">📦 Qtd: ${item.quantidade || 0}</span>
-                    <span class="badge" style="font-size: 0.72rem; font-family: monospace;">NI: ${item.num_inicial || 1} → NF: ${item.num_final || item.quantidade || 0}</span>
-                    <span class="badge" style="font-size: 0.72rem;">${item.verso ? '✅ Verso' : '-- S/ Verso'}</span>
                     <span class="badge" style="font-size: 0.72rem;">🏭 ${item.setor || '--'}</span>
                     ${statusBadge}
                 </div>
             </div>
             <div style="padding: 24px;">
-                <div class="amostra-mid-row" style="${state.amostrasContainerId === 'cliente-amostras-itens-container' ? 'grid-template-columns: 1fr;' : ''}">
+                <div class="amostra-mid-row" style="grid-template-columns: 1fr;">
                     <div class="amostra-decisao-panel">
                         ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
-                        <div class="amostra-decisao-title">⚖️ Decisão de Qualidade</div>
                         <div class="amostra-decisao-status-box">
                             <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
                             ${statusBadge}
@@ -22426,21 +22422,18 @@ function renderAmostrasOSItens(osId) {
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                     <div class="amostra-config-panel">
-                        <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
-                            ⚙️ Configurações da Amostra
-                        </h3>
                         <div style="display: flex; flex-direction: column; gap: 14px;">
-                            <div style="display: flex; flex-direction: column; gap: 14px;">
-                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
-                                    <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor Cadastrada</label>
-                                    <select class="form-control" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
+                            <div style="display: flex; gap: 14px; align-items: flex-end;">
+                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; flex: 1; min-width: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
+                                    <label style="display: flex; align-items: center; min-height: 24px; margin-bottom: 4px; text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor</label>
+                                    <select class="form-control" style="width: 100%;" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
                                         <option value="">-- Selecione uma Cor --</option>
                                         ${corsOpts}
                                     </select>
                                 </div>
-                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                        <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração Cadastrada</label>
+                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; min-height: 24px; margin-bottom: 4px;">
+                                        <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração</label>
                                         ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
                                             <div style="display: flex; gap: 4px; align-items: center;">
                                                 <button class="btn btn-sm btn-ghost" style="padding: 0 4px; font-size: 0.9rem;" onclick="window.showClienteNumeracoesModal('amostra-item-num-${idx}', ${idCliente})" title="Selecionar numeração existente deste cliente">📋</button>
@@ -22448,25 +22441,25 @@ function renderAmostrasOSItens(osId) {
                                             </div>
                                         `}
                                     </div>
-                                    <select class="form-control" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
+                                    <select class="form-control" style="width: 100%;" id="amostra-item-num-${idx}" onchange="onItemNumSelect(${idx}, '${osId}', '${item.id}')">
                                         <option value="">-- Selecione uma Numeração --</option>
                                         ${numOpts}
                                     </select>
-                                    <!-- Banco de dados (CSV) da numeração. Fica escondida
-                                         enquanto a numeração escolhida não tiver um; quem
-                                         mostra e preenche é atualizarBotoesCsvDaAmostra().
-                                         Nasceu com rótulo porque a versão anterior — dois
-                                         emojis nus ao lado do título — não se explicava. -->
-                                    <div id="linha-csv-${idx}" style="display:none; flex-direction:column; gap:8px; margin-top:8px; padding:8px 10px; background:rgba(15,23,42,0.55); border:1px solid var(--border); border-radius:var(--radius-sm);">
-                                        <span style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:5px; min-width:0;">
-                                            🗂️ Banco de dados:
-                                            <b id="csv-nome-${idx}" style="color:var(--text); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></b>
-                                        </span>
-                                        <div style="display:flex; gap:6px;">
-                                            <button class="btn btn-sm btn-secondary" id="btn-csv-editar-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'editar')" title="Abrir o banco como planilha: corrigir célula, coluna, e marcar quais linhas imprimem">📊 Ver / editar</button>
-                                            <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'distribuir')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
-                                        </div>
-                                    </div>
+                                </div>
+                            </div>
+                            <!-- Banco de dados (CSV) da numeração. Fica escondida
+                                 enquanto a numeração escolhida não tiver um; quem
+                                 mostra e preenche é atualizarBotoesCsvDaAmostra().
+                                 Nasceu com rótulo porque a versão anterior — dois
+                                 emojis nus ao lado do título — não se explicava. -->
+                            <div id="linha-csv-${idx}" style="display:none; flex-direction:column; gap:8px; padding:8px 10px; background:rgba(15,23,42,0.55); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                                <span style="font-size:0.78rem; color:var(--text-dim); display:flex; align-items:center; gap:5px; min-width:0;">
+                                    🗂️ Banco de dados:
+                                    <b id="csv-nome-${idx}" style="color:var(--text); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></b>
+                                </span>
+                                <div style="display:flex; gap:6px;">
+                                    <button class="btn btn-sm btn-secondary" id="btn-csv-editar-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'editar')" title="Abrir o banco como planilha: corrigir célula, coluna, e marcar quais linhas imprimem">📊 Ver / editar</button>
+                                    <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'distribuir')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
                                 </div>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
@@ -22532,8 +22525,15 @@ function renderAmostrasOSItens(osId) {
                     `}
                 </div>
                 <div class="amostra-preview-container" style="margin-top: 20px;">
-                    <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 8px; display: block; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
-                        ${item.nome_modelo || `Modelo ${idx + 1}`}
+                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+                        <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+                            ${item.nome_modelo || `Modelo ${idx + 1}`}
+                        </div>
+                        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 0.92rem; font-weight: 600; color: var(--text); letter-spacing: 0.02em;">
+                            <span>📦 Qtd: <b>${item.quantidade || 0}</b></span>
+                            <span>NI: <b>${item.num_inicial || 1}</b> → NF: <b>${item.num_final || item.quantidade || 0}</b></span>
+                            <span style="color: ${item.verso ? 'var(--text)' : 'var(--text-dim)'};">${item.verso ? '✅ Verso' : 'S/ Verso'}</span>
+                        </div>
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ?
                         (item.verso ? `
