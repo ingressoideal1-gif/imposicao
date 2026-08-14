@@ -294,12 +294,17 @@ distinto de nulo dentro de índice único, então `UNIQUE (empresa_id, coluna)` 
 nada. As chaves passam pela função `producao_acesso_empresa()`, que troca o nulo por um
 UUID zerado.
 
-## O que falta (parte 3)
+## O que falta (a partir da parte 3b)
 
-O aplicativo da portaria: IndexedDB com validação local de verdade, login do cliente,
-dispositivos com lista de setores própria, a senha do dono travando a configuração do
-evento, reentrada, lotação ao vivo e relatórios. Mais a mudança do Ideal Control para
-dentro deste repositório e a limpeza do `sw.js`, que ainda referencia SDKs do Firebase.
+A tela do dono (`controle.html`, parte 3a) já existe e está publicada: login do cliente,
+lotação e tipo de uso por setor, os aparelhos da portaria com lista de setores própria, e a
+senha do dono travando a configuração do evento. O controle de acesso também já mora dentro
+deste repositório — a mudança que tirou o Ideal Control antigo de fora dele.
+
+O que falta é o aplicativo da PORTARIA (parte 3b): IndexedDB com validação local de
+verdade, leitura de QR e registro de entrada sem depender de rede, reentrada em uso de
+verdade, e a limpeza do `sw.js`, que ainda referencia SDKs do Firebase removidos. Painel ao
+vivo, relatórios e cancelar credencial ficam para a parte 3c.
 
 Decisões já tomadas pelo usuário e registradas na
 [spec](superpowers/specs/2026-08-13-controle-acesso-parte2-design.md):

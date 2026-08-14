@@ -67,9 +67,16 @@ def _painel(evento_id: str) -> dict:
     for s in setores:
         # O número que a tela compara com `quantidade`. Divergência aqui é ou
         # impressão que ainda não terminou de publicar, ou credencial que
-        # alguém publicou sem dever.
+        # alguém publicou sem dever. `origem=eq.qr_ideal` é o que falta para
+        # essa comparação fazer sentido: sem ele, os códigos de staff que o
+        # PRÓPRIO dono importa (`origem='cliente'`) entravam na contagem e
+        # deslocavam o alarme para sempre — importar 42 códigos de staff num
+        # setor com a tiragem toda publicada fazia o cartão dizer "5042 no
+        # ar" permanentemente, porque a única forma de "corrigir" o número
+        # seria desimportar o próprio staff.
         s["publicadas"] = contar(
-            f"producao_acesso_credenciais?setor_id=eq.{s['id']}&status=eq.ativo"
+            f"producao_acesso_credenciais?setor_id=eq.{s['id']}"
+            "&status=eq.ativo&origem=eq.qr_ideal"
         )
 
     aparelhos = supabase(
@@ -137,8 +144,20 @@ def _conferir_senha(email: str, senha: str) -> bool:
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             return bool(json.loads(resp.read().decode("utf-8")).get("access_token"))
-    except urllib.error.HTTPError:
-        return False
+    except urllib.error.HTTPError as e:
+        if e.code in (400, 401):
+            # 400 é corpo mal formado, 401 é credencial errada — os dois são
+            # "senha não confere" do ponto de vista do dono. Qualquer outro
+            # código (429 de limite de taxa, 5xx do provedor) NÃO é senha
+            # errada: toda elevação sai do mesmo IP de saída do Render, então
+            # um limite por IP é compartilhado por toda a base de clientes, e
+            # dizer "senha errada" aqui manda o dono procurar um papel com a
+            # senha quando o problema é outro.
+            return False
+        raise HTTPException(
+            status_code=503,
+            detail=f"nao consegui conferir a senha agora (codigo {e.code})",
+        )
     except Exception as e:
         # Rede fora não é senha errada, e confundir os dois manda o dono
         # procurar um papel com a senha quando o problema é outro.
@@ -173,7 +192,13 @@ def _exigir_elevacao(evento_id: str, usuario: dict, elevacao, navegador) -> None
     """
     try:
         acesso_elevacao.conferir(elevacao, evento_id, usuario.get("id"), navegador)
-    except ValueError:
+    except (ValueError, RuntimeError):
+        # RuntimeError entra aqui de propósito: é o que `acesso_elevacao`
+        # levanta quando `ACESSO_ELEVACAO_SEGREDO` não está configurada, e
+        # esse é literalmente o estado do servidor até o dia em que a
+        # variável for colada no Render — não é hipotético. Um token BEM
+        # FORMADO chegando nessa janela não pode virar 500 numa tela que já
+        # sabe tratar 401.
         raise HTTPException(
             status_code=401,
             detail={"codigo": "elevacao_expirada",
@@ -283,7 +308,7 @@ def _gravar_setor(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
         if tipo not in TIPOS_DE_USO:
             raise HTTPException(
                 status_code=422,
-                detail="tipo de uso: escolha entre uma entrada so ou permite reentrada",
+                detail="tipo de uso: escolha 'vale uma entrada so' ou 'permite sair e voltar'",
             )
         mudanca["tipo_uso"] = tipo
 
@@ -343,8 +368,13 @@ def _hash_do_codigo(codigo: str, sal: str) -> str:
 
 
 def _setores_do_evento(evento_id: str) -> set:
+    # `status=eq.ativo`, para o mesmo filtro que `_painel` já aplica: sem
+    # ele, um aparelho podia ser vinculado a um setor que a tela nunca
+    # mostra, e o dono nunca teria como saber que aquele vínculo existe.
     return {str(s["id"]) for s in (supabase(
-        "GET", f"producao_acesso_setores?evento_id=eq.{evento_id}&select=id") or [])}
+        "GET",
+        f"producao_acesso_setores?evento_id=eq.{evento_id}&status=eq.ativo&select=id",
+    ) or [])}
 
 
 def _conferir_setores(evento_id: str, setores) -> list:
@@ -511,10 +541,17 @@ def _importar_codigos(evento_id, usuario, elevacao, navegador, corpo: dict) -> d
         limpos.append(codigo)
 
     if not limpos:
-        return {"gravados": 0}
+        return {"gravados": 0, "ja_existiam": 0}
 
     sal = _sal_do_evento(evento_id)
-    supabase(
+    # `return=representation` em vez de `return=minimal`: o achado da
+    # revisão final foi que `len(limpos)` conta o que foi ENVIADO, não o que
+    # foi ESCRITO. Reenviar a mesma lista — o que um dono faz depois de
+    # escolher o setor errado, já que 3a não tem como apagar um código —
+    # gravava zero linha nova (a chave única ignora o repetido) e a tela
+    # dizia "42 códigos entraram" nas duas vezes. Contar as linhas que
+    # voltaram de verdade é o que distingue as duas.
+    gravadas = supabase(
         "POST",
         "producao_acesso_credenciais?on_conflict=codigo_hash",
         [{
@@ -524,9 +561,10 @@ def _importar_codigos(evento_id, usuario, elevacao, navegador, corpo: dict) -> d
             "codigo_visivel": c,
             "origem": "cliente",
         } for c in limpos],
-        prefer="resolution=ignore-duplicates,return=minimal",
-    )
-    return {"gravados": len(limpos)}
+        prefer="resolution=ignore-duplicates,return=representation",
+    ) or []
+    novos = len(gravadas)
+    return {"gravados": novos, "ja_existiam": len(limpos) - novos}
 
 
 @router.post("/eventos/{evento_id}/codigos")

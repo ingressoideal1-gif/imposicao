@@ -81,6 +81,16 @@
             });
     }
 
+    // Memorizado aqui, e não só no `localStorage`: quando o `setItem` falha
+    // (aba anônima do iOS, quota estourada), cada chamada sem isto sortearia
+    // um UUID NOVO — `elevar()` assinaria com o id A e o `gravar()` seguinte
+    // mandaria o id B, a assinatura nunca bateria, e o dono digitaria a senha
+    // certa duas vezes só para ver "digite a senha do dono" de novo. Uma
+    // variável de módulo garante que, dentro da vida desta página, o id é
+    // sempre o mesmo — vindo do `localStorage` quando ele funciona, ou só da
+    // memória quando não funciona.
+    var _idMemorizado = null;
+
     /**
      * O identificador desta instalação do navegador.
      *
@@ -93,6 +103,8 @@
      * ponto aqui deslocaria os campos.
      */
     function navegadorId() {
+        if (_idMemorizado) { return _idMemorizado; }
+
         var CHAVE = 'acesso_navegador_id';
         var id = null;
         try { id = localStorage.getItem(CHAVE); } catch (e) { id = null; }
@@ -101,8 +113,9 @@
                 ? crypto.randomUUID()
                 : Array.from(crypto.getRandomValues(new Uint8Array(16)))
                     .map(function (b) { return b.toString(16).padStart(2, '0'); }).join(''));
-            try { localStorage.setItem(CHAVE, id); } catch (e) { /* aba anônima */ }
+            try { localStorage.setItem(CHAVE, id); } catch (e) { /* aba anônima: guarda so na memoria desta pagina */ }
         }
+        _idMemorizado = id;
         return id;
     }
 

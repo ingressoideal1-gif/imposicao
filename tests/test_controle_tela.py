@@ -792,6 +792,247 @@ def test_revogar_aceito_manda_status_revogado_pelo_botao():
     assert saida["enviado"]["corpo"]["status"] == "revogado"
 
 
+def test_salvar_do_setor_manda_so_a_lotacao_quando_so_ela_muda():
+    """CRITICAL da revisao final: `PATCH /setores/{id}` nao tinha chamador
+    nenhum no frontend -- lotacao e tipo de uso nunca eram gravados, e o
+    valor sumia no proximo redesenho sem aviso nenhum. Dirige o botao de
+    verdade, no mesmo padrao que ja prova o Salvar do aparelho."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        document.getElementById('lotacao-s1').value = '4800';
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        document.getElementById('setor-salvar-s1').click();
+        await new Promise(r => setTimeout(r, 50));
+        return { chamadas };
+    """)
+    assert len(saida["chamadas"]) == 1
+    chamada = saida["chamadas"][0]
+    assert chamada["caminho"] == "/setores/s1"
+    assert chamada["corpo"] == {"lotacao": 4800}
+
+
+def test_salvar_do_setor_manda_so_o_tipo_de_uso_quando_so_ele_muda():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        document.getElementById('uso-s1-reentrada').checked = true;
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        document.getElementById('setor-salvar-s1').click();
+        await new Promise(r => setTimeout(r, 50));
+        return { chamadas };
+    """)
+    assert len(saida["chamadas"]) == 1
+    chamada = saida["chamadas"][0]
+    assert chamada["caminho"] == "/setores/s1"
+    assert chamada["corpo"] == {"tipo_uso": "reentrada"}
+
+
+def test_salvar_do_setor_nao_manda_nada_quando_nada_mudou():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        document.getElementById('setor-salvar-s1').click();
+        await new Promise(r => setTimeout(r, 50));
+        return { chamadas };
+    """)
+    assert saida["chamadas"] == []
+
+
+def test_botao_salvar_do_setor_tem_rotulo_e_entra_na_trava():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const semSenha = document.getElementById('setor-salvar-s1').disabled;
+        const rotulo = document.getElementById('setor-salvar-s1').textContent.trim();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const comSenha = document.getElementById('setor-salvar-s1').disabled;
+        return { semSenha, comSenha, rotulo };
+    """)
+    assert len(saida["rotulo"]) > 3
+    assert saida["semSenha"] is True
+    assert saida["comSenha"] is False
+
+
+def test_navegador_id_e_memorizado_quando_o_localstorage_falha_ao_escrever():
+    """Achado da revisao final: sem memorizar em variavel de modulo, cada
+    chamada com o localStorage bloqueado (aba anonima do iOS, quota
+    estourada) sorteava um UUID NOVO. `elevar()` assina com o id A e o
+    `gravar()` seguinte manda o id B -- a assinatura nunca bate, e o dono
+    digita a senha certa duas vezes so para ver "digite a senha do dono"
+    de novo."""
+    saida = _no_navegador("""
+        const original = Storage.prototype.setItem;
+        Storage.prototype.setItem = function () { throw new Error('quota'); };
+        try {
+            const a = AcessoConta.navegadorId();
+            const b = AcessoConta.navegadorId();
+            return { a, b, iguais: a === b };
+        } finally {
+            Storage.prototype.setItem = original;
+        }
+    """)
+    assert saida["iguais"] is True
+
+
+def test_elevacao_e_restaurada_do_sessionstorage_ao_abrir():
+    """IMPORTANT da revisao final: a elevacao era gravada no sessionStorage
+    e nunca lida de volta. '<- Meus eventos' e todo link de evento sao
+    recarga de pagina inteira, entao o dono digitava a senha de novo em
+    toda navegacao -- o storage so custava usabilidade, sem comprar nada."""
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'ev-1'
+        }));
+        const url = new URL(location.href);
+        url.searchParams.set('evento', 'ev-1');
+        history.replaceState(null, '', url);
+        await Controle.abrir();
+        return {
+            elevado: Controle.elevado(),
+            somenteLeitura: document.body.classList.contains('somente-leitura'),
+        };
+    """)
+    assert saida["elevado"] is True
+    assert saida["somenteLeitura"] is False
+
+
+def test_elevacao_de_outro_evento_no_storage_nao_e_restaurada():
+    """O `navegador` ja impede um bilhete de outro navegador; isto impede um
+    bilhete de outro EVENTO no MESMO navegador -- a aba trocou de evento sem
+    fechar, o storage ainda tem o token antigo."""
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'outro-evento'
+        }));
+        const url = new URL(location.href);
+        url.searchParams.set('evento', 'ev-1');
+        history.replaceState(null, '', url);
+        await Controle.abrir();
+        return { elevado: Controle.elevado() };
+    """)
+    assert saida["elevado"] is False
+
+
+def test_elevacao_vencida_no_storage_e_descartada_ao_abrir():
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) - 5, evento_id: 'ev-1'
+        }));
+        const url = new URL(location.href);
+        url.searchParams.set('evento', 'ev-1');
+        history.replaceState(null, '', url);
+        await Controle.abrir();
+        return { elevado: Controle.elevado(),
+                 guardado: sessionStorage.getItem('acesso_elevacao') };
+    """)
+    assert saida["elevado"] is False
+    assert saida["guardado"] is None
+
+
+def test_desenhar_de_novo_nao_apaga_os_dados_do_evento_sendo_digitados():
+    """IMPORTANT da revisao final: `elevar()` chama `desenhar()`, e todo
+    `criarAparelho`/`novoCodigo`/`importarCodigos`/`renomearAparelho` chama
+    `carregarPainel()`. O arquivo ja resolve isto para os cartoes de
+    aparelho (`edicoesDeAparelhoAntes`); os campos do evento precisavam do
+    mesmo tratamento -- sem ele, o dono digitando um nome novo via a senha
+    vencer no meio da edicao e recuperava o texto ANTIGO."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('campo-nome-evento').value = 'Nome novo que eu digitei';
+        document.getElementById('campo-local').value = 'Local novo';
+        Controle.desenhar();
+        return {
+            nome: document.getElementById('campo-nome-evento').value,
+            local: document.getElementById('campo-local').value,
+        };
+    """)
+    assert saida["nome"] == "Nome novo que eu digitei"
+    assert saida["local"] == "Local novo"
+
+
+def test_desenhar_de_novo_nao_apaga_a_lotacao_e_o_uso_sendo_editados():
+    """Mesmo achado, no cartao de setor -- interage com o CRITICAL da mesma
+    revisao: uma vez que o setor passa a ser salvavel, a edicao nao salva
+    dele tambem precisa sobreviver a um redesenho disparado por OUTRO
+    cartao desta tela."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('lotacao-s1').value = '4800';
+        document.getElementById('uso-s1-reentrada').checked = true;
+        Controle.desenhar();
+        return {
+            lotacao: document.getElementById('lotacao-s1').value,
+            reentrada: document.getElementById('uso-s1-reentrada').checked,
+        };
+    """)
+    assert saida["lotacao"] == "4800"
+    assert saida["reentrada"] is True
+
+
+def test_a_caixa_do_codigo_mostra_o_nome_do_aparelho_ao_criar():
+    """Achado da revisao final: com varios aparelhos configurados, gerar um
+    codigo novo antes de fechar a caixa do anterior e como um codigo acaba
+    digitado no celular errado -- o titulo generico "Codigo deste aparelho"
+    nao dizia QUAL aparelho."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle._pedirParaTeste = async () => ({ id: 'a2', nome: 'Portao B', codigo: 'ABC234' });
+        await Controle.criarAparelho('Portao B', ['s1']);
+        return { titulo: document.getElementById('codigo-titulo').textContent };
+    """)
+    assert "Portao B" in saida["titulo"]
+
+
+def test_a_caixa_do_codigo_mostra_o_nome_do_aparelho_ao_gerar_outro():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle._pedirParaTeste = async () => ({ codigo: 'ZZZ999' });
+        await Controle.novoCodigo('a1');
+        return { titulo: document.getElementById('codigo-titulo').textContent };
+    """)
+    assert "Portao A" in saida["titulo"]
+
+
 def test_sem_supabase_a_tela_explica_em_vez_de_ficar_em_branco():
     """`supabaseClient` fica nulo sem rede, sem o CDN, ou no modo offline
     deliberado do `supabase-config.js` (`?offline=true` / `offline_mode`). Sem

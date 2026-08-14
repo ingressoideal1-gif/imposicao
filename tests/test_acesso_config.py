@@ -101,12 +101,31 @@ class FakeBanco:
             return linhas
         if method == "POST":
             linhas = body if isinstance(body, list) else [body]
+            # `on_conflict=<coluna>` + `resolution=ignore-duplicates`, no
+            # mesmo espirito da chave unica `uq_acesso_credencial_hash_simples`
+            # de verdade: reenviar um valor ja presente naquela coluna nao
+            # grava linha nova nenhuma. Sem isto o fake nao consegue provar
+            # que `gravados` conta o que o Supabase REALMENTE escreveu, e nao
+            # o que foi mandado -- o achado IMPORTANT da revisao final.
+            coluna_conflito = None
+            if "on_conflict=" in path:
+                coluna_conflito = path.split("on_conflict=", 1)[1].split("&", 1)[0]
+            ignora_duplicado = bool(prefer and "resolution=ignore-duplicates" in prefer)
+            ja_visto = ({l.get(coluna_conflito) for l in alvo}
+                       if coluna_conflito else set())
             criadas = []
             for l in linhas:
                 linha = dict(l)
+                if (coluna_conflito and ignora_duplicado
+                        and linha.get(coluna_conflito) in ja_visto):
+                    continue
                 linha.setdefault("id", f"novo-{len(alvo)}")
                 alvo.append(linha)
+                if coluna_conflito:
+                    ja_visto.add(linha.get(coluna_conflito))
                 criadas.append(linha)
+            if prefer and "return=minimal" in prefer:
+                return []
             return criadas
         if method == "PATCH":
             id_alvo = self._id_filtrado(path)
@@ -139,9 +158,35 @@ def banco(monkeypatch):
     monkeypatch.setattr(cfg, "supabase", b)
 
     def _contar(path):
-        if "origem=eq.cliente" in path:
-            return len([c for c in b.credenciais if c.get("origem") == "cliente"])
-        return len(b.credenciais)
+        """Honra `setor_id`, `origem` e `status` -- os tres filtros que
+        `_painel` usa para separar o QR Ideal publicado dos codigos que o
+        cliente importou. A revisao final achou que a versao antiga desta
+        fake ignorava os dois primeiros, o que escondia um bug real de
+        producao: `publicadas` contava credencial de origem='cliente'
+        junto com a do QR Ideal. Falta `evento_id` de proposito -- nenhum
+        teste desta suite tem mais de um evento, e honra-lo exigiria marcar
+        `evento_id` em toda credencial das fixtures so para um filtro que
+        nunca discriminaria nada aqui.
+
+        Os defaults ("qr_ideal", "ativo") espelham o DEFAULT de verdade do
+        schema (`sql/schema_acesso.sql`), para que uma credencial de teste
+        que nao seta `origem`/`status` continue se comportando como uma
+        linha real recem-inserida.
+        """
+        filtros = {}
+        if "?" in path:
+            for par in path.split("?", 1)[1].split("&"):
+                if "=eq." in par:
+                    chave, valor = par.split("=eq.", 1)
+                    filtros[chave] = valor
+        linhas = b.credenciais
+        if "setor_id" in filtros:
+            linhas = [c for c in linhas if str(c.get("setor_id")) == filtros["setor_id"]]
+        if "origem" in filtros:
+            linhas = [c for c in linhas if c.get("origem", "qr_ideal") == filtros["origem"]]
+        if "status" in filtros:
+            linhas = [c for c in linhas if c.get("status", "ativo") == filtros["status"]]
+        return len(linhas)
     monkeypatch.setattr(cfg, "contar", _contar)
     return b
 
@@ -206,6 +251,24 @@ def test_o_painel_conta_os_codigos_do_cliente(banco):
         {"id": "c2", "setor_id": SETOR, "origem": "qr_ideal"},
     ]
     assert cfg._painel(EVENTO)["codigos_cliente"] == 1
+
+
+def test_publicadas_nao_conta_os_codigos_do_cliente(banco):
+    """Achado CRITICAL da revisao final.
+
+    `publicadas` comparava com `quantidade` sem filtrar `origem`, entao
+    importar 42 codigos de staff (origem='cliente') num setor com a tiragem
+    toda publicada fazia o cartao dizer "5042 no ar" -- um alarme falso
+    permanente que o dono nunca consegue zerar, porque o proprio staff dele
+    faz o numero divergir de novo a cada importacao.
+    """
+    banco.credenciais = (
+        [{"id": f"c{i}", "setor_id": SETOR, "origem": "qr_ideal"} for i in range(5000)]
+        + [{"id": f"staff{i}", "setor_id": SETOR, "origem": "cliente"} for i in range(42)]
+    )
+    painel = cfg._painel(EVENTO)
+    assert painel["setores"][0]["publicadas"] == 5000
+    assert painel["setores"][0]["quantidade"] == 5000
 
 
 def test_evento_sem_aparelho_nao_consulta_vinculos(banco):
@@ -306,6 +369,30 @@ def test_escrita_sem_elevacao_e_recusada_com_codigo_proprio(banco, segredo_da_el
     assert e.value.detail["codigo"] == "elevacao_expirada"
 
 
+def test_exigir_elevacao_sem_segredo_devolve_401_e_nao_500(banco, monkeypatch):
+    """Achado da revisao final: `_exigir_elevacao` so pegava `ValueError`.
+
+    `acesso_elevacao.conferir` so levanta `RuntimeError` quando o segredo nao
+    esta configurado -- e e exatamente o estado do servidor ate o dia em que
+    `ACESSO_ELEVACAO_SEGREDO` for colado no Render. Um token BEM FORMADO
+    chegando nessa janela furava o `except ValueError` e virava 500, quando a
+    tela ja sabe tratar 401 (pede a senha de novo).
+    """
+    import time
+    import acesso_elevacao
+    monkeypatch.setattr(acesso_elevacao, "_SEGREDO_CACHE", None)
+    monkeypatch.setattr(acesso_elevacao.db, "ler_env_local", lambda _n: None)
+    monkeypatch.delenv(acesso_elevacao.SEGREDO_ENV, raising=False)
+
+    expira = int(time.time()) + 900
+    token = f"{EVENTO}.{DONO['id']}.{NAV}.{expira}.assinatura-que-nunca-sera-conferida"
+
+    with pytest.raises(HTTPException) as e:
+        cfg._exigir_elevacao(EVENTO, DONO, token, NAV)
+    assert e.value.status_code == 401
+    assert e.value.detail["codigo"] == "elevacao_expirada"
+
+
 def test_elevacao_de_outro_navegador_e_recusada(banco, segredo_da_elevacao, senha_certa):
     token = cfg._elevar(EVENTO, DONO, "boa", NAV)["token"]
     with pytest.raises(HTTPException) as e:
@@ -323,6 +410,54 @@ def test_servidor_sem_segredo_de_elevacao_recusa_elevar(banco, senha_certa, monk
         cfg._elevar(EVENTO, DONO, "boa", NAV)
     assert e.value.status_code == 503
     assert "ACESSO_ELEVACAO_SEGREDO" in str(e.value.detail)
+
+
+# ── `_conferir_senha` contra o HTTPError de verdade ─────────────────────────
+#
+# `senha_certa` (acima) substitui `_conferir_senha` inteira, e nenhum teste
+# antigo exercitava o corpo real da funcao. Achado da revisao final: o
+# `except urllib.error.HTTPError: return False` original tratava QUALQUER
+# HTTPError -- 429 de limite de taxa, 500 do provedor -- como senha errada.
+# Toda elevacao sai do mesmo IP de saida do Render, entao um limite por IP e
+# compartilhado por toda a base de clientes: um 429 do Supabase não é o dono
+# errando a senha, é o provedor pedindo para esperar.
+
+import urllib.error
+
+
+def _http_error(codigo):
+    return urllib.error.HTTPError("https://x.supabase.co/auth/v1/token", codigo,
+                                  "erro de teste", {}, None)
+
+
+def _urlopen_que_falha_com(codigo):
+    def _urlopen(req, timeout=20):
+        raise _http_error(codigo)
+    return _urlopen
+
+
+def test_senha_errada_401_do_supabase_e_recusada(monkeypatch):
+    monkeypatch.setattr(cfg.urllib.request, "urlopen", _urlopen_que_falha_com(401))
+    assert cfg._conferir_senha("dono@cliente.com", "errada") is False
+
+
+def test_corpo_malformado_400_do_supabase_e_recusado(monkeypatch):
+    monkeypatch.setattr(cfg.urllib.request, "urlopen", _urlopen_que_falha_com(400))
+    assert cfg._conferir_senha("dono@cliente.com", "") is False
+
+
+def test_limite_de_taxa_429_NAO_vira_senha_errada(monkeypatch):
+    monkeypatch.setattr(cfg.urllib.request, "urlopen", _urlopen_que_falha_com(429))
+    with pytest.raises(HTTPException) as e:
+        cfg._conferir_senha("dono@cliente.com", "boa")
+    assert e.value.status_code == 503
+
+
+def test_erro_5xx_do_provedor_NAO_vira_senha_errada(monkeypatch):
+    monkeypatch.setattr(cfg.urllib.request, "urlopen", _urlopen_que_falha_com(503))
+    with pytest.raises(HTTPException) as e:
+        cfg._conferir_senha("dono@cliente.com", "boa")
+    assert e.value.status_code == 503
 
 
 # ── Gravar evento e setor ───────────────────────────────────────────────────
@@ -571,6 +706,32 @@ def test_setor_de_outro_evento_e_recusado(banco, elevado):
         cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
                               {"codigos": ["A1"], "setor_id": "setor-alheio"})
     assert e.value.status_code == 422
+
+
+def test_reenviar_a_mesma_lista_nao_conta_como_gravado_de_novo(banco, elevado):
+    """Achado IMPORTANT da revisao final.
+
+    `gravados` devolvia `len(limpos)` -- o que foi ENVIADO, nao o que foi
+    ESCRITO. Reenviar a mesma lista (o que um dono faz depois de escolher o
+    setor errado) gravava zero linha nova, e a tela dizia "42 codigos
+    entraram" nas duas vezes.
+    """
+    cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                          {"codigos": ["STAFF01", "STAFF02"], "setor_id": SETOR})
+    r = cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                              {"codigos": ["STAFF01", "STAFF02"], "setor_id": SETOR})
+    assert r["gravados"] == 0
+    assert r["ja_existiam"] == 2
+    assert len(banco.credenciais) == 2   # nenhuma linha nova de verdade
+
+
+def test_uma_lista_parcialmente_repetida_conta_os_dois_grupos(banco, elevado):
+    cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                          {"codigos": ["STAFF01"], "setor_id": SETOR})
+    r = cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                              {"codigos": ["STAFF01", "STAFF02"], "setor_id": SETOR})
+    assert r["gravados"] == 1
+    assert r["ja_existiam"] == 1
 
 
 def test_importar_sem_elevacao_e_recusado(banco):

@@ -16,8 +16,19 @@
         sessao: null,
         evento_id: null,
         painel: null,
-        elevacao: null       // { token, expira_em }
+        elevacao: null       // { token, expira_em, evento_id }
     };
+
+    // Achado da revisão final: `desenhar()` reatribuía `campo-nome-evento`,
+    // `campo-local` e `campo-data` do ZERO a cada chamada. `elevar()` chama
+    // `desenhar()`, e qualquer `gravar()` de outro cartão desta tela chama
+    // `carregarPainel()` — que também chama `desenhar()`. Sem esta bandeira,
+    // o dono digitando um nome novo via a senha vencer no meio da edição
+    // recuperava o texto ANTIGO assim que a senha era aceita, sob o próprio
+    // aviso de "Modo configuração". Depois da primeira vez, o valor que já
+    // está em tela é preservado — a mesma ideia que os cartões de aparelho já
+    // usam com `edicoesDeAparelhoAntes`, abaixo.
+    var jaDesenhouEvento = false;
 
     var $ = function (id) { return document.getElementById(id); };
 
@@ -88,15 +99,40 @@
         if (!p) { return; }
 
         $('nome-evento-titulo').textContent = p.evento.nome_evento;
-        $('campo-nome-evento').value = p.evento.nome_evento || '';
-        $('campo-local').value = p.evento.local_evento || '';
-        // `datetime-local` só aceita "AAAA-MM-DDTHH:MM"; o banco devolve com
-        // segundos e fuso, e o campo fica VAZIO em silêncio se o formato não
-        // bater — o dono acharia que a data nunca foi gravada.
-        $('campo-data').value = (p.evento.data_evento || '').slice(0, 16);
+        // Só sincroniza com o servidor na PRIMEIRA vez: dali em diante, o
+        // valor que já está em tela — sincronizado antes, ou sendo digitado
+        // agora — é preservado. Ver o comentário de `jaDesenhouEvento` acima.
+        if (!jaDesenhouEvento) {
+            $('campo-nome-evento').value = p.evento.nome_evento || '';
+            $('campo-local').value = p.evento.local_evento || '';
+            // `datetime-local` só aceita "AAAA-MM-DDTHH:MM"; o banco devolve
+            // com segundos e fuso, e o campo fica VAZIO em silêncio se o
+            // formato não bater — o dono acharia que a data nunca foi
+            // gravada.
+            $('campo-data').value = (p.evento.data_evento || '').slice(0, 16);
+            jaDesenhouEvento = true;
+        }
+
+        // Mesma ideia dos cartões de aparelho, um degrau abaixo: cada cartão
+        // de setor é reconstruído a cada painel, e sem capturar o que já
+        // estava em tela ANTES de apagar, o dono editando lotação ou tipo de
+        // uso perderia os dois se qualquer outro cartão desta tela disparar
+        // um redesenho por baixo dele.
+        var edicoesDeSetorAntes = {};
+        p.setores.forEach(function (s) {
+            var campoLotacao = $('lotacao-' + s.id);
+            if (!campoLotacao) { return; }
+            var marcado = document.querySelector('input[name="uso-' + s.id + '"]:checked');
+            edicoesDeSetorAntes[s.id] = {
+                lotacao: campoLotacao.value,
+                tipo_uso: marcado ? marcado.value : s.tipo_uso
+            };
+        });
 
         $('setores').innerHTML = '';
-        p.setores.forEach(function (s) { $('setores').appendChild(cartaoDeSetor(s)); });
+        p.setores.forEach(function (s) {
+            $('setores').appendChild(cartaoDeSetor(s, edicoesDeSetorAntes[s.id]));
+        });
 
         // Mesma lógica do formulário de novo aparelho, um degrau abaixo: cada
         // cartão de aparelho tem seu próprio campo de nome e suas próprias
@@ -169,7 +205,13 @@
         desenharFaixa();
     }
 
-    function cartaoDeSetor(s) {
+    /**
+     * `edicaoAnterior`, se vier, é o que já estava em tela (digitado pelo
+     * dono ou sincronizado da rodada anterior) ANTES deste redesenho — ver o
+     * comentário em `desenhar()`. O mesmo papel que `edicaoAnterior` faz em
+     * `cartaoDeAparelho`.
+     */
+    function cartaoDeSetor(s, edicaoAnterior) {
         var el = document.createElement('div');
         el.className = 'cartao';
 
@@ -203,15 +245,48 @@
         campo.type = 'number';
         campo.min = '0';
         campo.inputMode = 'numeric';
-        campo.value = (s.lotacao === null || s.lotacao === undefined) ? '' : s.lotacao;
+        campo.value = edicaoAnterior ? edicaoAnterior.lotacao
+            : ((s.lotacao === null || s.lotacao === undefined) ? '' : s.lotacao);
         el.appendChild(campo);
 
         // A quantidade encomendada NÃO vira campo: quem manda nela é o ERP.
-        el.appendChild(opcoesDeUso(s));
+        el.appendChild(opcoesDeUso(s, edicaoAnterior));
+
+        // ── Salvar lotação e tipo de uso ─────────────────────────────────────
+        //
+        // CRITICAL da revisão final: `PATCH /setores/{id}` já existia e já
+        // tinha dez testes no backend, mas nenhum botão desta tela o chamava
+        // — o dono digitava a lotação, via o campo reagir, e o valor sumia
+        // no próximo redesenho sem aviso nenhum.
+        var btnSalvar = document.createElement('button');
+        btnSalvar.type = 'button';
+        btnSalvar.className = 'so-com-senha';
+        btnSalvar.id = 'setor-salvar-' + s.id;
+        btnSalvar.textContent = 'Salvar lotação e uso do ingresso';
+        btnSalvar.addEventListener('click', function () {
+            var lotacaoServidor = (s.lotacao === null || s.lotacao === undefined) ? null : s.lotacao;
+            var lotacaoDigitada = campo.value === '' ? null : parseInt(campo.value, 10);
+            var marcado = document.querySelector('input[name="uso-' + s.id + '"]:checked');
+            var tipoEscolhido = marcado ? marcado.value : s.tipo_uso;
+
+            // Só manda o que de fato mudou, igual ao Salvar do aparelho: menos
+            // pedido, e nenhum PATCH vazio se o dono só olhou o cartão.
+            var corpo = {};
+            if (lotacaoDigitada !== lotacaoServidor) { corpo.lotacao = lotacaoDigitada; }
+            if (tipoEscolhido !== s.tipo_uso) { corpo.tipo_uso = tipoEscolhido; }
+
+            if (Object.keys(corpo).length) {
+                gravarSetor(s.id, corpo).catch(function () { /* já avisado */ });
+            }
+        });
+        el.appendChild(btnSalvar);
+
         return el;
     }
 
-    function opcoesDeUso(s) {
+    function opcoesDeUso(s, edicaoAnterior) {
+        var tipoAtual = edicaoAnterior ? edicaoAnterior.tipo_uso : s.tipo_uso;
+
         var caixa = document.createElement('div');
         var titulo = document.createElement('p');
         titulo.textContent = 'Uso do ingresso';
@@ -229,7 +304,7 @@
             radio.name = 'uso-' + s.id;
             radio.id = 'uso-' + s.id + '-' + par[0];
             radio.value = par[0];
-            radio.checked = (s.tipo_uso === par[0]);
+            radio.checked = (tipoAtual === par[0]);
             var rot = document.createElement('label');
             rot.setAttribute('for', radio.id);
             rot.textContent = par[1];
@@ -240,14 +315,28 @@
         return caixa;
     }
 
+    /** Toda gravação de setor passa por aqui — ver `gravar()` para o
+     * protocolo de elevação vencida e o `carregarPainel()` no fim, que
+     * sincroniza o cartão com o que o banco realmente gravou. */
+    function gravarSetor(setor_id, corpo) {
+        return gravar('/setores/' + setor_id, corpo, 'PATCH').then(carregarPainel);
+    }
+
     /**
      * Mostra o código curto UMA vez.
      *
      * Ele não está guardado em lugar nenhum — o que fica é um resumo dele. Se a
      * tela não disser isso em texto, o dono fecha a caixa achando que consulta
      * depois, e descobre na porta do evento que não dá.
+     *
+     * `nomeAparelho`, quando vem, entra no título da caixa. Achado da revisão
+     * final: com vários aparelhos configurados, gerar um código novo antes de
+     * fechar a caixa do anterior é como um código acaba digitado no celular
+     * errado — o título genérico "Código deste aparelho" não dizia QUAL.
      */
-    function mostrarCodigo(codigo) {
+    function mostrarCodigo(codigo, nomeAparelho) {
+        $('codigo-titulo').textContent = nomeAparelho
+            ? ('Código de "' + nomeAparelho + '"') : 'Código deste aparelho';
         $('codigo-valor').textContent = codigo;
         $('caixa-codigo').classList.remove('sumindo');
     }
@@ -256,7 +345,7 @@
         return gravar('/eventos/' + estado.evento_id + '/aparelhos',
                       { nome: nome, setores: setores }, 'POST')
             .then(function (r) {
-                mostrarCodigo(r.codigo);
+                mostrarCodigo(r.codigo, nome);
                 return carregarPainel().then(function () { return r; });
             });
     }
@@ -272,9 +361,11 @@
      * isso o código continua na tela depois do redesenho.
      */
     function novoCodigo(aparelho_id) {
+        var aparelho = (estado.painel.aparelhos || [])
+            .find(function (a) { return a.id === aparelho_id; });
         return gravar('/aparelhos/' + aparelho_id + '/codigo', {}, 'POST')
             .then(function (r) {
-                mostrarCodigo(r.codigo);
+                mostrarCodigo(r.codigo, aparelho && aparelho.nome);
                 return carregarPainel().then(function () { return r; });
             });
     }
@@ -314,7 +405,16 @@
         return gravar('/eventos/' + estado.evento_id + '/codigos',
                       { codigos: codigos, setor_id: setor_id }, 'POST')
             .then(function (r) {
-                avisar(r.gravados + ' códigos entraram na lista deste setor.', 'ok');
+                // `gravados` e `ja_existiam` juntos: reenviar a mesma lista —
+                // o que o dono faz depois de escolher o setor errado — não
+                // pode parabenizá-lo com "42 códigos entraram" quando zero
+                // linha nova foi escrita.
+                var msg = r.gravados + ' código' + (r.gravados === 1 ? '' : 's')
+                    + ' entraram na lista deste setor.';
+                if (r.ja_existiam) {
+                    msg += ' ' + r.ja_existiam + ' já estavam lá.';
+                }
+                avisar(msg, 'ok');
                 return carregarPainel().then(function () { return r; });
             });
     }
@@ -433,7 +533,8 @@
                 var confirmou = window.confirm(
                     'Revogar "' + a.nome + '"? Isso DESLIGA o aparelho agora — ele para '
                     + 'de validar QR na portaria imediatamente. Gerar outro código não '
-                    + 'faz isso; só revogar desliga.'
+                    + 'faz isso; só revogar desliga. Nesta versão não há como reativar um '
+                    + 'aparelho revogado — para voltar a usar, será preciso criar outro.'
                 );
                 if (!confirmou) { return; }
                 revogarAparelho(a.id).catch(function () { /* já avisado */ });
@@ -476,6 +577,7 @@
             var pedido = new URLSearchParams(location.search).get('evento');
             if (pedido) {
                 estado.evento_id = pedido;
+                restaurarElevacao();
                 mostrar('evento');
                 return carregarPainel();
             }
@@ -529,13 +631,42 @@
         } catch (err) { /* aba anônima */ }
     }
 
+    /**
+     * Lê a elevação de volta do `sessionStorage`, se houver uma válida PARA
+     * ESTE EVENTO. Achado da revisão final: o token era gravado e nunca lido
+     * de volta — "← Meus eventos" e todo link de evento são recarga de
+     * página inteira, então o dono digitava a senha de novo em toda
+     * navegação, e o `sessionStorage` só custava usabilidade sem comprar
+     * nada. Chamada de dentro de `abrir()`, antes de `carregarPainel()`, para
+     * que a faixa e a trava dos campos já saiam corretas no primeiro
+     * `desenhar()`.
+     */
+    function restaurarElevacao() {
+        var bruto = null;
+        try { bruto = sessionStorage.getItem(CHAVE_ELEVACAO); } catch (err) { return; }
+        if (!bruto) { return; }
+
+        var e;
+        try { e = JSON.parse(bruto); } catch (err) { return; }
+        if (!e || e.evento_id !== estado.evento_id) {
+            // Token de outro evento nesta mesma aba: não é deste evento, e
+            // não é o caso de apagar o que pode servir a OUTRA aba/evento.
+            return;
+        }
+        if (!(e.expira_em * 1000 > Date.now())) {
+            guardarElevacao(null);   // vencida: não deixa lixo no storage
+            return;
+        }
+        estado.elevacao = e;
+    }
+
     function elevar(senha) {
         return AcessoConta.pedir('/eventos/' + estado.evento_id + '/elevar', {
             method: 'POST',
             headers: cabecalhos({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ senha: senha, navegador: AcessoConta.navegadorId() })
         }).then(function (r) {
-            guardarElevacao({ token: r.token, expira_em: r.expira_em });
+            guardarElevacao({ token: r.token, expira_em: r.expira_em, evento_id: estado.evento_id });
             desenhar();
             return r;
         });
@@ -721,6 +852,7 @@
         abrir: abrir,
         elevar: elevar,
         gravar: gravar,
+        gravarSetor: gravarSetor,
         sairDaConfiguracao: sairDaConfiguracao,
         mostrarCodigo: mostrarCodigo,
         criarAparelho: criarAparelho,
