@@ -28854,6 +28854,8 @@ async function carregarCorImpressora(printerName) {
         if (selPerfil.value !== (cfg.perfil || '')) selPerfil.value = '';
         selIntento.value = cfg.intento || 'relativo';
         chkAtivo.checked = cfg.ativo === true;
+        _corAjustes = cfg.ajustes && cfg.ajustes.curvas ? cfg.ajustes : AJUSTES_NEUTROS();
+        _refletirAjustesNaTela();
         atualizarStatusCor();
     } catch (e) {
         console.warn('[cores] Falha ao carregar perfis ICC:', e);
@@ -28865,14 +28867,18 @@ function atualizarStatusCor() {
     const chkAtivo = document.getElementById('ped-print-cor-ativo');
     const selPerfil = document.getElementById('ped-print-cor-perfil');
     if (!st) return;
+    const temAjustes = typeof _ajustesSaoNeutros === 'function' && !_ajustesSaoNeutros(_corAjustes);
     if (!chkAtivo?.checked) {
-        st.textContent = 'Desligado: a impressão sai sem conversão de cores, como sempre saiu.';
+        st.textContent = 'Desligado: a impressão sai sem conversão de cores nem ajustes, como sempre saiu.';
     } else if (!selPerfil?.value) {
-        st.textContent = 'Ligado, mas sem perfil escolhido: nada muda na impressão até escolher um.';
+        st.textContent = temAjustes
+            ? 'Sem perfil, mas os ajustes de cor valem nas impressões desta impressora.'
+            : 'Ligado, mas sem perfil nem ajustes: nada muda na impressão até configurar algo.';
     } else {
         const p = (_corPerfisCache || []).find(x => x.filename === selPerfil.value);
         st.textContent = `As cores desta impressora serão convertidas para "${p ? p.nome : selPerfil.value}"` +
-            (p && p.classe ? ` (${p.classe})` : '') + ' na hora de imprimir.';
+            (p && p.classe ? ` (${p.classe})` : '') +
+            (temAjustes ? ', com os ajustes de cor aplicados antes.' : ' na hora de imprimir.');
     }
 }
 
@@ -28884,7 +28890,8 @@ async function salvarCorImpressora() {
         mapa[printerName] = {
             perfil: document.getElementById('ped-print-cor-perfil')?.value || '',
             intento: document.getElementById('ped-print-cor-intento')?.value || 'relativo',
-            ativo: document.getElementById('ped-print-cor-ativo')?.checked === true
+            ativo: document.getElementById('ped-print-cor-ativo')?.checked === true,
+            ajustes: _corAjustes
         };
         await fetch('/api/printers/icc-map', {
             method: 'POST',
@@ -28919,6 +28926,241 @@ async function enviarPerfilIcc(input) {
     } finally {
         input.value = '';
     }
+}
+
+// ──── Ajustes de cor (saturacao, brilho, contraste, curvas) ─────────────────
+// A matematica daqui ESPELHA a do aplicar_ajustes() do color_profiles.py:
+// ordem saturacao -> brilho -> contraste -> curvas (master, depois canal),
+// interpolacao LINEAR nas curvas. Mudou la, muda aqui — senao a previa mente.
+
+const CURVA_NEUTRA = () => [[0, 0], [255, 255]];
+const AJUSTES_NEUTROS = () => ({
+    saturacao: 100, brilho: 0, contraste: 0,
+    curvas: { master: CURVA_NEUTRA(), r: CURVA_NEUTRA(), g: CURVA_NEUTRA(), b: CURVA_NEUTRA() }
+});
+
+let _corAjustes = AJUSTES_NEUTROS();
+let _corCanalAtivo = 'master';
+let _corSaveTimer = null;
+
+function _lutCurvaJS(pontos) {
+    const pts = (pontos && pontos.length ? pontos : CURVA_NEUTRA())
+        .map(([x, y]) => [Math.max(0, Math.min(255, Math.round(x))), Math.max(0, Math.min(255, Math.round(y)))])
+        .sort((a, b) => a[0] - b[0]);
+    const lut = new Array(256);
+    for (let v = 0; v < 256; v++) {
+        if (v <= pts[0][0]) { lut[v] = pts[0][1]; continue; }
+        if (v >= pts[pts.length - 1][0]) { lut[v] = pts[pts.length - 1][1]; continue; }
+        for (let i = 0; i < pts.length - 1; i++) {
+            const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+            if (v >= x0 && v <= x1) {
+                lut[v] = x1 === x0 ? y1 : Math.round(y0 + (v - x0) * (y1 - y0) / (x1 - x0));
+                break;
+            }
+        }
+    }
+    return lut;
+}
+
+function _ajustesSaoNeutros(a) {
+    if (!a) return true;
+    if ((a.saturacao ?? 100) !== 100 || (a.brilho ?? 0) !== 0 || (a.contraste ?? 0) !== 0) return false;
+    for (const canal of ['master', 'r', 'g', 'b']) {
+        const lut = _lutCurvaJS(a.curvas?.[canal]);
+        for (let v = 0; v < 256; v++) if (lut[v] !== v) return false;
+    }
+    return true;
+}
+
+function aplicarAjustesImageData(data, a) {
+    // data: Uint8ClampedArray RGBA. Mesma ordem do Python.
+    const sat = (a.saturacao ?? 100) / 100;
+    const brilho = (a.brilho ?? 0) * 1.28;
+    const k = ((a.contraste ?? 0) + 100) / 100;
+    const lutM = _lutCurvaJS(a.curvas?.master);
+    const lutR = _lutCurvaJS(a.curvas?.r), lutG = _lutCurvaJS(a.curvas?.g), lutB = _lutCurvaJS(a.curvas?.b);
+    const bc = v => Math.max(0, Math.min(255, Math.round((v + brilho - 128) * k + 128)));
+    for (let i = 0; i < data.length; i += 4) {
+        let r = data[i], g = data[i + 1], b = data[i + 2];
+        if (sat !== 1) {
+            const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+            r = Math.max(0, Math.min(255, Math.round(luma + (r - luma) * sat)));
+            g = Math.max(0, Math.min(255, Math.round(luma + (g - luma) * sat)));
+            b = Math.max(0, Math.min(255, Math.round(luma + (b - luma) * sat)));
+        }
+        data[i]     = lutR[lutM[bc(r)]];
+        data[i + 1] = lutG[lutM[bc(g)]];
+        data[i + 2] = lutB[lutM[bc(b)]];
+    }
+}
+
+// ─── faixa de teste da previa ───
+function _desenharFaixaTeste(ctx, w, h) {
+    // metade de cima: gradiente de cinza; metade de baixo: cores e tons de pele
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, '#000'); grad.addColorStop(1, '#fff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h / 2);
+    const cores = ['#ef4444', '#22c55e', '#3b82f6', '#06b6d4', '#d946ef', '#eab308', '#f1c27d', '#8d5524'];
+    const pw = w / cores.length;
+    cores.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(i * pw, h / 2, pw + 1, h / 2); });
+}
+
+function desenharPreviaCor() {
+    const antes = document.getElementById('ped-cor-previa-antes');
+    const depois = document.getElementById('ped-cor-previa-depois');
+    if (!antes || !depois) return;
+    const ctxA = antes.getContext('2d');
+    _desenharFaixaTeste(ctxA, antes.width, antes.height);
+    const ctxD = depois.getContext('2d');
+    _desenharFaixaTeste(ctxD, depois.width, depois.height);
+    const img = ctxD.getImageData(0, 0, depois.width, depois.height);
+    aplicarAjustesImageData(img.data, _corAjustes);
+    ctxD.putImageData(img, 0, 0);
+}
+
+// ─── editor de curvas ───
+const _CANAL_COR = { master: '#f1f5f9', r: '#f87171', g: '#4ade80', b: '#60a5fa' };
+let _curvaArrastando = -1;
+
+function desenharCurvaCor() {
+    const cv = document.getElementById('ped-cor-curva-canvas');
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    // grade nos quartos
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = 1;
+    for (let q = 1; q < 4; q++) {
+        ctx.beginPath(); ctx.moveTo(W * q / 4, 0); ctx.lineTo(W * q / 4, H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, H * q / 4); ctx.lineTo(W, H * q / 4); ctx.stroke();
+    }
+    // diagonal neutra de referencia
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, 0); ctx.stroke();
+    ctx.setLineDash([]);
+    // curva do canal ativo
+    const lut = _lutCurvaJS(_corAjustes.curvas[_corCanalAtivo]);
+    ctx.strokeStyle = _CANAL_COR[_corCanalAtivo];
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let v = 0; v < 256; v++) {
+        const x = v / 255 * W, y = H - lut[v] / 255 * H;
+        v === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // pontos
+    for (const [px, py] of _corAjustes.curvas[_corCanalAtivo]) {
+        ctx.fillStyle = _CANAL_COR[_corCanalAtivo];
+        ctx.beginPath();
+        ctx.arc(px / 255 * W, H - py / 255 * H, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function trocarCanalCurva(canal) {
+    _corCanalAtivo = canal;
+    for (const c of ['master', 'r', 'g', 'b']) {
+        const btn = document.getElementById('ped-cor-canal-' + c);
+        if (btn) btn.style.background = c === canal ? 'rgba(255,255,255,0.12)' : 'transparent';
+    }
+    desenharCurvaCor();
+}
+
+function _curvaPontoDoEvento(cv, ev) {
+    const rect = cv.getBoundingClientRect();
+    const x = Math.max(0, Math.min(255, Math.round((ev.clientX - rect.left) / rect.width * 255)));
+    const y = Math.max(0, Math.min(255, Math.round((1 - (ev.clientY - rect.top) / rect.height) * 255)));
+    return [x, y];
+}
+
+function _instalarEditorCurvas() {
+    const cv = document.getElementById('ped-cor-curva-canvas');
+    if (!cv || cv._curvaInstalada) return;
+    cv._curvaInstalada = true;
+
+    cv.addEventListener('mousedown', ev => {
+        const [x, y] = _curvaPontoDoEvento(cv, ev);
+        const pontos = _corAjustes.curvas[_corCanalAtivo];
+        let idx = pontos.findIndex(([px, py]) => Math.abs(px - x) < 12 && Math.abs(py - y) < 12);
+        if (idx === -1) {
+            pontos.push([x, y]);
+            pontos.sort((a, b) => a[0] - b[0]);
+            idx = pontos.findIndex(([px]) => px === x);
+        }
+        _curvaArrastando = idx;
+    });
+    cv.addEventListener('mousemove', ev => {
+        if (_curvaArrastando === -1) return;
+        const [x, y] = _curvaPontoDoEvento(cv, ev);
+        const pontos = _corAjustes.curvas[_corCanalAtivo];
+        pontos[_curvaArrastando] = [x, y];
+        desenharCurvaCor();
+    });
+    const soltar = () => {
+        if (_curvaArrastando === -1) return;
+        _curvaArrastando = -1;
+        _corAjustes.curvas[_corCanalAtivo].sort((a, b) => a[0] - b[0]);
+        desenharCurvaCor();
+        desenharPreviaCor();
+        agendarSalvarAjustesCor();
+    };
+    cv.addEventListener('mouseup', soltar);
+    cv.addEventListener('mouseleave', soltar);
+    cv.addEventListener('dblclick', ev => {
+        const [x, y] = _curvaPontoDoEvento(cv, ev);
+        const pontos = _corAjustes.curvas[_corCanalAtivo];
+        if (pontos.length <= 2) return;   // uma curva precisa de 2 pontos
+        const idx = pontos.findIndex(([px, py]) => Math.abs(px - x) < 12 && Math.abs(py - y) < 12);
+        if (idx !== -1) {
+            pontos.splice(idx, 1);
+            desenharCurvaCor();
+            desenharPreviaCor();
+            agendarSalvarAjustesCor();
+        }
+    });
+}
+
+// ─── sliders, estado e persistencia ───
+function _lerSlidersAjustes() {
+    _corAjustes.saturacao = parseInt(document.getElementById('ped-cor-saturacao')?.value ?? 100);
+    _corAjustes.brilho = parseInt(document.getElementById('ped-cor-brilho')?.value ?? 0);
+    _corAjustes.contraste = parseInt(document.getElementById('ped-cor-contraste')?.value ?? 0);
+}
+
+function _refletirAjustesNaTela() {
+    const s = document.getElementById('ped-cor-saturacao');
+    const b = document.getElementById('ped-cor-brilho');
+    const c = document.getElementById('ped-cor-contraste');
+    if (s) { s.value = _corAjustes.saturacao; document.getElementById('ped-cor-saturacao-val').textContent = _corAjustes.saturacao; }
+    if (b) { b.value = _corAjustes.brilho; document.getElementById('ped-cor-brilho-val').textContent = _corAjustes.brilho; }
+    if (c) { c.value = _corAjustes.contraste; document.getElementById('ped-cor-contraste-val').textContent = _corAjustes.contraste; }
+    _instalarEditorCurvas();
+    trocarCanalCurva(_corCanalAtivo);
+    desenharPreviaCor();
+}
+
+function onAjusteCorInput() {
+    _lerSlidersAjustes();
+    document.getElementById('ped-cor-saturacao-val').textContent = _corAjustes.saturacao;
+    document.getElementById('ped-cor-brilho-val').textContent = _corAjustes.brilho;
+    document.getElementById('ped-cor-contraste-val').textContent = _corAjustes.contraste;
+    desenharPreviaCor();
+    agendarSalvarAjustesCor();
+}
+
+function resetarAjustesCor() {
+    _corAjustes = AJUSTES_NEUTROS();
+    _refletirAjustesNaTela();
+    agendarSalvarAjustesCor();
+}
+
+function agendarSalvarAjustesCor() {
+    // debounce: arrastar um slider dispara dezenas de eventos por segundo
+    clearTimeout(_corSaveTimer);
+    _corSaveTimer = setTimeout(() => salvarCorImpressora(), 400);
 }
 
 // Ao mudar impressora no painel lateral → carregar opções do driver
