@@ -517,3 +517,64 @@ def test_criar_aparelho_sem_elevacao_e_recusado(banco):
     with pytest.raises(HTTPException) as e:
         cfg._criar_aparelho(EVENTO, DONO, None, NAV, {"nome": "X", "setores": []})
     assert e.value.status_code == 401
+
+
+# ── Os códigos do cliente ───────────────────────────────────────────────────
+
+def test_importar_codigos_do_cliente(banco, elevado):
+    r = cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                              {"codigos": ["STAFF01", "STAFF02"], "setor_id": SETOR})
+    assert r["gravados"] == 2
+    assert {c["codigo_visivel"] for c in banco.credenciais} == {"STAFF01", "STAFF02"}
+    assert all(c["origem"] == "cliente" for c in banco.credenciais)
+    assert all(c["setor_id"] == SETOR for c in banco.credenciais)
+
+
+def test_o_codigo_do_cliente_fica_legivel_e_o_nosso_nunca(banco, elevado):
+    """`codigo_visivel` so existe com origem='cliente'. E a linha divisoria
+    entre o que e do cliente e o que e nosso."""
+    cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                          {"codigos": ["CORTESIA1"], "setor_id": SETOR})
+    for c in banco.credenciais:
+        assert (c.get("codigo_visivel") is not None) == (c["origem"] == "cliente")
+
+
+def test_o_hash_nao_e_o_codigo(banco, elevado):
+    cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                          {"codigos": ["STAFF01"], "setor_id": SETOR})
+    assert len(banco.credenciais[0]["codigo_hash"]) == 64
+    assert banco.credenciais[0]["codigo_hash"] != "STAFF01"
+
+
+def test_repetidos_no_mesmo_envio_viram_um(banco, elevado):
+    r = cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                              {"codigos": ["A1", "a1", " A1 ", "B2"], "setor_id": SETOR})
+    assert r["gravados"] == 2
+
+
+def test_linha_vazia_e_ignorada(banco, elevado):
+    """Colar de uma planilha traz linha em branco. Isso nao e erro do cliente."""
+    r = cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                              {"codigos": ["A1", "", "   ", "B2"], "setor_id": SETOR})
+    assert r["gravados"] == 2
+
+
+def test_lista_grande_demais_e_recusada(banco, elevado):
+    with pytest.raises(HTTPException) as e:
+        cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                              {"codigos": [f"C{i}" for i in range(5001)], "setor_id": SETOR})
+    assert e.value.status_code == 413
+
+
+def test_setor_de_outro_evento_e_recusado(banco, elevado):
+    with pytest.raises(HTTPException) as e:
+        cfg._importar_codigos(EVENTO, DONO, elevado, NAV,
+                              {"codigos": ["A1"], "setor_id": "setor-alheio"})
+    assert e.value.status_code == 422
+
+
+def test_importar_sem_elevacao_e_recusado(banco):
+    with pytest.raises(HTTPException) as e:
+        cfg._importar_codigos(EVENTO, DONO, None, NAV,
+                              {"codigos": ["A1"], "setor_id": SETOR})
+    assert e.value.status_code == 401

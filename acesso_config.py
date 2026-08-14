@@ -456,3 +456,81 @@ def novo_codigo(aparelho_id: str, authorization: str = Header(None),
                 x_elevacao: str = Header(None), x_navegador: str = Header(None)):
     return _novo_codigo(aparelho_id, _usuario_logado(authorization),
                         x_elevacao, x_navegador)
+
+
+# ── Os códigos do próprio cliente ───────────────────────────────────────────
+#
+# Além do ingresso impresso, um evento tem crachá de staff, cortesia e lista
+# VIP — códigos que o CLIENTE fornece, não os que o QR Ideal gera. O dono cola
+# a lista no celular e escolhe o setor. A linha que não se borra: o código do
+# QR Ideal nunca aparece em claro; o código do cliente é dele, e ele precisa
+# administrar a própria lista — por isso fica legível em `codigo_visivel`.
+
+MAXIMO_CODIGOS = 5000
+
+TAMANHO_MAXIMO_DO_CODIGO = 64
+
+
+def _importar_codigos(evento_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    """Grava os códigos que o CLIENTE forneceu: staff, cortesia, lista VIP.
+
+    Eles são hasheados com o sal do EVENTO — não com o sal de um pedido, que é
+    o que os códigos do QR Ideal usam. E ficam legíveis em `codigo_visivel`,
+    porque são do cliente e ele precisa administrar a própria lista.
+
+    Reenviar a mesma lista é inofensivo: a chave única
+    `uq_acesso_credencial_hash_simples` ignora o repetido.
+    """
+    _evento_do_dono(evento_id, usuario)
+    _exigir_elevacao(evento_id, usuario, elevacao, navegador)
+
+    brutos = corpo.get("codigos") or []
+    if len(brutos) > MAXIMO_CODIGOS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"envie no maximo {MAXIMO_CODIGOS} codigos por vez",
+        )
+
+    setor_id = str(corpo.get("setor_id") or "")
+    if setor_id not in _setores_do_evento(evento_id):
+        raise HTTPException(status_code=422, detail="escolha um setor deste evento")
+
+    # Aparar, subir para maiúscula e reduzir repetidos preservando a ordem em
+    # que o cliente colou — a ordem é a única pista que ele tem para conferir.
+    vistos, limpos = set(), []
+    for bruto in brutos:
+        codigo = str(bruto or "").strip().upper()
+        if not codigo or codigo in vistos:
+            continue
+        if len(codigo) > TAMANHO_MAXIMO_DO_CODIGO:
+            raise HTTPException(
+                status_code=422,
+                detail=f"ha codigo com mais de {TAMANHO_MAXIMO_DO_CODIGO} caracteres",
+            )
+        vistos.add(codigo)
+        limpos.append(codigo)
+
+    if not limpos:
+        return {"gravados": 0}
+
+    sal = _sal_do_evento(evento_id)
+    supabase(
+        "POST",
+        "producao_acesso_credenciais?on_conflict=codigo_hash",
+        [{
+            "evento_id": evento_id,
+            "setor_id": setor_id,
+            "codigo_hash": qr_ideal.hash_codigo(c, sal),
+            "codigo_visivel": c,
+            "origem": "cliente",
+        } for c in limpos],
+        prefer="resolution=ignore-duplicates,return=minimal",
+    )
+    return {"gravados": len(limpos)}
+
+
+@router.post("/eventos/{evento_id}/codigos")
+def importar_codigos(evento_id: str, corpo: dict, authorization: str = Header(None),
+                     x_elevacao: str = Header(None), x_navegador: str = Header(None)):
+    return _importar_codigos(evento_id, _usuario_logado(authorization),
+                             x_elevacao, x_navegador, corpo)
