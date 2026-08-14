@@ -137,8 +137,21 @@ def contar(path: str) -> int:
         "Authorization": f"Bearer {SERVICE_KEY}",
         "Prefer": "count=exact",
     })
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        faixa = resp.headers.get("Content-Range") or ""
+
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            faixa = resp.headers.get("Content-Range") or ""
+    except urllib.error.HTTPError as e:
+        # Mesmo padrão do supabase(): sem o corpo do erro, o número que a tela
+        # compara com a quantidade encomendada vira um 500 pelado, e quem
+        # investigar não tem por onde começar.
+        detalhe = ""
+        try:
+            detalhe = e.read().decode("utf-8")[:400]
+        except Exception:
+            pass
+        raise RuntimeError(f"Supabase GET {path}: HTTP {e.code} {detalhe}") from e
+
     # "0-0/1234", ou "*/0" quando não há linha nenhuma.
     total = faixa.split("/")[-1]
     return int(total) if total.isdigit() else 0

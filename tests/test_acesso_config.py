@@ -40,6 +40,9 @@ class FakeBanco:
         self.credenciais = []
         self.pedidos = [{"pedido_id_int": 18560, "evento_id": EVENTO,
                          "publicado_em": "2026-08-14T00:00:00Z", "total_credenciais": 5000}]
+        # Registro das chamadas, para o teste que confere que um evento sem
+        # aparelho nem chega a consultar `producao_acesso_dispositivo_setores`.
+        self.chamadas = []
 
     def _tabela(self, path):
         nome = path.split("?")[0]
@@ -69,6 +72,7 @@ class FakeBanco:
         return None
 
     def __call__(self, method, path, body=None, prefer=None):
+        self.chamadas.append((method, path))
         alvo = self._tabela(path)
         if method == "GET":
             linhas = [dict(l) for l in alvo]
@@ -168,6 +172,40 @@ def test_o_painel_conta_os_codigos_do_cliente(banco):
         {"id": "c2", "setor_id": SETOR, "origem": "qr_ideal"},
     ]
     assert cfg._painel(EVENTO)["codigos_cliente"] == 1
+
+
+def test_evento_sem_aparelho_nao_consulta_vinculos(banco):
+    """`in.()` vazio e URL malformada — a consulta tem de nem sair.
+
+    Sem este cuidado, um evento sem catraca cadastrada mandaria
+    `dispositivo_id=in.()` para o PostgREST a cada abertura do painel.
+    """
+    cfg._painel(EVENTO)
+    consultou_vinculos = any(
+        p.startswith("producao_acesso_dispositivo_setores") for _m, p in banco.chamadas
+    )
+    assert not consultou_vinculos
+
+
+def test_vinculos_de_aparelho_sao_filtrados_por_ele_e_nao_pelo_sistema_inteiro(banco):
+    """A consulta escopada ao(s) aparelho(s) do evento, nao a tabela inteira.
+
+    Antes deste ajuste, `_painel` trazia os vinculos de TODOS os eventos do
+    sistema a cada abertura da tela e filtrava em Python depois — correto no
+    resultado, mas uma leitura de tabela inteira que piora sozinha conforme
+    eventos se acumulam.
+    """
+    banco.dispositivos = [{"id": APARELHO, "evento_id": EVENTO, "nome": "Catraca 1",
+                            "status": "ativo", "ultimo_visto": None}]
+    banco.dispositivo_setores = [{"dispositivo_id": APARELHO, "setor_id": SETOR}]
+
+    painel = cfg._painel(EVENTO)
+
+    consultas = [p for _m, p in banco.chamadas
+                 if p.startswith("producao_acesso_dispositivo_setores")]
+    assert len(consultas) == 1
+    assert f"dispositivo_id=in.({APARELHO})" in consultas[0]
+    assert painel["aparelhos"][0]["setores"] == [SETOR]
 
 
 # ── A montagem do router ────────────────────────────────────────────────────

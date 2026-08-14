@@ -20,7 +20,6 @@ mas isso é a parte 3b, e não passa por aqui.
 
 from fastapi import APIRouter, Header, HTTPException
 
-import acesso_elevacao
 from acesso_api import _usuario_logado, contar, supabase
 
 router = APIRouter(prefix="/api/acesso", tags=["acesso"])
@@ -70,10 +69,16 @@ def _painel(evento_id: str) -> dict:
         f"producao_acesso_dispositivos?evento_id=eq.{evento_id}"
         "&select=id,nome,status,ultimo_visto&order=nome.asc",
     ) or []
-    vinculos = supabase(
+    # Escopado aos aparelhos já buscados acima: sem o `in.(...)`, esta consulta
+    # trazia os vínculos de TODOS os eventos do sistema a cada abertura do
+    # painel, e piorava sozinha conforme eventos se acumulassem. Evento sem
+    # aparelho nenhum pula a ida ao banco — `in.()` vazio é URL malformada.
+    ids_aparelhos = [str(a["id"]) for a in aparelhos]
+    vinculos = (supabase(
         "GET",
-        "producao_acesso_dispositivo_setores?select=dispositivo_id,setor_id",
-    ) or []
+        f"producao_acesso_dispositivo_setores?dispositivo_id=in.({','.join(ids_aparelhos)})"
+        "&select=dispositivo_id,setor_id",
+    ) or []) if ids_aparelhos else []
     for a in aparelhos:
         a["setores"] = [v["setor_id"] for v in vinculos
                         if str(v["dispositivo_id"]) == str(a["id"])]

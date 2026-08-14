@@ -289,6 +289,124 @@ def test_rede_fora_nao_vira_credencial_invalida(monkeypatch):
     assert e.value.status_code == 503
 
 
+# ─── contar() ──────────────────────────────────────────────────────────────
+#
+# O número que `contar()` devolve é o que a tela do dono compara com a
+# quantidade encomendada — a única pista visível de que uma tiragem não
+# terminou de publicar. Todo ponto de chamada da Tarefa 3 passa por um
+# `contar` monkeypatchado, então sem estes testes o caminho real (a junção
+# `?`/`&`, o `Prefer: count=exact`, a leitura do `Content-Range`) não era
+# exercitado por teste nenhum.
+
+
+class _RespostaFake:
+    """Um `http.client.HTTPResponse` de mentira, só o que `contar()` usa."""
+
+    def __init__(self, content_range):
+        self._content_range = content_range
+
+    @property
+    def headers(self):
+        class _Headers:
+            def __init__(self, valor):
+                self._valor = valor
+
+            def get(self, chave, default=None):
+                if chave == "Content-Range" and self._valor is not None:
+                    return self._valor
+                return default
+
+        return _Headers(self._content_range)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _grava_requisicao(monkeypatch, content_range):
+    """Substitui urlopen por um espião que guarda a `Request` recebida.
+
+    Fixa `SERVICE_KEY` para o teste não depender de haver (ou não) um
+    `.env.local` na máquina que roda a suíte — em CI ela normalmente falta.
+    """
+    monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave-de-teste")
+    capturado = {}
+
+    def fake_urlopen(req, timeout=None):
+        capturado["req"] = req
+        return _RespostaFake(content_range)
+
+    monkeypatch.setattr(acesso_api.urllib.request, "urlopen", fake_urlopen)
+    return capturado
+
+
+def test_contar_junta_com_interrogacao_quando_o_caminho_nao_tem_filtro(monkeypatch):
+    capturado = _grava_requisicao(monkeypatch, "0-0/1")
+    acesso_api.contar("producao_acesso_credenciais")
+    assert capturado["req"].full_url == (
+        f"{acesso_api.db.SUPABASE_URL}/rest/v1/producao_acesso_credenciais?select=id&limit=1"
+    )
+
+
+def test_contar_junta_com_e_comercial_quando_o_caminho_ja_tem_filtro(monkeypatch):
+    capturado = _grava_requisicao(monkeypatch, "0-0/1")
+    acesso_api.contar("producao_acesso_credenciais?setor_id=eq.abc")
+    assert capturado["req"].full_url == (
+        f"{acesso_api.db.SUPABASE_URL}/rest/v1/"
+        "producao_acesso_credenciais?setor_id=eq.abc&select=id&limit=1"
+    )
+
+
+def test_contar_manda_o_prefer_count_exact(monkeypatch):
+    capturado = _grava_requisicao(monkeypatch, "0-0/1")
+    acesso_api.contar("producao_acesso_credenciais")
+    assert capturado["req"].get_header("Prefer") == "count=exact"
+
+
+def test_contar_le_o_total_do_content_range(monkeypatch):
+    _grava_requisicao(monkeypatch, "0-0/1234")
+    assert acesso_api.contar("producao_acesso_credenciais") == 1234
+
+
+def test_contar_zero_linhas_e_asterisco_barra_zero(monkeypatch):
+    _grava_requisicao(monkeypatch, "*/0")
+    assert acesso_api.contar("producao_acesso_credenciais") == 0
+
+
+def test_contar_sem_cabecalho_ou_irreconhecivel_e_zero_sem_levantar(monkeypatch):
+    _grava_requisicao(monkeypatch, None)
+    assert acesso_api.contar("producao_acesso_credenciais") == 0
+
+    _grava_requisicao(monkeypatch, "isso-nao-e-um-content-range")
+    assert acesso_api.contar("producao_acesso_credenciais") == 0
+
+
+def test_contar_erro_do_postgrest_vira_runtimeerror_diagnosticavel(monkeypatch):
+    """Mesmo padrão do `supabase()`: sem isso, o erro sobe cru e vira 500 pelado.
+
+    O corpo da resposta do PostgREST diz o que houve — sem ele, quem for
+    investigar por que a tela mostra a contagem errada não tem por onde
+    começar.
+    """
+    import io
+    import urllib.error
+
+    monkeypatch.setattr(acesso_api, "SERVICE_KEY", "chave-de-teste")
+
+    def fake_urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(
+            req.full_url, 500, "erro interno", None, io.BytesIO(b'{"message":"tabela travada"}')
+        )
+
+    monkeypatch.setattr(acesso_api.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(RuntimeError) as e:
+        acesso_api.contar("producao_acesso_credenciais")
+    assert "500" in str(e.value)
+    assert "tabela travada" in str(e.value)
+
+
 def test_a_url_do_qr_aponta_para_a_origem_do_painel():
     """Tem de ser o domínio que a estação e a Vercel servem de verdade."""
     import security_config
