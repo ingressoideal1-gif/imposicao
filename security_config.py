@@ -98,6 +98,7 @@ PAINEL_ARQUIVOS = [
     "qr-ideal-colunas.js",
     "qr-ideal-hash.js",
     "fonte-canvas.js",
+    "fonte-nome.js",
     "csv-editor.js",
     "texto-ajuste.js",
     "foto-lib.js",
