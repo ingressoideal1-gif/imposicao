@@ -84,6 +84,7 @@ PAINEL_ARQUIVOS = [
     "cliente.html",
     "evento.html",
     "evento.js",
+    "acesso-conta.js",
     "script.js",
     "pedido.js",
     "cliente.js",

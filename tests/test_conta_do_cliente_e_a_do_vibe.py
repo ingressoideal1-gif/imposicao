@@ -29,6 +29,17 @@ def _ler(nome):
         return f.read()
 
 
+def _login_do_cliente():
+    """A superfície inteira do login do cliente.
+
+    Desde a Tarefa 8, `evento.js` não fala com o Supabase direto: quem faz
+    isso é `acesso-conta.js`, compartilhado com `controle.html`. Testar só
+    `evento.js` checaria um arquivo que, de propósito, não tem mais essa
+    lógica — a extração é o ponto da tarefa, não uma regressão.
+    """
+    return _ler("evento.js") + _ler("acesso-conta.js")
+
+
 def test_o_mesmo_projeto_supabase_do_vibe():
     """Se os dois projetos divergissem, o login do cliente pararia de valer.
 
@@ -40,18 +51,18 @@ def test_o_mesmo_projeto_supabase_do_vibe():
 
     # A tela do cliente não pode criar um client próprio apontando para outro
     # lugar: ela usa o `supabaseClient` que este arquivo monta.
-    evento = _ler("evento.js")
-    assert "createClient" not in evento
-    assert "supabaseClient.auth" in evento
+    login = _login_do_cliente()
+    assert "createClient" not in login
+    assert "supabaseClient.auth" in login
 
 
 def test_a_tela_do_cliente_nao_cria_conta():
     """O `signUp` é a única forma de nascer uma identidade fora do Vibe."""
-    evento = _ler("evento.js")
-    assert "signUp" not in evento, (
-        "evento.js oferece criacao de conta; a conta tem de ser a do Vibe"
+    login = _login_do_cliente()
+    assert "signUp" not in login, (
+        "o login do cliente oferece criacao de conta; a conta tem de ser a do Vibe"
     )
-    assert "signInWithPassword" in evento
+    assert "signInWithPassword" in login
 
 
 def test_o_painel_da_grafica_tambem_nao_cria_conta():
@@ -73,5 +84,4 @@ def test_a_tela_diz_de_que_conta_esta_falando():
 
 def test_quem_esqueceu_a_senha_tem_saida_sem_criar_outra_conta():
     """A recuperacao age sobre a conta que existe; criar outra e o erro."""
-    evento = _ler("evento.js")
-    assert "resetPasswordForEmail" in evento
+    assert "resetPasswordForEmail" in _login_do_cliente()

@@ -21,11 +21,6 @@
 (function () {
     'use strict';
 
-    // Mesma regra do resto do app: servido pela estação, fala com a estação;
-    // servido pela Vercel, fala com o motor na nuvem.
-    var ehLocal = ['localhost', '127.0.0.1'].indexOf(location.hostname) >= 0;
-    var API = (ehLocal || location.port === '9000') ? '' : 'https://imposicao.onrender.com';
-
     var TOKEN = new URLSearchParams(location.search).get('t') || '';
     var esqueleto = null;
 
@@ -39,21 +34,6 @@
         el.classList.remove('sumindo');
     }
 
-    function pedir(caminho, opcoes) {
-        return fetch(API + '/api/acesso' + caminho, opcoes).then(function (r) {
-            return r.json().catch(function () { return {}; }).then(function (corpo) {
-                if (!r.ok) throw new Error(corpo.detail || ('Erro ' + r.status));
-                return corpo;
-            });
-        });
-    }
-
-    function sessao() {
-        return supabaseClient.auth.getSession().then(function (r) {
-            return (r.data && r.data.session) || null;
-        });
-    }
-
     // ── 1. Trocar o token pelo esqueleto ─────────────────────────────────────
 
     function carregar() {
@@ -63,13 +43,13 @@
             falhar('erro-texto', 'O endereço veio sem o código do QR. Leia o QR de novo com a câmera.');
             return;
         }
-        pedir('/evento?t=' + encodeURIComponent(TOKEN))
+        AcessoConta.pedir('/evento?t=' + encodeURIComponent(TOKEN))
             .then(function (d) {
                 esqueleto = d;
                 desenhar(d);
                 esconder('carregando');
                 mostrar('pedido');
-                return sessao();
+                return AcessoConta.sessao();
             })
             .then(function (s) { if (s) entrou(s); })
             .catch(function (e) {
@@ -117,22 +97,14 @@
         esconder('erro-login');
         $('btn-entrar').disabled = $('btn-esqueci').disabled = true;
 
-        supabaseClient.auth.signInWithPassword({ email: email, password: senha })
-            .then(function (r) {
+        AcessoConta.entrar(email, senha)
+            .then(function (sess) {
                 $('btn-entrar').disabled = $('btn-esqueci').disabled = false;
-                if (r.error) {
-                    // A mensagem do Supabase vem em inglês e fala de "credentials".
-                    // Quem lê é o cliente, no celular, e o que ele precisa saber é
-                    // QUAL conta tentar.
-                    falhar('erro-login', 'E-mail ou senha não conferem. Use a mesma conta do Vibe, '
-                        + 'onde você acompanha os seus pedidos.');
-                    return;
-                }
-                if (!r.data.session) {
-                    falhar('erro-login', 'Não consegui abrir a sessão. Tente de novo em instantes.');
-                    return;
-                }
-                entrou(r.data.session);
+                entrou(sess);
+            })
+            .catch(function (e) {
+                $('btn-entrar').disabled = $('btn-esqueci').disabled = false;
+                falhar('erro-login', e.message);
             });
     }
 
@@ -147,13 +119,9 @@
         }
         esconder('erro-login');
         $('btn-esqueci').disabled = true;
-
-        supabaseClient.auth.resetPasswordForEmail(email).then(function (r) {
+        AcessoConta.esqueciSenha(email).then(function (frase) {
             $('btn-esqueci').disabled = false;
-            // Sempre a mesma resposta, tenha o e-mail conta ou não: responder
-            // diferente diria a um estranho quais e-mails têm cadastro.
-            falhar('erro-login', 'Se este e-mail tiver conta, enviamos o link para trocar a senha. '
-                + 'Depois de trocar, volte a ler este QR.');
+            falhar('erro-login', frase + ' Depois de trocar, volte a ler este QR.');
         });
     }
 
@@ -161,7 +129,7 @@
         esconder('bloco-entrar');
         mostrar('bloco-cadastrar');
 
-        pedir('/meus-eventos', { headers: { Authorization: 'Bearer ' + sess.access_token } })
+        AcessoConta.pedir('/meus-eventos', { headers: { Authorization: 'Bearer ' + sess.access_token } })
             .then(function (d) {
                 var destino = $('destino');
                 (d.eventos || []).forEach(function (ev) {
@@ -181,9 +149,9 @@
         $('btn-cadastrar').disabled = true;
         $('btn-cadastrar').textContent = 'Cadastrando…';
 
-        sessao().then(function (sess) {
+        AcessoConta.sessao().then(function (sess) {
             if (!sess) throw new Error('Sua sessão expirou. Entre de novo.');
-            return pedir('/reivindicar', {
+            return AcessoConta.pedir('/reivindicar', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
