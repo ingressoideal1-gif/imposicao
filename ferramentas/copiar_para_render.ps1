@@ -18,13 +18,22 @@
 .PARAMETER Conferir
   So confere e relata. Nao mexe na area de transferencia.
 
+.PARAMETER Somente
+  Copia UMA variavel e sai, sem esperar Enter. Existe para quem esta dirigindo o
+  script de fora -- um agente, um terminal sem teclado -- e para quem so precisa
+  refazer uma delas.
+
 .EXAMPLE
   .\ferramentas\copiar_para_render.ps1
   .\ferramentas\copiar_para_render.ps1 -Conferir
+  .\ferramentas\copiar_para_render.ps1 -Somente QR_PEDIDO_SEGREDO
 #>
 [CmdletBinding()]
 param(
-    [switch]$Conferir
+    [switch]$Conferir,
+
+    [ValidateSet('SUPABASE_SERVICE_KEY', 'ACESSO_AGENTE_SEGREDO', 'QR_PEDIDO_SEGREDO')]
+    [string]$Somente
 )
 
 $ErrorActionPreference = 'Stop'
@@ -157,17 +166,37 @@ Write-Host '  No Render: Dashboard -> ideal-imposition-api -> Environment.' -For
 Write-Host '  Para cada uma: Add Environment Variable, cole o nome e o valor.'
 Write-Host ''
 
+if ($Somente) {
+    Set-Clipboard -Value $valores[$Somente]
+    Write-Host '  Na area de transferencia: ' -NoNewline
+    Write-Host $Somente -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '  Cole no campo "Value" do Render. O nome, digite ou cole daqui:' -ForegroundColor DarkGray
+    Write-Host "    $Somente"
+    Write-Host ''
+    # Este modo NAO limpa a area de transferencia ao sair, e isso e deliberado:
+    # quem usa o -Somente cola depois, noutra janela, na hora que puder. Limpar
+    # aqui apagaria o valor antes de ele chegar ao destino -- ja aconteceu, e o
+    # sintoma foi "o terceiro nao colou". Quem limpa e o modo interativo, que
+    # sabe quando a colagem terminou porque espera o Enter.
+    exit 0
+}
+
 foreach ($v in $VARIAVEIS) {
     Set-Clipboard -Value $valores[$v.Nome]
-    Write-Host "  Na area de transferencia: " -NoNewline
+    Write-Host '  Na area de transferencia: ' -NoNewline
     Write-Host $v.Nome -ForegroundColor Cyan
     Write-Host '  Cole no Render e tecle Enter aqui para a proxima...' -ForegroundColor DarkGray
     [void](Read-Host)
 }
 
-Set-Clipboard -Value ''
+# Sobrescrever, e nao limpar: o Set-Clipboard do PowerShell 5.1 recusa string
+# vazia com ArgumentNullException, e o -Clear so existe no PowerShell 7. Deixar
+# o segredo na area de transferencia depois de colado seria pior do que
+# qualquer desses detalhes.
+Set-Clipboard -Value '(area de transferencia liberada pelo copiar_para_render)'
 Write-Host ''
-Write-Host '  Area de transferencia limpa.' -ForegroundColor DarkGray
+Write-Host '  Area de transferencia liberada.' -ForegroundColor DarkGray
 Write-Host '  Agora clique em "Save, rebuild, and deploy" no Render.' -ForegroundColor Yellow
 Write-Host '  Quando terminar, confira com:' -ForegroundColor Yellow
 Write-Host '    curl https://imposicao.onrender.com/api/acesso/saude'

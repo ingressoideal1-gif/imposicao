@@ -20,7 +20,8 @@
 #
 
 $raiz = Split-Path -Parent $PSScriptRoot
-. (Join-Path $raiz "ferramentas\copiar_para_render.ps1")
+$script = Join-Path $raiz "ferramentas\copiar_para_render.ps1"
+. $script
 
 # Um JWT de mentira com as proporcoes certas: 43 caracteres de assinatura.
 $assinaturaBoa = "a" * 43
@@ -129,6 +130,34 @@ Describe "Conferencia das variaveis do controle de acesso" {
             $nomes -contains 'ACESSO_AGENTE_SEGREDO' | Should Be $true
             $nomes -contains 'QR_PEDIDO_SEGREDO' | Should Be $true
             $nomes.Count | Should Be 3
+        }
+
+        It "o -Somente aceita as mesmas tres, e nada alem" {
+            # Se as duas listas saissem de sincronia, -Somente recusaria uma
+            # variavel que o script precisa copiar, ou aceitaria um nome que
+            # nao existe no .env.local e copiaria vazio.
+            $texto = Get-Content $script -Raw
+            foreach ($nome in ($VARIAVEIS | ForEach-Object { $_.Nome })) {
+                $texto | Should Match "ValidateSet\([^)]*'$nome'"
+            }
+        }
+    }
+
+    Context "a limpeza da area de transferencia" {
+
+        It "nao usa string vazia, que o PowerShell 5.1 recusa" {
+            # Set-Clipboard -Value '' levanta ArgumentNullException no 5.1, e o
+            # -Clear so existe no PowerShell 7. A falha deixaria o segredo na
+            # area de transferencia depois de colado, que e justamente o que
+            # esta linha existe para evitar.
+            $texto = Get-Content $script -Raw
+            $texto | Should Not Match "Set-Clipboard -Value ''"
+            $texto | Should Not Match 'Set-Clipboard\s+-Clear'
+        }
+
+        It "sobrescreve a area de transferencia no fim do modo interativo" {
+            $texto = Get-Content $script -Raw
+            $texto | Should Match "liberada pelo copiar_para_render"
         }
     }
 }
