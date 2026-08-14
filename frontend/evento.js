@@ -8,6 +8,10 @@
  *   2. pede login, porque o evento fica ligado a uma conta;
  *   3. cria um evento novo — ou anexa a um que a conta já tem.
  *
+ * A conta do passo 2 é a que o cliente já tem no ERP Vibe. Não há cadastro
+ * separado, e esta tela não oferece criar um: os dois sistemas apontam para o
+ * mesmo projeto Supabase, então o mesmo e-mail e a mesma senha já entram aqui.
+ *
  * Nada aqui fala com o banco direto. Toda leitura e escrita passa pelo backend,
  * que é quem tem a chave. O que esta página usa do Supabase é só o login.
  *
@@ -97,7 +101,13 @@
 
     // ── 2. Entrar ────────────────────────────────────────────────────────────
 
-    function entrar(criandoConta) {
+    // A conta é a MESMA do ERP Vibe, e não uma daqui: os dois sistemas usam o
+    // mesmo projeto Supabase, logo o mesmo `auth.users`. Por isso esta tela não
+    // oferece criar conta. Uma conta criada aqui funcionaria — e seria o pior
+    // caso, porque o login passaria e só muito depois alguém descobriria que o
+    // evento, os setores e a portaria ficaram pendurados numa identidade sem
+    // nenhuma relação com o cadastro do cliente no ERP.
+    function entrar() {
         var email = $('email').value.trim();
         var senha = $('senha').value;
         if (!email || !senha) {
@@ -105,22 +115,45 @@
             return;
         }
         esconder('erro-login');
-        $('btn-entrar').disabled = $('btn-criar-conta').disabled = true;
+        $('btn-entrar').disabled = $('btn-esqueci').disabled = true;
 
-        var acao = criandoConta
-            ? supabaseClient.auth.signUp({ email: email, password: senha })
-            : supabaseClient.auth.signInWithPassword({ email: email, password: senha });
+        supabaseClient.auth.signInWithPassword({ email: email, password: senha })
+            .then(function (r) {
+                $('btn-entrar').disabled = $('btn-esqueci').disabled = false;
+                if (r.error) {
+                    // A mensagem do Supabase vem em inglês e fala de "credentials".
+                    // Quem lê é o cliente, no celular, e o que ele precisa saber é
+                    // QUAL conta tentar.
+                    falhar('erro-login', 'E-mail ou senha não conferem. Use a mesma conta do Vibe, '
+                        + 'onde você acompanha os seus pedidos.');
+                    return;
+                }
+                if (!r.data.session) {
+                    falhar('erro-login', 'Não consegui abrir a sessão. Tente de novo em instantes.');
+                    return;
+                }
+                entrou(r.data.session);
+            });
+    }
 
-        acao.then(function (r) {
-            $('btn-entrar').disabled = $('btn-criar-conta').disabled = false;
-            if (r.error) { falhar('erro-login', r.error.message); return; }
-            if (!r.data.session) {
-                // Conta criada mas exigindo confirmação por e-mail: dizer isso,
-                // e não deixar a tela parada sem explicação.
-                falhar('erro-login', 'Conta criada. Confirme o e-mail que enviamos e volte a ler este QR.');
-                return;
-            }
-            entrou(r.data.session);
+    // Recuperar age sobre a conta que JÁ existe. É a saída certa para quem
+    // esqueceu a senha — criar outra conta "resolveria" o login e quebraria o
+    // vínculo com o cadastro do cliente.
+    function esqueciSenha() {
+        var email = $('email').value.trim();
+        if (!email) {
+            falhar('erro-login', 'Escreva o seu e-mail acima e toque de novo.');
+            return;
+        }
+        esconder('erro-login');
+        $('btn-esqueci').disabled = true;
+
+        supabaseClient.auth.resetPasswordForEmail(email).then(function (r) {
+            $('btn-esqueci').disabled = false;
+            // Sempre a mesma resposta, tenha o e-mail conta ou não: responder
+            // diferente diria a um estranho quais e-mails têm cadastro.
+            falhar('erro-login', 'Se este e-mail tiver conta, enviamos o link para trocar a senha. '
+                + 'Depois de trocar, volte a ler este QR.');
         });
     }
 
@@ -178,13 +211,13 @@
     // ── Ligações ─────────────────────────────────────────────────────────────
 
     document.addEventListener('DOMContentLoaded', function () {
-        $('btn-entrar').addEventListener('click', function () { entrar(false); });
-        $('btn-criar-conta').addEventListener('click', function () { entrar(true); });
+        $('btn-entrar').addEventListener('click', function () { entrar(); });
+        $('btn-esqueci').addEventListener('click', esqueciSenha);
         $('btn-cadastrar').addEventListener('click', cadastrar);
 
         // Enter no campo de senha entra, que é o que qualquer pessoa espera.
         $('senha').addEventListener('keydown', function (ev) {
-            if (ev.key === 'Enter') entrar(false);
+            if (ev.key === 'Enter') entrar();
         });
 
         // O nome só faz sentido quando se está criando um evento.

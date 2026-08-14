@@ -153,6 +153,34 @@ pedidos: quantidade e reimpressão são por modelo. O cliente renomeia à vontad
 > campo `setor` de `pedidos_modelos` **já está ocupado** com o setor de PRODUÇÃO (FLEXO,
 > TÊXTIL, PVC, LASER).
 
+## A conta é a do Vibe, e não uma daqui
+
+Regra do usuário: **o cliente entra com o mesmo e-mail e a mesma senha que ele já usa no ERP
+Vibe.** Não existe cadastro separado no controle de acesso.
+
+Ela não custou integração nenhuma, porque o Ideal Imposition e o Vibecode apontam para o
+**mesmo projeto Supabase** (`vwbtitjlpelrcnsytzqw`, em `frontend/supabase-config.js`) e,
+portanto, para o mesmo `auth.users`. O login do cliente já valia aqui desde sempre.
+
+O que a regra custa é o outro lado: **nenhuma tela nossa pode oferecer criar conta.** O
+`evento.html` oferecia, num botão "Ainda não tenho conta" que chamava `auth.signUp`. Uma
+conta criada ali funcionaria — e esse é o problema. O login passaria, o cadastro seguiria, e
+só muito depois alguém descobriria que o evento, os setores e a portaria inteira ficaram
+pendurados numa identidade sem relação nenhuma com o cadastro do cliente no ERP. Refazer
+significa refazer com o lote já impresso.
+
+No lugar dele há **"Esqueci minha senha"**, que age sobre a conta que existe. A resposta é
+sempre a mesma, tenha o e-mail conta ou não: responder diferente diria a um estranho quais
+e-mails têm cadastro.
+
+> **Limite conhecido.** O servidor exige que a pessoa esteja logada, mas **não consegue
+> provar que ela é o cliente daquele pedido**. Não há no banco ligação entre `auth.users` e
+> `clientes` — conferido em 14/08: a tabela `clientes` tem 47 colunas e nenhuma é um id de
+> autenticação, e `propostas.user_id` é o **vendedor**, não o cliente. Quem ler o QR primeiro
+> reivindica. A proteção real hoje é o QR chegar à pessoa certa e a reivindicação valer uma
+> vez só. Fechar isso exige criar a ligação `auth.users → clientes.id_cliente`, e é assunto
+> do parceiro também.
+
 ## A tela `evento.html`
 
 Auto-contida e feita para telefone. **Não** carrega o `style.css` de 81 KB do painel, que
