@@ -14,6 +14,11 @@
         <span>Controle de acesso</span>
     </header>
 
+    <!-- Fora de qualquer bloco de estado, de propósito: se o arranque falhar
+         antes de decidir qual bloco mostrar (sem conta verificada, sem
+         evento carregado), esta é a única coisa que aparece na tela. -->
+    <div id="erro-arranque" class="aviso erro sumindo" role="alert"></div>
+
     <!-- 1. Entrar -->
     <div id="bloco-entrar" class="cartao sumindo">
         <h1>Entre com a sua conta do Vibe</h1>

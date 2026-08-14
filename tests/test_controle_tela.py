@@ -238,3 +238,24 @@ def test_sem_elevacao_a_tela_anuncia_que_esta_somente_leitura():
     """)
     assert saida["somenteLeitura"] is True
     assert len(saida["aviso"]) > 10
+
+
+def test_sem_supabase_a_tela_explica_em_vez_de_ficar_em_branco():
+    """`supabaseClient` fica nulo sem rede, sem o CDN, ou no modo offline
+    deliberado do `supabase-config.js` (`?offline=true` / `offline_mode`). Sem
+    tratamento, `AcessoConta.sessao()` LANCA em vez de resolver "sem sessao"
+    -- e como `abrir()` roda sozinho no DOMContentLoaded, essa excecao morre
+    calada. Os tres blocos de estado nascem com "sumindo", entao o dono
+    encara uma tela inteiramente em branco, sem uma palavra do porque.
+    """
+    saida = _no_navegador("""
+        window.supabaseClient = null;
+        await Controle.abrir();
+        const caixa = document.getElementById('erro-arranque');
+        return {
+            escondido: caixa.classList.contains('sumindo'),
+            texto: (caixa.textContent || '').trim(),
+        };
+    """)
+    assert saida["escondido"] is False
+    assert len(saida["texto"]) > 10

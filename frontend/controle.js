@@ -27,9 +27,27 @@
         return h;
     }
 
+    /**
+     * Escreve no único aviso que fica de FORA de todo bloco de estado — por
+     * isso ele é o que sobra visível quando o arranque falha antes de decidir
+     * qual bloco mostrar.
+     */
+    function falharArranque(mensagem) {
+        var el = $('erro-arranque');
+        el.textContent = mensagem;
+        el.classList.remove('sumindo');
+    }
+
     function carregarPainel() {
         return AcessoConta.pedir('/eventos/' + estado.evento_id, { headers: cabecalhos() })
-            .then(function (p) { estado.painel = p; desenhar(); return p; });
+            .then(function (p) { estado.painel = p; desenhar(); return p; })
+            .catch(function (e) {
+                // Sessão vencida ou rede caindo no meio do carregamento: sem
+                // isto a tela fica do jeito que estava — muda, sem o dono
+                // saber se algo deu errado ou se é só demora.
+                falharArranque('Não consegui carregar este evento. Confira a '
+                    + 'internet e tente de novo em instantes.');
+            });
     }
 
     function elevado() {
@@ -163,7 +181,19 @@
     var esconder = function (id) { $(id).classList.add('sumindo'); };
 
     function abrir() {
-        return AcessoConta.sessao().then(function (s) {
+        esconder('erro-arranque');
+        // `Promise.resolve().then(...)` — não chamar `AcessoConta.sessao()`
+        // direto — porque ela NÃO é async: se `supabaseClient` for nulo (sem
+        // rede, CDN bloqueado, ou o modo offline deliberado do
+        // `supabase-config.js`), ela LANÇA na hora, em vez de rejeitar uma
+        // promessa. Um throw síncrono aqui escaparia do `.catch()` abaixo e
+        // subiria cru até o `DOMContentLoaded`, que não tem tratamento
+        // nenhum — a promessa morre em silêncio e os três blocos de estado
+        // ficam todos com "sumindo": uma tela em branco, sem uma palavra do
+        // porquê.
+        return Promise.resolve().then(function () {
+            return AcessoConta.sessao();
+        }).then(function (s) {
             if (!s) {
                 mostrar('bloco-entrar');
                 return null;
@@ -178,6 +208,10 @@
                 return carregarPainel();
             }
             return listarEventos();
+        }).catch(function (e) {
+            mostrar('bloco-entrar');
+            falharArranque('Não consegui verificar a sua conta agora. Pode ser '
+                + 'a internet: confira o sinal e toque em "Entrar" de novo.');
         });
     }
 
@@ -200,6 +234,12 @@
                     link.textContent = ev.nome_evento;   // digitado pelo cliente: TEXTO
                     caixa.appendChild(link);
                 });
+            })
+            .catch(function (e) {
+                // Mesma lacuna de `carregarPainel`: sem isto, uma falha aqui
+                // deixa a tela sem `lista-eventos` E sem `sem-eventos` — nada.
+                falharArranque('Não consegui carregar os seus eventos. Confira '
+                    + 'a internet e tente de novo em instantes.');
             });
     }
 
