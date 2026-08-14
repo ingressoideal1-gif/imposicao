@@ -22379,6 +22379,13 @@ function renderAmostrasOSItens(osId) {
         const numOpts = filteredNumeracoes.map(n =>
             `<option value="${n.id}" ${String(n.id) === String(resolvedNumId) ? 'selected' : ''}>${n.name}</option>`
         ).join('');
+        // Aprovar pelo painel e privilegio de ADM e Atendimento; o papel pode
+        // ainda estar em viagem no primeiro desenho — sem ele, o botao nao nasce.
+        const roleAtual = (window._currentPerms && window._currentPerms.role)
+                       || (window._acessoLocal && window._acessoLocal.role)
+                       || '';
+        const podeAprovarPeloPainel = roleAtual === 'admin' || roleAtual === 'atendimento';
+
         return `
         <div class="card" style="border: 1px solid #918f8c; margin-bottom: 3pt;">
             <div class="card-header" style="background: rgba(59, 130, 246, 0.08); border-bottom: 1px solid #918f8c; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
@@ -22397,21 +22404,29 @@ function renderAmostrasOSItens(osId) {
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
                         <div class="amostra-decisao-btns">
-                            ${state.amostrasContainerId === 'cliente-amostras-itens-container' 
+                            ${state.amostrasContainerId === 'cliente-amostras-itens-container'
                                 ? `
                                 <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px #22c55e;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
                                     ${status === 'APROVADA' ? '✅ APROVADO' : 'APROVAR'}
                                 </button>
-                                ` 
-                                : `
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'PRONTO' || status === 'APROVADA' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' ? 'disabled' : ''}>
-                                    ${status === 'APROVADA' ? '✅ APROVADO (CLIENTE)' : (status === 'PRONTO' ? '🎨 PRONTO' : 'MARCAR PRONTO')}
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                    ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : 'ALTERAR'}
                                 </button>
                                 `
+                                : `
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                    ❌ EM ALTERAÇÃO
+                                </button>
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'PRONTO' ? 'background-color: #3b82f6; border-color: #3b82f6; color: #fff; box-shadow: 0 0 10px rgba(59,130,246,0.55);' : 'background-color: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.45); color: #60a5fa;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'PRONTO')" ${status === 'APROVADA' ? 'disabled' : ''}>
+                                    🎨 MARCAR PRONTO
+                                </button>
+                                ${podeAprovarPeloPainel ? `
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')" title="Aprovar a amostra pelo painel — mesmo efeito do Aprovar do link do cliente">
+                                    ✅ APROVADO
+                                </button>
+                                ` : ''}
+                                `
                             }
-                            <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
-                                ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : 'ALTERAR'}
-                            </button>
                         </div>
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
@@ -22425,7 +22440,7 @@ function renderAmostrasOSItens(osId) {
                                         ${corsOpts}
                                     </select>
                                 </div>
-                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0; flex: 0.9; min-width: 0;">
+                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0; flex: 0.9; min-width: 0; display: block;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; height: 24px; margin-bottom: 4px;">
                                         <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração</label>
                                         ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
@@ -22440,7 +22455,7 @@ function renderAmostrasOSItens(osId) {
                                         ${numOpts}
                                     </select>
                                 </div>
-                                <div class="form-group" style="margin-bottom: 0; flex: 2.2; min-width: 0;">
+                                <div class="form-group" style="margin-bottom: 0; flex: 2.2; min-width: 0; display: block;">
                                     <div style="display: flex; align-items: center; height: 24px; margin-bottom: 4px;">
                                         <span style="display: inline-flex; align-items: center; gap: 4px; height: 22px; font-size: 0.8rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
                                             <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
