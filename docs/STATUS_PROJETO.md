@@ -1,6 +1,6 @@
 # Status do Projeto — Ideal Imposition
 
-**Última atualização: 13 de agosto de 2026**
+**Última atualização: 14 de agosto de 2026**
 
 Este documento diz onde o projeto está **hoje** e por onde continuar. Se você está
 retomando depois de um tempo, comece por aqui.
@@ -11,11 +11,31 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + motor | **v560** | 13/08/2026 |
-| Agente NewProd | **1.2.59** | 13/08/2026 |
+| Site + motor | **v561** | 14/08/2026 |
+| Agente NewProd | **1.2.60** | 14/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
+
+**O controle de acesso está ativo no servidor.** Conferido em 14/08 contra o Render, não
+assumido:
+
+```
+GET /api/acesso/saude
+{"ok":true,"variaveis":{"SUPABASE_SERVICE_KEY":true,"ACESSO_AGENTE_SEGREDO":true,
+ "QR_PEDIDO_SEGREDO":true},"faltando":[],"banco":"ok"}
+```
+
+As oito rotas `/api/acesso/*` respondem, e as quatro travas seguraram: publicar faixa sem o
+segredo do agente, gerar QR sem login, listar eventos sem login e trocar um token falso
+pelo esqueleto — **401 em todas**.
+
+> **Há dois serviços no Render nesta conta.** O certo é o chamado **`imposicao`**, que
+> atende `https://imposicao.onrender.com`. As variáveis foram parar no outro na primeira
+> tentativa, e o sintoma foi enganoso: `/api/acesso/saude` respondendo **404**, não 503 —
+> porque sem a `SUPABASE_SERVICE_KEY` o `app.py` não monta o router, e a rota simplesmente
+> não existe. Para confirmar que é o serviço certo antes de colar, compare o commit que o
+> Render mostra com `git rev-parse --short origin/main`.
 
 ---
 
@@ -31,11 +51,14 @@ caracteres tirado de uma lista de 3 milhões que só existe nas estações da gr
 
 Documentação: [docs/qr_ideal.md](qr_ideal.md) · skill `.claude/skills/qr-ideal/`
 
-### ✅ Parte 2 — o código chega à nuvem (**pronta, aguardando publicação**)
+### ✅ Parte 2 — o código chega à nuvem (**no ar desde a v561**)
 
 Oito tarefas, todas implementadas e testadas. O ciclo fecha: o agente publica a faixa
 sozinho ao imprimir, o atendente gera o QR do Pedido no painel, e o cliente lê com o
 celular e cadastra o evento.
+
+Publicada em 14/08/2026, com as três variáveis configuradas no Render e conferidas por
+fora. **Falta o teste de ponta a ponta com um pedido de verdade** — ver abaixo.
 
 Documentação: [docs/controle_acesso.md](controle_acesso.md)
 Plano: [docs/superpowers/plans/2026-08-13-controle-acesso-parte2.md](superpowers/plans/2026-08-13-controle-acesso-parte2.md)
@@ -56,11 +79,33 @@ lotação ao vivo e relatórios. Mais a mudança do Ideal Control (hoje em
 
 ---
 
-## ▶️ Para retomar amanhã, nesta ordem
+## ▶️ Por onde continuar
 
-### 1. Configurar três variáveis no Render
+### 1. O teste que fecha tudo, e que só o usuário pode fazer
 
-Todas com o valor que **já está** no `.env.local` desta máquina:
+O servidor está pronto e provado por fora, mas **nenhum pedido de verdade passou pelo ciclo
+inteiro ainda**. Este é o passo que falta:
+
+1. No painel, num pedido aprovado, clicar em **🎟️ QR do Evento**.
+2. Ler o QR com a câmera do celular.
+3. Entrar e cadastrar o evento.
+4. Conferir no Supabase que `producao_acesso_setores` ganhou um setor por modelo.
+
+Depois, imprimir um trabalho com QR Ideal e conferir que `producao_acesso_credenciais`
+recebeu a faixa daquele pedido.
+
+### 2. Então: parte 3
+
+Ela merece a própria spec, como as anteriores.
+
+---
+
+## Como configurar as variáveis do Render (para a próxima vez)
+
+Já feito em 14/08. Fica registrado porque um serviço novo, ou uma troca de segredo, refaz
+este caminho.
+
+São três, todas com o valor que já está no `.env.local` desta máquina:
 
 - `SUPABASE_SERVICE_KEY` — sem ela o router `/api/acesso/*` nem é montado
 - `ACESSO_AGENTE_SEGREDO` — sem ela a faixa de códigos nunca é publicada
@@ -72,13 +117,12 @@ Todas com o valor que **já está** no `.env.local` desta máquina:
 
 Ele confere as três, põe uma de cada vez na área de transferência (o valor **não** aparece
 na tela) e espera você colar no Render antes de passar para a próxima. Com `-Conferir`, só
-confere e sai.
+confere e sai; com `-Somente <NOME>`, copia uma e não limpa nada.
 
-**As variáveis vêm antes da publicação, mas só dá para conferi-las depois.** O
-`GET /api/acesso/saude` responde `404` enquanto o Render roda código sem o
-`acesso_api` — o router nem existe lá. Não é erro de configuração: é o passo 2 que ainda
-não aconteceu. Configure agora mesmo assim, senão o primeiro deploy sobe sem a chave e o
-router não monta.
+**A ordem é: variáveis primeiro, publicação depois** — senão o primeiro deploy sobe sem a
+chave e o router não monta. Mas a conferência só funciona ao contrário: enquanto o Render
+rodar código sem o `acesso_api`, o `/api/acesso/saude` responde **404**, e isso não é erro
+de configuração.
 
 > **Armadilha já vivida, e a razão de o script existir.** Ao copiar a
 > `SUPABASE_SERVICE_KEY` com o mouse, um caractere sobrando no começo ou um `=` no fim fazem
@@ -87,38 +131,16 @@ router não monta.
 > nunca termina em `=`. Isso já custou meia hora de investigação, e o script pega as duas
 > violações.
 
-### 2. Publicar
+E publicar é sempre os dois — site e agente, com número de versão novo:
 
 ```powershell
-.\publicar.ps1 "controle de acesso, parte 2"
-.\publicar_agente.ps1 1.2.60
+.\publicar.ps1 "mensagem"
+.\publicar_agente.ps1 <versao>
 ```
 
-Os dois, sempre. O executável embute uma cópia do frontend, e o build do agente agora exige
-o `ACESSO_AGENTE_SEGREDO` — ele lê do `.env.local` sozinho, o mesmo arquivo de onde saiu o
-valor colado no Render, então os dois lados batem sem ninguém conferir.
-
-**É aqui que o `saude` passa a responder.** Assim que o Render terminar de subir:
-
-```
-curl https://imposicao.onrender.com/api/acesso/saude
-```
-
-Esperado: `"ok": true`, as três em `variaveis` e `"banco": "ok"`.
-
-### 3. O teste que fecha tudo, e que só o usuário pode fazer
-
-1. No painel, num pedido aprovado, clicar em **🎟️ QR do Evento**.
-2. Ler o QR com a câmera do celular.
-3. Entrar e cadastrar o evento.
-4. Conferir no Supabase que `producao_acesso_setores` ganhou um setor por modelo.
-
-Depois, imprimir um trabalho com QR Ideal e conferir que `producao_acesso_credenciais`
-recebeu a faixa daquele pedido.
-
-### 4. Então: parte 3
-
-Ela merece a própria spec, como as anteriores.
+O executável embute uma cópia do frontend, e o build do agente exige o
+`ACESSO_AGENTE_SEGREDO` — ele lê do mesmo `.env.local` de onde saiu o valor colado no
+Render, então os dois lados batem sem ninguém conferir.
 
 ---
 
@@ -143,6 +165,14 @@ mas a restrição não faz o que o nome promete.
 
 **A migração `sql/schema_acesso_02` é opcional.** Ela só remove um índice redundante. Sem
 ela, nada quebra.
+
+**O `catalogo_fontes` promete uma coisa e o código faz outra.** O
+`sql/schema_catalogo_fontes.sql` existe desde 30/07 e **nunca foi aplicado**, então o
+Supabase responde 404 e o [db.py:1095](../db.py#L1095) desiste na primeira tentativa e usa o
+catálogo local — que é o que sempre funcionou de verdade. Nada quebra, mas cada arranque
+imprime duas linhas vermelhas no log, e log vermelho rotineiro treina qualquer um a ignorar
+log vermelho. Duas saídas: aplicar o SQL e reiniciar, ou apagar o arquivo e assumir que o
+catálogo é local por decisão. Hoje temos o pior dos dois.
 
 ---
 

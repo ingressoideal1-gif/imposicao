@@ -4,11 +4,11 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v560** — 2026-08-13 | Agente **1.2.59**
+## Versão atual: **v561** — 2026-08-14 | Agente **1.2.60**
 
 ---
 
-## [não publicado] — Controle de acesso, parte 2: o código chega à nuvem
+## [v561] — Controle de acesso, parte 2: o código chega à nuvem
 
 O ingresso já saía da impressora com o QR Ideal, mas aquele código não existia em lugar
 nenhum fora da estação que o imprimiu. O cliente não tinha como cadastrar o evento, e a
@@ -48,11 +48,17 @@ ele, pela mesma razão do pool.
 
 Detalhes em [docs/controle_acesso.md](docs/controle_acesso.md).
 
-**Antes de publicar:** três variáveis no Render — `SUPABASE_SERVICE_KEY`,
-`ACESSO_AGENTE_SEGREDO` e `QR_PEDIDO_SEGREDO`. Rode
-`.\ferramentas\copiar_para_render.ps1`: ele confere o formato das três e põe uma de cada
-vez na área de transferência, sem mostrar o valor na tela. Depois de salvar,
-`GET /api/acesso/saude` responde as três de uma vez e diz quais faltam.
+**As três variáveis do Render** — `SUPABASE_SERVICE_KEY`, `ACESSO_AGENTE_SEGREDO` e
+`QR_PEDIDO_SEGREDO` — foram configuradas em 14/08 e conferidas por fora: o
+`GET /api/acesso/saude` responde `"ok": true` com as três presentes e `"banco": "ok"`, e as
+oito rotas novas devolvem **401** a quem chega sem credencial.
+
+Duas armadilhas do caminho, registradas porque vão se repetir: há **dois serviços no
+Render** nesta conta, e as variáveis foram parar no errado da primeira vez — o sintoma foi
+`404` no `/saude`, e não 503, porque sem a chave o `app.py` nem monta o router. E copiar a
+`SUPABASE_SERVICE_KEY` com o mouse já produziu um `401 Invalid API key` com uma chave que
+parecia perfeita. O `.\ferramentas\copiar_para_render.ps1` existe para as duas: confere o
+formato do JWT e copia sem mostrar o valor na tela.
 
 ---
 
