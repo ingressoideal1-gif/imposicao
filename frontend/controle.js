@@ -98,8 +98,28 @@
         $('setores').innerHTML = '';
         p.setores.forEach(function (s) { $('setores').appendChild(cartaoDeSetor(s)); });
 
+        // Mesma lógica do formulário de novo aparelho, um degrau abaixo: cada
+        // cartão de aparelho tem seu próprio campo de nome e suas próprias
+        // caixas de setor, e o cartão inteiro é substituído a cada painel. Sem
+        // isto, o dono que está editando o nome de um aparelho e marcando
+        // setores perde os dois se QUALQUER outra gravação nesta tela disparar
+        // um `carregarPainel()` por baixo dele.
+        var edicoesDeAparelhoAntes = {};
+        (p.aparelhos || []).forEach(function (a) {
+            var campoNome = $('aparelho-nome-' + a.id);
+            if (!campoNome) { return; }
+            edicoesDeAparelhoAntes[a.id] = {
+                nome: campoNome.value,
+                setores: Array.prototype.slice
+                    .call(document.querySelectorAll('#aparelho-setores-' + a.id + ' input:checked'))
+                    .map(function (c) { return c.value; })
+            };
+        });
+
         $('aparelhos').innerHTML = '';
-        p.aparelhos.forEach(function (a) { $('aparelhos').appendChild(cartaoDeAparelho(a)); });
+        p.aparelhos.forEach(function (a) {
+            $('aparelhos').appendChild(cartaoDeAparelho(a, edicoesDeAparelhoAntes[a.id]));
+        });
 
         $('codigos-total').textContent = p.codigos_cliente + ' códigos carregados';
 
@@ -241,9 +261,27 @@
             });
     }
 
+    /**
+     * Gera outro código para um aparelho que já existe.
+     *
+     * Recarrega o painel depois de mostrar o código, igual a `criarAparelho`:
+     * o cartão deste aparelho pode ter mudado por outro caminho enquanto o
+     * dono estava aqui, e a tela não pode ficar desatualizada só porque esta
+     * ação não mexeu em nome nem em setor. `mostrarCodigo` roda ANTES do
+     * `carregarPainel`, e `desenhar()` nunca toca em `#caixa-codigo` — por
+     * isso o código continua na tela depois do redesenho.
+     */
     function novoCodigo(aparelho_id) {
         return gravar('/aparelhos/' + aparelho_id + '/codigo', {}, 'POST')
-            .then(function (r) { mostrarCodigo(r.codigo); return r; });
+            .then(function (r) {
+                mostrarCodigo(r.codigo);
+                return carregarPainel().then(function () { return r; });
+            });
+    }
+
+    function renomearAparelho(aparelho_id, nome) {
+        return gravar('/aparelhos/' + aparelho_id, { nome: nome }, 'PATCH')
+            .then(carregarPainel);
     }
 
     function trocarSetoresDoAparelho(aparelho_id, setores) {
@@ -254,6 +292,13 @@
     function revogarAparelho(aparelho_id) {
         return gravar('/aparelhos/' + aparelho_id, { status: 'revogado' }, 'PATCH')
             .then(carregarPainel);
+    }
+
+    /** Duas listas de id têm os mesmos elementos, em qualquer ordem. */
+    function mesmosItens(a, b) {
+        var x = (a || []).slice().sort();
+        var y = (b || []).slice().sort();
+        return x.length === y.length && x.every(function (v, i) { return v === y[i]; });
     }
 
     /**
@@ -274,7 +319,17 @@
             });
     }
 
-    function cartaoDeAparelho(a) {
+    /**
+     * O cartão de um aparelho: nome, situação, e os três controles que a
+     * caixa `#caixa-codigo` promete por escrito desde a Tarefa 9 — gerar
+     * outro código, revogar, e editar nome/setores. Uma tela que promete e
+     * não entrega o botão está mentindo para o dono tanto quanto uma que
+     * mostra o número errado.
+     *
+     * `edicaoAnterior`, se vier, é o que o dono tinha digitado/marcado ANTES
+     * do painel recarregar por baixo dele — ver o comentário em `desenhar()`.
+     */
+    function cartaoDeAparelho(a, edicaoAnterior) {
         var el = document.createElement('div');
         el.className = 'cartao';
 
@@ -291,6 +346,101 @@
         situacao.textContent = (a.status === 'ativo' ? 'Ativo. ' : 'Revogado. ')
             + (nomes.length ? 'Valida: ' + nomes.join(', ') : 'Ainda não valida nenhum setor.');
         el.appendChild(situacao);
+
+        // ── Editar nome e setores ───────────────────────────────────────────
+        var rotNome = document.createElement('label');
+        rotNome.setAttribute('for', 'aparelho-nome-' + a.id);
+        rotNome.textContent = 'Nome do aparelho';
+        el.appendChild(rotNome);
+
+        var campoNome = document.createElement('input');
+        campoNome.type = 'text';
+        campoNome.id = 'aparelho-nome-' + a.id;
+        campoNome.value = edicaoAnterior ? edicaoAnterior.nome : a.nome;
+        el.appendChild(campoNome);
+
+        var rotSetores = document.createElement('p');
+        rotSetores.style.fontSize = '.82rem';
+        rotSetores.style.color = 'var(--dim)';
+        rotSetores.style.margin = '12px 0 4px';
+        rotSetores.textContent = 'Quais setores este aparelho valida';
+        el.appendChild(rotSetores);
+
+        var caixaSetores = document.createElement('div');
+        caixaSetores.id = 'aparelho-setores-' + a.id;
+        var marcadosAgora = edicaoAnterior ? edicaoAnterior.setores : a.setores;
+        (estado.painel.setores || []).forEach(function (s) {
+            var linha = document.createElement('div');
+            linha.className = 'opcao';
+            var caixa = document.createElement('input');
+            caixa.type = 'checkbox';
+            caixa.value = s.id;
+            caixa.id = 'aparelho-setor-' + a.id + '-' + s.id;
+            caixa.checked = marcadosAgora.indexOf(s.id) >= 0;
+            var rot = document.createElement('label');
+            rot.setAttribute('for', caixa.id);
+            rot.textContent = s.nome;
+            linha.appendChild(caixa);
+            linha.appendChild(rot);
+            caixaSetores.appendChild(linha);
+        });
+        el.appendChild(caixaSetores);
+
+        var btnSalvar = document.createElement('button');
+        btnSalvar.type = 'button';
+        btnSalvar.className = 'so-com-senha';
+        btnSalvar.id = 'aparelho-salvar-' + a.id;
+        btnSalvar.textContent = 'Salvar nome e setores';
+        btnSalvar.addEventListener('click', function () {
+            var novoNome = campoNome.value;
+            var marcados = Array.prototype.slice
+                .call(caixaSetores.querySelectorAll('input:checked'))
+                .map(function (c) { return c.value; });
+            // Só manda o que de fato mudou: menos pedido, e nenhum PATCH vazio
+            // se o dono só olhou o formulário e não mexeu em nada.
+            var acoes = [];
+            if (novoNome !== a.nome) { acoes.push(renomearAparelho(a.id, novoNome)); }
+            if (!mesmosItens(marcados, a.setores)) {
+                acoes.push(trocarSetoresDoAparelho(a.id, marcados));
+            }
+            if (acoes.length) {
+                Promise.all(acoes).catch(function () { /* já avisado */ });
+            }
+        });
+        el.appendChild(btnSalvar);
+
+        // ── Código e revogação ──────────────────────────────────────────────
+        var btnNovoCodigo = document.createElement('button');
+        btnNovoCodigo.type = 'button';
+        btnNovoCodigo.className = 'so-com-senha secundario';
+        btnNovoCodigo.id = 'aparelho-novo-codigo-' + a.id;
+        btnNovoCodigo.textContent = 'Gerar outro código';
+        btnNovoCodigo.addEventListener('click', function () {
+            novoCodigo(a.id).catch(function () { /* já avisado */ });
+        });
+        el.appendChild(btnNovoCodigo);
+
+        if (a.status === 'ativo') {
+            var btnRevogar = document.createElement('button');
+            btnRevogar.type = 'button';
+            btnRevogar.className = 'so-com-senha secundario';
+            btnRevogar.id = 'aparelho-revogar-' + a.id;
+            btnRevogar.textContent = 'Revogar (desliga o aparelho)';
+            btnRevogar.addEventListener('click', function () {
+                // Confirmação, não senha de novo: a elevação já cobre isso. O
+                // que falta avisar é a diferença para "gerar outro código" —
+                // aquele não desconecta ninguém, revogar desconecta na hora.
+                var confirmou = window.confirm(
+                    'Revogar "' + a.nome + '"? Isso DESLIGA o aparelho agora — ele para '
+                    + 'de validar QR na portaria imediatamente. Gerar outro código não '
+                    + 'faz isso; só revogar desliga.'
+                );
+                if (!confirmou) { return; }
+                revogarAparelho(a.id).catch(function () { /* já avisado */ });
+            });
+            el.appendChild(btnRevogar);
+        }
+
         return el;
     }
 
@@ -575,6 +725,7 @@
         mostrarCodigo: mostrarCodigo,
         criarAparelho: criarAparelho,
         novoCodigo: novoCodigo,
+        renomearAparelho: renomearAparelho,
         trocarSetoresDoAparelho: trocarSetoresDoAparelho,
         revogarAparelho: revogarAparelho,
         importarCodigos: importarCodigos

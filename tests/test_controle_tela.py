@@ -541,6 +541,124 @@ def test_importar_anuncia_QUANTOS_entraram():
     assert "3" in saida["aviso"]
 
 
+def test_gerar_outro_codigo_mostra_o_codigo_novo_na_caixa():
+    """`novoCodigo` e a acao que o cartao do aparelho oferece de verdade --
+    sem este teste, ela ficava exportada e nunca chamada por nada."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle._pedirParaTeste = async () => ({ codigo: 'ZZZ999' });
+        await Controle.novoCodigo('a1');
+        return {
+            codigo: document.getElementById('codigo-valor').textContent,
+            visivel: !document.getElementById('caixa-codigo').classList.contains('sumindo'),
+        };
+    """)
+    assert saida["codigo"] == "ZZZ999"
+    assert saida["visivel"] is True
+
+
+def test_revogar_manda_status_revogado():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        let enviado = null;
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
+            return { ok: true };
+        };
+        await Controle.revogarAparelho('a1');
+        return enviado;
+    """)
+    assert saida["caminho"] == "/aparelhos/a1"
+    assert saida["corpo"]["status"] == "revogado"
+
+
+def test_renomear_manda_o_nome():
+    """O backend ja aceita `nome` no PATCH; faltava alguma funcao do
+    frontend mandar esse campo."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        let enviado = null;
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
+            return { ok: true };
+        };
+        await Controle.renomearAparelho('a1', 'Portao A renomeado');
+        return enviado;
+    """)
+    assert saida["caminho"] == "/aparelhos/a1"
+    assert saida["corpo"]["nome"] == "Portao A renomeado"
+
+
+def test_os_controles_do_aparelho_existem_com_rotulo_e_entram_na_trava():
+    """O revisor pediu para conferir isto especificamente: um botao de
+    revogar que funciona sem elevacao seria pior que a tela sem revogar
+    nenhuma."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const semSenha = {
+            nome: document.getElementById('aparelho-nome-a1').disabled,
+            salvar: document.getElementById('aparelho-salvar-a1').disabled,
+            novoCodigo: document.getElementById('aparelho-novo-codigo-a1').disabled,
+            revogar: document.getElementById('aparelho-revogar-a1').disabled,
+            rotulos: {
+                salvar: document.getElementById('aparelho-salvar-a1').textContent.trim(),
+                novoCodigo: document.getElementById('aparelho-novo-codigo-a1').textContent.trim(),
+                revogar: document.getElementById('aparelho-revogar-a1').textContent.trim(),
+            },
+        };
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const comSenha = {
+            nome: document.getElementById('aparelho-nome-a1').disabled,
+            salvar: document.getElementById('aparelho-salvar-a1').disabled,
+            novoCodigo: document.getElementById('aparelho-novo-codigo-a1').disabled,
+            revogar: document.getElementById('aparelho-revogar-a1').disabled,
+        };
+        return { semSenha, comSenha };
+    """)
+    assert len(saida["semSenha"]["rotulos"]["salvar"]) > 3
+    assert len(saida["semSenha"]["rotulos"]["novoCodigo"]) > 3
+    assert len(saida["semSenha"]["rotulos"]["revogar"]) > 3
+    assert saida["semSenha"]["nome"] is True
+    assert saida["semSenha"]["salvar"] is True
+    assert saida["semSenha"]["novoCodigo"] is True
+    assert saida["semSenha"]["revogar"] is True
+    assert saida["comSenha"]["nome"] is False
+    assert saida["comSenha"]["salvar"] is False
+    assert saida["comSenha"]["novoCodigo"] is False
+    assert saida["comSenha"]["revogar"] is False
+
+
+def test_revogar_pelo_botao_pede_confirmacao_antes_de_desligar():
+    """O `dialog` do Chrome e sempre descartado pelo arnes (equivale a tocar
+    em Cancelar). Se o clique chamasse `revogarAparelho` sem passar por um
+    `confirm()`, a chamada aconteceria mesmo assim -- aqui ela nao pode."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        let chamou = false;
+        Controle._pedirParaTeste = async () => { chamou = true; return { ok: true }; };
+        document.getElementById('aparelho-revogar-a1').click();
+        await new Promise(r => setTimeout(r, 50));
+        return { chamou };
+    """)
+    assert saida["chamou"] is False
+
+
 def test_sem_supabase_a_tela_explica_em_vez_de_ficar_em_branco():
     """`supabaseClient` fica nulo sem rede, sem o CDN, ou no modo offline
     deliberado do `supabase-config.js` (`?offline=true` / `offline_mode`). Sem
