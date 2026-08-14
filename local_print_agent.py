@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, Red
 from fastapi.staticfiles import StaticFiles
 
 import print_service
+import color_profiles
 import ppd_parser
 from engine import ImpositionConfig, ImpositionEngine
 import db
@@ -140,6 +141,38 @@ def get_ppd_map():
 async def save_ppd_map(request: Request):
     mapping = await request.json()
     print_service.save_printer_ppd_map(mapping)
+    return {"status": "success"}
+
+# ─── PERFIS ICC (GERENCIAMENTO DE CORES) ──────────────────────────────────────
+# Mesmos endpoints do app.py: os dois servidores precisam responder igual.
+
+@app.get("/api/icc")
+def list_icc():
+    return color_profiles.listar_perfis()
+
+@app.post("/api/icc/upload")
+async def upload_icc(file: UploadFile = File(...)):
+    filename = os.path.basename(file.filename or "")
+    if not filename.lower().endswith((".icc", ".icm")):
+        raise HTTPException(status_code=400, detail="Apenas arquivos .icc ou .icm são suportados")
+    dest_path = os.path.join(color_profiles.ICC_DIR, filename)
+    with open(dest_path, "wb") as f:
+        f.write(await file.read())
+    try:
+        return {"ok": True, "perfil": color_profiles.perfil_info(dest_path)}
+    except ValueError as e:
+        # Perfil invalido nao fica na pasta enganando a listagem
+        os.remove(dest_path)
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/printers/icc-map")
+def get_icc_map():
+    return color_profiles.load_printer_icc_map()
+
+@app.post("/api/printers/icc-map")
+async def save_icc_map(request: Request):
+    mapping = await request.json()
+    color_profiles.save_printer_icc_map(mapping)
     return {"status": "success"}
 
 @app.post("/api/print/submit")
