@@ -4,7 +4,7 @@ O QR Ideal ([docs/qr_ideal.md](qr_ideal.md)) põe no ingresso um código que nin
 adivinha. Este documento é a outra metade: como esse código chega à nuvem, como o cliente
 cadastra o evento dele, e o que protege cada passo.
 
-Estado em 14/08/2026: **partes 2 e 3a no ar** (site v569, agente 1.2.68). A parte 3b — o
+Estado em 14/08/2026: **partes 2 e 3a no ar** (site v570, agente 1.2.69). A parte 3b — o
 aplicativo da portaria — ainda não começou.
 
 ## O caminho inteiro, em ordem
@@ -297,7 +297,7 @@ UUID zerado.
 
 ## O que falta (a partir da parte 3b)
 
-A tela do dono (`controle.html`, parte 3a) **está no ar desde a v569**. Ela traz: login do
+A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**. Ela traz: login do
 cliente, lotação e tipo de uso por setor, os aparelhos da portaria com lista de setores
 própria, e a senha do dono travando a configuração do evento. Falta a variável
 `ACESSO_ELEVACAO_SEGREDO` no Render — sem ela a tela abre mas não grava; o estado atual

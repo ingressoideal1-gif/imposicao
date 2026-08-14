@@ -11,8 +11,8 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + motor | **v569** | 14/08/2026 |
-| Agente NewProd | **1.2.68** | 14/08/2026 |
+| Site + motor | **v570** | 14/08/2026 |
+| Agente NewProd | **1.2.69** | 14/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
@@ -73,7 +73,7 @@ Spec: [docs/superpowers/specs/2026-08-13-controle-acesso-parte2-design.md](super
 
 **As sete tabelas `producao_acesso_*` já existem no banco** e foram conferidas uma a uma.
 
-### 🔑 Parte 3a — o dono configura o evento (**no ar desde a v569, aguardando a quarta variável**)
+### 🔑 Parte 3a — o dono configura o evento (**no ar desde a v570, aguardando a quarta variável**)
 
 O dono do evento configura tudo em [frontend/controle.html](../frontend/controle.html): dados
 do evento, lotação e tipo de uso de cada setor, aparelhos da portaria — inclusive renomear e
@@ -98,7 +98,8 @@ Spec: [docs/superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md](supe
 `ACESSO_AGENTE_SEGREDO`, `QR_PEDIDO_SEGREDO` e `ACESSO_ELEVACAO_SEGREDO`.
 
 **O código está publicado; a quarta variável, não.** Site e motor saíram na v569 e o agente
-na 1.2.68 (tabela no topo deste documento), o que já leva `controle.html`, `controle.js`,
+na 1.2.68 — e a v570 / 1.2.69 os reafirmam (tabela no topo deste documento). Isso já leva
+`controle.html`, `controle.js`,
 `controle.css` e `acesso-conta.js` às estações pela `PAINEL_ARQUIVOS`. Falta só colar
 `ACESSO_ELEVACAO_SEGREDO` no Render — serviço **`imposicao`** — e conferir
 `/api/acesso/saude` com as quatro em `true`. Colocar a variável é ação do usuário; até lá a
