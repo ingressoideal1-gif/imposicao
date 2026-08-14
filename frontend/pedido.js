@@ -1828,8 +1828,19 @@ function drawPedPreview() {
                             (f) => buildCanvasFont(f, el.font_name)
                         );
 
-                    } else if (el.type === 'QR') {
+                    } else if (el.type === 'QR' || el.type === 'QR_IDEAL') {
 
+                        // O QR Ideal entra pelo MESMO ramo do QR comum, e nao
+                        // por um proprio. Os dois ocupam a mesma area (size_mm,
+                        // padrao 15) e, nesta tela, o desenho e uma REPRESENTACAO
+                        // — tres marcas de canto, nao um QR legivel. O que a
+                        // previa do Painel responde e "cabe, esta no lugar, esta
+                        // na cor certa"; quem mostra o codigo de verdade e o card
+                        // do pedido, que sabe de que pedido o trabalho veio.
+                        //
+                        // Ate 14/08/2026 o QR Ideal nao caia em ramo nenhum e
+                        // simplesmente sumia daqui: o operador via a folha sem
+                        // ele e o PDF saia com ele.
                         const sz = (el.size_mm || 15) * MM2PT * scale;
                         const hsz = sz / 2;
 
