@@ -115,6 +115,35 @@ def supabase(method: str, path: str, body=None, prefer: str | None = None):
         raise RuntimeError(f"Supabase {method} {path}: HTTP {e.code} {detalhe}") from e
 
 
+def contar(path: str) -> int:
+    """Quantas linhas casam com o filtro, sem trazer as linhas.
+
+    Existe porque a tela do dono precisa comparar o que o ERP encomendou com o
+    que está publicado, e um evento de 12.000 ingressos traria 12.000 objetos
+    para chegar a um número. O PostgREST devolve a contagem no cabeçalho
+    `Content-Range` quando se pede `Prefer: count=exact`.
+
+    Mora aqui, e não no `acesso_config.py`, porque precisa da `service_role`: a
+    pergunta "quem tem a chave-mestra na mão?" continua tendo um arquivo só por
+    resposta.
+    """
+    if not SERVICE_KEY:
+        raise RuntimeError(f"{CHAVE_ENV} nao configurada.")
+
+    juncao = "&" if "?" in path else "?"
+    url = f"{db.SUPABASE_URL}/rest/v1/{path}{juncao}select=id&limit=1"
+    req = urllib.request.Request(url, headers={
+        "apikey": SERVICE_KEY,
+        "Authorization": f"Bearer {SERVICE_KEY}",
+        "Prefer": "count=exact",
+    })
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        faixa = resp.headers.get("Content-Range") or ""
+    # "0-0/1234", ou "*/0" quando não há linha nenhuma.
+    total = faixa.split("/")[-1]
+    return int(total) if total.isdigit() else 0
+
+
 # ─── A publicação da faixa de códigos ─────────────────────────────────────────
 #
 # O agente chama três endpoints em sequência, sempre DEPOIS que o papel saiu:

@@ -56,8 +56,10 @@ import font_cache as font_cache_local
 # chave, e montar o router lá deixaria endpoints respondendo 503 a tudo, o que
 # só confunde quem for diagnosticar por que uma publicação não chegou.
 import acesso_api
+import acesso_config
 if acesso_api.disponivel():
     app.include_router(acesso_api.router)
+    app.include_router(acesso_config.router)
     print("[app] Controle de acesso ativo.", flush=True)
 else:
     print(f"[app] Controle de acesso inativo ({acesso_api.CHAVE_ENV} ausente).", flush=True)
