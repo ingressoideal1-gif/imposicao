@@ -41,6 +41,12 @@ dist/
 # E de cada maquina, nunca do repositorio.
 print_configs.json
 
+# Perfis ICC (.icm/.icc) enviados pelo operador e o mapa impressora->perfil do
+# gerenciamento de cores. Sao das impressoras de cada estacao, nunca do
+# repositorio — mesmo caso do print_configs.json.
+perfis_icc/
+printer_icc_map.json
+
 # Pastas observadas por RIP que a estacao autorizou a receber PDF. E a lista
 # branca do hot folder: caminho de maquina, e ao mesmo tempo a trava de
 # seguranca do endpoint de gravacao. Nunca versionar — o caminho de uma estacao
