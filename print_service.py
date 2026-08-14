@@ -6,6 +6,8 @@ import tempfile
 import fitz  # PyMuPDF
 from ppd_parser import PPDParser
 
+import color_profiles
+
 try:
     import win32print
     HAS_WIN32 = True
@@ -342,15 +344,28 @@ def _find_ghostscript():
     return None
 
 
-def _send_pdf_raw(printer_name, pdf_path, devmode, job_title):
+def _send_pdf_raw(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
     """
     Envia o PDF diretamente ao spooler como dados RAW.
     A impressora precisa ter interpretador PDF embutido (Konica, Xerox, Canon, Ricoh modernas).
     Preserva 100% das fontes embutidas — zero conversão.
+
+    Com cor_cfg, o perfil .icm da impressora e embutido como OutputIntent no
+    PDF antes do envio: a controladora (Fiery, Konica, Ricoh) le o intent e
+    converte no RIP dela.
     """
     if not HAS_WIN32:
         print(f"[print][PDF-RAW][MOCK] Job: {job_title} | Printer: {printer_name}")
         return True, "[MOCK] PDF RAW simulado com sucesso."
+
+    pdf_temporario = None
+    if cor_cfg:
+        try:
+            pdf_temporario = color_profiles.pdf_com_output_intent(pdf_path, cor_cfg)
+            pdf_path = pdf_temporario
+            print(f"[print][PDF-RAW] OutputIntent embutido: {cor_cfg['nome']} ({cor_cfg['classe']})")
+        except Exception as e:
+            print(f"[print][PDF-RAW] Aviso: OutputIntent nao embutido ({e}); enviando sem gerenciamento")
 
     try:
         hPrinter = win32print.OpenPrinter(printer_name)
@@ -378,17 +393,28 @@ def _send_pdf_raw(printer_name, pdf_path, devmode, job_title):
 
         size_mb = os.path.getsize(pdf_path) / (1024 * 1024)
         print(f"[print][PDF-RAW] Job enviado: {size_mb:.1f} MB para '{printer_name}'")
-        return True, f"PDF enviado diretamente (RAW) para '{printer_name}' ({size_mb:.1f} MB)."
+        sufixo_cor = f" [cores: {cor_cfg['nome']}]" if cor_cfg else ""
+        return True, f"PDF enviado diretamente (RAW) para '{printer_name}' ({size_mb:.1f} MB).{sufixo_cor}"
     except Exception as e:
         err = f"Erro no envio PDF RAW: {e}"
         print(f"[print][PDF-RAW] {err}")
         return False, err
+    finally:
+        if pdf_temporario and os.path.exists(pdf_temporario):
+            try:
+                os.remove(pdf_temporario)
+            except OSError:
+                pass
 
 
-def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title):
+def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
     """
     Converte PDF → PostScript via Ghostscript preservando fontes como Type 42 (vetorial).
     Funciona com qualquer impressora PostScript.
+
+    Com cor_cfg, o GS converte as cores colorimetricamente para o perfil da
+    impressora (inclusive o CMYK da arte do cliente) — e a conversao mais
+    correta dos tres modos.
     """
     gs_exe = _find_ghostscript()
     if not gs_exe:
@@ -411,6 +437,7 @@ def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title):
             "-dEmbedAllFonts=true",
             "-dSubsetFonts=true",
             "-dCompressFonts=true",
+        ] + color_profiles.args_ghostscript(cor_cfg) + [
             pdf_path
         ]
         print(f"[print][GS-PS] Convertendo PDF -> PS: {' '.join(cmd)}")
@@ -449,7 +476,8 @@ def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title):
             win32print.ClosePrinter(hPrinter)
 
         print(f"[print][GS-PS] Job enviado com sucesso para '{printer_name}'")
-        return True, f"PDF convertido para PostScript (Ghostscript) e enviado para '{printer_name}' ({ps_size_mb:.1f} MB)."
+        sufixo_cor = f" [cores: {cor_cfg['nome']}]" if cor_cfg else ""
+        return True, f"PDF convertido para PostScript (Ghostscript) e enviado para '{printer_name}' ({ps_size_mb:.1f} MB).{sufixo_cor}"
 
     except subprocess.TimeoutExpired:
         return False, "Ghostscript timeout (>120s) na conversao PDF->PS."
@@ -466,10 +494,14 @@ def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title):
                 pass
 
 
-def _send_gdi_raster(printer_name, pdf_path, devmode, job_title):
+def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
     """
     Fallback: Envia PDF via GDI/PIL rasterizando para imagem.
     Funciona com qualquer impressora mas perde qualidade vetorial das fontes.
+
+    Com cor_cfg, o raster sRGB passa pela transformacao LittleCMS do perfil da
+    impressora antes de ir ao driver — sem isso o driver faz a conversao dele
+    as cegas, que e a origem da variacao de cor deste modo.
     """
     if not HAS_WIN32:
         print(f"[print][GDI][MOCK] Job: {job_title} | Printer: {printer_name}")
@@ -494,6 +526,17 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title):
                 dpi_y   = dc.GetDeviceCaps(win32con.LOGPIXELSY)
                 render_dpi = max(dpi_x, dpi_y, 300)
 
+                # Transformacao de cor criada UMA vez por trabalho e usada em
+                # todas as folhas; falha vira aviso e o job segue sem cor
+                # gerenciada — producao nunca para por causa de perfil.
+                transform_cor = None
+                if cor_cfg:
+                    try:
+                        transform_cor = color_profiles.transform_para_gdi(cor_cfg)
+                        print(f"[print][GDI] Gerenciamento de cores ativo: {cor_cfg['nome']} ({cor_cfg['classe']}, {cor_cfg['intento']})")
+                    except Exception as e:
+                        print(f"[print][GDI] Aviso: transformacao de cor falhou ({e}); imprimindo sem gerenciamento")
+
                 doc = fitz.open(pdf_path)
                 total_pages = len(doc)
                 print(f"[print][GDI] {total_pages} pagina(s) @ {render_dpi} DPI para '{printer_name}' (raster fallback)")
@@ -504,6 +547,11 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title):
 
                     pix = page.get_pixmap(dpi=render_dpi)
                     img = Image.open(_io.BytesIO(pix.tobytes("png")))
+                    if transform_cor is not None:
+                        from PIL import ImageCms as _cms
+                        if img.mode != "RGB":
+                            img = img.convert("RGB")
+                        img = _cms.applyTransform(img, transform_cor)
                     img_w, img_h = img.size
 
                     ratio_img   = img_w / img_h
@@ -530,7 +578,8 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title):
         finally:
             win32print.ClosePrinter(hPrinter)
 
-        return True, f"PDF enviado via GDI (raster) para '{printer_name}'."
+        sufixo_cor = f" [cores: {cor_cfg['nome']}]" if cor_cfg else ""
+        return True, f"PDF enviado via GDI (raster) para '{printer_name}'.{sufixo_cor}"
     except Exception as e:
         import traceback
         err = f"Erro na impressao GDI: {e}\n{traceback.format_exc()}"
@@ -549,9 +598,15 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao
       - "gdi" → rasteriza para imagem via GDI (fallback, perde qualidade vetorial)
       - "auto" → tenta pdf_raw → ghostscript → gdi em cascata
     """
+    # Config de cor da impressora de destino (perfil .icm, intento). Resolvida
+    # UMA vez por trabalho; None quando o recurso esta desligado — e ai tudo
+    # se comporta exatamente como antes do gerenciamento de cores existir.
+    cor_cfg, aviso_cor = color_profiles.resolver_config(printer_name)
+    sufixo_aviso = f" AVISO: {aviso_cor}" if aviso_cor else ""
+
     if not HAS_WIN32:
         print(f"[print][MOCK] Job: {job_title} | Printer: {printer_name} | PDF: {pdf_path}")
-        return True, "[MOCK] Impressao simulada com sucesso."
+        return True, f"[MOCK] Impressao simulada com sucesso.{sufixo_aviso}"
 
     # Obter DEVMODE com as opcoes do usuario (duplex, bandeja, papel, etc.)
     devmode = _apply_devmode_options(printer_name, options)
@@ -560,35 +615,37 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao
     print(f"[print] Modo de impressao: '{print_mode}' para '{printer_name}'")
 
     # Modo forçado
-    if print_mode == "pdf_raw":
-        return _send_pdf_raw(printer_name, pdf_path, devmode, job_title)
-    elif print_mode == "ghostscript":
-        return _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title)
-    elif print_mode == "gdi":
-        return _send_gdi_raster(printer_name, pdf_path, devmode, job_title)
+    modo_forcado = {"pdf_raw": _send_pdf_raw,
+                    "ghostscript": _send_ps_ghostscript,
+                    "gdi": _send_gdi_raster}.get(print_mode)
+    if modo_forcado:
+        ok, msg = modo_forcado(printer_name, pdf_path, devmode, job_title, cor_cfg)
+        if ok:
+            msg += sufixo_aviso
+        return ok, msg
 
     # Modo automático: PDF RAW → Ghostscript PS → GDI Raster
     errors = []
 
     # Estratégia 1: PDF RAW (mais rápido, preserva fontes)
     print("[print] Tentando estrategia 1: PDF RAW direto...")
-    ok, msg = _send_pdf_raw(printer_name, pdf_path, devmode, job_title)
+    ok, msg = _send_pdf_raw(printer_name, pdf_path, devmode, job_title, cor_cfg)
     if ok:
-        return True, msg
+        return True, msg + sufixo_aviso
     errors.append(f"PDF-RAW: {msg}")
     print(f"[print] PDF RAW falhou, tentando Ghostscript...")
 
     # Estratégia 2: Ghostscript PS (vetorial, universal)
-    ok, msg = _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title)
+    ok, msg = _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title, cor_cfg)
     if ok:
-        return True, msg
+        return True, msg + sufixo_aviso
     errors.append(f"GS-PS: {msg}")
     print(f"[print] Ghostscript falhou, usando GDI raster (fallback)...")
 
     # Estratégia 3: GDI Raster (fallback seguro)
-    ok, msg = _send_gdi_raster(printer_name, pdf_path, devmode, job_title)
+    ok, msg = _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg)
     if ok:
-        return True, f"{msg} (AVISO: modo raster - fontes nao vetoriais)"
+        return True, f"{msg} (AVISO: modo raster - fontes nao vetoriais){sufixo_aviso}"
     errors.append(f"GDI: {msg}")
 
     all_errors = " | ".join(errors)
