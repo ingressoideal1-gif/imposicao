@@ -1684,6 +1684,35 @@
                                                  </div>
                                              </div>
 
+                                             <!-- Gerenciamento de Cores: perfil ICC por impressora.
+                                                  A escolha vale para a IMPRESSORA (fica no agente da
+                                                  estacao), nao para o pedido. -->
+                                             <div id="ped-print-cor-box" style="display:flex;flex-direction:column;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">
+                                                 <div style="display:flex;align-items:center;justify-content:space-between;">
+                                                     <label style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Gerenciamento de Cores</label>
+                                                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                                         <input type="checkbox" id="ped-print-cor-ativo" onchange="salvarCorImpressora()" style="width:16px;height:16px;accent-color:#6366f1;cursor:pointer;">
+                                                         <span style="font-size:0.75rem;color:#94a3b8;">Ativo</span>
+                                                     </label>
+                                                 </div>
+                                                 <div>
+                                                     <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;margin-bottom:5px;">Perfil da impressora (.icm)</label>
+                                                     <select id="ped-print-cor-perfil" onchange="salvarCorImpressora()" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
+                                                         <option value="">— sem perfil —</option>
+                                                     </select>
+                                                 </div>
+                                                 <div>
+                                                     <label style="display:block;font-size:0.72rem;font-weight:600;color:#64748b;margin-bottom:5px;">Intento de renderização</label>
+                                                     <select id="ped-print-cor-intento" onchange="salvarCorImpressora()" style="width:100%;background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#f1f5f9;padding:7px 10px;font-size:0.8rem;appearance:none;">
+                                                         <option value="relativo">Colorimétrico Relativo (fiel, com compensação de ponto preto)</option>
+                                                         <option value="perceptual">Perceptual (comprime o gamut suavemente)</option>
+                                                     </select>
+                                                 </div>
+                                                 <input type="file" id="ped-print-cor-upload" accept=".icc,.icm" style="display:none;" onchange="enviarPerfilIcc(this)">
+                                                 <button onclick="document.getElementById('ped-print-cor-upload').click()" style="width:100%;padding:7px 10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;cursor:pointer;font-size:0.78rem;">📥 Enviar perfil .icm desta impressora…</button>
+                                                 <div id="ped-print-cor-status" style="font-size:0.72rem;color:#64748b;line-height:1.4;">Desligado: a impressão sai sem conversão de cores, como sempre saiu.</div>
+                                             </div>
+
                                          </div><!-- /ped-driver-options -->
 
                                           <!-- Botão Salvar Config do Produto -->

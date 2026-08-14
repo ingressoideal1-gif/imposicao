@@ -22406,11 +22406,11 @@ function renderAmostrasOSItens(osId) {
                         <div class="amostra-decisao-btns">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container'
                                 ? `
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px #22c55e;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
-                                    ${status === 'APROVADA' ? '✅ APROVADO' : 'APROVAR'}
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'APROVADA' ? 'background-color: #22c55e; border-color: #22c55e; color: #fff; box-shadow: 0 0 10px rgba(34,197,94,0.6);' : 'background-color: rgba(34,197,94,0.10); border-color: rgba(34,197,94,0.45); color: #4ade80;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'APROVADA')">
+                                    ${status === 'APROVADA' ? '✅ APROVADO' : '✅ APROVAR'}
                                 </button>
-                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff;' : 'background-color: transparent; border-color: var(--border-color); color: var(--text);'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
-                                    ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : 'ALTERAR'}
+                                <button class="btn" style="flex: 1; font-weight: 700; height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid; ${status === 'REPROVADA' ? 'background-color: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 10px rgba(239,68,68,0.55);' : 'background-color: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.45); color: #f87171;'}" onclick="decisionAmostraItem('${item.id}', '${osId}', 'REPROVADA')">
+                                    ${status === 'REPROVADA' ? '❌ EM ALTERAÇÃO' : '❌ ALTERAR'}
                                 </button>
                                 `
                                 : `
@@ -28826,6 +28826,101 @@ async function reloadPedPrinterList() {
     }
 }
 
+// ──── Gerenciamento de Cores (perfil ICC por impressora) ────────────────────
+// O perfil e do EQUIPAMENTO: escolhido uma vez, vale para todo pedido que va
+// para aquela impressora. O mapa vive no agente da estacao
+// (printer_icc_map.json), ao lado do mapa de PPDs.
+
+let _corPerfisCache = null;
+
+async function carregarCorImpressora(printerName) {
+    const selPerfil = document.getElementById('ped-print-cor-perfil');
+    const selIntento = document.getElementById('ped-print-cor-intento');
+    const chkAtivo = document.getElementById('ped-print-cor-ativo');
+    if (!selPerfil || !printerName) return;
+    try {
+        const [perfis, mapa] = await Promise.all([
+            fetch('/api/icc').then(r => r.json()),
+            fetch('/api/printers/icc-map').then(r => r.json())
+        ]);
+        _corPerfisCache = perfis;
+        selPerfil.innerHTML = '<option value="">— sem perfil —</option>' +
+            perfis.map(p => p.erro
+                ? `<option value="${p.filename}" disabled>${p.filename} (inválido)</option>`
+                : `<option value="${p.filename}">${p.nome} (${p.classe})</option>`
+            ).join('');
+        const cfg = (mapa && mapa[printerName]) || {};
+        selPerfil.value = cfg.perfil || '';
+        if (selPerfil.value !== (cfg.perfil || '')) selPerfil.value = '';
+        selIntento.value = cfg.intento || 'relativo';
+        chkAtivo.checked = cfg.ativo === true;
+        atualizarStatusCor();
+    } catch (e) {
+        console.warn('[cores] Falha ao carregar perfis ICC:', e);
+    }
+}
+
+function atualizarStatusCor() {
+    const st = document.getElementById('ped-print-cor-status');
+    const chkAtivo = document.getElementById('ped-print-cor-ativo');
+    const selPerfil = document.getElementById('ped-print-cor-perfil');
+    if (!st) return;
+    if (!chkAtivo?.checked) {
+        st.textContent = 'Desligado: a impressão sai sem conversão de cores, como sempre saiu.';
+    } else if (!selPerfil?.value) {
+        st.textContent = 'Ligado, mas sem perfil escolhido: nada muda na impressão até escolher um.';
+    } else {
+        const p = (_corPerfisCache || []).find(x => x.filename === selPerfil.value);
+        st.textContent = `As cores desta impressora serão convertidas para "${p ? p.nome : selPerfil.value}"` +
+            (p && p.classe ? ` (${p.classe})` : '') + ' na hora de imprimir.';
+    }
+}
+
+async function salvarCorImpressora() {
+    const printerName = document.getElementById('ped-print-printer')?.value;
+    if (!printerName) return;
+    try {
+        const mapa = await fetch('/api/printers/icc-map').then(r => r.json()) || {};
+        mapa[printerName] = {
+            perfil: document.getElementById('ped-print-cor-perfil')?.value || '',
+            intento: document.getElementById('ped-print-cor-intento')?.value || 'relativo',
+            ativo: document.getElementById('ped-print-cor-ativo')?.checked === true
+        };
+        await fetch('/api/printers/icc-map', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mapa)
+        });
+        atualizarStatusCor();
+    } catch (e) {
+        console.warn('[cores] Falha ao salvar config de cor:', e);
+    }
+}
+
+async function enviarPerfilIcc(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const res = await fetch('/api/icc/upload', { method: 'POST', body: fd });
+        const corpo = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert('Perfil recusado: ' + (corpo.detail || 'arquivo inválido.'));
+            return;
+        }
+        const printerName = document.getElementById('ped-print-printer')?.value;
+        await carregarCorImpressora(printerName);
+        const selPerfil = document.getElementById('ped-print-cor-perfil');
+        if (selPerfil) { selPerfil.value = corpo.perfil.filename; }
+        await salvarCorImpressora();
+    } catch (e) {
+        alert('Falha ao enviar o perfil: ' + e);
+    } finally {
+        input.value = '';
+    }
+}
+
 // Ao mudar impressora no painel lateral → carregar opções do driver
 async function onPedPrinterChange() {
     const sel = document.getElementById('ped-print-printer');
@@ -28846,6 +28941,9 @@ async function onPedPrinterChange() {
     if (hintDiv) hintDiv.style.display = 'none';
     if (loadDiv) loadDiv.style.display = 'block';
     if (optDiv) optDiv.style.display = 'none';
+
+    // Config de cor e independente das capacidades do driver: carrega em paralelo
+    carregarCorImpressora(printerName);
 
     // Buscar capacidades
     let caps = null;
