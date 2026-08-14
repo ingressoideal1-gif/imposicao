@@ -74,8 +74,11 @@ Ele confere as três, põe uma de cada vez na área de transferência (o valor *
 na tela) e espera você colar no Render antes de passar para a próxima. Com `-Conferir`, só
 confere e sai.
 
-Depois de salvar no Render, `GET /api/acesso/saude` responde as três de uma vez e diz quais
-faltam.
+**As variáveis vêm antes da publicação, mas só dá para conferi-las depois.** O
+`GET /api/acesso/saude` responde `404` enquanto o Render roda código sem o
+`acesso_api` — o router nem existe lá. Não é erro de configuração: é o passo 2 que ainda
+não aconteceu. Configure agora mesmo assim, senão o primeiro deploy sobe sem a chave e o
+router não monta.
 
 > **Armadilha já vivida, e a razão de o script existir.** Ao copiar a
 > `SUPABASE_SERVICE_KEY` com o mouse, um caractere sobrando no começo ou um `=` no fim fazem
@@ -92,7 +95,16 @@ faltam.
 ```
 
 Os dois, sempre. O executável embute uma cópia do frontend, e o build do agente agora exige
-o `ACESSO_AGENTE_SEGREDO` — ele lê do `.env.local` sozinho.
+o `ACESSO_AGENTE_SEGREDO` — ele lê do `.env.local` sozinho, o mesmo arquivo de onde saiu o
+valor colado no Render, então os dois lados batem sem ninguém conferir.
+
+**É aqui que o `saude` passa a responder.** Assim que o Render terminar de subir:
+
+```
+curl https://imposicao.onrender.com/api/acesso/saude
+```
+
+Esperado: `"ok": true`, as três em `variaveis` e `"banco": "ok"`.
 
 ### 3. O teste que fecha tudo, e que só o usuário pode fazer
 
