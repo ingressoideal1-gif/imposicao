@@ -1,0 +1,240 @@
+# -*- coding: utf-8 -*-
+"""A tela do dono, no navegador de verdade.
+
+O que estes testes protegem não é a aparência: é que a tela não minta. Ela
+mostra números que vêm do ERP e números que vêm da publicação, e o dono toma
+decisão de produção olhando para eles.
+"""
+
+import json
+import os
+import re
+import subprocess
+
+import pytest
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _ler(caminho):
+    with open(os.path.join(RAIZ, caminho), encoding="utf-8") as f:
+        return f.read()
+
+
+# ── Estrutura, sem navegador ────────────────────────────────────────────────
+
+def test_os_tres_arquivos_estao_na_lista_que_as_estacoes_baixam():
+    import security_config
+    for nome in ("controle.html", "controle.js", "controle.css"):
+        assert nome in security_config.PAINEL_ARQUIVOS
+
+
+def test_a_pagina_carrega_o_login_compartilhado_ANTES_do_controle():
+    texto = _ler("frontend/controle.html")
+    assert texto.index("acesso-conta.js") < texto.index("controle.js")
+
+
+def test_a_versao_dos_scripts_e_uma_so():
+    versoes = set(re.findall(r'\.(?:js|css)\?v=(\d+)', _ler("frontend/controle.html")))
+    assert len(versoes) == 1, f"controle.html tem versoes misturadas: {sorted(versoes)}"
+
+
+def test_a_tela_nunca_explica_como_o_codigo_do_QR_e_gerado():
+    """Regra do usuario: e segredo de Estado.
+
+    A tela do dono e a que mais tenta explicar, porque e onde ele configura. Uma
+    frase sobre pool, hash ou sal aqui vira documentacao publica do mecanismo.
+    """
+    proibidas = ["pbkdf2", "pool", "hash do codigo", "sal do evento", "iteracoes"]
+    for arquivo in ("frontend/controle.html", "frontend/controle.js"):
+        texto = _ler(arquivo).lower()
+        for palavra in proibidas:
+            assert palavra not in texto, f"{arquivo} explica o mecanismo: '{palavra}'"
+
+
+def test_todo_botao_tem_rotulo_em_texto():
+    """Regra do projeto: controle novo precisa de rotulo em texto.
+
+    Um botao so com icone obriga o dono a adivinhar, e ele esta no celular,
+    talvez na porta do evento.
+    """
+    html = _ler("frontend/controle.html")
+    for botao in re.findall(r"<button[^>]*>(.*?)</button>", html, re.S):
+        sem_tag = re.sub(r"<[^>]+>", "", botao)
+        letras = re.sub(r"[^A-Za-zÀ-ÿ]", "", sem_tag)
+        assert len(letras) >= 3, f"botao sem rotulo em texto: {botao.strip()[:60]}"
+
+
+# ── No navegador ────────────────────────────────────────────────────────────
+
+PAINEL_FALSO = {
+    "evento": {"id": "ev-1", "nome_evento": "Baile do Hawaii",
+               "data_evento": None, "local_evento": "Clube"},
+    "setores": [
+        {"id": "s1", "nome": "PISTA", "quantidade": 5000, "publicadas": 5000,
+         "lotacao": None, "tipo_uso": "unico", "pedido_id_int": 18560, "modelo_id": 1000110},
+        {"id": "s2", "nome": "VIP", "quantidade": 800, "publicadas": 640,
+         "lotacao": 700, "tipo_uso": "reentrada", "pedido_id_int": 18560, "modelo_id": 1000111},
+    ],
+    "aparelhos": [{"id": "a1", "nome": "Portao A", "status": "ativo",
+                   "ultimo_visto": None, "setores": ["s1"]}],
+    "pedidos": [{"pedido_id_int": 18560, "publicado_em": "2026-08-14T00:00:00Z",
+                 "total_credenciais": 5640}],
+    "codigos_cliente": 42,
+}
+
+
+def _no_navegador(script_extra):
+    """Abre o controle.html num Chrome de verdade, com o backend interceptado.
+
+    O `controle.html` referencia os scripts por caminho ABSOLUTO (`/controle.js`),
+    que é como o Vercel e a estação os servem. Sob `file://` isso apontaria para
+    a raiz do disco, e a página carregaria vazia — sem erro nenhum, o que é o
+    pior modo de falhar num teste. Por isso o driver intercepta cada pedido e
+    responde com o arquivo lido de `frontend/`.
+    """
+    driver = f"""
+const fs = require('fs');
+const path = require('path');
+const REPO = {json.dumps(RAIZ)};
+const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
+const PAINEL = {json.dumps(PAINEL_FALSO)};
+
+const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
+                '.html': 'text/html' }};
+
+(async () => {{
+  const browser = await puppeteer.launch({{ args: ['--no-sandbox'] }});
+  const page = await browser.newPage();
+  const erros = [];
+  page.on('pageerror', e => erros.push(String(e)));
+
+  // Sob `file://` a página tem origem "null", que nenhum backend real permite —
+  // é um artefato só deste arnês. O backend de verdade libera CORS pela lista
+  // em `security_config.ALLOWED_ORIGINS`; aqui simulamos a mesma liberação
+  // para o pedido chegar como chegaria vindo de uma origem cadastrada.
+  const CORS = {{ 'Access-Control-Allow-Origin': '*',
+                 'Access-Control-Allow-Methods': '*',
+                 'Access-Control-Allow-Headers': '*' }};
+
+  await page.setRequestInterception(true);
+  page.on('request', req => {{
+    const url = req.url();
+
+    if (url.includes('/api/acesso/') && req.method() === 'OPTIONS') {{
+      return req.respond({{ status: 204, headers: CORS }});
+    }}
+    if (url.includes('/api/acesso/eventos/')) {{
+      return req.respond({{ status: 200, contentType: 'application/json',
+                           headers: CORS, body: JSON.stringify(PAINEL) }});
+    }}
+    if (url.includes('/api/acesso/meus-eventos')) {{
+      return req.respond({{ status: 200, contentType: 'application/json',
+                           headers: CORS, body: JSON.stringify({{ eventos: [] }}) }});
+    }}
+    // O SDK do Supabase não é exercitado aqui: a sessão é semeada à mão. Mas o
+    // `abrir()` da página roda sozinho no DOMContentLoaded e chama
+    // `AcessoConta.sessao()` ANTES do `page.evaluate` do teste rodar — um
+    // `supabaseClient` null quebraria esse arranque automático com um erro que
+    // não existe na página real, onde o SDK sempre entrega um client, mesmo
+    // sem sessão.
+    if (url.includes('cdn.jsdelivr') || url.includes('supabase-config')) {{
+      return req.respond({{ status: 200, contentType: 'application/javascript',
+                           body: 'window.supabaseClient = {{ auth: {{ getSession: '
+                               + 'async () => ({{ data: {{ session: null }} }}) }} }};' }});
+    }}
+
+    // Caminho absoluto do site vira arquivo de frontend/.
+    const nome = decodeURIComponent(url.split('?')[0].split('/').pop());
+    const arquivo = path.join(REPO, 'frontend', nome);
+    if (nome && fs.existsSync(arquivo) && TIPOS[path.extname(nome)]) {{
+      return req.respond({{ status: 200, contentType: TIPOS[path.extname(nome)],
+                           body: fs.readFileSync(arquivo, 'utf8') }});
+    }}
+    req.continue();
+  }});
+
+  await page.goto('file://' + path.join(REPO, 'frontend', 'controle.html').replace(/\\\\/g, '/'),
+                  {{ waitUntil: 'networkidle0' }});
+  await page.waitForFunction(() => window.Controle && window.AcessoConta);
+
+  const saida = await page.evaluate(async () => {{
+    window.supabaseClient = {{ auth: {{
+      getSession: async () => ({{ data: {{ session: {{ access_token: 'jwt-de-teste' }} }} }})
+    }} }};
+    {script_extra}
+  }});
+
+  await browser.close();
+  console.log(JSON.stringify({{ saida, erros }}));
+}})();
+"""
+    r = subprocess.run(["node", "-e", driver], capture_output=True, text=True, cwd=RAIZ)
+    if r.returncode != 0:
+        raise AssertionError(r.stderr[:800])
+    resultado = json.loads(r.stdout.strip().splitlines()[-1])
+    assert not resultado["erros"], resultado["erros"]
+    return resultado["saida"]
+
+
+def test_a_tela_desenha_setores_aparelhos_e_codigos():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        return {
+            titulo: document.getElementById('nome-evento-titulo').textContent,
+            setores: document.querySelectorAll('#setores .cartao').length,
+            aparelhos: document.querySelectorAll('#aparelhos .cartao').length,
+            codigos: document.getElementById('codigos-total').textContent,
+        };
+    """)
+    assert saida["titulo"] == "Baile do Hawaii"
+    assert saida["setores"] == 2
+    assert saida["aparelhos"] == 1
+    assert "42" in saida["codigos"]
+
+
+def test_a_divergencia_entre_encomendado_e_publicado_aparece_EM_TEXTO():
+    """O VIP tem 800 encomendados e 640 publicados.
+
+    Esse numero e a unica pista visivel de que ou a impressao nao terminou de
+    publicar, ou alguem publicou o que nao devia. Escondê-lo transformaria a
+    tela num relatorio que confirma o que o dono ja acha.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const vip = document.querySelectorAll('#setores .cartao')[1];
+        return { texto: vip.textContent.replace(/\\s+/g, ' ') };
+    """)
+    assert "640" in saida["texto"] and "800" in saida["texto"]
+    assert "confer" in saida["texto"].lower() or "falta" in saida["texto"].lower()
+
+
+def test_a_quantidade_impressa_nao_e_editavel():
+    """Quem manda na tiragem e o ERP."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const campos = [...document.querySelectorAll('#setores input')].map(i => i.id);
+        return { campos };
+    """)
+    assert not any("quantidade" in c for c in saida["campos"])
+
+
+def test_sem_elevacao_a_tela_anuncia_que_esta_somente_leitura():
+    """Uma tela que aceita o toque e nao grava e pior que uma que se declara."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        return {
+            somenteLeitura: document.body.classList.contains('somente-leitura'),
+            aviso: (document.getElementById('aviso-leitura').textContent || '').trim(),
+        };
+    """)
+    assert saida["somenteLeitura"] is True
+    assert len(saida["aviso"]) > 10

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Configurar o evento — Ideal Control</title>
+    <meta name="theme-color" content="#0a0f1e">
+    <link rel="stylesheet" href="/controle.css?v=566">
+</head>
+<body>
+<div class="folha">
+    <header>
+        <img src="/Logo Ideal Dark.png" alt="Ingresso Ideal">
+        <span>Controle de acesso</span>
+    </header>
+
+    <!-- 1. Entrar -->
+    <div id="bloco-entrar" class="cartao sumindo">
+        <h1>Entre com a sua conta do Vibe</h1>
+        <p style="font-size:.84rem;color:var(--dim);margin:0;">
+            <strong>É o mesmo e-mail e a mesma senha</strong> que você usa para
+            acompanhar os seus pedidos. Não existe cadastro separado aqui.
+        </p>
+        <label for="email">E-mail</label>
+        <input id="email" type="email" autocomplete="email" inputmode="email">
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" autocomplete="current-password">
+        <button id="btn-entrar">Entrar</button>
+        <button id="btn-esqueci" class="secundario">Esqueci minha senha</button>
+        <div id="erro-login" class="aviso erro sumindo" style="margin-top:14px;"></div>
+    </div>
+
+    <!-- 2. Escolher o evento -->
+    <div id="lista-eventos" class="sumindo">
+        <h1>Seus eventos</h1>
+        <div id="eventos"></div>
+        <p id="sem-eventos" class="aviso sumindo">
+            Você ainda não cadastrou nenhum evento. Leia o QR que a gráfica enviou
+            para cadastrar o primeiro.
+        </p>
+    </div>
+
+    <!-- 3. O evento -->
+    <div id="evento" class="sumindo">
+        <div id="faixa-elevacao" class="sumindo">
+            <span id="faixa-tempo">Modo configuração</span>
+            <button id="btn-sair-config" class="secundario">Sair do modo configuração</button>
+        </div>
+
+        <a href="/controle.html" style="color:var(--dim);font-size:.84rem;">← Meus eventos</a>
+        <h1 id="nome-evento-titulo">Evento</h1>
+
+        <div id="aviso-gravacao" class="aviso sumindo" role="status"></div>
+        <div id="aviso-leitura" class="aviso"></div>
+        <button id="btn-elevar">Digitar a senha do dono</button>
+
+        <div class="secao">
+            <h2>Dados do evento</h2>
+            <div class="cartao">
+                <label for="campo-nome-evento">Nome do evento</label>
+                <input id="campo-nome-evento" type="text">
+                <label for="campo-data">Data e hora</label>
+                <input id="campo-data" type="datetime-local">
+                <label for="campo-local">Local</label>
+                <input id="campo-local" type="text">
+                <button id="btn-gravar-evento" class="so-com-senha">Gravar dados do evento</button>
+            </div>
+        </div>
+
+        <div class="secao">
+            <h2>Setores</h2>
+            <div id="setores"></div>
+        </div>
+
+        <div class="secao">
+            <h2>Aparelhos da portaria</h2>
+            <div id="aparelhos"></div>
+            <div class="cartao so-com-senha">
+                <label for="novo-aparelho-nome">Nome do novo aparelho</label>
+                <input id="novo-aparelho-nome" type="text" placeholder="Ex.: Portão A">
+                <p style="font-size:.82rem;color:var(--dim);margin:12px 0 4px;">
+                    Quais setores este aparelho valida
+                </p>
+                <div id="novo-aparelho-setores"></div>
+                <button id="btn-criar-aparelho">Criar aparelho</button>
+            </div>
+        </div>
+
+        <div id="caixa-codigo" class="cartao sumindo">
+            <h2>Código deste aparelho</h2>
+            <div class="codigo-gerado" id="codigo-valor"></div>
+            <p style="font-size:.84rem;color:var(--dim);">
+                Anote agora: este código <strong>não aparece de novo</strong>. Se
+                você perdê-lo, é só gerar outro — e gerar outro
+                <strong>não desconecta</strong> o aparelho que já está trabalhando
+                na portaria. Para desligar um aparelho, use "Revogar".
+            </p>
+            <button id="btn-fechar-codigo" class="secundario">Já anotei, fechar</button>
+        </div>
+
+        <div class="secao">
+            <h2>Meus códigos (staff, cortesia)</h2>
+            <div class="cartao">
+                <p id="codigos-total" style="font-size:.9rem;">0 códigos carregados</p>
+                <div class="so-com-senha">
+                    <label for="codigos-setor">Setor destes códigos</label>
+                    <select id="codigos-setor"></select>
+                    <label for="codigos-texto">Cole os códigos, um por linha</label>
+                    <textarea id="codigos-texto" rows="6"
+                              style="width:100%;font-family:inherit;font-size:1rem;"></textarea>
+                    <button id="btn-importar-codigos">Carregar códigos</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="rodape">Ingresso Ideal</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/supabase-config.js?v=566"></script>
+<script src="/acesso-conta.js?v=566"></script>
+<script src="/controle.js?v=566"></script>
+</body>
+</html>
