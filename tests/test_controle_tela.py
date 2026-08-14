@@ -240,6 +240,174 @@ def test_sem_elevacao_a_tela_anuncia_que_esta_somente_leitura():
     assert len(saida["aviso"]) > 10
 
 
+def test_somente_leitura_desabilita_os_campos_de_verdade():
+    """A opacidade em CSS so avisa aos olhos.
+
+    Sem `disabled`, o campo aceita o toque e nao grava nada -- a mesma
+    armadilha que o cabecalho do arquivo condena. O dono digita uma nova
+    lotacao ou muda o uso do ingresso, ve a tela reagir, e nada persiste.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const semSenha = {
+            nome: document.getElementById('campo-nome-evento').disabled,
+            lotacao: document.getElementById('lotacao-s1').disabled,
+            uso: document.getElementById('uso-s1-unico').disabled,
+            gravar: document.getElementById('btn-gravar-evento').disabled,
+            elevar: document.getElementById('btn-elevar').disabled,
+        };
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const comSenha = {
+            nome: document.getElementById('campo-nome-evento').disabled,
+            lotacao: document.getElementById('lotacao-s1').disabled,
+            uso: document.getElementById('uso-s1-unico').disabled,
+            gravar: document.getElementById('btn-gravar-evento').disabled,
+        };
+        return { semSenha, comSenha };
+    """)
+    assert saida["semSenha"]["nome"] is True
+    assert saida["semSenha"]["lotacao"] is True
+    assert saida["semSenha"]["uso"] is True
+    assert saida["semSenha"]["gravar"] is True
+    assert saida["semSenha"]["elevar"] is False
+    assert saida["comSenha"]["nome"] is False
+    assert saida["comSenha"]["lotacao"] is False
+    assert saida["comSenha"]["uso"] is False
+    assert saida["comSenha"]["gravar"] is False
+
+
+def test_a_faixa_de_configuracao_mostra_o_tempo_e_um_botao_de_sair():
+    """Uma trava que se desarma calada e pior que trava nenhuma."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const faixa = document.getElementById('faixa-elevacao');
+        return {
+            visivel: !faixa.classList.contains('sumindo'),
+            texto: faixa.textContent.replace(/\\s+/g, ' ').trim(),
+            temBotaoSair: !!document.getElementById('btn-sair-config'),
+            somenteLeitura: document.body.classList.contains('somente-leitura'),
+        };
+    """)
+    assert saida["visivel"] is True
+    assert "14" in saida["texto"] or "15" in saida["texto"]
+    assert saida["temBotaoSair"] is True
+    assert saida["somenteLeitura"] is False
+
+
+def test_sair_da_configuracao_apaga_a_elevacao_na_hora():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.sairDaConfiguracao();
+        return {
+            elevacao: Controle.estado.elevacao,
+            somenteLeitura: document.body.classList.contains('somente-leitura'),
+            guardado: sessionStorage.getItem('acesso_elevacao'),
+        };
+    """)
+    assert saida["elevacao"] is None
+    assert saida["somenteLeitura"] is True
+    assert saida["guardado"] is None
+
+
+def test_elevacao_vencida_nao_conta_como_elevada():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) - 1 };
+        Controle.desenhar();
+        return { elevado: Controle.elevado(),
+                 somenteLeitura: document.body.classList.contains('somente-leitura') };
+    """)
+    assert saida["elevado"] is False
+    assert saida["somenteLeitura"] is True
+
+
+def test_elevacao_vencida_no_meio_da_edicao_NAO_perde_o_que_foi_digitado():
+    """O caso que faz o cliente desistir da tela.
+
+    A gravacao volta 401, a tela pede a senha, e repete a MESMA gravacao. O que
+    estava na caixa de texto continua la o tempo todo.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('campo-nome-evento').value = 'Nome que eu digitei';
+
+        // A primeira gravacao volta 401 de elevacao vencida.
+        let tentativas = 0;
+        Controle._pedirParaTeste = async () => {
+            tentativas++;
+            if (tentativas === 1) {
+                const e = new Error('venceu');
+                e.status = 401;
+                e.corpo = { codigo: 'elevacao_expirada' };
+                throw e;
+            }
+            return { ok: true };
+        };
+        Controle._pedirSenhaParaTeste = async () => {
+            Controle.estado.elevacao = { token: 'novo',
+                                         expira_em: Math.floor(Date.now()/1000) + 900 };
+        };
+
+        const r = await Controle.gravar('/eventos/ev-1', { nome_evento: 'x' }, 'PATCH');
+        return {
+            ok: !!r.ok,
+            tentativas,
+            digitado: document.getElementById('campo-nome-evento').value,
+        };
+    """)
+    assert saida["ok"] is True
+    assert saida["tentativas"] == 2
+    assert saida["digitado"] == "Nome que eu digitei"
+
+
+def test_falha_de_rede_avisa_e_mantem_o_que_foi_digitado():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('campo-nome-evento').value = 'Nome que eu digitei';
+        Controle._pedirParaTeste = async () => { throw new TypeError('Failed to fetch'); };
+        let erro = null;
+        try { await Controle.gravar('/eventos/ev-1', { nome_evento: 'x' }, 'PATCH'); }
+        catch (e) { erro = e.message; }
+        return {
+            erro,
+            aviso: document.getElementById('aviso-gravacao').textContent,
+            digitado: document.getElementById('campo-nome-evento').value,
+        };
+    """)
+    assert saida["digitado"] == "Nome que eu digitei"
+    assert len(saida["aviso"]) > 10
+
+
+def test_gravar_com_sucesso_anuncia_que_gravou():
+    """Regra do projeto: o que o sistema faz sozinho se anuncia."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle._pedirParaTeste = async () => ({ ok: true });
+        await Controle.gravar('/eventos/ev-1', { nome_evento: 'x' }, 'PATCH');
+        return { aviso: document.getElementById('aviso-gravacao').textContent };
+    """)
+    assert "grav" in saida["aviso"].lower()
+
+
 def test_sem_supabase_a_tela_explica_em_vez_de_ficar_em_branco():
     """`supabaseClient` fica nulo sem rede, sem o CDN, ou no modo offline
     deliberado do `supabase-config.js` (`?offline=true` / `offline_mode`). Sem

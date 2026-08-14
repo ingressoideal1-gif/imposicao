@@ -54,15 +54,38 @@
         return !!(estado.elevacao && estado.elevacao.expira_em * 1000 > Date.now());
     }
 
+    /**
+     * A trava de verdade, não só a de olhar.
+     *
+     * O CSS já esmaece os campos em `body.somente-leitura`, mas opacidade não
+     * impede toque: sem `disabled`, o dono digita uma nova lotação, vê o campo
+     * reagir, e nada persiste — a mesma armadilha que o cabeçalho deste
+     * arquivo condena. `#btn-elevar` e `#btn-sair-config` ficam de fora de
+     * propósito: são a saída do modo leitura, e travá-los exigiria senha para
+     * pedir senha.
+     *
+     * Chamada tanto por `desenhar()` quanto pelo `setInterval` da faixa, para
+     * que uma elevação que vence NO MEIO dos 20 segundos entre redesenhos
+     * realmente devolva a tela ao modo leitura — e não só esconda a faixa
+     * enquanto os campos continuam soltos.
+     */
+    function travarCampos() {
+        var leitura = !elevado();
+        document.body.classList.toggle('somente-leitura', leitura);
+        $('aviso-leitura').textContent = leitura
+            ? 'Você está vendo o evento. Para alterar qualquer coisa, toque em '
+              + '"Digitar a senha do dono".'
+            : '';
+
+        document.querySelectorAll('#evento input, #evento select, #evento textarea')
+            .forEach(function (el) { el.disabled = leitura; });
+        document.querySelectorAll('#evento button.so-com-senha, #evento .so-com-senha button')
+            .forEach(function (el) { el.disabled = leitura; });
+    }
+
     function desenhar() {
         var p = estado.painel;
         if (!p) { return; }
-
-        document.body.classList.toggle('somente-leitura', !elevado());
-        $('aviso-leitura').textContent = elevado()
-            ? ''
-            : 'Você está vendo o evento. Para alterar qualquer coisa, toque em '
-              + '"Digitar a senha do dono".';
 
         $('nome-evento-titulo').textContent = p.evento.nome_evento;
         $('campo-nome-evento').value = p.evento.nome_evento || '';
@@ -79,6 +102,11 @@
         p.aparelhos.forEach(function (a) { $('aparelhos').appendChild(cartaoDeAparelho(a)); });
 
         $('codigos-total').textContent = p.codigos_cliente + ' códigos carregados';
+
+        // Depois dos cartões de setor existirem no DOM: são eles que trazem os
+        // campos de lotação e uso que a trava também precisa desligar.
+        travarCampos();
+        desenharFaixa();
     }
 
     function cartaoDeSetor(s) {
@@ -243,7 +271,152 @@
             });
     }
 
+    var CHAVE_ELEVACAO = 'acesso_elevacao';
+
+    /**
+     * Guardar a elevação no `sessionStorage`, e não no `localStorage`: fechar a
+     * aba tem de encerrar o modo configuração. O aparelho é da portaria.
+     */
+    function guardarElevacao(e) {
+        estado.elevacao = e;
+        try {
+            if (e) { sessionStorage.setItem(CHAVE_ELEVACAO, JSON.stringify(e)); }
+            else { sessionStorage.removeItem(CHAVE_ELEVACAO); }
+        } catch (err) { /* aba anônima */ }
+    }
+
+    function elevar(senha) {
+        return AcessoConta.pedir('/eventos/' + estado.evento_id + '/elevar', {
+            method: 'POST',
+            headers: cabecalhos({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ senha: senha, navegador: AcessoConta.navegadorId() })
+        }).then(function (r) {
+            guardarElevacao({ token: r.token, expira_em: r.expira_em });
+            desenhar();
+            return r;
+        });
+    }
+
+    function sairDaConfiguracao() {
+        guardarElevacao(null);
+        desenhar();
+    }
+
+    function avisar(texto, tipo) {
+        var el = $('aviso-gravacao');
+        el.textContent = texto;
+        el.className = 'aviso ' + (tipo || 'ok');
+    }
+
+    // Substituíveis pelo teste de navegador, que não tem backend.
+    function _pedir(caminho, opcoes) {
+        return (window.Controle._pedirParaTeste || AcessoConta.pedir)(caminho, opcoes);
+    }
+    function _pedirSenha() {
+        if (window.Controle._pedirSenhaParaTeste) {
+            return window.Controle._pedirSenhaParaTeste();
+        }
+        return abrirCaixaDeSenha();
+    }
+
+    /**
+     * Toda gravação passa por aqui.
+     *
+     * Elevação vencida não perde o que o dono digitou: a chamada volta 401 com
+     * `codigo: 'elevacao_expirada'`, a tela pede a senha e REPETE a mesma
+     * gravação. Nada é relido da tela nesse caminho, e nada é limpo.
+     */
+    function gravar(caminho, corpo, metodo, jaTentou) {
+        var opcoes = {
+            method: metodo || 'PATCH',
+            headers: cabecalhos({
+                'Content-Type': 'application/json',
+                'X-Elevacao': (estado.elevacao || {}).token || '',
+                'X-Navegador': AcessoConta.navegadorId()
+            }),
+            body: JSON.stringify(corpo)
+        };
+
+        return _pedir(caminho, opcoes).then(function (r) {
+            avisar('Gravado.', 'ok');
+            return r;
+        }).catch(function (e) {
+            var venceu = e.status === 401 && e.corpo && e.corpo.codigo === 'elevacao_expirada';
+            if (venceu && !jaTentou) {
+                return Promise.resolve(_pedirSenha()).then(function () {
+                    return gravar(caminho, corpo, metodo, true);
+                });
+            }
+            if (e.status === undefined) {
+                // Sem status: foi a rede, não o servidor. O texto digitado fica.
+                avisar('Sem conexão agora. O que você digitou continua aqui — '
+                     + 'toque em gravar de novo quando a internet voltar.', 'erro');
+            } else {
+                avisar(e.message, 'erro');
+            }
+            throw e;
+        });
+    }
+
+    /** A faixa que conta o tempo. Redesenha a cada 20 segundos. */
+    function desenharFaixa() {
+        var faixa = $('faixa-elevacao');
+        if (!elevado()) {
+            faixa.classList.add('sumindo');
+            return;
+        }
+        faixa.classList.remove('sumindo');
+        var falta = Math.max(0, estado.elevacao.expira_em - Math.floor(Date.now() / 1000));
+        var m = Math.floor(falta / 60), s = falta % 60;
+        $('faixa-tempo').textContent = 'Modo configuração · ' + m + ':'
+            + String(s).padStart(2, '0') + ' restante';
+    }
+
+    // `travarCampos()` também roda aqui, e não só dentro de `desenhar()`: sem
+    // isto, uma elevação que vence no meio dos 20 segundos deixaria a faixa
+    // sumir enquanto os campos continuavam destravados — a mesma trava que
+    // se desarma calada que a faixa existe para evitar.
+    setInterval(function () {
+        if (estado.painel) { desenharFaixa(); travarCampos(); }
+    }, 20000);
+
+    /**
+     * Pede a senha do dono. Devolve uma promessa que resolve quando a elevação
+     * chega — é o que permite ao `gravar()` repetir a mesma gravação depois.
+     *
+     * `prompt` de propósito: é a única caixa de texto que o navegador não guarda
+     * em preenchimento automático, e a senha do dono não pode ficar num campo
+     * que o celular do porteiro memorize.
+     */
+    function abrirCaixaDeSenha() {
+        var senha = window.prompt(
+            'Digite a senha da sua conta do Vibe para liberar as alterações por '
+            + acesso_minutos() + ' minutos.'
+        );
+        if (!senha) { return Promise.reject(new Error('cancelado')); }
+        return elevar(senha).catch(function (e) {
+            avisar(e.message, 'erro');
+            throw e;
+        });
+    }
+
+    function acesso_minutos() { return 15; }
+
     document.addEventListener('DOMContentLoaded', function () {
+        $('btn-sair-config').addEventListener('click', sairDaConfiguracao);
+
+        $('btn-elevar').addEventListener('click', function () {
+            abrirCaixaDeSenha();
+        });
+
+        $('btn-gravar-evento').addEventListener('click', function () {
+            gravar('/eventos/' + estado.evento_id, {
+                nome_evento: $('campo-nome-evento').value,
+                local_evento: $('campo-local').value,
+                data_evento: $('campo-data').value || null
+            }, 'PATCH').then(carregarPainel).catch(function () { /* já avisado */ });
+        });
+
         $('btn-entrar').addEventListener('click', function () {
             var erro = $('erro-login');
             erro.classList.add('sumindo');
@@ -272,6 +445,9 @@
         carregarPainel: carregarPainel,
         desenhar: desenhar,
         elevado: elevado,
-        abrir: abrir
+        abrir: abrir,
+        elevar: elevar,
+        gravar: gravar,
+        sairDaConfiguracao: sairDaConfiguracao
     };
 })();
