@@ -22389,17 +22389,11 @@ function renderAmostrasOSItens(osId) {
                 </div>
             </div>
             <div style="padding: 24px;">
-                <div class="amostra-mid-row" style="grid-template-columns: 1fr;">
-                    <div class="amostra-decisao-panel">
-                        ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
-                        <div class="amostra-decisao-status-box">
-                            <span style="font-size: 0.82rem; color: var(--text-dim);">Status Atual:</span>
-                            ${statusBadge}
-                        </div>
-                        `}
+                <div class="amostra-mid-row" style="grid-template-columns: 1fr; gap: 12px;">
+                    <div class="amostra-decisao-panel" style="padding: 14px 16px;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label for="amostra-obs-${item.id}" style="font-size: 0.82rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em;">Anotações / Observações de Alteração</label>
-                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
+                            <textarea id="amostra-obs-${item.id}" class="form-control" rows="2" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px;"
                                 onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
                         </div>
                         <div class="amostra-decisao-btns">
@@ -22421,17 +22415,17 @@ function renderAmostrasOSItens(osId) {
                         </div>
                     </div>
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
-                    <div class="amostra-config-panel">
-                        <div style="display: flex; flex-direction: column; gap: 14px;">
-                            <div style="display: flex; gap: 14px; align-items: flex-end;">
-                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; flex: 1; min-width: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
+                    <div class="amostra-config-panel" style="padding: 14px 16px;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                                <div class="form-group" id="amostra-item-config-cor-${idx}" style="margin-bottom: 0; flex: 0.9; min-width: 0; display: ${item.modo_pdf ? 'none' : 'block'};">
                                     <label style="display: flex; align-items: center; min-height: 24px; margin-bottom: 4px; text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Cor</label>
                                     <select class="form-control" style="width: 100%;" id="amostra-item-cor-${idx}" onchange="onItemCorSelect(${idx}, '${osId}', '${item.id}')">
                                         <option value="">-- Selecione uma Cor --</option>
                                         ${corsOpts}
                                     </select>
                                 </div>
-                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0; flex: 1; min-width: 0;">
+                                <div class="form-group" id="amostra-item-config-num-${idx}" style="margin-bottom: 0; flex: 0.9; min-width: 0;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; min-height: 24px; margin-bottom: 4px;">
                                         <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; margin: 0;">Numeração</label>
                                         ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `
@@ -22445,6 +22439,59 @@ function renderAmostrasOSItens(osId) {
                                         <option value="">-- Selecione uma Numeração --</option>
                                         ${numOpts}
                                     </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0; flex: 2.2; min-width: 0;">
+                                    <div style="display: flex; align-items: center; min-height: 24px; margin-bottom: 4px;">
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 1px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
+                                            <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
+                                            <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
+                                        </span>
+                                    </div>
+                                    ${item.verso ? `
+                                    <div style="display:flex; flex-direction: column; gap:8px;">
+                                        <div style="display:flex; gap:6px; align-items: center; flex-wrap: wrap;">
+                                            <span class="badge badge-blue" style="font-size: 0.7rem; font-weight: 700; width: 60px; text-align: center;">FRENTE</span>
+                                            <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="font-weight:700; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Abrir Criador de Arte 2D para este modelo">🎨 Criar Arte</button>
+                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;" title="Enviar arquivo de arte (PDF, JPG, PNG)">
+                                                🖼️ Upload Arte
+                                            </label>
+                                            <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
+                                                onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
+                                            <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
+                                            <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                            <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
+                                            <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página">📄 PDF</button>
+                                            <span id="amostra-item-arte-name-${idx}" style="display:none;"></span>
+                                        </div>
+                                        <div style="display:${item.modo_pdf ? 'none' : 'flex'}; gap:6px; align-items: center; flex-wrap: wrap;">
+                                            <span class="badge badge-amber" style="font-size: 0.7rem; font-weight: 700; width: 60px; text-align: center;">VERSO</span>
+                                            <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'verso')" style="font-weight:700; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff;" title="Abrir Criador de Arte 2D para o Verso">🎨 Criar Verso</button>
+                                            <label class="btn btn-sm btn-secondary" for="amostra-item-arte-verso-${idx}" style="margin: 0; cursor: pointer;" title="Enviar arquivo de arte do verso (PDF, JPG, PNG)">
+                                                🖼️ Upload Verso
+                                            </label>
+                                            <input type="file" id="amostra-item-arte-verso-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
+                                                onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'verso')">
+                                            <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" style="${itemTemArte(item, 'verso') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')">✕ Remover</button>
+                                            <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-verso-${idx}" style="${itemTemArte(item, 'verso') ? '' : 'display:none;'}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="Copiar Link da Arte Verso"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                            <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="Colar Link da Arte Verso"><i class="fa-regular fa-paste"></i> Colar</button>
+                                            <span id="amostra-item-arte-verso-name-${idx}" style="display:none;"></span>
+                                        </div>
+                                    </div>
+                                    ` : `
+                                    <div style="display:flex; gap:6px; align-items: center; flex-wrap: wrap;">
+                                        <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="font-weight:700; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Abrir Criador de Arte 2D para este modelo">🎨 Criar Arte</button>
+                                        <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;" title="Enviar arquivo de arte (PDF, JPG, PNG)">
+                                            🖼️ Upload Arte
+                                        </label>
+                                        <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
+                                            onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
+                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
+                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
+                                        <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
+                                        <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página">📄 PDF</button>
+                                        <span id="amostra-item-arte-name-${idx}" style="display:none;"></span>
+                                    </div>
+                                    `}
                                 </div>
                             </div>
                             <!-- Banco de dados (CSV) da numeração. Fica escondida
@@ -22462,69 +22509,11 @@ function renderAmostrasOSItens(osId) {
                                     <button class="btn btn-sm btn-secondary" id="btn-csv-fatia-${idx}" style="flex:1; white-space:nowrap;" onclick="abrirCsvDoModelo(${idx}, '${osId}', 'distribuir')" title="Escolher quais linhas do banco ESTE modelo imprime">🧩 Linhas: <b id="csv-conta-${idx}">—</b></button>
                                 </div>
                             </div>
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label style="text-transform: uppercase; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;">Arte de Amostra (PDF, JPG, PNG)</label>
-                                ${item.verso ? `
-                                <div style="display:flex; flex-direction: column; gap:10px; margin-top: 4px;">
-                                    <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
-                                        <span class="badge badge-blue" style="font-size: 0.7rem; font-weight: 700; width: 60px; text-align: center;">FRENTE</span>
-                                        <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="font-weight:700; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Abrir Criador de Arte 2D para este modelo">🎨 Criar Arte</button>
-                                        <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">
-                                            🖼️ Upload Arte
-                                        </label>
-                                        <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
-                                            onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
-                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
-                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
-                                        <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
-                                        <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página">📄 PDF</button>
-                                        <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${itemTemArte(item, 'frente') ? '(Salva)' : ''}</span>
-                                    </div>
-                                    <div style="display:${item.modo_pdf ? 'none' : 'flex'}; gap:10px; align-items: center; flex-wrap: wrap;">
-                                        <span class="badge badge-amber" style="font-size: 0.7rem; font-weight: 700; width: 60px; text-align: center;">VERSO</span>
-                                        <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'verso')" style="font-weight:700; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; color: #fff;" title="Abrir Criador de Arte 2D para o Verso">🎨 Criar Verso</button>
-                                        <label class="btn btn-sm btn-secondary" for="amostra-item-arte-verso-${idx}" style="margin: 0; cursor: pointer;">
-                                            🖼️ Upload Verso
-                                        </label>
-                                        <input type="file" id="amostra-item-arte-verso-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
-                                            onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'verso')">
-                                        <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-verso-${idx}" style="${itemTemArte(item, 'verso') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'verso')">✕ Remover</button>
-                                        <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-verso-${idx}" style="${itemTemArte(item, 'verso') ? '' : 'display:none;'}" onclick="copiarArte('${item.verso_arte_url || ''}', 'verso')" title="Copiar Link da Arte Verso"><i class="fa-regular fa-copy"></i> Copiar</button>
-                                        <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'verso')" title="Colar Link da Arte Verso"><i class="fa-regular fa-paste"></i> Colar</button>
-                                        <span id="amostra-item-arte-verso-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${itemTemArte(item, 'verso') ? '(Salva)' : ''}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: flex-end;">
-                                        <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.95rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
-                                            <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
-                                            <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
-                                        </span>
-                                    </div>
-                                </div>
-                                ` : `
-                                <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
-                                    <button class="btn btn-sm" onclick="abrirCriadorDeArte(${idx}, '${osId}', 'frente')" style="font-weight:700; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; color: #fff;" title="Abrir Criador de Arte 2D para este modelo">🎨 Criar Arte</button>
-                                    <label class="btn btn-sm btn-secondary" for="amostra-item-arte-${idx}" style="margin: 0; cursor: pointer;">
-                                        🖼️ Upload Arte
-                                    </label>
-                                    <input type="file" id="amostra-item-arte-${idx}" accept=".pdf,.jpg,.jpeg,.png" style="display:none"
-                                        onchange="onItemArteUpload(${idx}, '${osId}', '${item.id}', 'frente')">
-                                    <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="onItemArteRemove(${idx}, '${osId}', '${item.id}', 'frente')">✕ Remover</button>
-                                    <button class="btn btn-sm btn-secondary" id="btn-copy-amostra-arte-${idx}" style="${itemTemArte(item, 'frente') ? '' : 'display:none;'}" onclick="copiarArte('${item.arte_url || ''}', 'frente')" title="Copiar Link da Arte"><i class="fa-regular fa-copy"></i> Copiar</button>
-                                    <button class="btn btn-sm btn-secondary" onclick="colarArte(${idx}, '${osId}', '${item.id}', 'frente')" title="Colar Link da Arte"><i class="fa-regular fa-paste"></i> Colar</button>
-                                    <button class="btn btn-sm ${item.modo_pdf ? 'btn-pdf-active' : 'btn-secondary'}" id="btn-modo-pdf-${idx}" onclick="toggleModoPdf(${idx}, '${osId}', '${item.id}')" title="Modo PDF Multi-Página">📄 PDF</button>
-                                    <span id="amostra-item-arte-name-${idx}" style="font-size:0.82rem; color:var(--text-dim)">${itemTemArte(item, 'frente') ? '(Arte Salva)' : ''}</span>
-                                    <span style="display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 0.95rem; color: var(--text-dim); background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; user-select: all;" onclick="navigator.clipboard.writeText('${item.id}').then(() => toast('ID ${item.id} copiado!', 'success'))" title="Copiar ID do Modelo">
-                                        <i class="fa-regular fa-copy" style="font-size: 0.7rem;"></i>
-                                        <span style="font-weight: 600; font-family: monospace;">ID: ${item.id}</span>
-                                    </span>
-                                </div>
-                                `}
-                            </div>
                         </div>
                     </div>
                     `}
                 </div>
-                <div class="amostra-preview-container" style="margin-top: 20px;">
+                <div class="amostra-preview-container" style="margin-top: 12px;">
                     <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
                         <div id="amostra-item-header-${idx}" style="color: #FFD700; font-weight: 800; font-size: 1.1rem; text-transform: uppercase; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
                             ${item.nome_modelo || `Modelo ${idx + 1}`}
