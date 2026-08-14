@@ -369,7 +369,9 @@ async function deletarFonteWeb(id) {
     
     try {
         const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-        const res = await fetch(`${apiBase}/api/fontes?id=${id}`, {
+        // A rota do app.py e DELETE /api/fontes/{fonte_id}; mandar ?id= dava 405
+        // e o Excluir nunca funcionou.
+        const res = await fetch(`${apiBase}/api/fontes/${encodeURIComponent(id)}`, {
             method: 'DELETE'
         });
         
