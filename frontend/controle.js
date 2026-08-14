@@ -393,7 +393,15 @@
             'Digite a senha da sua conta do Vibe para liberar as alterações por '
             + acesso_minutos() + ' minutos.'
         );
-        if (!senha) { return Promise.reject(new Error('cancelado')); }
+        if (!senha) {
+            // Cancelar não é o mesmo caso que errar a senha nem que ficar sem
+            // rede — cada um já tem a própria frase. Sem esta, o dono toca em
+            // "Cancelar" no meio de uma gravação e a tela fica muda: ele guarda
+            // o celular achando que gravou.
+            avisar('Você cancelou o pedido de senha. Não gravei nada — o que '
+                 + 'você digitou continua na tela.', 'erro');
+            return Promise.reject(new Error('cancelado'));
+        }
         return elevar(senha).catch(function (e) {
             avisar(e.message, 'erro');
             throw e;

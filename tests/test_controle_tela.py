@@ -109,6 +109,13 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
   const erros = [];
   page.on('pageerror', e => erros.push(String(e)));
 
+  // `abrirCaixaDeSenha()` usa `window.prompt`, de propósito -- é a única caixa
+  // que o navegador não guarda em preenchimento automático. Sem tratar o
+  // evento `dialog`, o CDP prende a página esperando alguém decidir, e o
+  // teste trava. Descartar sempre equivale a tocar em "Cancelar": é o caminho
+  // que o dono segue quando não tem a senha em mãos no momento.
+  page.on('dialog', dialog => dialog.dismiss());
+
   // Sob `file://` a página tem origem "null", que nenhum backend real permite —
   // é um artefato só deste arnês. O backend de verdade libera CORS pela lista
   // em `security_config.ALLOWED_ORIGINS`; aqui simulamos a mesma liberação
@@ -406,6 +413,45 @@ def test_gravar_com_sucesso_anuncia_que_gravou():
         return { aviso: document.getElementById('aviso-gravacao').textContent };
     """)
     assert "grav" in saida["aviso"].lower()
+
+
+def test_cancelar_o_pedido_de_senha_avisa_e_nao_perde_o_que_foi_digitado():
+    """O caso que a revisao pegou: cancelar nao e o mesmo que errar a senha,
+    nem que ficar sem rede -- os outros dois ja tem frase propria, essa era a
+    que faltava. Sem aviso, o dono guarda o celular achando que gravou.
+
+    Nao substitui `_pedirSenhaParaTeste`: o driver descarta o `window.prompt`
+    de verdade (equivale a tocar em "Cancelar"), para exercitar o caminho
+    real de `abrirCaixaDeSenha()`, e nao uma simulacao dele.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('campo-nome-evento').value = 'Nome que eu digitei';
+
+        Controle._pedirParaTeste = async () => {
+            const e = new Error('venceu');
+            e.status = 401;
+            e.corpo = { codigo: 'elevacao_expirada' };
+            throw e;
+        };
+
+        let erro = null;
+        try {
+            await Controle.gravar('/eventos/ev-1', { nome_evento: 'x' }, 'PATCH');
+        } catch (e) { erro = e.message; }
+        return {
+            erro,
+            aviso: document.getElementById('aviso-gravacao').textContent,
+            digitado: document.getElementById('campo-nome-evento').value,
+        };
+    """)
+    assert saida["erro"] == "cancelado"
+    assert len(saida["aviso"]) > 10
+    assert "cancel" in saida["aviso"].lower()
+    assert "digitou" in saida["aviso"].lower() or "continua" in saida["aviso"].lower()
+    assert saida["digitado"] == "Nome que eu digitei"
 
 
 def test_sem_supabase_a_tela_explica_em_vez_de_ficar_em_branco():
