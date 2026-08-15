@@ -1014,7 +1014,7 @@ class FakeBanco:
     """Um Supabase de mentira, que guarda em dicionario o que foi gravado."""
 
     def __init__(self):
-        self.eventos = [{"id": "e1", "nome": "Festa", "sal": SAL}]
+        self.eventos = [{"id": "e1", "nome_evento": "Festa", "sal": SAL}]
         self.aparelhos = [{
             "id": "d1", "evento_id": "e1", "nome": "Portao A", "status": "ativo",
             "codigo_hash": qr_ideal.hash_codigo("ABC234", SAL), "token_hash": None,
@@ -1400,12 +1400,18 @@ def _faixa(cabecalho: str | None, desde: int) -> dict:
     # regra `setor_nao_autorizado` possivel: com so os setores autorizados, um
     # ingresso de outra porta cairia em `desconhecido` e o porteiro devolveria
     # ingresso bom achando que e falso.
+    # UMA LINHA A MAIS de proposito. Sem ela nao da para distinguir "a ultima
+    # pagina veio cheia por coincidencia" de "ainda tem mais": um total multiplo
+    # exato de POR_PAGINA faria a ultima pagina se declarar incompleta, e o
+    # aparelho pediria uma pagina vazia atras da outra.
     pagina = supabase(
         "GET",
         f"producao_acesso_credenciais?evento_id=eq.{evento_id}&status=eq.ativo"
         "&select=id,codigo_hash,setor_id,numero&order=id.asc"
-        f"&offset={desde}&limit={POR_PAGINA}",
+        f"&offset={desde}&limit={POR_PAGINA + 1}",
     ) or []
+    tem_mais = len(pagina) > POR_PAGINA
+    pagina = pagina[:POR_PAGINA]
 
     return {
         "evento": {"id": evento["id"], "nome": evento.get("nome_evento"),
@@ -1420,7 +1426,7 @@ def _faixa(cabecalho: str | None, desde: int) -> dict:
         # nomes de campo.
         "credenciais": [{"h": c["codigo_hash"], "s": c["setor_id"],
                          "n": c["numero"], "id": c["id"]} for c in pagina],
-        "proxima": (desde + POR_PAGINA) if len(pagina) == POR_PAGINA else None,
+        "proxima": (desde + POR_PAGINA) if tem_mais else None,
     }
 
 
@@ -1504,7 +1510,7 @@ if acesso_api.disponivel():
 - [ ] **Step 5: Rodar e ver passar**
 
 Run: `venv/Scripts/python.exe -m pytest tests/test_acesso_portaria.py -q`
-Expected: PASS, 14 testes.
+Expected: PASS, 13 testes.
 
 - [ ] **Step 6: Conferir que o motor ainda sobe**
 
@@ -1513,7 +1519,7 @@ Expected: `motor ok`
 
 - [ ] **Step 7: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 588 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 589 passed.
 
 ```bash
 git add acesso_portaria.py tests/test_acesso_portaria.py app.py
@@ -2211,7 +2217,7 @@ Se `test_ambiguidade_...` falhar por a fila ter 1 em vez de 0, o defeito é real
 
 - [ ] **Step 6: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 594 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 595 passed.
 
 ```bash
 git add frontend/portaria.html frontend/portaria.js tests/test_portaria_tela.py tests/portaria_tela_harness.js
@@ -2429,7 +2435,7 @@ Run:
 node -e "['portaria-camera.js','sw.js'].forEach(f => new Function(require('fs').readFileSync('frontend/'+f,'utf8'))); console.log('js ok')"
 venv/Scripts/python.exe -m pytest tests/ -q
 ```
-Expected: `js ok` e 594 passed.
+Expected: `js ok` e 595 passed.
 
 - [ ] **Step 6: Commit**
 
@@ -2622,7 +2628,7 @@ Abra `http://127.0.0.1:9123/app/controle.html`, confira o desenho, e derrube o s
 
 - [ ] **Step 8: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 599 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 600 passed.
 
 ```bash
 git add frontend/controle.js frontend/controle.html frontend/controle.css tests/test_portaria_fonte.py
@@ -2722,7 +2728,7 @@ Expected: PASS, 5 testes (os links novos precisam apontar para arquivos que exis
 
 - [ ] **Step 5: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 599 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 600 passed.
 
 ```bash
 git add docs/controle_acesso.md docs/STATUS_PROJETO.md
@@ -2774,7 +2780,7 @@ prova equivalente; `TIPOS_DE_USO = ("unico", "reentrada")` está em `acesso_conf
 chave `uq_acesso_leitura_do_aparelho UNIQUE (dispositivo_id, id_local)` está em
 `sql/schema_acesso.sql`.
 
-**Contagem de testes ao longo do plano:** 548 hoje → 565 (Task 1) → 574 (Task 2) → 588
-(Task 3) → 594 (Task 4) → 599 (Task 6). As Tasks 5 e 7 não acrescentam teste: a 5 é a
+**Contagem de testes ao longo do plano:** 548 hoje → 566 (Task 1) → 576 (Task 2) → 589
+(Task 3) → 595 (Task 4) → 600 (Task 6). As Tasks 5 e 7 não acrescentam teste: a 5 é a
 câmera, que precisa de hardware, e é coberta pelas guardas de fonte da Task 6 e pelo teste
 no celular, que só o usuário pode fazer.
