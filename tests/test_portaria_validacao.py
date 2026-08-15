@@ -148,6 +148,17 @@ def test_a_ORDEM_das_regras_setor_errado_vence_faixa_bloqueada():
     assert decidir(["h-vip-9"], c)["motivo"] == "setor_nao_autorizado"
 
 
+def test_a_ORDEM_das_regras_fora_da_janela_vence_faixa_bloqueada():
+    """Fora da janela e a informacao que o porteiro consegue usar sozinho --
+    'volte as 20h'. Dizer 'bloqueado' mandaria a pessoa procurar o dono do
+    evento por um problema que, antes da janela abrir, nem e o dela: o
+    bloqueio so importa depois que o setor comecar a valer."""
+    c = carga(bloqueios=[{"setor_id": PISTA, "de": 1, "ate": 50, "motivo": "lote extraviado"}])
+    c["setores"][0]["abre_em"] = "2026-08-20T23:00:00Z"
+    r = decidir(["h-pista-1"], c, agora="2026-08-20T22:00:00Z")
+    assert r["motivo"] == "fora_da_janela"
+
+
 def test_a_ORDEM_das_regras_bloqueio_vence_ja_entrou():
     """Bloqueio e decisao do dono e tem motivo para ler em voz alta; 'ja entrou'
     e consequencia. Dizer 'ja entrou' esconderia que aquele lote esta suspenso."""
