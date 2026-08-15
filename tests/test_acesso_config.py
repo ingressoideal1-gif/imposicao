@@ -34,10 +34,12 @@ class FakeBanco:
             "id": SETOR, "evento_id": EVENTO, "nome": "PISTA", "quantidade": 5000,
             "lotacao": None, "tipo_uso": "unico", "pedido_id_int": 18560,
             "modelo_id": 1000110, "status": "ativo",
+            "abre_em": None, "fecha_em": None,
         }]
         self.dispositivos = []
         self.dispositivo_setores = []
         self.credenciais = []
+        self.bloqueios = []
         self.pedidos = [{"pedido_id_int": 18560, "evento_id": EVENTO,
                          "publicado_em": "2026-08-14T00:00:00Z", "total_credenciais": 5000}]
         # Registro das chamadas, para o teste que confere que um evento sem
@@ -53,7 +55,28 @@ class FakeBanco:
             "producao_acesso_dispositivo_setores": self.dispositivo_setores,
             "producao_acesso_credenciais": self.credenciais,
             "producao_acesso_pedidos": self.pedidos,
+            "producao_acesso_bloqueios": self.bloqueios,
         }[nome]
+
+    @staticmethod
+    def _filtros_eq(path):
+        """Todo `coluna=eq.valor` da URL, como dicionario.
+
+        Honrar isso no GET importa a partir dos bloqueios: um bloqueio pertence
+        a UM setor de UM evento, e sem filtro a fixture devolveria os bloqueios
+        de todo mundo. O teste "nao traz bloqueio de outro evento" so consegue
+        distinguir "filtrou certo" de "trouxe tudo" se o fake filtrar de
+        verdade. `select`, `order` e `limit` nao sao filtro e ficam de fora
+        naturalmente, porque nenhum deles usa `=eq.`.
+        """
+        filtros = {}
+        if "?" not in path:
+            return filtros
+        for par in path.split("?", 1)[1].split("&"):
+            if "=eq." in par:
+                chave, valor = par.split("=eq.", 1)
+                filtros[chave] = valor
+        return filtros
 
     @staticmethod
     def _id_filtrado(path):
@@ -94,7 +117,9 @@ class FakeBanco:
         self.chamadas.append((method, path))
         alvo = self._tabela(path)
         if method == "GET":
-            linhas = [dict(l) for l in alvo]
+            filtros = self._filtros_eq(path)
+            linhas = [dict(l) for l in alvo
+                      if all(str(l.get(k)) == v for k, v in filtros.items())]
             campos = self._campos_selecionados(path)
             if campos:
                 linhas = [{k: v for k, v in l.items() if k in campos} for l in linhas]
@@ -554,6 +579,220 @@ def test_gravar_um_setor_nao_atinge_o_outro(banco, elevado):
     assert banco.setores[0]["tipo_uso"] == "reentrada"
     outro = next(s for s in banco.setores if s["id"] == outro_setor)
     assert outro["tipo_uso"] == "unico"
+
+
+# ── A janela do setor ───────────────────────────────────────────────────────
+#
+# Quando aquele setor passa a valer, e quando deixa de valer. Nulo dos dois
+# lados quer dizer sem limite -- e e assim que nasce todo setor que ja existia
+# antes desta coluna.
+
+ABRE = "2026-09-28T20:00:00Z"
+FECHA = "2026-09-29T04:00:00Z"
+
+
+def test_o_painel_traz_a_janela_do_setor(banco):
+    banco.setores[0]["abre_em"] = ABRE
+    banco.setores[0]["fecha_em"] = FECHA
+    setor = cfg._painel(EVENTO)["setores"][0]
+    assert setor["abre_em"] == ABRE
+    assert setor["fecha_em"] == FECHA
+
+
+def test_gravar_a_janela_do_setor(banco, elevado):
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"abre_em": ABRE, "fecha_em": FECHA})
+    assert banco.setores[0]["abre_em"] == ABRE
+    assert banco.setores[0]["fecha_em"] == FECHA
+
+
+def test_a_janela_pode_ser_apagada(banco, elevado):
+    """Nulo quer dizer sem limite, e o dono precisa poder voltar atras depois de
+    ter posto um horario -- senao a unica saida seria inventar uma data
+    absurda."""
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"abre_em": ABRE, "fecha_em": FECHA})
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"abre_em": None, "fecha_em": ""})
+    assert banco.setores[0]["abre_em"] is None
+    assert banco.setores[0]["fecha_em"] is None
+
+
+def test_fechar_antes_de_abrir_e_recusado(banco, elevado):
+    """Janela invertida nao recusa "as vezes": ela recusa SEMPRE, e o dono
+    descobre com a fila na porta. Como o baile que vira a madrugada e o caso
+    normal, a confusao natural aqui e trocar o dia -- por isso a mensagem tem de
+    dizer o que esta errado, e nao so 'invalido'."""
+    with pytest.raises(HTTPException) as e:
+        cfg._gravar_setor(SETOR, DONO, elevado, NAV,
+                          {"abre_em": FECHA, "fecha_em": ABRE})
+    assert e.value.status_code == 422
+    assert "fecha" in str(e.value.detail).lower()
+
+
+def test_janela_so_com_um_lado_e_aceita(banco, elevado):
+    """"Abre as 20h e nao fecha" e configuracao legitima -- e a comparacao entre
+    os dois lados nao pode estourar quando um deles e nulo."""
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"abre_em": ABRE})
+    assert banco.setores[0]["abre_em"] == ABRE
+    assert banco.setores[0]["fecha_em"] is None
+
+
+def test_a_janela_e_comparada_contra_o_que_JA_ESTA_gravado(banco, elevado):
+    """A tela manda so o que mudou. Se o dono mexer so no `fecha_em`, a checagem
+    precisa comparar com o `abre_em` do BANCO -- senao uma janela invertida
+    entra pela porta dos fundos, um campo de cada vez."""
+    cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"abre_em": FECHA})
+    with pytest.raises(HTTPException) as e:
+        cfg._gravar_setor(SETOR, DONO, elevado, NAV, {"fecha_em": ABRE})
+    assert e.value.status_code == 422
+
+
+# ── Bloqueio de faixas de ingresso ──────────────────────────────────────────
+#
+# Um ponto de venda nao pagou, um lote foi roubado. A faixa e um intervalo de
+# `numero` -- a posicao do ingresso na tiragem --, e o motivo e o que a portaria
+# le em voz alta para a pessoa que esta na frente.
+
+BLOQUEIO = "55555555-5555-5555-5555-555555555555"
+
+
+def test_bloquear_uma_faixa(banco, elevado):
+    cfg._bloquear(SETOR, DONO, elevado, NAV,
+                  {"de": 1000, "ate": 1500, "motivo": "lote nao pago pelo PDV Centro"})
+    assert len(banco.bloqueios) == 1
+    b = banco.bloqueios[0]
+    assert (b["de"], b["ate"]) == (1000, 1500)
+    assert b["motivo"] == "lote nao pago pelo PDV Centro"
+    assert b["status"] == "ativo"
+    assert b["setor_id"] == SETOR
+    assert b["evento_id"] == EVENTO      # a portaria baixa por evento, nao por setor
+
+
+def test_o_motivo_e_obrigatorio(banco, elevado):
+    """A razao de a tabela existir. Sem motivo, a portaria recusa e ninguem sabe
+    o que dizer para a pessoa na frente."""
+    for vazio in (None, "", "   "):
+        with pytest.raises(HTTPException) as e:
+            cfg._bloquear(SETOR, DONO, elevado, NAV,
+                          {"de": 1, "ate": 2, "motivo": vazio})
+        assert e.value.status_code == 422
+        assert "motivo" in str(e.value.detail).lower()
+    assert banco.bloqueios == []
+
+
+def test_faixa_invertida_e_recusada(banco, elevado):
+    """"De 1500 a 1000" nao bloqueia ingresso NENHUM -- o pior resultado
+    possivel, porque o dono acha que bloqueou e so descobre na porta."""
+    with pytest.raises(HTTPException) as e:
+        cfg._bloquear(SETOR, DONO, elevado, NAV,
+                      {"de": 1500, "ate": 1000, "motivo": "roubo"})
+    assert e.value.status_code == 422
+    assert banco.bloqueios == []
+
+
+def test_faixa_comecando_antes_do_primeiro_ingresso_e_recusada(banco, elevado):
+    """A tiragem comeca em 1. `de = 0` costuma ser o dono pensando em indice."""
+    with pytest.raises(HTTPException) as e:
+        cfg._bloquear(SETOR, DONO, elevado, NAV, {"de": 0, "ate": 10, "motivo": "x"})
+    assert e.value.status_code == 422
+
+
+def test_faixa_passando_da_tiragem_e_recusada(banco, elevado):
+    """O setor tem 5000. Bloquear ate 6000 nao faz mal a ninguem, mas quase
+    sempre e o dono confundindo o setor -- e o silencio o deixaria achando que
+    protegeu ingresso que nem existe naquele setor."""
+    with pytest.raises(HTTPException) as e:
+        cfg._bloquear(SETOR, DONO, elevado, NAV,
+                      {"de": 4900, "ate": 6000, "motivo": "roubo"})
+    assert e.value.status_code == 422
+    assert "5000" in str(e.value.detail)
+
+
+def test_um_ingresso_so_pode_ser_bloqueado(banco, elevado):
+    """A faixa e inclusiva nos dois extremos: de = ate = 7 bloqueia o 7."""
+    cfg._bloquear(SETOR, DONO, elevado, NAV, {"de": 7, "ate": 7, "motivo": "perdido"})
+    assert (banco.bloqueios[0]["de"], banco.bloqueios[0]["ate"]) == (7, 7)
+
+
+def test_bloquear_sem_elevacao_e_recusado(banco):
+    with pytest.raises(HTTPException) as e:
+        cfg._bloquear(SETOR, DONO, None, NAV, {"de": 1, "ate": 2, "motivo": "x"})
+    assert e.value.status_code == 401
+    assert banco.bloqueios == []
+
+
+def test_bloquear_setor_alheio_e_recusado(banco, elevado):
+    with pytest.raises(HTTPException) as e:
+        cfg._bloquear(SETOR, ESTRANHO, elevado, NAV, {"de": 1, "ate": 2, "motivo": "x"})
+    assert e.value.status_code == 403
+    assert banco.bloqueios == []
+
+
+def test_o_painel_traz_os_bloqueios_do_setor(banco, elevado):
+    cfg._bloquear(SETOR, DONO, elevado, NAV, {"de": 10, "ate": 20, "motivo": "roubo"})
+    setor = cfg._painel(EVENTO)["setores"][0]
+    assert len(setor["bloqueios"]) == 1
+    assert setor["bloqueios"][0]["motivo"] == "roubo"
+
+
+def test_o_painel_nao_traz_bloqueio_ja_liberado(banco, elevado):
+    """Liberado e historico, nao configuracao. Mostra-lo na lista de bloqueios
+    ativos faria o dono liberar duas vezes e nunca entender por que continua
+    ali."""
+    cfg._bloquear(SETOR, DONO, elevado, NAV, {"de": 10, "ate": 20, "motivo": "roubo"})
+    banco.bloqueios[0]["status"] = "removido"
+    assert cfg._painel(EVENTO)["setores"][0]["bloqueios"] == []
+
+
+def test_o_painel_nao_traz_bloqueio_de_outro_evento(banco, elevado):
+    outro_evento = "88888888-8888-8888-8888-888888888888"
+    banco.bloqueios.append({
+        "id": "b-alheio", "evento_id": outro_evento, "setor_id": "s-alheio",
+        "de": 1, "ate": 9999, "motivo": "de outro cliente", "status": "ativo",
+    })
+    cfg._bloquear(SETOR, DONO, elevado, NAV, {"de": 10, "ate": 20, "motivo": "roubo"})
+    setor = cfg._painel(EVENTO)["setores"][0]
+    assert [b["motivo"] for b in setor["bloqueios"]] == ["roubo"]
+
+
+def test_liberar_marca_removido_e_nao_apaga(banco, elevado):
+    """"Liberamos o lote as 22h40" e informacao que a portaria vai querer ter
+    depois. Um DELETE a jogaria fora."""
+    cfg._bloquear(SETOR, DONO, elevado, NAV, {"de": 10, "ate": 20, "motivo": "roubo"})
+    id_bloqueio = banco.bloqueios[0]["id"]
+    cfg._liberar(SETOR, id_bloqueio, DONO, elevado, NAV)
+    assert len(banco.bloqueios) == 1
+    assert banco.bloqueios[0]["status"] == "removido"
+
+
+def test_liberar_sem_elevacao_e_recusado(banco, elevado):
+    cfg._bloquear(SETOR, DONO, elevado, NAV, {"de": 10, "ate": 20, "motivo": "roubo"})
+    id_bloqueio = banco.bloqueios[0]["id"]
+    with pytest.raises(HTTPException) as e:
+        cfg._liberar(SETOR, id_bloqueio, DONO, None, NAV)
+    assert e.value.status_code == 401
+    assert banco.bloqueios[0]["status"] == "ativo"
+
+
+def test_liberar_bloqueio_de_setor_alheio_e_recusado(banco, elevado):
+    cfg._bloquear(SETOR, DONO, elevado, NAV, {"de": 10, "ate": 20, "motivo": "roubo"})
+    id_bloqueio = banco.bloqueios[0]["id"]
+    with pytest.raises(HTTPException) as e:
+        cfg._liberar(SETOR, id_bloqueio, ESTRANHO, elevado, NAV)
+    assert e.value.status_code == 403
+    assert banco.bloqueios[0]["status"] == "ativo"
+
+
+def test_liberar_bloqueio_de_OUTRO_setor_e_recusado(banco, elevado):
+    """A rota passa pelo setor para achar o dono. Sem conferir que o bloqueio
+    pertence AQUELE setor, o dono de um evento liberaria um bloqueio de outro
+    cliente so mandando o id certo pela sua propria URL."""
+    banco.bloqueios.append({
+        "id": "b-alheio", "evento_id": "88888888-8888-8888-8888-888888888888",
+        "setor_id": "s-alheio", "de": 1, "ate": 10, "motivo": "x", "status": "ativo",
+    })
+    with pytest.raises(HTTPException) as e:
+        cfg._liberar(SETOR, "b-alheio", DONO, elevado, NAV)
+    assert e.value.status_code == 403
+    assert banco.bloqueios[0]["status"] == "ativo"
 
 
 # ── Os aparelhos ────────────────────────────────────────────────────────────

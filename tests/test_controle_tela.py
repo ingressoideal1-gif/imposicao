@@ -92,9 +92,13 @@ PAINEL_FALSO = {
     # a tela poder ler um campo que nunca chega em producao.
     "setores": [
         {"id": "s1", "nome": "PISTA", "quantidade": 5000,
-         "tipo_uso": "unico", "pedido_id_int": 18560, "modelo_id": 1000110},
+         "tipo_uso": "unico", "abre_em": None, "fecha_em": None,
+         "bloqueios": [], "pedido_id_int": 18560, "modelo_id": 1000110},
         {"id": "s2", "nome": "VIP", "quantidade": 800,
-         "tipo_uso": "reentrada", "pedido_id_int": 18560, "modelo_id": 1000111},
+         "tipo_uso": "reentrada", "abre_em": None, "fecha_em": None,
+         "bloqueios": [{"id": "b1", "setor_id": "s2", "de": 100, "ate": 150,
+                        "motivo": "lote nao pago pelo PDV Centro"}],
+         "pedido_id_int": 18560, "modelo_id": 1000111},
     ],
     "aparelhos": [{"id": "a1", "nome": "Portao A", "status": "ativo",
                    "ultimo_visto": None, "setores": ["s1"]}],
@@ -834,23 +838,31 @@ def test_o_cartao_do_setor_nao_tem_campo_de_lotacao_nem_botao_de_salvar():
     Le o DOM montado, e nao o texto do arquivo: um campo que sobrevivesse
     escondido atras de outro nome continuaria sendo um segundo numero que
     discorda do contrato.
+
+    NAO conta campos por tipo. O cartao tem campos legitimos -- nome, e o "de/a"
+    do bloqueio de faixa --, e uma contagem cega reprovaria a cada opcao nova de
+    configuracao, sem nada a ver com lotacao. O que este teste guarda e a
+    AUSENCIA da lotacao, dita de tres formas independentes.
     """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
         await Controle.carregarPainel();
+        document.getElementById('setor-configurar-s1').click();
         const cartao = document.getElementById('setor-configurar-s1').parentElement;
         return {
-            campos: cartao.querySelectorAll('input[type="number"], input[type="text"]').length,
+            porId: [...cartao.querySelectorAll('input, button')]
+                       .map(e => e.id).filter(id => /lota|salvar/i.test(id)),
             lotacaoPorId: !!document.getElementById('lotacao-s1'),
             salvarPorId: !!document.getElementById('setor-salvar-s1'),
             texto: cartao.textContent,
         };
     """)
-    assert saida["campos"] == 0
+    assert saida["porId"] == []
     assert saida["lotacaoPorId"] is False
     assert saida["salvarPorId"] is False
     assert "lotação" not in saida["texto"].lower()
+    assert "salvar" not in saida["texto"].lower()
     assert "5.000 ingressos contratados" in saida["texto"]
 
 
@@ -1104,6 +1116,306 @@ def test_desenhar_de_novo_nao_apaga_os_dados_do_evento_sendo_digitados():
     """)
     assert saida["nome"] == "Nome novo que eu digitei"
     assert saida["local"] == "Local novo"
+
+
+def test_o_fuso_vai_e_volta_sem_mover_o_horario():
+    """A unica logica desta tela que da para errar sem nada parecer errado: um
+    horario tres horas fora ainda e um horario.
+
+    O `datetime-local` nao tem fuso -- ele entrega a hora do RELOGIO de quem
+    digitou. A coluna e TIMESTAMPTZ. Mandar cru faz o Postgres ler como UTC, e
+    no Brasil o portao passaria a abrir tres horas antes.
+    """
+    saida = _no_navegador("""
+        const iso = Controle.doCampoParaISO('2026-09-28T20:00');
+        const d = new Date(iso);
+        return {
+            terminaEmZ: iso.endsWith('Z'),
+            // O instante tem de ser as 20:00 do RELOGIO local, seja qual for o
+            // fuso da maquina que roda o teste.
+            horaLocal: d.getHours(),
+            minutoLocal: d.getMinutes(),
+            // E a volta tem de devolver exatamente o que foi digitado.
+            volta: Controle.deISOParaCampo(iso),
+            vazioVira: Controle.doCampoParaISO(''),
+            nuloVira: Controle.deISOParaCampo(null),
+        };
+    """)
+    assert saida["terminaEmZ"] is True
+    assert saida["horaLocal"] == 20
+    assert saida["minutoLocal"] == 0
+    assert saida["volta"] == "2026-09-28T20:00"
+    assert saida["vazioVira"] is None
+    assert saida["nuloVira"] == ""
+
+
+def test_a_janela_do_setor_grava_o_horario_convertido():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
+            return { ok: true };
+        };
+        document.getElementById('setor-configurar-s1').click();
+        const campo = document.getElementById('setor-abre_em-s1');
+        campo.value = '2026-09-28T20:00';
+        campo.dispatchEvent(new Event('change'));
+        await new Promise(r => setTimeout(r, 80));
+        return { chamadas, esperado: new Date('2026-09-28T20:00').toISOString() };
+    """)
+    assert len(saida["chamadas"]) == 1
+    assert saida["chamadas"][0]["caminho"] == "/setores/s1"
+    assert saida["chamadas"][0]["corpo"] == {"abre_em": saida["esperado"]}
+
+
+def test_o_nome_na_portaria_grava_ao_sair_do_campo():
+    """O nome nasce do nome do modelo no ERP -- "PISTA 2026 FRENTE VERNIZ". Quem
+    esta na porta precisa ler "PISTA". O PATCH ja aceitava `nome` desde a parte
+    3a e nenhuma tela chamava."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
+            return { ok: true };
+        };
+        document.getElementById('setor-configurar-s1').click();
+        const campo = document.getElementById('setor-nome-s1');
+        const valorDeFabrica = campo.value;
+        campo.value = 'Pista';
+        campo.dispatchEvent(new Event('change'));
+        await new Promise(r => setTimeout(r, 80));
+        return { chamadas, valorDeFabrica };
+    """)
+    assert saida["valorDeFabrica"] == "PISTA"
+    assert len(saida["chamadas"]) == 1
+    assert saida["chamadas"][0]["corpo"] == {"nome": "Pista"}
+
+
+def test_o_nome_igual_ao_que_ja_esta_nao_grava():
+    """Sair do campo sem ter mudado nada e o gesto mais comum do mundo."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.body) { chamadas.push(caminho); }
+            return { ok: true };
+        };
+        document.getElementById('setor-configurar-s1').click();
+        const campo = document.getElementById('setor-nome-s1');
+        campo.dispatchEvent(new Event('change'));
+        campo.value = '   ';                 // apagar o nome nao e renomear
+        campo.dispatchEvent(new Event('change'));
+        await new Promise(r => setTimeout(r, 80));
+        return { chamadas };
+    """)
+    assert saida["chamadas"] == []
+
+
+def test_bloquear_uma_faixa_manda_os_tres_campos_e_limpa_o_formulario():
+    """Limpar importa: sem isso o dono ve a faixa recem-bloqueada ainda escrita
+    no formulario, e o convite e bloquea-la de novo."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.method === 'POST') {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
+            return { ok: true };
+        };
+        document.getElementById('setor-configurar-s1').click();
+        document.getElementById('bloq-de-s1').value = '1000';
+        document.getElementById('bloq-ate-s1').value = '1500';
+        document.getElementById('bloq-motivo-s1').value = 'lote nao pago';
+        document.getElementById('bloq-criar-s1').click();
+        await new Promise(r => setTimeout(r, 150));
+        return {
+            chamadas,
+            de: document.getElementById('bloq-de-s1').value,
+            ate: document.getElementById('bloq-ate-s1').value,
+            motivo: document.getElementById('bloq-motivo-s1').value,
+            aindaAberto: !document.getElementById('setor-config-s1')
+                .classList.contains('sumindo'),
+        };
+    """)
+    assert len(saida["chamadas"]) == 1
+    assert saida["chamadas"][0]["caminho"] == "/setores/s1/bloqueios"
+    assert saida["chamadas"][0]["corpo"] == {"de": "1000", "ate": "1500",
+                                             "motivo": "lote nao pago"}
+    assert saida["de"] == ""
+    assert saida["ate"] == ""
+    assert saida["motivo"] == ""
+    assert saida["aindaAberto"] is True
+
+
+def test_a_lista_mostra_a_faixa_bloqueada_com_o_motivo():
+    """O motivo e o que a portaria le em voz alta. Escondido, o dono nao sabe o
+    que bloqueou nem como desfazer -- e um lote bloqueado por engano so
+    apareceria na porta, com a fila esperando."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('setor-configurar-s2').click();
+        return {
+            texto: document.getElementById('bloq-lista-s2').textContent.replace(/\\s+/g,' '),
+            temLiberar: !!document.getElementById('bloq-liberar-b1'),
+            semBloqueio: document.getElementById('bloq-lista-s1').textContent,
+        };
+    """)
+    assert "100 a 150" in saida["texto"]
+    assert "lote nao pago pelo PDV Centro" in saida["texto"]
+    assert saida["temLiberar"] is True
+    assert "Nenhum ingresso bloqueado" in saida["semBloqueio"]
+
+
+def test_liberar_pede_confirmacao_e_manda_DELETE():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.method === 'DELETE') { chamadas.push(caminho); }
+            return { ok: true };
+        };
+        document.getElementById('setor-configurar-s2').click();
+        document.getElementById('bloq-liberar-b1').click();
+        await new Promise(r => setTimeout(r, 150));
+        return { chamadas };
+    """, aceitar_dialogo=True)
+    assert saida["chamadas"] == ["/setores/s2/bloqueios/b1"]
+
+
+def test_liberar_recusado_na_confirmacao_nao_manda_nada():
+    """Liberar devolve a entrada a um lote roubado. Cancelar tem de cancelar."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.method === 'DELETE') { chamadas.push(caminho); }
+            return { ok: true };
+        };
+        document.getElementById('setor-configurar-s2').click();
+        document.getElementById('bloq-liberar-b1').click();
+        await new Promise(r => setTimeout(r, 150));
+        return { chamadas };
+    """)
+    assert saida["chamadas"] == []
+
+
+def test_bloquear_e_liberar_entram_na_trava_de_senha():
+    """Sao as duas escritas mais perigosas desta tela: uma recusa um lote na
+    porta, a outra devolve a entrada a um lote roubado."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const semSenha = {
+            criar: document.getElementById('bloq-criar-s2').disabled,
+            liberar: document.getElementById('bloq-liberar-b1').disabled,
+            de: document.getElementById('bloq-de-s2').disabled,
+            nome: document.getElementById('setor-nome-s2').disabled,
+            abre: document.getElementById('setor-abre_em-s2').disabled,
+        };
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const comSenha = {
+            criar: document.getElementById('bloq-criar-s2').disabled,
+            liberar: document.getElementById('bloq-liberar-b1').disabled,
+            de: document.getElementById('bloq-de-s2').disabled,
+            nome: document.getElementById('setor-nome-s2').disabled,
+            abre: document.getElementById('setor-abre_em-s2').disabled,
+        };
+        return { semSenha, comSenha };
+    """)
+    for campo in ("criar", "liberar", "de", "nome", "abre"):
+        assert saida["semSenha"][campo] is True, campo
+        assert saida["comSenha"][campo] is False, campo
+
+
+def test_desenhar_de_novo_nao_apaga_o_bloqueio_sendo_digitado():
+    """O dono digita tres campos seguidos. Um redesenho disparado por OUTRO
+    cartao no meio disso apagaria os tres, sem ele ter tocado neste
+    formulario."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('setor-configurar-s1').click();
+        document.getElementById('bloq-de-s1').value = '1000';
+        document.getElementById('bloq-ate-s1').value = '1500';
+        document.getElementById('bloq-motivo-s1').value = 'lote nao pago';
+        Controle.desenhar();
+        return {
+            de: document.getElementById('bloq-de-s1').value,
+            ate: document.getElementById('bloq-ate-s1').value,
+            motivo: document.getElementById('bloq-motivo-s1').value,
+        };
+    """)
+    assert saida["de"] == "1000"
+    assert saida["ate"] == "1500"
+    assert saida["motivo"] == "lote nao pago"
+
+
+def test_o_motivo_do_bloqueio_e_TEXTO_nunca_HTML():
+    """O motivo e escrito pelo dono do evento, e a tela do dono e a tela de um
+    cliente -- nao nossa. Um `<img onerror>` no motivo rodaria no navegador de
+    quem abrisse o cartao."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.painel.setores[0].bloqueios = [
+            { id: 'bx', setor_id: 's1', de: 1, ate: 2,
+              motivo: '<img src=x onerror="window.__invadiu=1">' }
+        ];
+        Controle.desenhar();
+        document.getElementById('setor-configurar-s1').click();
+        const lista = document.getElementById('bloq-lista-s1');
+        return {
+            temImg: lista.querySelectorAll('img').length,
+            invadiu: !!window.__invadiu,
+            texto: lista.textContent,
+        };
+    """)
+    assert saida["temImg"] == 0
+    assert saida["invadiu"] is False
+    assert "onerror" in saida["texto"]      # aparece como texto, nao como tag
 
 
 def test_desenhar_de_novo_nao_fecha_o_painel_nem_desmarca_o_uso():

@@ -109,7 +109,12 @@
             // com segundos e fuso, e o campo fica VAZIO em silêncio se o
             // formato não bater — o dono acharia que a data nunca foi
             // gravada.
-            $('campo-data').value = (p.evento.data_evento || '').slice(0, 16);
+            //
+            // Passa pela conversão de fuso em vez de um `.slice(0, 16)` cru: a
+            // coluna é TIMESTAMPTZ, então um horário gravado às 22:00 de
+            // Brasília volta como 01:00 do dia seguinte em UTC, e o corte
+            // mostraria esse 01:00 na tela. Ver `deISOParaCampo`.
+            $('campo-data').value = deISOParaCampo(p.evento.data_evento);
             jaDesenhouEvento = true;
         }
 
@@ -125,9 +130,23 @@
             var painelConfig = $('setor-config-' + s.id);
             if (!painelConfig) { return; }
             var marcado = document.querySelector('input[name="uso-' + s.id + '"]:checked');
+            var valor = function (id) {
+                var el = $(id + '-' + s.id);
+                return el ? el.value : '';
+            };
             edicoesDeSetorAntes[s.id] = {
                 aberto: !painelConfig.classList.contains('sumindo'),
-                tipo_uso: marcado ? marcado.value : s.tipo_uso
+                tipo_uso: marcado ? marcado.value : s.tipo_uso,
+                nome: valor('setor-nome'),
+                abre_em: valor('setor-abre_em'),
+                fecha_em: valor('setor-fecha_em'),
+                // O formulário de bloqueio conta MAIS do que os outros campos:
+                // o dono digita três coisas seguidas, e um redesenho disparado
+                // por outro cartão no meio disso apagaria os três — sem ele ter
+                // tocado neste formulário.
+                bloq_de: valor('bloq-de'),
+                bloq_ate: valor('bloq-ate'),
+                bloq_motivo: valor('bloq-motivo')
             };
         });
 
@@ -267,10 +286,125 @@
             btnConfigurar.setAttribute('aria-expanded', 'true');
         }
 
+        // O aviso de gravado é UM por setor, no fim do painel: todos os grupos
+        // acima gravam sozinhos, e um "✓ salvo" por grupo seria quatro avisos
+        // repetindo a mesma coisa num cartão de celular.
+        var recado = document.createElement('span');
+        recado.className = 'salvo sumindo';
+        recado.id = 'setor-salvo-' + s.id;
+        recado.setAttribute('role', 'status');
+        recado.textContent = '✓ salvo';
+
+        painel.appendChild(nomeNaPortaria(s, edicaoAnterior));
+        painel.appendChild(quandoVale(s, edicaoAnterior));
         painel.appendChild(opcoesDeUso(s, edicaoAnterior));
+        painel.appendChild(recado);
+        painel.appendChild(bloqueiosDoSetor(s, edicaoAnterior));
         el.appendChild(painel);
 
         return el;
+    }
+
+    /**
+     * Avisa que gravou, achando o elemento NOVO pelo id.
+     *
+     * Toda gravação termina em `carregarPainel()`, que reconstrói o cartão
+     * inteiro: qualquer referência capturada antes da chamada já saiu do
+     * documento quando a promessa resolve, e mexer nela não apareceria na tela.
+     */
+    function avisarSalvo(setor_id) {
+        var atual = $('setor-salvo-' + setor_id);
+        if (atual) { atual.classList.remove('sumindo'); }
+    }
+
+    function grupo(rotulo) {
+        var caixa = document.createElement('div');
+        var titulo = document.createElement('p');
+        titulo.className = 'config-titulo';
+        titulo.textContent = rotulo;
+        caixa.appendChild(titulo);
+        return caixa;
+    }
+
+    /**
+     * O nome que a portaria lê.
+     *
+     * O nome nasce do nome do modelo no ERP — coisas como "PISTA 2026 FRENTE
+     * VERNIZ". Quem está na porta precisa ler "PISTA". O `PATCH /setores/{id}`
+     * aceita `nome` desde a parte 3a; esta é a tela que faltava.
+     *
+     * Grava no `change`, que num campo de texto dispara ao sair do campo — e
+     * não a cada tecla, o que mandaria um PATCH por letra digitada.
+     */
+    function nomeNaPortaria(s, edicaoAnterior) {
+        var caixa = grupo('Nome na portaria');
+        var campo = document.createElement('input');
+        campo.type = 'text';
+        campo.id = 'setor-nome-' + s.id;
+        campo.value = edicaoAnterior ? edicaoAnterior.nome : (s.nome || '');
+        campo.addEventListener('change', function () {
+            var novo = campo.value.trim();
+            if (!novo || novo === s.nome) { return; }
+            gravarSetor(s.id, { nome: novo })
+                .then(function () { avisarSalvo(s.id); })
+                .catch(function () { /* `gravar()` já avisou na tela */ });
+        });
+        caixa.appendChild(campo);
+        return caixa;
+    }
+
+    /**
+     * A janela em que o setor vale na portaria. Vazio dos dois lados = sempre.
+     *
+     * FUSO HORÁRIO, e é o ponto todo destas duas funções: o `datetime-local` do
+     * navegador não tem fuso nenhum — ele entrega "2026-09-28T20:00", que é a
+     * hora do RELÓGIO de quem digitou. Mandar isso cru para uma coluna
+     * TIMESTAMPTZ faz o Postgres lê-la como UTC, e no Brasil o portão passaria a
+     * abrir às 17:00. A conversão tem de acontecer aqui, onde o fuso do dono é
+     * conhecido; o servidor não tem como adivinhá-lo.
+     */
+    function doCampoParaISO(local) {
+        if (!local) { return null; }
+        var d = new Date(local);        // interpretado no fuso de quem digitou
+        return isNaN(d.getTime()) ? null : d.toISOString();
+    }
+
+    function deISOParaCampo(iso) {
+        if (!iso) { return ''; }
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) { return ''; }
+        // `toISOString()` devolveria UTC de novo. Estes cinco campos montam a
+        // hora local, que é o que o `datetime-local` espera.
+        var p = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+             + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function quandoVale(s, edicaoAnterior) {
+        var caixa = grupo('Quando vale (vazio = sempre)');
+
+        [['abre_em', 'Abre'], ['fecha_em', 'Fecha']].forEach(function (par) {
+            var rot = document.createElement('label');
+            rot.setAttribute('for', 'setor-' + par[0] + '-' + s.id);
+            rot.textContent = par[1];
+            caixa.appendChild(rot);
+
+            var campo = document.createElement('input');
+            campo.type = 'datetime-local';
+            campo.id = 'setor-' + par[0] + '-' + s.id;
+            campo.value = edicaoAnterior ? edicaoAnterior[par[0]]
+                                         : deISOParaCampo(s[par[0]]);
+            campo.addEventListener('change', function () {
+                var corpo = {};
+                corpo[par[0]] = doCampoParaISO(campo.value);
+                gravarSetor(s.id, corpo)
+                    .then(function () { avisarSalvo(s.id); })
+                    .catch(function () { /* `gravar()` já avisou na tela */ });
+            });
+            caixa.appendChild(campo);
+        });
+
+        return caixa;
     }
 
     /**
@@ -283,18 +417,7 @@
      */
     function opcoesDeUso(s, edicaoAnterior) {
         var tipoAtual = edicaoAnterior ? edicaoAnterior.tipo_uso : s.tipo_uso;
-
-        var caixa = document.createElement('div');
-        var titulo = document.createElement('p');
-        titulo.className = 'config-titulo';
-        titulo.textContent = 'Uso do ingresso';
-        caixa.appendChild(titulo);
-
-        var recado = document.createElement('span');
-        recado.className = 'salvo sumindo';
-        recado.id = 'setor-salvo-' + s.id;
-        recado.setAttribute('role', 'status');
-        recado.textContent = '✓ salvo';
+        var caixa = grupo('Uso do ingresso');
 
         [['unico', 'Vale uma entrada só'],
          ['reentrada', 'Permite sair e voltar']].forEach(function (par) {
@@ -308,17 +431,8 @@
             radio.checked = (tipoAtual === par[0]);
             radio.addEventListener('change', function () {
                 if (radio.value === s.tipo_uso) { return; }   // nada mudou de verdade
-                recado.classList.add('sumindo');
                 gravarSetor(s.id, { tipo_uso: radio.value })
-                    .then(function () {
-                        // `gravarSetor` termina em `carregarPainel()`, que
-                        // reconstrói o cartão inteiro: o `recado` capturado
-                        // aqui já saiu do documento nesta altura, e mexer
-                        // nele não apareceria na tela. Quem recebe o aviso é
-                        // o elemento NOVO, achado pelo mesmo id.
-                        var atual = $('setor-salvo-' + s.id);
-                        if (atual) { atual.classList.remove('sumindo'); }
-                    })
+                    .then(function () { avisarSalvo(s.id); })
                     .catch(function () { /* `gravar()` já avisou na tela */ });
             });
             var rot = document.createElement('label');
@@ -329,7 +443,129 @@
             caixa.appendChild(linha);
         });
 
-        caixa.appendChild(recado);
+        return caixa;
+    }
+
+    /**
+     * Bloquear faixas de ingresso, e a lista do que está bloqueado.
+     *
+     * Aqui HÁ um botão, e ele é diferente do "Salvar" que saiu do cartão: aquele
+     * confirmava uma escolha que já estava feita na tela; este cria uma coisa
+     * nova a partir de três campos, e não teria como disparar sozinho sem
+     * bloquear faixa pela metade a cada tecla digitada.
+     */
+    function bloqueiosDoSetor(s, edicaoAnterior) {
+        var caixa = grupo('Bloquear ingressos');
+
+        var explicacao = document.createElement('p');
+        explicacao.className = 'config-ajuda';
+        explicacao.textContent = 'Do primeiro ao último ingresso do lote. '
+            + 'A portaria recusa e mostra o motivo que você escrever.';
+        caixa.appendChild(explicacao);
+
+        var faixa = document.createElement('div');
+        faixa.className = 'faixa';
+        var campos = {};
+        [['de', 'De', 'number'], ['ate', 'a', 'number']].forEach(function (par) {
+            var rot = document.createElement('label');
+            rot.setAttribute('for', 'bloq-' + par[0] + '-' + s.id);
+            rot.textContent = par[1];
+            var campo = document.createElement('input');
+            campo.type = par[2];
+            campo.min = '1';
+            campo.inputMode = 'numeric';
+            campo.id = 'bloq-' + par[0] + '-' + s.id;
+            campo.value = edicaoAnterior ? edicaoAnterior['bloq_' + par[0]] : '';
+            campos[par[0]] = campo;
+            faixa.appendChild(rot);
+            faixa.appendChild(campo);
+        });
+        caixa.appendChild(faixa);
+
+        var rotMotivo = document.createElement('label');
+        rotMotivo.setAttribute('for', 'bloq-motivo-' + s.id);
+        rotMotivo.textContent = 'Motivo (a portaria vai ler isto)';
+        caixa.appendChild(rotMotivo);
+
+        var motivo = document.createElement('input');
+        motivo.type = 'text';
+        motivo.id = 'bloq-motivo-' + s.id;
+        motivo.placeholder = 'Ex.: lote não pago pelo PDV Centro';
+        motivo.value = edicaoAnterior ? edicaoAnterior.bloq_motivo : '';
+        caixa.appendChild(motivo);
+
+        var botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'so-com-senha';
+        botao.id = 'bloq-criar-' + s.id;
+        botao.textContent = 'Bloquear esta faixa';
+        botao.addEventListener('click', function () {
+            var corpo = {
+                de: campos.de.value,
+                ate: campos.ate.value,
+                motivo: motivo.value
+            };
+            gravar('/setores/' + s.id + '/bloqueios', corpo, 'POST')
+                .then(function () {
+                    // Limpa ANTES de recarregar, porque quem restaura os campos
+                    // no redesenho é a captura feita em `desenhar()` — ela lê o
+                    // que estiver na tela naquele instante. Limpar depois seria
+                    // limpar elementos que já saíram do documento, e o dono
+                    // veria a faixa recém-bloqueada ainda escrita no formulário,
+                    // convidando a bloqueá-la de novo.
+                    campos.de.value = '';
+                    campos.ate.value = '';
+                    motivo.value = '';
+                    return carregarPainel();
+                })
+                .then(function () { avisarSalvo(s.id); })
+                .catch(function () { /* `gravar()` já avisou na tela */ });
+        });
+        caixa.appendChild(botao);
+
+        // ── O que já está bloqueado ──────────────────────────────────────────
+        //
+        // Sem esta lista, o dono não tem como saber o que bloqueou nem como
+        // desfazer — e um lote bloqueado por engano só apareceria na porta, com
+        // a fila esperando.
+        var lista = document.createElement('div');
+        lista.id = 'bloq-lista-' + s.id;
+        var ativos = s.bloqueios || [];
+
+        var cabeca = document.createElement('p');
+        cabeca.className = 'config-titulo';
+        cabeca.textContent = ativos.length
+            ? 'Bloqueados'
+            : 'Nenhum ingresso bloqueado neste setor.';
+        lista.appendChild(cabeca);
+
+        ativos.forEach(function (b) {
+            var linha = document.createElement('div');
+            linha.className = 'bloqueado';
+
+            var texto = document.createElement('span');
+            // Texto, nunca HTML: o motivo é escrito pelo dono do evento.
+            texto.textContent = b.de.toLocaleString('pt-BR') + ' a '
+                + b.ate.toLocaleString('pt-BR') + ' · ' + b.motivo;
+            linha.appendChild(texto);
+
+            var liberar = document.createElement('button');
+            liberar.type = 'button';
+            liberar.className = 'secundario so-com-senha';
+            liberar.id = 'bloq-liberar-' + b.id;
+            liberar.textContent = 'Liberar';
+            liberar.addEventListener('click', function () {
+                if (!window.confirm('Liberar os ingressos ' + b.de + ' a ' + b.ate
+                        + '? Eles voltam a entrar na portaria.')) { return; }
+                gravar('/setores/' + s.id + '/bloqueios/' + b.id, {}, 'DELETE')
+                    .then(carregarPainel)
+                    .catch(function () { /* `gravar()` já avisou na tela */ });
+            });
+            linha.appendChild(liberar);
+            lista.appendChild(linha);
+        });
+
+        caixa.appendChild(lista);
         return caixa;
     }
 
@@ -814,7 +1050,12 @@
             gravar('/eventos/' + estado.evento_id, {
                 nome_evento: $('campo-nome-evento').value,
                 local_evento: $('campo-local').value,
-                data_evento: $('campo-data').value || null
+                // Convertido, e não mandado cru: o `datetime-local` entrega a
+                // hora do relógio de quem digitou, sem fuso nenhum, e a coluna
+                // é TIMESTAMPTZ. Cru, "22:00" viraria 22:00 UTC — 19:00 em
+                // Brasília — e o evento apareceria três horas mais cedo para
+                // todo mundo. Ver `doCampoParaISO`.
+                data_evento: doCampoParaISO($('campo-data').value)
             }, 'PATCH').then(carregarPainel).catch(function () { /* já avisado */ });
         });
 
@@ -878,6 +1119,11 @@
         renomearAparelho: renomearAparelho,
         trocarSetoresDoAparelho: trocarSetoresDoAparelho,
         revogarAparelho: revogarAparelho,
-        importarCodigos: importarCodigos
+        importarCodigos: importarCodigos,
+        // A conversão de fuso é a única lógica desta tela que dá para errar sem
+        // que nada apareça errado: um horário três horas fora ainda é um
+        // horário. Exposta para ser testada de ida E de volta.
+        doCampoParaISO: doCampoParaISO,
+        deISOParaCampo: deISOParaCampo
     };
 })();

@@ -22,6 +22,7 @@ import json
 import secrets
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -72,9 +73,26 @@ def _painel(evento_id: str) -> dict:
     setores = supabase(
         "GET",
         f"producao_acesso_setores?evento_id=eq.{evento_id}&status=eq.ativo"
-        "&select=id,nome,quantidade,tipo_uso,pedido_id_int,modelo_id"
+        "&select=id,nome,quantidade,tipo_uso,abre_em,fecha_em,pedido_id_int,modelo_id"
         "&order=nome.asc",
     ) or []
+
+    # Uma consulta só para o evento inteiro, distribuída por setor aqui — e não
+    # uma por setor. É o mesmo cuidado que os vínculos dos aparelhos já tomam
+    # logo abaixo: um evento com doze setores faria doze idas ao banco a cada
+    # abertura da tela, e a lista de bloqueios de um evento cabe folgada numa
+    # resposta só.
+    #
+    # `status=eq.ativo` porque bloqueio liberado é histórico, não configuração.
+    # Mostrá-lo na lista faria o dono liberar de novo o que já está liberado.
+    bloqueios = supabase(
+        "GET",
+        f"producao_acesso_bloqueios?evento_id=eq.{evento_id}&status=eq.ativo"
+        "&select=id,setor_id,de,ate,motivo&order=de.asc",
+    ) or []
+    for s in setores:
+        s["bloqueios"] = [b for b in bloqueios
+                          if str(b["setor_id"]) == str(s["id"])]
 
     aparelhos = supabase(
         "GET",
@@ -235,12 +253,66 @@ def _texto(valor, campo: str, minimo: int, maximo: int) -> str:
     return limpo
 
 
+def _momento(valor, campo: str):
+    """Um instante para o banco, ou `None`.
+
+    `None` e `""` são o mesmo pedido — sem limite daquele lado —, porque o dono
+    precisa de um jeito de voltar atrás depois de ter posto um horário; a única
+    alternativa seria inventar uma data absurda.
+
+    A validação é de FORMA, não de calendário: o `datetime-local` do navegador
+    manda "2026-09-28T20:00", e o Postgres aceita. Data impossível é recusada
+    pelo próprio banco, e repetir a regra aqui seria uma segunda verdade para
+    manter.
+    """
+    if valor is None or (isinstance(valor, str) and valor.strip() == ""):
+        return None
+    texto = str(valor).strip()
+    try:
+        datetime.fromisoformat(texto.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{campo}: escreva uma data e hora validas, ou deixe vazio",
+        )
+    return texto
+
+
+def _conferir_janela(abre, fecha):
+    """Fechar antes de abrir recusa SEMPRE, não "às vezes".
+
+    O dono descobriria isso com a fila na porta. E como o baile que vira a
+    madrugada é o caso normal — abre sábado 22h, fecha domingo 5h —, a confusão
+    natural aqui é errar o DIA; por isso a mensagem diz o que está errado, e não
+    só "inválido".
+
+    Comparação em UTC: sem `astimezone`, um `abre_em` com fuso e um `fecha_em`
+    sem fuso estouram `TypeError` no `<` em vez de recusar com 422.
+    """
+    if not abre or not fecha:
+        return                      # um lado só é configuração legítima
+    a = datetime.fromisoformat(abre.replace("Z", "+00:00"))
+    f = datetime.fromisoformat(fecha.replace("Z", "+00:00"))
+    if a.tzinfo is None:
+        a = a.replace(tzinfo=timezone.utc)
+    if f.tzinfo is None:
+        f = f.replace(tzinfo=timezone.utc)
+    if f <= a:
+        raise HTTPException(
+            status_code=422,
+            detail="a hora em que fecha tem de ser depois da hora em que abre "
+                   "— confira se o dia esta certo, no caso de virar a madrugada",
+        )
+
+
 def _setor_do_dono(setor_id: str, usuario: dict) -> dict:
     """O setor, se o evento dele for desta conta. Reaproveita `_evento_do_dono`
     em vez de repetir a checagem, para que só exista um lugar respondendo
     "este evento é seu?"."""
     linha = (supabase(
-        "GET", f"producao_acesso_setores?id=eq.{setor_id}&select=id,evento_id",
+        "GET",
+        f"producao_acesso_setores?id=eq.{setor_id}"
+        "&select=id,evento_id,quantidade,abre_em,fecha_em",
     ) or [None])[0]
     if not linha:
         raise HTTPException(status_code=403, detail="setor nao encontrado nesta conta")
@@ -289,6 +361,19 @@ def _gravar_setor(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
                 detail="tipo de uso: escolha 'vale uma entrada so' ou 'permite sair e voltar'",
             )
         mudanca["tipo_uso"] = tipo
+    if "abre_em" in corpo:
+        mudanca["abre_em"] = _momento(corpo["abre_em"], "hora em que abre")
+    if "fecha_em" in corpo:
+        mudanca["fecha_em"] = _momento(corpo["fecha_em"], "hora em que fecha")
+
+    # Contra o que JÁ ESTÁ gravado, e não só contra o que veio no corpo: a tela
+    # manda apenas o que o dono mexeu. Comparar só os dois campos do corpo
+    # deixaria uma janela invertida entrar pela porta dos fundos, um campo de
+    # cada vez — grava o `abre_em` tarde hoje, o `fecha_em` cedo em seguida, e
+    # nenhuma das duas chamadas vê o par completo.
+    if "abre_em" in mudanca or "fecha_em" in mudanca:
+        _conferir_janela(mudanca.get("abre_em", setor.get("abre_em")),
+                         mudanca.get("fecha_em", setor.get("fecha_em")))
 
     if mudanca:
         supabase("PATCH", f"producao_acesso_setores?id=eq.{setor_id}", mudanca,
@@ -308,6 +393,104 @@ def gravar_setor(setor_id: str, corpo: dict, authorization: str = Header(None),
                  x_elevacao: str = Header(None), x_navegador: str = Header(None)):
     return _gravar_setor(setor_id, _usuario_logado(authorization),
                          x_elevacao, x_navegador, corpo)
+
+
+# ── Bloqueio de faixas de ingresso ──────────────────────────────────────────
+#
+# Acontece na gráfica de verdade: um ponto de venda recebe 500 ingressos e não
+# paga; um lote é roubado. Os códigos já estão publicados, e sem isto a portaria
+# os aceita.
+#
+# O bloqueio NÃO toca em `producao_acesso_credenciais`. Ele é uma linha dizendo
+# "do ingresso 1000 ao 1500, motivo X" — e liberar depois é apagar essa linha, e
+# não corrigir quinhentas, cada uma delas uma chance de parar no meio.
+#
+# A faixa é um intervalo de `numero`, a posição do ingresso na tiragem, que o
+# agente já grava em cada credencial. Nenhum código em claro entra nisto.
+
+def _faixa(corpo: dict, quantidade: int) -> tuple:
+    """`(de, ate)` conferidos, ou 422 dizendo o que está errado."""
+    try:
+        de = int(corpo.get("de"))
+        ate = int(corpo.get("ate"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=422, detail="de/ate: escreva o primeiro e o ultimo ingresso da faixa")
+
+    if de < 1:
+        # A tiragem começa em 1. `de = 0` costuma ser o dono pensando em índice.
+        raise HTTPException(status_code=422, detail="o primeiro ingresso da faixa e o 1")
+    if ate < de:
+        # Faixa invertida não bloqueia ingresso NENHUM — o pior resultado
+        # possível, porque o dono acha que bloqueou e só descobre na porta.
+        raise HTTPException(
+            status_code=422, detail="o ultimo ingresso da faixa tem de vir depois do primeiro")
+    if quantidade and ate > quantidade:
+        # Não faz mal a ninguém bloquear número que não existe, mas quase sempre
+        # é o dono confundindo o setor — e o silêncio o deixaria achando que
+        # protegeu ingresso que está em outro lugar.
+        raise HTTPException(
+            status_code=422,
+            detail=f"este setor tem {quantidade} ingressos; a faixa nao pode passar disso")
+    return de, ate
+
+
+def _bloquear(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    setor = _setor_do_dono(setor_id, usuario)
+    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
+
+    de, ate = _faixa(corpo, int(setor.get("quantidade") or 0))
+    # Obrigatório, e é a razão de tudo isto existir: um bloqueio sem motivo
+    # aparece na portaria como "recusado" e ninguém sabe o que dizer para a
+    # pessoa que está na frente.
+    motivo = _texto(corpo.get("motivo"), "motivo", 1, 200)
+
+    linha = {
+        "evento_id": setor["evento_id"],
+        "setor_id": setor["id"],
+        "de": de,
+        "ate": ate,
+        "motivo": motivo,
+        "status": "ativo",
+        "criado_por": usuario["id"],
+    }
+    supabase("POST", "producao_acesso_bloqueios", linha, prefer="return=minimal")
+    return {"ok": True, "de": de, "ate": ate}
+
+
+def _liberar(setor_id, bloqueio_id, usuario, elevacao, navegador) -> dict:
+    setor = _setor_do_dono(setor_id, usuario)
+    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
+
+    # O bloqueio tem de pertencer A ESTE setor. Sem esta conferência, o dono de
+    # um evento liberaria o bloqueio de outro cliente mandando o id alheio pela
+    # própria URL — a guarda de cima só provou que o SETOR é dele.
+    alvo = (supabase(
+        "GET",
+        f"producao_acesso_bloqueios?id=eq.{bloqueio_id}&select=id,setor_id",
+    ) or [None])[0]
+    if not alvo or str(alvo["setor_id"]) != str(setor["id"]):
+        raise HTTPException(status_code=403, detail="bloqueio nao encontrado neste setor")
+
+    # `status='removido'`, nunca DELETE: "liberamos o lote às 22h40" é
+    # informação que a portaria vai querer ter depois.
+    supabase("PATCH", f"producao_acesso_bloqueios?id=eq.{bloqueio_id}",
+             {"status": "removido"}, prefer="return=minimal")
+    return {"ok": True, "liberado": bloqueio_id}
+
+
+@router.post("/setores/{setor_id}/bloqueios")
+def bloquear(setor_id: str, corpo: dict, authorization: str = Header(None),
+             x_elevacao: str = Header(None), x_navegador: str = Header(None)):
+    return _bloquear(setor_id, _usuario_logado(authorization),
+                     x_elevacao, x_navegador, corpo)
+
+
+@router.delete("/setores/{setor_id}/bloqueios/{bloqueio_id}")
+def liberar(setor_id: str, bloqueio_id: str, authorization: str = Header(None),
+            x_elevacao: str = Header(None), x_navegador: str = Header(None)):
+    return _liberar(setor_id, bloqueio_id, _usuario_logado(authorization),
+                    x_elevacao, x_navegador)
 
 
 # ── Os aparelhos da portaria ─────────────────────────────────────────────────

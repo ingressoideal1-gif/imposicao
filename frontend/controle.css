@@ -183,7 +183,25 @@ body.somente-leitura .so-com-senha { opacity: .55; }
     margin-top: 14px; padding-left: 12px;
     border-left: 2px solid var(--border);
 }
-.config-titulo { margin: 0 0 6px; font-size: .82rem; color: var(--dim); }
+.config-titulo { margin: 14px 0 6px; font-size: .82rem; color: var(--dim);
+                 text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+.config-setor > div:first-child > .config-titulo { margin-top: 0; }
+.config-ajuda { margin: 0 0 8px; font-size: .8rem; color: var(--dim); line-height: 1.45; }
+
+/* "De [    ] a [    ]" numa linha só. Em duas linhas o "a" fica órfão no meio do
+   cartão e deixa de ligar os dois campos. */
+.faixa { display: flex; align-items: center; gap: 8px; }
+.faixa label { margin: 0; white-space: nowrap; }
+.faixa input { margin: 0; }
+
+/* Cada faixa bloqueada com o seu "Liberar" ao lado. O motivo pode ser longo e
+   quebra em várias linhas; o botão não encolhe junto. */
+.bloqueado {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    padding: 8px 0; border-top: 1px solid var(--border);
+    font-size: .86rem;
+}
+.bloqueado button { width: auto; margin: 0; flex: 0 0 auto; padding: 5px 10px; font-size: .8rem; }
 
 /* Não há botão de salvar: escolher a opção grava. Este "✓ salvo" é o que
    impede que gravar sozinho vire gravar em silêncio. */

@@ -278,7 +278,8 @@ Criadas por [sql/schema_acesso.sql](../sql/schema_acesso.sql), pronto para colar
 |---|---|
 | `_eventos` | o evento do cliente; pode reunir vários pedidos |
 | `_pedidos` | sal, token do QR e estado da publicação. Nasce **antes** do evento |
-| `_setores` | um por modelo; a lotação É a `quantidade` do ERP, não um campo |
+| `_setores` | um por modelo; a lotação É a `quantidade` do ERP, não um campo. `abre_em`/`fecha_em` = janela em que o setor vale; nulo = sempre |
+| `_bloqueios` | faixas de ingresso recusadas na porta: `de`, `ate`, `motivo`. A faixa é um intervalo de `credenciais.numero`, e o motivo é o que a portaria lê em voz alta |
 | `_credenciais` | `codigo_hash` sempre; `codigo_visivel` só quando `origem='cliente'` |
 | `_dispositivos` | os aparelhos da portaria (parte 3) |
 | `_dispositivo_setores` | em quais setores cada aparelho valida (parte 3) |
