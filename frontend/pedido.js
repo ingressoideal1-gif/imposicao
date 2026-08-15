@@ -4808,7 +4808,14 @@ window.runPedImposition = async function (mode, isRefazer) {
                             const ct = agentCheck.headers.get("content-type") || "";
                             if (ct.includes("application/json")) {
                                 const checkData = await agentCheck.json().catch(() => ({}));
-                                if (checkData.status === "running") {
+                                // Ver o comentario longo na sondagem do script.js:
+                                // o primeiro endereco testado e o da propria pagina,
+                                // que na Vercel leva ao Render. Como o mesmo app.py
+                                // serve os dois, a nuvem se apresentava como agente
+                                // local e a imposicao ia parar la -- com o selo
+                                // "AGENTE LOCAL" na tela e o QR Ideal impossivel de
+                                // imprimir, porque o pool so existe na estacao.
+                                if (checkData.status === "running" && checkData.onde !== "nuvem") {
                                     localActive = true;
                                     agentBaseUrl = base;
                                     break outerLoop;

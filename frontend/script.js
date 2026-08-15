@@ -10082,7 +10082,20 @@ window.runImposition = async function (mode, returnBlob = false) {
                             const ct = agentCheck.headers.get("content-type") || "";
                             if (ct.includes("application/json")) {
                                 const checkData = await agentCheck.json().catch(() => ({}));
-                                if (checkData.status === "running") {
+                                // `onde !== 'nuvem'` e nao `onde === 'local'`, de
+                                // proposito: agente antigo nao conhece o campo e
+                                // precisa continuar sendo aceito ate as estacoes
+                                // atualizarem. Quem se declara e a NUVEM, e e ela
+                                // que precisa ser barrada.
+                                //
+                                // 15/08/2026: o primeiro endereco sondado e o da
+                                // PROPRIA PAGINA, que na Vercel leva ao Render. Como
+                                // o mesmo app.py serve os dois, a nuvem respondia
+                                // "NewProd Agent ativo" e o painel acreditava --
+                                // impondo na nuvem com o selo "AGENTE LOCAL" na tela.
+                                // O QR Ideal ficou impossivel de imprimir por caminho
+                                // nenhum, porque o pool so existe na estacao.
+                                if (checkData.status === "running" && checkData.onde !== "nuvem") {
                                     localActive = true;
                                     agentBaseUrl = base;
                                     

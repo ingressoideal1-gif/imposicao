@@ -95,11 +95,25 @@ LOCAL_AGENT_VERSION = f"NewProd {AGENT_VERSION}"
 @app.get("/", include_in_schema=False)
 def root_redirect():
     """Retorna status JSON (compatibilidade) e serve como health check."""
-    return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
+    return _status_do_agente()
 
 @app.get("/api/status")
 def read_root():
-    return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"]}
+    return _status_do_agente()
+
+
+def _status_do_agente():
+    """O mesmo corpo do `/api/status` do app.py — ver o comentário longo lá.
+
+    O `onde` é o que impede a nuvem de se passar pelo agente da estação. Este
+    arquivo implementa os mesmos endpoints por fora do app.py, e uma correção
+    que valesse só para um dos dois sumiria sem avisar — que é exatamente a
+    razão de o `security_config.py` existir.
+    """
+    import security_config
+    return {"status": "running", "message": "NewProd Agent ativo",
+            "version": LOCAL_AGENT_VERSION, "capabilities": ["impose", "print"],
+            "onde": "nuvem" if security_config.is_cloud_runtime() else "local"}
 
 @app.get("/api/version")
 def version_info():

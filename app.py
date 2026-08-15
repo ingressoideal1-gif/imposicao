@@ -211,8 +211,29 @@ def _agent_id_local():
 
 @app.get("/api/status")
 def read_root():
+    """Quem sou eu, e — principalmente — ONDE estou rodando.
+
+    O `onde` existe por causa de 15/08/2026. Este mesmo arquivo serve a estação
+    e o Render, então a nuvem respondia exatamente o que o agente responde:
+    `{"status": "running", "message": "NewProd Agent ativo", ...}`.
+
+    O painel procura o agente testando três endereços, e o primeiro é o da
+    própria página — que na Vercel leva ao Render. Ele acreditava, parava de
+    procurar, e mandava a imposição para a nuvem **mostrando na tela o selo
+    "⚡ AGENTE LOCAL"**.
+
+    O estrago era grande e silencioso: o QR Ideal não podia ser impresso por
+    caminho nenhum (a nuvem não tem o pool, e nunca vai ter), a imposição rodava
+    pela rede contra a razão de o agente existir, e a faixa de credenciais não
+    subia.
+
+    `is_cloud_runtime()` olha as variáveis que só o Render define. Não é
+    configurável de fora de propósito: quem controlasse a configuração poderia
+    fazer a nuvem se declarar estação de novo.
+    """
     return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION,
-            "agent_id": _agent_id_local(), "capabilities": ["impose", "print"]}
+            "agent_id": _agent_id_local(), "capabilities": ["impose", "print"],
+            "onde": "nuvem" if security_config.is_cloud_runtime() else "local"}
 
 @app.get("/api/version")
 def version_info():
@@ -785,6 +806,42 @@ async def impose_file(
         # Embutir fontes do sistema nos elementos para deploy cross-platform
         _embed_system_fonts(numeracao)
         _embed_system_fonts(numeracao_2)
+
+        # ── O trabalho pediu numeração e ela não chegou? Para aqui. ──────────
+        #
+        # 15/08/2026: o pedido 20508 saiu da impressora TRÊS VEZES sem número e
+        # sem QR, com a prévia mostrando os dois. Sessenta e dois ingressos
+        # perdidos. O motor recebia `numeracao_id` preenchido e `numeracao`
+        # nula, não tinha o que desenhar, desenhava só a arte — e não dizia
+        # nada. No log ficava o silêncio de uma linha que não aparece, e é
+        # preciso conhecer muito bem este arquivo para reparar numa ausência.
+        #
+        # Um ingresso sem código não parece defeituoso: ele é entregue, e só
+        # falha na portaria do evento. Vale a mesma regra do QR Ideal sem pool
+        # — falhar alto é a regra, não a exceção.
+        #
+        # O `numeracao_id` no log é o que faz a PRÓXIMA investigação começar com
+        # o dado na mão, em vez de começar pela falta de uma linha.
+        # Duas formas de chegar inútil, e as duas dão a mesma folha em branco:
+        # o objeto não vir, ou vir sem `elements`. A segunda é mais traiçoeira,
+        # porque o diagnóstico abaixo só imprime quando há `elements` — então
+        # ela produzia o MESMO silêncio no log.
+        _n_els = len((numeracao or {}).get("elements") or [])
+        print(f"[impose] numeracao_id={data.get('numeracao_id')!r} "
+              f"objeto={'veio' if numeracao else 'NAO VEIO'} elements={_n_els} | "
+              f"numeracao_2_id={data.get('numeracao_2_id')!r} "
+              f"objeto={'veio' if numeracao_2 else 'nao veio'}", flush=True)
+
+        if data.get("numeracao_id") and not _n_els:
+            _falta = "nao chegou" if not numeracao else "chegou SEM elementos"
+            raise ValueError(
+                f"Este trabalho pede numeracao, mas ela {_falta} ao motor: o "
+                f"painel mandou numeracao_id={data.get('numeracao_id')!r}. A folha "
+                "sairia so com a arte, sem numero e sem QR — e um ingresso sem "
+                "codigo so falha na portaria do evento, quando ja nao da para "
+                "consertar. Reabra o modelo, escolha a numeracao no seletor e "
+                "gere de novo."
+            )
 
         # Diagnóstico de elementos na numeração (font, color, posição)
         for _num_label, _num_obj in [("numeracao", numeracao), ("numeracao_2", numeracao_2)]:
