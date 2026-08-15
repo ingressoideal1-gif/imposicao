@@ -2685,6 +2685,38 @@
       "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/fontes/CentSchbkCyrill_BT_Bold_Italic.ttf",
       "ativo": true,
       "id": "6458c32c-a85d-4b95-8b56-876a0e096a1b"
+    },
+    {
+      "nome": "Gotham Book",
+      "font_family": "Gotham Book",
+      "categoria": "Geral",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1786733620026_0_gothambook.ttf",
+      "ativo": true,
+      "id": "9bf6db87-79e8-4e8b-84e0-7e3b43b0acc1"
+    },
+    {
+      "nome": "Gotham Bold",
+      "font_family": "Gotham Bold",
+      "categoria": "Geral",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1786733640393_0_gothambold.ttf",
+      "ativo": true,
+      "id": "068403b4-a9c1-4e23-96e2-9ffe45db729a"
+    },
+    {
+      "nome": "Swis721 LtCn BT Light",
+      "font_family": "Swis721 LtCn BT Light",
+      "categoria": "Geral",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1786733648281_0_swiss_721_ltcn_bt.ttf",
+      "ativo": true,
+      "id": "8356c66c-1b1b-4884-b3a9-70356daf1191"
+    },
+    {
+      "nome": "Swiss 911 Extra Compressed",
+      "font_family": "Swiss 911 Extra Compressed",
+      "categoria": "Geral",
+      "arquivo_url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/chat-ideal/fontes/1786733655593_0_swiss_911_extra_compressed_regular.otf",
+      "ativo": true,
+      "id": "48b58123-66d6-4fe5-aedb-900cf9684218"
     }
   ]
 }
