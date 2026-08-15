@@ -1,6 +1,6 @@
 # Status do Projeto — Ideal Imposition
 
-**Última atualização: 14 de agosto de 2026**
+**Última atualização: 15 de agosto de 2026, madrugada**
 
 Este documento diz onde o projeto está **hoje** e por onde continuar. Se você está
 retomando depois de um tempo, comece por aqui.
@@ -11,8 +11,8 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + motor | **v570** | 14/08/2026 |
-| Agente NewProd | **1.2.69** | 14/08/2026 |
+| Site + motor | **v578** | 15/08/2026 |
+| Agente NewProd | **1.2.77** | 15/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
@@ -130,30 +130,174 @@ O que a parte 3 inteira precisa entregar está no fim do
 
 ---
 
-## ▶️ Por onde continuar
+## 🔴 A noite de 15/08: três defeitos empilhados, e o que ficou de guarda
 
-### 1. O teste que fecha tudo, e que só o usuário pode fazer
+O pedido **20508** foi o primeiro pedido de verdade a passar pelo ciclo inteiro, e ele
+achou três defeitos independentes. Os três tinham o mesmo formato: **silêncio**. Nada
+quebrava na tela, nada aparecia em vermelho, e a conta só fecharia na portaria do evento,
+com a fila na porta.
 
-O servidor está pronto e provado por fora, mas **nenhum pedido de verdade passou pelo ciclo
-inteiro ainda**. Este é o passo que falta:
+### 1. Nenhum agente publicado tinha o segredo (corrigido na 1.2.75)
 
-1. No painel, num pedido aprovado, clicar em **🎟️ QR do Evento**.
-2. Ler o QR com a câmera do celular.
-3. Entrar e cadastrar o evento.
-4. Conferir no Supabase que `producao_acesso_setores` ganhou um setor por modelo.
+Na estação, o segredo que autoriza publicar a faixa vive num `acesso_segredo.py` embutido
+no executável. Ele é gerado na compilação, e o git o ignora.
 
-Depois, imprimir um trabalho com QR Ideal e conferir que `producao_acesso_credenciais`
-recebeu a faixa daquele pedido.
+- **`publicar_agente.ps1`**, que compila TODO release, nunca o gerava — ia direto ao
+  PyInstaller.
+- **`build_agent.ps1`** gerava, mas **depois** de já ter compilado: o arquivo só entraria no
+  build seguinte.
 
-### 2. A parte 3a com um cliente de verdade
+Resultado: todo agente já publicado imprimia perfeitamente e não publicava credencial
+nenhuma. O PyInstaller avisou em todos os builds, num arquivo que ninguém lia —
+`missing module named acesso_segredo`.
 
-Depois do teste acima, o dono do evento abre a `controle.html`, entra com a conta que ele já
-tem no ERP Vibe, muda o uso de um setor, cadastra um aparelho e lê o código no celular.
-É o único jeito de saber se a tela se explica sozinha.
+**A guarda:** a rotina agora é uma só, `New-SegredoDoAgente` no
+[ferramentas/Publicacao.psm1](../ferramentas/Publicacao.psm1), chamada **antes** da
+compilação pelos dois scripts. Depois dela, `Test-SegredoNoBuild` lê o aviso do PyInstaller
+e **para o release** se o módulo não tiver entrado.
+Testes: [tests/SegredoDoAgente.Tests.ps1](../tests/SegredoDoAgente.Tests.ps1).
 
-### 3. Então: parte 3b e 3c
+### 2. O banco descartava o segundo modelo (corrigido na v577)
 
-Cada uma merece a própria spec, como a 3a teve.
+Três modelos do 20508 usavam a mesma numeração ("Triband"), então o item 1 dos três saía
+impresso com o mesmo `000001`. Texto igual e sal igual — o sal é por pedido — dão hash
+igual, e a chave única de então, `codigo_hash` sozinho, aceitou a IMPRENSA e **descartou em
+silêncio** a PISTA e o CAMAROTE.
+
+Pior: o aparelho da portaria nunca teria chance de resolver a ambiguidade pelo setor, que é
+a decisão registrada em [docs/controle_acesso.md](controle_acesso.md), porque a linha do
+segundo modelo não existia.
+
+**O papel não mudou**, por decisão do usuário: o texto impresso é o que o cliente
+contratou. A chave passou a ser `chave_dedup` — pedido + modelo + número + hash, coluna
+`GENERATED ALWAYS` que o próprio Postgres calcula
+([sql/schema_acesso_04_credencial_por_modelo.sql](../sql/schema_acesso_04_credencial_por_modelo.sql),
+já aplicado no banco em 15/08).
+
+**O teste também mentia**, e essa é a lição maior: o fake do Supabase deduplicava por
+`codigo_hash` por conta própria, ignorando o `on_conflict` que o código de produção pedia —
+então passava verde por mais errada que fosse a chave real. Agora ele obedece ao parâmetro.
+
+### 3. Imprimir saindo sem numeração — **AINDA ABERTO**. Comece por aqui amanhã.
+
+**Sintoma:** o modelo 1000281 (PISTA) do pedido 20508 sai da impressora **sem número e sem
+QR**, e continuou saindo assim depois de duas correções e de a estação estar na v578 /
+1.2.77 (conferido: o `script.js` servido pela própria estação já tem os consertos). A
+prévia na tela mostra o QR; o papel sai sem.
+
+**A pista mais forte, e por onde continuar:** o catálogo de numerações da estação tem
+**uma única numeração**.
+
+```powershell
+curl http://localhost:9000/api/numeracoes
+# devolve 1 item: {"id":"num_1","name":"Numeração Padrão", ...}
+```
+
+O painel monta `state.numeracoes` em `loadAll()` com `api('GET', '/numeracoes')`. Servido
+pelo agente na porta 9000, isso vai ao **catálogo local** — e o `agent_worker` sincroniza
+fontes e painel, **mas não o catálogo de numerações**. Então, na estação,
+`state.numeracoes` tem uma entrada só.
+
+A consequência bate exatamente com o sintoma. Em `runImposition`:
+
+```js
+const numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+```
+
+`numId` está certo (`632bbf8d…`, a "Triband", conferido no banco), mas o `find` não acha
+nada nessa lista de um item → `numeracao` fica nulo → o payload vai sem numeração → o motor
+compõe a folha sem elemento nenhum. E o backend também não salva: `db.get_numeracao()` na
+estação lê o mesmo catálogo local.
+
+**O que ainda não fecha, e precisa ser explicado antes de corrigir:** às 01h15 os mesmos
+modelos foram impressos **com** numeração — o log da estação registrou
+`[impose] numeracao el[1]: type=QR`. Se o catálogo local sempre teve um item só, aquela
+impressão não deveria ter funcionado. Ou a página estava apontando para o motor da nuvem,
+ou o `formats_db.json` foi reescrito no meio da noite. **Descobrir isso é o primeiro passo**
+— corrigir sem entender essa contradição é chutar.
+
+**Como conferir depressa, amanhã:**
+
+```powershell
+# 1. quantas numeracoes a estacao enxerga
+curl http://localhost:9000/api/numeracoes
+
+# 2. o que o log diz da ultima impressao (o tamanho no Explorer MENTE, leia o conteudo)
+$log = "$env:LOCALAPPDATA\NewProd Agent\agent_log.txt"
+$fs = [System.IO.File]::Open($log,'Open','Read','ReadWrite')
+(New-Object System.IO.StreamReader($fs)).ReadToEnd() -split "`n" |
+    Select-String 'numeracao|DIAG impose|acesso'
+```
+
+Se aparecer `[impose] numeracao tem N elements`, a numeração chegou e o problema é outro.
+Se não aparecer, é este.
+
+### 3b. O que já foi corrigido nesta linha (v578) — necessário, mas não suficiente
+
+A tabela `pedidos_modelos` do ERP **não tem** coluna `numeracao_id`; ela guarda
+`amostra_num_id`. O painel resolve as duas em quatro lugares — e o quarto, `runImposition`,
+que é justamente o que imprime, lia só a que não existe no banco.
+
+A tabela `pedidos_modelos` do ERP **não tem** coluna `numeracao_id`; ela guarda
+`amostra_num_id`. O painel resolve as duas em quatro lugares — e o quarto, `runImposition`,
+que é justamente o que imprime, lia só a que não existe no banco. Sem alguém ter tocado no
+seletor de numeração naquela sessão, a numeração ia nula ao motor e **a folha saía sem
+número e sem QR, com a prévia mostrando os dois**.
+
+Isso valia para qualquer modelo de qualquer pedido, não só o 20508.
+
+**A guarda:** [tests/test_numeracao_do_item.py](../tests/test_numeracao_do_item.py) lê o
+`script.js` inteiro e reprova no dia em que aparecer uma quinta cópia da regra sem o
+fallback — porque o defeito não foi uma linha errada, foi quatro cópias que divergiram.
+
+---
+
+## ▶️ Por onde continuar — amanhã, nesta ordem
+
+### 0. ⛔ Antes de tudo: o 1000281 ainda sai sem QR
+
+Está descrito em **"3. Imprimir saindo sem numeração"**, acima. Enquanto isso não estiver
+resolvido, **não adianta reimprimir** — sai papel sem código de novo, como já saiu duas
+vezes. Já foram 62 ingressos perdidos nessas tentativas.
+
+### 1. Terminar o pedido 20508 (depois do item 0)
+
+Estado da nuvem, conferido em 15/08 às 02h:
+
+| Modelo | | Contratado | Na nuvem | |
+|---|---|---|---|---|
+| 1000278 | VIP | 50 | **50** | ✅ QR Ideal |
+| 1000279 | CAMAROTE | 50 | **50** | ✅ QR Ideal |
+| 1000280 | IMPRENSA | 20 | **20** | ✅ |
+| 1000282 | GERENCIA | 12 | **12** | ✅ |
+| 1000281 | PISTA | 30 | **0** | ⬅ falta reimprimir |
+| 1000284 | CAMAROTE | 1 | **0** | ⬅ falta reimprimir |
+| 1000283 | VIP | 50 | 0 | numeração **sem QR nenhum** |
+
+**O passo, DEPOIS do item 0:** reimprimir **1000281** e **1000284** pela `localhost:9000`,
+com a estação na **1.2.77** ou mais.
+
+**Imprima UM ingresso primeiro e olhe o papel.** Tem número e QR? Só então mande os 30.
+Foi ignorar isso que custou 62 ingressos na madrugada de 15/08.
+
+O alvo é **163 de 213**. A diferença são os 50 do `1000283 VIP`, abaixo.
+
+### 2. Decidir o que fazer com o 1000283 VIP
+
+Cinquenta ingressos com a numeração "Numeração Esquerda - Pre", que **não tem QR nem código
+de barras**. Nenhuma correção de software resolve: não existe nada para a portaria ler. Se
+esse evento vai ter controle de acesso, esse modelo precisa de outra numeração e de
+reimpressão de verdade, com papel novo.
+
+### 3. O teste da tela do dono com um cliente de verdade
+
+Ninguém ainda entrou na `controle.html` com a conta do Vibe, digitou a senha, configurou um
+setor e cadastrou um aparelho. É o único jeito de saber se a tela se explica sozinha.
+
+### 4. Então: parte 3b (a portaria) e 3c
+
+Cada uma merece a própria spec, como a 3a teve. A 3b é a que fecha o ciclo — sem ela, tudo
+o que está publicado na nuvem não é lido por ninguém.
 
 ---
 
@@ -239,6 +383,23 @@ mas a restrição não faz o que o nome promete.
 **A migração `sql/schema_acesso_02` é opcional.** Ela só remove um índice redundante. Sem
 ela, nada quebra.
 
+**O log do agente é apagado a cada abertura.** O `agent_tray.py` abre o `agent_log.txt` em
+modo `"w"`, que trunca. Como a auto-atualização reinicia o agente, **toda atualização joga
+fora o registro do que aconteceu antes** — e foi exatamente o que atrapalhou o diagnóstico
+da noite de 15/08: a evidência de uma impressão sumiu quando o agente subiu de versão no
+meio da investigação. Vale trocar por `"a"` com corte por tamanho. Ainda não foi feito.
+
+**Atenção ao ler o tamanho do `agent_log.txt`.** O Windows não atualiza o tamanho na
+entrada de diretório enquanto o arquivo está aberto pelo agente: `Get-ChildItem` mostra
+**0 bytes** num log cheio. Leia o conteúdo (`[System.IO.File]::Open` com
+`FileShare.ReadWrite`) em vez de confiar no tamanho — foi assim que o log "vazio" acabou
+entregando as cinco linhas que explicavam tudo.
+
+**Dois modelos com a mesma numeração imprimem o mesmo código.** Continua verdade depois da
+correção de 15/08 — o que mudou é que agora os dois são gravados, cada um com o seu setor,
+em vez de o segundo ser descartado. Quem separa na leitura é o setor do aparelho, e isso é
+trabalho da **parte 3b**: enquanto ela não existir, ninguém está lendo nada.
+
 **O `catalogo_fontes` era o pior dos dois mundos, e foi resolvido em 14/08.** O
 `sql/schema_catalogo_fontes.sql` existia desde 30/07 e nunca foi aplicado, então o Supabase
 respondia 404 e o código caía no catálogo local — que é o que sempre funcionou de verdade.
@@ -252,7 +413,7 @@ próprio sincronismo — o que se decidiu foi só onde mora a lista.
 
 ## Saúde do repositório
 
-- **228 testes pytest + 120 Pester**, todos passando. `pytest tests/` roda inteiro, sem
+- **524 testes pytest + 171 Pester**, todos passando. `pytest tests/` roda inteiro, sem
   exclusão, em cerca de 20 segundos — quase metade num teste só, o que publica 1.200
   credenciais de verdade pelo KDF lento.
 - Em 13/08 a suíte foi recuperada: **dez** arquivos não rodavam, e um deles disparava um
