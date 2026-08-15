@@ -1958,12 +1958,213 @@ node -e "new Function(require('fs').readFileSync('frontend/portaria.js','utf8'))
 ```
 Expected: `js ok`
 
-- [ ] **Step 4: Rodar a suíte inteira e commitar**
+- [ ] **Step 4: Escrever o teste da tela pintada**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 588 passed (nenhum teste novo nesta task; as guardas de fonte vêm na Task 6).
+O que a tela **pinta** é a parte desta task que pode falhar em silêncio: as regras já são
+testadas na Task 1, mas nada garante que o veredito `setor_nao_autorizado` vire laranja em
+vez de vermelho — e é essa distinção que a spec chama de erro mais caro da tela.
+
+Criar `tests/portaria_tela_harness.js`:
+
+```js
+// Carrega a tela de verdade, semeia uma carga no IndexedDB e manda validar um
+// texto. Devolve a classe da caixa de resposta e o que ela escreveu.
+//
+// A camera nao entra aqui: `validarTexto` e a mesma porta por onde a camera e o
+// "digitar o numero" passam.
+
+const path = require('path');
+const fs = require('fs');
+const REPO = path.resolve(__dirname, '..');
+const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
+
+let bruto = '';
+process.stdin.on('data', d => (bruto += d));
+process.stdin.on('end', () => rodar(JSON.parse(bruto)));
+
+const ARQUIVOS = ['qr-ideal-hash.js', 'portaria-validacao.js',
+                  'portaria-deposito.js', 'portaria.js'];
+
+async function rodar(caso) {
+    const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+    const page = await browser.newPage();
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+        const u = new URL(req.url());
+        if (u.hostname !== 'localhost') return req.continue();
+        const nome = u.pathname.replace(/^\//, '');
+        if (nome === 'portaria.html' || nome === '') {
+            let html = fs.readFileSync(path.join(REPO, 'frontend', 'portaria.html'), 'utf8');
+            // Sem versao nos scripts: o interceptador serve pelo nome.
+            html = html.replace(/\?v=\d+/g, '');
+            return req.respond({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
+        }
+        if (ARQUIVOS.indexOf(nome) !== -1) {
+            return req.respond({
+                status: 200, contentType: 'application/javascript; charset=utf-8',
+                body: fs.readFileSync(path.join(REPO, 'frontend', nome), 'utf8'),
+            });
+        }
+        return req.respond({ status: 404, body: '' });
+    });
+
+    await page.goto('http://localhost/portaria.html', { waitUntil: 'networkidle0' });
+
+    const saida = await page.evaluate(async (c) => {
+        await window.portariaDeposito.limpar();
+        window.portaria.estado.carga = c.carga;
+        window.portaria.estado.token = 'token-de-teste';
+        await window.portaria.validarTexto(c.texto, c.setorEscolhido || null);
+        const caixa = document.getElementById('resposta-caixa');
+        const visivel = id => !document.getElementById(id).classList.contains('sumindo');
+        return {
+            classe: caixa.className,
+            titulo: document.getElementById('resposta-titulo').textContent,
+            detalhe: document.getElementById('resposta-detalhe').textContent,
+            motivo: document.getElementById('resposta-motivo').textContent,
+            telaResposta: visivel('tela-resposta'),
+            telaAmbiguo: visivel('tela-ambiguo'),
+            fila: await window.portariaDeposito.contarFila(),
+        };
+    }, caso);
+
+    await browser.close();
+    console.log(JSON.stringify(saida));
+}
+```
+
+Criar `tests/test_portaria_tela.py`:
+
+```python
+# -*- coding: utf-8 -*-
+"""O que a tela PINTA, que e a parte desta camada que falha em silencio.
+
+As regras ja sao testadas em tests/test_portaria_validacao.py. O que nada mais
+cobre e a traducao do veredito em cor e frase -- e a spec diz que confundir
+`setor_nao_autorizado` (ingresso bom, porta errada) com `desconhecido` (ingresso
+estranho ao evento) faz o porteiro devolver ingresso legitimo achando que e
+falso. Sao cores diferentes de proposito, e e isto que garante que continuem.
+"""
+
+import hashlib
+import json
+import os
+import subprocess
+
+import pytest
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HARNESS = os.path.join(RAIZ, "tests", "portaria_tela_harness.js")
+
+PISTA = "11111111-1111-1111-1111-111111111111"
+VIP = "22222222-2222-2222-2222-222222222222"
+SAL = "aa" * 32
+
+
+def hash_de(texto):
+    import qr_ideal
+    return qr_ideal.hash_codigo(texto, SAL)
+
+
+def carga(**mudancas):
+    base = {
+        "evento": {"id": "e1", "nome": "Festa", "sal": SAL},
+        "aparelho": {"id": "d1", "nome": "Portao A", "setores": [PISTA]},
+        "sais": {},
+        "setores": [
+            {"id": PISTA, "nome": "PISTA", "quantidade": 600,
+             "tipo_uso": "unico", "abre_em": None, "fecha_em": None},
+            {"id": VIP, "nome": "VIP", "quantidade": 500,
+             "tipo_uso": "unico", "abre_em": None, "fecha_em": None},
+        ],
+        "bloqueios": [],
+        "credenciais": [
+            {"h": hash_de("000001"), "s": PISTA, "n": 1, "id": "c-p1"},
+            {"h": hash_de("000009"), "s": VIP, "n": 9, "id": "c-v9"},
+        ],
+    }
+    base.update(mudancas)
+    return base
+
+
+def pintar(texto, c=None, escolhido=None):
+    r = subprocess.run(
+        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
+        input=json.dumps({"texto": texto, "carga": c or carga(),
+                          "setorEscolhido": escolhido}),
+    )
+    if r.returncode != 0:
+        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
+    return json.loads(r.stdout)
+
+
+def test_permitido_pinta_verde_e_diz_o_setor_e_o_numero():
+    r = pintar("000001")
+    assert "ok" in r["classe"]
+    assert r["titulo"] == "PODE ENTRAR"
+    assert r["detalhe"] == "PISTA"
+
+
+def test_porta_errada_pinta_LARANJA_e_nao_vermelho():
+    """O erro mais caro da tela. Ingresso bom na porta errada nao pode ter a
+    mesma cara de ingresso estranho ao evento."""
+    r = pintar("000009")
+    assert "porta" in r["classe"], f"pintou {r['classe']!r} em vez de laranja"
+    assert "recusa" not in r["classe"]
+    assert "VIP" in r["detalhe"] and "PISTA" in r["detalhe"]
+
+
+def test_desconhecido_pinta_vermelho():
+    r = pintar("999999")
+    assert "recusa" in r["classe"]
+    assert "porta" not in r["classe"]
+
+
+def test_o_motivo_do_bloqueio_aparece_no_campo_de_corpo_grande():
+    """E o que o porteiro le em voz alta -- nao pode virar legenda."""
+    c = carga(bloqueios=[{"setor_id": PISTA, "de": 1, "ate": 50,
+                          "motivo": "lote extraviado na entrega"}])
+    r = pintar("000001", c)
+    assert r["motivo"] == "lote extraviado na entrega"
+
+
+def test_ambiguidade_abre_a_tela_de_escolha_e_NAO_registra_leitura():
+    """Perguntar nao e decidir: enquanto o porteiro nao tocar num setor, nada
+    pode ir para a fila -- senao a lotacao contaria uma entrada que nao houve."""
+    c = carga()
+    c["aparelho"]["setores"] = [PISTA, VIP]
+    c["credenciais"] = [
+        {"h": hash_de("000001"), "s": PISTA, "n": 1, "id": "c-p1"},
+        {"h": hash_de("000001"), "s": VIP, "n": 1, "id": "c-v1"},
+    ]
+    r = pintar("000001", c)
+    assert r["telaAmbiguo"] is True
+    assert r["telaResposta"] is False
+    assert r["fila"] == 0
+
+
+def test_toda_leitura_decidida_entra_na_fila_inclusive_a_negada():
+    """E a leitura negada que responde 'por que a fila parou as 22h'."""
+    assert pintar("000001")["fila"] == 1
+    assert pintar("999999")["fila"] == 1
+```
+
+- [ ] **Step 5: Rodar e ver passar**
+
+Run: `venv/Scripts/python.exe -m pytest tests/test_portaria_tela.py -q`
+Expected: PASS, 6 testes.
+
+Se `test_ambiguidade_...` falhar por a fila ter 1 em vez de 0, o defeito é real e está no
+`portaria.js`: `validarTexto` só pode chamar `registrar` depois de o veredito deixar de ser
+`ambiguo`. Conferir que o `return perguntarSetor(...)` acontece **antes** de qualquer
+`registrar`.
+
+- [ ] **Step 6: Rodar a suíte inteira e commitar**
+
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 594 passed.
 
 ```bash
-git add frontend/portaria.html frontend/portaria.js
+git add frontend/portaria.html frontend/portaria.js tests/test_portaria_tela.py tests/portaria_tela_harness.js
 git commit -m "portaria: a tela do porteiro, com entrada digitada
 
 Pareamento pelo codigo de seis caracteres, carga paginada para o IndexedDB, as
@@ -2178,7 +2379,7 @@ Run:
 node -e "['portaria-camera.js','sw.js'].forEach(f => new Function(require('fs').readFileSync('frontend/'+f,'utf8'))); console.log('js ok')"
 venv/Scripts/python.exe -m pytest tests/ -q
 ```
-Expected: `js ok` e 588 passed.
+Expected: `js ok` e 594 passed.
 
 - [ ] **Step 6: Commit**
 
@@ -2371,7 +2572,7 @@ Abra `http://127.0.0.1:9123/app/controle.html`, confira o desenho, e derrube o s
 
 - [ ] **Step 8: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 593 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 599 passed.
 
 ```bash
 git add frontend/controle.js frontend/controle.html frontend/controle.css tests/test_portaria_fonte.py
@@ -2471,7 +2672,7 @@ Expected: PASS, 5 testes (os links novos precisam apontar para arquivos que exis
 
 - [ ] **Step 5: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 593 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 599 passed.
 
 ```bash
 git add docs/controle_acesso.md docs/STATUS_PROJETO.md
@@ -2524,5 +2725,6 @@ chave `uq_acesso_leitura_do_aparelho UNIQUE (dispositivo_id, id_local)` está em
 `sql/schema_acesso.sql`.
 
 **Contagem de testes ao longo do plano:** 548 hoje → 565 (Task 1) → 574 (Task 2) → 588
-(Task 3) → 593 (Task 6). As Tasks 4, 5 e 7 não acrescentam teste; a 4 e a 5 são cobertas
-pelas guardas de fonte da 6 e pelo teste no celular, que só o usuário pode fazer.
+(Task 3) → 594 (Task 4) → 599 (Task 6). As Tasks 5 e 7 não acrescentam teste: a 5 é a
+câmera, que precisa de hardware, e é coberta pelas guardas de fonte da Task 6 e pelo teste
+no celular, que só o usuário pode fazer.
