@@ -306,9 +306,14 @@ def process_queue():
 # o manifesto tem ~300 bytes, entao sao 2 requisicoes por hora por estacao.
 INTERVALO_UPDATE_S = 30 * 60
 
-# O sync de fontes continua em 6h: sao ~140 MB na primeira vez e depois so o que
-# faltar. Fonte nova no catalogo demora ate 6h para aparecer, o que e aceitavel.
+# O sync dos BINARIOS continua em 6h: sao ~140 MB na primeira vez e depois so o que
+# faltar.
 INTERVALO_FONTES_S = 6 * 3600
+
+# A LISTA e outra coisa: ~60 KB. Vai a cada 30 min, como o painel, porque e o que faz
+# uma fonte cadastrada em outra estacao aparecer aqui. Quando a lista muda, o sync dos
+# binarios e chamado na hora, sem esperar as 6h.
+INTERVALO_CATALOGO_S = 30 * 60
 
 # Painel a cada 30 min, como o manifesto: sao ~1,5 MB e a estacao precisa pegar
 # a correcao publicada no mesmo dia. A primeira sincronizacao acontece 5s apos
@@ -378,6 +383,42 @@ def diagnostico_fontes():
         }
     except Exception as e:
         return {"erro": str(e)[:140]}
+
+
+def sincronizar_catalogo_fontes():
+    """Traz a LISTA de fontes da tabela compartilhada para o disco desta estacao.
+
+    E o que faz uma fonte cadastrada em outra estacao (ou pelo site) aparecer aqui. A
+    estacao NUNCA consulta a tabela na hora de impor — le sempre o formats_db.json —,
+    entao e esta funcao que mantem aquele arquivo verdadeiro.
+
+    A cada 30 min e nao a cada 6h como o sync dos binarios: a lista tem ~60 KB contra
+    ~140 MB, e uma fonte nova que demorasse 6h para aparecer faria o operador cadastrar
+    de novo achando que a primeira falhou. Depois de trazer a lista, baixa so os
+    binarios que ainda nao estao em cache — normalmente nenhum.
+    """
+    try:
+        lista = db._supabase_call("GET", "catalogo_fontes?select=*&order=nome.asc",
+                                  silencioso=True)
+    except Exception as e:
+        print(f"[fontes] Nao consegui ler o catalogo compartilhado: {e}", flush=True)
+        return
+
+    if not lista:
+        # Lista vazia nao e resposta: ou a tabela ainda nao existe, ou deu erro. A
+        # copia que ja esta no disco continua valendo — zerar o catalogo faria toda
+        # arte sair em Helvetica.
+        return
+
+    if db.guardar_catalogo_local(lista):
+        print(f"[fontes] Catalogo atualizado: {len(lista)} fonte(s)", flush=True)
+        _sincronizar_fontes_em_thread()
+
+
+def _sincronizar_catalogo_em_thread():
+    import threading
+    threading.Thread(target=sincronizar_catalogo_fontes, daemon=True,
+                     name="SyncCatalogoFontes").start()
 
 
 def sincronizar_fontes():
@@ -755,6 +796,7 @@ def run_loop():
     print(f"Iniciando Agent Worker (Cloud Relay) - ID: {AGENT_ID}", flush=True)
     heartbeat_timer = 0
     update_timer = 60   # primeira checagem 1 min apos subir
+    catalogo_timer = 10  # a LISTA antes dos binarios: e ela que diz o que baixar
     fontes_timer = 20   # sync de fontes logo no inicio
     painel_timer = 5    # painel quase de imediato: e o que o operador ve
     acessos_timer = 5   # junto com o painel: sem a lista, ninguem entra
@@ -766,6 +808,9 @@ def run_loop():
             if update_timer <= 0:
                 verificar_atualizacao()
                 update_timer = INTERVALO_UPDATE_S
+            if catalogo_timer <= 0:
+                _sincronizar_catalogo_em_thread()
+                catalogo_timer = INTERVALO_CATALOGO_S
             if fontes_timer <= 0:
                 _sincronizar_fontes_em_thread()
                 fontes_timer = INTERVALO_FONTES_S
@@ -779,6 +824,7 @@ def run_loop():
             time.sleep(5)
             heartbeat_timer -= 5
             update_timer -= 5
+            catalogo_timer -= 5
             fontes_timer -= 5
             painel_timer -= 5
             acessos_timer -= 5
@@ -787,6 +833,7 @@ def run_loop():
             time.sleep(5)
             heartbeat_timer -= 5 # Garantir decremento
             update_timer -= 5
+            catalogo_timer -= 5
             fontes_timer -= 5
             painel_timer -= 5
             acessos_timer -= 5

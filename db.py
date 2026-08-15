@@ -249,7 +249,23 @@ else:
 def _supabase_request(method: str, path: str, body: dict = None) -> list | dict | None:
     if not IS_SUPABASE_ACTIVE:
         return None
-        
+    return _supabase_call(method, path, body)
+
+
+def _supabase_call(method: str, path: str, body: dict = None,
+                   silencioso: bool = False) -> list | dict | None:
+    """A requisição em si, sem perguntar se o Supabase está "ativo".
+
+    Existe separada porque `IS_SUPABASE_ACTIVE` é False de propósito no executável,
+    para que o CATÁLOGO seja lido do disco (decisão de desempenho: a imposição roda na
+    estação). Quem precisa ESCREVER no banco compartilhado a partir da estação — o
+    cadastro de fonte, por exemplo — entra por aqui. Sem essa separação, a escrita
+    devolvia None em silêncio e a fonte morria na estação onde foi cadastrada.
+
+    `silencioso` é para quem já trata a falha e não quer a linha vermelha: o erro
+    continua subindo, só não vira ruído no log. Quem chama assim tem a obrigação de
+    avisar por conta própria, uma vez.
+    """
     url = f"{SUPABASE_URL}/rest/v1/{path}"
     headers = {
         "apikey": SUPABASE_KEY,
@@ -272,7 +288,8 @@ def _supabase_request(method: str, path: str, body: dict = None) -> list | dict 
                 return json.loads(content)
             return None
     except Exception as e:
-        print(f"[db.py] Erro Supabase REST {method} em {path}: {e}")
+        if not silencioso:
+            print(f"[db.py] Erro Supabase REST {method} em {path}: {e}")
         raise e
 
 
@@ -1092,43 +1109,187 @@ def delete_mapa_teatro(mapa_id: str):
         db["mapas_teatro"] = [m for m in db["mapas_teatro"] if m["id"] != mapa_id]
         _save_db(db)
 
-# ─── Catálogo de fontes: local por decisão ────────────────────────────────────
+# ─── Catálogo de fontes: uma lista só, com cópia em disco ─────────────────────
 #
-# A tabela `catalogo_fontes` NUNCA existiu no Supabase. O `schema_catalogo_fontes.sql`
-# ficou escrito e não aplicado de 30/07/2026 a 14/08/2026, e nesse tempo o código
-# tentava a tabela a cada arranque, tomava 404 e caía no catálogo local — que é o que
-# sempre funcionou de verdade. Custo: duas linhas vermelhas no log a cada partida do
-# motor, e log vermelho rotineiro treina qualquer um a ignorar log vermelho.
+# A lista mora na tabela `catalogo_fontes` do Supabase (ver
+# `sql/schema_catalogo_fontes.sql`). Os binários sempre estiveram no Storage; o que
+# mudou em 15/08/2026 é onde mora a LISTA.
 #
-# Em 14/08/2026 o usuário decidiu: **apagar o SQL**. O catálogo é local, e ponto. Ele
-# vive no `formats_db.json`, versionado no repositório, e a estação recebe uma cópia
-# junto com o executável (ver `_semear_db`). Os binários das fontes continuam no
-# Storage do Supabase, com o próprio sincronismo — o que se decidiu aqui é só onde
-# mora a LISTA.
+# Por que mudou: até então a lista era um arquivo em disco na máquina que respondia
+# ao painel. Quando o operador abria o painel pelo site publicado, quem respondia era
+# o Render — cujo disco volta ao conteúdo versionado a cada publicação. Quatro fontes
+# cadastradas em 14/08 sumiram na publicação seguinte, e a numeração 1000289 passou a
+# exibir o nome da fonte no seletor mas a desenhar com outra. Guardar só na estação
+# não resolvia: o link que o cliente abre para aprovar a arte lê o catálogo da nuvem.
 #
-# Por isso não há mais chamada remota nenhuma nas três funções abaixo. Se um dia o
-# catálogo precisar ser compartilhado entre estações, isso volta como decisão nova,
-# com a tabela criada antes do código que a consulta — não depois.
-def get_catalogo_fontes() -> list:
-    """Lista as fontes do catálogo. Fonte da verdade: o banco local."""
+# ── A regra que não pode ser quebrada ──
+#
+# A ESTAÇÃO NUNCA VAI À REDE PARA LER O CATÁLOGO. A imposição roda na estação por
+# causa de tempo, e o operador está de pé na frente da impressora. Por isso a leitura
+# do agente sai sempre do `formats_db.json` em disco; quem atualiza essa cópia é o
+# `sincronizar_catalogo_fontes` do agent_worker, em segundo plano.
+#
+# `IS_SUPABASE_ACTIVE` é False de propósito no executável (ver o topo deste arquivo) e
+# é exatamente isso que separa os dois mundos: quem tem essa flag ligada (a nuvem e o
+# desenvolvimento) não guarda cópia sincronizada e portanto lê da tabela; quem a tem
+# desligada (a estação) lê do disco. A ESCRITA é outra história — ver
+# `_catalogo_remoto_ativo`.
+
+# Memória curta da lista para quem lê da tabela. Sem ela, uma tela que desenha 40
+# elementos faria 40 consultas. Não vale para a estação, que lê do disco.
+#
+# `tentar_depois_de` cobre o caso do erro: enquanto a tabela não tiver sido criada, ou
+# a rede estiver fora, a consulta é adiada em vez de repetida a cada chamada. Sem isso
+# o motor imprimia uma linha vermelha por leitura de catálogo — e log vermelho de
+# rotina treina qualquer um a ignorar log vermelho, que foi metade do motivo de o
+# catálogo ter virado local em 14/08.
+_CATALOGO_MEMO = {"lista": None, "expira": 0.0, "tentar_depois_de": 0.0, "avisou": False}
+_CATALOGO_MEMO_S = 60
+
+
+def _catalogo_remoto_ativo() -> bool:
+    """Dá para gravar a fonte na tabela compartilhada?
+
+    Depende só de haver URL e chave — NÃO de `IS_SUPABASE_ACTIVE`, que a estação
+    desliga de propósito para ler o catálogo do disco. Amarrar a escrita àquela flag
+    faria a fonte cadastrada numa estação morrer ali mesmo, sem nunca chegar às outras
+    nem ao link do cliente: o defeito de 14/08 de novo, só que mais silencioso.
+
+    É o mesmo erro que já aconteceu uma vez com a fila de impressão — ver
+    `agent_worker._relay_ativo`.
+    """
+    return bool(SUPABASE_URL and SUPABASE_KEY)
+
+
+def _catalogo_do_disco() -> list:
     return list(_get_db().get("catalogo_fontes", []))
 
 
+def guardar_catalogo_local(lista: list) -> bool:
+    """Grava no `formats_db.json` a lista vinda da tabela. Devolve se mudou algo.
+
+    Usado pelo sincronismo do agente. Uma lista VAZIA é recusada: um erro de rede que
+    devolvesse `[]` deixaria a estação sem nenhuma fonte, e aí toda arte sairia em
+    Helvetica sem ninguém entender por quê.
+    """
+    if not lista:
+        return False
+    db = _get_db()
+    if db.get("catalogo_fontes") == lista:
+        return False
+    db["catalogo_fontes"] = lista
+    _save_db(db)
+    return True
+
+
+def get_catalogo_fontes() -> list:
+    """Lista as fontes do catálogo.
+
+    Na estação: do disco, sempre, sem tocar na rede.
+    Na nuvem e no desenvolvimento: da tabela, com memória de 60s e queda para o disco
+    se a consulta falhar — o link do cliente sem catálogo nenhum desenharia toda a
+    arte com fonte genérica, o que é pior do que uma lista velha.
+    """
+    if not IS_SUPABASE_ACTIVE:
+        return _catalogo_do_disco()
+
+    import time
+    agora = time.time()
+    if _CATALOGO_MEMO["lista"] is not None and agora < _CATALOGO_MEMO["expira"]:
+        return list(_CATALOGO_MEMO["lista"])
+    if agora < _CATALOGO_MEMO["tentar_depois_de"]:
+        return _catalogo_do_disco()
+
+    try:
+        lista = _supabase_call("GET", "catalogo_fontes?select=*&order=nome.asc",
+                               silencioso=True) or []
+    except Exception as e:
+        lista = []
+        if not _CATALOGO_MEMO["avisou"]:
+            _CATALOGO_MEMO["avisou"] = True
+            print(f"[db] Catalogo compartilhado indisponivel ({e}); "
+                  f"usando a copia em disco. Aviso dado uma vez por processo.")
+
+    if not lista:
+        _CATALOGO_MEMO["tentar_depois_de"] = agora + _CATALOGO_MEMO_S
+        return _catalogo_do_disco()
+
+    _CATALOGO_MEMO["lista"] = lista
+    _CATALOGO_MEMO["expira"] = agora + _CATALOGO_MEMO_S
+    _CATALOGO_MEMO["avisou"] = False
+    return list(lista)
+
+
 def save_catalogo_fonte(fonte_data: dict) -> dict:
-    """Salva ou atualiza uma fonte no catálogo."""
+    """Salva uma fonte no catálogo compartilhado e na cópia em disco.
+
+    Duplicata de nome é RECUSADA pelo índice único da tabela, e aqui isso vira "já
+    existe, fica a que estava" — nunca troca o binário de uma fonte já usada em arte
+    aprovada. É a mesma regra que o frontend aplica antes de enviar; o índice é a
+    garantia de verdade, para o caso de duas estações subirem a mesma fonte juntas.
+    """
     fid = fonte_data.get("id") or str(uuid.uuid4())
     fonte_data["id"] = fid
+
+    if _catalogo_remoto_ativo():
+        try:
+            gravada = _supabase_call("POST", "catalogo_fontes", fonte_data)
+            if gravada:
+                fonte_data = gravada[0] if isinstance(gravada, list) else gravada
+        except Exception as e:
+            if "23505" in str(e) or "duplicate key" in str(e).lower():
+                nome = (fonte_data.get("nome") or "").strip()
+                print(f"[db] Fonte '{nome}' ja existia no catalogo; mantida a que estava.")
+                existente = _fonte_por_nome(nome)
+                if existente:
+                    return existente
+            else:
+                print(f"[db] Nao consegui gravar a fonte no catalogo compartilhado: {e}")
+
+    _CATALOGO_MEMO["lista"] = None
     db = _get_db()
-    if "catalogo_fontes" not in db:
-        db["catalogo_fontes"] = []
-    db["catalogo_fontes"] = [f for f in db["catalogo_fontes"] if f.get("id") != fid]
-    db["catalogo_fontes"].append(fonte_data)
+    catalogo = [f for f in db.get("catalogo_fontes", []) if f.get("id") != fonte_data["id"]]
+    catalogo.append(fonte_data)
+    db["catalogo_fontes"] = catalogo
     _save_db(db)
     return fonte_data
 
 
+def _fonte_por_nome(nome: str) -> dict | None:
+    """A fonte já cadastrada com este nome, olhando a tabela quando dá.
+
+    Consulta a tabela em vez da cópia em disco porque quem chama acabou de tomar uma
+    recusa por duplicata: a linha que ganhou a corrida está lá e pode ainda não ter
+    chegado ao disco desta estação.
+    """
+    alvo = (nome or "").strip().lower()
+    if _catalogo_remoto_ativo():
+        try:
+            achadas = _supabase_call(
+                "GET", f"catalogo_fontes?nome=ilike.{urllib.parse.quote(alvo)}&limit=1")
+            if achadas:
+                return achadas[0]
+        except Exception:
+            pass
+    for f in _catalogo_do_disco():
+        if (f.get("nome") or "").strip().lower() == alvo:
+            return f
+    return None
+
+
 def delete_catalogo_fonte(fonte_id: str):
-    """Remove uma fonte do catálogo."""
+    """Remove uma fonte do catálogo compartilhado e da cópia em disco.
+
+    O binário no Storage continua onde está: apagá-lo quebraria qualquer arte antiga
+    que ainda aponte para aquela URL, e guardar o arquivo é barato.
+    """
+    if _catalogo_remoto_ativo():
+        try:
+            _supabase_call("DELETE", f"catalogo_fontes?id=eq.{urllib.parse.quote(fonte_id)}")
+        except Exception as e:
+            print(f"[db] Nao consegui remover a fonte do catalogo compartilhado: {e}")
+
+    _CATALOGO_MEMO["lista"] = None
     db = _get_db()
     if "catalogo_fontes" in db:
         db["catalogo_fontes"] = [f for f in db["catalogo_fontes"] if f.get("id") != fonte_id]
