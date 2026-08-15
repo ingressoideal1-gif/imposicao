@@ -128,19 +128,35 @@ from fastapi import HTTPException
 class FakeBanco:
     """Um Supabase de mentira, que guarda em dicionário o que foi gravado."""
 
-    def __init__(self, pedidos=None, modelos=None, setores=None):
+    def __init__(self, pedidos=None, modelos=None, setores=None, numeracoes=None):
         self.pedidos = pedidos or []
         self.modelos = modelos or [{"id": 1000022, "quantidade": 3}]
         # Vazio = pedido ainda não reivindicado, que é o caso mais comum: o papel
         # sai antes de o cliente abrir o link do evento.
         self.setores = setores or []
+        # Modelo que não diz a numeração dele usa esta: um QR comum, que é o
+        # caso normal. Quem quiser testar o modelo SEM código legível declara
+        # `"amostra_num_id": None` no próprio modelo — o `**m` abaixo faz o
+        # valor explícito vencer o padrão, inclusive quando ele é None.
+        self.numeracao_padrao = "num-qr"
+        self.numeracoes = numeracoes or {"num-qr": [{"type": "QR"}]}
         self.credenciais = []
         self.chamadas = []
 
     def __call__(self, method, path, body=None, prefer=None):
         self.chamadas.append((method, path))
         if path.startswith("pedidos_modelos"):
-            return self.modelos
+            return [{"amostra_num_id": self.numeracao_padrao, **m} for m in self.modelos]
+        if path.startswith("producao_numeracoes"):
+            # Obedece ao filtro `id=in.("a","b")` em vez de devolver tudo: um
+            # fake que ignora o filtro nunca reprova o codigo que pergunta pelos
+            # ids errados.
+            pedidos_ids = None
+            if "id=in.(" in path:
+                dentro = path.split("id=in.(", 1)[1].split(")", 1)[0]
+                pedidos_ids = {p.strip().strip('"') for p in dentro.split(",") if p.strip()}
+            return [{"id": k, "elements": v} for k, v in self.numeracoes.items()
+                    if pedidos_ids is None or k in pedidos_ids]
         if path.startswith("producao_acesso_setores"):
             if method == "GET":
                 return list(self.setores)
@@ -339,6 +355,57 @@ def test_fechar_conta_sem_trazer_as_linhas(banco, monkeypatch):
     )
     assert r == {"total": 2000, "esperado": 2000, "completo": True}
     assert banco.pedidos[0]["total_credenciais"] == 2000
+
+
+def test_modelo_sem_codigo_nao_vira_setor_do_evento(banco):
+    """O modelo 1000283 do pedido 20508, e a regra que ele originou.
+
+    Cinquenta ingressos com a numeracao "Numeracao Esquerda - Preta 20mm", que
+    tem texto e um PDF -- nenhum QR, nenhum codigo de barras. Nao ha o que a
+    portaria leia, entao ele NAO sobe ao Ideal Control.
+
+    Sem este filtro o modelo vira um setor do evento com cinquenta lugares que
+    nunca serao preenchidos: o dono do evento olha a tela e ve uma faixa que
+    "faltou publicar", e nao faltou nada -- o ingresso foi impresso do jeito que
+    foi contratado, so nao e controlado na entrada.
+    """
+    banco.numeracoes = {
+        "com-qr": [{"type": "TEXT"}, {"type": "QR"}],
+        "so-texto": [{"type": "TEXT"}, {"type": "PDF"}],   # a "Esquerda - Preta"
+    }
+    banco.modelos = [
+        {"id": 1000281, "nome_modelo": "PISTA", "quantidade": 30, "amostra_num_id": "com-qr"},
+        {"id": 1000283, "nome_modelo": "VIP", "quantidade": 50, "amostra_num_id": "so-texto"},
+        {"id": 1000999, "nome_modelo": "CORTESIA", "quantidade": 10, "amostra_num_id": None},
+    ]
+
+    setores = acesso_api._modelos_legiveis(20508)
+
+    assert [s["modelo_id"] for s in setores] == [1000281], (
+        "modelo sem codigo legivel (ou sem numeracao nenhuma) virou setor do evento"
+    )
+    assert setores[0]["nome"] == "PISTA"
+
+
+def test_o_pedido_fecha_completo_ignorando_o_modelo_sem_codigo(banco, monkeypatch):
+    """O outro lado da mesma regra, e o que o operador sente.
+
+    Contar o modelo sem codigo no total esperado deixa o pedido eternamente
+    incompleto: o agente avisa "faixa INCOMPLETA" a cada impressao e convida a
+    reimprimir papel que esta certo. O pedido 20508 vivia assim -- 163 de 213,
+    com os 50 que faltavam sendo justamente os que nao tem o que publicar.
+    """
+    banco.numeracoes = {"com-qr": [{"type": "QR"}], "so-texto": [{"type": "TEXT"}]}
+    banco.modelos = [
+        {"id": 1000281, "quantidade": 30, "amostra_num_id": "com-qr"},
+        {"id": 1000283, "quantidade": 50, "amostra_num_id": "so-texto"},
+    ]
+    monkeypatch.setattr(acesso_api, "contar", lambda p: 30)
+    acesso_api._abrir_pedido(20508)
+
+    r = acesso_api._fechar_pedido(20508)
+
+    assert r == {"total": 30, "esperado": 30, "completo": True}
 
 
 def test_credencial_de_pedido_ainda_nao_reivindicado_continua_gravando(banco):

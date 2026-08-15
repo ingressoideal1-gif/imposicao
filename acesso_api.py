@@ -252,6 +252,60 @@ def _tiragem_do_pedido(pedido_id_int: int) -> dict:
     return {int(l["id"]): int(l.get("quantidade") or 0) for l in linhas}
 
 
+def _modelos_legiveis(pedido_id_int: int) -> list:
+    """Os modelos do pedido que a portaria TEM COMO LER, na ordem do ERP.
+
+    Modelo cuja numeração não tem QR, QR Ideal nem código de barras não sobe ao
+    Ideal Control. Regra do usuário, em 15/08/2026, sobre o modelo 1000283 do
+    pedido 20508 — cinquenta ingressos com a numeração "Numeração Esquerda -
+    Preta 20mm", que só tem texto e um PDF.
+
+    Não é uma otimização: é o que impede o sistema de mentir. Sem o filtro, o
+    modelo aparece como um setor do evento com cinquenta lugares que nunca serão
+    preenchidos, e o pedido se declara **eternamente incompleto** — mandando
+    reimprimir papel que está do jeito que foi contratado. O ingresso sem código
+    não é defeito: ele simplesmente não é controlado na entrada.
+
+    Quem decide o que é legível é `acesso_publicacao.numeracao_do_modelo`, a
+    MESMA função que o agente usa para decidir o que publicar. Duas definições
+    de "tem código" divergiriam no dia em que uma delas mudasse, e o sintoma
+    seria o de sempre aqui: uma ponta esperando o que a outra nunca manda.
+    """
+    import acesso_publicacao
+
+    modelos = supabase(
+        "GET",
+        f"pedidos_modelos?id_int=eq.{int(pedido_id_int)}"
+        "&select=id,nome_modelo,quantidade,amostra_num_id&order=ordem.asc",
+    ) or []
+
+    ids = sorted({str(m["amostra_num_id"]) for m in modelos if m.get("amostra_num_id")})
+    numeracoes = {}
+    if ids:
+        lista = ",".join(f'"{i}"' for i in ids)
+        numeracoes = {
+            str(n["id"]): n.get("elements")
+            for n in (supabase(
+                "GET", f"producao_numeracoes?id=in.({lista})&select=id,elements"
+            ) or [])
+        }
+
+    legiveis = []
+    for m in modelos:
+        elementos = numeracoes.get(str(m.get("amostra_num_id")))
+        if not acesso_publicacao.numeracao_do_modelo(elementos):
+            continue
+        legiveis.append({
+            "modelo_id": int(m["id"]),
+            # O setor do evento sai de `nome_modelo`. O campo `setor` de
+            # pedidos_modelos ja esta ocupado com o setor de PRODUCAO
+            # (FLEXO, TEXTIL, PVC, LASER) e nao serve aqui.
+            "nome": (m.get("nome_modelo") or f"Setor {m['id']}").strip(),
+            "quantidade": int(m.get("quantidade") or 0),
+        })
+    return legiveis
+
+
 def _setores_do_pedido(pedido_id_int: int) -> dict:
     """{modelo_id: {"evento_id": ..., "setor_id": ...}} para o pedido já reivindicado.
 
@@ -376,7 +430,10 @@ def _fechar_pedido(pedido_id_int: int) -> dict:
     """
     pedido_id_int = int(pedido_id_int)
     total = contar(f"producao_acesso_credenciais?pedido_id_int=eq.{pedido_id_int}")
-    esperado = sum(_tiragem_do_pedido(pedido_id_int).values())
+    # Espera-se só o que a portaria tem como ler. Contar o modelo sem código
+    # deixaria o pedido eternamente incompleto e mandaria reimprimir papel que
+    # está do jeito que foi contratado. Ver `_modelos_legiveis`.
+    esperado = sum(m["quantidade"] for m in _modelos_legiveis(pedido_id_int))
     supabase("PATCH", f"producao_acesso_pedidos?pedido_id_int=eq.{pedido_id_int}", {
         "publicado_em": "now()",
         "total_credenciais": total,
@@ -533,19 +590,12 @@ def _esqueleto(token: str) -> dict:
             detail="este QR foi substituido por outro; use o mais recente",
         )
 
-    # 3. O que o ERP diz HOJE sobre este pedido.
-    modelos = supabase(
-        "GET",
-        f"pedidos_modelos?id_int=eq.{pedido}&select=id,nome_modelo,quantidade&order=ordem.asc",
-    ) or []
-    setores = [{
-        "modelo_id": int(m["id"]),
-        # O setor do evento sai de `nome_modelo`. O campo `setor` de
-        # pedidos_modelos ja esta ocupado com o setor de PRODUCAO
-        # (FLEXO, TEXTIL, PVC, LASER) e nao serve aqui.
-        "nome": (m.get("nome_modelo") or f"Setor {m['id']}").strip(),
-        "quantidade": int(m.get("quantidade") or 0),
-    } for m in modelos]
+    # 3. O que o ERP diz HOJE sobre este pedido — só o que a portaria lê.
+    #
+    # Modelo sem QR, QR Ideal ou codigo de barras nao vira setor: ele nunca
+    # teria uma credencial, e um setor vazio para sempre e pior que setor
+    # nenhum. Ver `_modelos_legiveis`.
+    setores = _modelos_legiveis(pedido)
 
     proposta = (supabase(
         "GET", f"propostas?id_int=eq.{pedido}&select=id_cliente"
