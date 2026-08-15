@@ -712,9 +712,14 @@ def _importar_codigos(evento_id, usuario, elevacao, navegador, corpo: dict) -> d
     # gravava zero linha nova (a chave única ignora o repetido) e a tela
     # dizia "42 códigos entraram" nas duas vezes. Contar as linhas que
     # voltaram de verdade é o que distingue as duas.
+    # `chave_dedup` e não `codigo_hash`: é a mesma chave única da publicação da
+    # faixa, e ela vale igual aqui. Estes códigos não têm pedido, modelo nem
+    # número — os três entram como zero na chave —, então na prática eles
+    # continuam sendo únicos pelo hash, que é o que sempre foi. O que muda é só
+    # o nome do índice que o banco consulta.
     gravadas = supabase(
         "POST",
-        "producao_acesso_credenciais?on_conflict=codigo_hash",
+        "producao_acesso_credenciais?on_conflict=chave_dedup",
         [{
             "evento_id": evento_id,
             "setor_id": setor_id,

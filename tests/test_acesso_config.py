@@ -136,18 +136,35 @@ class FakeBanco:
             if "on_conflict=" in path:
                 coluna_conflito = path.split("on_conflict=", 1)[1].split("&", 1)[0]
             ignora_duplicado = bool(prefer and "resolution=ignore-duplicates" in prefer)
-            ja_visto = ({l.get(coluna_conflito) for l in alvo}
-                       if coluna_conflito else set())
+
+            def chave(linha):
+                """A `chave_dedup`, calculada aqui como o banco a calcula.
+
+                Ela e uma coluna GENERATED ALWAYS no Postgres, entao o backend
+                nunca a envia -- o banco preenche. O fake precisa fazer o mesmo,
+                senao a deduplicacao aqui olharia um campo que nao chega e
+                NENHUMA duplicata seria pega, o oposto do banco real.
+                """
+                if coluna_conflito != "chave_dedup":
+                    return linha.get(coluna_conflito)
+                return "{}/{}/{}/{}".format(
+                    linha.get("pedido_id_int") or 0,
+                    linha.get("modelo_id") or 0,
+                    linha.get("numero") or 0,
+                    linha.get("codigo_hash"),
+                )
+
+            ja_visto = ({chave(l) for l in alvo} if coluna_conflito else set())
             criadas = []
             for l in linhas:
                 linha = dict(l)
                 if (coluna_conflito and ignora_duplicado
-                        and linha.get(coluna_conflito) in ja_visto):
+                        and chave(linha) in ja_visto):
                     continue
                 linha.setdefault("id", f"novo-{len(alvo)}")
                 alvo.append(linha)
                 if coluna_conflito:
-                    ja_visto.add(linha.get(coluna_conflito))
+                    ja_visto.add(chave(linha))
                 criadas.append(linha)
             if prefer and "return=minimal" in prefer:
                 return []

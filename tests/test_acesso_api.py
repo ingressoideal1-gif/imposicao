@@ -154,11 +154,38 @@ class FakeBanco:
             if method == "GET":
                 return list(self.credenciais)
             if method == "POST":
-                vistos = {c["codigo_hash"] for c in self.credenciais}
+                # A `chave_dedup` do banco, calculada aqui do mesmo jeito. Ela e
+                # GENERATED ALWAYS no Postgres, entao o backend nunca a envia --
+                # e o fake tem de calcula-la, senao deduplicaria por um campo
+                # que nao chega e deixaria passar tudo.
+                #
+                # Ate 15/08/2026 este fake deduplicava so por `codigo_hash`,
+                # espelhando a chave antiga. Era ela que descartava PISTA e
+                # CAMAROTE do pedido 20508 por terem o mesmo `000001` da
+                # IMPRENSA -- 31 ingressos impressos e sem linha na nuvem.
+                # Obedece ao `on_conflict=` que o BACKEND mandou, em vez de
+                # decidir por conta. Um fake que deduplica sempre pela chave
+                # certa, ignorando o que o codigo de producao pediu, nunca
+                # reprova nada -- foi assim que este arquivo passou verde
+                # enquanto o backend pedia a chave errada.
+                coluna = None
+                if "on_conflict=" in path:
+                    coluna = path.split("on_conflict=", 1)[1].split("&", 1)[0]
+
+                def chave(c):
+                    if coluna != "chave_dedup":
+                        return c.get(coluna)
+                    return "{}/{}/{}/{}".format(
+                        c.get("pedido_id_int") or 0,
+                        c.get("modelo_id") or 0,
+                        c.get("numero") or 0,
+                        c["codigo_hash"],
+                    )
+                vistos = {chave(c) for c in self.credenciais}
                 for linha in body:
-                    if linha["codigo_hash"] not in vistos:
+                    if chave(linha) not in vistos:
                         self.credenciais.append(linha)
-                        vistos.add(linha["codigo_hash"])
+                        vistos.add(chave(linha))
                 return []
         return []
 
@@ -198,6 +225,59 @@ def test_enviar_o_mesmo_lote_tres_vezes_nao_duplica(banco):
     for _ in range(3):
         acesso_api._gravar_lote(20272, itens)
     assert len(banco.credenciais) == 1
+
+
+def test_modelos_diferentes_com_o_MESMO_codigo_entram_os_dois(banco):
+    """O defeito que custou 31 ingressos do pedido 20508, em 15/08/2026.
+
+    Tres modelos daquele pedido usavam a mesma numeracao ("Triband"), entao o
+    item 1 dos tres saiu impresso com o mesmo texto: `000001`. Texto igual e sal
+    igual -- o sal e por pedido -- dao hash igual, e a chave unica de entao, que
+    era so `codigo_hash`, aceitou a IMPRENSA e DESCARTOU EM SILENCIO a PISTA e o
+    CAMAROTE. Trinta e um ingressos impressos, entregues, e sem linha nenhuma na
+    nuvem: recusados na portaria, sem como descobrir antes.
+
+    O papel NAO muda para consertar isso, por decisao do usuario -- o texto
+    impresso e o que o cliente contratou. Quem passou a distinguir foi a chave:
+    um codigo por MODELO, e nao um codigo no sistema inteiro.
+
+    Quem separa os dois na leitura e o setor do aparelho, que e a decisao ja
+    registrada em docs/controle_acesso.md.
+    """
+    banco.modelos = [{"id": 1000280, "quantidade": 20},   # IMPRENSA
+                     {"id": 1000281, "quantidade": 30},   # PISTA
+                     {"id": 1000284, "quantidade": 1}]    # CAMAROTE
+    acesso_api._abrir_pedido(20508)
+
+    mesmo_hash = "e" * 64          # o `000001` que os tres imprimem
+    acesso_api._gravar_lote(20508, [
+        {"modelo_id": 1000280, "numero": 1, "hash": mesmo_hash},
+        {"modelo_id": 1000281, "numero": 1, "hash": mesmo_hash},
+        {"modelo_id": 1000284, "numero": 1, "hash": mesmo_hash},
+    ])
+
+    assert len(banco.credenciais) == 3
+    assert sorted(c["modelo_id"] for c in banco.credenciais) == [1000280, 1000281, 1000284]
+
+    # E a protecao contra duplicata continua de pe para o que E duplicata:
+    # reenviar o lote inteiro nao grava nada de novo.
+    acesso_api._gravar_lote(20508, [
+        {"modelo_id": 1000280, "numero": 1, "hash": mesmo_hash},
+        {"modelo_id": 1000281, "numero": 1, "hash": mesmo_hash},
+    ])
+    assert len(banco.credenciais) == 3
+
+
+def test_o_mesmo_codigo_em_numeros_diferentes_do_mesmo_modelo_entra(banco):
+    """Caso raro mas real: uma numeracao alimentada por coluna de CSV pode
+    repetir o mesmo texto em itens diferentes. Cada item e um ingresso, e cada
+    ingresso precisa da sua linha -- senao o segundo e recusado na porta."""
+    acesso_api._abrir_pedido(20272)
+    acesso_api._gravar_lote(20272, [
+        {"modelo_id": 1000022, "numero": 1, "hash": "f" * 64},
+        {"modelo_id": 1000022, "numero": 2, "hash": "f" * 64},
+    ])
+    assert len(banco.credenciais) == 2
 
 
 def test_numero_acima_da_tiragem_e_recusado(banco):

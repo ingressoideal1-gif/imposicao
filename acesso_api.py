@@ -255,10 +255,23 @@ def _tiragem_do_pedido(pedido_id_int: int) -> dict:
 def _gravar_lote(pedido_id_int: int, itens: list) -> int:
     """Grava um lote de credenciais, ignorando o que já existe.
 
-    `on_conflict=codigo_hash` é o que torna a publicação repetível: a rede cai
+    `on_conflict=chave_dedup` é o que torna a publicação repetível: a rede cai
     no meio, o agente reenvia o lote inteiro, e nada duplica. Conferido contra o
     banco de verdade em 13/08/2026 — três envios do mesmo lote deixaram uma
     linha só.
+
+    A chave era `codigo_hash` sozinho, e isso custou 31 ingressos do pedido
+    20508 em 15/08/2026: três modelos daquele pedido usavam a mesma numeração,
+    então o item 1 dos três saiu impresso com o mesmo `000001`. Texto igual e
+    sal igual — o sal é por pedido — dão hash igual, e o banco aceitou a
+    IMPRENSA e descartou em silêncio a PISTA e o CAMAROTE. Papel entregue, nada
+    na nuvem, recusa na portaria.
+
+    `chave_dedup` é uma coluna GENERATED ALWAYS no Postgres
+    (`sql/schema_acesso_04_credencial_por_modelo.sql`) que junta pedido, modelo,
+    número e hash. Ela NÃO é enviada daqui: quem a calcula é o banco, em toda
+    inserção, e por isso não há como este código esquecer de preenchê-la nem
+    preenchê-la diferente do índice.
     """
     pedido_id_int = int(pedido_id_int)
 
@@ -293,7 +306,7 @@ def _gravar_lote(pedido_id_int: int, itens: list) -> int:
 
     supabase(
         "POST",
-        "producao_acesso_credenciais?on_conflict=codigo_hash",
+        "producao_acesso_credenciais?on_conflict=chave_dedup",
         [{
             "pedido_id_int": pedido_id_int,
             "modelo_id": int(i["modelo_id"]),

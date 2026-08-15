@@ -134,6 +134,21 @@ de setores, e o código é lido nesse contexto. Quando o aparelho valida vários
 código casa em mais de um, a portaria pergunta qual, mostrando só os que casaram — um toque,
 e fica registrado. Isso é trabalho da parte 3.
 
+> **A gravação chegou a atrapalhar essa decisão, e custou 31 ingressos.** Em 15/08/2026 o
+> pedido 20508 tinha três modelos com a numeração "Triband", e o item 1 dos três saiu com o
+> mesmo `000001`. A chave única era `codigo_hash` sozinho: o banco aceitou a IMPRENSA e
+> **descartou em silêncio** a PISTA e o CAMAROTE. Papel entregue, nada na nuvem, recusa na
+> portaria — e o aparelho nunca teria chance de resolver, porque a linha do segundo modelo
+> não existia.
+>
+> A chave passou a ser `chave_dedup` — pedido + modelo + número + hash, calculada pelo
+> próprio Postgres (`sql/schema_acesso_04_credencial_por_modelo.sql`). Os três `000001`
+> convivem, um por modelo, cada um com o seu setor. **O papel não mudou**, por decisão do
+> usuário: o texto impresso é o que o cliente contratou, e quem se ajusta é o banco.
+>
+> De quebra, isso conserta o caso de mudar a numeração e reimprimir: os dois lotes passam a
+> valer na porta, em vez de o segundo ser descartado.
+
 ### O segredo do agente
 
 Os três endpoints escrevem, e vivem num backend público. Sem segredo, qualquer um
