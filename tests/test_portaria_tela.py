@@ -8,7 +8,6 @@ estranho ao evento) faz o porteiro devolver ingresso legitimo achando que e
 falso. Sao cores diferentes de proposito, e e isto que garante que continuem.
 """
 
-import hashlib
 import json
 import os
 import subprocess
@@ -109,3 +108,39 @@ def test_toda_leitura_decidida_entra_na_fila_inclusive_a_negada():
     """E a leitura negada que responde 'por que a fila parou as 22h'."""
     assert pintar("000001")["fila"] == 1
     assert pintar("999999")["fila"] == 1
+
+
+# ── A fila so sai depois que o servidor confirmou ────────────────────────────
+#
+# Nenhum dos testes acima toca isto: eles desligam `navigator.onLine` de
+# proposito (nenhuma rede deve sair enquanto so estamos testando pintura), e
+# por isso `sincronizar()` sai no primeiro guard sem executar o corpo -- onde
+# mora a regra "so remove da fila depois que o POST /leituras confirmou".
+# Achado em revisao de codigo, 15/08/2026: sem este teste, inverter a ordem
+# (remover da fila antes do fetch) passaria pela suite inteira sem aviso.
+
+def _sincronizar(mock):
+    r = subprocess.run(
+        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
+        input=json.dumps({"modo": "sincronizar", "carga": carga(), "mock": mock}),
+    )
+    if r.returncode != 0:
+        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
+    return json.loads(r.stdout)
+
+
+def test_sincronizar_remove_da_fila_so_depois_da_confirmacao_do_servidor():
+    r = _sincronizar({"method": "POST", "pathname": "/api/acesso/portaria/leituras",
+                      "status": 200, "body": {"gravadas": 1}})
+    assert r["filaAntes"] == 1
+    assert r["filaDepois"] == 0
+
+
+def test_sincronizar_mantem_na_fila_se_o_servidor_nao_confirmar():
+    """O teste que fica vermelho se alguem inverter a ordem: remover da fila
+    ANTES do fetch faria a leitura sumir mesmo quando o servidor nunca
+    recebeu -- e a lotacao contaria uma entrada que nunca chegou."""
+    r = _sincronizar({"method": "POST", "pathname": "/api/acesso/portaria/leituras",
+                      "abort": True})
+    assert r["filaAntes"] == 1
+    assert r["filaDepois"] == 1
