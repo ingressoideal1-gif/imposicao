@@ -263,6 +263,111 @@ function ConvertFrom-VercelLs {
     return $deploys
 }
 
+# ─── O segredo que autoriza a estacao a publicar a faixa ─────────────────────
+#
+# Vive aqui, e nao dentro de um dos scripts de build, porque a raiz do defeito de
+# 15/08/2026 nao foi nenhum dos dois scripts isoladamente: foi existirem DOIS,
+# cada um com a sua copia, e as duas divergirem sem ninguem notar.
+#
+#   - publicar_agente.ps1, que compila todo release, nunca gerava o arquivo;
+#   - build_agent.ps1 gerava DEPOIS de ja ter chamado o PyInstaller.
+#
+# O resultado foi um agente que imprime perfeitamente e nao publica credencial
+# nenhuma -- sem erro, sem aviso, ate a portaria do evento. O pedido 20508 saiu
+# com 143 ingressos que a portaria recusaria.
+
+function New-SegredoDoAgente {
+    <#
+    .SYNOPSIS
+      Gera o acesso_segredo.py que o PyInstaller embute no executavel.
+
+    .DESCRIPTION
+      TEM DE RODAR ANTES do PyInstaller. Gerado depois, o arquivo so entra no
+      build SEGUINTE -- que foi exatamente o defeito do build_agent.ps1.
+
+      O segredo vai DENTRO do executavel, e nao num arquivo solto ao lado como o
+      pool: e curto, e nao ha por que deixa-lo legivel para quem abrir a pasta.
+      O git o ignora; ele nunca existe no repositorio.
+
+      Ele NAO e a service_role. So autoriza publicar faixa de codigos.
+
+    .PARAMETER Raiz
+      A pasta do projeto: e de la que sai o .env.local e e la que o arquivo e
+      escrito, ao lado do agent_tray.py que o PyInstaller varre.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Raiz)
+
+    $segredo = $env:ACESSO_AGENTE_SEGREDO
+    if (-not $segredo) {
+        $envLocal = Join-Path $Raiz ".env.local"
+        if (Test-Path $envLocal) {
+            $linha = Get-Content $envLocal |
+                     Where-Object { $_ -match '^\s*ACESSO_AGENTE_SEGREDO\s*=' } |
+                     Select-Object -First 1
+            if ($linha) { $segredo = ($linha -split '=', 2)[1].Trim().Trim('"').Trim("'") }
+        }
+    }
+    if (-not $segredo) {
+        # `throw`, e nao um aviso: um agente sem segredo imprime normalmente e
+        # nao publica nada. Seguir seria produzir exatamente o release que
+        # custou o pedido 20508.
+        throw ("ACESSO_AGENTE_SEGREDO nao encontrado. Sem ele o agente imprime " +
+               "normalmente mas NAO publica a faixa de codigos, e a portaria do " +
+               "evento fica sem o que conferir. Ponha a linha no .env.local, com " +
+               "o MESMO valor configurado no Render: ACESSO_AGENTE_SEGREDO=<valor>")
+    }
+
+    # A barra invertida primeiro: invertida a ordem, o escape da aspa seria
+    # escapado de novo e o .py sairia com erro de sintaxe -- e o agente sairia
+    # sem o segredo, em silencio, de novo.
+    $escapado = $segredo.Replace('\', '\\').Replace('"', '\"')
+    $destino = Join-Path $Raiz "acesso_segredo.py"
+    @"
+# -*- coding: utf-8 -*-
+# GERADO NA COMPILACAO. Nao edite, nao versione.
+# O .gitignore cobre este arquivo: ele e o segredo que autoriza a estacao a
+# publicar a faixa de codigos do QR Ideal no backend da nuvem.
+SEGREDO = "$escapado"
+"@ | Out-File -FilePath $destino -Encoding utf8
+
+    return $destino
+}
+
+function Test-SegredoNoBuild {
+    <#
+    .SYNOPSIS
+      Confere, DEPOIS de compilar, que o modulo do segredo entrou no executavel.
+
+    .DESCRIPTION
+      A trava que nao depende de ninguem lembrar. O PyInstaller escreve os
+      modulos que nao achou em build\agent_tray\warn-agent_tray.txt, e a linha
+
+          missing module named acesso_segredo - imported by acesso_publicacao
+
+      esteve la em TODOS os builds ate 15/08/2026 sem que ninguem lesse o
+      arquivo. Agora ela para o release.
+
+    .PARAMETER Aviso
+      Caminho do warn-agent_tray.txt que o PyInstaller acabou de escrever.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Aviso)
+
+    if (-not (Test-Path $Aviso)) {
+        # Sem o arquivo nao da para afirmar nada, e dizer "esta ok" seria a
+        # mesma omissao de antes com outra roupa.
+        throw "Nao achei o aviso do PyInstaller em '$Aviso'; nao da para confirmar que o segredo entrou."
+    }
+    $texto = Get-Content -Raw $Aviso
+    if ($texto -match 'missing module named acesso_segredo') {
+        throw ("O PyInstaller nao achou o modulo acesso_segredo: o agente sairia " +
+               "sem o segredo e NAO publicaria faixa nenhuma. Confira se o " +
+               "New-SegredoDoAgente rodou ANTES da compilacao.")
+    }
+}
+
 Export-ModuleMember -Function Test-ArquivoDeRascunho, ConvertFrom-JwtPayload,
     Find-SegredoNoTexto, Get-ProximaVersao, ConvertTo-TuplaVersao,
-    Test-VersaoMaior, Get-TagAnterior, ConvertFrom-VercelLs
+    Test-VersaoMaior, Get-TagAnterior, ConvertFrom-VercelLs,
+    New-SegredoDoAgente, Test-SegredoNoBuild

@@ -65,12 +65,22 @@ Describe "Pool do QR Ideal na publicacao" {
         $rastreados | Should BeNullOrEmpty
     }
 
-    It "o build exige o segredo do agente antes de compilar" {
+    It "os DOIS caminhos de build exigem o segredo do agente antes de compilar" {
         # Sem ele o agente imprime normalmente e nao publica faixa nenhuma. E o
         # mesmo modo de falhar do pool: silencioso ate a portaria do evento.
-        $conteudo = Get-Content (Join-Path $raiz "build_agent.ps1") -Raw
-        $conteudo | Should Match "ACESSO_AGENTE_SEGREDO"
-        $conteudo | Should Match "acesso_segredo\.py"
+        #
+        # Este teste olhava so o build_agent.ps1 e so procurava o NOME da
+        # variavel. Passava verde enquanto o publicar_agente.ps1 -- que compila
+        # todo release -- nem gerava o arquivo, e enquanto o proprio
+        # build_agent.ps1 o gerava DEPOIS de compilar. O pedido 20508 saiu
+        # assim, em 15/08/2026, com 143 ingressos que a portaria recusaria.
+        #
+        # O detalhe de cada caminho esta em tests/SegredoDoAgente.Tests.ps1.
+        foreach ($script in @("build_agent.ps1", "publicar_agente.ps1")) {
+            $conteudo = Get-Content (Join-Path $raiz $script) -Raw
+            $conteudo | Should Match "New-SegredoDoAgente"
+            $conteudo | Should Match "Test-SegredoNoBuild"
+        }
     }
 
     It "o segredo do agente nunca fica versionado" {
