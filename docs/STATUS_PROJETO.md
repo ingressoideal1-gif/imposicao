@@ -130,7 +130,7 @@ O que a parte 3 inteira precisa entregar está no fim do
 
 ---
 
-## 🔴 A noite de 15/08: três defeitos empilhados, e o que ficou de guarda
+## 🔴 A noite de 15/08: quatro defeitos empilhados, e o que ficou de guarda
 
 O pedido **20508** foi o primeiro pedido de verdade a passar pelo ciclo inteiro, e ele
 achou três defeitos independentes. Os três tinham o mesmo formato: **silêncio**. Nada
@@ -213,6 +213,53 @@ ainda não conhece o campo — continue sendo aceito enquanto as estações não
 **Confirmado em 15/08 de manhã:** o 1000284 foi gerado **com a numeração 1000117**, a
 exclusiva que falhava, e saiu com QR. A credencial subiu. Não havia regressão de
 `is_custom`: era sempre a nuvem no lugar do agente.
+
+### 4. O navegador bloqueou a estação (corrigido na v581)
+
+Corrigir o item 3 revelou o item 4, e é o mais importante dos quatro porque não é um
+defeito nosso — é uma regra nova do navegador, que vai chegar a toda estação sozinha.
+
+O **Chrome 151** passou a recusar que uma página `https://` da internet converse com
+`http://127.0.0.1:9000`:
+
+```
+blocked by CORS policy: Permission was denied for this request
+to access the `loopback` address space
+```
+
+O cabeçalho `Access-Control-Allow-Private-Network` que o agente já envia **deixou de
+bastar**. Conferido no navegador em 15/08: o agente responde certo ao preflight e ao GET
+por `curl`; quem recusa é o Chrome, antes de a requisição sair.
+
+O efeito: a partir de `ideal-imposition.vercel.app` a estação é **inalcançável**, e o
+painel caía para a nuvem em silêncio. Como a nuvem não tem o `qr_ideal_pool.bin`, o
+operador lia *"falta a lista de codigos desta estacao"* **estando na frente de uma estação
+que tem a lista** — a frase que fez esta investigação durar dois dias.
+
+**A saída não pode ser permissão concedida no navegador:** cada estação da gráfica usa um
+navegador diferente, e um clique por site, por navegador e por perfil volta a quebrar na
+primeira máquina nova. A saída é abrir o painel pelo endereço do **próprio agente**:
+
+```
+http://localhost:9000/app/index.html
+```
+
+Ali a página e o agente têm a mesma origem, não há permissão envolvida, e funciona em
+qualquer navegador. Medido no Chrome desta estação: agente encontrado, imposição indo para
+`http://localhost:9000`, **61 numerações** no catálogo, zero bloqueios.
+
+**Um engano meu, corrigido:** eu havia registrado aqui que o painel servido pelo agente
+ficaria preso ao catálogo local dele, que tem uma numeração só. **Não fica.** A função
+`api()` do `script.js` desvia `/formatos`, `/numeracoes`, `/saidas`, `/cores` e
+`/modelos_imposicao` direto para o Supabase quando o `supabaseClient` existe. O
+`formats_db.json` da estação é um espelho que o painel não lê.
+
+**A correção publicada (v581):** o painel deixa de cair na nuvem calado. Quando a estação
+não é encontrada e a página não vem da própria máquina, ele mostra um alerta vermelho
+durante a geração e repete o motivo dentro da mensagem de erro — dizendo o endereço a
+abrir. A guarda é
+[tests/test_estacao_bloqueada_pelo_navegador.py](../tests/test_estacao_bloqueada_pelo_navegador.py),
+que reprova qualquer tela que mostre o selo "NUVEM" sem explicar por quê.
 
 **As guardas:** [tests/test_onde_estou_rodando.py](../tests/test_onde_estou_rodando.py)
 varre **todos** os `.js` do frontend e reprova qualquer sondagem que aceite um `running`

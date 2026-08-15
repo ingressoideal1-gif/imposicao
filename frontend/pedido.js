@@ -4752,7 +4752,10 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         let baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
 
-        
+        // Ver o comentario de `explicarEstacaoNaoEncontrada` no script.js: esta
+        // tela tem a sondagem duplicada, e um aviso que valha so para metade das
+        // telas some sem ninguem notar.
+        let avisoDaNuvem = '';
 
         // 1. Verificar primeiro se o servidor FastAPI principal está rodando localmente (porta 8080)
 
@@ -4849,7 +4852,14 @@ window.runPedImposition = async function (mode, isRefazer) {
 
             console.log("[Imposition] Processando na nuvem (Render)");
 
-            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... <span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,0.35);vertical-align:middle;">&#9729; NUVEM</span>`;
+            avisoDaNuvem = typeof explicarEstacaoNaoEncontrada === 'function'
+                ? explicarEstacaoNaoEncontrada(window.location.origin) : '';
+            const selo = `<span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,0.35);vertical-align:middle;">&#9729; NUVEM</span>`;
+            const alerta = avisoDaNuvem
+                ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:#7f1d1d;color:#fee2e2;font-size:0.8rem;line-height:1.45;text-align:left;font-weight:600;">&#9888; ${avisoDaNuvem}</div>`
+                : '';
+            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... ${selo}${alerta}`;
+            if (avisoDaNuvem) console.warn('[Imposition] ' + avisoDaNuvem);
 
         }
 
@@ -5182,7 +5192,9 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         } else {
 
-            toast(`Erro: ${err.message}`, 'error');
+            const causa = avisoDaNuvem ? `\n\n${avisoDaNuvem}` : '';
+
+            toast(`Erro: ${err.message}${causa}`, 'error');
 
         }
 

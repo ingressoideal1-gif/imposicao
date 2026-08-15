@@ -3544,12 +3544,57 @@ const MOTOR_NUVEM = 'https://imposicao.onrender.com';
  * @param baseUrl base já resolvida pelo chamador ('' = mesma origem da página)
  * @param origem  origem da página; parâmetro para poder ser testado
  */
+function ehEnderecoDaPropriaMaquina(url) {
+    return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test((url || '').replace(/\/+$/, ''));
+}
+window.ehEnderecoDaPropriaMaquina = ehEnderecoDaPropriaMaquina;
+
 function baseParaImposicao(baseUrl, origem) {
     const alvo = (baseUrl || origem || window.location.origin || '').replace(/\/+$/, '');
-    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(alvo)) return baseUrl;
+    if (ehEnderecoDaPropriaMaquina(alvo)) return baseUrl;
     return MOTOR_NUVEM;
 }
 window.baseParaImposicao = baseParaImposicao;
+
+/**
+ * O que dizer ao operador quando a estação não foi encontrada e o trabalho vai
+ * cair na nuvem.
+ *
+ * ## Por que este aviso existe
+ *
+ * Em 15/08/2026 o Chrome 151 passou a recusar que uma página `https://` da
+ * internet converse com `http://127.0.0.1:9000`:
+ *
+ *     blocked by CORS policy: Permission was denied for this request
+ *     to access the `loopback` address space
+ *
+ * O cabeçalho `Access-Control-Allow-Private-Network`, que o agente já envia,
+ * deixou de bastar. A estação passou a ser **inalcançável** a partir do painel
+ * publicado na Vercel — e o painel caía para a nuvem em silêncio, com um
+ * discreto selo "NUVEM" que ninguém olha durante uma tiragem.
+ *
+ * O estrago é o de sempre neste projeto: a tela diz uma coisa e o papel é
+ * outra. Na nuvem não existe o `qr_ideal_pool.bin`, então o QR Ideal fica
+ * impossível; e a imposição sai da máquina do operador para a rede, contra a
+ * razão de o agente existir, que é tempo.
+ *
+ * Isso vai acontecer em TODA estação conforme o navegador dela atualizar, e
+ * cada estação da gráfica usa um navegador diferente — então a saída não pode
+ * ser permissão concedida site a site. A saída é abrir o painel pelo endereço
+ * do próprio agente, onde a página e o agente têm a mesma origem e não há
+ * permissão nenhuma envolvida.
+ *
+ * @param origem origem da página; parâmetro para poder ser testado
+ * @returns a frase, ou '' quando a página já vem da própria máquina
+ */
+function explicarEstacaoNaoEncontrada(origem) {
+    if (ehEnderecoDaPropriaMaquina(origem || window.location.origin)) return '';
+    return 'A estacao (NewProd) nao foi encontrada, entao este trabalho vai para a nuvem: '
+        + 'mais devagar, e SEM QR Ideal. Se o NewProd esta aberto nesta maquina, quem bloqueou '
+        + 'foi o navegador — pagina da internet nao pode mais falar com a propria maquina. '
+        + 'Abra o painel por http://localhost:9000 e refaca por la.';
+}
+window.explicarEstacaoNaoEncontrada = explicarEstacaoNaoEncontrada;
 
 /**
  * Descreve uma resposta HTTP de erro em uma frase que serve ao operador.
@@ -10020,7 +10065,10 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         let baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
 
-        
+        // Preenchido so quando o trabalho cai na nuvem por a estacao nao ter
+        // sido encontrada. Serve a duas telas: o alerta durante a geracao e a
+        // mensagem de erro, que sem ele diz o que faltou mas nao o que fazer.
+        let avisoDaNuvem = '';
 
         // 1. Verificar primeiro se o servidor FastAPI principal está rodando localmente (porta 8080)
 
@@ -10151,7 +10199,16 @@ window.runImposition = async function (mode, returnBlob = false) {
 
             console.log("[Imposition] Processando na nuvem (Render)");
 
-            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... <span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,0.35);vertical-align:middle;">&#9729; NUVEM</span>`;
+            // O selo sozinho nao basta: ele e discreto e some entre os numeros
+            // do progresso. Quando a estacao existia e o navegador a bloqueou, o
+            // operador precisa LER o motivo e o que fazer, na hora, sem procurar.
+            avisoDaNuvem = explicarEstacaoNaoEncontrada(window.location.origin);
+            const selo = `<span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,0.35);vertical-align:middle;">&#9729; NUVEM</span>`;
+            const alerta = avisoDaNuvem
+                ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:#7f1d1d;color:#fee2e2;font-size:0.8rem;line-height:1.45;text-align:left;font-weight:600;">&#9888; ${avisoDaNuvem}</div>`
+                : '';
+            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... ${selo}${alerta}`;
+            if (avisoDaNuvem) console.warn('[Imposition] ' + avisoDaNuvem);
 
         }
 
@@ -10427,7 +10484,13 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         } else {
 
-            toast(`Erro: ${err.message}`, 'error');
+            // A recusa do motor diz o que faltou; ela nao tem como saber que o
+            // trabalho foi parar na nuvem porque o navegador barrou a estacao.
+            // Sem esta frase, o operador le "falta a lista de codigos desta
+            // estacao" estando na frente de uma estacao que TEM a lista.
+            const causa = avisoDaNuvem ? `\n\n${avisoDaNuvem}` : '';
+
+            toast(`Erro: ${err.message}${causa}`, 'error');
 
         }
 
