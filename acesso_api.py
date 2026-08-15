@@ -252,6 +252,24 @@ def _tiragem_do_pedido(pedido_id_int: int) -> dict:
     return {int(l["id"]): int(l.get("quantidade") or 0) for l in linhas}
 
 
+def _setores_do_pedido(pedido_id_int: int) -> dict:
+    """{modelo_id: {"evento_id": ..., "setor_id": ...}} para o pedido já reivindicado.
+
+    Vazio enquanto o cliente não reivindicou — e aí a credencial nasce sem dono
+    mesmo, porque ainda não existe evento a que pertencer. O `_reivindicar`
+    carimba as que já estavam.
+    """
+    linhas = supabase(
+        "GET",
+        f"producao_acesso_setores?pedido_id_int=eq.{int(pedido_id_int)}"
+        "&select=id,modelo_id,evento_id",
+    ) or []
+    return {
+        int(l["modelo_id"]): {"evento_id": l["evento_id"], "setor_id": l["id"]}
+        for l in linhas if l.get("modelo_id") is not None
+    }
+
+
 def _gravar_lote(pedido_id_int: int, itens: list) -> int:
     """Grava um lote de credenciais, ignorando o que já existe.
 
@@ -272,6 +290,21 @@ def _gravar_lote(pedido_id_int: int, itens: list) -> int:
     número e hash. Ela NÃO é enviada daqui: quem a calcula é o banco, em toda
     inserção, e por isso não há como este código esquecer de preenchê-la nem
     preenchê-la diferente do índice.
+
+    ## Por que a credencial já nasce ligada ao setor
+
+    O carimbo de `evento_id`/`setor_id` era feito SÓ na reivindicação, num PATCH
+    sobre as credenciais que já existiam. Isso funciona numa ordem só —
+    imprimir, depois reivindicar — e falha calado na outra: em 14/08/2026 o
+    cliente reivindicou o pedido 18560 às 10:55, o papel saiu às 18:52, e as 200
+    credenciais ficaram órfãs para sempre. Em 15/08 as 363 credenciais do banco
+    inteiro estavam sem evento e sem setor.
+
+    Órfã não é defeito visível: ela existe, conta no total, e some justamente
+    onde importa — a portaria não sabe de que setor o código é, e o bloqueio por
+    faixa, que é por setor, não alcança nenhuma. Por isso o vínculo é resolvido
+    aqui, na hora de gravar, e a reivindicação continua carimbando as que vieram
+    antes dela. As duas ordens passam a dar no mesmo lugar.
     """
     pedido_id_int = int(pedido_id_int)
 
@@ -304,6 +337,8 @@ def _gravar_lote(pedido_id_int: int, itens: list) -> int:
                 ),
             )
 
+    dono = _setores_do_pedido(pedido_id_int)
+
     supabase(
         "POST",
         "producao_acesso_credenciais?on_conflict=chave_dedup",
@@ -313,6 +348,7 @@ def _gravar_lote(pedido_id_int: int, itens: list) -> int:
             "numero": int(i["numero"]),
             "codigo_hash": i["hash"],
             "origem": "qr_ideal",
+            **dono.get(int(i["modelo_id"]), {}),
         } for i in itens],
         prefer="resolution=ignore-duplicates,return=minimal",
     )
@@ -586,9 +622,11 @@ def _reivindicar(token: str, usuario: dict, evento_id=None, nome_evento="") -> d
             "quantidade": s["quantidade"],
         })
         setor_id = criado[0]["id"]
-        # Carimba as credenciais que o agente já publicou. As que vierem depois
-        # nascem sem evento e são carimbadas na mesma conta — por isso o
-        # `fechar` do agente não depende desta ordem.
+        # Carimba as credenciais que o agente publicou ANTES desta reivindicação.
+        # As que vierem depois já nascem ligadas, porque o `_gravar_lote` lê os
+        # setores na hora de gravar. As duas metades juntas é que cobrem as duas
+        # ordens possíveis; sozinha, esta aqui deixou 200 credenciais do pedido
+        # 18560 órfãs por oito horas de diferença entre reivindicar e imprimir.
         supabase(
             "PATCH",
             f"producao_acesso_credenciais?pedido_id_int=eq.{pedido}&modelo_id=eq.{s['modelo_id']}",

@@ -128,9 +128,12 @@ from fastapi import HTTPException
 class FakeBanco:
     """Um Supabase de mentira, que guarda em dicionário o que foi gravado."""
 
-    def __init__(self, pedidos=None, modelos=None):
+    def __init__(self, pedidos=None, modelos=None, setores=None):
         self.pedidos = pedidos or []
         self.modelos = modelos or [{"id": 1000022, "quantidade": 3}]
+        # Vazio = pedido ainda não reivindicado, que é o caso mais comum: o papel
+        # sai antes de o cliente abrir o link do evento.
+        self.setores = setores or []
         self.credenciais = []
         self.chamadas = []
 
@@ -138,6 +141,10 @@ class FakeBanco:
         self.chamadas.append((method, path))
         if path.startswith("pedidos_modelos"):
             return self.modelos
+        if path.startswith("producao_acesso_setores"):
+            if method == "GET":
+                return list(self.setores)
+            return []
         if path.startswith("producao_acesso_pedidos"):
             if method == "GET":
                 return list(self.pedidos)
@@ -266,6 +273,50 @@ def test_modelos_diferentes_com_o_MESMO_codigo_entram_os_dois(banco):
         {"modelo_id": 1000281, "numero": 1, "hash": mesmo_hash},
     ])
     assert len(banco.credenciais) == 3
+
+
+def test_credencial_de_pedido_ja_reivindicado_nasce_ligada_ao_setor(banco):
+    """O defeito que deixou as 363 credenciais do banco orfas, achado em 15/08/2026.
+
+    O carimbo de `evento_id`/`setor_id` era feito SO na reivindicacao, num PATCH
+    sobre o que ja existia. Isso cobre uma ordem -- imprimir, depois reivindicar
+    -- e falha calado na outra. No pedido 18560 o cliente reivindicou as 10:55 e
+    o papel saiu as 18:52; as 200 credenciais ficaram sem evento e sem setor
+    para sempre.
+
+    Orfa nao e defeito visivel: a credencial existe, conta no total, e some
+    justamente onde importa. A portaria nao sabe de que setor o codigo e, e o
+    bloqueio por faixa -- que e por setor -- nao alcanca nenhuma.
+    """
+    banco.modelos = [{"id": 1000110, "quantidade": 400},
+                     {"id": 1000107, "quantidade": 500}]
+    banco.setores = [
+        {"id": "setor-camarote", "modelo_id": 1000110, "evento_id": "evento-1"},
+        {"id": "setor-vip", "modelo_id": 1000107, "evento_id": "evento-1"},
+    ]
+    acesso_api._abrir_pedido(18560)
+    acesso_api._gravar_lote(18560, [
+        {"modelo_id": 1000110, "numero": 1, "hash": "a" * 64},
+        {"modelo_id": 1000107, "numero": 1, "hash": "b" * 64},
+    ])
+
+    por_modelo = {c["modelo_id"]: c for c in banco.credenciais}
+    assert por_modelo[1000110]["setor_id"] == "setor-camarote"
+    assert por_modelo[1000107]["setor_id"] == "setor-vip"
+    assert {c["evento_id"] for c in banco.credenciais} == {"evento-1"}
+
+
+def test_credencial_de_pedido_ainda_nao_reivindicado_continua_gravando(banco):
+    """A ordem normal -- imprimir primeiro, cliente reivindicar depois -- nao
+    pode passar a exigir setor. Sem setor a credencial nasce sem dono mesmo,
+    porque ainda nao existe evento a que pertencer, e o `_reivindicar` a carimba
+    quando o cliente abrir o link."""
+    acesso_api._abrir_pedido(20272)
+    acesso_api._gravar_lote(20272, [{"modelo_id": 1000022, "numero": 1, "hash": "c" * 64}])
+
+    assert len(banco.credenciais) == 1
+    assert "setor_id" not in banco.credenciais[0]
+    assert "evento_id" not in banco.credenciais[0]
 
 
 def test_o_mesmo_codigo_em_numeros_diferentes_do_mesmo_modelo_entra(banco):
