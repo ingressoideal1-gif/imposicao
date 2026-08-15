@@ -66,12 +66,32 @@ def test_a_fila_sai_na_ordem_em_que_entrou():
     """) == "a,b"
 
 
+def test_a_fila_ordena_por_MOMENTO_e_nao_pela_chave_id_local():
+    """`getAll(query, count)` corta pela ordem da CHAVE PRIMARIA (`id_local`, um
+    UUID sem relacao com o tempo), nao pela ordem de chegada. Este teste usa
+    `id_local` DE PROPOSITO fora de ordem em relacao a `momento` -- z e o mais
+    antigo, a e o mais novo -- porque o teste acima (`a,b,c` na mesma ordem
+    alfabetica dos momentos) mascarava esse defeito: cortar pela chave dava a
+    mesma resposta que cortar pelo momento, por acidente."""
+    assert rodar("""
+        await d.enfileirar({id_local: 'z', momento: '2026-08-20T21:00:00Z'});
+        await d.enfileirar({id_local: 'y', momento: '2026-08-20T21:01:00Z'});
+        await d.enfileirar({id_local: 'a', momento: '2026-08-20T21:02:00Z'});
+        const f = await d.lerFila(2);
+        return f.map(x => x.id_local).join(',');
+    """) == "z,y"
+
+
 def test_enfileirar_o_mesmo_id_local_duas_vezes_nao_duplica():
     """`id_local` e a chave de idempotencia que o servidor tambem usa. Duplicar
-    aqui inflaria a lotacao antes mesmo de sair do celular."""
+    aqui inflaria a lotacao antes mesmo de sair do celular.
+
+    Os dois `momento` sao DIFERENTES de proposito: se as duas chamadas usassem
+    o mesmo instante, o teste passaria mesmo com a loja chaveada por `momento`
+    em vez de `id_local` -- foi exatamente esse acidente que a revisao achou."""
     assert rodar("""
         await d.enfileirar({id_local: 'a', momento: '2026-08-20T21:00:00Z'});
-        await d.enfileirar({id_local: 'a', momento: '2026-08-20T21:00:00Z'});
+        await d.enfileirar({id_local: 'a', momento: '2026-08-20T21:05:00Z'});
         return await d.contarFila();
     """) == 1
 

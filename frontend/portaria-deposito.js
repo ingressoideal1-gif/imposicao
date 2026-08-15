@@ -49,6 +49,22 @@
         });
     }
 
+    // Variante para quando duas lojas precisam terminar juntas ou nenhuma
+    // terminar -- `enfileirar` usa para `fila` e `entradas` nao se separarem
+    // se o app morrer no meio do caminho. `tarefa` recebe a transacao inteira
+    // e busca cada loja com `t.objectStore(nome)`.
+    function comLojas(nomes, modo, tarefa) {
+        return abrir().then(function (b) {
+            return new Promise(function (ok, erro) {
+                var t = b.transaction(nomes, modo);
+                var resultado;
+                tarefa(t, function (v) { resultado = v; });
+                t.oncomplete = function () { ok(resultado); };
+                t.onerror = function () { erro(t.error); };
+            });
+        });
+    }
+
     function gravarCarga(carga) {
         return comLoja('carga', 'readwrite', function (loja) {
             loja.clear();                 // substitui a carga INTEIRA
@@ -64,25 +80,37 @@
     }
 
     function enfileirar(leitura) {
-        return comLoja('fila', 'readwrite', function (loja) {
-            loja.put(leitura);            // `keyPath: id_local` ignora o repetido
-        }).then(function () {
-            if (leitura.resultado !== 'permitido' || !leitura.credencial_id) return;
-            return comLoja('entradas', 'readwrite', function (loja) {
-                loja.put(leitura.momento, leitura.credencial_id);
-            });
+        // MESMA transacao para `fila` e `entradas`: se o app morrer entre
+        // gravar a leitura na fila e marcar a entrada -- celular ligado horas
+        // a fio, bateria acabando, troca de app -- o IndexedDB desfaz as duas
+        // juntas. Duas transacoes separadas deixariam a leitura na fila sem a
+        // marca de entrada, e depois que a fila subisse e fosse removida essa
+        // credencial nunca apareceria em `entradasPermitidas()`.
+        return comLojas(['fila', 'entradas'], 'readwrite', function (t) {
+            t.objectStore('fila').put(leitura);   // `keyPath: id_local` ignora o repetido
+            if (leitura.resultado === 'permitido' && leitura.credencial_id) {
+                t.objectStore('entradas').put(leitura.momento, leitura.credencial_id);
+            }
         });
     }
 
     function lerFila(limite) {
         return comLoja('fila', 'readonly', function (loja, devolver) {
-            var r = loja.getAll(undefined, limite);
+            // `getAll(query, count)` corta pela ordem da CHAVE PRIMARIA
+            // (`id_local`, um UUID sem relacao com o tempo), NAO pela ordem de
+            // chegada -- limitar ali e so entao ordenar reordenaria um
+            // subconjunto ja cortado errado, podendo descartar a leitura mais
+            // antiga (a mais dificil de reconstituir se a rede cair nesse
+            // meio-tempo). Por isso le a fila inteira (volume e de centenas de
+            // leituras) e so corta em JavaScript, DEPOIS de ordenar.
+            var r = loja.getAll();
             r.onsuccess = function () {
                 // Mais antigas primeiro: se a rede cair no meio do envio, o que
                 // fica para tras e o mais recente.
-                devolver((r.result || []).sort(function (a, b) {
+                var ordenada = (r.result || []).sort(function (a, b) {
                     return String(a.momento || '').localeCompare(String(b.momento || ''));
-                }));
+                });
+                devolver(ordenada.slice(0, limite));
             };
         });
     }
