@@ -49,5 +49,15 @@ self.addEventListener('fetch', e => {
     // e seguro porque cada pathname so tem UMA entrada por geracao de cache
     // (o nome do cache ja carrega a versao); nao ha como um "?v=" velho
     // responder no lugar de um novo.
-    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request)));
+    //
+    // caches.open(CACHE).then(c => c.match(...)), e nao caches.match(...)
+    // global: o origin ja tem outro cache (frontend/editor-foto.js abre
+    // 'ideal-modelos-ia' para modelos ONNX). O global varreria os dois: sem
+    // pathname em comum hoje, mas restringir ao cache desta versao da
+    // portaria e o que garante que um nome futuro nunca colida por acidente.
+    e.respondWith(
+        caches.open(CACHE)
+            .then(c => c.match(e.request, { ignoreSearch: true }))
+            .then(r => r || fetch(e.request))
+    );
 });

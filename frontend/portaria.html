@@ -145,7 +145,18 @@
     // do carregamento pode guardar resposta pela metade.
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
-            navigator.serviceWorker.register('/sw.js?v=582');
+            // scope: '/portaria.html' -- sem isto o escopo padrao seria a
+            // origin inteira ('/'), e o self.clients.claim() do sw.js faria
+            // este service worker assumir TAMBEM producao.html, controle.html
+            // e evento.html. Ele foi pensado so para a portaria; abas de
+            // outra tela nao podem ter seu fetch interceptado por ele.
+            navigator.serviceWorker.register('/sw.js?v=582', { scope: '/portaria.html' })
+                .catch(function (e) {
+                    // Silencioso aqui seria o pior lugar para silenciar: "por
+                    // que este aparelho nao abre offline" e a pergunta que
+                    // esta tela existe para responder.
+                    console.error('service worker da portaria nao registrou -- o aparelho nao vai abrir sem rede:', e);
+                });
         });
     }
 </script>
