@@ -77,6 +77,31 @@ def _painel(evento_id: str) -> dict:
         "&order=nome.asc",
     ) or []
 
+    # A faixa que está IMPRESSA em cada setor — "de 0001 a 0400". Ela vem do
+    # ERP, e não de um MIN/MAX sobre as credenciais publicadas, por duas
+    # razões. A primeira é a mesma que vale para a quantidade: quem manda na
+    # tiragem é o pedido, e uma faixa deduzida do que já foi impresso encolhe
+    # quando metade dos modelos ainda não passou pela impressora. A segunda é
+    # custo: agregação está desligada neste PostgREST ("Use of aggregate
+    # functions is not allowed"), então o mínimo e o máximo por setor sairiam
+    # em duas consultas CADA — aqui é uma só para o evento inteiro.
+    modelos = sorted({int(s["modelo_id"]) for s in setores
+                      if s.get("modelo_id") is not None})
+    faixas = {}
+    if modelos:
+        for m in supabase(
+            "GET",
+            f"pedidos_modelos?id=in.({','.join(str(m) for m in modelos)})"
+            "&select=id,numeracao_inicio,numeracao_fim",
+        ) or []:
+            faixas[int(m["id"])] = m
+    for s in setores:
+        faixa = faixas.get(int(s["modelo_id"])) if s.get("modelo_id") is not None else None
+        # Ausente e não zero: o modelo pode não ter faixa cadastrada, e um
+        # "de 0000 a 0000" na tela do dono seria pior que linha nenhuma.
+        s["numero_de"] = (faixa or {}).get("numeracao_inicio")
+        s["numero_ate"] = (faixa or {}).get("numeracao_fim")
+
     # Uma consulta só para o evento inteiro, distribuída por setor aqui — e não
     # uma por setor. É o mesmo cuidado que os vínculos dos aparelhos já tomam
     # logo abaixo: um evento com doze setores faria doze idas ao banco a cada
@@ -119,14 +144,29 @@ def _painel(evento_id: str) -> dict:
         "&select=pedido_id_int,publicado_em,total_credenciais&order=pedido_id_int.asc",
     ) or []
 
+    # Os códigos que o cliente forneceu (staff, cortesia) passaram a ser
+    # contados POR SETOR: a caixa de carregá-los saiu da seção própria e vive
+    # dentro do "Configurar" do setor a que eles pertencem — que é onde o dono
+    # já escolheu de qual setor está tratando.
+    #
+    # A contagem por setor só acontece quando o evento tem algum código de
+    # cliente. Sem esta guarda, um evento comum — que é a maioria, e nunca
+    # carregou código nenhum — pagaria uma ida ao banco por setor a cada
+    # abertura da tela para receber zero em todas.
+    codigos = contar(
+        f"producao_acesso_credenciais?evento_id=eq.{evento_id}&origem=eq.cliente"
+    )
+    for s in setores:
+        s["codigos_cliente"] = contar(
+            f"producao_acesso_credenciais?setor_id=eq.{s['id']}&origem=eq.cliente"
+        ) if codigos else 0
+
     return {
         "evento": evento,
         "setores": setores,
         "aparelhos": aparelhos,
         "pedidos": pedidos,
-        "codigos_cliente": contar(
-            f"producao_acesso_credenciais?evento_id=eq.{evento_id}&origem=eq.cliente"
-        ),
+        "codigos_cliente": codigos,
     }
 
 

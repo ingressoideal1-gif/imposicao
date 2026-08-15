@@ -42,9 +42,23 @@ class FakeBanco:
         self.bloqueios = []
         self.pedidos = [{"pedido_id_int": 18560, "evento_id": EVENTO,
                          "publicado_em": "2026-08-14T00:00:00Z", "total_credenciais": 5000}]
+        # A tabela do ERP de onde sai a faixa impressa do setor. A segunda
+        # linha nao pertence a nenhum setor deste evento, de proposito: sem
+        # ela, um `_painel` que pedisse a tabela inteira e casasse errado
+        # passaria igual -- e a faixa de um pedido de outro cliente apareceria
+        # no cartao deste.
+        self.modelos = [
+            {"id": 1000110, "numeracao_inicio": 201, "numeracao_fim": 5200,
+             "quantidade": 5000},
+            {"id": 1000999, "numeracao_inicio": 1, "numeracao_fim": 9,
+             "quantidade": 9},
+        ]
         # Registro das chamadas, para o teste que confere que um evento sem
         # aparelho nem chega a consultar `producao_acesso_dispositivo_setores`.
         self.chamadas = []
+        # O mesmo, para as contagens: elas nao passam por `__call__`, porque
+        # `contar()` e outra funcao do `acesso_api`.
+        self.contagens = []
 
     def _tabela(self, path):
         nome = path.split("?")[0]
@@ -56,7 +70,27 @@ class FakeBanco:
             "producao_acesso_credenciais": self.credenciais,
             "producao_acesso_pedidos": self.pedidos,
             "producao_acesso_bloqueios": self.bloqueios,
+            "pedidos_modelos": self.modelos,
         }[nome]
+
+    @staticmethod
+    def _ids_em_lista(path):
+        """Os valores de `id=in.(a,b,c)` na URL, se a chamada trouxer um.
+
+        Honrado de verdade, e nao ignorado como um filtro qualquer, pela lição
+        que a portaria deixou em 15/08/2026: um dublê mais generoso que o banco
+        esconde justamente a classe de defeito em que a consulta pede a coisa
+        errada. Sem isto, `_painel` podia pedir os modelos de qualquer pedido —
+        ou nao filtrar nada — e a fixture devolveria a lista inteira do mesmo
+        jeito, com o teste passando.
+        """
+        if "?" not in path:
+            return None
+        for par in path.split("?", 1)[1].split("&"):
+            if par.startswith("id=in.("):
+                dentro = par[len("id=in.("):].rstrip(")")
+                return [v for v in dentro.split(",") if v]
+        return None
 
     @staticmethod
     def _filtros_eq(path):
@@ -120,6 +154,9 @@ class FakeBanco:
             filtros = self._filtros_eq(path)
             linhas = [dict(l) for l in alvo
                       if all(str(l.get(k)) == v for k, v in filtros.items())]
+            na_lista = self._ids_em_lista(path)
+            if na_lista is not None:
+                linhas = [l for l in linhas if str(l.get("id")) in na_lista]
             campos = self._campos_selecionados(path)
             if campos:
                 linhas = [{k: v for k, v in l.items() if k in campos} for l in linhas]
@@ -215,6 +252,11 @@ def banco(monkeypatch):
         que nao seta `origem`/`status` continue se comportando como uma
         linha real recem-inserida.
         """
+        # Registrado para o teste que guarda o CUSTO da contagem por setor: um
+        # evento sem codigo de cliente nenhum nao pode pagar uma ida ao banco
+        # por setor a cada abertura da tela. Sem contar as chamadas, esse teste
+        # nao teria como distinguir "pulou" de "consultou e deu zero".
+        b.contagens.append(path)
         filtros = {}
         if "?" in path:
             for par in path.split("?", 1)[1].split("&"):
@@ -282,6 +324,82 @@ def test_o_painel_nao_conta_credencial_por_setor(banco):
     painel = cfg._painel(EVENTO)
     assert "publicadas" not in painel["setores"][0]
     assert painel["setores"][0]["quantidade"] == 5000
+
+
+def test_o_painel_traz_a_faixa_impressa_do_setor(banco):
+    """Pedido do usuario, 15/08/2026: "CAMAROTE / 400 ingressos contratados -
+    de 0005 a 0500".
+
+    A faixa vem do ERP (`pedidos_modelos.numeracao_inicio/fim`), e nao de um
+    MIN/MAX sobre as credenciais ja publicadas: um pedido cujos modelos ainda
+    nao foram todos impressos mostraria uma faixa que encolhe.
+    """
+    painel = cfg._painel(EVENTO)
+    assert painel["setores"][0]["numero_de"] == 201
+    assert painel["setores"][0]["numero_ate"] == 5200
+
+
+def test_a_faixa_impressa_vem_do_modelo_DESTE_setor(banco):
+    """A fixture tem um modelo 1000999 que nao pertence a nenhum setor deste
+    evento. Uma consulta sem filtro devolveria os dois e o codigo poderia casar
+    pelo indice — o cartao mostraria "de 0001 a 0009" num setor de 5.000."""
+    cfg._painel(EVENTO)
+    pedidos = [p for m, p in banco.chamadas if m == "GET" and p.startswith("pedidos_modelos")]
+    assert len(pedidos) == 1, f"esperava uma consulta so aos modelos: {pedidos}"
+    assert "id=in.(1000110)" in pedidos[0]
+
+
+def test_setor_sem_modelo_cadastrado_nao_ganha_faixa_inventada(banco):
+    """Setor cujo modelo nao esta em `pedidos_modelos` — ou que nem tem
+    `modelo_id` — fica com a faixa em branco. Zero seria pior: "de 0000 a
+    0000" e um numero que nao existe em ingresso nenhum."""
+    banco.setores[0]["modelo_id"] = None
+    painel = cfg._painel(EVENTO)
+    assert painel["setores"][0]["numero_de"] is None
+    assert painel["setores"][0]["numero_ate"] is None
+
+    banco.setores[0]["modelo_id"] = 1000777          # existe, mas nao no ERP
+    painel = cfg._painel(EVENTO)
+    assert painel["setores"][0]["numero_de"] is None
+
+
+def test_o_painel_conta_os_codigos_do_cliente_POR_SETOR(banco):
+    """A caixa de carregar codigos passou para dentro do "Configurar" do setor
+    em 15/08/2026, entao a contagem tambem e por setor: "42 codigos" num evento
+    de tres portoes nao diz ao dono em qual deles eles valem."""
+    banco.setores.append({
+        "id": "setor-2", "evento_id": EVENTO, "nome": "VIP", "quantidade": 800,
+        "tipo_uso": "unico", "pedido_id_int": 18560, "modelo_id": 1000999,
+        "status": "ativo", "abre_em": None, "fecha_em": None,
+    })
+    banco.credenciais = (
+        [{"id": f"s{i}", "setor_id": SETOR, "origem": "cliente"} for i in range(7)]
+        + [{"id": f"v{i}", "setor_id": "setor-2", "origem": "cliente"} for i in range(3)]
+        + [{"id": "qr", "setor_id": SETOR, "origem": "qr_ideal"}]
+    )
+    painel = cfg._painel(EVENTO)
+    por_nome = {s["nome"]: s for s in painel["setores"]}
+    assert por_nome["PISTA"]["codigos_cliente"] == 7
+    assert por_nome["VIP"]["codigos_cliente"] == 3
+    # O total do evento continua existindo, e continua ignorando o QR Ideal.
+    assert painel["codigos_cliente"] == 10
+
+
+def test_evento_sem_codigo_de_cliente_nao_consulta_setor_por_setor(banco):
+    """A guarda de custo. O caso comum e o evento que nunca carregou codigo
+    nenhum; sem ela, ele pagaria uma ida ao banco POR SETOR, a cada abertura da
+    tela, para receber zero em todas."""
+    banco.setores.append({
+        "id": "setor-2", "evento_id": EVENTO, "nome": "VIP", "quantidade": 800,
+        "tipo_uso": "unico", "pedido_id_int": 18560, "modelo_id": 1000999,
+        "status": "ativo", "abre_em": None, "fecha_em": None,
+    })
+    banco.credenciais = [{"id": "qr", "setor_id": SETOR, "origem": "qr_ideal"}]
+    antes = len(banco.contagens)
+    painel = cfg._painel(EVENTO)
+    assert all(s["codigos_cliente"] == 0 for s in painel["setores"])
+    # Uma contagem so: a do evento inteiro, que e a propria guarda.
+    assert len(banco.contagens) - antes == 1
 
 
 def test_o_painel_nao_devolve_lotacao(banco):

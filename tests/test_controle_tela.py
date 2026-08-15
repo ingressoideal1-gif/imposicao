@@ -90,15 +90,21 @@ PAINEL_FALSO = {
     # Sem `lotacao` e sem `publicadas`: o `_painel` real parou de devolver as
     # duas em 14/08/2026, e uma fixture mais generosa que o servidor deixaria
     # a tela poder ler um campo que nunca chega em producao.
+    # `numero_de`/`numero_ate` sao a faixa IMPRESSA, que o `_painel` passou a
+    # devolver em 15/08/2026 lendo `pedidos_modelos` do ERP. O VIP nao comeca
+    # em 1 de proposito: uma fixture que so tivesse faixas 1..N nao pegaria uma
+    # tela que ignorasse o inicio e escrevesse "de 0001" para todo mundo.
     "setores": [
         {"id": "s1", "nome": "PISTA", "quantidade": 5000,
          "tipo_uso": "unico", "abre_em": None, "fecha_em": None,
-         "bloqueios": [], "pedido_id_int": 18560, "modelo_id": 1000110},
+         "bloqueios": [], "pedido_id_int": 18560, "modelo_id": 1000110,
+         "numero_de": 1, "numero_ate": 5000, "codigos_cliente": 0},
         {"id": "s2", "nome": "VIP", "quantidade": 800,
          "tipo_uso": "reentrada", "abre_em": None, "fecha_em": None,
          "bloqueios": [{"id": "b1", "setor_id": "s2", "de": 100, "ate": 150,
                         "motivo": "lote nao pago pelo PDV Centro"}],
-         "pedido_id_int": 18560, "modelo_id": 1000111},
+         "pedido_id_int": 18560, "modelo_id": 1000111,
+         "numero_de": 201, "numero_ate": 1000, "codigos_cliente": 42},
     ],
     "aparelhos": [{"id": "a1", "nome": "Portao A", "status": "ativo",
                    "ultimo_visto": None, "setores": ["s1"]}],
@@ -224,6 +230,13 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
 
 
 def test_a_tela_desenha_setores_aparelhos_e_codigos():
+    """A contagem de codigos e POR SETOR desde 15/08/2026.
+
+    Ela morava numa secao propria no fim da tela, com um `<select>` de setor ao
+    lado; o usuario tirou a janela e mandou carregar os codigos no momento
+    certo. O momento certo e o "Configurar" do setor, onde o setor ja esta
+    escolhido -- por isso o 42 do VIP aparece dentro do cartao do VIP.
+    """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -232,13 +245,20 @@ def test_a_tela_desenha_setores_aparelhos_e_codigos():
             titulo: document.getElementById('nome-evento-titulo').textContent,
             setores: document.querySelectorAll('#setores .cartao').length,
             aparelhos: document.querySelectorAll('#aparelhos .cartao').length,
-            codigos: document.getElementById('codigos-total').textContent,
+            codigos_vip: document.getElementById('codigos-total-s2').textContent,
+            codigos_pista: document.getElementById('codigos-total-s1').textContent,
+            secao_antiga: !!document.getElementById('codigos-total'),
+            select_antigo: !!document.getElementById('codigos-setor'),
         };
     """)
     assert saida["titulo"] == "Baile do Hawaii"
     assert saida["setores"] == 2
     assert saida["aparelhos"] == 1
-    assert "42" in saida["codigos"]
+    assert "42" in saida["codigos_vip"]
+    assert "0" in saida["codigos_pista"]
+    # A janela global saiu inteira: contador e seletor de setor.
+    assert saida["secao_antiga"] is False
+    assert saida["select_antigo"] is False
 
 
 def test_o_setor_mostra_a_quantidade_contratada_EM_TEXTO():
@@ -257,6 +277,76 @@ def test_o_setor_mostra_a_quantidade_contratada_EM_TEXTO():
     """)
     assert "800 ingressos contratados" in saida["texto"]
     assert "VIP" in saida["texto"]
+
+
+def test_o_setor_mostra_a_FAIXA_impressa_com_zeros_a_esquerda():
+    """Pedido do usuario, 15/08/2026: "CAMAROTE / 400 ingressos contratados -
+    de 0005 a 0500".
+
+    So a quantidade nao identifica o lote: dois setores de 400 sao iguais na
+    tela, e o que o dono tem na mao para conferir e um ingresso com um numero
+    escrito. Com zeros a esquerda porque e assim que o numero sai no papel --
+    "de 201 a 1000" mandaria o dono procurar um ingresso "201" que nao existe.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const linha = i => document.querySelectorAll('#setores .cartao')[i]
+                             .querySelector('.contratado').textContent;
+        const antes = { pista: linha(0), vip: linha(1) };
+
+        // O exemplo literal do usuario: um setor cujo ultimo numero tem TRES
+        // digitos. Sem o piso de quatro, a tela escreveria "de 005 a 500" para
+        // um ingresso que esta impresso "0005".
+        Controle.estado.painel.setores[1].numero_de = 5;
+        Controle.estado.painel.setores[1].numero_ate = 500;
+        Controle.desenhar();
+        return { antes, curto: linha(1) };
+    """)
+    assert "5.000 ingressos contratados" in saida["antes"]["pista"]
+    assert "de 0001 a 5000" in saida["antes"]["pista"]
+    # O VIP nao comeca em 1: a tela tem de mostrar o INICIO de verdade.
+    assert "800 ingressos contratados" in saida["antes"]["vip"]
+    assert "de 0201 a 1000" in saida["antes"]["vip"]
+    # E o piso de quatro digitos, que e como o numero sai no papel.
+    assert "de 0005 a 0500" in saida["curto"]
+
+
+def test_setor_sem_faixa_cadastrada_nao_inventa_numero():
+    """Modelo sem faixa no ERP fica sem a linha. "de 0000 a 0000" seria um
+    numero que nao existe em ingresso nenhum, e o dono iria procura-lo."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.painel.setores[0].numero_de = null;
+        Controle.estado.painel.setores[0].numero_ate = null;
+        Controle.desenhar();
+        return { pista: document.querySelector('#setores .contratado').textContent };
+    """)
+    assert saida["pista"].strip() == "5.000 ingressos contratados"
+    assert "de " not in saida["pista"]
+
+
+def test_o_setor_diz_que_sem_data_e_hora_ja_esta_valendo():
+    """Pedido do usuario, 15/08/2026: "Se nao configurar Data e Hora ja esta
+    valendo".
+
+    O titulo dizia "(vazio = sempre)" entre parenteses, e o dono lia aquilo
+    como instrucao do que ele PRECISA preencher -- justamente no caso comum,
+    que e a festa de uma noite so, sem horario de corte.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('setor-configurar-s1').click();
+        return { texto: document.getElementById('setor-config-s1')
+                          .textContent.replace(/\\s+/g, ' ') };
+    """)
+    assert "não configurar data e hora" in saida["texto"]
+    assert "já está valendo" in saida["texto"]
 
 
 def test_a_quantidade_impressa_nao_e_editavel():
@@ -572,6 +662,177 @@ def test_criar_aparelho_manda_a_lista_de_setores_escolhida():
     assert saida["corpo"]["setores"] == ["s1", "s2"]
 
 
+def test_criar_aparelho_PELO_BOTAO_leva_os_setores_acesos():
+    """O caminho que o dono percorre de verdade: digita o nome, toca nos
+    setores, toca em "Criar aparelho".
+
+    O teste acima chama `Controle.criarAparelho` direto e por isso nao tocava
+    no `DOMContentLoaded`, que e onde a leitura da escolha mora -- ela lia
+    `input:checked` de uma lista que deixou de ter `input`. Um teste que so
+    chama a funcao teria passado com a tela quebrada.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        let enviado = null;
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
+            return { id: 'a2', nome: 'Portao B', codigo: 'ABC234' };
+        };
+
+        document.getElementById('novo-aparelho-nome').value = 'Portao B';
+        document.getElementById('novo-aparelho-setores-s2').click();
+        document.getElementById('btn-criar-aparelho').click();
+        await new Promise(r => setTimeout(r, 80));
+
+        return { enviado,
+                 codigo: document.getElementById('codigo-valor').textContent,
+                 nome_limpo: document.getElementById('novo-aparelho-nome').value };
+    """)
+    assert saida["enviado"]["caminho"] == "/eventos/ev-1/aparelhos"
+    assert saida["enviado"]["corpo"]["nome"] == "Portao B"
+    assert saida["enviado"]["corpo"]["setores"] == ["s2"]
+    # E o codigo apareceu uma vez, que e a razao de a caixa existir.
+    assert saida["codigo"] == "ABC234"
+    assert saida["nome_limpo"] == ""
+
+
+def test_o_setor_do_aparelho_e_botao_e_nao_caixa_de_marcar():
+    """Regra do usuario, 15/08/2026: "sem checkbox, cada setor e um botao".
+
+    A caixa de marcar nao era so feia: a regra `input { width: 100% }` da folha
+    a esticava por toda a linha e jogava o nome do setor para o extremo
+    direito. Este teste MEDE, e nao so conta elementos -- foi a medida
+    (385px x 13px, com o rotulo a 400px de distancia) que revelou o defeito.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        document.getElementById('evento').classList.remove('sumindo');
+
+        const medir = el => { const r = el.getBoundingClientRect();
+                              return { w: Math.round(r.width), h: Math.round(r.height) }; };
+        const botoes = [...document.querySelectorAll('#novo-aparelho-setores button')];
+        return {
+            caixas_de_marcar: document.querySelectorAll(
+                '#novo-aparelho-setores input, [id^="aparelho-setores-"] input').length,
+            rotulos: botoes.map(b => b.textContent),
+            medidas: botoes.map(medir),
+            largura_da_folha: Math.round(
+                document.querySelector('.folha').getBoundingClientRect().width),
+        };
+    """)
+    # Nenhuma caixa de marcar sobrou, nos dois lugares.
+    assert saida["caixas_de_marcar"] == 0
+    # O rotulo E o botao: o nome do setor esta no alvo do toque.
+    assert saida["rotulos"] == ["PISTA", "VIP"]
+    for m in saida["medidas"]:
+        # Nao estica pela linha inteira -- era exatamente esse o defeito.
+        assert m["w"] < saida["largura_da_folha"] * 0.7, m
+        # E e um alvo de toque de verdade, nao um risco de 13px.
+        assert m["h"] >= 36, m
+
+
+def test_a_tranca_fica_a_vista_enquanto_o_evento_esta_so_para_olhar():
+    """Foi assim que "criar aparelho" virou "nao esta funcionando".
+
+    A explicacao de por que os botoes estao apagados morava no alto de uma
+    pagina de tres telas de altura. O dono rolava ate os aparelhos, tocava num
+    botao apagado, e nao acontecia nada -- sem uma palavra a vista dizendo o
+    porque. `position: sticky` e o que garante que ela continue em tela.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('evento').classList.remove('sumindo');
+        const tranca = document.getElementById('tranca');
+        const leitura = {
+            visivel: !tranca.classList.contains('sumindo'),
+            grudada: getComputedStyle(tranca).position,
+            texto: tranca.textContent.replace(/\\s+/g, ' '),
+            botao_travado: document.getElementById('btn-elevar').disabled,
+            esqueci_travado: document.getElementById('btn-esqueci-config').disabled,
+        };
+
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        return { leitura, some_com_a_senha: tranca.classList.contains('sumindo') };
+    """)
+    assert saida["leitura"]["visivel"] is True
+    assert saida["leitura"]["grudada"] == "sticky"
+    # Os dois botoes da tranca nunca podem ser travados pela propria trava:
+    # seria exigir a senha para poder digitar a senha.
+    assert saida["leitura"]["botao_travado"] is False
+    assert saida["leitura"]["esqueci_travado"] is False
+    # E ela sai da frente assim que nao ha mais o que destrancar.
+    assert saida["some_com_a_senha"] is True
+
+
+def test_a_tela_nao_fala_mais_em_senha_do_dono():
+    """Pedido do usuario, 15/08/2026: "Digitar a senha do dono" deve ser
+    "Digitar a Senha Cadastrada", e com "esqueci minha senha".
+
+    "A senha do dono" se lia como uma SEGUNDA senha, especial, que o cliente
+    nunca recebeu -- e e a mesma com que ele acabou de entrar na tela.
+    """
+    html = _ler("frontend/controle.html")
+    assert "Digitar a Senha Cadastrada" in html
+    assert "senha do dono" not in html
+    assert 'id="btn-esqueci-config"' in html
+
+    # As DUAS frases que o dono le, lidas da tela e nao do arquivo: o aviso de
+    # somente leitura e a caixa que o botao abre. Ler o fonte pegaria tambem os
+    # comentarios que EXPLICAM a troca, e um teste que reprova por causa do
+    # proprio comentario nao esta medindo o que o dono ve.
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        let perguntado = null;
+        window.prompt = (texto) => { perguntado = texto; return null; };
+        document.getElementById('btn-elevar').click();
+        return { perguntado,
+                 aviso: document.getElementById('aviso-leitura').textContent };
+    """)
+    assert "senha do dono" not in saida["perguntado"]
+    assert "senha cadastrada" in saida["perguntado"].lower()
+    assert "mesma com que você entrou" in saida["perguntado"]
+    assert "senha do dono" not in saida["aviso"]
+    assert "Senha Cadastrada" in saida["aviso"]
+
+
+def test_esqueci_minha_senha_usa_o_email_de_quem_ja_entrou():
+    """Sem campo de e-mail: quem esta nesta tela ja entrou. Pedir para digitar
+    de novo o e-mail com que acabou de entrar e uma chance de errar sem
+    nenhum ganho."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste',
+                                   user: { email: 'dono@exemplo.com' } };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        document.getElementById('evento').classList.remove('sumindo');
+
+        let pedido = null;
+        window.supabaseClient.auth.resetPasswordForEmail = async (email) => {
+            pedido = email; return {};
+        };
+        document.getElementById('btn-esqueci-config').click();
+        await new Promise(r => setTimeout(r, 60));
+        return { pedido,
+                 aviso: document.getElementById('aviso-gravacao').textContent };
+    """)
+    assert saida["pedido"] == "dono@exemplo.com"
+    assert "link" in saida["aviso"].lower()
+
+
 def test_importar_codigos_quebra_o_texto_colado_em_linhas():
     """O cliente cola de uma planilha. Linha vazia nao e erro dele."""
     saida = _no_navegador("""
@@ -723,12 +984,15 @@ def test_revogar_pelo_botao_pede_confirmacao_antes_de_desligar():
     assert saida["chamou"] is False
 
 
-def test_salvar_manda_so_os_setores_quando_so_o_setor_muda():
-    """Dirige o controle de verdade -- marca uma caixa no cartao do
-    aparelho e clica em "Salvar" -- em vez de chamar `trocarSetoresDoAparelho`
-    direto. Um teste que so chama a funcao nao pega o botao desligado: foi
-    essa a licao da rodada anterior, e era exatamente este ramo do handler
-    que continuava sem nenhum teste tocando nele."""
+def test_tocar_no_setor_do_aparelho_grava_na_hora():
+    """Regra do usuario, 15/08/2026: "cada setor e um botao, ao clicar ascende
+    e passa a valer".
+
+    "Passa a valer" e a metade que da para implementar pela metade: um botao
+    que so acende e espera um "Salvar" deixa o dono sair da tela achando que
+    configurou o portao. Dirige o clique de verdade, e nao
+    `trocarSetoresDoAparelho`, porque o que se esta provando E o clique.
+    """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -736,24 +1000,56 @@ def test_salvar_manda_so_os_setores_quando_so_o_setor_muda():
         Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
         Controle.desenhar();
 
-        // O aparelho a1 comeca validando so o setor s1; o dono marca o s2
-        // tambem, sem tocar no nome.
-        document.getElementById('aparelho-setor-a1-s2').checked = true;
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+
+        // O aparelho a1 comeca validando so o setor s1; o dono toca no s2.
+        const botao = document.getElementById('aparelho-setores-a1-s2');
+        const antes = botao.getAttribute('aria-pressed');
+        botao.click();
+        await new Promise(r => setTimeout(r, 60));
+
+        return { chamadas, antes, depois: botao.getAttribute('aria-pressed'),
+                 salvo: !document.getElementById('aparelho-salvo-a1')
+                            .classList.contains('sumindo') };
+    """)
+    # Acendeu...
+    assert saida["antes"] == "false"
+    assert saida["depois"] == "true"
+    # ...e passou a valer, sem ninguem tocar em "Salvar".
+    chamadas = [c for c in saida["chamadas"] if c["caminho"] == "/aparelhos/a1"]
+    assert len(chamadas) == 1
+    assert sorted(chamadas[0]["corpo"]["setores"]) == ["s1", "s2"]
+    assert "nome" not in chamadas[0]["corpo"]
+    # E disse que gravou: gravar sozinho nao pode ser gravar calado.
+    assert saida["salvo"] is True
+
+
+def test_apagar_um_setor_do_aparelho_tambem_grava_na_hora():
+    """O outro sentido do mesmo botao. Um toggle que so sabe acender deixa o
+    dono sem como TIRAR um setor de um portao -- e tirar e a metade perigosa,
+    porque e ela que impede o aparelho da pista de liberar o camarote."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
 
         const chamadas = [];
         Controle._pedirParaTeste = async (caminho, opcoes) => {
             chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
             return { ok: true };
         };
-        document.getElementById('aparelho-salvar-a1').click();
-        await new Promise(r => setTimeout(r, 50));
+        document.getElementById('aparelho-setores-a1-s1').click();
+        await new Promise(r => setTimeout(r, 60));
         return { chamadas };
     """)
     assert len(saida["chamadas"]) == 1
-    chamada = saida["chamadas"][0]
-    assert chamada["caminho"] == "/aparelhos/a1"
-    assert sorted(chamada["corpo"]["setores"]) == ["s1", "s2"]
-    assert "nome" not in chamada["corpo"]
+    assert saida["chamadas"][0]["corpo"]["setores"] == []
 
 
 def test_salvar_manda_so_o_nome_quando_so_o_nome_muda():

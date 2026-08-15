@@ -85,8 +85,14 @@
         document.body.classList.toggle('somente-leitura', leitura);
         $('aviso-leitura').textContent = leitura
             ? 'Você está vendo o evento. Para alterar qualquer coisa, toque em '
-              + '"Digitar a senha do dono".'
+              + '"Digitar a Senha Cadastrada" — é a mesma senha com que você '
+              + 'entrou aqui.'
             : '';
+        // A tranca inteira some quando não há o que destrancar. Ela é
+        // `sticky`, então deixá-la em tela durante o modo configuração
+        // roubaria uma faixa do alto para dizer o que a faixa âmbar, logo
+        // acima, já está dizendo.
+        $('tranca').classList.toggle('sumindo', !leitura);
 
         document.querySelectorAll('#evento input, #evento select, #evento textarea')
             .forEach(function (el) { el.disabled = leitura; });
@@ -146,7 +152,12 @@
                 // tocado neste formulário.
                 bloq_de: valor('bloq-de'),
                 bloq_ate: valor('bloq-ate'),
-                bloq_motivo: valor('bloq-motivo')
+                bloq_motivo: valor('bloq-motivo'),
+                // Pelo mesmo motivo, e com mais razão ainda: a lista de
+                // códigos de staff é colada de uma planilha e pode ter
+                // centenas de linhas. Perdê-la num redesenho é perder o
+                // trabalho todo.
+                codigos: valor('codigos-texto')
             };
         });
 
@@ -167,9 +178,7 @@
             if (!campoNome) { return; }
             edicoesDeAparelhoAntes[a.id] = {
                 nome: campoNome.value,
-                setores: Array.prototype.slice
-                    .call(document.querySelectorAll('#aparelho-setores-' + a.id + ' input:checked'))
-                    .map(function (c) { return c.value; })
+                setores: setoresAcesos('aparelho-setores-' + a.id)
             };
         });
 
@@ -179,47 +188,19 @@
         });
         $('aparelhos').appendChild(caixaDePareamento(p.evento.id));
 
-        $('codigos-total').textContent = p.codigos_cliente + ' códigos carregados';
-
-        // As caixas de setor do formulário de aparelho, e o seletor de setor dos
-        // códigos. Redesenhadas junto com o painel para nunca oferecerem um setor
-        // que deixou de existir.
+        // Os botões de setor do formulário de aparelho novo. Redesenhados junto
+        // com o painel para nunca oferecerem um setor que deixou de existir.
         //
-        // Guardar o que já estava marcado/selecionado ANTES de recriar: um
-        // `gravar()' de outro cartão desta mesma tela chama `carregarPainel()`
-        // por baixo do dono, e sem isto ele perderia os setores que tinha
-        // acabado de marcar aqui — sem nunca ter tocado neste formulário.
-        var marcadosAntes = Array.prototype.slice
-            .call(document.querySelectorAll('#novo-aparelho-setores input:checked'))
-            .map(function (c) { return c.value; });
-        var setorCodigosAntes = $('codigos-setor').value;
-
-        $('novo-aparelho-setores').innerHTML = '';
-        $('codigos-setor').innerHTML = '';
-        p.setores.forEach(function (s) {
-            var linha = document.createElement('div');
-            linha.className = 'opcao';
-            var caixa = document.createElement('input');
-            caixa.type = 'checkbox';
-            caixa.value = s.id;
-            caixa.id = 'novo-setor-' + s.id;
-            caixa.checked = marcadosAntes.indexOf(s.id) >= 0;
-            var rot = document.createElement('label');
-            rot.setAttribute('for', caixa.id);
-            rot.textContent = s.nome;
-            linha.appendChild(caixa);
-            linha.appendChild(rot);
-            $('novo-aparelho-setores').appendChild(linha);
-
-            var op = document.createElement('option');
-            op.value = s.id;
-            op.textContent = s.nome;
-            $('codigos-setor').appendChild(op);
-        });
-        // Só restaura a seleção do <select> se o setor escolhido continuar
-        // existindo depois do redesenho — senão o navegador cai sozinho na
-        // primeira opção, o que já é o comportamento certo.
-        if (setorCodigosAntes) { $('codigos-setor').value = setorCodigosAntes; }
+        // Guardar o que já estava aceso ANTES de recriar: um `gravar()` de
+        // outro cartão desta mesma tela chama `carregarPainel()` por baixo do
+        // dono, e sem isto ele perderia os setores que tinha acabado de
+        // escolher aqui — sem nunca ter tocado neste formulário.
+        //
+        // Sem `aoTrocar`: aqui o aparelho ainda não existe, então não há o que
+        // gravar. A escolha só sai da tela no "Criar aparelho".
+        var acesosAntes = setoresAcesos('novo-aparelho-setores');
+        $('novo-aparelho-setores')
+            .replaceWith(botoesDeSetor('novo-aparelho-setores', acesosAntes, null));
 
         // Depois dos cartões de setor existirem no DOM: são eles que trazem os
         // campos de lotação e uso que a trava também precisa desligar.
@@ -245,9 +226,15 @@
         // como informação e não como campo: um número digitado à parte seria
         // uma segunda fonte da verdade, que discorda do contrato assim que o
         // cliente aumenta o pedido no ERP.
+        //
+        // Junto vem a faixa impressa, porque só a quantidade não identifica o
+        // lote: dois setores de 400 são indistinguíveis na tela, e o que o
+        // dono tem na mão para conferir é um ingresso com um número escrito.
         var contratado = document.createElement('p');
         contratado.className = 'contratado';
-        contratado.textContent = s.quantidade.toLocaleString('pt-BR') + ' ingressos contratados';
+        var faixa = faixaImpressa(s);
+        contratado.textContent = s.quantidade.toLocaleString('pt-BR') + ' ingressos contratados'
+            + (faixa ? ' · ' + faixa : '');
         el.appendChild(contratado);
 
         // ── Configurar ───────────────────────────────────────────────────────
@@ -301,9 +288,77 @@
         painel.appendChild(opcoesDeUso(s, edicaoAnterior));
         painel.appendChild(recado);
         painel.appendChild(bloqueiosDoSetor(s, edicaoAnterior));
+        painel.appendChild(codigosDoSetor(s, edicaoAnterior));
         el.appendChild(painel);
 
         return el;
+    }
+
+    /**
+     * Os códigos que o cliente fornece: staff, cortesia, lista VIP.
+     *
+     * Vivia numa seção própria no fim da tela, com um `<select>` de setor ao
+     * lado e um contador global de "N códigos carregados". As duas coisas
+     * eram redundantes aqui dentro: o dono já está configurando UM setor, e
+     * qual ele é não precisa ser escolhido de novo numa lista onde dá para
+     * errar. O contador global também não dizia nada acionável — 42 códigos
+     * em qual portão? Aqui ele conta o que pertence a ESTE setor.
+     *
+     * O melhor momento de carregar é este, e não o fim da tela: é quando o
+     * dono está decidindo como o setor funciona que ele lembra de quem entra
+     * sem ingresso impresso.
+     */
+    function codigosDoSetor(s, edicaoAnterior) {
+        var caixa = grupo('Códigos de staff e cortesia');
+
+        var ajuda = document.createElement('p');
+        ajuda.className = 'config-ajuda';
+        ajuda.textContent = 'Códigos que não foram impressos no pedido e mesmo '
+            + 'assim entram por este setor. A portaria aceita cada um uma vez, '
+            + 'igual a um ingresso.';
+        caixa.appendChild(ajuda);
+
+        var quantos = document.createElement('p');
+        quantos.className = 'config-ajuda';
+        quantos.id = 'codigos-total-' + s.id;
+        var n = s.codigos_cliente || 0;
+        quantos.textContent = n === 1 ? '1 código carregado neste setor'
+                                      : n + ' códigos carregados neste setor';
+        caixa.appendChild(quantos);
+
+        var rot = document.createElement('label');
+        rot.setAttribute('for', 'codigos-texto-' + s.id);
+        rot.textContent = 'Cole os códigos, um por linha';
+        caixa.appendChild(rot);
+
+        var texto = document.createElement('textarea');
+        texto.id = 'codigos-texto-' + s.id;
+        texto.rows = 5;
+        texto.style.width = '100%';
+        texto.style.fontFamily = 'inherit';
+        texto.style.fontSize = '1rem';
+        // Preservado no redesenho como todo o resto do painel: o dono cola uma
+        // lista longa, e uma gravação de outro cartão por baixo dele apagaria
+        // tudo antes de ele chegar ao botão.
+        texto.value = edicaoAnterior ? (edicaoAnterior.codigos || '') : '';
+        caixa.appendChild(texto);
+
+        var botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'so-com-senha';
+        botao.id = 'codigos-carregar-' + s.id;
+        botao.textContent = 'Carregar códigos neste setor';
+        botao.addEventListener('click', function () {
+            importarCodigos(texto.value, s.id)
+                .then(function () {
+                    var atual = $('codigos-texto-' + s.id);
+                    if (atual) { atual.value = ''; }
+                })
+                .catch(function () { /* `gravar()` já avisou na tela */ });
+        });
+        caixa.appendChild(botao);
+
+        return caixa;
     }
 
     /**
@@ -316,6 +371,27 @@
     function avisarSalvo(setor_id) {
         var atual = $('setor-salvo-' + setor_id);
         if (atual) { atual.classList.remove('sumindo'); }
+    }
+
+    /**
+     * "de 0005 a 0500" — a faixa que está impressa nos ingressos do setor.
+     *
+     * Com zeros à esquerda de propósito: é assim que o número sai no papel, e
+     * o que o dono faz com esta linha é comparar a tela com um ingresso na
+     * mão. Quatro dígitos no mínimo pela mesma razão — abaixo disso a tela
+     * escreveria "de 5 a 500" para um ingresso que diz "0005".
+     *
+     * Devolve texto vazio quando o modelo não tem faixa cadastrada no ERP:
+     * linha nenhuma é melhor que uma faixa inventada.
+     */
+    function faixaImpressa(s) {
+        var de = s.numero_de, ate = s.numero_ate;
+        if (de === null || de === undefined || ate === null || ate === undefined) {
+            return '';
+        }
+        var largura = Math.max(4, String(ate).length, String(de).length);
+        var zeros = function (n) { return String(n).padStart(largura, '0'); };
+        return 'de ' + zeros(de) + ' a ' + zeros(ate);
     }
 
     function grupo(rotulo) {
@@ -382,7 +458,18 @@
     }
 
     function quandoVale(s, edicaoAnterior) {
-        var caixa = grupo('Quando vale (vazio = sempre)');
+        var caixa = grupo('Quando vale');
+
+        // Dizer em frase o que "(vazio = sempre)" dizia entre parênteses no
+        // título. O dono lia aquilo como instrução do que ele PRECISA
+        // preencher, e o caso comum — a festa de uma noite só, sem horário de
+        // corte — é justamente o de não preencher nada.
+        var ajuda = document.createElement('p');
+        ajuda.className = 'config-ajuda';
+        ajuda.textContent = 'Se você não configurar data e hora, este setor já está '
+            + 'valendo: a portaria aceita a qualquer momento. Preencha só se quiser '
+            + 'que ele abra ou feche em hora marcada.';
+        caixa.appendChild(ajuda);
 
         [['abre_em', 'Abre'], ['fecha_em', 'Fecha']].forEach(function (par) {
             var rot = document.createElement('label');
@@ -640,11 +727,66 @@
             .then(carregarPainel);
     }
 
-    /** Duas listas de id têm os mesmos elementos, em qualquer ordem. */
-    function mesmosItens(a, b) {
-        var x = (a || []).slice().sort();
-        var y = (b || []).slice().sort();
-        return x.length === y.length && x.every(function (v, i) { return v === y[i]; });
+    /**
+     * Os setores de um aparelho, em botões que acendem.
+     *
+     * Eram caixas de marcar, e saíam tortas: a regra `input { width: 100% }`
+     * desta folha esticava o quadradinho por toda a linha — 385px de largura
+     * por 13px de altura, medidos — e empurrava o nome do setor para o canto
+     * direito, longe da caixa que ele nomeia. O dono lia "CAMAROTE" num
+     * extremo e marcava um risco fino no outro. Num botão, o alvo do toque É
+     * o nome do setor, e não há como errar qual dos dois se está tocando.
+     *
+     * `aoTrocar`, quando vem, recebe a lista nova a cada toque — é o que faz
+     * o setor "passar a valer" na hora num aparelho que já existe. O
+     * formulário do aparelho novo não passa nada: ali a escolha só vale
+     * quando o dono toca em "Criar aparelho".
+     */
+    function botoesDeSetor(id, escolhidos, aoTrocar) {
+        var caixa = document.createElement('div');
+        caixa.id = id;
+        caixa.className = 'setores-botoes';
+
+        (estado.painel.setores || []).forEach(function (s) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'setor-botao so-com-senha';
+            b.id = id + '-' + s.id;
+            // `dataset` e não o texto do botão: o nome do setor é editável
+            // pelo dono ("Nome na portaria"), e ler a escolha pelo rótulo
+            // ligaria a gravação ao que está escrito na tela.
+            b.dataset.setor = s.id;
+            b.textContent = s.nome;          // vem do ERP: TEXTO, nunca HTML
+            b.setAttribute('aria-pressed',
+                (escolhidos || []).indexOf(s.id) >= 0 ? 'true' : 'false');
+
+            b.addEventListener('click', function () {
+                var aceso = b.getAttribute('aria-pressed') === 'true';
+                b.setAttribute('aria-pressed', aceso ? 'false' : 'true');
+                if (aoTrocar) { aoTrocar(setoresAcesos(id)); }
+            });
+            caixa.appendChild(b);
+        });
+
+        return caixa;
+    }
+
+    /**
+     * Quais setores estão acesos numa caixa de botões.
+     *
+     * O estado mora no `aria-pressed` do próprio botão, e não numa variável
+     * fechada dentro de `botoesDeSetor`: `desenhar()` reconstrói estas caixas
+     * a cada painel, e quem lê a escolha depois — o "Criar aparelho", lá no
+     * `DOMContentLoaded` — não tem como alcançar uma variável de outra
+     * chamada. Perguntar ao DOM é a única leitura que continua verdadeira
+     * depois de um redesenho.
+     */
+    function setoresAcesos(id) {
+        var caixa = $(id);
+        if (!caixa) { return []; }
+        return Array.prototype.slice
+            .call(caixa.querySelectorAll('button[aria-pressed="true"]'))
+            .map(function (b) { return b.dataset.setor; });
     }
 
     /**
@@ -718,49 +860,44 @@
         rotSetores.style.fontSize = '.82rem';
         rotSetores.style.color = 'var(--dim)';
         rotSetores.style.margin = '12px 0 4px';
-        rotSetores.textContent = 'Quais setores este aparelho valida';
+        rotSetores.textContent = 'Toque nos setores que este aparelho valida. '
+            + 'O que estiver aceso vale na hora.';
         el.appendChild(rotSetores);
 
-        var caixaSetores = document.createElement('div');
-        caixaSetores.id = 'aparelho-setores-' + a.id;
+        // Passa a valer no toque, sem botão de confirmar: é a mesma regra que
+        // o "Uso do ingresso" do cartão de setor já segue. O aviso de gravado
+        // fica logo abaixo, porque gravar sozinho não pode ser gravar calado.
         var marcadosAgora = edicaoAnterior ? edicaoAnterior.setores : a.setores;
-        (estado.painel.setores || []).forEach(function (s) {
-            var linha = document.createElement('div');
-            linha.className = 'opcao';
-            var caixa = document.createElement('input');
-            caixa.type = 'checkbox';
-            caixa.value = s.id;
-            caixa.id = 'aparelho-setor-' + a.id + '-' + s.id;
-            caixa.checked = marcadosAgora.indexOf(s.id) >= 0;
-            var rot = document.createElement('label');
-            rot.setAttribute('for', caixa.id);
-            rot.textContent = s.nome;
-            linha.appendChild(caixa);
-            linha.appendChild(rot);
-            caixaSetores.appendChild(linha);
-        });
-        el.appendChild(caixaSetores);
+        var recado = document.createElement('span');
+        recado.className = 'salvo sumindo';
+        recado.id = 'aparelho-salvo-' + a.id;
+        recado.setAttribute('role', 'status');
+        recado.textContent = '✓ salvo';
+
+        el.appendChild(botoesDeSetor('aparelho-setores-' + a.id, marcadosAgora,
+            function (setores) {
+                trocarSetoresDoAparelho(a.id, setores)
+                    .then(function () {
+                        var atual = $('aparelho-salvo-' + a.id);
+                        if (atual) { atual.classList.remove('sumindo'); }
+                    })
+                    .catch(function () { /* `gravar()` já avisou na tela */ });
+            }));
+        el.appendChild(recado);
 
         var btnSalvar = document.createElement('button');
         btnSalvar.type = 'button';
         btnSalvar.className = 'so-com-senha';
         btnSalvar.id = 'aparelho-salvar-' + a.id;
-        btnSalvar.textContent = 'Salvar nome e setores';
+        // Só o nome: os setores já gravaram sozinhos ao serem tocados. Um
+        // botão que continuasse dizendo "e setores" prometeria uma gravação
+        // que não acontece mais aqui.
+        btnSalvar.textContent = 'Salvar nome';
         btnSalvar.addEventListener('click', function () {
             var novoNome = campoNome.value;
-            var marcados = Array.prototype.slice
-                .call(caixaSetores.querySelectorAll('input:checked'))
-                .map(function (c) { return c.value; });
-            // Só manda o que de fato mudou: menos pedido, e nenhum PATCH vazio
-            // se o dono só olhou o formulário e não mexeu em nada.
-            var acoes = [];
-            if (novoNome !== a.nome) { acoes.push(renomearAparelho(a.id, novoNome)); }
-            if (!mesmosItens(marcados, a.setores)) {
-                acoes.push(trocarSetoresDoAparelho(a.id, marcados));
-            }
-            if (acoes.length) {
-                Promise.all(acoes).catch(function () { /* já avisado */ });
-            }
+            // Nenhum PATCH vazio se o dono só olhou o campo e não mexeu.
+            if (novoNome === a.nome) { return; }
+            renomearAparelho(a.id, novoNome).catch(function () { /* já avisado */ });
         });
         el.appendChild(btnSalvar);
 
@@ -1077,9 +1214,12 @@
      * que o celular do porteiro memorize.
      */
     function abrirCaixaDeSenha() {
+        // "A mesma com que você entrou nesta tela", e não "a senha do dono":
+        // o dono lia aquilo como uma segunda senha, especial, que ele nunca
+        // recebeu — e desistia de configurar achando que faltava algo.
         var senha = window.prompt(
-            'Digite a senha da sua conta do Vibe para liberar as alterações por '
-            + acesso_minutos() + ' minutos.'
+            'Digite a sua senha cadastrada — a mesma com que você entrou nesta '
+            + 'tela — para liberar as alterações por ' + acesso_minutos() + ' minutos.'
         );
         if (!senha) {
             // Cancelar não é o mesmo caso que errar a senha nem que ficar sem
@@ -1145,18 +1285,25 @@
         });
 
         $('btn-criar-aparelho').addEventListener('click', function () {
-            var marcados = Array.prototype.slice
-                .call(document.querySelectorAll('#novo-aparelho-setores input:checked'))
-                .map(function (c) { return c.value; });
-            criarAparelho($('novo-aparelho-nome').value, marcados)
+            criarAparelho($('novo-aparelho-nome').value,
+                          setoresAcesos('novo-aparelho-setores'))
                 .then(function () { $('novo-aparelho-nome').value = ''; })
                 .catch(function () { /* já avisado */ });
         });
 
-        $('btn-importar-codigos').addEventListener('click', function () {
-            importarCodigos($('codigos-texto').value, $('codigos-setor').value)
-                .then(function () { $('codigos-texto').value = ''; })
-                .catch(function () { /* já avisado */ });
+        // O e-mail vem da sessão, e não de um campo: quem está aqui já entrou.
+        // Pedir para digitar de novo o e-mail com que ele acabou de entrar
+        // seria uma chance de errar sem nenhum ganho.
+        $('btn-esqueci-config').addEventListener('click', function () {
+            var email = ((estado.sessao || {}).user || {}).email || '';
+            if (!email) {
+                avisar('Não consegui identificar a sua conta agora. Recarregue a '
+                     + 'página e tente de novo.', 'erro');
+                return;
+            }
+            AcessoConta.esqueciSenha(email).then(function (frase) {
+                avisar(frase, 'ok');
+            });
         });
 
         abrir();

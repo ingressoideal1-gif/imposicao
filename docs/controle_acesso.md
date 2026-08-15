@@ -586,11 +586,35 @@ ele guarda só os arquivos da tela, nunca a API.
 A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**. Ela traz: login do
 cliente; configuração por setor atrás de um botão **Configurar** (nome na portaria, janela
 de abertura e fechamento, uso do ingresso — entrada única ou sair e voltar —, bloqueio por
-faixa com motivo); os aparelhos da portaria com lista de setores própria; a caixa de
-códigos próprios do cliente (staff, cortesia); e a senha do dono travando a configuração do
+faixa com motivo, e os códigos próprios do cliente para staff e cortesia); os aparelhos da
+portaria com lista de setores própria; e a senha cadastrada travando a configuração do
 evento. **A lotação de um setor é a quantidade contratada no ERP**, mostrada como informação
 e nunca como campo — não existe um segundo número que possa discordar do contrato. O
 histórico e as pendências estão em [STATUS_PROJETO.md](STATUS_PROJETO.md).
+
+Em 15/08/2026 o usuário revisou essa tela usando-a, e quatro coisas mudaram por causa disso:
+
+- **O cartão do setor mostra a faixa impressa**, e não só a quantidade: `400 ingressos
+  contratados · de 0005 a 0500`. Só a quantidade não identifica o lote — dois setores de
+  400 são idênticos na tela, e o que o dono tem na mão para conferir é um ingresso com um
+  número escrito. A faixa vem de `pedidos_modelos.numeracao_inicio/numeracao_fim`, o ERP, e
+  **não de um MIN/MAX sobre as credenciais já publicadas**: um pedido cujos modelos ainda
+  não foram todos impressos mostraria uma faixa que encolhe. Zeros à esquerda, com piso de
+  quatro dígitos, porque é assim que o número sai no papel.
+- **"Quando vale" diz em frase que sem data e hora o setor já está valendo.** O título
+  dizia `(vazio = sempre)` entre parênteses, e o dono lia aquilo como instrução do que ele
+  *precisa* preencher — justamente no caso comum, que é a festa de uma noite só.
+- **Os setores de um aparelho são botões que acendem, e passam a valer no toque.** Eram
+  caixas de marcar, e saíam tortas: a regra `input { width: 100% }` do `controle.css` as
+  esticava por toda a linha — 385px × 13px, medidos no navegador — e jogava o nome do setor
+  para o extremo direito, longe da caixa que ele nomeia. O `Salvar` sobrou só para o nome.
+- **A tranca ficou `sticky` no topo, e o botão passou a se chamar "Digitar a Senha
+  Cadastrada"**, com um "Esqueci minha senha" ao lado. "A senha do dono" se lia como uma
+  segunda senha, especial, que o cliente nunca recebeu — é a mesma com que ele acabou de
+  entrar na tela. E a explicação de por que os botões estão apagados morava no alto de uma
+  página de três telas de altura: no desktop, o dono rolava até os aparelhos, tocava num
+  botão apagado e não acontecia nada. Foi assim que "criar aparelho" virou "não está
+  funcionando".
 
 O que falta é a parte 3c: painel ao vivo, relatórios, cancelar credencial, desvincular
 pedido do evento, reativar aparelho revogado, e a limpeza dos oito setores órfãos citados
@@ -602,7 +626,8 @@ de 15/08 e está registrada nesta página, em [A ambiguidade](#ambiguidade), e n
 `sql/schema_acesso_04_credencial_por_modelo.sql`:
 
 - cada aparelho valida **só a lista de setores dele**;
-- mudar configuração do evento exige a **senha do dono**, conferida na hora;
+- mudar configuração do evento exige a **senha cadastrada do cliente**, conferida na hora
+  (é a mesma conta do ERP Vibe com que ele entra na tela — não existe uma segunda senha);
 - duas leituras offline do mesmo ingresso **deixam os dois entrarem**, e a duplicidade é
   apontada na sincronização — ninguém fica parado no portão por causa de rede;
 - o cliente pode **carregar códigos próprios** para staff e cortesia;

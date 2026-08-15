@@ -165,6 +165,19 @@ h3 { font-size: 1rem; margin: 0 0 4px; }
 }
 #faixa-elevacao button { width: auto; margin: 0; padding: 7px 12px; font-size: .8rem; }
 
+/* A tranca, quando o evento está só para olhar. GRUDADA no topo pela mesma
+   razão que a faixa âmbar: o dono rola até a seção de aparelhos — uma tela e
+   meia abaixo, no desktop —, toca num botão apagado e não acontece nada. Se a
+   explicação ficou lá em cima, fora de vista, a tela não explicou nada. */
+#tranca {
+    position: sticky; top: 0; z-index: 5;
+    padding: 10px 16px 12px; margin: 0 -16px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+#tranca .aviso { margin: 0; }
+#tranca button { margin-top: 10px; }
+
 /* Em somente leitura os campos ficam visivelmente desligados. Aceitar o toque e
    não gravar é a pior das combinações. */
 body.somente-leitura input,
@@ -207,9 +220,37 @@ body.somente-leitura .so-com-senha { opacity: .55; }
    impede que gravar sozinho vire gravar em silêncio. */
 .salvo { display: inline-block; margin-top: 8px; font-size: .82rem; color: var(--teal); }
 
+/* `input[type="radio"], input[type="checkbox"]` e não só o rádio. A regra
+   `input { width: 100% }` lá em cima vale para os dois, e enquanto esta
+   exceção cobria só um deles as caixas de marcar da lista de setores saíam
+   com 385px de largura por 13px de altura — uma linha fina atravessando o
+   cartão, com o nome do setor empurrado para o extremo direito, longe da
+   caixa que ele nomeia. Aquela lista virou botão (`.setor-botao`), mas a
+   exceção fica: a próxima caixa de marcar desta tela não pode renascer torta
+   pelo mesmo motivo. */
 .opcao { display: flex; align-items: center; gap: 9px; margin: 7px 0; }
-.opcao input[type="radio"] { width: auto; min-height: 0; }
+.opcao input[type="radio"],
+.opcao input[type="checkbox"] { width: auto; min-height: 0; flex: none; }
 .opcao label { margin: 0; color: var(--text); font-size: .9rem; }
+
+/* Os setores de um aparelho: um botão por setor, que acende ao ser tocado.
+   Embrulham em várias linhas porque um evento pode ter uma dúzia de setores e
+   a tela tem 460px no máximo. */
+.setores-botoes { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.setor-botao {
+    width: auto; margin: 0;
+    padding: 9px 14px; min-height: 40px;
+    font-size: .88rem; font-weight: 600;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent; color: var(--dim);
+}
+/* Aceso: cor cheia, e não só uma borda. O porteiro configura isto uma vez e
+   confere de relance; um estado marcado por detalhe de borda se perde no
+   escuro do cartão. */
+.setor-botao[aria-pressed="true"] {
+    background: var(--teal); color: #06231f; border-color: var(--teal);
+}
 
 .codigo-gerado {
     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;

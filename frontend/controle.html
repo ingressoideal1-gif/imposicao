@@ -56,8 +56,20 @@
         <h1 id="nome-evento-titulo">Evento</h1>
 
         <div id="aviso-gravacao" class="aviso sumindo" role="status"></div>
-        <div id="aviso-leitura" class="aviso"></div>
-        <button id="btn-elevar">Digitar a senha do dono</button>
+
+        <!-- A tranca fica GRUDADA no topo enquanto o evento está só para
+             olhar. Antes ela morava aqui e rolava para fora da tela: no
+             desktop, a seção de aparelhos está a uma tela e meia daqui, e o
+             dono chegava lá, tocava num botão apagado e não acontecia nada —
+             sem nenhuma palavra à vista dizendo o porquê. É assim que "criar
+             aparelho" virou "não está funcionando". -->
+        <div id="tranca" class="sumindo">
+            <div id="aviso-leitura" class="aviso"></div>
+            <button id="btn-elevar">Digitar a Senha Cadastrada</button>
+            <!-- A mesma saída que a tela de login oferece. Sem ela, o dono que
+                 não lembra a senha fica preso olhando um evento que é dele. -->
+            <button id="btn-esqueci-config" class="secundario">Esqueci minha senha</button>
+        </div>
 
         <div class="secao">
             <h2>Dados do evento</h2>
@@ -84,7 +96,7 @@
                 <label for="novo-aparelho-nome">Nome do novo aparelho</label>
                 <input id="novo-aparelho-nome" type="text" placeholder="Ex.: Portão A">
                 <p style="font-size:.82rem;color:var(--dim);margin:12px 0 4px;">
-                    Quais setores este aparelho valida
+                    Toque nos setores que este aparelho valida
                 </p>
                 <div id="novo-aparelho-setores"></div>
                 <button id="btn-criar-aparelho">Criar aparelho</button>
@@ -103,20 +115,11 @@
             <button id="btn-fechar-codigo" class="secundario">Já anotei, fechar</button>
         </div>
 
-        <div class="secao">
-            <h2>Meus códigos (staff, cortesia)</h2>
-            <div class="cartao">
-                <p id="codigos-total" style="font-size:.9rem;">0 códigos carregados</p>
-                <div class="so-com-senha">
-                    <label for="codigos-setor">Setor destes códigos</label>
-                    <select id="codigos-setor"></select>
-                    <label for="codigos-texto">Cole os códigos, um por linha</label>
-                    <textarea id="codigos-texto" rows="6"
-                              style="width:100%;font-family:inherit;font-size:1rem;"></textarea>
-                    <button id="btn-importar-codigos">Carregar códigos</button>
-                </div>
-            </div>
-        </div>
+        <!-- Os códigos de staff e cortesia moravam aqui, numa seção própria com
+             um seletor de setor e um contador global. Passaram para dentro do
+             "Configurar" de cada setor: lá o setor já está escolhido — não há
+             lista onde errar — e a contagem passa a dizer algo acionável, que
+             é quantos códigos valem NAQUELE portão. -->
     </div>
 
     <p class="rodape">Ingresso Ideal</p>
