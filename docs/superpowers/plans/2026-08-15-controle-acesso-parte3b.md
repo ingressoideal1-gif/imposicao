@@ -2607,9 +2607,15 @@ function caixaDePareamento(eventoId) {
     const tela = document.createElement('canvas');
     tela.width = tela.height = 220;
     if (typeof window.renderQRCodeOnCtx === 'function') {
+        var ctx = tela.getContext('2d');
+        // A funcao desenha CENTRADA no ponto que recebe, nao a partir do canto
+        // (qr-canvas.js:54). Sem transladar para o meio, tres quartos do QR
+        // caem em coordenada negativa e so o quadrante inferior direito
+        // aparece. E o mesmo padrao do script.js:15091.
+        ctx.translate(110, 110);
         // Fundo branco explicito: o painel e escuro, e QR preto sobre escuro
         // nao e lido por leitor nenhum.
-        window.renderQRCodeOnCtx(tela.getContext('2d'), url, 0, 0, 220, '#000000', '#ffffff');
+        window.renderQRCodeOnCtx(ctx, url, 0, 0, 220, '#000000', '#ffffff');
     }
 
     caixa.appendChild(texto);
@@ -2647,7 +2653,7 @@ Abra `http://127.0.0.1:9123/app/controle.html`, confira o desenho, e derrube o s
 
 - [ ] **Step 8: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 601 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 603 passed.
 
 ```bash
 git add frontend/controle.js frontend/controle.html frontend/controle.css tests/test_portaria_fonte.py
@@ -2747,7 +2753,7 @@ Expected: PASS, 5 testes (os links novos precisam apontar para arquivos que exis
 
 - [ ] **Step 5: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 601 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 603 passed.
 
 ```bash
 git add docs/controle_acesso.md docs/STATUS_PROJETO.md
@@ -2800,6 +2806,6 @@ chave `uq_acesso_leitura_do_aparelho UNIQUE (dispositivo_id, id_local)` está em
 `sql/schema_acesso.sql`.
 
 **Contagem de testes ao longo do plano:** 548 hoje → 566 (Task 1) → 576 (Task 2) → 589
-(Task 3) → 596 (Task 4) → 601 (Task 6). As Tasks 5 e 7 não acrescentam teste: a 5 é a
+(Task 3) → 596 (Task 4) → 603 (Task 6). As Tasks 5 e 7 não acrescentam teste: a 5 é a
 câmera, que precisa de hardware, e é coberta pelas guardas de fonte da Task 6 e pelo teste
 no celular, que só o usuário pode fazer.
