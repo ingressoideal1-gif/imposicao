@@ -4,8 +4,9 @@ O QR Ideal ([docs/qr_ideal.md](qr_ideal.md)) põe no ingresso um código que nin
 adivinha. Este documento é a outra metade: como esse código chega à nuvem, como o cliente
 cadastra o evento dele, e o que protege cada passo.
 
-Estado em 14/08/2026: **partes 2 e 3a no ar** (site v570, agente 1.2.69). A parte 3b — o
-aplicativo da portaria — ainda não começou.
+Estado em 15/08/2026: **partes 2 e 3a no ar** (site v581, agente 1.2.80). A parte 3b — o
+aplicativo da portaria — ainda não começou, e é ela que fecha o ciclo: as 2.163 credenciais
+já publicadas ainda não são lidas por ninguém.
 
 ## O caminho inteiro, em ordem
 
@@ -13,10 +14,14 @@ aplicativo da portaria — ainda não começou.
 1. o operador imprime          →  agente calcula os hashes e publica a faixa
 2. o atendente clica no painel →  QR do Pedido gerado, o anterior morre
 3. o cliente lê com a câmera   →  troca o token pelo esqueleto, lido do ERP
-4. o cliente entra e cadastra  →  evento criado, credenciais carimbadas
-5. o dono configura o evento   →  tipo de uso e aparelhos da portaria (parte 3a)
+4. o cliente entra e cadastra  →  evento criado, credenciais ligadas ao setor
+5. o dono configura o evento   →  janela, bloqueios e aparelhos (parte 3a)
 6. (parte 3b) a portaria lê    →  ainda não existe
 ```
+
+O passo 1 e o passo 4 **não têm ordem obrigatória**. Imprimir antes de o cliente
+reivindicar é o caso comum; reivindicar antes de imprimir acontece, e o sistema tem de
+funcionar nos dois sentidos. Ver [O vínculo com o setor](#vinculo).
 
 ## A regra que decide tudo: quem fala com o banco
 
@@ -27,7 +32,7 @@ Agente (tem o pool)  ──hash──►  Render (service_role)  ──►  Supa
                               evento.html (PWA, no celular)
 ```
 
-**Nenhuma chave de banco chega ao celular nem ao navegador.** As sete tabelas
+**Nenhuma chave de banco chega ao celular nem ao navegador.** As oito tabelas
 `producao_acesso_*` nasceram com RLS ligado e **zero políticas**: com a chave anônima —
 que é pública e qualquer um lê no código-fonte do painel — não se lê nem se escreve uma
 linha. Conferido contra o banco em 13/08/2026: uma tentativa de escrita anônima volta
@@ -40,7 +45,9 @@ proposta e financeiro do parceiro — em cada `NewProd.exe` seria bem pior do qu
 anônima que já circula.
 
 Consequência visível: o `app.py` monta o router `/api/acesso/*` **só onde a chave existe**.
-A estação simplesmente não serve esses endpoints.
+A estação simplesmente não serve esses endpoints — e é por isso que o log dela diz
+`[app] Controle de acesso inativo (SUPABASE_SERVICE_KEY ausente)`, que é o certo, não um
+defeito.
 
 ## O que a nuvem guarda no lugar do código
 
@@ -61,7 +68,7 @@ recusado na portaria**, e não há como descobrir isso antes — a não ser ali.
 
 ## A publicação da faixa
 
-Ao fechar a impressão de um trabalho com QR Ideal, o `app.py` chama
+Ao fechar a impressão de um trabalho, o `app.py` chama
 `acesso_publicacao.publicar_em_fundo()`, que **devolve na hora**: o cálculo e o envio
 acontecem numa thread, depois que os PDFs saíram. O operador está de pé na frente da
 impressora, e o agente existe por causa disso.
@@ -76,23 +83,94 @@ Três endpoints, nesta ordem:
 |---|---|
 | `POST /pedidos/{p}/abrir` | devolve o sal e a tiragem. Reabrir devolve o **mesmo** sal |
 | `POST /pedidos/{p}/credenciais` | grava um lote, ignorando o que já existe |
-| `POST /pedidos/{p}/fechar` | carimba o total e compara com o que o ERP encomendou |
+| `POST /pedidos/{p}/fechar` | carimba o total e compara com o que foi encomendado |
 
 **Reabrir nunca troca o sal.** O cliente reimprime 500 de um pedido de 5.000; sal novo
 invalidaria os 4.500 que já estão na mão das pessoas.
 
-**A gravação é repetível.** `?on_conflict=codigo_hash` faz o reenvio não duplicar nada —
-conferido contra o banco real: três envios do mesmo lote deixaram uma linha.
+**A gravação é repetível.** `?on_conflict=chave_dedup` faz o reenvio não duplicar nada —
+conferido contra o banco real: três envios do mesmo lote deixam uma linha. A chave é uma
+coluna `GENERATED ALWAYS` do Postgres que junta **pedido + modelo + número + hash**
+(`sql/schema_acesso_04_credencial_por_modelo.sql`); quem a calcula é o banco, em toda
+inserção, e por isso não há como o código esquecer de preenchê-la nem preenchê-la
+diferente do índice. O porquê dela está em [A ambiguidade](#ambiguidade), abaixo.
+
+### `fechar` conta pelo `Content-Range`
+
+O total sai de `contar()`, que pergunta ao PostgREST quantas linhas casam sem trazer
+nenhuma. Medir o tamanho da lista devolvida **não funciona**: o PostgREST corta toda
+resposta em 1.000 linhas, em silêncio e sem ordem definida.
+
+> Em 15/08/2026 o pedido 18560, de 2.000 ingressos, fechou dizendo
+> `[acesso] Faixa do pedido 18560 INCOMPLETA: 1000 de 2000` com as 2.000 credenciais
+> gravadas e corretas. O estrago era duplo e calado: o `total_credenciais` gravado ficava
+> pela metade, e o `completo` nunca virava verdadeiro — quer dizer, **todo pedido acima de
+> mil ingressos se declarava eternamente incompleto** e mandava reimprimir papel que já
+> estava certo. Mil é justamente o tamanho em que o defeito começa; nenhuma tiragem menor o
+> mostraria.
+>
+> A mesma armadilha pega quem for conferir de fora: duas leituras seguidas da mesma tabela
+> devolvem **fatias diferentes** com o mesmo total de 1.000. Para auditar, pagine por
+> `Range` com `order` explícito, ou conte por `Prefer: count=exact`.
 
 `fechar` devolve `esperado` e `completo`. É por aí que o agente sabe que um lote se perdeu
 na rede, em vez de dar a publicação por terminada.
 
+<a name="so-sobe-o-que-a-portaria-le"></a>
+### Só sobe o que a portaria tem como ler
+
+Regra do usuário, 15/08/2026, sobre o modelo 1000283 do pedido 20508: **modelo cuja
+numeração não tem QR, QR Ideal nem código de barras não sobe ao Ideal Control.** Eram
+cinquenta ingressos com a numeração "Numeração Esquerda - Preta 20mm", que só tem texto e
+um PDF.
+
+Um ingresso sem código **não é um ingresso com defeito**. Ele foi impresso do jeito que o
+cliente contratou; ele simplesmente não é controlado na entrada. Tratá-lo como pendência
+faz o sistema mentir de duas formas, e as duas são caladas:
+
+- o modelo vira **um setor do evento com cinquenta lugares que nunca serão preenchidos**, e
+  o dono olha a tela e vê uma faixa que "faltou publicar";
+- o pedido se declara **eternamente incompleto** — o 20508 vivia como 163 de 213 —, e o
+  agente avisa "faixa INCOMPLETA" a cada impressão.
+
+`acesso_api._modelos_legiveis()` filtra os dois lugares onde isso aparece: os setores
+criados na reivindicação e o `esperado` do `fechar`. Quem decide o que é legível é
+`acesso_publicacao.numeracao_do_modelo`, a **mesma** função que o agente usa para decidir o
+que publicar — duas definições de "tem código" divergiriam no dia em que uma delas mudasse,
+e o sintoma seria o de sempre aqui: uma ponta esperando exatamente o que a outra nunca
+manda.
+
+Se o modelo precisar mesmo ser controlado, não é conserto de software: ele precisa de outra
+numeração, com código, e de reimpressão de verdade, com papel novo.
+
+<a name="vinculo"></a>
+### O vínculo com o evento e o setor
+
+A credencial nasce com `evento_id` e `setor_id` preenchidos quando o pedido já foi
+reivindicado, e a reivindicação carimba as que vieram antes dela. **As duas metades juntas
+é que cobrem as duas ordens possíveis.**
+
+> Até 15/08/2026 só existia a segunda metade — um `PATCH` sobre as credenciais que já
+> existiam no momento da reivindicação. Isso cobre uma ordem e falha calado na outra: no
+> pedido 18560 o cliente reivindicou às 10:55 e o papel saiu às 18:52, e as 200 credenciais
+> daquele dia ficaram órfãs para sempre. Em 15/08 as **363 credenciais do banco inteiro**
+> estavam sem evento e sem setor.
+>
+> Órfã não é defeito visível: a credencial existe, conta no total, e some justamente onde
+> importa — a portaria não sabe de que setor o código é, e o bloqueio por faixa, que é por
+> setor, não alcança nenhuma. O conserto do passado é
+> [sql/reparo_acesso_credenciais_orfas.sql](../sql/reparo_acesso_credenciais_orfas.sql).
+
+Pedido ainda não reivindicado continua gravando **sem** setor, porque ainda não existe
+evento a que pertencer. Isso é o normal, não uma falha.
+
+<a name="nem-todo-ingresso-tem-qr-ideal"></a>
 ### Nem todo ingresso tem QR Ideal
 
 Regra do usuário, 14/08/2026: **o Ideal Control tem de funcionar com qualquer ingresso que
 tenha QR ou código de barras**, mesmo sem o elemento QR Ideal — lendo o dado do próprio
-elemento de numeração. Não é hipótese: das 59 numerações do catálogo, **32 já têm um
-elemento QR** e só uma tem QR Ideal.
+elemento de numeração. Não é hipótese: das **61 numerações** do catálogo, **31 a portaria
+consegue ler** e só **2** têm QR Ideal (conferido em 15/08/2026).
 
 Dá para fazer porque o `engine._render_element` desenha o QR e o código de barras a partir
 do mesmo `val_str`: `prefixo + numero.zfill(pad) + sufixo`. O agente recalcula esse texto
@@ -107,6 +185,7 @@ Por modelo, vale o primeiro que existir nesta ordem:
 | `QR_IDEAL` | código do pool |
 | `QR` / `BARCODE` | `prefixo + numero.zfill(pad) + sufixo` |
 | alimentado por coluna do CSV | **não publica** — o conteúdo vem da linha, não do número |
+| valor fixo | **não publica** — é o mesmo em todos os ingressos, não identifica nada |
 
 O agente não conhece a numeração: ele recebe do servidor só `{modelo: quantidade}`, o que
 bastava enquanto o código saía do pool por fórmula. Quem entrega o mapa é o
@@ -125,14 +204,17 @@ hash errado, e reimprimir não consertaria, porque o servidor ignora duplicata.
 > de outra pessoa. A fraude deixa de ser falsificação e vira **clonagem**, e quem a pega é a
 > detecção de entrada repetida na portaria, não o sigilo do código.
 
-**A ambiguidade, e a decisão que a resolve.** Com `prefix=''` e `pad=4` — que é como o
-acervo inteiro está —, o item 1 do VIP e o item 1 do CAMAROTE são os dois `0001`, no mesmo
-evento. E como o sal é por pedido, os dois dão o **mesmo hash**.
+<a name="ambiguidade"></a>
+### A ambiguidade, e a decisão que a resolve
+
+Com `prefix=''` e `pad=4` — que é como o acervo inteiro está —, o item 1 do VIP e o item 1
+do CAMAROTE são os dois `0001`, no mesmo evento. E como o sal é por pedido, os dois dão o
+**mesmo hash**.
 
 Decisão do usuário: **o aparelho resolve pelo setor dele.** Cada aparelho valida uma lista
 de setores, e o código é lido nesse contexto. Quando o aparelho valida vários setores e o
 código casa em mais de um, a portaria pergunta qual, mostrando só os que casaram — um toque,
-e fica registrado. Isso é trabalho da parte 3.
+e fica registrado. Isso é trabalho da parte 3b.
 
 > **A gravação chegou a atrapalhar essa decisão, e custou 31 ingressos.** Em 15/08/2026 o
 > pedido 20508 tinha três modelos com a numeração "Triband", e o item 1 dos três saiu com o
@@ -141,10 +223,9 @@ e fica registrado. Isso é trabalho da parte 3.
 > portaria — e o aparelho nunca teria chance de resolver, porque a linha do segundo modelo
 > não existia.
 >
-> A chave passou a ser `chave_dedup` — pedido + modelo + número + hash, calculada pelo
-> próprio Postgres (`sql/schema_acesso_04_credencial_por_modelo.sql`). Os três `000001`
-> convivem, um por modelo, cada um com o seu setor. **O papel não mudou**, por decisão do
-> usuário: o texto impresso é o que o cliente contratou, e quem se ajusta é o banco.
+> A chave passou a ser `chave_dedup`. Os três `000001` convivem, um por modelo, cada um com
+> o seu setor. **O papel não mudou**, por decisão do usuário: o texto impresso é o que o
+> cliente contratou, e quem se ajusta é o banco.
 >
 > De quebra, isso conserta o caso de mudar a numeração e reimprimir: os dois lotes passam a
 > valer na porta, em vez de o segundo ser descartado.
@@ -164,13 +245,37 @@ Quatro travas:
   pedido — nem com o segredo dá para inventar o ingresso 99.999 de uma tiragem de 88;
 - publicação fechada não aceita mais lote; reabrir é ato explícito.
 
-O segredo vai **embutido no executável**: o `build_agent.ps1` gera `acesso_segredo.py`, que
-o git ignora, e o build **para** sem ele — mesma razão do pool.
+O segredo vai **embutido no executável**. Quem o gera é `New-SegredoDoAgente`, no módulo
+`ferramentas/Publicacao.psm1`, chamada **antes** da compilação pelas duas ferramentas que
+constroem o agente: o `build_agent.ps1` e o `publicar_agente.ps1`. O arquivo gerado
+(`acesso_segredo.py`) é ignorado pelo git, e o build **para** sem ele — mesma razão do pool.
+
+> **Uma rotina só, e uma guarda depois do build, porque a duplicata já falhou.** Até
+> 14/08/2026 o `publicar_agente.ps1` **não gerava o segredo**, e o `build_agent.ps1` o
+> gerava *depois* de compilar. Resultado: **nenhum agente publicado jamais teve o segredo**.
+> O PyInstaller anotava `missing module named acesso_segredo` em
+> `build/agent_tray/warn-agent_tray.txt` a cada build, num arquivo que ninguém lia, e a
+> falha só aparecia na estação, na hora de publicar a faixa.
+>
+> Hoje `Test-SegredoNoBuild` lê esse arquivo depois de compilar e **interrompe a publicação**
+> se o aviso estiver lá. É por isso que o `publicar_agente.ps1` imprime
+> `Segredo conferido dentro do executavel.` antes de gerar o MSI.
 
 > **Risco residual, registrado de propósito.** Quem tiver o segredo do agente e pegar a
 > janela entre `abrir` e `fechar` ainda consegue ocupar uma posição da tiragem com um hash
-> próprio. Endereçar isso é trabalho da parte 3, onde a portaria vai poder cruzar o total
+> próprio. Endereçar isso é trabalho da parte 3b, onde a portaria vai poder cruzar o total
 > publicado com o que o ERP encomendou.
+
+### Onde imprimir, para a faixa subir
+
+A publicação só acontece onde a imposição acontece: **no agente**. Se o navegador mandar o
+trabalho para a nuvem, não há agente com faixa a publicar — e, no caso do QR Ideal, nem
+pool.
+
+Desde 15/08/2026 o Chrome bloqueia a página da Vercel de falar com a estação, então o painel
+tem de ser aberto por **`http://localhost:9000`**. O porquê, a mensagem exata do navegador e
+por que a solução não pode ser permissão concedida site a site estão em
+[qr_ideal.md → Onde imprimir](qr_ideal.md#onde-imprimir).
 
 ## O QR do Pedido
 
@@ -210,11 +315,18 @@ Mas o **próprio dono relendo o próprio QR não é erro**: devolve o evento que
 "anexar a um evento existente" fica ao lado de "criar". Anexar não cria evento novo.
 
 Um modelo = um setor, e setores **nunca se fundem**, mesmo com nome igual vindo de dois
-pedidos: quantidade e reimpressão são por modelo. O cliente renomeia à vontade.
+pedidos: quantidade e reimpressão são por modelo. O cliente renomeia à vontade. Modelo sem
+código legível não vira setor — ver
+[Só sobe o que a portaria tem como ler](#so-sobe-o-que-a-portaria-le).
 
 > Cuidado com o vocabulário: o setor do EVENTO ("VIP", "Pista") sai de `nome_modelo`. O
 > campo `setor` de `pedidos_modelos` **já está ocupado** com o setor de PRODUÇÃO (FLEXO,
 > TÊXTIL, PVC, LASER).
+
+> **Limite conhecido.** O esqueleto é lido do ERP a cada leitura do QR, então ele sempre
+> reflete o pedido de hoje. Os **setores já criados**, não: eles são gravados uma vez, na
+> reivindicação. Se um modelo ganhar numeração com código depois disso, o setor dele não
+> aparece sozinho. Não há hoje uma re-sincronização, e ela é trabalho da parte 3c.
 
 ## A conta é a do Vibe, e não uma daqui
 
@@ -262,18 +374,34 @@ malformado" não é frase para o cliente ler no celular.
 | `SUPABASE_SERVICE_KEY` | Render | o router `/api/acesso/*` nem é montado |
 | `ACESSO_AGENTE_SEGREDO` | Render **e** no build do agente | a faixa nunca é publicada |
 | `QR_PEDIDO_SEGREDO` | Render | não dá para gerar QR do evento |
+| `ACESSO_ELEVACAO_SEGREDO` | Render | o dono digita a senha certa e **nada acontece** |
 
-`GET /api/acesso/saude` responde as três de uma vez — presença de cada variável e se o
+`GET /api/acesso/saude` responde as quatro de uma vez — presença de cada variável e se o
 banco responde:
 
 ```json
-{"ok": true, "variaveis": {"SUPABASE_SERVICE_KEY": true, "...": true},
+{"ok": true, "variaveis": {"SUPABASE_SERVICE_KEY": true, "ACESSO_AGENTE_SEGREDO": true,
+ "QR_PEDIDO_SEGREDO": true, "ACESSO_ELEVACAO_SEGREDO": true},
  "faltando": [], "banco": "ok"}
 ```
 
 Ele diz **se** cada uma existe, nunca o que ela vale: o endpoint é público. E confere as
 variáveis **antes** de tocar no banco, senão um erro de rede esconderia o de configuração,
 que é o que a pessoa veio ver.
+
+Cada uma falha num lugar diferente e tarde, e a quarta é a mais silenciosa de todas: o dono
+entra na tela do evento, digita a senha certa, e nada acontece — porque o servidor não tem
+como assinar a elevação.
+
+Para pôr uma variável no Render sem abrir o painel deles:
+
+```powershell
+.\ferramentas\variavel_no_render.ps1 -Variavel ACESSO_ELEVACAO_SEGREDO
+```
+
+Ele lê o valor exato do `.env.local`, acha o serviço pelo nome **exato** (o filtro da API do
+Render é por prefixo, e "imposicao" casaria com mais de um), grava por API e dispara o
+deploy. Nunca imprime o valor.
 
 > Uma armadilha já vivida: ao copiar a `SUPABASE_SERVICE_KEY` do painel do Supabase, um
 > caractere sobrando no começo ou um `=` no fim fazem o Supabase responder `401 Invalid API
@@ -285,9 +413,18 @@ que é o que a pessoa veio ver.
 > assinatura) e põe na área de transferência **sem mostrar na tela**. Com `-Conferir`, só
 > confere.
 
-## As sete tabelas
+## As oito tabelas
 
-Criadas por [sql/schema_acesso.sql](../sql/schema_acesso.sql), pronto para colar.
+Nasceram em [sql/schema_acesso.sql](../sql/schema_acesso.sql), pronto para colar, mais as
+migrações que vieram depois. Todos os arquivos são idempotentes e podem ser colados de novo.
+
+| Arquivo | O que faz |
+|---|---|
+| `schema_acesso.sql` | cria **sete** tabelas, com RLS ligado e zero políticas |
+| `schema_acesso_02_credencial_hash_unico.sql` | a primeira chave única, por `codigo_hash` |
+| `schema_acesso_04_credencial_por_modelo.sql` | `chave_dedup`, que substitui a anterior |
+| `schema_acesso_bloqueios.sql` | `abre_em`/`fecha_em` nos setores e a **oitava** tabela, `_bloqueios` |
+| `reparo_acesso_credenciais_orfas.sql` | conserto pontual das credenciais sem evento/setor |
 
 | Tabela | Guarda |
 |---|---|
@@ -295,7 +432,7 @@ Criadas por [sql/schema_acesso.sql](../sql/schema_acesso.sql), pronto para colar
 | `_pedidos` | sal, token do QR e estado da publicação. Nasce **antes** do evento |
 | `_setores` | um por modelo; a lotação É a `quantidade` do ERP, não um campo. `abre_em`/`fecha_em` = janela em que o setor vale; nulo = sempre |
 | `_bloqueios` | faixas de ingresso recusadas na porta: `de`, `ate`, `motivo`. A faixa é um intervalo de `credenciais.numero`, e o motivo é o que a portaria lê em voz alta |
-| `_credenciais` | `codigo_hash` sempre; `codigo_visivel` só quando `origem='cliente'` |
+| `_credenciais` | `codigo_hash` sempre; `codigo_visivel` só quando `origem='cliente'`; `evento_id`/`setor_id` quando o pedido já foi reivindicado |
 | `_dispositivos` | os aparelhos da portaria (parte 3) |
 | `_dispositivo_setores` | em quais setores cada aparelho valida (parte 3) |
 | `_leituras` | toda leitura, inclusive negada (parte 3) |
@@ -311,25 +448,39 @@ distinto de nulo dentro de índice único, então `UNIQUE (empresa_id, coluna)` 
 nada. As chaves passam pela função `producao_acesso_empresa()`, que troca o nulo por um
 UUID zerado.
 
+## O que já rodou de verdade
+
+Dois pedidos completos em 15/08/2026, conferidos por leitura paginada do banco:
+
+| Pedido | Modelos | Contratado | A publicar | Publicado | |
+|---|---|---|---|---|---|
+| 18560 | 5, todos legíveis | 2.000 | 2.000 | **2.000** | 400 com QR Ideal |
+| 20508 | 7, sendo 6 legíveis | 213 | 163 | **163** | 100 com QR Ideal |
+
+A diferença de 50 do 20508 é o modelo 1000283, que não tem código nenhum e por isso não
+sobe — não é faixa faltando.
+
+Zero credenciais sem setor, zero hashes repetidos, nenhuma faixa com buraco. Cinco das
+numerações envolvidas são exclusivas (`is_custom`): Triband, 1000110, 1000117, 1000176 e
+1000282. Vale registrar porque durante a investigação do 20508 chegou-se a suspeitar de uma
+regressão em numeração exclusiva — não havia; era a nuvem se passando pelo agente local.
+
+O que **não** está provado ainda: nada disso foi lido por um aparelho de portaria, porque a
+parte 3b não existe. Todo o valor está guardado, e nenhum foi usado.
+
 ## O que falta (a partir da parte 3b)
 
-A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**, com a
-`ACESSO_ELEVACAO_SEGREDO` já no Render — o `/api/acesso/saude` responde as quatro em `true`.
-Ela traz: login do cliente, tipo de uso por setor atrás de um botão **Configurar**, os
-aparelhos da portaria com lista de setores própria, e a senha do dono travando a
-configuração do evento. **A lotação de um setor é a quantidade contratada no ERP**,
-mostrada como informação e nunca como campo — não existe um segundo número que possa
-discordar do contrato. O estado atual está em [STATUS_PROJETO.md](STATUS_PROJETO.md).
+A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**. Ela traz: login do
+cliente, configuração por setor atrás de um botão **Configurar** (nome na portaria, janela
+de abertura e fechamento, bloqueio por faixa com motivo), os aparelhos da portaria com
+lista de setores própria, e a senha do dono travando a configuração do evento. **A lotação
+de um setor é a quantidade contratada no ERP**, mostrada como informação e nunca como
+campo — não existe um segundo número que possa discordar do contrato. O estado atual está em
+[STATUS_PROJETO.md](STATUS_PROJETO.md).
 
 O que falta é o aplicativo da PORTARIA (parte 3b): IndexedDB com validação local de
 verdade, leitura de QR e registro de entrada sem depender de rede, e reentrada em uso de
 verdade. Painel ao vivo, relatórios e cancelar credencial ficam para a parte 3c.
-
-**O Ideal Control antigo continua fora deste repositório**, em `../ideal-IdealControl/`.
-Trazê-lo para cá é trabalho da parte 3c, e a parte 3a reverteu o plano de evoluí-lo: o
-layout foi refeito do zero, por decisão do usuário. Enquanto ele não vier, o `sw.js` que
-ainda referencia SDKs do Firebase removidos mora lá, não aqui — não há `sw.js` em
-`frontend/`.
 
 Decisões já tomadas pelo usuário e registradas na
 [spec](superpowers/specs/2026-08-13-controle-acesso-parte2-design.md):
@@ -342,3 +493,15 @@ Decisões já tomadas pelo usuário e registradas na
 - **o aparelho resolve o setor pela lista dele.** Com numeração comum, dois setores do mesmo
   evento têm o mesmo `0001` e o mesmo hash. O aparelho configurado para um setor só não tem
   dúvida; o que valida vários precisa perguntar qual, mostrando só os que casaram.
+
+Duas pendências de produto continuam abertas, e nenhuma tem dono no plano atual:
+
+- **não há como reativar um aparelho revogado** — a revogação é definitiva;
+- **o log do agente é apagado a cada reinício** (`open(..., "w")` em `agent_tray.py`), o que
+  já custou evidência duas vezes numa mesma investigação.
+
+**O Ideal Control antigo continua fora deste repositório**, em `../ideal-IdealControl/`.
+Trazê-lo para cá é trabalho da parte 3c, e a parte 3a reverteu o plano de evoluí-lo: o
+layout foi refeito do zero, por decisão do usuário. Enquanto ele não vier, o `sw.js` que
+ainda referencia SDKs do Firebase removidos mora lá, não aqui — não há `sw.js` em
+`frontend/`.
