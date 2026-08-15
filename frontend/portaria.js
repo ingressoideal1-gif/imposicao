@@ -67,10 +67,30 @@
     }
 
     function desparear() {
+        // Despareamento DELIBERADO -- o operador escolheu tirar este evento
+        // do aparelho (celular trocado de mao, por exemplo). Apaga TUDO:
+        // carga, fila e entradas. Nao chamar isto a partir de um 401 de
+        // sincronizacao: ver `aparelhoRevogado` abaixo.
         localStorage.removeItem(CHAVE_TOKEN);
         estado.token = null;
         estado.carga = null;
         return D.limpar().then(function () { mostrar('pareando'); });
+    }
+
+    function aparelhoRevogado() {
+        // O dono revogou ESTE aparelho na tela dele -- nao e despareamento
+        // deliberado do porteiro. A fila pode ter leituras que o servidor
+        // ainda nao confirmou (Portao B ficou horas sem sinal, acumulou
+        // centenas de leituras; o dono revoga o aparelho ERRADO na tela
+        // dele); apaga-las e perder a contagem que o cliente pagou para ter
+        // -- contra a spec escrita, achado em revisao de codigo, 15/08/2026.
+        // So esquece o token. Carga, fila e entradas continuam no celular.
+        localStorage.removeItem(CHAVE_TOKEN);
+        estado.token = null;
+        $('erro-pareamento').textContent = 'Este aparelho foi desligado pelo organizador.';
+        $('erro-pareamento').classList.remove('sumindo');
+        mostrar('pareando');
+        return Promise.resolve();
     }
 
     // ── A carga ─────────────────────────────────────────────────────────────
@@ -264,7 +284,7 @@
                 return D.removerDaFila(lote.map(function (l) { return l.id_local; }));
             }).then(atualizarFila);
         }).catch(function (e) {
-            if (e.status === 401) return desparear();
+            if (e.status === 401) return aparelhoRevogado();
         }).then(function () { sincronizando = false; });
     }
 
@@ -297,10 +317,33 @@
         var t = ($('campo-numero').value || '').trim();
         if (!t) return;
         $('campo-numero').value = '';
+        // A camera continua ligada enquanto o <video> fica escondido -- sem
+        // desligar aqui, ela pode pegar outro QR no meio da digitacao e
+        // pintar a tela com a resposta ERRADA por cima da certa, meio
+        // segundo depois. achou() (camera) ja desliga antes de validar;
+        // aqui tem de ser igual. Achado em revisao de codigo, 15/08/2026.
+        if (window.portariaCamera) window.portariaCamera.desligar();
         // Passa pelas MESMAS seis regras. Digitar nao e atalho -- e outra forma
         // de entrada, para o ingresso rasgado e para o codigo de barras que o
         // navegador do iPhone nao le.
         validarTexto(t);
+    };
+
+    $('btn-atualizar-evento').onclick = function () {
+        // Sem este botao, um bloqueio criado pelo dono DEPOIS do pareamento
+        // nunca chegava a este aparelho -- a regra 4 so valia para quem
+        // pareou depois do bloqueio existir. Achado em revisao de codigo,
+        // 15/08/2026.
+        if (window.portariaCamera) window.portariaCamera.desligar();
+        baixarCarga().catch(function () {
+            // Uma atualizacao que falha NAO pode jogar o porteiro para a
+            // tela de pareamento -- o aparelho ja esta pareado e
+            // funcionando, so a atualizacao e que nao completou. Volta para
+            // a leitura com a carga que ja tinha (baixarCarga so grava a
+            // carga NOVA depois que TODAS as paginas chegam; uma pagina que
+            // falha no meio nao troca nada no que ja estava salvo).
+            entrarEmLeitura();
+        });
     };
 
     // ── Partida ─────────────────────────────────────────────────────────────

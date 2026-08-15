@@ -134,6 +134,54 @@ def test_toda_leitura_decidida_entra_na_fila_inclusive_a_negada():
 # Achado em revisao de codigo, 15/08/2026: sem este teste, inverter a ordem
 # (remover da fila antes do fetch) passaria pela suite inteira sem aviso.
 
+def _conferir(texto, c=None):
+    r = subprocess.run(
+        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
+        input=json.dumps({"modo": "conferir", "texto": texto, "carga": c or carga()}),
+    )
+    if r.returncode != 0:
+        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
+    return json.loads(r.stdout)
+
+
+def test_digitar_o_numero_desliga_a_camera_antes_de_validar():
+    """Achado em revisao de codigo, 15/08/2026. `achou()` (camera) ja desliga
+    antes de validar; `btn-conferir` ('Digitar o numero') tinha ficado de
+    fora. Sem isto, a camera continua lendo QR enquanto o porteiro digita um
+    numero -- e meio segundo depois ela pode pegar outro ingresso e pintar a
+    tela com a resposta ERRADA por cima da certa, sem que nada avise qual
+    ingresso a tela esta respondendo."""
+    assert _conferir("000001")["desligarChamado"] is True
+
+
+def _atualizar(mock, c=None):
+    r = subprocess.run(
+        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
+        input=json.dumps({"modo": "atualizar", "carga": c or carga(), "mock": mock}),
+    )
+    if r.returncode != 0:
+        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
+    return json.loads(r.stdout)
+
+
+def test_atualizar_o_evento_troca_a_carga_sem_tocar_fila_ou_entradas():
+    """Achado em revisao de codigo, 15/08/2026 (I5). Antes desta correcao nao
+    havia como refazer a carga depois de parear: um bloqueio criado as 21h
+    pelo dono nunca chegava ao aparelho que pareou as 20h. O botao 'Atualizar
+    o evento' chama `baixarCarga()`, que SUBSTITUI a carga -- mas fila e
+    entradas sao do porteiro, nao do evento, e uma atualizacao nao pode
+    mexer nelas."""
+    nova = carga()
+    nova["evento"]["nome"] = "Festa Atualizada"
+    nova["proxima"] = None
+    r = _atualizar({"method": "GET", "pathname": "/api/acesso/portaria/faixa",
+                    "status": 200, "body": nova})
+    assert r["filaAntes"] == 2
+    assert r["filaDepois"] == 2, "atualizar o evento apagou leituras da fila"
+    assert r["entradasAntes"] == r["entradasDepois"], "atualizar o evento apagou entradas"
+    assert r["nomeEventoDepois"] == "Festa Atualizada", "a carga nova nao chegou a gravar"
+
+
 def _sincronizar(mock):
     r = subprocess.run(
         ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
@@ -146,8 +194,8 @@ def _sincronizar(mock):
 
 def test_sincronizar_remove_da_fila_so_depois_da_confirmacao_do_servidor():
     r = _sincronizar({"method": "POST", "pathname": "/api/acesso/portaria/leituras",
-                      "status": 200, "body": {"gravadas": 1}})
-    assert r["filaAntes"] == 1
+                      "status": 200, "body": {"gravadas": 2}})
+    assert r["filaAntes"] == 2
     assert r["filaDepois"] == 0
 
 
@@ -157,5 +205,22 @@ def test_sincronizar_mantem_na_fila_se_o_servidor_nao_confirmar():
     recebeu -- e a lotacao contaria uma entrada que nunca chegou."""
     r = _sincronizar({"method": "POST", "pathname": "/api/acesso/portaria/leituras",
                       "abort": True})
-    assert r["filaAntes"] == 1
-    assert r["filaDepois"] == 1
+    assert r["filaAntes"] == 2
+    assert r["filaDepois"] == 2
+
+
+def test_401_na_sincronizacao_preserva_a_fila_em_vez_de_apagar():
+    """Achado em revisao de codigo, 15/08/2026. O 401 na sincronizacao chamava
+    `desparear()`, que apaga carga, fila E entradas -- contra a spec escrita:
+    'perder uma leitura e perder a contagem que o cliente pagou para ter.' O
+    dono pode revogar o aparelho ERRADO (Portao B fica horas sem sinal e
+    acumula leituras; o dono revoga o aparelho errado na tela dele) e o 401
+    que vem depois nao pode comer o que o Portao B ainda nao mandou."""
+    r = _sincronizar({"method": "POST", "pathname": "/api/acesso/portaria/leituras",
+                      "status": 401, "body": {"detail": "aparelho nao pareado ou revogado"}})
+    assert r["filaAntes"] == 2
+    assert r["filaDepois"] == 2, "o 401 apagou leituras que o servidor nunca confirmou"
+    assert r["entradasAntes"] == r["entradasDepois"], "o 401 apagou a marca de quem ja entrou"
+    assert r["tokenDepois"] is None, "o token revogado tem de ser esquecido"
+    assert r["telaPareandoVisivel"] is True
+    assert r["mensagem"], "o porteiro tem de saber por que voltou para o pareamento"

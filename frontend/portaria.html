@@ -112,6 +112,10 @@
             <input id="campo-numero" inputmode="numeric" placeholder="000001">
             <button id="btn-conferir">Conferir</button>
         </div>
+        <!-- Sem isto, um bloqueio criado pelo dono DEPOIS do pareamento nunca
+             chega a este aparelho -- a regra 4 inteira so valeria para quem
+             pareou depois do bloqueio existir. -->
+        <button id="btn-atualizar-evento" class="discreto">Atualizar o evento</button>
     </div>
 
     <div id="tela-resposta" class="sumindo">
