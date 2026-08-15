@@ -217,3 +217,8 @@ body.somente-leitura .so-com-senha { opacity: .55; }
     padding: 14px; border-radius: 8px;
     background: rgba(20, 184, 166, .12); border: 1px dashed var(--teal);
 }
+
+/* A caixa do endereço de pareamento, ao fim da seção de aparelhos. */
+.pareamento { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pareamento a { display: block; word-break: break-all; font-size: 0.82rem; margin: 6px 0 10px; }
+.pareamento canvas { background: #fff; border-radius: 8px; padding: 8px; }

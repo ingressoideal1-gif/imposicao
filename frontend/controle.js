@@ -177,6 +177,7 @@
         p.aparelhos.forEach(function (a) {
             $('aparelhos').appendChild(cartaoDeAparelho(a, edicoesDeAparelhoAntes[a.id]));
         });
+        $('aparelhos').appendChild(caixaDePareamento(p.evento.id));
 
         $('codigos-total').textContent = p.codigos_cliente + ' códigos carregados';
 
@@ -797,6 +798,64 @@
         }
 
         return el;
+    }
+
+    /**
+     * O endereço que o porteiro abre no aparelho.
+     *
+     * O código de seis caracteres, sozinho, não leva a lugar nenhum: ninguém
+     * adivinha a URL da portaria. `portaria.html` lê o `?e=` para saber de
+     * qual evento é o aparelho antes mesmo de pedir o código.
+     */
+    function enderecoDaPortaria(eventoId) {
+        return location.origin + '/portaria.html?e=' + encodeURIComponent(eventoId);
+    }
+
+    /**
+     * A caixa que mostra o endereço de pareamento, com QR.
+     *
+     * O porteiro precisa de DOIS dados: onde abrir e qual o código. Mostrar só
+     * o código deixa o aparelho parado — ninguém digita 60 caracteres de URL
+     * de cabeça. O QR existe pelo mesmo motivo: digitar esses 60 caracteres
+     * num celular, no portão, é pedir erro de digitação.
+     */
+    function caixaDePareamento(eventoId) {
+        var caixa = document.createElement('div');
+        caixa.className = 'pareamento';
+
+        var url = enderecoDaPortaria(eventoId);
+
+        var texto = document.createElement('p');
+        texto.className = 'config-ajuda';
+        texto.textContent = 'No celular do porteiro, abra este endereço e digite '
+            + 'o código do aparelho:';
+        caixa.appendChild(texto);
+
+        var link = document.createElement('a');
+        link.href = url;
+        link.textContent = url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        caixa.appendChild(link);
+
+        var tela = document.createElement('canvas');
+        tela.width = tela.height = 220;
+        if (typeof window.renderQRCodeOnCtx === 'function') {
+            var ctx = tela.getContext('2d');
+            // `renderQRCodeOnCtx` desenha CENTRADO no ponto (x, y) que recebe
+            // — ver frontend/qr-canvas.js — e não a partir do canto. Sem este
+            // translate para o centro do canvas, só o quadrante inferior
+            // direito do QR apareceria; o resto cairia em coordenada
+            // negativa, fora da tela. É o mesmo padrão que o QR do evento usa
+            // no script.js.
+            ctx.translate(110, 110);
+            // Fundo branco explícito: o painel é escuro, e QR preto sobre
+            // fundo escuro não é lido por leitor nenhum.
+            window.renderQRCodeOnCtx(ctx, url, 0, 0, 220, '#000000', '#ffffff');
+        }
+        caixa.appendChild(tela);
+
+        return caixa;
     }
 
     // ── O arranque ───────────────────────────────────────────────────────────
