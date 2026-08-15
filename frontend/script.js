@@ -7242,7 +7242,9 @@ function drawPreview() {
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
             if (!fmtId) fmtId = item.formato_id;
-            if (!numId) numId = item.numeracao_id;
+            // Ver o comentario em `runImposition`: a coluna do ERP e
+            // `amostra_num_id`; `numeracao_id` so existe em memoria.
+            if (!numId) numId = item.numeracao_id || item.amostra_num_id;
             if (!saiId) {
                 saiId = item.saida_id;
                 if (!saiId && fmtId) {
@@ -9418,7 +9420,9 @@ window.runImposition = async function (mode, returnBlob = false) {
         if (firstItem) {
             fmtId = firstItem.formato_id;
             saiId = firstItem.saida_id;
-            numId = firstItem.numeracao_id;
+            // Ver o comentario em `runImposition`: a coluna do ERP e
+            // `amostra_num_id`; `numeracao_id` so existe em memoria.
+            numId = firstItem.numeracao_id || firstItem.amostra_num_id;
             // Para multi-seleção de modelos combinados, SEMPRE usar cut_stack
             schema = 'cut_stack';
         } else {
@@ -9470,7 +9474,13 @@ window.runImposition = async function (mode, returnBlob = false) {
         const item = itens.find(i => String(i.id) === String(activeItem.itemId));
         if (item) {
             fmtId = item.formato_id;
-            numId = item.numeracao_id;
+            // `|| item.amostra_num_id` NAO e zelo: `numeracao_id` nao existe na
+            // tabela do ERP -- a coluna e `amostra_num_id`, e `numeracao_id` so
+            // aparece em memoria depois que alguem mexe no seletor. Sem o
+            // fallback, imprimir um modelo recem-carregado mandava numeracao
+            // NULA ao motor: a folha saia sem numero e sem QR, com a previa
+            // mostrando os dois. Aconteceu com o pedido 20508 em 15/08/2026.
+            numId = item.numeracao_id || item.amostra_num_id;
             saiId = item.saida_id;
             if (!saiId && fmtId) {
                 const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
@@ -20702,7 +20712,11 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
 
     // --- MATCHING AUTOMÁTICO DE NUMERAÇÃO ---
     setTimeout(() => {
-        let numId = item.numeracao_id;
+        // Ver o comentario em `runImposition`: a coluna do ERP e
+        // `amostra_num_id`. Sem o fallback, este matching automatico refazia o
+        // trabalho de adivinhar a numeracao de um item que JA tinha uma
+        // gravada — e podia gravar por cima com um palpite.
+        let numId = item.numeracao_id || item.amostra_num_id;
         if (!numId && item.numeracao) {
             numId = matchNumeracao(item.numeracao, formatoId);
             if (numId) {
