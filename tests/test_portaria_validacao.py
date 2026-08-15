@@ -194,6 +194,24 @@ def test_ambiguidade_com_o_setor_escolhido_decide_normalmente():
     assert r["credencial_id"] == "c-v"
 
 
+def test_setor_escolhido_que_nao_bate_com_nenhum_candidato_nao_vira_desconhecido():
+    """Achado em revisao de codigo, 15/08/2026, fechando um minor da Task 1.
+    O `escolhido` normalmente e um dos setores que a propria tela ofereceu em
+    `perguntarSetor` -- so chega aqui fora da lista por uma inconsistencia (a
+    carga mudou entre a pergunta e a escolha, por exemplo). `desconhecido`
+    diria 'NAO E DESTE EVENTO', que e mentira: o ingresso ja passou pelas
+    regras 1 e 2. E o mesmo padrao do setor ausente em pintar() -- devolver
+    motivo generico onde o dado sumiu."""
+    c = carga()
+    c["aparelho"]["setores"] = [PISTA, VIP]
+    c["credenciais"] = [
+        {"h": "h-igual", "s": PISTA, "n": 1, "id": "c-p"},
+        {"h": "h-igual", "s": VIP, "n": 1, "id": "c-v"},
+    ]
+    r = decidir(["h-igual"], c, escolhido="setor-que-nao-existe-mais")
+    assert r["motivo"] != "desconhecido"
+
+
 def test_ambiguidade_nao_pergunta_quando_so_um_setor_e_autorizado():
     """O aparelho de PISTA nao deve perguntar nada: o candidato do VIP nem e
     dele. Perguntar aqui poria o porteiro para escolher uma porta que ele nao

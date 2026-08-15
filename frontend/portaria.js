@@ -118,8 +118,15 @@
 
     function validarTexto(texto, setorEscolhido) {
         var carga = estado.carga;
-        var sais = V.saisParaTentar(texto, carga);
-        return Promise.all(sais.map(function (s) { return window.qrIdealHash(texto, s); }))
+        // TUDO dentro da cadeia de promise, inclusive o primeiro calculo --
+        // sem isto um erro SINCRONO (ex.: `saisParaTentar` recebendo carga
+        // incompleta) escapava do .catch la embaixo e a tela nao mudava:
+        // nem verde, nem vermelho, nada. Achado em revisao de codigo,
+        // 15/08/2026.
+        return Promise.resolve().then(function () {
+            var sais = V.saisParaTentar(texto, carga);
+            return Promise.all(sais.map(function (s) { return window.qrIdealHash(texto, s); }));
+        })
             .then(function (hashes) {
                 return D.entradasPermitidas().then(function (entradas) {
                     return V.decidir({
@@ -135,6 +142,14 @@
                     return perguntarSetor(v.candidatos);
                 }
                 return registrar(v).then(function () { return pintar(v); });
+            })
+            .catch(function (e) {
+                // Qualquer excecao daqui para cima -- IndexedDB sem espaco,
+                // crypto.subtle ausente, carga com campo faltando -- tinha o
+                // MESMO sintoma: porteiro le o QR, tela nao muda. Um erro
+                // visivel e infinitamente melhor que um silencio.
+                console.error('erro ao validar leitura da portaria:', e);
+                pintar({ estado: 'negado', motivo: 'erro_de_leitura', setor: null, detalhe: {} });
             });
     }
 
@@ -180,6 +195,7 @@
         fora_da_janela: 'FORA DO HORÁRIO',
         bloqueado: 'FAIXA BLOQUEADA',
         ja_entrou: 'JÁ ENTROU',
+        erro_de_leitura: 'ERRO AO LER',
     };
 
     function hora(iso) {
@@ -190,6 +206,13 @@
     function pintar(v) {
         var caixa = $('resposta-caixa');
         var d = v.detalhe || {};
+        // `v.setor` pode vir null: a regra 2 (setor_nao_autorizado) chama
+        // `setorPorId`, que devolve null quando o setor do ingresso alheio
+        // nao esta mais em `carga.setores` (setor virou status != 'ativo' no
+        // servidor). Acessar `.nome` direto travava a tela -- nem verde, nem
+        // vermelho, indistinguivel de celular travado. Achado em revisao de
+        // codigo, 15/08/2026.
+        var setor = v.setor || {};
         caixa.className = 'resposta ' + (
             v.estado === 'permitido' ? 'ok' :
             v.motivo === 'setor_nao_autorizado' ? 'porta' : 'recusa');
@@ -200,22 +223,24 @@
         $('resposta-motivo').textContent = '';
 
         if (v.estado === 'permitido') {
-            $('resposta-detalhe').textContent = v.setor.nome;
+            $('resposta-detalhe').textContent = setor.nome;
             $('resposta-grande').textContent = 'nº ' + v.numero;
         } else if (v.motivo === 'setor_nao_autorizado') {
             $('resposta-detalhe').textContent =
-                'Este ingresso é ' + v.setor.nome + '. Este aparelho lê ' +
+                'Este ingresso é ' + (setor.nome || 'de outro setor') + '. Este aparelho lê ' +
                 (d.setoresDoAparelho || []).join(', ') + '.';
         } else if (v.motivo === 'fora_da_janela') {
             $('resposta-detalhe').textContent = d.abre_em
-                ? (v.setor.nome + ' abre às ' + hora(d.abre_em))
-                : (v.setor.nome + ' fechou às ' + hora(d.fecha_em));
+                ? (setor.nome + ' abre às ' + hora(d.abre_em))
+                : (setor.nome + ' fechou às ' + hora(d.fecha_em));
         } else if (v.motivo === 'bloqueado') {
-            $('resposta-detalhe').textContent = v.setor.nome + ' · nº ' + v.numero;
+            $('resposta-detalhe').textContent = setor.nome + ' · nº ' + v.numero;
             $('resposta-motivo').textContent = d.motivoBloqueio;
         } else if (v.motivo === 'ja_entrou') {
             $('resposta-detalhe').textContent =
-                v.setor.nome + ' · nº ' + v.numero + ' — entrou às ' + hora(d.momentoAnterior);
+                setor.nome + ' · nº ' + v.numero + ' — entrou às ' + hora(d.momentoAnterior);
+        } else if (v.motivo === 'erro_de_leitura') {
+            $('resposta-detalhe').textContent = 'Erro ao ler — chame o organizador.';
         } else {
             $('resposta-detalhe').textContent = 'Este código não é deste evento.';
         }

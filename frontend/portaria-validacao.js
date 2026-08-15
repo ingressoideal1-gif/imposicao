@@ -101,7 +101,14 @@
         // pedido tem o mesmo texto e o mesmo sal. O aparelho nao escolhe.
         if (escolhido) {
             meus = meus.filter(function (c) { return c.s === escolhido; });
-            if (!meus.length) return negado('desconhecido', null, null, {});
+            // NAO e 'desconhecido': o ingresso ja passou pelas regras 1 e 2,
+            // entao sabemos que e deste evento e que o aparelho autoriza pelo
+            // menos um dos setores dele. So chega aqui fora da lista por uma
+            // inconsistencia (a carga mudou entre `perguntarSetor` oferecer o
+            // botao e o porteiro tocar nele). Dizer 'NAO E DESTE EVENTO' seria
+            // mentira -- o mesmo padrao do setor ausente em `pintar()`, so que
+            // aqui o dado que sumiu e o setor escolhido.
+            if (!meus.length) return negado('erro_de_leitura', null, null, {});
         } else {
             var setoresDistintos = [];
             meus.forEach(function (c) {

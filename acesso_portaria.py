@@ -31,7 +31,18 @@ router = APIRouter(prefix="/api/acesso/portaria", tags=["acesso"])
 # Quantas credenciais por pagina da carga. Um evento de 30.000 sao ~3,5 MB de
 # JSON; mandar de uma vez castiga o 4G do portao e estoura memoria em celular
 # velho.
-POR_PAGINA = 5000
+#
+# TEM DE FICAR ABAIXO DE 1000: este projeto tem `max-rows = 1000` no
+# PostgREST, e esse teto vence QUALQUER `limit` pedido na URL -- pedir
+# limit=5001 volta 1000 linhas, caladamente, sem erro. O paginador abaixo
+# pede POR_PAGINA + 1 para saber se ha proxima pagina (ver o comentario em
+# `_faixa`); com POR_PAGINA >= 1000, esse "+1" tambem seria cortado pelo teto
+# e `tem_proxima` (que compara contra o teto, nao contra o que foi pedido)
+# nunca ficaria True -- o aparelho pararia achando que baixou o evento
+# inteiro faltando metade. E o mesmo defeito que ja mordeu o `_fechar_pedido`
+# (contagem por tamanho de resposta) e a auditoria de 15/08/2026 (pedido
+# 18560: 2.000 credenciais gravadas, leitura devolvendo 1.000).
+POR_PAGINA = 500
 
 # Quantas leituras o servidor aceita por chamada. O aparelho manda em lotes.
 MAXIMO_LEITURAS = 500

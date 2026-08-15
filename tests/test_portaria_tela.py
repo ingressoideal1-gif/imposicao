@@ -81,6 +81,21 @@ def test_desconhecido_pinta_vermelho():
     assert "porta" not in r["classe"]
 
 
+def test_setor_ausente_da_carga_pinta_recusa_em_vez_de_travar():
+    """Achado em revisao de codigo, 15/08/2026. A regra 2 (setor_nao_autorizado)
+    devolve `setor: setorPorId(carga, alheio.s)`, que e null quando o setor do
+    ingresso alheio nao esta em `carga.setores` -- acontece quando um setor
+    vira `status != 'ativo'` no servidor mas a credencial ainda aponta para
+    ele. `pintar()` acessava `v.setor.nome` direto: TypeError, e a tela nao
+    muda -- nem verde, nem vermelho, indistinguivel de celular travado. O
+    porteiro le o QR e nada acontece."""
+    c = carga()
+    c["setores"] = [s for s in c["setores"] if s["id"] != VIP]  # setor sumiu da carga
+    r = pintar("000009", c)  # ingresso do VIP; o aparelho so autoriza PISTA
+    assert r["telaResposta"] is True
+    assert "recusa" in r["classe"] or "porta" in r["classe"]
+
+
 def test_o_motivo_do_bloqueio_aparece_no_campo_de_corpo_grande():
     """E o que o porteiro le em voz alta -- nao pode virar legenda."""
     c = carga(bloqueios=[{"setor_id": PISTA, "de": 1, "ate": 50,

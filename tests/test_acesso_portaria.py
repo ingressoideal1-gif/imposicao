@@ -225,6 +225,20 @@ def test_a_faixa_pagina_e_diz_onde_continuar(banco, monkeypatch):
     assert fim["proxima"] is None
 
 
+def test_a_pagina_da_faixa_cabe_no_teto_de_mil_linhas_do_postgrest():
+    """O PostgREST corta toda resposta em 1000 linhas, e esse teto vence o
+    `limit` pedido. Com POR_PAGINA acima disso, a pagina volta truncada, o
+    `tem_mais` da False, e o aparelho para achando que baixou o evento inteiro --
+    metade das pessoas recebe 'NAO E DESTE EVENTO' com ingresso legitimo.
+
+    Este mesmo teto ja mordeu o projeto duas vezes antes de chegar aqui: no
+    `_fechar_pedido` (contagem por tamanho de resposta, corrigida para contar
+    por `Content-Range`) e na auditoria de 15/08/2026 (pedido 18560, 2.000
+    credenciais gravadas e corretas, leitura devolvendo 1.000). E o mesmo
+    defeito, na terceira porta."""
+    assert ap.POR_PAGINA + 1 < 1000
+
+
 def test_token_desconhecido_e_recusado(banco):
     with pytest.raises(HTTPException) as e:
         ap._faixa("Bearer nao-existe", 0)
