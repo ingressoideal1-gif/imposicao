@@ -449,14 +449,34 @@ correção de 15/08 — o que mudou é que agora os dois são gravados, cada um 
 em vez de o segundo ser descartado. Quem separa na leitura é o setor do aparelho, e isso é
 trabalho da **parte 3b**: enquanto ela não existir, ninguém está lendo nada.
 
-**O `catalogo_fontes` era o pior dos dois mundos, e foi resolvido em 14/08.** O
-`sql/schema_catalogo_fontes.sql` existia desde 30/07 e nunca foi aplicado, então o Supabase
-respondia 404 e o código caía no catálogo local — que é o que sempre funcionou de verdade.
-Nada quebrava, mas cada arranque imprimia duas linhas vermelhas no log, e log vermelho
-rotineiro treina qualquer um a ignorar log vermelho. O usuário escolheu **apagar o SQL**: o
-catálogo é local por decisão, mora no `formats_db.json`, e o [db.py](../db.py) não faz mais
-nenhuma chamada remota por causa dele. Os binários das fontes seguem no Storage, com o
-próprio sincronismo — o que se decidiu foi só onde mora a lista.
+**O `catalogo_fontes` virou tabela de verdade em 15/08 — e o motivo é uma perda real.** Em
+14/08 o usuário tinha decidido o contrário: o `sql/schema_catalogo_fontes.sql` existia desde
+30/07 sem nunca ter sido aplicado, o Supabase respondia 404, o código caía no catálogo local
+e imprimia duas linhas vermelhas por arranque. A decisão de então foi apagar o SQL e assumir
+o catálogo como local.
+
+O que aquela decisão não previu: quando o operador abre o painel pelo **site publicado**,
+quem responde é o Render, e o disco do Render volta ao conteúdo versionado a cada
+publicação. Quatro fontes cadastradas em 14/08 (Gotham Book, Gotham Bold, Swis721 LtCn BT
+Light e Swiss 911 Extra Compressed) sumiram na publicação seguinte. A numeração **1000289**
+passou a mostrar o nome da fonte no seletor e a desenhar com outra, porque o elemento guarda
+apenas o NOME — o `arquivo_url` só entra no payload da imposição, nunca é salvo. Os binários
+nunca se perderam: estão em `chat-ideal/fontes/`, e é de lá que as quatro foram repostas.
+
+Guardar só na estação não resolveria, porque o link que o cliente abre para aprovar a arte
+lê o catálogo da **nuvem**: fonte que existisse apenas numa estação faria o cliente aprovar
+arte com a fonte errada. Por isso a lista passou a viver na tabela.
+
+**A garantia de desempenho continua inteira:** a estação nunca vai à rede para LER o
+catálogo — lê sempre o `formats_db.json`, e quem atualiza aquele arquivo é o
+`sincronizar_catalogo_fontes` do [agent_worker.py](../agent_worker.py), a cada 30 min em
+segundo plano. Quem separa os dois mundos é o `IS_SUPABASE_ACTIVE`, que o executável já
+desligava de propósito. A **escrita** não pode depender daquela flag (senão a fonte
+cadastrada numa estação morre ali), e é isso que o `_catalogo_remoto_ativo` resolve.
+
+Duas armadilhas viraram teste: lista vazia nunca sobrescreve a cópia do disco, e tabela
+ausente cai para o disco **adiando** a próxima consulta em vez de imprimir uma linha
+vermelha por elemento desenhado.
 
 ---
 
