@@ -2067,6 +2067,13 @@ async function rodar(caso) {
     await page.goto('http://localhost/portaria.html', { waitUntil: 'networkidle0' });
 
     const saida = await page.evaluate(async (c) => {
+        // OFFLINE antes de qualquer coisa. `registrar()` chama `sincronizar()`
+        // sem esperar, e `sincronizar` so desiste cedo quando `navigator.onLine`
+        // e falso. Sem isto, CADA teste dispara um fetch de verdade para o
+        // Render de PRODUCAO com um token ficticio -- e o 401 de volta faz
+        // `desparear()` apagar a fila do IndexedDB no meio do teste, que passa
+        // a depender de quem vence a corrida em vez da logica.
+        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
         await window.portariaDeposito.limpar();
         window.portaria.estado.carga = c.carga;
         window.portaria.estado.token = 'token-de-teste';
@@ -2217,7 +2224,7 @@ Se `test_ambiguidade_...` falhar por a fila ter 1 em vez de 0, o defeito é real
 
 - [ ] **Step 6: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 595 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 596 passed.
 
 ```bash
 git add frontend/portaria.html frontend/portaria.js tests/test_portaria_tela.py tests/portaria_tela_harness.js
@@ -2435,7 +2442,7 @@ Run:
 node -e "['portaria-camera.js','sw.js'].forEach(f => new Function(require('fs').readFileSync('frontend/'+f,'utf8'))); console.log('js ok')"
 venv/Scripts/python.exe -m pytest tests/ -q
 ```
-Expected: `js ok` e 595 passed.
+Expected: `js ok` e 596 passed.
 
 - [ ] **Step 6: Commit**
 
@@ -2628,7 +2635,7 @@ Abra `http://127.0.0.1:9123/app/controle.html`, confira o desenho, e derrube o s
 
 - [ ] **Step 8: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 600 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 601 passed.
 
 ```bash
 git add frontend/controle.js frontend/controle.html frontend/controle.css tests/test_portaria_fonte.py
@@ -2728,7 +2735,7 @@ Expected: PASS, 5 testes (os links novos precisam apontar para arquivos que exis
 
 - [ ] **Step 5: Rodar a suíte inteira e commitar**
 
-Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 600 passed.
+Run: `venv/Scripts/python.exe -m pytest tests/ -q` — Expected: 601 passed.
 
 ```bash
 git add docs/controle_acesso.md docs/STATUS_PROJETO.md
@@ -2781,6 +2788,6 @@ chave `uq_acesso_leitura_do_aparelho UNIQUE (dispositivo_id, id_local)` está em
 `sql/schema_acesso.sql`.
 
 **Contagem de testes ao longo do plano:** 548 hoje → 566 (Task 1) → 576 (Task 2) → 589
-(Task 3) → 595 (Task 4) → 600 (Task 6). As Tasks 5 e 7 não acrescentam teste: a 5 é a
+(Task 3) → 596 (Task 4) → 601 (Task 6). As Tasks 5 e 7 não acrescentam teste: a 5 é a
 câmera, que precisa de hardware, e é coberta pelas guardas de fonte da Task 6 e pelo teste
 no celular, que só o usuário pode fazer.
