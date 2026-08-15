@@ -44,19 +44,51 @@ class FakeBanco:
         self.leituras = []
         self.chamadas = []
 
+    def _status_pedido(self, path):
+        """O `status=eq.<valor>` que a URL pediu, ou `None` se ela nao pediu
+        nenhum.
+
+        O dublê OBEDECE a URL em vez de decidir por conta propria -- e nao um
+        capricho de estilo. Um PostgREST de verdade so filtra o que o filtro
+        pede; se `acesso_portaria.py` um dia perder o `&status=eq.ativo` da
+        consulta (refatoracao, copiar-colar errado), o servidor real passa a
+        devolver aparelho revogado junto. Um fake que filtra por conta propria
+        nunca reprova essa regressao -- ele "concerta" o buraco da consulta
+        raiz, e a suite fica verde enquanto o aparelho revogado volta a
+        funcionar em producao. Mesma licao do FakeBanco de
+        tests/test_acesso_api.py, que deduplicava por uma coluna escolhida por
+        ele mesmo em vez do `on_conflict=` que o codigo pedia, e passou verde
+        por meses com a chave real errada -- ate custar 31 ingressos impressos.
+        """
+        if "status=eq." not in path:
+            return None
+        return path.split("status=eq.", 1)[1].split("&", 1)[0]
+
     def __call__(self, method, path, body=None, prefer=None):
         self.chamadas.append((method, path))
         if path.startswith("producao_acesso_eventos"):
-            return list(self.eventos)
+            # Tambem obedece a URL, pelo mesmo motivo do `_status_pedido`
+            # abaixo: sem filtrar por `id=eq.`, um evento_id que nao existe
+            # "acharia" o primeiro evento da lista, e o teste que existe
+            # exatamente para provar que evento inexistente e recusado nunca
+            # exerceria esse caminho.
+            linhas = list(self.eventos)
+            if "id=eq." in path:
+                alvo = path.split("id=eq.", 1)[1].split("&", 1)[0]
+                linhas = [e for e in linhas if str(e["id"]) == alvo]
+            return linhas
         if path.startswith("producao_acesso_dispositivo_setores"):
             return list(self.vinculos)
         if path.startswith("producao_acesso_dispositivos"):
             if method == "GET":
+                linhas = list(self.aparelhos)
                 if "token_hash=eq." in path:
                     alvo = path.split("token_hash=eq.", 1)[1].split("&", 1)[0]
-                    return [a for a in self.aparelhos
-                            if a.get("token_hash") == alvo and a["status"] == "ativo"]
-                return [a for a in self.aparelhos if a["status"] == "ativo"]
+                    linhas = [a for a in linhas if a.get("token_hash") == alvo]
+                status = self._status_pedido(path)
+                if status is not None:
+                    linhas = [a for a in linhas if a["status"] == status]
+                return linhas
             if method == "PATCH":
                 for a in self.aparelhos:
                     a.update(body)
@@ -124,6 +156,23 @@ def test_codigo_errado_nao_diz_se_o_evento_existe(banco):
     """Responder diferente contaria a um estranho quais eventos existem."""
     with pytest.raises(HTTPException) as e:
         entrar(codigo="ZZZZZZ")
+    assert e.value.status_code == 401
+
+
+def test_evento_que_nao_existe_nao_diz_se_o_evento_existe(banco):
+    """Mesma resposta de `test_codigo_errado_nao_diz_se_o_evento_existe`, mas
+    para o outro jeito de a mesma pergunta chegar: em vez de errar o codigo
+    num evento que existe, aqui o evento_id em si e desconhecido.
+
+    Um 404 "evento nao encontrado" aqui seria vazamento igual, so que mais
+    direto: um estranho testando evento_id em sequencia aprenderia, um a um,
+    quais existem -- 404 para os que nao existem, 401 (ou coisa nenhuma) para
+    os que existem. A regra do projeto e responder o MESMO para os tres
+    casos -- codigo errado, aparelho revogado, evento inexistente -- porque
+    responder diferente conta a um estranho o que existe do outro lado.
+    """
+    with pytest.raises(HTTPException) as e:
+        entrar(evento="evento-que-nao-existe")
     assert e.value.status_code == 401
 
 
