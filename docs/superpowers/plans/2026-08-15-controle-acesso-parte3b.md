@@ -2268,7 +2268,10 @@ Conferir que o arquivo registra `jsQR` global e tem menos de 100 KB:
 ```bash
 node -e "const s=require('fs').readFileSync('frontend/jsqr.min.js','utf8'); console.log(s.length, /jsQR/.test(s))"
 ```
-Expected: um número abaixo de 100000 e `true`.
+Expected: `true`, e um número na casa das centenas de milhares — o pacote `jsqr`
+publica um bundle **não minificado** de ~257 KB e não tem variante `.min`. Não introduza
+minificador para fechar número: o arquivo é baixado uma vez e fica no cache do service
+worker, e trocar a biblioteca por um build próprio traria risco muito maior que 250 KB.
 
 - [ ] **Step 2: Escrever `frontend/portaria-camera.js`**
 
@@ -2409,7 +2412,16 @@ self.addEventListener('fetch', e => {
     // ingresso que ja existe, ou aceitar um que foi cancelado.
     if (url.pathname.startsWith('/api/')) return;
     if (e.request.method !== 'GET') return;
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+    // `ignoreSearch` NAO e detalhe: a tela e aberta por `portaria.html?e=<evento>`,
+    // e a chave gravada no cache e `/portaria.html`, sem query. Sem isto o match
+    // falha, cai no fetch de rede, e a pagina nao abre -- justamente offline, que
+    // e o unico cenario para o qual este arquivo existe.
+    //
+    // E seguro porque cada pathname tem uma entrada so por geracao de cache, e a
+    // geracao esta no nome do cache.
+    e.respondWith(
+        caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request))
+    );
 });
 ```
 
