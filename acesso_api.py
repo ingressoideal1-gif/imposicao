@@ -356,19 +356,34 @@ def _gravar_lote(pedido_id_int: int, itens: list) -> int:
 
 
 def _fechar_pedido(pedido_id_int: int) -> dict:
-    """Carimba o total publicado e trava a entrada de lotes novos."""
+    """Carimba o total publicado e trava a entrada de lotes novos.
+
+    O total sai do `contar()`, e não de trazer as linhas para medir o tamanho da
+    lista. O PostgREST **corta a resposta em 1.000 linhas**, em silêncio e sem
+    ordem definida, e essa era a forma antiga: o pedido 18560, com 2.000
+    ingressos, fechou dizendo
+
+        [acesso] Faixa do pedido 18560 INCOMPLETA: 1000 de 2000.
+
+    com as 2.000 credenciais gravadas e corretas no banco. O estrago é duplo e
+    silencioso: o `total_credenciais` gravado no pedido fica pela metade, e o
+    `completo` nunca vira verdadeiro — quer dizer, todo pedido acima de mil
+    ingressos se declara eternamente incompleto e manda o operador reimprimir
+    papel que já está certo.
+
+    Mil é justamente o tamanho em que o defeito começa: quem testou com uma
+    tiragem menor não tinha como ver.
+    """
     pedido_id_int = int(pedido_id_int)
-    gravadas = supabase(
-        "GET", f"producao_acesso_credenciais?pedido_id_int=eq.{pedido_id_int}&select=id"
-    ) or []
+    total = contar(f"producao_acesso_credenciais?pedido_id_int=eq.{pedido_id_int}")
     esperado = sum(_tiragem_do_pedido(pedido_id_int).values())
     supabase("PATCH", f"producao_acesso_pedidos?pedido_id_int=eq.{pedido_id_int}", {
         "publicado_em": "now()",
-        "total_credenciais": len(gravadas),
+        "total_credenciais": total,
     })
     # `completo` é o que o agente olha para decidir se tenta de novo: um lote
     # perdido por rede não pode passar por publicação terminada.
-    return {"total": len(gravadas), "esperado": esperado, "completo": len(gravadas) == esperado}
+    return {"total": total, "esperado": esperado, "completo": total == esperado}
 
 
 @router.post("/pedidos/{pedido}/abrir")

@@ -306,6 +306,41 @@ def test_credencial_de_pedido_ja_reivindicado_nasce_ligada_ao_setor(banco):
     assert {c["evento_id"] for c in banco.credenciais} == {"evento-1"}
 
 
+def test_fechar_conta_sem_trazer_as_linhas(banco, monkeypatch):
+    """O defeito do pedido 18560, achado em 15/08/2026 com o papel já impresso.
+
+    O PostgREST corta a resposta em 1.000 linhas, em silencio e sem ordem
+    definida. O `_fechar_pedido` media a publicacao trazendo as credenciais e
+    olhando o tamanho da lista, entao um pedido de 2.000 ingressos fechava
+    dizendo "INCOMPLETA: 1000 de 2000" com as 2.000 gravadas e corretas.
+
+    Duas consequencias, as duas caladas: o `total_credenciais` gravado no pedido
+    fica pela metade, e o `completo` nunca vira verdadeiro -- quer dizer, todo
+    pedido acima de mil ingressos se declara eternamente incompleto e manda
+    reimprimir papel que ja esta certo.
+
+    Mil e justamente o tamanho em que o defeito comeca: uma tiragem menor nunca
+    o mostraria. Por isso este teste cobra a CHAMADA a `contar()`, e nao um
+    numero -- um fake que devolvesse 2.000 linhas de mentira passaria verde com
+    o codigo errado, porque o corte quem faz e o Postgres de verdade.
+    """
+    pedidas = []
+    monkeypatch.setattr(acesso_api, "contar", lambda p: (pedidas.append(p), 2000)[1])
+    banco.modelos = [{"id": 1000109, "quantidade": 600}, {"id": 1000110, "quantidade": 400},
+                     {"id": 1000107, "quantidade": 500}, {"id": 1000176, "quantidade": 300},
+                     {"id": 1000108, "quantidade": 200}]
+    acesso_api._abrir_pedido(18560)
+
+    r = acesso_api._fechar_pedido(18560)
+
+    assert pedidas == ["producao_acesso_credenciais?pedido_id_int=eq.18560"], (
+        "o fechamento nao contou pelo Content-Range; medir o tamanho da lista "
+        "para no teto de 1000 linhas do PostgREST"
+    )
+    assert r == {"total": 2000, "esperado": 2000, "completo": True}
+    assert banco.pedidos[0]["total_credenciais"] == 2000
+
+
 def test_credencial_de_pedido_ainda_nao_reivindicado_continua_gravando(banco):
     """A ordem normal -- imprimir primeiro, cliente reivindicar depois -- nao
     pode passar a exigir setor. Sem setor a credencial nasce sem dono mesmo,
