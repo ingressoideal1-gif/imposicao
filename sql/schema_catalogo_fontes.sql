@@ -37,13 +37,44 @@ create unique index if not exists catalogo_fontes_nome_unico
   on public.catalogo_fontes (lower(btrim(nome)));
 
 -- O catalogo e leitura publica: o link do cliente precisa dele para desenhar a
--- arte, e o visitante nao faz login. Escrita continua so pela service_role, que e
--- por onde o painel grava.
+-- arte, e o visitante nao faz login.
 alter table public.catalogo_fontes enable row level security;
 
 drop policy if exists catalogo_fontes_leitura on public.catalogo_fontes;
 create policy catalogo_fontes_leitura
   on public.catalogo_fontes for select
+  using (true);
+
+-- ATENCAO — por que a escrita tambem e liberada para a chave anonima:
+--
+-- Quem grava aqui e o app.py, e ele usa a NEXT_PUBLIC_SUPABASE_ANON_KEY (ver
+-- db.py: a SUPABASE_SERVICE_KEY so e usada pelo acesso_api.py). Isso vale tanto
+-- para a nuvem quanto para o agente da estacao — e o agente NAO PODE levar uma
+-- chave service_role dentro do executavel, que fica na maquina de cada estacao.
+--
+-- Sem estas politicas o cadastro e o Excluir do Catalogo de Fontes respondem
+-- 42501 (new row violates row-level security policy) e a tela quebra. Foi o que
+-- aconteceu na primeira versao deste arquivo, pega antes de publicar.
+--
+-- Isto NAO afrouxa nada em relacao ao que o projeto ja tinha: as demais tabelas
+-- (producao_numeracoes, producao_formatos, ...) tambem aceitam escrita anonima
+-- hoje, porque o endurecimento de RLS esta adiado por decisao do usuario. Quando
+-- esse endurecimento acontecer, esta tabela entra junto e o caminho e trocar a
+-- escrita do agente por uma rota autenticada — nao apertar so aqui, o que
+-- deixaria a estacao sem conseguir cadastrar fonte.
+drop policy if exists catalogo_fontes_insercao on public.catalogo_fontes;
+create policy catalogo_fontes_insercao
+  on public.catalogo_fontes for insert
+  with check (true);
+
+drop policy if exists catalogo_fontes_atualizacao on public.catalogo_fontes;
+create policy catalogo_fontes_atualizacao
+  on public.catalogo_fontes for update
+  using (true) with check (true);
+
+drop policy if exists catalogo_fontes_remocao on public.catalogo_fontes;
+create policy catalogo_fontes_remocao
+  on public.catalogo_fontes for delete
   using (true);
 
 -- ── As 273 fontes de hoje ──────────────────────────────────────────

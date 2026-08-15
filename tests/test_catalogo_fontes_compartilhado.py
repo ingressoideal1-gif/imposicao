@@ -248,6 +248,15 @@ def test_o_sql_da_tabela_existe_e_traz_as_fontes():
     assert "create table if not exists public.catalogo_fontes" in sql
     assert "catalogo_fontes_nome_unico" in sql, "sem indice unico a duplicata volta"
     assert "Swiss 911 Extra Compressed" in sql, "as fontes recuperadas precisam entrar"
+
+    # A primeira versao deste arquivo ligava RLS com politica só de SELECT. Quem
+    # grava no catalogo e o app.py, que usa a chave ANONIMA — tanto na nuvem quanto
+    # no agente da estacao, que nao pode levar uma service_role dentro do executavel.
+    # O resultado era 42501 (new row violates row-level security policy): cadastrar e
+    # excluir fonte paravam de funcionar. Pego antes de publicar, por sorte.
+    for politica in ("for insert", "for update", "for delete"):
+        assert politica in sql, (
+            f"sem politica '{politica}' o Catalogo de Fontes nao consegue gravar")
     linhas_de_fonte = sql.count("\n  ('")
     assert linhas_de_fonte >= 250, (
         f"a carga inicial das fontes tem de vir no arquivo; achei {linhas_de_fonte}")
