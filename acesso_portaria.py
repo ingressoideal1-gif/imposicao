@@ -18,6 +18,7 @@ do dono e passa pelo `acesso_config.py` -- decisao do usuario em 13/08/2026.
 
 import hashlib
 import hmac
+import re
 import secrets
 import time
 
@@ -98,12 +99,29 @@ def _setores_do_aparelho(dispositivo_id: str) -> list:
     ) or [])]
 
 
+FORMATO_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
+)
+
+
 def _entrar(corpo: dict) -> dict:
     """Troca o codigo de seis caracteres por um token do aparelho."""
     evento_id = str((corpo or {}).get("evento_id") or "").strip()
     codigo = str((corpo or {}).get("codigo") or "").strip().upper()
     if not evento_id or not codigo:
         raise HTTPException(status_code=422, detail="informe o evento e o codigo")
+
+    # O formato do id e conferido AQUI, antes de ir ao banco. Sem isto o
+    # PostgREST recusa `id=eq.nao-e-uuid` com um erro de tipo, o `supabase()`
+    # levanta, e o porteiro recebe "Internal Server Error" -- num portao, com
+    # fila, e sem nada que ele possa fazer. Conferido contra o Render em
+    # 15/08/2026, logo depois de publicar: UUID valido inexistente devolvia 401,
+    # id malformado devolvia 500.
+    #
+    # E a resposta e a MESMA dos outros casos, de proposito: um 500 aqui e um
+    # 401 ali contariam a um estranho que aquele id chegou a existir.
+    if not FORMATO_UUID.match(evento_id):
+        _recusar_pareamento(evento_id)
 
     _conferir_forca_bruta(evento_id)
 

@@ -15,6 +15,11 @@ import acesso_portaria as ap
 import qr_ideal
 
 SAL = "aa" * 32
+# UUID de verdade, e nao "e1", porque o banco real so aceita UUID. Um dublê que
+# usa id de brinquedo esconde a classe inteira de defeito que aparece quando o
+# formato importa -- e escondeu: `POST /entrar` com id malformado devolvia 500
+# em producao, e nenhum teste acusava, porque aqui nada era malformado.
+EVENTO = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
 PISTA = "11111111-1111-1111-1111-111111111111"
 VIP = "22222222-2222-2222-2222-222222222222"
 
@@ -23,16 +28,16 @@ class FakeBanco:
     """Um Supabase de mentira, que guarda em dicionario o que foi gravado."""
 
     def __init__(self):
-        self.eventos = [{"id": "e1", "nome_evento": "Festa", "sal": SAL}]
+        self.eventos = [{"id": EVENTO, "nome_evento": "Festa", "sal": SAL}]
         self.aparelhos = [{
-            "id": "d1", "evento_id": "e1", "nome": "Portao A", "status": "ativo",
+            "id": "d1", "evento_id": EVENTO, "nome": "Portao A", "status": "ativo",
             "codigo_hash": qr_ideal.hash_codigo("ABC234", SAL), "token_hash": None,
         }]
         self.vinculos = [{"dispositivo_id": "d1", "setor_id": PISTA}]
         self.setores = [
-            {"id": PISTA, "evento_id": "e1", "nome": "PISTA", "quantidade": 600,
+            {"id": PISTA, "evento_id": EVENTO, "nome": "PISTA", "quantidade": 600,
              "tipo_uso": "unico", "abre_em": None, "fecha_em": None, "pedido_id_int": 18560},
-            {"id": VIP, "evento_id": "e1", "nome": "VIP", "quantidade": 500,
+            {"id": VIP, "evento_id": EVENTO, "nome": "VIP", "quantidade": 500,
              "tipo_uso": "reentrada", "abre_em": None, "fecha_em": None, "pedido_id_int": 18560},
         ]
         self.bloqueios = []
@@ -40,7 +45,7 @@ class FakeBanco:
             {"id": "c1", "codigo_hash": "h1", "setor_id": PISTA, "numero": 1},
             {"id": "c2", "codigo_hash": "h2", "setor_id": VIP, "numero": 9},
         ]
-        self.pedidos = [{"pedido_id_int": 18560, "sal": "bb" * 32, "evento_id": "e1"}]
+        self.pedidos = [{"pedido_id_int": 18560, "sal": "bb" * 32, "evento_id": EVENTO}]
         self.leituras = []
         self.chamadas = []
 
@@ -64,9 +69,38 @@ class FakeBanco:
             return None
         return path.split("status=eq.", 1)[1].split("&", 1)[0]
 
+    @staticmethod
+    def _conferir_uuid(path):
+        """Levanta no id malformado, como o PostgREST de verdade.
+
+        O Postgres recusa `id=eq.nao-e-uuid` com `22P02 invalid input syntax for
+        type uuid`, e o `supabase()` traduz isso em RuntimeError -- que o
+        FastAPI, sem tratamento, vira **500**.
+
+        Um dublê que simplesmente devolve lista vazia nesse caso e mais gentil
+        que o banco, e essa gentileza esconde defeito: foi assim que o
+        `POST /entrar` foi para producao devolvendo 500 para id malformado, com
+        a suite inteira verde. Conferido contra o Render em 15/08/2026, depois
+        de publicar a v583.
+        """
+        import re as _re
+        for campo in ("id", "evento_id", "setor_id", "dispositivo_id"):
+            marca = campo + "=eq."
+            if marca not in path:
+                continue
+            valor = path.split(marca, 1)[1].split("&", 1)[0]
+            if not _re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
+                             r"[0-9a-f]{4}-[0-9a-f]{12}$", valor, _re.I):
+                raise RuntimeError(
+                    f"Supabase GET {path}: HTTP 400 "
+                    f'{{"code":"22P02","message":"invalid input syntax for type uuid: '
+                    f'\\"{valor}\\""}}'
+                )
+
     def __call__(self, method, path, body=None, prefer=None):
         self.chamadas.append((method, path))
         if path.startswith("producao_acesso_eventos"):
+            self._conferir_uuid(path)
             # Tambem obedece a URL, pelo mesmo motivo do `_status_pedido`
             # abaixo: sem filtrar por `id=eq.`, um evento_id que nao existe
             # "acharia" o primeiro evento da lista, e o teste que existe
@@ -132,7 +166,7 @@ def banco(monkeypatch):
     return b
 
 
-def entrar(codigo="ABC234", evento="e1"):
+def entrar(codigo="ABC234", evento=EVENTO):
     return ap._entrar({"evento_id": evento, "codigo": codigo})
 
 
@@ -170,10 +204,37 @@ def test_evento_que_nao_existe_nao_diz_se_o_evento_existe(banco):
     os que existem. A regra do projeto e responder o MESMO para os tres
     casos -- codigo errado, aparelho revogado, evento inexistente -- porque
     responder diferente conta a um estranho o que existe do outro lado.
+
+    O id usado aqui e um UUID BEM FORMADO que nao existe, e nao um texto
+    qualquer: e o unico jeito de este teste exercitar a consulta ao banco. Com
+    um id malformado ele passaria pela conferencia de formato e nunca chegaria
+    la -- ver o teste logo abaixo, que cobre esse outro caminho.
     """
     with pytest.raises(HTTPException) as e:
-        entrar(evento="evento-que-nao-existe")
+        entrar(evento="00000000-0000-0000-0000-000000000000")
     assert e.value.status_code == 401
+
+
+def test_evento_id_malformado_e_recusado_igual_e_nao_estoura(banco):
+    """Achado conferindo o Render DEPOIS de publicar a v583, em 15/08/2026.
+
+    `POST /entrar` com `evento_id` que nao e UUID devolvia **500 Internal Server
+    Error**: o PostgREST recusa `id=eq.nao-e-uuid` com erro de tipo, o
+    `supabase()` levanta, e o FastAPI traduz para 500.
+
+    Duas consequencias. A que importa: o porteiro que abrir um endereco truncado
+    ou digitado errado ve "Internal Server Error" num portao, com fila, e sem
+    nada que ele possa fazer. A outra: 500 aqui e 401 no UUID valido inexistente
+    contam a um estranho qual dos dois ids chegou a ser procurado.
+    """
+    for ruim in ("nao-e-uuid", "123", "'; drop table --", "0000"):
+        ap._FALHAS.clear()
+        with pytest.raises(HTTPException) as e:
+            entrar(evento=ruim)
+        assert e.value.status_code == 401, f"{ruim!r} nao devolveu 401"
+        assert e.value.detail == "codigo invalido", (
+            f"{ruim!r} respondeu diferente dos outros casos, e isso e vazamento"
+        )
 
 
 def test_aparelho_revogado_nao_pareia(banco):
