@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Portaria — Ideal Control</title>
+    <meta name="theme-color" content="#0a0f1e">
+    <!--
+        A tela do porteiro. Uma mao, no escuro, com sol de refletor na cara e a
+        fila andando. Por isso: alvos de toque grandes, cor ocupando a tela
+        inteira na resposta, e nenhuma decisao escondida atras de menu.
+
+        Auto-contida como o evento.html, e por um motivo a mais: esta pagina
+        precisa ABRIR SEM REDE. Todo arquivo que ela usa e local -- nao ha CDN
+        nenhum aqui, e nao pode haver.
+    -->
+    <style>
+        :root {
+            --bg: #0a0f1e; --card: #1e293b; --border: rgba(148,163,184,0.25);
+            --text: #e2e8f0; --dim: #94a3b8;
+            --verde: #16a34a; --vermelho: #b91c1c; --laranja: #c2410c; --teal: #14b8a6;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; background: var(--bg); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+            padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+        }
+        .folha { max-width: 520px; margin: 0 auto; padding: 14px; }
+        .topo {
+            display: flex; justify-content: space-between; align-items: baseline;
+            gap: 10px; font-size: 0.82rem; color: var(--dim); margin-bottom: 12px;
+        }
+        .topo strong { color: var(--text); font-size: 0.95rem; }
+        h1 { font-size: 1.25rem; margin: 0 0 6px; }
+        .sumindo { display: none !important; }
+
+        input {
+            width: 100%; padding: 14px; font-size: 1.15rem; letter-spacing: 0.08em;
+            background: rgba(0,0,0,0.32); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-family: inherit;
+            text-align: center; text-transform: uppercase;
+        }
+        button {
+            width: 100%; padding: 16px; font-size: 1.05rem; font-weight: 700;
+            font-family: inherit; border: 0; border-radius: 10px;
+            background: var(--teal); color: #06231f; margin-top: 14px;
+            min-height: 56px; cursor: pointer;
+        }
+        button.discreto { background: transparent; color: var(--dim); border: 1px solid var(--border); }
+        button:disabled { opacity: 0.5; }
+
+        /* A resposta ocupa a tela: o porteiro le de longe, com o celular na mao
+           esticada e a pessoa esperando. */
+        .resposta { border-radius: 14px; padding: 28px 20px; text-align: center; }
+        .resposta.ok       { background: var(--verde); }
+        .resposta.recusa   { background: var(--vermelho); }
+        /* Laranja, e nao vermelho: ingresso bom na porta errada NAO e a mesma
+           coisa que ingresso estranho ao evento. Confundir os dois faz o
+           porteiro devolver ingresso legitimo achando que e falso. */
+        .resposta.porta    { background: var(--laranja); }
+        .resposta .marca   { font-size: 3.2rem; line-height: 1; }
+        .resposta .titulo  { font-size: 1.5rem; font-weight: 800; margin: 8px 0 4px; }
+        .resposta .detalhe { font-size: 1.05rem; opacity: 0.95; }
+        /* O motivo do bloqueio e o que o porteiro le em voz alta. */
+        .resposta .motivo  { font-size: 1.35rem; font-weight: 700; margin-top: 10px; }
+        .resposta .grande  { font-size: 2.1rem; font-weight: 800; margin-top: 6px; }
+
+        .escolha { display: grid; gap: 12px; margin-top: 16px; }
+        .escolha button { margin: 0; font-size: 1.25rem; padding: 22px; }
+
+        .aviso {
+            font-size: 0.85rem; padding: 12px 14px; border-radius: 8px;
+            background: rgba(245,158,11,0.12); border-left: 3px solid #f59e0b;
+            color: var(--dim); margin-top: 12px;
+        }
+        .cam { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4/3; }
+    </style>
+</head>
+<body>
+<div class="folha">
+    <div class="topo">
+        <span><strong id="topo-aparelho">Portaria</strong><br><span id="topo-setores"></span></span>
+        <span id="topo-fila"></span>
+    </div>
+
+    <div id="tela-pareando">
+        <h1>Ligar este aparelho</h1>
+        <p style="color:var(--dim);font-size:0.9rem;">
+            Peça o código de 6 caracteres a quem organiza o evento.
+        </p>
+        <input id="campo-codigo" maxlength="6" autocomplete="off"
+               autocapitalize="characters" placeholder="ABC234">
+        <button id="btn-parear">Ligar</button>
+        <div id="erro-pareamento" class="aviso sumindo"></div>
+    </div>
+
+    <div id="tela-carregando" class="sumindo">
+        <h1>Baixando o evento</h1>
+        <p style="color:var(--dim);" id="carregando-conta">…</p>
+        <div class="aviso">
+            Depois disso o aparelho funciona sem internet. Espere terminar antes
+            de ir para o portão.
+        </div>
+    </div>
+
+    <div id="tela-lendo" class="sumindo">
+        <video id="cam" class="cam" playsinline muted></video>
+        <button id="btn-digitar" class="discreto">Digitar o número</button>
+        <div id="caixa-digitar" class="sumindo">
+            <input id="campo-numero" inputmode="numeric" placeholder="000001">
+            <button id="btn-conferir">Conferir</button>
+        </div>
+    </div>
+
+    <div id="tela-resposta" class="sumindo">
+        <div class="resposta" id="resposta-caixa">
+            <div class="marca" id="resposta-marca"></div>
+            <div class="titulo" id="resposta-titulo"></div>
+            <div class="detalhe" id="resposta-detalhe"></div>
+            <div class="grande" id="resposta-grande"></div>
+            <div class="motivo" id="resposta-motivo"></div>
+        </div>
+        <button id="btn-proximo">Ler o próximo</button>
+    </div>
+
+    <div id="tela-ambiguo" class="sumindo">
+        <h1>Qual setor?</h1>
+        <p style="color:var(--dim);font-size:0.9rem;">
+            Este número existe em mais de um setor que este aparelho atende.
+        </p>
+        <div class="escolha" id="escolha-setores"></div>
+    </div>
+</div>
+
+<script src="/qr-ideal-hash.js?v=582"></script>
+<script src="/portaria-validacao.js?v=582"></script>
+<script src="/portaria-deposito.js?v=582"></script>
+<script src="/portaria.js?v=582"></script>
+</body>
+</html>
