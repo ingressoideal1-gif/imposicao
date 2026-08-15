@@ -178,65 +178,56 @@ já aplicado no banco em 15/08).
 `codigo_hash` por conta própria, ignorando o `on_conflict` que o código de produção pedia —
 então passava verde por mais errada que fosse a chave real. Agora ele obedece ao parâmetro.
 
-### 3. Imprimir saindo sem numeração — **AINDA ABERTO**. Comece por aqui amanhã.
+### 3. A nuvem se passava pelo agente local (corrigido na v579 / 1.2.78)
 
-**Sintoma:** o modelo 1000281 (PISTA) do pedido 20508 sai da impressora **sem número e sem
-QR**, e continuou saindo assim depois de duas correções e de a estação estar na v578 /
-1.2.77 (conferido: o `script.js` servido pela própria estação já tem os consertos). A
-prévia na tela mostra o QR; o papel sai sem.
+**Sintoma:** o modelo 1000281 (PISTA) saía **sem número e sem QR**, mesmo depois das duas
+correções acima. A numeração "Triband Padrão" funcionava; a "Triband" e a "1000117", não.
+Parecia defeito de numeração exclusiva (`is_custom`), e não era.
 
-**A pista mais forte, e por onde continuar:** o catálogo de numerações da estação tem
-**uma única numeração**.
+**A causa:** é o **mesmo `app.py`** que serve o motor da nuvem e o agente da estação, então
+a nuvem respondia palavra por palavra o que o agente responderia:
 
-```powershell
-curl http://localhost:9000/api/numeracoes
-# devolve 1 item: {"id":"num_1","name":"Numeração Padrão", ...}
+```
+https://imposicao.vercel.app/api/status
+→ {"status":"running","message":"NewProd Agent ativo","version":"NewProd 1.2.77", ...}
 ```
 
-O painel monta `state.numeracoes` em `loadAll()` com `api('GET', '/numeracoes')`. Servido
-pelo agente na porta 9000, isso vai ao **catálogo local** — e o `agent_worker` sincroniza
-fontes e painel, **mas não o catálogo de numerações**. Então, na estação,
-`state.numeracoes` tem uma entrada só.
+O painel procura o agente testando três endereços, e o **primeiro da lista é o endereço da
+própria página** — que na Vercel leva ao Render. Ele acreditava, parava de procurar, e
+mandava a imposição para a nuvem **mostrando na tela o selo "⚡ AGENTE LOCAL"**. Na nuvem, o
+catálogo de numerações é outro, o `qr_ideal_pool.bin` não existe (e nunca vai existir — é o
+segredo mestre) e não há agente com faixa a publicar. Daí os três estragos ao mesmo tempo:
+folha sem código, "falta a lista de codigos desta estacao", e credencial que não sobe.
 
-A consequência bate exatamente com o sintoma. Em `runImposition`:
+**A correção:** o `/api/status` agora declara **onde** está rodando, e a sondagem do painel
+recusa quem se declara nuvem:
 
-```js
-const numeracao = numId ? state.numeracoes.find(n => String(n.id) === String(numId)) : null;
+```
+imposicao.onrender.com/api/status → "onde":"nuvem"   → recusado
+127.0.0.1:9000/api/status         → "onde":"local"   → aceito
 ```
 
-`numId` está certo (`632bbf8d…`, a "Triband", conferido no banco), mas o `find` não acha
-nada nessa lista de um item → `numeracao` fica nulo → o payload vai sem numeração → o motor
-compõe a folha sem elemento nenhum. E o backend também não salva: `db.get_numeracao()` na
-estação lê o mesmo catálogo local.
+A recusa é por `onde !== 'nuvem'`, e não por `onde === 'local'`, para que agente antigo — que
+ainda não conhece o campo — continue sendo aceito enquanto as estações não atualizam.
 
-**O que ainda não fecha, e precisa ser explicado antes de corrigir:** às 01h15 os mesmos
-modelos foram impressos **com** numeração — o log da estação registrou
-`[impose] numeracao el[1]: type=QR`. Se o catálogo local sempre teve um item só, aquela
-impressão não deveria ter funcionado. Ou a página estava apontando para o motor da nuvem,
-ou o `formats_db.json` foi reescrito no meio da noite. **Descobrir isso é o primeiro passo**
-— corrigir sem entender essa contradição é chutar.
+**Confirmado em 15/08 de manhã:** o 1000284 foi gerado **com a numeração 1000117**, a
+exclusiva que falhava, e saiu com QR. A credencial subiu. Não havia regressão de
+`is_custom`: era sempre a nuvem no lugar do agente.
 
-**Como conferir depressa, amanhã:**
+**As guardas:** [tests/test_onde_estou_rodando.py](../tests/test_onde_estou_rodando.py)
+varre **todos** os `.js` do frontend e reprova qualquer sondagem que aceite um `running`
+sem checar o `onde` — porque a sondagem está duplicada no `script.js` e no `pedido.js`, e
+consertar uma e esquecer a outra deixaria metade das telas impondo na nuvem.
 
-```powershell
-# 1. quantas numeracoes a estacao enxerga
-curl http://localhost:9000/api/numeracoes
-
-# 2. o que o log diz da ultima impressao (o tamanho no Explorer MENTE, leia o conteudo)
-$log = "$env:LOCALAPPDATA\NewProd Agent\agent_log.txt"
-$fs = [System.IO.File]::Open($log,'Open','Read','ReadWrite')
-(New-Object System.IO.StreamReader($fs)).ReadToEnd() -split "`n" |
-    Select-String 'numeracao|DIAG impose|acesso'
-```
-
-Se aparecer `[impose] numeracao tem N elements`, a numeração chegou e o problema é outro.
-Se não aparecer, é este.
+**A segunda guarda, que vale por si:**
+[tests/test_numeracao_pedida_e_ausente.py](../tests/test_numeracao_pedida_e_ausente.py). O
+`/api/impose` agora **recusa** o trabalho que traz `numeracao_id` preenchido e nenhum
+elemento para desenhar, em vez de imprimir a folha calada. Um ingresso sem código não
+parece defeituoso: ele é entregue e só falha na portaria, quando não há mais o que fazer.
+E o log passou a registrar `[impose] numeracao_id=… objeto=… elements=N`, para a próxima
+investigação começar com um dado na mão em vez de com a ausência de uma linha.
 
 ### 3b. O que já foi corrigido nesta linha (v578) — necessário, mas não suficiente
-
-A tabela `pedidos_modelos` do ERP **não tem** coluna `numeracao_id`; ela guarda
-`amostra_num_id`. O painel resolve as duas em quatro lugares — e o quarto, `runImposition`,
-que é justamente o que imprime, lia só a que não existe no banco.
 
 A tabela `pedidos_modelos` do ERP **não tem** coluna `numeracao_id`; ela guarda
 `amostra_num_id`. O painel resolve as duas em quatro lugares — e o quarto, `runImposition`,
@@ -254,33 +245,29 @@ fallback — porque o defeito não foi uma linha errada, foi quatro cópias que 
 
 ## ▶️ Por onde continuar — amanhã, nesta ordem
 
-### 0. ⛔ Antes de tudo: o 1000281 ainda sai sem QR
+### 1. ✅ Pedido 20508 — fechado no que era alcançável
 
-Está descrito em **"3. Imprimir saindo sem numeração"**, acima. Enquanto isso não estiver
-resolvido, **não adianta reimprimir** — sai papel sem código de novo, como já saiu duas
-vezes. Já foram 62 ingressos perdidos nessas tentativas.
+Estado da nuvem, conferido em 15/08 de manhã, com a estação já na **1.2.78**:
 
-### 1. Terminar o pedido 20508 (depois do item 0)
+| Modelo | | Contratado | Na nuvem | Numeração | |
+|---|---|---|---|---|---|
+| 1000278 | VIP | 50 | **50** | Mobi Padrão | ✅ QR Ideal |
+| 1000279 | CAMAROTE | 50 | **50** | Mobi Padrão | ✅ QR Ideal |
+| 1000280 | IMPRENSA | 20 | **20** | Triband Padrão | ✅ |
+| 1000281 | PISTA | 30 | **30** | Triband (exclusiva) | ✅ |
+| 1000282 | GERENCIA | 12 | **12** | 1000282 (exclusiva) | ✅ |
+| 1000284 | CAMAROTE | 1 | **1** | 1000117 (exclusiva) | ✅ |
+| 1000283 | VIP | 50 | 0 | Esquerda - Preta 20mm | ❌ **sem QR nenhum** |
 
-Estado da nuvem, conferido em 15/08 às 02h:
+**163 de 213.** A diferença são os 50 do `1000283 VIP`, abaixo — e não tem correção de
+software.
 
-| Modelo | | Contratado | Na nuvem | |
-|---|---|---|---|---|
-| 1000278 | VIP | 50 | **50** | ✅ QR Ideal |
-| 1000279 | CAMAROTE | 50 | **50** | ✅ QR Ideal |
-| 1000280 | IMPRENSA | 20 | **20** | ✅ |
-| 1000282 | GERENCIA | 12 | **12** | ✅ |
-| 1000281 | PISTA | 30 | **0** | ⬅ falta reimprimir |
-| 1000284 | CAMAROTE | 1 | **0** | ⬅ falta reimprimir |
-| 1000283 | VIP | 50 | 0 | numeração **sem QR nenhum** |
+Três das seis que deram certo são numerações **exclusivas** (`is_custom = true`). É a prova
+de que a suspeita de regressão em numeração exclusiva estava errada: o que falhava era a
+nuvem no lugar do agente.
 
-**O passo, DEPOIS do item 0:** reimprimir **1000281** e **1000284** pela `localhost:9000`,
-com a estação na **1.2.77** ou mais.
-
-**Imprima UM ingresso primeiro e olhe o papel.** Tem número e QR? Só então mande os 30.
-Foi ignorar isso que custou 62 ingressos na madrugada de 15/08.
-
-O alvo é **163 de 213**. A diferença são os 50 do `1000283 VIP`, abaixo.
+**A lição de operação, que custou 62 ingressos:** imprima **um** ingresso primeiro e olhe o
+papel. Tem número e QR? Só então mande a tiragem.
 
 ### 2. Decidir o que fazer com o 1000283 VIP
 
