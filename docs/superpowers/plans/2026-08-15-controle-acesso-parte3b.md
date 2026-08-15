@@ -692,12 +692,32 @@ def test_a_fila_sai_na_ordem_em_que_entrou():
 
 def test_enfileirar_o_mesmo_id_local_duas_vezes_nao_duplica():
     """`id_local` e a chave de idempotencia que o servidor tambem usa. Duplicar
-    aqui inflaria a lotacao antes mesmo de sair do celular."""
+    aqui inflaria a lotacao antes mesmo de sair do celular.
+
+    Os dois `momento` sao DIFERENTES de proposito: com o mesmo momento nos dois,
+    este teste continua verde mesmo se a chave da loja for `momento` em vez de
+    `id_local` -- deduplicaria por acidente, e o teste provaria outra coisa."""
     assert rodar("""
         await d.enfileirar({id_local: 'a', momento: '2026-08-20T21:00:00Z'});
-        await d.enfileirar({id_local: 'a', momento: '2026-08-20T21:00:00Z'});
+        await d.enfileirar({id_local: 'a', momento: '2026-08-20T21:07:00Z'});
         return await d.contarFila();
     """) == 1
+
+
+def test_a_fila_sai_por_MOMENTO_mesmo_com_id_local_fora_de_ordem():
+    """O caso que o teste acima nao pega, e que custou uma revisao.
+
+    `id_local` e um UUID: nao tem relacao nenhuma com o tempo. Cortar a fila
+    pelos primeiros N na ordem da CHAVE e ordenar depois entrega uma fatia
+    arbitraria -- e o que fica pendente pode ser a leitura mais antiga, a mais
+    dificil de reconstituir, que e o oposto do prometido."""
+    assert rodar("""
+        await d.enfileirar({id_local: 'z', momento: '2026-08-20T21:00:00Z'});
+        await d.enfileirar({id_local: 'y', momento: '2026-08-20T21:01:00Z'});
+        await d.enfileirar({id_local: 'a', momento: '2026-08-20T21:02:00Z'});
+        const f = await d.lerFila(2);
+        return f.map(x => x.id_local).join(',');
+    """) == "z,y"
 
 
 def test_remover_da_fila_tira_so_o_que_o_servidor_confirmou():
@@ -810,6 +830,20 @@ Atenção ao teste `test_entradas_permitidas_sobrevive_ao_envio_para_o_servidor`
         });
     }
 
+    function comLojas(nomes, modo, tarefa) {
+        return abrir().then(function (b) {
+            return new Promise(function (ok, erro) {
+                var t = b.transaction(nomes, modo);
+                var lojas = {};
+                nomes.forEach(function (n) { lojas[n] = t.objectStore(n); });
+                var resultado;
+                tarefa(lojas, function (v) { resultado = v; });
+                t.oncomplete = function () { ok(resultado); };
+                t.onerror = function () { erro(t.error); };
+            });
+        });
+    }
+
     function gravarCarga(carga) {
         return comLoja('carga', 'readwrite', function (loja) {
             loja.clear();                 // substitui a carga INTEIRA
@@ -825,25 +859,41 @@ Atenção ao teste `test_entradas_permitidas_sobrevive_ao_envio_para_o_servidor`
     }
 
     function enfileirar(leitura) {
-        return comLoja('fila', 'readwrite', function (loja) {
-            loja.put(leitura);            // `keyPath: id_local` ignora o repetido
-        }).then(function () {
-            if (leitura.resultado !== 'permitido' || !leitura.credencial_id) return;
-            return comLoja('entradas', 'readwrite', function (loja) {
-                loja.put(leitura.momento, leitura.credencial_id);
-            });
+        // As DUAS lojas na MESMA transacao. Em duas transacoes separadas, o app
+        // morto no meio (bateria, troca de app, celular ligado a noite inteira)
+        // deixaria a leitura na fila sem a marca em `entradas`. Depois que a
+        // fila subisse e fosse removida, a credencial nunca apareceria em
+        // `entradasPermitidas()` -- e o mesmo ingresso reentraria offline sem
+        // ninguem perceber, que e exatamente a falha que a separacao de lojas
+        // existe para evitar.
+        return comLojas(['fila', 'entradas'], 'readwrite', function (lojas) {
+            lojas.fila.put(leitura);      // `keyPath: id_local` ignora o repetido
+            if (leitura.resultado === 'permitido' && leitura.credencial_id) {
+                lojas.entradas.put(leitura.momento, leitura.credencial_id);
+            }
         });
     }
 
     function lerFila(limite) {
         return comLoja('fila', 'readonly', function (loja, devolver) {
-            var r = loja.getAll(undefined, limite);
+            // SEM limite no `getAll`, de proposito. `getAll(query, count)` corta
+            // pelos primeiros `count` na ordem da CHAVE PRIMARIA, que aqui e o
+            // `id_local` -- um UUID, sem relacao nenhuma com o tempo. Cortar
+            // primeiro e ordenar depois entrega uma fatia arbitraria: com
+            // id_local 'z','y','a' gravados em ordem crescente de momento,
+            // `lerFila(2)` devolvia as duas MAIS NOVAS e perdia a mais antiga.
+            //
+            // Ordenar aqui e barato: sao centenas de leituras numa noite, nao
+            // milhoes.
+            var r = loja.getAll();
             r.onsuccess = function () {
                 // Mais antigas primeiro: se a rede cair no meio do envio, o que
-                // fica para tras e o mais recente.
-                devolver((r.result || []).sort(function (a, b) {
+                // fica para tras e o mais recente, que e o mais facil de
+                // reconstituir.
+                var todas = (r.result || []).sort(function (a, b) {
                     return String(a.momento || '').localeCompare(String(b.momento || ''));
-                }));
+                });
+                devolver(limite ? todas.slice(0, limite) : todas);
             };
         });
     }
@@ -891,12 +941,12 @@ Atenção ao teste `test_entradas_permitidas_sobrevive_ao_envio_para_o_servidor`
 - [ ] **Step 5: Rodar e ver passar**
 
 Run: `venv/Scripts/python.exe -m pytest tests/test_portaria_deposito.py -q`
-Expected: PASS, 9 testes.
+Expected: PASS, 10 testes.
 
 - [ ] **Step 6: Rodar a suíte inteira**
 
 Run: `venv/Scripts/python.exe -m pytest tests/ -q`
-Expected: 574 passed.
+Expected: 576 passed.
 
 - [ ] **Step 7: Commit**
 
