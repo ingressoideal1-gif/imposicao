@@ -18,17 +18,28 @@ def _texto(nome):
 
 
 def test_a_tela_da_portaria_nao_carrega_nada_de_fora():
-    """Um `<script src>` para CDN faz a tela nao abrir sem rede -- que e a unica
-    razao de ela existir -- e ainda esbarra na CSP."""
-    externos = re.findall(r'<script[^>]+src=["\'](https?:)?//[^"\']+',
-                          _texto("portaria.html"))
+    """Nao so `<script src>`: um `<link rel=stylesheet>`, um `@import` ou um
+    `<img>` de CDN fazem a tela nao abrir sem rede -- que e a unica razao de
+    ela existir -- e ainda esbarram na CSP. Achado em revisao de codigo,
+    15/08/2026: a guarda so olhava `<script src>`."""
+    html = _texto("portaria.html")
+    externos = re.findall(
+        r'<(?:script|link|img)[^>]+(?:src|href)=["\'](https?:)?//[^"\']+',
+        html, flags=re.IGNORECASE)
+    externos += re.findall(
+        r'@import\s+(?:url\()?["\']?(https?:)?//[^"\';)]+',
+        html, flags=re.IGNORECASE)
     assert not externos, f"a portaria carrega arquivo de fora: {externos}"
 
 
 def test_a_recusa_nao_oferece_escape():
     """Decisao do usuario, 15/08/2026: recusa e recusa. Quem for recusado
-    procura o dono do evento."""
-    junto = _texto("portaria.html") + _texto("portaria.js")
+    procura o dono do evento.
+
+    Le tambem `portaria-validacao.js`: e la que a decisao de deixar entrar
+    realmente mora (achado em revisao de codigo, 15/08/2026 -- a guarda
+    original nao lia esse arquivo)."""
+    junto = _texto("portaria.html") + _texto("portaria.js") + _texto("portaria-validacao.js")
     for frase in ("mesmo assim", "liberar", "forcar", "forçar"):
         assert frase not in junto.lower(), (
             f"a tela da portaria oferece escape na recusa ({frase!r})"
@@ -42,6 +53,41 @@ def test_o_service_worker_nunca_guarda_resposta_de_api():
     assert "/api/" in sw and "return" in sw, (
         "o sw.js nao exclui as chamadas de API do cache"
     )
+
+
+def test_o_service_worker_e_network_first_so_para_a_navegacao():
+    """Achado em revisao de codigo, 15/08/2026 (I3). O sw.js e byte-identico
+    entre releases -- a versao vem de `self.location`, nunca do proprio
+    texto do arquivo -- entao o navegador NUNCA detecta 'o sw.js mudou' e
+    nunca reinstala este service worker sozinho. Sem network-first na
+    navegacao, um aparelho pareado num release antigo fica preso na PAGINA
+    antiga para sempre, mesmo com o servidor ja publicado. Os outros
+    arquivos (JS) continuam cache-first -- isso quem confere e
+    `test_o_service_worker_so_guarda_arquivos_da_portaria` continuando verde
+    e o teste de deposito/validacao/tela que nao usam SW nenhum."""
+    sw = _texto("sw.js")
+    assert "e.request.mode === 'navigate'" in sw, (
+        "o fetch do sw.js nao distingue navegacao do resto -- sem isso a "
+        "pagina fica presa em cache para sempre, mesmo depois de publicar"
+    )
+    # Dentro do ramo de navegacao, a REDE decide primeiro -- o cache e so o
+    # catch de quando ela falha. `.split` isola o trecho do addEventListener
+    # que trata a navegacao para nao confundir com o `fetch(e.request)` do
+    # ramo cache-first, mais abaixo no arquivo.
+    navegacao = sw.split("e.request.mode === 'navigate'", 1)[1][:700]
+    assert "fetch(e.request)" in navegacao and ".catch(" in navegacao, (
+        "a navegacao nao esta tentando a rede antes do cache"
+    )
+
+
+def test_o_comentario_do_service_worker_nao_promete_auto_atualizacao_que_nao_existe():
+    """O comentario antigo afirmava que publicar troca o service worker
+    sozinho, o que e falso: bytes identicos entre releases nunca disparam
+    reinstalacao. Um comentario que promete o oposto do que o codigo faz e
+    pior que nenhum comentario."""
+    sw = _texto("sw.js")
+    assert "publicar troca o cache sozinho" not in sw.lower()
+    assert "nao existe o" not in sw.lower() or "que assombra service worker" not in sw.lower()
 
 
 def test_o_service_worker_so_guarda_arquivos_da_portaria():
