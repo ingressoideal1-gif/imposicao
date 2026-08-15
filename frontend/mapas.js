@@ -317,8 +317,8 @@ window.duplicarMapaTeatro = async function(id) {
     
     await fetchMapasTeatro();
     
-    if (typeof window.showToast === 'function') {
-        window.showToast(`Mapa duplicado como "${novoNome}"!`, 'success');
+    if (typeof window.toast === 'function') {
+        window.toast(`Mapa duplicado como "${novoNome}"!`, 'success');
     }
 }
 

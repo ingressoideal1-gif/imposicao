@@ -17547,13 +17547,16 @@ function conferirColunasQrIdealDosPedidos() {
     });
     if (!avisados.length) return;
     console.warn('[QR Ideal] choque de coluna:', avisados);
-    if (typeof showToast === 'function') {
-        showToast(
-            `⚠️ QR Ideal — ${avisados.join('; ')}. Estes modelos gerariam ingressos ` +
-            `com o mesmo código no mesmo evento. Não imprimir com QR Ideal antes de resolver.`,
-            'error'
-        );
-    }
+    // Chamava `showToast`, que nao existe em lugar nenhum do frontend -- a
+    // funcao de aviso deste projeto chama-se `toast`. O guard `typeof` fazia
+    // a chamada falhar em silencio, e o operador nunca via este aviso: so o
+    // console. Achado na auditoria da documentacao de 15/08/2026, que dizia
+    // "o painel avisa sobre o pedido inteiro" e nao avisava.
+    toast(
+        `⚠️ QR Ideal — ${avisados.join('; ')}. Estes modelos gerariam ingressos ` +
+        `com o mesmo código no mesmo evento. Não imprimir com QR Ideal antes de resolver.`,
+        'error'
+    );
 }
 
 
@@ -27009,10 +27012,10 @@ async function selectDesigner(osIntId, uid, nome) {
         }
 
         if (opError) throw opError;
-        showToast("Designer atribuído com sucesso!", "success");
+        toast("Designer atribuído com sucesso!", "success");
     } catch (e) {
         console.error("Erro ao salvar designer:", e);
-        showToast("Erro ao atribuir designer.", "error");
+        toast("Erro ao atribuir designer.", "error");
     }
 }
 

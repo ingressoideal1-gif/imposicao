@@ -11,8 +11,8 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + motor | **v578** | 15/08/2026 |
-| Agente NewProd | **1.2.77** | 15/08/2026 |
+| Site + motor | **v581** | 15/08/2026 |
+| Agente NewProd | **1.2.80** | 15/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
@@ -69,7 +69,9 @@ Documentação: [docs/controle_acesso.md](controle_acesso.md)
 Plano: [docs/superpowers/plans/2026-08-13-controle-acesso-parte2.md](superpowers/plans/2026-08-13-controle-acesso-parte2.md)
 Spec: [docs/superpowers/specs/2026-08-13-controle-acesso-parte2-design.md](superpowers/specs/2026-08-13-controle-acesso-parte2-design.md)
 
-**As sete tabelas `producao_acesso_*` já existem no banco** e foram conferidas uma a uma.
+**As oito tabelas `producao_acesso_*` já existem no banco** e foram conferidas uma a uma
+(sete no `schema_acesso.sql`; a oitava, `_bloqueios`, veio com a parte 3a em
+`schema_acesso_bloqueios.sql`).
 
 ### ✅ Parte 3a — o dono configura o evento (**no ar desde a v570**)
 
@@ -103,7 +105,8 @@ Spec: [docs/superpowers/specs/2026-08-14-controle-acesso-parte3a-design.md](supe
 `ACESSO_AGENTE_SEGREDO`, `QR_PEDIDO_SEGREDO` e `ACESSO_ELEVACAO_SEGREDO` — as quatro estão
 no Render desde 14/08, conferidas pelo `/api/acesso/saude` acima.
 
-O código saiu na v569, e a v570 / 1.2.69 o reafirmam (tabela no topo deste documento). A
+O código saiu na v569 e foi reafirmado na v570 / 1.2.69; a versão corrente está na tabela
+no topo deste documento. A
 `PAINEL_ARQUIVOS` leva `controle.html`, `controle.js`, `controle.css` e `acesso-conta.js`
 às estações.
 
@@ -159,8 +162,9 @@ Testes: [tests/SegredoDoAgente.Tests.ps1](../tests/SegredoDoAgente.Tests.ps1).
 
 ### 2. O banco descartava o segundo modelo (corrigido na v577)
 
-Três modelos do 20508 usavam a mesma numeração ("Triband"), então o item 1 dos três saía
-impresso com o mesmo `000001`. Texto igual e sal igual — o sal é por pedido — dão hash
+Três modelos do 20508 usavam numerações de mesmo formato — Triband Padrão, Triband e
+1000117, todas com prefixo vazio e seis dígitos —, então o item 1 dos três saía impresso
+com o mesmo `000001`. Texto igual e sal igual — o sal é por pedido — dão hash
 igual, e a chave única de então, `codigo_hash` sozinho, aceitou a IMPRENSA e **descartou em
 silêncio** a PISTA e o CAMAROTE.
 
@@ -402,7 +406,7 @@ chave anônima pública + RLS off significa que qualquer um lê e escreve o banc
 com o parceiro Vibecode, incluindo dados de clientes. Foi **decisão informada** do usuário
 em 06/08/2026 ("nossa aplicação está em testes ainda, usuários restritos"), não esquecimento.
 
-As sete tabelas do controle de acesso **nascem fechadas** — RLS ligado, zero políticas — e
+As oito tabelas do controle de acesso **nascem fechadas** — RLS ligado, zero políticas — e
 isso não reabre aquela decisão: elas não têm tela lendo direto.
 
 **Risco residual do controle de acesso.** Quem tiver o segredo do agente e pegar a janela

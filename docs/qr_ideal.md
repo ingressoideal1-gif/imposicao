@@ -19,7 +19,10 @@ guarda — está em [docs/controle_acesso.md](controle_acesso.md).
 > quê. Pela página publicada na Vercel, o navegador não deixa mais o painel falar
 > com a estação, e o trabalho vai para a nuvem — onde o pool não existe.
 
-## As duas chaves
+## As duas chaves e o item
+
+Pedido e modelo escolhem a **coluna** do pool; o número do ingresso escolhe a
+**linha**.
 
 | No papel | Campo no banco | Exemplo |
 |---|---|---|
@@ -145,6 +148,18 @@ e por perfil volta a quebrar na primeira máquina nova. Pelo `localhost:9000` a
 página e o agente têm a mesma origem, e não há permissão envolvida — funciona em
 qualquer navegador.
 
+**Há uma segunda proteção, permanente, que se soma a esta.** O mesmo `app.py`
+serve o motor da nuvem e o agente da estação, então até a v579 os dois respondiam
+palavra por palavra a mesma coisa em `/api/status` — e a sondagem do painel, que
+testa primeiro o endereço da própria página, tomava o Render pela estação e
+impunha na nuvem exibindo o selo "⚡ AGENTE LOCAL". Foi essa confusão, e não uma
+regressão em numeração exclusiva, que fez a investigação do pedido 20508 durar
+dois dias. Desde a v579 o `/api/status` declara `"onde": "local"` ou
+`"onde": "nuvem"`, e o painel **recusa** como estação qualquer resposta que se
+declare nuvem (`tests/test_onde_estou_rodando.py`). A recusa é por
+`onde !== 'nuvem'`, e não por `onde === 'local'`, para que agente antigo continue
+sendo aceito enquanto as estações não atualizam.
+
 **O painel servido pelo agente não é uma versão reduzida.** A função `api()` do
 `script.js` desvia `/formatos`, `/numeracoes`, `/saidas`, `/cores` e
 `/modelos_imposicao` direto para o Supabase, então o catálogo é o mesmo da nuvem.
@@ -199,22 +214,26 @@ impede extrair um código legível da imagem de aprovação.
 
 ## As travas antes do papel
 
-Todas recusam o trabalho **antes** de imprimir. A regra é a mesma em todas:
-ingresso errado não parece defeituoso — ele é entregue, e só falha na portaria,
-quando não há mais o que fazer.
+As três primeiras recusam o trabalho **antes** de imprimir; a quarta é uma
+garantia de conteúdo. A regra por trás de todas é a mesma: ingresso errado não
+parece defeituoso — ele é entregue, e só falha na portaria, quando não há mais o
+que fazer.
 
-1. **Colunas repetidas.** Dois modelos do mesmo pedido cujos `id` diferem em
-   exatamente 100 caem na mesma coluna, e sairiam QRs **idênticos no mesmo
-   evento** — o único choque que o número do pedido no QR não separa. O motor
-   recusa a folha (`multi_artes`); o painel avisa sobre o pedido inteiro.
+1. **Colunas repetidas.** Dois modelos do mesmo pedido cujos `id` terminam nos
+   mesmos dois dígitos (diferem em 100, 200, 300…) caem na mesma coluna, e
+   sairiam QRs **idênticos no mesmo evento** — o único choque que o número do
+   pedido no QR não separa. O motor recusa a folha (`multi_artes`), e o painel
+   avisa sobre o pedido inteiro ao carregar os modelos — o motor só enxerga uma
+   folha por vez, então dois modelos impressos em trabalhos separados dependem
+   desse aviso.
 2. **Pedido, modelo ou pool ausentes.** `engine._conferir_dados_do_qr_ideal` diz
    qual dos três falta, em vez de falhar no meio da montagem das páginas com uma
    mensagem que manda procurar no lugar errado.
 3. **Numeração pedida e ausente.** O `/api/impose` recusa o trabalho que traz
    `numeracao_id` preenchido e **nenhum elemento para desenhar**. Antes ele
-   desenhava só a arte e não dizia nada: em 15/08/2026 o pedido 20508 saiu da
-   impressora três vezes sem número e sem QR, com a prévia mostrando os dois —
-   62 ingressos perdidos. O log passou a registrar
+   desenhava só a arte e não dizia nada: na noite de 14 para 15/08/2026 o pedido
+   20508 saiu da impressora três vezes sem número e sem QR, com a prévia
+   mostrando os dois — 62 ingressos perdidos. O log passou a registrar
    `[impose] numeracao_id=… objeto=… elements=N`, para a próxima investigação
    começar com um dado na mão em vez de com a ausência de uma linha.
    (`tests/test_numeracao_pedida_e_ausente.py`)
@@ -258,10 +277,12 @@ funciona com qualquer ingresso que tenha QR ou código de barras, lendo o dado d
 próprio elemento de numeração. A diferença é a força da proteção, e ela está
 explicada em [controle_acesso.md](controle_acesso.md#nem-todo-ingresso-tem-qr-ideal).
 
-As 31 legíveis são uma a menos que as 32 com elemento `QR`: uma numeração tem o QR
-alimentado por coluna do CSV, e ali o conteúdo vem da linha, não do número do
-item — publicar a conta sequencial gravaria um hash que **não corresponde ao que
-foi impresso**.
+A conta das 31: das 61, **33** têm QR, QR Ideal ou código de barras (as três com
+barras também têm QR, e uma das duas com QR Ideal também). Dessas 33, **duas**
+— as exclusivas `1000153` e `1000154` — têm o QR alimentado por coluna do CSV
+(`Link`), e ali o conteúdo vem da linha, não do número do item: publicar a conta
+sequencial gravaria um hash que **não corresponde ao que foi impresso**. Ficam
+31.
 
 ## Publicação
 
@@ -270,13 +291,16 @@ mesma leva do site, com número de versão **novo** — republicar um número ex
 é ignorado em silêncio pelas estações.
 
 ```powershell
-.\publicar.ps1 "mensagem (vNNN)"
+.\publicar.ps1 "mensagem"
 .\publicar_agente.ps1 1.2.NN
 ```
 
+O `publicar.ps1` acrescenta o `(vNNN)` à mensagem e cria a tag sozinho — escrever
+o número na mensagem duplica o sufixo no commit.
+
 Vale para o frontend também, e não só para o Python: o executável embute uma cópia
-do painel, que é o que ele serve em `localhost:9000` e o que uma instalação nova
-recebe de cara.
+do painel, que semeia a pasta `painel/` servida em `localhost:9000` (o agente a
+atualiza da nuvem a cada 30 minutos) e é o que uma instalação nova recebe de cara.
 
 E as estações precisam receber o `qr_ideal_pool.bin` pelo instalador antes de
 qualquer trabalho com QR Ideal.
