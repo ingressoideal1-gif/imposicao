@@ -4,9 +4,12 @@ O QR Ideal ([docs/qr_ideal.md](qr_ideal.md)) põe no ingresso um código que nin
 adivinha. Este documento é a outra metade: como esse código chega à nuvem, como o cliente
 cadastra o evento dele, e o que protege cada passo.
 
-Estado em 15/08/2026: **partes 2 e 3a no ar** (site v581, agente 1.2.80). A parte 3b — o
-aplicativo da portaria — ainda não começou, e é ela que fecha o ciclo: as 2.163 credenciais
-já publicadas ainda não são lidas por ninguém.
+Estado em 15/08/2026: **partes 2 e 3a no ar** (site v582, agente 1.2.81). A parte 3b — o
+aplicativo da portaria — **está pronta e testada, ainda não publicada**: o código está
+neste repositório e os 603 testes passam, mas só vai ao ar quando o usuário rodar
+`.\publicar.ps1` e `.\publicar_agente.ps1`. Até lá, as 2.163 credenciais já publicadas
+continuam sem ser lidas por ninguém. A parte 3c — painel ao vivo e relatórios — ainda não
+começou.
 
 ## O caminho inteiro, em ordem
 
@@ -16,7 +19,7 @@ já publicadas ainda não são lidas por ninguém.
 3. o cliente lê com a câmera   →  troca o token pelo esqueleto, lido do ERP
 4. o cliente entra e cadastra  →  evento criado, credenciais ligadas ao setor
 5. o dono configura o evento   →  janela, bloqueios e aparelhos (parte 3a)
-6. (parte 3b) a portaria lê    →  ainda não existe
+6. (parte 3b) a portaria lê    →  pronta, aguardando publicação
 ```
 
 O passo 1 e o passo 4 **não têm ordem obrigatória**. Imprimir antes de o cliente
@@ -242,7 +245,8 @@ sal é por pedido, os dois dão o **mesmo hash**.
 Decisão do usuário: **o aparelho resolve pelo setor dele.** Cada aparelho valida uma lista
 de setores, e o código é lido nesse contexto. Quando o aparelho valida vários setores e o
 código casa em mais de um, a portaria pergunta qual, mostrando só os que casaram — um toque,
-e fica registrado. Isso é trabalho da parte 3b.
+e fica registrado. É o que a parte 3b implementa — ver [A portaria (parte
+3b)](#a-portaria-parte-3b).
 
 > **A gravação chegou a atrapalhar essa decisão, e custou 31 ingressos.** Na noite de 14
 > para 15/08/2026 o pedido 20508 tinha três modelos com numerações diferentes — Triband
@@ -522,10 +526,62 @@ estação (ver [qr_ideal.md → Onde imprimir](qr_ideal.md#onde-imprimir)).
 > [sql/reparo_acesso_total_publicado.sql](../sql/reparo_acesso_total_publicado.sql), que
 > recalcula o carimbo de todos os pedidos.
 
-O que **não** está provado ainda: nada disso foi lido por um aparelho de portaria, porque a
-parte 3b não existe. Todo o valor está guardado, e nenhum foi usado.
+O que **não** está provado ainda: nada disso foi lido por um aparelho de portaria de
+verdade — o código está pronto e testado, mas ainda não foi publicado. Todo o valor está
+guardado, e nenhum foi usado.
 
-## O que falta (a partir da parte 3b)
+<a name="a-portaria-parte-3b"></a>
+## A portaria (parte 3b)
+
+`portaria.html` é a tela do porteiro. Depois de pareada, ela **decide sem rede**.
+
+O porteiro abre o endereço que a tela do dono mostra — `portaria.html?e=<evento_id>`,
+também como QR — e digita o código de 6 caracteres daquele aparelho. O servidor troca o
+código por um token próprio, guardado como `sha256` na coluna `token_hash` que existe desde
+13/08. **Revogar o aparelho é o único jeito de derrubá-lo**: gerar um código novo não
+desconecta ninguém, porque quem já pareou não usa mais o código.
+
+Em seguida o aparelho baixa a carga — o evento **inteiro**, em páginas de 5.000 — para o
+IndexedDB: hashes, sais de cada pedido, setores, bloqueios, e quais setores este aparelho
+valida. O evento inteiro, e não só os setores autorizados, porque é isso que permite
+distinguir "não é deste evento" de "é deste evento, mas de outra porta" — e chamar o segundo
+de primeiro faz o porteiro devolver ingresso bom achando que é falso.
+
+As seis regras vivem em `frontend/portaria-validacao.js`, puras, e a **ordem é a resposta**:
+
+| # | Regra | O que o porteiro vê |
+|---|---|---|
+| 1 | `desconhecido` | vermelho — não é deste evento |
+| 2 | `setor_nao_autorizado` | **laranja** — ingresso é de um setor que este aparelho não lê |
+| 3 | `fora_da_janela` | o setor abre às 20h / fechou às 2h |
+| 4 | `bloqueado` | vermelho, **com o motivo em corpo grande** |
+| 5 | `ja_entrou` | só onde `tipo_uso = unico` |
+| 6 | permitido | verde, setor e número |
+
+Casando em mais de um setor autorizado — o mesmo `0001` do VIP e do Camarote —, o aparelho
+**pergunta qual**, mostrando só os que casaram.
+
+**Recusa é recusa.** Decisão do usuário em 15/08/2026: não existe "deixar entrar mesmo
+assim". Quem for recusado procura o dono do evento.
+
+Cada leitura entra numa fila no IndexedDB **antes** de a tela mudar de cor, e só sai de lá
+depois que o servidor confirmou. O reenvio da fila inteira não duplica nada, porque a chave
+`(dispositivo_id, id_local)` existe no esquema desde 13/08 exatamente para isso. **Leitura
+negada também sobe** — é ela que responde "por que a fila parou às 22h".
+
+Os três endpoints são `POST /api/acesso/portaria/entrar`, `GET .../faixa?desde=` e
+`POST .../leituras`, em `acesso_portaria.py`. Arquivo separado do `acesso_config.py` porque
+quem entra ali é outra pessoa: lá é o dono, com a conta do Vibe e a senha; aqui é o porteiro,
+com um celular que pode estar offline há horas.
+
+A câmera usa `BarcodeDetector` nativo onde ele existe (Chrome/Android, lê QR e código de
+barras) e cai para `jsQR` vendorizado (`frontend/jsqr.min.js`) onde não existe — no Safari do
+iPhone, que só lê QR pela câmera. Por isso a tela também tem "Digitar o número", que passa
+pelas mesmas seis regras: é o caminho para ingresso rasgado e para código de barras que a
+câmera do iPhone não lê. `frontend/sw.js` é o que deixa `portaria.html` **abrir sem rede**;
+ele guarda só os arquivos da tela, nunca a API.
+
+## O que falta (a partir da parte 3c)
 
 A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**. Ela traz: login do
 cliente; configuração por setor atrás de um botão **Configurar** (nome na portaria, janela
@@ -536,10 +592,9 @@ evento. **A lotação de um setor é a quantidade contratada no ERP**, mostrada 
 e nunca como campo — não existe um segundo número que possa discordar do contrato. O
 histórico e as pendências estão em [STATUS_PROJETO.md](STATUS_PROJETO.md).
 
-O que falta é o aplicativo da PORTARIA (parte 3b): IndexedDB com validação local de
-verdade, leitura de QR e registro de entrada sem depender de rede, e o tipo de uso
-"sair e voltar" funcionando na leitura — hoje ele só é configurado no setor. Painel ao
-vivo, relatórios e cancelar credencial ficam para a parte 3c.
+O que falta é a parte 3c: painel ao vivo, relatórios, cancelar credencial, desvincular
+pedido do evento, reativar aparelho revogado, e a limpeza dos oito setores órfãos citados
+acima, em [Só sobe o que a portaria tem como ler](#so-sobe-o-que-a-portaria-le).
 
 Decisões já tomadas pelo usuário. As quatro primeiras estão registradas na
 [spec de 13/08](superpowers/specs/2026-08-13-controle-acesso-parte2-design.md); a quinta é
@@ -555,14 +610,13 @@ de 15/08 e está registrada nesta página, em [A ambiguidade](#ambiguidade), e n
   evento têm o mesmo `0001` e o mesmo hash. O aparelho configurado para um setor só não tem
   dúvida; o que valida vários precisa perguntar qual, mostrando só os que casaram.
 
-Duas pendências de produto continuam abertas, e nenhuma tem dono no plano atual:
-
-- **não há como reativar um aparelho revogado** — a revogação é definitiva;
-- **o log do agente é apagado a cada reinício** (`open(..., "w")` em `agent_tray.py`), o que
-  já custou evidência duas vezes numa mesma investigação.
+Uma pendência de produto continua aberta, e não tem dono no plano atual: **o log do agente é
+apagado a cada reinício** (`open(..., "w")` em `agent_tray.py`), o que já custou evidência
+duas vezes numa mesma investigação.
 
 **O Ideal Control antigo continua fora deste repositório**, em `../ideal-IdealControl/`.
 Trazê-lo para cá é trabalho da parte 3c, e a parte 3a reverteu o plano de evoluí-lo: o
 layout foi refeito do zero, por decisão do usuário. Enquanto ele não vier, o `sw.js` que
-ainda referencia SDKs do Firebase removidos mora lá, não aqui — não há `sw.js` em
-`frontend/`.
+ainda referencia SDKs do Firebase removidos mora lá, não aqui. **Desde a parte 3b existe um
+`frontend/sw.js`**, mas é outro arquivo, com outro dono: serve só `portaria.html`, guarda
+apenas os arquivos daquela tela, e não tem nada a ver com o Firebase do Ideal Control antigo.

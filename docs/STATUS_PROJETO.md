@@ -11,8 +11,8 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + motor | **v581** | 15/08/2026 |
-| Agente NewProd | **1.2.80** | 15/08/2026 |
+| Site + motor | **v582** | 15/08/2026 |
+| Agente NewProd | **1.2.81** | 15/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
@@ -117,10 +117,18 @@ revogado.** Revogar é o botão de pânico da portaria, e botão de pânico é a
 engano; hoje o conserto é criar outro aparelho e digitar um código novo no celular. O
 backend já aceitaria a reativação — falta a decisão do usuário e o botão.
 
-### ⏳ Parte 3b — a portaria (**não começou**)
+### 🟡 Parte 3b — a portaria (**pronta, aguardando publicação**)
 
-Ler o QR, validar **local de verdade** com IndexedDB (o `sw.js` de hoje só guarda os arquivos
-da tela — a portaria para quando a rede cai), fila de leituras.
+O aparelho do porteiro: pareia com o código de 6 caracteres, baixa o evento inteiro para o
+IndexedDB e decide **sem rede**, pelas seis regras de
+[frontend/portaria-validacao.js](../frontend/portaria-validacao.js). Os três endpoints —
+`entrar`, `faixa` e `leituras` — ficam em [acesso_portaria.py](../acesso_portaria.py), e o
+`frontend/sw.js` novo é o que deixa `portaria.html` abrir sem rede. **Os 603 testes da
+suíte passam**; falta publicar (`.\publicar.ps1` e `.\publicar_agente.ps1`) e provar com um
+celular de verdade — a única prova que vale.
+
+Plano: [docs/superpowers/plans/2026-08-15-controle-acesso-parte3b.md](superpowers/plans/2026-08-15-controle-acesso-parte3b.md)
+Spec: [docs/superpowers/specs/2026-08-15-controle-acesso-parte3b-design.md](superpowers/specs/2026-08-15-controle-acesso-parte3b-design.md)
 
 ### ⏳ Parte 3c — painel ao vivo e relatórios (**não começou**)
 
@@ -332,10 +340,13 @@ reimpressão de verdade, com papel novo.
 Ninguém ainda entrou na `controle.html` com a conta do Vibe, digitou a senha, configurou um
 setor e cadastrou um aparelho. É o único jeito de saber se a tela se explica sozinha.
 
-### 4. Então: parte 3b (a portaria) e 3c
+### 4. Publicar a parte 3b, e testar com um celular de verdade
 
-Cada uma merece a própria spec, como a 3a teve. A 3b é a que fecha o ciclo — sem ela, tudo
-o que está publicado na nuvem não é lido por ninguém.
+A portaria já tem spec, plano e os 603 testes passam (ver "Parte 3b", acima) — falta
+publicar e provar num aparelho real: parear, desligar Wi-Fi e dados, ler um ingresso do
+pedido 18560 e ver o verde. É ela que fecha o ciclo — sem publicar, tudo o que está na
+nuvem continua sem ser lido por ninguém. A parte 3c, que merece a própria spec como a 3a
+teve, vem depois.
 
 ---
 
