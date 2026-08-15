@@ -58,9 +58,11 @@ import font_cache as font_cache_local
 # só confunde quem for diagnosticar por que uma publicação não chegou.
 import acesso_api
 import acesso_config
+import acesso_portaria
 if acesso_api.disponivel():
     app.include_router(acesso_api.router)
     app.include_router(acesso_config.router)
+    app.include_router(acesso_portaria.router)
     print("[app] Controle de acesso ativo.", flush=True)
 else:
     print(f"[app] Controle de acesso inativo ({acesso_api.CHAVE_ENV} ausente).", flush=True)
