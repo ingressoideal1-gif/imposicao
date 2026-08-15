@@ -134,9 +134,20 @@
     </div>
 </div>
 
+<script src="/jsqr.min.js?v=582"></script>
 <script src="/qr-ideal-hash.js?v=582"></script>
 <script src="/portaria-validacao.js?v=582"></script>
 <script src="/portaria-deposito.js?v=582"></script>
+<script src="/portaria-camera.js?v=582"></script>
 <script src="/portaria.js?v=582"></script>
+<script>
+    // Registrar DEPOIS de tudo carregar: um service worker que instala no meio
+    // do carregamento pode guardar resposta pela metade.
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js?v=582');
+        });
+    }
+</script>
 </body>
 </html>

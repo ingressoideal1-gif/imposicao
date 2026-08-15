@@ -24,8 +24,8 @@ let bruto = '';
 process.stdin.on('data', d => (bruto += d));
 process.stdin.on('end', () => rodar(JSON.parse(bruto)));
 
-const ARQUIVOS = ['qr-ideal-hash.js', 'portaria-validacao.js',
-                  'portaria-deposito.js', 'portaria.js'];
+const ARQUIVOS = ['jsqr.min.js', 'qr-ideal-hash.js', 'portaria-validacao.js',
+                  'portaria-deposito.js', 'portaria-camera.js', 'portaria.js'];
 
 async function rodar(caso) {
     const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
