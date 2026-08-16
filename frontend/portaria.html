@@ -181,12 +181,12 @@
     </div>
 </div>
 
-<script src="jsqr.min.js?v=609"></script>
-<script src="qr-ideal-hash.js?v=609"></script>
-<script src="portaria-validacao.js?v=609"></script>
-<script src="portaria-deposito.js?v=609"></script>
-<script src="portaria-camera.js?v=609"></script>
-<script src="portaria.js?v=609"></script>
+<script src="jsqr.min.js?v=610"></script>
+<script src="qr-ideal-hash.js?v=610"></script>
+<script src="portaria-validacao.js?v=610"></script>
+<script src="portaria-deposito.js?v=610"></script>
+<script src="portaria-camera.js?v=610"></script>
+<script src="portaria.js?v=610"></script>
 <script>
     // Registrar DEPOIS de tudo carregar: um service worker que instala no meio
     // do carregamento pode guardar resposta pela metade.
@@ -210,7 +210,7 @@
             // escopo `/` faria o self.clients.claim() daqui assumir o painel de
             // producao, e abas de outra tela nao podem ter seu fetch
             // interceptado por este arquivo.
-            navigator.serviceWorker.register('sw.js?v=609', { scope: './' })
+            navigator.serviceWorker.register('sw.js?v=610', { scope: './' })
                 .then(function (reg) {
                     // Instalado na tela de inicio, o aplicativo nao tem barra
                     // de endereco: sem este aviso o porteiro nao tem COMO
