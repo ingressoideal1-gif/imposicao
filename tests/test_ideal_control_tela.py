@@ -121,15 +121,16 @@ PAINEL_FALSO = {
     "evento": {"id": "ev-1", "nome_evento": "Baile do Hawaii",
                "data_evento": None, "local_evento": "Clube", "status": "ativo",
                "dono_auth_id": "cliente-1", "created_at": "2026-08-14T10:00:00Z"},
+    # Sem `publicadas`/`entradas`/`codigos_cliente`: desde 16/08/2026 a abertura
+    # do pedido NAO conta nada. Uma fixture mais generosa que o servidor deixaria
+    # a tela poder ler um campo que nunca chega.
     "setores": [
         {"id": "s1", "nome": "PISTA", "quantidade": 600, "tipo_uso": "unico",
          "abre_em": None, "fecha_em": None, "pedido_id_int": 18560,
-         "modelo_id": 1000109, "bloqueios": [], "publicadas": 600,
-         "codigos_cliente": 0, "entradas": 120},
+         "modelo_id": 1000109, "bloqueios": []},
         {"id": "s2", "nome": "CAMAROTE", "quantidade": 400, "tipo_uso": "reentrada",
          "abre_em": None, "fecha_em": None, "pedido_id_int": 18560,
-         "modelo_id": 1000110, "publicadas": 400, "codigos_cliente": 42,
-         "entradas": 30,
+         "modelo_id": 1000110,
          "bloqueios": [{"id": "b1", "setor_id": "s2", "de": 100, "ate": 150,
                         "motivo": "PDV Centro nao pagou",
                         "created_at": "2026-08-15T00:00:00Z"}]},
@@ -137,7 +138,10 @@ PAINEL_FALSO = {
     "aparelhos": [{"id": "a1", "nome": "Portao A", "status": "ativo",
                    "ultimo_visto": None, "pareado": False,
                    "created_at": "2026-08-15T00:00:00Z", "setores": ["s1"]}],
-    "dashboard": {
+    "tem_dashboard": True,
+}
+
+DASHBOARD_FALSO = {
         "publico": {"contratado": 1000, "publicado": 1000, "cortesias": 42,
                     "entraram": 150, "sairam": 10, "presentes": 140,
                     "recusadas": 7, "bloqueados": 51, "comparecimento_pct": 15.0},
@@ -153,9 +157,8 @@ PAINEL_FALSO = {
         "por_hora": [{"hora": "2026-08-15T22:00", "entradas": 100, "saidas": 0, "recusas": 2},
                      {"hora": "2026-08-15T23:00", "entradas": 50, "saidas": 10, "recusas": 5}],
         "pico": "2026-08-15T22:00",
-        "grafico_truncado": False,
-        "leituras_lidas": 167,
-    },
+    "grafico_truncado": False,
+    "leituras_lidas": 167,
 }
 
 
@@ -191,7 +194,16 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
   await page.setViewport({{ width: 1440, height: 900 }});
   const erros = [];
   page.on('pageerror', e => erros.push(String(e)));
-  page.on('console', m => {{ if (m.type() === 'error') erros.push('console: ' + m.text()); }});
+  page.on('console', m => {{
+    if (m.type() !== 'error') return;
+    // `[ideal-control]` e diagnostico DELIBERADO: a tela tratou o erro, mostrou
+    // uma frase ao atendente, e deixou a pilha no console para quem for
+    // investigar. Conta-lo como falha reprovaria justamente os testes que
+    // provam que o erro foi bem tratado. Erro nao capturado (`pageerror`)
+    // continua reprovando sempre -- e e ele que denuncia a tela travada.
+    if (m.text().indexOf('[ideal-control]') >= 0) return;
+    erros.push('console: ' + m.text());
+  }});
   page.on('dialog', d => {json.dumps(bool(aceitar_dialogo))} ? d.accept() : d.dismiss());
 
   await page.setRequestInterception(true);
@@ -229,6 +241,7 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
 
   const saida = await page.evaluate(async () => {{
     window.PAINEL = {json.dumps(PAINEL_FALSO)};
+    window.DASHBOARD = {json.dumps(DASHBOARD_FALSO)};
     window.toast = (t, tipo) => {{ (window._avisos = window._avisos || []).push([t, tipo]); }};
     {script_extra}
   }});
@@ -253,36 +266,50 @@ SERVIDOR = """
         chamadas.push({ caminho, metodo: (opcoes || {}).method || 'GET',
                         corpo: (opcoes || {}).body ? JSON.parse(opcoes.body) : null });
         if (caminho.startsWith('/pedidos?')) return { pedidos: [] };
+        if (caminho.indexOf('/dashboard') >= 0) return window.DASHBOARD;
         if (caminho.startsWith('/pedidos/')) return window.PAINEL;
         return { ok: true };
     };
     window._chamadas = chamadas;
+    IdealControl.iniciar();
 """
 
 
 def test_a_tela_abre_um_pedido_e_desenha_tudo():
     saida = _no_navegador(SERVIDOR + """
         await IdealControl.abrirPedido(18560);
-        return {
+        const antes = {
             titulo: document.getElementById('ic-titulo').textContent,
             selos: [...document.querySelectorAll('#ic-situacao .badge')]
                      .map(b => b.textContent),
             setores: document.querySelectorAll('#ic-setores .ic-setor').length,
             aparelhos: document.querySelectorAll('#ic-aparelhos .ic-aparelho').length,
-            kpis: [...document.querySelectorAll('.ic-kpi')].map(k =>
-                     k.querySelector('.ic-kpi-rotulo').textContent + '=' +
-                     k.querySelector('.ic-kpi-valor').textContent),
+            kpis: document.querySelectorAll('.ic-kpi').length,
+            caminhos: window._chamadas.map(c => c.caminho),
         };
+
+        // O painel de publico so vem quando alguem pede.
+        document.getElementById('ic-dashboard-abrir').click();
+        await new Promise(r => setTimeout(r, 120));
+        const depois = [...document.querySelectorAll('.ic-kpi')].map(k =>
+            k.querySelector('.ic-kpi-rotulo').textContent + '=' +
+            k.querySelector('.ic-kpi-valor').textContent);
+        return { antes, depois };
     """)
-    assert "18560" in saida["titulo"]
-    assert "Baile do Hawaii" in saida["titulo"]
-    assert saida["setores"] == 2
+    a = saida["antes"]
+    assert "18560" in a["titulo"]
+    assert "Baile do Hawaii" in a["titulo"]
+    assert a["setores"] == 2
     # Os cartoes de aparelho MAIS o formulario de criar um.
-    assert saida["aparelhos"] == 2
-    assert any("1 sem código" in s for s in saida["selos"])
-    assert "Entraram=150" in saida["kpis"]
-    assert "Presentes=140" in saida["kpis"]
-    assert "Comparecimento=15,0%" in saida["kpis"]
+    assert a["aparelhos"] == 2
+    assert any("1 sem código" in s for s in a["selos"])
+    # Abrir o pedido NAO pede o painel de publico, e nao desenha KPI nenhum.
+    assert a["kpis"] == 0
+    assert not [c for c in a["caminhos"] if "/dashboard" in c]
+    # E depois do toque, sim.
+    assert "Entraram=150" in saida["depois"]
+    assert "Presentes=140" in saida["depois"]
+    assert "Comparecimento=15,0%" in saida["depois"]
 
 
 def test_o_modelo_sem_codigo_aparece_marcado_e_nao_escondido():
@@ -327,6 +354,8 @@ def test_o_setor_mostra_a_faixa_impressa_com_o_mesmo_piso_de_quatro_digitos():
 def test_o_dashboard_desenha_o_grafico_por_hora():
     saida = _no_navegador(SERVIDOR + """
         await IdealControl.abrirPedido(18560);
+        document.getElementById('ic-dashboard-abrir').click();
+        await new Promise(r => setTimeout(r, 120));
         const colunas = [...document.querySelectorAll('#ic-por-hora .ic-coluna')];
         return {
             colunas: colunas.length,
@@ -348,8 +377,10 @@ def test_o_grafico_avisa_na_TELA_quando_o_servidor_diz_que_truncou():
     """O servidor avisa; a tela tem de repetir. Um aviso que so existe no JSON
     nao avisa ninguem."""
     saida = _no_navegador(SERVIDOR + """
-        window.PAINEL.dashboard.grafico_truncado = true;
+        window.DASHBOARD.grafico_truncado = true;
         await IdealControl.abrirPedido(18560);
+        document.getElementById('ic-dashboard-abrir').click();
+        await new Promise(r => setTimeout(r, 120));
         const el = document.getElementById('ic-grafico-aviso');
         return { visivel: el.style.display !== 'none', texto: el.textContent };
     """)
@@ -364,6 +395,7 @@ INGRESSOS = """
         (window._chamadas = window._chamadas || []).push(
             { caminho, metodo: (opcoes || {}).method || 'GET' });
         if (caminho.startsWith('/pedidos?')) return { pedidos: [] };
+        if (caminho.indexOf('/dashboard') >= 0) return window.DASHBOARD;
         if (caminho.startsWith('/pedidos/')) return window.PAINEL;
         if (caminho.indexOf('/ingressos') >= 0) {
             const p = new URLSearchParams(caminho.split('?')[1]);
@@ -384,7 +416,9 @@ INGRESSOS = """
             return { setor: { id: 's1', nome: 'PISTA', quantidade: 600 },
                      pagina: pagina, por_pagina: 200,
                      ha_mais: filtrados.length > pagina * 200,
-                     ingressos: fatia };
+                     ingressos: fatia,
+                     numeros: pagina === 1
+                        ? { publicadas: 1300, entradas: 1, codigos_cliente: 0 } : null };
         }
         return { ok: true };
     };
@@ -513,12 +547,14 @@ def test_criar_aparelho_leva_os_setores_acesos_e_mostra_o_codigo_uma_vez():
             chamadas.push({ caminho, metodo: (opcoes || {}).method || 'GET',
                             corpo: (opcoes || {}).body ? JSON.parse(opcoes.body) : null });
             if (caminho.startsWith('/pedidos?')) return { pedidos: [] };
+            if (caminho.indexOf('/dashboard') >= 0) return window.DASHBOARD;
             if (caminho.startsWith('/pedidos/')) return window.PAINEL;
             if (caminho.indexOf('/aparelhos') >= 0)
                 return { id: 'a2', nome: 'Portao B', codigo: 'ABC234' };
             return { ok: true };
         };
         window._chamadas = chamadas;
+    IdealControl.iniciar();
         await IdealControl.abrirPedido(18560);
 
         document.getElementById('ic-novo-ap-nome').value = 'Portao B';
@@ -611,7 +647,7 @@ def test_pedido_sem_evento_explica_o_que_falta():
         window.PAINEL.evento = null;
         window.PAINEL.setores = [];
         window.PAINEL.aparelhos = [];
-        window.PAINEL.dashboard = null;
+        window.PAINEL.tem_dashboard = false;
         await IdealControl.abrirPedido(18560);
         return {
             aviso: document.getElementById('ic-sem-evento').textContent,
@@ -716,3 +752,156 @@ def test_abrir_a_tela_duas_vezes_nao_duplica_os_ouvintes():
         return { gravacoes: window._chamadas.filter(c => c.metodo === 'PATCH').length };
     """)
     assert saida["gravacoes"] == 1
+
+
+# ── A tela travada ──────────────────────────────────────────────────────────
+#
+# Em 16/08/2026, na primeira vez que o usuario abriu esta tela em producao, ela
+# ficou tres minutos em "Carregando..." e NENHUMA requisicao chegou ao motor --
+# conferido no log do Render. A causa: `supabase-config.js` deixa
+# `window.supabaseClient` NULO quando o SDK do CDN nao carrega (ou em modo
+# offline), e `cabecalhos()` chamava `supabaseClient.auth` direto. Isso LANCA na
+# hora, em vez de rejeitar uma promessa -- e o throw sincrono escapa do
+# `.catch()` de quem chamou, porque a corrente de promessas nem chegou a
+# existir.
+#
+# Estes testes nao usam o desvio `_pedirParaTeste`: eles exercitam o caminho de
+# rede DE VERDADE, que e onde o defeito morava.
+
+SEM_REDE = """
+    // Nada sai desta pagina: `fetch` falha na hora. E o que garante que o
+    // teste mede o tratamento do erro, e nao uma ida a producao.
+    window.fetch = () => Promise.reject(new TypeError('Failed to fetch'));
+"""
+
+
+def test_sem_o_login_do_painel_a_tela_DIZ_e_nao_fica_carregando():
+    """O defeito de 16/08/2026, reproduzido.
+
+    Com `supabaseClient` nulo, a tela tem de mostrar uma frase. Ficar
+    "Carregando..." para sempre e o pior fim possivel: o atendente espera, e
+    nao ha nada que ele possa fazer.
+    """
+    saida = _no_navegador(SEM_REDE + """
+        window.supabaseClient = null;
+        IdealControl.iniciar();
+        await IdealControl.abrirPedido(18560);
+        await new Promise(r => setTimeout(r, 60));
+        return {
+            carregando: document.getElementById('ic-carregando').style.display,
+            vazio_visivel: document.getElementById('ic-vazio').style.display !== 'none',
+            recado: document.getElementById('ic-vazio').textContent,
+            conteudo: document.getElementById('ic-conteudo').style.display,
+        };
+    """)
+    # O "Carregando..." SAIU da tela. E esta a asserção que reprova o defeito.
+    assert saida["carregando"] == "none"
+    assert saida["vazio_visivel"] is True
+    assert saida["conteudo"] == "none"
+    # E o recado diz o que fazer, em portugues.
+    assert "login" in saida["recado"].lower()
+    assert "recarregue" in saida["recado"].lower()
+
+
+def test_supabase_sem_auth_tambem_e_tratado():
+    """A outra forma do mesmo estado: o objeto existe, mas nao e um client.
+    `supabaseClient.auth.getSession()` lancaria `TypeError` igual."""
+    saida = _no_navegador(SEM_REDE + """
+        window.supabaseClient = {};
+        IdealControl.iniciar();
+        await IdealControl.abrirPedido(18560);
+        await new Promise(r => setTimeout(r, 60));
+        return { carregando: document.getElementById('ic-carregando').style.display,
+                 recado: document.getElementById('ic-vazio').textContent };
+    """)
+    assert saida["carregando"] == "none"
+    assert "login" in saida["recado"].lower()
+
+
+def test_sessao_vencida_manda_entrar_de_novo():
+    """Client bom, sessao vazia. E outro conserto -- entrar de novo, e nao
+    recarregar a pagina -- entao a frase tem de ser outra."""
+    saida = _no_navegador(SEM_REDE + """
+        window.supabaseClient = { auth: { getSession: async () => ({ data: { session: null } }) } };
+        IdealControl.iniciar();
+        await IdealControl.abrirPedido(18560);
+        await new Promise(r => setTimeout(r, 60));
+        return { carregando: document.getElementById('ic-carregando').style.display,
+                 recado: document.getElementById('ic-vazio').textContent };
+    """)
+    assert saida["carregando"] == "none"
+    assert "sessão expirou" in saida["recado"]
+
+
+def test_rede_fora_no_meio_tambem_tira_o_carregando_da_tela():
+    """Sessao boa, rede caindo. Qualquer que seja a falha, o fim e o mesmo: uma
+    frase na tela, nunca um "Carregando..." eterno."""
+    saida = _no_navegador(SEM_REDE + """
+        window.supabaseClient = { auth: { getSession: async () => (
+            { data: { session: { access_token: 'jwt' } } }) } };
+        IdealControl.iniciar();
+        await IdealControl.abrirPedido(18560);
+        await new Promise(r => setTimeout(r, 80));
+        return { carregando: document.getElementById('ic-carregando').style.display,
+                 vazio_visivel: document.getElementById('ic-vazio').style.display !== 'none',
+                 recado: document.getElementById('ic-vazio').textContent };
+    """)
+    assert saida["carregando"] == "none"
+    assert saida["vazio_visivel"] is True
+    assert saida["recado"].strip() != ""
+
+
+def test_erro_ao_DESENHAR_tambem_tira_o_carregando():
+    """O `.catch` cobre o `desenhar()` tambem, e nao so a ida a rede: um campo
+    que o servidor deixasse de mandar travaria a tela do mesmo jeito."""
+    saida = _no_navegador("""
+        IdealControl._pedirParaTeste = async () => ({ /* resposta sem nada */ });
+        IdealControl.iniciar();
+        await IdealControl.abrirPedido(18560);
+        await new Promise(r => setTimeout(r, 60));
+        return { carregando: document.getElementById('ic-carregando').style.display,
+                 vazio_visivel: document.getElementById('ic-vazio').style.display !== 'none' };
+    """)
+    assert saida["carregando"] == "none"
+    assert saida["vazio_visivel"] is True
+
+
+def test_os_numeros_do_setor_so_aparecem_quando_a_lista_e_aberta():
+    """Decisao do usuario, 16/08/2026: "nao deve carregar de imediato os
+    codigos, apenas se solicitado, cada setor de uma vez".
+
+    Contar custa tres idas ao banco POR SETOR. Abrir o pedido para renomear um
+    setor nao pode pagar por isso -- foi o que fez a tela demorar.
+    """
+    saida = _no_navegador(INGRESSOS + """
+        await IdealControl.abrirPedido(18560);
+        const antes = {
+            linha: document.getElementById('ic-numeros-s1').textContent,
+            caminhos: window._chamadas.map(c => c.caminho),
+        };
+
+        document.getElementById('ic-ingressos-abrir-s1').click();
+        await new Promise(r => setTimeout(r, 140));
+        return { antes, depois: document.getElementById('ic-numeros-s1').textContent };
+    """)
+    # Ao abrir o pedido: nenhuma contagem pedida, nenhum numero na tela.
+    assert saida["antes"]["linha"] == ""
+    assert not [c for c in saida["antes"]["caminhos"] if "/ingressos" in c]
+    # Depois de abrir a lista DAQUELE setor: os numeros aparecem.
+    assert "1.300 publicadas" in saida["depois"]
+    assert "1 entraram" in saida["depois"]
+
+
+def test_paginar_nao_apaga_os_numeros_do_setor():
+    """O servidor so manda os numeros na primeira pagina -- repeti-los custaria
+    tres idas ao banco por toque em "Proximos". A tela precisa guardar o que ja
+    tem, senao a linha pisca para vazio."""
+    saida = _no_navegador(INGRESSOS + """
+        await IdealControl.abrirPedido(18560);
+        document.getElementById('ic-ingressos-abrir-s1').click();
+        await new Promise(r => setTimeout(r, 140));
+        document.getElementById('ic-pagina-proxima-s1').click();
+        await new Promise(r => setTimeout(r, 140));
+        return { linha: document.getElementById('ic-numeros-s1').textContent };
+    """)
+    assert "1.300 publicadas" in saida["linha"]

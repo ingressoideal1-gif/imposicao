@@ -142,7 +142,12 @@ o QR do Pedido e encontra os portões prontos, em vez de uma tela em branco.
 
 Junto vem o **dashboard de gerenciamento de público** — contratado, publicado, entraram,
 presentes, comparecimento, recusas por motivo, ocupação por setor e entradas por hora. É a
-primeira versão, para o usuário ajustar depois.
+primeira versão, para o usuário ajustar depois, e fica **atrás de um botão**.
+
+**Nada que custe contagem carrega na abertura.** Decisão do usuário em 16/08/2026: abrir o
+pedido traz a estrutura (oito idas ao banco, ~1,2s), os números de um setor vêm com a
+primeira página da lista daquele setor, e o painel de público só quando alguém o pede.
+Antes disso, abrir o pedido 18560 custava vinte idas ao banco.
 
 - Backend: [acesso_interno.py](../acesso_interno.py), prefixo `/api/acesso/interno`
 - Tela: [frontend/ideal-control.js](../frontend/ideal-control.js) e a

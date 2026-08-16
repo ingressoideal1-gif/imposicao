@@ -31,7 +31,8 @@
     var estado = {
         pedido: null,        // o número pesquisado
         painel: null,        // a resposta do servidor
-        ingressos: {}        // { setor_id: { pagina, ha_mais, lista, busca } }
+        ingressos: {},       // { setor_id: { pagina, ha_mais, lista, busca } }
+        dashboard: null      // so existe depois de alguem pedir
     };
 
     var $ = function (id) { return document.getElementById(id); };
@@ -46,10 +47,28 @@
      * O token vem da sessão do Supabase, a mesma do resto do painel. Sem ele o
      * servidor responde 401 — e é ele que prova QUEM está pedindo, mesmo que
      * esta tela não peça senha de evento nenhuma.
+     *
+     * `Promise.resolve().then(...)`, e não a chamada direta: o
+     * `supabase-config.js` deixa `window.supabaseClient` NULO quando o SDK do
+     * CDN não carrega, ou quando o modo offline está ligado. Chamado direto,
+     * `supabaseClient.auth` LANÇA na hora — um throw síncrono, que escapa do
+     * `.catch()` de quem chamou porque a corrente de promessas nem chegou a
+     * existir. O resultado observado em 16/08/2026 foi o pior possível: a tela
+     * ficou em "Carregando…" por três minutos, sem uma palavra, e nenhuma
+     * requisição chegou ao motor. É a mesma armadilha que o `controle.js`
+     * documenta no cabeçalho dele — e que eu repeti aqui.
      */
     function cabecalhos() {
-        return window.supabaseClient.auth.getSession().then(function (r) {
-            var s = (r.data && r.data.session) || null;
+        return Promise.resolve().then(function () {
+            var cliente = window.supabaseClient;
+            if (!cliente || !cliente.auth) {
+                throw new Error('Esta tela precisa da sua conta do painel, e o '
+                    + 'login não carregou neste navegador. Recarregue a página; '
+                    + 'se continuar, o painel está em modo offline.');
+            }
+            return cliente.auth.getSession();
+        }).then(function (r) {
+            var s = (r && r.data && r.data.session) || null;
             if (!s || !s.access_token) {
                 throw new Error('Sua sessão expirou. Entre de novo no painel.');
             }
@@ -68,9 +87,18 @@
      * a página faz.
      */
     function pedir(caminho, opcoes) {
-        if (window.IdealControl && window.IdealControl._pedirParaTeste) {
-            return window.IdealControl._pedirParaTeste(caminho, opcoes);
-        }
+        // Também dentro de uma promessa: se o desvio de teste lançar — ou se
+        // qualquer coisa aqui lançar —, quem chamou recebe uma REJEIÇÃO, e não
+        // uma exceção que passa por cima do `.catch()` dele.
+        return Promise.resolve().then(function () {
+            if (window.IdealControl && window.IdealControl._pedirParaTeste) {
+                return window.IdealControl._pedirParaTeste(caminho, opcoes);
+            }
+            return _pedirNaRede(caminho, opcoes);
+        });
+    }
+
+    function _pedirNaRede(caminho, opcoes) {
         return cabecalhos().then(function (h) {
             var o = opcoes || {};
             o.headers = h;
@@ -184,22 +212,31 @@
         // Toda gravação termina aqui (`recarregar`), e limpar sempre fecharia
         // a lista debaixo de quem estava procurando um ingresso — no instante
         // seguinte a ele salvar o nome do setor, sem ter tocado na lista.
-        if (estado.pedido !== n) { estado.ingressos = {}; }
+        if (estado.pedido !== n) { estado.ingressos = {}; estado.dashboard = null; }
         estado.pedido = n;
         $('ic-carregando').style.display = '';
         $('ic-conteudo').style.display = 'none';
         $('ic-vazio').style.display = 'none';
 
+        // O `.catch` cobre o `desenhar()` TAMBÉM, e não só a ida à rede: um erro
+        // ao montar a tela — um campo que o servidor deixou de mandar, por
+        // exemplo — deixaria o "Carregando…" na tela para sempre se ficasse de
+        // fora. Nesta tela, ficar carregando é o pior fim possível: o atendente
+        // espera, e não há o que ele possa fazer.
         return pedir('/pedidos/' + n).then(function (p) {
             estado.painel = p;
             desenhar();
         }).catch(function (e) {
             estado.painel = null;
             $('ic-carregando').style.display = 'none';
+            $('ic-conteudo').style.display = 'none';
             $('ic-vazio').style.display = '';
-            $('ic-vazio').textContent = e.status === 404
+            $('ic-vazio').textContent = e && e.status === 404
                 ? ('O pedido ' + n + ' não existe no ERP, ou não tem modelo cadastrado.')
-                : e.message;
+                : ((e && e.message) || 'Não consegui abrir este pedido.');
+            // No console fica o erro inteiro, com a pilha — a tela recebe uma
+            // frase, quem for investigar recebe o resto.
+            if (window.console) { console.error('[ideal-control] abrirPedido', e); }
         });
     }
 
@@ -238,6 +275,12 @@
             + (p.evento ? ' · ' + p.evento.nome_evento : '');
 
         desenharSituacao();
+        // A seção do público aparece com o BOTÃO, e não com os números: eles
+        // só são buscados se alguém pedir.
+        $('ic-dashboard-secao').style.display = p.tem_dashboard ? '' : 'none';
+        $('ic-dashboard-abrir').style.display = estado.dashboard ? 'none' : '';
+        $('ic-dashboard-abrir').disabled = false;
+        $('ic-dashboard-abrir').textContent = 'Ver o painel de público';
         desenharDashboard();
         desenharEvento();
         desenharSetores();
@@ -308,10 +351,33 @@
      * telefone é "quantos entraram?" e "por que fulano foi recusado?" — as duas
      * perguntas estão nos cartões de cima e na lista de recusas.
      */
+    /**
+     * O painel de público, pedido em separado.
+     *
+     * Ele custa cinco contagens, uma varredura das leituras e uma passada por
+     * setor. Quem abre um pedido para renomear um setor não pode pagar por
+     * isso — por decisão do usuário em 16/08/2026, depois de a tela levar três
+     * minutos para abrir.
+     */
+    function carregarDashboard() {
+        var botao = $('ic-dashboard-abrir');
+        botao.disabled = true;
+        botao.textContent = 'Carregando o painel de público…';
+        return pedir('/pedidos/' + estado.pedido + '/dashboard').then(function (d) {
+            estado.dashboard = d;
+            botao.style.display = 'none';
+            desenharDashboard();
+        }).catch(function (e) {
+            botao.disabled = false;
+            botao.textContent = 'Ver o painel de público';
+            avisar((e && e.message) || 'Não consegui carregar o painel.', 'error');
+        });
+    }
+
     function desenharDashboard() {
-        var d = estado.painel.dashboard, caixa = $('ic-dashboard');
+        var d = estado.dashboard, caixa = $('ic-dashboard');
         caixa.innerHTML = '';
-        $('ic-dashboard-secao').style.display = d ? '' : 'none';
+        $('ic-dashboard-numeros').style.display = d ? '' : 'none';
         if (!d) { return; }
 
         var p = d.publico;
@@ -438,11 +504,16 @@
         var topo = document.createElement('div');
         topo.className = 'ic-setor-topo';
         texto(topo, 'h3', s.nome);
+        // Só o que veio do ERP: quantidade contratada e faixa impressa. As
+        // contagens (publicadas, entradas, cortesias) custam três idas ao
+        // banco POR SETOR, e por decisão do usuário elas só acontecem quando
+        // ele abre a lista deste setor. Até lá, esta linha não mente — ela
+        // apenas não fala de números que ninguém pediu.
         var faixa = faixaImpressa(numeroDeDoSetor(s), numeroAteDoSetor(s));
         texto(topo, 'span', numero(s.quantidade) + ' contratados'
-              + (faixa ? ' · ' + faixa : '')
-              + ' · ' + numero(s.publicadas) + ' publicadas'
-              + ' · ' + numero(s.entradas) + ' entraram', 'ic-dim');
+              + (faixa ? ' · ' + faixa : ''), 'ic-dim');
+        var numeros = texto(topo, 'span', '', 'ic-dim');
+        numeros.id = 'ic-numeros-' + s.id;
         el.appendChild(topo);
 
         // ── Configuração ───────────────────────────────────────────────────
@@ -580,8 +651,7 @@
         caixa.className = 'ic-bloco';
         texto(caixa, 'h4', 'Códigos de staff e cortesia');
         texto(caixa, 'p', 'Códigos que não foram impressos no pedido e mesmo assim '
-              + 'entram por este setor. ' + numero(s.codigos_cliente)
-              + ' carregado(s) até agora.', 'ic-ajuda');
+              + 'entram por este setor.', 'ic-ajuda');
 
         var area = document.createElement('textarea');
         area.className = 'form-control';
@@ -644,7 +714,10 @@
             abrir.setAttribute('aria-expanded', fechado ? 'true' : 'false');
             abrir.textContent = fechado ? 'Fechar a lista'
                                         : 'Ver os ingressos deste setor';
-            if (fechado && !estado.ingressos[s.id]) { carregarIngressos(s.id, 1); }
+            if (fechado && !estado.ingressos[s.id]) {
+                painel.textContent = 'Carregando os ingressos deste setor…';
+                carregarIngressos(s.id, 1);
+            }
         });
 
         if (estado.ingressos[s.id]) {
@@ -661,13 +734,37 @@
                     + '&por_pagina=200';
         if (busca) { caminho += '&busca=' + encodeURIComponent(busca); }
         return pedir(caminho).then(function (r) {
+            var antes = estado.ingressos[setor_id] || {};
             estado.ingressos[setor_id] = {
                 pagina: r.pagina, ha_mais: r.ha_mais, lista: r.ingressos,
-                busca: busca || '', setor: r.setor
+                busca: busca || '', setor: r.setor,
+                // Os números só vêm na primeira página. Nas seguintes, o
+                // servidor manda nulo e o que já estava na tela continua
+                // valendo — senão a linha do setor piscaria para vazio a cada
+                // "Próximos".
+                numeros: r.numeros || antes.numeros || null
             };
+            pintarNumeros(setor_id);
             var painel = $('ic-ingressos-' + setor_id);
             if (painel) { pintarIngressos(painel, setor_id); }
-        }).catch(function (e) { avisar(e.message, 'error'); });
+        }).catch(function (e) {
+            var painel = $('ic-ingressos-' + setor_id);
+            if (painel) {
+                painel.textContent = 'Não consegui carregar os ingressos: '
+                    + ((e && e.message) || 'erro desconhecido');
+            }
+            avisar((e && e.message) || 'Não consegui carregar os ingressos.', 'error');
+        });
+    }
+
+    /** A linha de números do setor, preenchida quando eles chegam. */
+    function pintarNumeros(setor_id) {
+        var el = $('ic-numeros-' + setor_id);
+        var n = (estado.ingressos[setor_id] || {}).numeros;
+        if (!el || !n) { return; }
+        el.textContent = ' · ' + numero(n.publicadas) + ' publicadas · '
+            + numero(n.entradas) + ' entraram · '
+            + numero(n.codigos_cliente) + ' cortesias';
     }
 
     var SITUACAO = {
@@ -929,6 +1026,7 @@
         $('ic-busca').addEventListener('keydown', function (ev) {
             if (ev.key === 'Enter') { abrirPedido($('ic-busca').value); }
         });
+        $('ic-dashboard-abrir').addEventListener('click', carregarDashboard);
         $('ic-codigo-fechar').addEventListener('click', function () {
             $('ic-codigo-caixa').style.display = 'none';
             $('ic-codigo-valor').textContent = '';

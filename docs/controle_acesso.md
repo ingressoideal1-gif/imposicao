@@ -608,6 +608,48 @@ chamam as mesmas funções `_aplicar_*` do [acesso_config.py](../acesso_config.p
 camada de autorização difere. Duas cópias divergiriam, e o sintoma seria o pior possível —
 a gráfica pré-configurando um evento de um jeito que o cliente não consegue reproduzir.
 
+### O que ela carrega, e quando
+
+Abrir um pedido traz só a **estrutura**: os modelos do ERP, o estado da
+publicação, os setores com a configuração e os bloqueios, e os aparelhos. Oito
+idas ao banco, ~1,2s medido de fora. Nenhuma contagem.
+
+O que custa contagem vem **quando alguém pede**, e é decisão do usuário em
+16/08/2026 — *"não deve carregar de imediato os códigos, apenas se solicitado,
+cada setor de uma vez"*:
+
+- os números de um setor (publicadas, entraram, cortesias) viajam junto com a
+  **primeira página** da lista de ingressos daquele setor, e só dela: repeti-los
+  a cada "Próximos" seriam três idas ao banco para reescrever o mesmo número;
+- o **painel de público** fica atrás de um botão. Ele custa cinco contagens mais
+  uma varredura das leituras, e quem abre o pedido para renomear um setor não
+  pode pagar por isso.
+
+Antes dessa separação, abrir o pedido 18560 custava **20 idas ao banco** — cinco
+delas só para escrever números que ninguém tinha pedido.
+
+### A tela que ficou três minutos carregando
+
+Na primeira vez que o usuário abriu esta tela em produção, ela ficou em
+"Carregando…" e nunca saiu. O log do Render provou o essencial: **nenhuma
+requisição chegou ao motor**. O problema estava antes da rede.
+
+`frontend/supabase-config.js` deixa `window.supabaseClient` **nulo** quando o SDK
+do CDN não carrega, ou quando o modo offline está ligado. O `cabecalhos()` desta
+tela chamava `supabaseClient.auth.getSession()` direto — e isso **lança na hora**,
+em vez de rejeitar uma promessa. Um `throw` síncrono escapa do `.catch()` de quem
+chamou, porque a corrente de promessas nem chegou a existir: a tela não recebe
+erro nenhum e o "Carregando…" fica para sempre.
+
+É exatamente a armadilha que o `controle.js` documenta no próprio cabeçalho —
+repetida no arquivo ao lado. As duas defesas agora são:
+
+1. `cabecalhos()` e `pedir()` começam com `Promise.resolve().then(...)`, então
+   qualquer falha vira **rejeição**, nunca exceção;
+2. o `.catch` de `abrirPedido` cobre também o `desenhar()`, e sempre tira o
+   "Carregando…" da tela. Numa tela de atendimento, ficar carregando é o pior
+   fim possível: a pessoa espera, e não há o que ela possa fazer.
+
 Três coisas que essa tela **não** faz, de propósito:
 
 - **não mostra o código do QR Ideal.** A lista de ingressos traz o número impresso e a

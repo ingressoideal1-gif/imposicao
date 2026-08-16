@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Header, HTTPException
 
 import acesso_config as cfg
-from acesso_api import _modelos_legiveis, _usuario_logado, contar, supabase
+from acesso_api import _usuario_logado, contar, supabase
 
 router = APIRouter(prefix="/api/acesso/interno", tags=["acesso"])
 
@@ -166,16 +166,34 @@ def _modelos_do_pedido(pedido_id_int: int) -> list:
     Os dois lados juntos de propósito. O atendente precisa ver o modelo QUE NÃO
     SOBE tanto quanto os que sobem — senão ele conta os setores na tela, acha
     que falta um, e abre um chamado sobre um ingresso que simplesmente não tem
-    código impresso. Ver `_modelos_legiveis` e a regra do usuário sobre o
-    modelo 1000283.
+    código impresso. É a regra do usuário sobre o modelo 1000283.
+
+    Duas idas ao banco, e não três: a versão anterior chamava
+    `_modelos_legiveis()`, que consulta `pedidos_modelos` DE NOVO só para
+    devolver a lista filtrada. Quem decide o que é legível continua sendo
+    `acesso_publicacao.numeracao_do_modelo` — a mesma função que o agente usa
+    para decidir o que publicar, e que `_modelos_legiveis` também chama. Duas
+    definições de "tem código" divergiriam no dia em que uma delas mudasse.
     """
+    import acesso_publicacao
+
     todos = supabase(
         "GET",
         f"pedidos_modelos?id_int=eq.{int(pedido_id_int)}"
         "&select=id,nome_modelo,quantidade,numeracao_inicio,numeracao_fim,"
-        "tipo_numeracao,ordem&order=ordem.asc",
+        "tipo_numeracao,ordem,amostra_num_id&order=ordem.asc",
     ) or []
-    legiveis = {m["modelo_id"] for m in _modelos_legiveis(pedido_id_int)}
+
+    ids = sorted({str(m["amostra_num_id"]) for m in todos if m.get("amostra_num_id")})
+    numeracoes = {}
+    if ids:
+        lista = ",".join(f'"{i}"' for i in ids)
+        numeracoes = {
+            str(n["id"]): n.get("elements")
+            for n in (supabase(
+                "GET", f"producao_numeracoes?id=in.({lista})&select=id,elements"
+            ) or [])
+        }
 
     return [{
         "modelo_id": int(m["id"]),
@@ -184,7 +202,8 @@ def _modelos_do_pedido(pedido_id_int: int) -> list:
         "numero_de": m.get("numeracao_inicio"),
         "numero_ate": m.get("numeracao_fim"),
         "tipo_numeracao": m.get("tipo_numeracao"),
-        "sobe_ao_controle": int(m["id"]) in legiveis,
+        "sobe_ao_controle": bool(acesso_publicacao.numeracao_do_modelo(
+            numeracoes.get(str(m.get("amostra_num_id"))))),
     } for m in todos]
 
 
@@ -228,17 +247,20 @@ def _painel_do_pedido(pedido_id_int: int) -> dict:
         "evento": evento,
         "setores": setores,
         "aparelhos": aparelhos,
-        "dashboard": _dashboard(evento_id, setores, modelos) if evento_id else None,
+        # O dashboard NÃO vem junto: ele custa cinco contagens, uma varredura
+        # das leituras e uma contagem por setor. A tela pede em separado,
+        # quando o atendente toca em "Ver o painel de público" — e até lá a
+        # abertura do pedido não paga por ele.
+        "tem_dashboard": bool(evento_id),
     }
 
 
 def _setores_do_evento(evento_id: str, pedido_id_int=None) -> list:
-    """Os setores com a configuração completa e os números que importam.
+    """Os setores com a configuração e os bloqueios. SEM contagem nenhuma.
 
-    Uma consulta para os setores, uma para os bloqueios do evento inteiro, e
-    duas contagens por setor. As contagens são `contar()` — cabeçalho
-    `Content-Range`, sem trazer linha nenhuma —, o que mantém o custo igual
-    para um setor de 50 e para um de 50.000.
+    Duas consultas, as duas para o evento inteiro: uma de setores e uma de
+    bloqueios. O custo não cresce com o número de setores — que é justamente o
+    que fazia esta tela demorar.
     """
     filtro = f"producao_acesso_setores?evento_id=eq.{evento_id}&status=eq.ativo"
     if pedido_id_int is not None:
@@ -255,31 +277,34 @@ def _setores_do_evento(evento_id: str, pedido_id_int=None) -> list:
         "&select=id,setor_id,de,ate,motivo,created_at&order=de.asc",
     ) or []
 
-    # Duas perguntas ao evento inteiro antes de perguntar setor por setor.
+    # NENHUMA contagem aqui. É a decisão do usuário em 16/08/2026: "não deve
+    # carregar de imediato os códigos, apenas se solicitado, cada setor de uma
+    # vez".
     #
-    # Medido contra produção em 15/08/2026: o pedido 18560, com cinco setores,
-    # levava 4,4s para abrir a tela — quinze idas ao banco só de contagem, e
-    # dez delas voltando zero. Um evento que nunca carregou código de cortesia
-    # e ainda não teve leitura nenhuma (o estado de TODO evento antes da
-    # porta abrir) não precisa perguntar por setor: a resposta é zero em
-    # todos, e uma consulta ao evento inteiro já sabe disso.
-    ha_cortesias = contar(
-        f"producao_acesso_credenciais?evento_id=eq.{evento_id}&origem=eq.cliente")
-    ha_leituras = contar(f"producao_acesso_leituras?evento_id=eq.{evento_id}")
-
+    # Medido contra produção: com as contagens, abrir o pedido 18560 custava 20
+    # idas ao banco — cada uma a ~160ms de Ohio até o Supabase — e cinco delas
+    # existiam só para escrever um número que ninguém tinha pedido ainda. Agora
+    # a abertura traz a ESTRUTURA (o que o pedido tem), e os números de cada
+    # setor vêm com a lista de ingressos daquele setor, quando o atendente a
+    # abre. Ver `_ingressos_do_setor`, que devolve os dois juntos.
     for s in setores:
         s["bloqueios"] = [b for b in bloqueios
                           if str(b["setor_id"]) == str(s["id"])]
-        s["publicadas"] = contar(
-            f"producao_acesso_credenciais?setor_id=eq.{s['id']}&origem=eq.qr_ideal")
-        s["codigos_cliente"] = contar(
-            f"producao_acesso_credenciais?setor_id=eq.{s['id']}&origem=eq.cliente"
-        ) if ha_cortesias else 0
-        s["entradas"] = contar(
-            f"producao_acesso_leituras?setor_id=eq.{s['id']}"
-            "&resultado=eq.permitido&tipo=eq.entrada"
-        ) if ha_leituras else 0
     return setores
+
+
+def _numeros_do_setor(setor_id: str) -> dict:
+    """As três contagens de um setor. Custam três idas ao banco, e por isso
+    só acontecem quando alguém pede aquele setor."""
+    return {
+        "publicadas": contar(
+            f"producao_acesso_credenciais?setor_id=eq.{setor_id}&origem=eq.qr_ideal"),
+        "codigos_cliente": contar(
+            f"producao_acesso_credenciais?setor_id=eq.{setor_id}&origem=eq.cliente"),
+        "entradas": contar(
+            f"producao_acesso_leituras?setor_id=eq.{setor_id}"
+            "&resultado=eq.permitido&tipo=eq.entrada"),
+    }
 
 
 def _aparelhos_do_evento(evento_id: str) -> list:
@@ -324,12 +349,22 @@ MOTIVOS = {
 def _dashboard(evento_id: str, setores: list, modelos: list) -> dict:
     """Os números de gerenciamento de público deste evento.
 
-    Os totais saem de `contar()`, que é exato em qualquer tamanho. Só o
-    histograma por hora precisa das linhas, e ele avisa quando trunca.
+    Pedido em separado da abertura do pedido, de propósito: ele custa cinco
+    contagens, uma varredura das leituras e duas contagens por setor. Quem
+    abre um pedido para renomear um setor não pode pagar por tudo isso.
+
+    Os totais saem de `contar()`, que é exato em qualquer tamanho — inclusive
+    `publicado` e `cortesias`, que ANTES eram a soma dos setores. Somar exigia
+    contar setor por setor; perguntar ao evento inteiro é uma consulta só, e o
+    número é o mesmo.
+
+    Só o histograma por hora precisa das linhas, e ele avisa quando trunca.
     """
     contratado = sum(m["quantidade"] for m in modelos if m["sobe_ao_controle"])
-    publicado = sum(s.get("publicadas") or 0 for s in setores)
-    cortesias = sum(s.get("codigos_cliente") or 0 for s in setores)
+    publicado = contar(f"producao_acesso_credenciais?evento_id=eq.{evento_id}"
+                       "&origem=eq.qr_ideal")
+    cortesias = contar(f"producao_acesso_credenciais?evento_id=eq.{evento_id}"
+                       "&origem=eq.cliente")
 
     entradas = contar(f"producao_acesso_leituras?evento_id=eq.{evento_id}"
                       "&resultado=eq.permitido&tipo=eq.entrada")
@@ -343,7 +378,12 @@ def _dashboard(evento_id: str, setores: list, modelos: list) -> dict:
         "&select=momento,resultado,motivo,tipo,setor_id,dispositivo_id&order=momento.asc")
 
     por_hora = defaultdict(lambda: {"entradas": 0, "saidas": 0, "recusas": 0})
+    entradas_por_setor = Counter()
     for l in leituras:
+        if (l.get("resultado") == "permitido" and l.get("tipo") != "saida"
+                and l.get("setor_id")):
+            entradas_por_setor[str(l["setor_id"])] += 1
+
         hora = _hora_cheia(l.get("momento"))
         if not hora:
             continue
@@ -379,13 +419,16 @@ def _dashboard(evento_id: str, setores: list, modelos: list) -> dict:
             "comparecimento_pct": (round(entradas * 100.0 / publicado, 1)
                                    if publicado else None),
         },
+        # Sai da MESMA varredura de leituras que o histograma usa — nenhuma
+        # consulta a mais. Contar por setor no banco custaria uma ida por
+        # setor, e o número já está aqui.
         "por_setor": [{
             "setor_id": s["id"],
             "nome": s["nome"],
             "contratado": s.get("quantidade") or 0,
-            "publicado": s.get("publicadas") or 0,
-            "entraram": s.get("entradas") or 0,
-            "ocupacao_pct": (round((s.get("entradas") or 0) * 100.0 / s["quantidade"], 1)
+            "entraram": entradas_por_setor.get(str(s["id"]), 0),
+            "ocupacao_pct": (round(entradas_por_setor.get(str(s["id"]), 0)
+                                   * 100.0 / s["quantidade"], 1)
                              if s.get("quantidade") else None),
         } for s in setores],
         "recusas": [{"motivo": m or "sem motivo",
@@ -490,6 +533,11 @@ def _ingressos_do_setor(setor_id: str, pagina: int, por_pagina: int,
         "por_pagina": por_pagina,
         "ha_mais": ha_mais,
         "ingressos": ingressos,
+        # Os números deste setor vêm de carona, e só na PRIMEIRA página: quem
+        # abriu a lista está olhando este setor agora, e é o momento certo de
+        # contar. Repeti-los a cada página seriam três idas ao banco por toque
+        # em "Próximos" para escrever o mesmo número.
+        "numeros": _numeros_do_setor(setor["id"]) if pagina == 1 else None,
     }
 
 
@@ -612,6 +660,25 @@ def listar_ingressos(setor_id: str, pagina: int = 1,
                      authorization: str = Header(None)):
     _equipe(authorization)
     return _ingressos_do_setor(setor_id, pagina, por_pagina, busca)
+
+
+@router.get("/pedidos/{pedido}/dashboard")
+def ver_dashboard(pedido: int, authorization: str = Header(None)):
+    """O painel de público, pedido em separado da abertura do pedido.
+
+    Decisão do usuário em 16/08/2026: a abertura traz a estrutura, e o que
+    custa contagem só vem quando alguém pede.
+    """
+    _equipe(authorization)
+    pedido = int(pedido)
+    publicacao = _evento_do_pedido(pedido)
+    evento_id = (publicacao or {}).get("evento_id")
+    if not evento_id:
+        raise HTTPException(status_code=404,
+                            detail="este pedido ainda nao virou evento")
+    return _dashboard(evento_id,
+                      _setores_do_evento(evento_id, pedido),
+                      _modelos_do_pedido(pedido))
 
 
 @router.patch("/eventos/{evento_id}")

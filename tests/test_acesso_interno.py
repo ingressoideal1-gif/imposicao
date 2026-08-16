@@ -466,10 +466,10 @@ def test_o_grafico_avisa_quando_trunca(banco, equipe, monkeypatch):
                        "motivo": None, "dispositivo_id": APARELHO,
                        "momento": "2026-08-15T22:30:00+00:00"}
                       for i in range(1500)]
-    painel = interno._painel_do_pedido(PEDIDO)
-    assert painel["dashboard"]["grafico_truncado"] is True
+    d = interno.ver_dashboard(PEDIDO, authorization="Bearer x")
+    assert d["grafico_truncado"] is True
     # ...e o TOTAL continua exato, porque nao passa pelo teto.
-    assert painel["dashboard"]["publico"]["entraram"] == 1500
+    assert d["publico"]["entraram"] == 1500
 
 
 # ── O painel do pedido ──────────────────────────────────────────────────────
@@ -492,8 +492,8 @@ def test_o_painel_mostra_o_modelo_que_NAO_sobe_ao_controle(banco, equipe):
 def test_o_contratado_do_dashboard_ignora_o_modelo_sem_codigo(banco, equipe):
     """Somar os 50 do VIP daria um evento eternamente incompleto -- 1.050
     contratados para 1.000 que a portaria tem como ler."""
-    painel = interno._painel_do_pedido(PEDIDO)
-    assert painel["dashboard"]["publico"]["contratado"] == 1000
+    d = interno.ver_dashboard(PEDIDO, authorization="Bearer x")
+    assert d["publico"]["contratado"] == 1000
 
 
 def test_pedido_sem_evento_ainda_mostra_os_modelos(banco, equipe):
@@ -503,7 +503,7 @@ def test_pedido_sem_evento_ainda_mostra_os_modelos(banco, equipe):
     painel = interno._painel_do_pedido(PEDIDO)
     assert painel["evento"] is None
     assert painel["setores"] == []
-    assert painel["dashboard"] is None
+    assert painel["tem_dashboard"] is False
     assert len(painel["modelos"]) == 3
 
 
@@ -537,8 +537,11 @@ def test_o_painel_so_traz_os_setores_DESTE_pedido(banco, equipe):
 # ── O dashboard ─────────────────────────────────────────────────────────────
 
 def _semear_leituras(banco):
-    banco.credenciais = [{"id": f"c{i}", "setor_id": SETOR, "numero": i,
-                          "codigo_visivel": None, "origem": "qr_ideal",
+    # `evento_id` junto, como o `_gravar_lote` carimba desde 15/08/2026: o
+    # dashboard conta pelo EVENTO, e uma fixture sem essa coluna faria a
+    # contagem voltar zero -- escondendo o numero em vez de prova-lo.
+    banco.credenciais = [{"id": f"c{i}", "setor_id": SETOR, "evento_id": EVENTO,
+                          "numero": i, "codigo_visivel": None, "origem": "qr_ideal",
                           "status": "ativo", "created_at": "2026-08-15T00:00:00Z"}
                          for i in range(1, 101)]
     banco.leituras = [
@@ -565,7 +568,7 @@ def _semear_leituras(banco):
 
 def test_o_dashboard_conta_publico_entradas_saidas_e_presentes(banco, equipe):
     _semear_leituras(banco)
-    p = interno._painel_do_pedido(PEDIDO)["dashboard"]["publico"]
+    p = interno.ver_dashboard(PEDIDO, authorization="Bearer x")["publico"]
     assert p["publicado"] == 100
     assert p["entraram"] == 3
     assert p["sairam"] == 1
@@ -576,14 +579,14 @@ def test_o_dashboard_conta_publico_entradas_saidas_e_presentes(banco, equipe):
 def test_o_comparecimento_e_nulo_sem_ninguem_publicado(banco, equipe):
     """Zero por cento e uma afirmacao; "ainda nao da para saber" e outra. Um
     evento sem nada publicado nao tem denominador."""
-    p = interno._painel_do_pedido(PEDIDO)["dashboard"]["publico"]
+    p = interno.ver_dashboard(PEDIDO, authorization="Bearer x")["publico"]
     assert p["publicado"] == 0
     assert p["comparecimento_pct"] is None
 
 
 def test_o_dashboard_agrupa_as_recusas_por_motivo_com_rotulo_legivel(banco, equipe):
     _semear_leituras(banco)
-    recusas = interno._painel_do_pedido(PEDIDO)["dashboard"]["recusas"]
+    recusas = interno.ver_dashboard(PEDIDO, authorization="Bearer x")["recusas"]
     por_motivo = {r["motivo"]: r for r in recusas}
     assert por_motivo["ja_entrou"]["quantas"] == 1
     assert por_motivo["ja_entrou"]["rotulo"] == "Ingresso já usado"
@@ -592,7 +595,7 @@ def test_o_dashboard_agrupa_as_recusas_por_motivo_com_rotulo_legivel(banco, equi
 
 def test_o_dashboard_agrupa_por_hora_cheia_e_acha_o_pico(banco, equipe):
     _semear_leituras(banco)
-    d = interno._painel_do_pedido(PEDIDO)["dashboard"]
+    d = interno.ver_dashboard(PEDIDO, authorization="Bearer x")
     por_hora = {h["hora"]: h for h in d["por_hora"]}
     assert por_hora["2026-08-15T22:00"]["entradas"] == 2
     assert por_hora["2026-08-15T23:00"]["entradas"] == 1
@@ -605,7 +608,7 @@ def test_o_dashboard_conta_os_ingressos_bloqueados(banco, equipe):
     banco.bloqueios = [{"id": "b1", "evento_id": EVENTO, "setor_id": SETOR,
                         "de": 100, "ate": 150, "motivo": "PDV nao pagou",
                         "status": "ativo", "created_at": "2026-08-15T00:00:00Z"}]
-    d = interno._painel_do_pedido(PEDIDO)["dashboard"]
+    d = interno.ver_dashboard(PEDIDO, authorization="Bearer x")
     assert d["publico"]["bloqueados"] == 51      # de 100 a 150, inclusive
 
 
@@ -734,41 +737,55 @@ def test_nao_libera_bloqueio_de_outro_setor(banco, equipe):
     assert banco.bloqueios[0]["status"] == "ativo"
 
 
-def test_evento_sem_cortesia_nem_leitura_nao_conta_setor_por_setor(banco, equipe):
-    """A guarda de custo, medida contra producao: o pedido 18560, com cinco
-    setores, levava 4,4s para abrir -- quinze idas ao banco so de contagem, dez
-    delas voltando zero.
+def test_abrir_o_pedido_nao_conta_NADA(banco, equipe):
+    """Decisao do usuario, 16/08/2026: "nao deve carregar de imediato os
+    codigos, apenas se solicitado, cada setor de uma vez".
 
-    Um evento que nunca carregou cortesia e ainda nao teve leitura nenhuma e o
-    estado de TODO evento antes de a porta abrir. Duas perguntas ao evento
-    inteiro respondem por todos os setores.
+    Medido contra producao: com as contagens, abrir o pedido 18560 custava 20
+    idas ao banco a ~160ms cada. Sem elas, oito. Este teste guarda o CUSTO --
+    nao o layout -- e reprova no dia em que alguem devolver uma contagem para
+    dentro da abertura.
     """
     antes = len(banco.contagens)
     painel = interno._painel_do_pedido(PEDIDO)
-    assert all(s["codigos_cliente"] == 0 for s in painel["setores"])
-    assert all(s["entradas"] == 0 for s in painel["setores"])
+    assert len(banco.contagens) - antes == 0, banco.contagens[antes:]
+    # E os setores voltam SEM os campos de contagem: a tela nao pode ler um
+    # numero que nao foi buscado.
+    for s in painel["setores"]:
+        assert "publicadas" not in s
+        assert "entradas" not in s
+        assert "codigos_cliente" not in s
 
-    feitas = banco.contagens[antes:]
-    por_setor = [c for c in feitas if "setor_id=eq." in c]
-    # Uma por setor, e so a de publicadas: as outras duas foram dispensadas.
-    assert len(por_setor) == len(painel["setores"]), por_setor
-    assert all("origem=eq.qr_ideal" in c for c in por_setor), por_setor
+
+def test_os_numeros_do_setor_vem_com_a_lista_de_ingressos(banco, equipe):
+    """"Cada setor de uma vez": as tres contagens daquele setor viajam junto
+    com a primeira pagina da lista dele."""
+    banco.credenciais = (
+        [{"id": f"q{i}", "setor_id": SETOR, "evento_id": EVENTO, "numero": i,
+          "origem": "qr_ideal", "status": "ativo",
+          "created_at": "2026-08-15T00:00:00Z"} for i in range(1, 8)]
+        + [{"id": "s1", "setor_id": SETOR, "evento_id": EVENTO, "numero": None,
+            "origem": "cliente", "codigo_visivel": "STAFF-1", "status": "ativo",
+            "created_at": "2026-08-15T00:00:00Z"}])
+    r = interno._ingressos_do_setor(SETOR, 1, 50)
+    assert r["numeros"] == {"publicadas": 7, "codigos_cliente": 1, "entradas": 0}
 
 
-def test_com_cortesia_ou_leitura_a_contagem_por_setor_volta(banco, equipe):
-    """A guarda nao pode virar "nunca conta": quando ha o que contar, o numero
-    por setor tem de aparecer."""
-    banco.credenciais = [{"id": "s1", "setor_id": SETOR, "origem": "cliente",
-                          "evento_id": EVENTO}]
-    banco.leituras = [{"id": "l1", "evento_id": EVENTO, "setor_id": SETOR,
-                       "resultado": "permitido", "tipo": "entrada", "motivo": None,
-                       "credencial_id": "s1", "dispositivo_id": APARELHO,
-                       "momento": "2026-08-15T22:00:00+00:00"}]
-    painel = interno._painel_do_pedido(PEDIDO)
-    por_nome = {s["nome"]: s for s in painel["setores"]}
-    assert por_nome["PISTA"]["codigos_cliente"] == 1
-    assert por_nome["PISTA"]["entradas"] == 1
-    assert por_nome["CAMAROTE"]["codigos_cliente"] == 0
+def test_a_segunda_pagina_nao_repete_as_contagens(banco, equipe):
+    """Repeti-las custaria tres idas ao banco a cada toque em "Proximos", para
+    escrever o mesmo numero que ja esta na tela."""
+    banco.credenciais = [{"id": f"c{i}", "setor_id": SETOR, "evento_id": EVENTO,
+                          "numero": i, "origem": "qr_ideal", "status": "ativo",
+                          "created_at": "2026-08-15T00:00:00Z"}
+                         for i in range(1, 30)]
+    antes = len(banco.contagens)
+    assert interno._ingressos_do_setor(SETOR, 1, 10)["numeros"] is not None
+    custo_primeira = len(banco.contagens) - antes
+
+    antes = len(banco.contagens)
+    assert interno._ingressos_do_setor(SETOR, 2, 10)["numeros"] is None
+    assert len(banco.contagens) - antes == 0
+    assert custo_primeira == 3
 
 
 def test_id_que_nao_e_uuid_nao_vira_filtro_do_postgrest(banco, equipe):

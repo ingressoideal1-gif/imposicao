@@ -2494,9 +2494,14 @@
                     <div id="ic-situacao" class="ic-selos"></div>
                     <div id="ic-modelos" class="card" style="padding:14px 16px;margin:12px 0 20px;"></div>
 
-                    <!-- Dashboard de público -->
+                    <!-- Dashboard de público.
+                         Atrás de um botão de propósito: ele custa cinco contagens,
+                         uma varredura das leituras e uma passada por setor. Quem
+                         abre o pedido só para renomear um setor não paga por isso. -->
                     <div id="ic-dashboard-secao" style="display:none;">
                         <h3 class="ic-secao-titulo">Gerenciamento de público</h3>
+                        <button id="ic-dashboard-abrir" class="btn btn-sm btn-outline">Ver o painel de público</button>
+                        <div id="ic-dashboard-numeros" style="display:none;">
                         <div id="ic-dashboard" class="ic-kpis"></div>
                         <div class="ic-duas-colunas">
                             <div class="card" style="padding:14px 16px;">
@@ -2517,6 +2522,7 @@
                                 <span class="ic-amostra-recusa"></span> recusas
                             </p>
                             <p id="ic-grafico-aviso" class="ic-ajuda" style="display:none;"></p>
+                        </div>
                         </div>
                     </div>
 
