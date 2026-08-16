@@ -8,6 +8,7 @@ em texto, ao lado do nome.
 
 import json
 import os
+import re
 import subprocess
 
 import pytest
@@ -111,3 +112,51 @@ def test_todo_botao_da_lista_tem_rotulo_em_texto():
 def test_o_arquivo_entra_na_lista_que_as_estacoes_baixam():
     import security_config
     assert "lista-eventos.js" in security_config.PAINEL_ARQUIVOS
+
+
+# ── A pagina carrega tudo o que o codigo dela chama ─────────────────────────
+#
+# Este teste nasceu de um defeito que a suite inteira deixou passar. O
+# `virar-portao.js` chamava `window.portariaDeposito.contarFila()`, e o
+# `controle.html` nao carregava o `portaria-deposito.js`. Resultado: tocar na
+# barra do evento lancava e NAO FAZIA NADA -- sem erro na tela, sem uma palavra.
+# So apareceu dirigindo a tela num Chrome de verdade.
+#
+# O modo de falhar e sempre o mesmo, e e silencioso: um arquivo passa a usar um
+# `window.X` de outro, e a pagina que os junta nao e atualizada. Ninguem quebra;
+# um botao simplesmente para de responder.
+
+MODULOS_GLOBAIS = {
+    "chaveiro": "chaveiro.js",
+    "portariaDeposito": "portaria-deposito.js",
+    "listaEventos": "lista-eventos.js",
+    "virarPortao": "virar-portao.js",
+    "aparelhoAqui": "aparelho.js",
+    "AcessoConta": "acesso-conta.js",
+    "lerQR": "ler-qr.js",
+    "portariaCamera": "portaria-camera.js",
+    "Controle": "controle.js",
+    "paredePwa": "parede-pwa.js",
+}
+
+
+def _scripts_da_pagina(pagina):
+    return set(re.findall(r'<script src="([^"?]+)', _ler("frontend/" + pagina)))
+
+
+@pytest.mark.parametrize("pagina", ["controle.html", "portaria.html"])
+def test_a_pagina_carrega_todo_modulo_que_os_scripts_dela_usam(pagina):
+    scripts = _scripts_da_pagina(pagina)
+    codigo = "".join(
+        _ler("frontend/" + s) for s in sorted(scripts)
+        if s.endswith(".js") and os.path.exists(os.path.join(RAIZ, "frontend", s))
+    )
+    faltando = []
+    for global_, dono in MODULOS_GLOBAIS.items():
+        if dono in scripts:
+            continue                     # o dono esta carregado: nada a conferir
+        if re.search(r"window\." + global_ + r"\b", codigo):
+            faltando.append(global_ + " (mora em " + dono + ")")
+    assert not faltando, (
+        pagina + " usa modulo que ela nao carrega: " + ", ".join(faltando)
+    )

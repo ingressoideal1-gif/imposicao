@@ -295,7 +295,13 @@ body.somente-leitura .so-com-senha { opacity: .55; }
 }
 .barra-evento.destaque { justify-content: center; }
 .barra-evento .nome-evento { flex: 1; }
+/* O celular-com-QR do lado direito da barra. Maior que os 24px que o SVG
+   declara, para ficar como está na imagem de referência — e porque ele é a
+   única pista visual de que a barra inteira é o botão de LER. */
 .barra-evento .icone-ler { color: #60a5fa; display: flex; }
+.barra-evento .icone-ler svg { width: 34px; height: 34px; }
+/* A engrenagem preenche melhor a bolinha, que tem 52px. */
+.botao-engrenagem svg { width: 30px; height: 30px; }
 
 .luz {
     width: 22px; height: 22px; border-radius: 50%;

@@ -30,15 +30,25 @@
         return window.chaveiro.procurar(caso.pedido) ? 'trocar' : 'criar';
     }
 
-    function avisarFilaCheia(n) {
+    /**
+     * O unico aviso desta tela, e ele fica FORA de todo bloco de estado: e o
+     * que sobra visivel quando algo falha antes de a tela decidir o que
+     * mostrar. Mesmo elemento que o `controle.js` usa para falhar no arranque.
+     */
+    function avisar(texto) {
         var aviso = document.getElementById('erro-arranque');
-        aviso.textContent = (n === 1
+        if (!aviso) { return; }
+        aviso.textContent = texto;
+        aviso.classList.remove('sumindo');
+    }
+
+    function avisarFilaCheia(n) {
+        avisar((n === 1
             ? 'Há 1 leitura que ainda não subiu'
             : 'Há ' + n + ' leituras que ainda não subiram')
             + ' para o servidor. Conecte este aparelho à internet e espere a '
             + 'fila zerar antes de trocar de evento: o que ficou para trás '
-            + 'seria contado no evento errado.';
-        aviso.classList.remove('sumindo');
+            + 'seria contado no evento errado.');
     }
 
     /** Todos os setores do evento, para o portao nascer lendo. */
@@ -99,6 +109,24 @@
      * ja provou que e portao daquele evento quando o token foi guardado.
      */
     function abrir(evento_id, nome) {
+        // O deposito TEM de estar carregado. Antes esta linha era
+        // `window.portariaDeposito.contarFila()` direto, e a pagina que
+        // esquecesse o `<script>` dele lancava aqui -- o toque na barra do
+        // evento nao fazia nada, sem erro na tela e sem uma palavra. Aconteceu.
+        //
+        // E note o que NAO se faz aqui: tratar a ausencia como "fila zero".
+        // Seria a leitura mais simples, e e a errada -- deixaria trocar de
+        // evento com leitura pendente, que e exatamente a perda de contagem
+        // que a trava abaixo existe para impedir. Sem o deposito, a resposta
+        // certa e recusar e dizer por que.
+        if (!window.portariaDeposito) {
+            avisar('Não consegui conferir se há leituras pendentes neste '
+                 + 'aparelho, e sem essa conferência não dá para abrir o '
+                 + 'portão com segurança. Recarregue a tela; se continuar, '
+                 + 'avise a gráfica.');
+            return Promise.resolve();
+        }
+
         return window.portariaDeposito.contarFila().catch(function () {
             return 0;                 // IndexedDB fora do ar: nao ha fila a proteger
         }).then(function (naFila) {

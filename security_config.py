@@ -134,6 +134,11 @@ PAINEL_ARQUIVOS = [
     "lista-eventos.js",
     "virar-portao.js",
     "parede-pwa.js",
+    # O deposito entra JUNTO com eles, embora seja da portaria: antes de trocar
+    # de evento, o "virar portao" pergunta a ele quantas leituras ainda nao
+    # subiram, e sem essa conta a troca perderia contagem que o cliente pagou
+    # para ter. A tela inicial passou a carrega-lo por isso.
+    "portaria-deposito.js",
     "style.css",
 ]
 

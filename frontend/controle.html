@@ -211,6 +211,13 @@
      o "virar portão" vêm depois; `controle.js` (a engrenagem) por último entre
      eles; e a parede do PWA no fim, para não competir com o arranque da tela. -->
 <script src="chaveiro.js?v=613"></script>
+<!-- O depósito da portaria mora AQUI também, e não só no portaria.html: antes
+     de trocar de evento, o "virar portão" precisa saber quantas leituras ainda
+     não subiram. Sem este arquivo, aquela conta lança e o toque na barra do
+     evento não faz absolutamente nada — sem erro na tela, sem uma palavra. Foi
+     assim que este defeito passou por toda a suíte de testes e só apareceu no
+     navegador de verdade. -->
+<script src="portaria-deposito.js?v=613"></script>
 <script src="lista-eventos.js?v=613"></script>
 <script src="virar-portao.js?v=613"></script>
 <script src="controle.js?v=613"></script>
