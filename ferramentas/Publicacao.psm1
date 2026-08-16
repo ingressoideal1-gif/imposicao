@@ -126,6 +126,27 @@ function Find-SegredoNoTexto {
         return 'service_role em texto claro'
     }
 
+    # Personal Access Token do Supabase, o `sbp_`. Entrou no radar em
+    # 16/08/2026, quando a migracao do Render para o Supabase passou a exigir um
+    # para publicar Edge Functions.
+    #
+    # Ele merece freio proprio por duas razoes que a service_role nao tem:
+    #
+    # 1. NAO EXPIRA. Vale ate alguem revogar a mao. Um vazamento nao se corrige
+    #    com o tempo.
+    # 2. E DA CONTA, nao do projeto. Alcanca todos os projetos Supabase do dono,
+    #    nao so este. E a credencial mais abrangente que este repositorio chega
+    #    perto de tocar.
+    #
+    # Exige os 40 hexadecimais do token de verdade, e nao so o prefixo: assim
+    # `sbp_...` e `sbp_seu_token_aqui` continuam podendo aparecer na
+    # documentacao que ensina onde colar o token. Vale aqui a mesma regra do
+    # resto desta funcao -- um alarme que sempre toca e um alarme que se aprende
+    # a ignorar.
+    if ($Texto -match 'sbp_[0-9a-f]{40}') {
+        return 'Personal Access Token do Supabase (sbp_) — alcanca a conta inteira e nao expira'
+    }
+
     return ''
 }
 

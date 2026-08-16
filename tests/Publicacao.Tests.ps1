@@ -80,6 +80,19 @@ Describe "Find-SegredoNoTexto" {
         $guia = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\GUIA_AGENTE.md"
         Find-SegredoNoTexto $guia | Should Be ''
     }
+    It "barra um Personal Access Token do Supabase" {
+        # Montado por pedacos de proposito: escrever o token inteiro num literal
+        # deixaria no repositorio uma coisa com cara de credencial de verdade.
+        $pat = 'sbp_' + ('0123456789abcdef' * 2) + '01234567'
+        Find-SegredoNoTexto "SUPABASE_ACCESS_TOKEN=$pat" | Should Not Be ''
+    }
+    It "DEIXA PASSAR o marcador de documentacao sbp_..." {
+        # O freio exige os 40 hexadecimais do token real. Sem isso, toda linha
+        # de documentacao que ensina onde colar o token faria o alarme tocar --
+        # e alarme que sempre toca e alarme que se aprende a ignorar.
+        Find-SegredoNoTexto 'SUPABASE_ACCESS_TOKEN=sbp_...' | Should Be ''
+        Find-SegredoNoTexto 'coloque o seu sbp_seu_token_aqui no .env.local' | Should Be ''
+    }
     It "deixa passar texto comum" {
         Find-SegredoNoTexto 'def imposicao(): pass' | Should Be ''
     }
