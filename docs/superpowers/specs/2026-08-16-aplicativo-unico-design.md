@@ -197,6 +197,50 @@ O que muda neles: os dois hoje se iniciam sozinhos ao carregar e falam com ids d
 própria página. Passam a expor uma função de abertura que o roteador chama — e só ela toca
 no DOM.
 
+## O CDN tem de sair primeiro
+
+Descoberto ao detalhar o plano, e é pré-requisito de tudo o mais.
+
+`controle.html` e `evento.html` carregam **dois arquivos de CDN**:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+```
+
+`portaria.html` não carrega nenhum, e diz isso no próprio comentário: *"todo arquivo que ela
+usa é local — e não pode haver"*. Existe até um teste que varre a página atrás de `script`,
+`link` e `img` de fora (`test_a_tela_da_portaria_nao_carrega_nada_de_fora`).
+
+Juntar as três numa página só faz o CDN entrar no caminho do portão. Isso é inaceitável por
+duas razões independentes:
+
+- **Sem rede não abre.** Um `<script>` de fora que não carrega derruba a página inteira,
+  que é justamente o que o service worker existe para impedir. Cache não resolve: resposta
+  de outra origem é opaca.
+- **Cadeia de suprimento.** Este aplicativo guarda a sessão do dono e decide quem entra num
+  evento. Buscar o código de autenticação num terceiro a cada carregamento significa que
+  quem controlar aquele endereço controla o portão.
+
+**Os dois passam a ser servidos daqui**, como o `jsqr.min.js` já é — foi vendorizado pela
+mesma razão. E são carregados **sob demanda**: a tela da portaria nunca precisa do SDK do
+Supabase nem do gerador de QR, e não deve pagar por eles ao abrir no portão.
+
+Entram na `PAINEL_ARQUIVOS` junto com os demais, para a estação continuar servindo as telas
+inteiras.
+
+## As duas fases
+
+O trabalho se parte em duas, e a primeira entrega algo usável sozinha:
+
+| | O que entra | Pareamento |
+|---|---|---|
+| **Fase 1** | tirar o CDN, `app.html` com as três telas, o roteador, os apelidos, manifesto, service worker, o convite para instalar, e a câmera do **+ Novo Evento** | continua o de hoje (código de seis) |
+| **Fase 2** | o dono configurando no próprio aparelho: uma senha, nomear, liberar setor, travar; e a tela do dono perdendo criar e editar | passa a ser por senha |
+
+Separadas porque a Fase 2 muda o modelo de segurança, e misturá-la com a mudança de casca
+faria uma publicação em que, se algo sair errado, não se sabe qual das duas foi.
+
 ## Instalar
 
 **Um manifesto** (`app.webmanifest`), escopo e `start_url` em `/app.html`, os mesmos cinco
