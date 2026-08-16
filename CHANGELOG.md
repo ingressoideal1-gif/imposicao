@@ -4,7 +4,54 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v609** — 2026-08-16 | Agente **1.2.104**
+## Versão atual: **v610** — 2026-08-16 | Agente **1.2.105**
+
+---
+
+## [v610] — O Ideal Control vira um aplicativo só
+
+O cliente instala **um** aplicativo. Ele abre em **Seus eventos**, tem um botão **+ Novo
+Evento** que abre a câmera, e é o mesmo aplicativo que atende a portaria.
+
+**O prefixo `/ic/`, sem mover arquivo nenhum.** Um aplicativo instalável precisa de escopo,
+e escopo é prefixo de URL — mas as telas moram na raiz, ao lado do `index.html` e do
+`producao.html` da gráfica. Escopo `/` poria as telas da gráfica dentro do aplicativo do
+cliente, e o porteiro tocaria num link e cairia no painel de produção. O prefixo sai de
+reescrita na Vercel; os arquivos ficam onde estão.
+
+**As URLs de hoje continuam valendo**, por redirecionamento declarado na Vercel. É isso que
+mantém vivo o QR do Pedido que já circula por WhatsApp e o endereço do portão que já foi
+passado a porteiro — a querystring chega intacta.
+
+**Uma câmera, dois tipos de QR.** Não existe seletor de modo: o próprio QR diz o que ele é.
+`?t=` cadastra o evento, `?e=` liga o aparelho na portaria. Um seletor seria mais uma decisão
+para errar — e errar aqui manda o dono para a tela do porteiro, ou o porteiro para a tela de
+cadastro. QR de outra origem é recusado com a mensagem que diz **o que fazer**, não só o que
+deu errado.
+
+**O portão vem antes da rede.** Havendo aparelho pareado, o aplicativo abre direto na leitura
+**antes** de perguntar a sessão ao Supabase. Invertida a ordem, o portão passaria a depender
+de rede — a única coisa que ele não pode fazer.
+
+**O botão da câmera fica acima do login, e fora dele.** O porteiro não tem conta, e pedir
+login a ele seria travar o portão numa credencial que ninguém lhe deu.
+
+**O CDN saiu.** `controle.html` e `evento.html` buscavam o SDK do Supabase e o gerador de QR
+no jsDelivr. Script de outra origem que não carrega derruba a página, e o service worker não
+tem como guardá-lo — resposta de outra origem é opaca. Um aplicativo instalado que morre sem
+rede em três das quatro telas não é um aplicativo instalado. A segunda razão é independente:
+buscar o código de **autenticação** num terceiro significa que quem controlar aquele endereço
+controla o portão. Os dois passam a ser servidos daqui, com a versão congelada (supabase-js
+2.112.3) em vez de flutuar no `@2`.
+
+**E o convite para instalar.** Não existe "link que instala": o link é a URL, e quem instala é
+o navegador. O que faltava era a tela pedir — botão no Android, e no iPhone, onde não há
+evento nenhum, o caminho do Compartilhar escrito por extenso.
+
+Dois defeitos que só apareceram dirigindo o navegador, e não nos testes: o service worker,
+servido na raiz pela estação, registrava com escopo `/` e assumiria o painel de produção —
+agora só registra sob o prefixo; e a câmera da casa não funcionaria, porque ela ainda chamava
+a tela da portaria pelo nome.
 
 ---
 
