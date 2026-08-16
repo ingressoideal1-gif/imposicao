@@ -301,9 +301,20 @@ async function leituras(cabecalho: string | null, corpo: any): Promise<Response>
       dispositivo_id: aparelho.id,
       credencial_id: i.credencial_id,
       setor_id: i.setor_id,
-      resultado: i.resultado,
-      id_local: i.id_local,
+      id_local: String(i.id_local),
       momento: i.momento,
+      // `tipo` tem DEFAULT 'entrada' no esquema, entao omiti-lo daria a mesma
+      // linha -- por sorte. Explicito porque o dia em que o default mudar nao
+      // avisa ninguem, e porque o Python manda explicito.
+      tipo: "entrada",
+      resultado: i.resultado,
+      // ESTE campo ficou de fora ate 16/08/2026, e o furo passou por baixo de
+      // todo teste de HTTP: as duas rotas respondem `{"gravadas": 1}` antes de
+      // saber o que o banco fez, entao a resposta era identica e a linha
+      // gravada nao era. So apareceu quando li a tabela com a chave de
+      // servico. `motivo` e o "por que" da recusa no portao -- sem ele, a tela
+      // do dono mostra um ingresso negado e nao sabe dizer a razao.
+      motivo: i.motivo ?? null,
     });
   }
 

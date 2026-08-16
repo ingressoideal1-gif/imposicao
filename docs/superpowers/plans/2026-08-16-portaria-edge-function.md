@@ -1070,6 +1070,45 @@ git add tests/test_portaria_paridade.py
 git commit -m "Portaria: teste de paridade entre o Python e a Edge Function"
 ```
 
+**O que a Tarefa 5 achou de verdade (16/08/2026)**
+
+O teste escrito como o plano mandava passava — e passava escondendo um defeito. Duas
+lições que ficam:
+
+1. **`motivo` sumia.** A Edge Function montava a linha de leitura sem o campo `motivo`, que
+   é o "por que" de uma recusa no portão. As duas rotas respondem `{"gravadas": 1}` **antes
+   de saber o que o banco fez**, porque o envio pede `return=minimal` — então a resposta era
+   idêntica e a linha gravada não era. Nenhuma comparação por HTTP pegaria isso. Só apareceu
+   ao ler `producao_acesso_leituras` com a chave de serviço. Daí o
+   `test_a_linha_gravada_e_igual_e_nao_so_a_resposta`: onde a rota escreve e não devolve,
+   a prova tem de descer até a tabela.
+
+   No mesmo lugar faltava `tipo: "entrada"`, que escapou por sorte — a coluna tem
+   `DEFAULT 'entrada'` no esquema. Foi posto explícito assim mesmo: o dia em que o default
+   mudar não avisa ninguém.
+
+2. **O aparelho de teste precisa de um evento grande.** Com menos de 500 credenciais
+   (`POR_PAGINA`) o teste de paginação passa sem nunca virar a página, provando nada sobre
+   o teto de linhas do PostgREST — que é a única razão dele existir. O teste agora **falha**
+   nesse caso em vez de passar de graça. O aparelho "Paridade (teste)" foi criado no evento
+   *Teste Ideal Control*, que tem 2000 credenciais: quatro páginas.
+
+Um alarme falso, para não se repetir: o `Bearer` de 64 zeros devolve *"aparelho nao pareado
+ou revogado"*, e não *"aparelho nao pareado"*. As duas mensagens existem dos dois lados e
+saem da mesma ramificação em cada um — cabeçalho malformado nunca chega ao banco; token bem
+formado que o banco não reconhece, sim. As duas portarias sempre concordaram; o texto fixo
+do meu primeiro teste é que estava errado.
+
+**Onde mora o token, e por que não dá para "consultá-lo"**
+
+O token é sorteado no pareamento e o banco guarda só o `sha256` dele
+([acesso_portaria.py:187](../../../acesso_portaria.py#L187)). No celular ele vive no
+`localStorage`, chave `ideal_portaria_token`. Isso é proposital: banco vazado não entrega
+os tokens dos porteiros. O preço é que nem o dono consegue recuperar o token de um aparelho
+já pareado — para testar, cria-se um aparelho novo e pareia-se por ele.
+
+O token de teste mora em `PORTARIA_TOKEN_DE_TESTE`, no `.env.local`, que o git ignora.
+
 ---
 
 ### Tarefa 6: O corte
