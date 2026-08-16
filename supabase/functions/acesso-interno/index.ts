@@ -26,7 +26,11 @@
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa, quemConfigura } from "../_compartilhado/sessao.ts";
-import { inteiro, RecusaDeValidacao } from "../_compartilhado/validacao.ts";
+import {
+  inteiro,
+  recusaDeRotaDesconhecida,
+  RecusaDeValidacao,
+} from "../_compartilhado/validacao.ts";
 import {
   aplicarAparelho,
   aplicarAparelhoNovo,
@@ -635,7 +639,12 @@ async function rotear(req: Request, url: URL): Promise<Response> {
 
   // O texto e o do FastAPI, e nao um nosso mais bonito: e o que a tela recebe
   // hoje do Render, e o corte tem de ser invisivel para ela.
-  throw new Recusa(404, "Not Found");
+  //
+  // E o CODIGO depende do METODO: GET vira 404 e o resto vira 405, por causa de
+  // como o `app.py` esta montado. Aqui era um 404 fixo ate a Tarefa 3, e ele
+  // acertava so o caso que o teste de paridade exercitava -- um POST para rota
+  // errada respondia 404 nesta funcao e 405 no Render.
+  recusaDeRotaDesconhecida(metodo);
 }
 
 Deno.serve(async (req: Request) => {

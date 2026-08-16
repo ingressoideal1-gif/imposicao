@@ -59,3 +59,35 @@ export function inteiro(valor: unknown, onde: "path" | "query", nome: string): n
   if (!/^[+-]?\d+$/.test(texto)) recusaDeInteiro(onde, nome, valor);
   return Number(texto);
 }
+
+/**
+ * A recusa de rota que nao existe -- e ela depende do METODO, nao do caminho.
+ *
+ * ## O que foi medido, em 16/08/2026, contra o Render
+ *
+ *     GET    /api/acesso/pedidos/1/qr          404 {"detail":"Not Found"}
+ *     PUT    /api/acesso/pedidos/1/qr          405 {"detail":"Method Not Allowed"}
+ *     GET    /api/acesso/pedidos/1/nada-disso  404 {"detail":"Not Found"}
+ *     POST   /api/acesso/pedidos/1/nada-disso  405 {"detail":"Method Not Allowed"}
+ *     PATCH  /api/acesso/pedidos/1/nada-disso  405
+ *     DELETE /api/acesso/pedidos/1/nada-disso  405
+ *
+ * Repare na primeira linha: o caminho EXISTE, so que para POST, e mesmo assim a
+ * resposta e 404. E na quarta: o caminho nao existe para metodo nenhum, e a
+ * resposta e 405. Nao ha regra "caminho conhecido da 405" -- ha uma regra de
+ * metodo, e ela vem de como o `app.py` esta montado.
+ *
+ * O `app.py` serve o painel inteiro por um apanhador de arquivos estaticos, que
+ * casa QUALQUER caminho em GET. O Starlette percorre as rotas guardando a
+ * primeira que casa o caminho mas nao o metodo (que viraria 405) e segue
+ * procurando uma que case os dois. Em GET, o apanhador sempre casa por inteiro e
+ * responde o 404 dele -- o 405 guardado nunca chega a ser usado. Em qualquer
+ * outro metodo nada casa por inteiro, e o 405 do apanhador e o que sobra.
+ *
+ * Adivinhar isto pela leitura do FastAPI daria o contrario, e foi o que este
+ * porte fez antes de medir. Quem descobriu foram os testes de paridade.
+ */
+export function recusaDeRotaDesconhecida(metodo: string): never {
+  if (metodo === "GET" || metodo === "HEAD") throw new Recusa(404, "Not Found");
+  throw new Recusa(405, "Method Not Allowed");
+}

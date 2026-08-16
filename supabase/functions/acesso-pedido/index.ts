@@ -33,7 +33,11 @@ import { banco } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
-import { inteiro, RecusaDeValidacao } from "../_compartilhado/validacao.ts";
+import {
+  inteiro,
+  recusaDeRotaDesconhecida,
+  RecusaDeValidacao,
+} from "../_compartilhado/validacao.ts";
 import { gerarQrPedido, SEGREDO_QR_PEDIDO } from "../_compartilhado/assinatura.ts";
 import { abrirPedido } from "../_compartilhado/pedidos.ts";
 import { pedacosDaRota, urlDoEvento } from "./puro.ts";
@@ -74,19 +78,16 @@ async function gerar(pedido: number, quem: { email: string }): Promise<unknown> 
 async function rotear(req: Request, url: URL): Promise<Response> {
   const p = pedacosDaRota(url.pathname);
 
-  // A ordem e a do Starlette, e ela e visivel de fora: primeiro o CAMINHO casa
-  // (senao 404), depois o METODO (senao 405), e so entao o `pedido: int` e
-  // validado (senao 422) -- tudo antes de a rota rodar, e portanto antes da
-  // sessao. Inverter aqui faria a mesma URL responder 401 num endereco e 422 no
-  // outro enquanto as duas pilhas convivem.
-  //
-  // O texto das duas recusas e o do FastAPI, e nao um nosso mais bonito: e o
-  // que a tela recebe hoje do Render, e o corte tem de ser invisivel para ela.
-  if (!(p.length === 3 && p[0] === "pedidos" && p[2] === "qr")) {
-    throw new Recusa(404, "Not Found");
+  // Rota que nao e esta -- por caminho ou por metodo -- cai na regra do
+  // `app.py`, que depende do METODO e nao do caminho: GET vira 404, o resto
+  // vira 405. Ver `recusaDeRotaDesconhecida`, onde a medicao esta registrada.
+  if (req.method !== "POST" || !(p.length === 3 && p[0] === "pedidos" && p[2] === "qr")) {
+    recusaDeRotaDesconhecida(req.method);
   }
-  if (req.method !== "POST") throw new Recusa(405, "Method Not Allowed");
 
+  // O `pedido: int` e validado antes de a rota rodar, e portanto antes da
+  // sessao: caminho invalido responde 422 mesmo sem JWT. Inverter faria a mesma
+  // URL responder 401 num endereco e 422 no outro enquanto as duas convivem.
   const pedido = inteiro(p[1], "path", "pedido");
   const quem = usuarioDoJwt(req.headers.get("authorization"));
   return new Response(JSON.stringify(await gerar(pedido, quem)), {

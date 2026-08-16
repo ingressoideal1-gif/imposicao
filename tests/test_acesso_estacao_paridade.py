@@ -126,9 +126,34 @@ def test_segredo_errado_recusa_igual():
 
 
 def test_as_tres_rotas_recusam_igual_sem_segredo():
+    # O corpo vai junto de propósito: a rota `credenciais` declara um corpo
+    # obrigatório, e o FastAPI o valida ANTES de a rota rodar. Sem corpo, o
+    # Render responde 422 — a divergência que o teste seguinte registra.
     for rota in ("abrir", "credenciais", "fechar"):
-        a, b = _dos_dois(f"pedidos/{INEXISTENTE}/{rota}", segredo="errado")
+        a, b = _dos_dois(
+            f"pedidos/{INEXISTENTE}/{rota}", segredo="errado", corpo={"itens": []}
+        )
         assert a == b, f"a rota {rota} recusa diferente"
+
+
+def test_a_unica_divergencia_conhecida_esta_onde_foi_registrada():
+    """Corpo ausente com segredo errado: o Render diz 422, a Edge diz 401.
+
+    É deliberado, e é o único caso em que as duas discordam. O FastAPI valida o
+    corpo antes de a rota rodar, então nem chega a conferir o segredo; a Edge
+    Function confere o segredo primeiro, porque interpretar corpo de quem não se
+    identificou é trabalho feito para um estranho.
+
+    Fica escrito como teste, e não só como comentário, para que uma mudança
+    futura em qualquer um dos dois lados apareça — inclusive uma que
+    acidentalmente concordasse.
+    """
+    a = _pedir(f"{PYTHON}/pedidos/{INEXISTENTE}/credenciais", "POST", "errado")
+    b = _pedir(f"{EDGE}/pedidos/{INEXISTENTE}/credenciais", "POST", "errado")
+    if _ainda_nao_subiu(b) or b[0] == 503:
+        pytest.skip("a Edge Function `acesso-estacao` ainda não responde")
+    assert a[0] == 422, f"o Render mudou de comportamento: {a}"
+    assert b == (401, {"detail": "segredo do agente invalido"}), b
 
 
 def test_caminho_que_nao_e_numero_recusa_igual():

@@ -29,6 +29,7 @@
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
+import { recusaDeRotaDesconhecida } from "../_compartilhado/validacao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
 import { gerarSal, modelosLegiveis } from "../_compartilhado/pedidos.ts";
 import {
@@ -528,7 +529,10 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     return ok(await aplicarCodigos(evento.id, await corpo()));
   }
 
-  throw new Recusa(404, "Not Found");
+  // O codigo depende do METODO, e nao do caminho: GET vira 404 e o resto vira
+  // 405, por causa de como o `app.py` esta montado. Ver
+  // `recusaDeRotaDesconhecida`, onde a medicao contra o Render esta registrada.
+  recusaDeRotaDesconhecida(metodo);
 }
 
 Deno.serve(async (req: Request) => {

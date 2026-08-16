@@ -43,7 +43,11 @@ import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado
 import { Recusa } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
 import { iguaisEmTempoConstante } from "../_compartilhado/assinatura.ts";
-import { inteiro, RecusaDeValidacao } from "../_compartilhado/validacao.ts";
+import {
+  inteiro,
+  recusaDeRotaDesconhecida,
+  RecusaDeValidacao,
+} from "../_compartilhado/validacao.ts";
 import {
   abrirPedido,
   modelosLegiveis,
@@ -151,16 +155,15 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   const ok = (corpo: unknown) =>
     new Response(JSON.stringify(corpo), { headers: JSON_HEADERS });
 
-  // A ordem e a do Starlette, e ela e visivel de fora: primeiro o CAMINHO casa
-  // (senao 404), depois o METODO (senao 405), e so entao os parametros sao
-  // validados (senao 422) -- tudo isso antes de a rota rodar, e portanto antes
-  // do segredo. Trocar a ordem faria a mesma URL responder diferente em cada
-  // pilha enquanto as duas convivem.
+  // Rota que nao e uma das tres -- por caminho ou por metodo -- cai na regra do
+  // `app.py`, que depende do METODO e nao do caminho: GET vira 404, o resto vira
+  // 405. Ver `recusaDeRotaDesconhecida`, onde a medicao esta registrada.
   const conhecida = p.length === 3 && p[0] === "pedidos" &&
     ["abrir", "credenciais", "fechar"].includes(p[2]);
-  if (!conhecida) throw new Recusa(404, "Not Found");
-  if (req.method !== "POST") throw new Recusa(405, "Method Not Allowed");
+  if (!conhecida || req.method !== "POST") recusaDeRotaDesconhecida(req.method);
 
+  // O `pedido: int` e validado antes de a rota rodar, e portanto antes do
+  // segredo: caminho invalido responde 422 mesmo sem se identificar.
   const pedido = inteiro(p[1], "path", "pedido");
   await conferirAgente(req);
 
