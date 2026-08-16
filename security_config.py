@@ -114,6 +114,14 @@ PAINEL_ARQUIVOS = [
     # pagina abriria quebrada SO na maquina da grafica.
     "supabase-js.min.js",
     "qrcode-generator.min.js",
+    # A camera do "+ Novo Evento" da casa do Ideal Control. Ela e a MESMA da
+    # portaria -- um segundo leitor herdaria os defeitos que o primeiro ja
+    # corrigiu -- e por isso `jsqr.min.js` e `portaria-camera.js` entram aqui
+    # mesmo a estacao nao servindo a tela do portao.
+    "jsqr.min.js",
+    "portaria-camera.js",
+    "ler-qr.js",
+    "instalar.js",
     "style.css",
 ]
 

@@ -49,13 +49,25 @@ def test_o_sdk_e_o_gerador_de_qr_sao_servidos_daqui():
         assert os.path.getsize(caminho) > 3000, nome + " veio vazio ou truncado"
 
 
-def test_a_estacao_sincroniza_os_arquivos_novos():
+def test_a_estacao_sincroniza_tudo_o_que_as_telas_pedem():
     """Sem isto, a estacao serve uma tela que referencia arquivo que ela nao
-    tem -- e a pagina abre quebrada so na maquina da grafica."""
+    tem -- e a pagina abre quebrada SO na maquina da grafica, que e o pior
+    lugar para descobrir.
+
+    A lista sai da propria tela, e nao escrita a mao: assim, acrescentar um
+    `<script>` ao `controle.html` e esquecer o `PAINEL_ARQUIVOS` quebra o teste
+    em vez de quebrar a estacao.
+    """
     import security_config
 
-    for nome in ("supabase-js.min.js", "qrcode-generator.min.js"):
-        assert nome in security_config.PAINEL_ARQUIVOS, nome
+    for pagina in ("controle.html", "evento.html"):
+        html = _ler("frontend/" + pagina)
+        pedidos = re.findall(r'<(?:script|link)[^>]+(?:src|href)="([^"?]+)', html)
+        for pedido in pedidos:
+            if pedido.endswith(".js") or pedido.endswith(".css"):
+                assert pedido in security_config.PAINEL_ARQUIVOS, (
+                    pagina + " pede " + pedido + ", que a estacao nao sincroniza"
+                )
 
 
 # ── O prefixo /ic/ ──────────────────────────────────────────────────────────
@@ -165,6 +177,73 @@ def test_quem_liga_a_camera_diz_o_que_fazer_com_a_leitura():
         assert re.search(r"portariaCamera\.ligar\(\s*\w|portariaCamera\.ligar\(function", js), (
             arquivo + " liga a camera sem dizer o que fazer com a leitura"
         )
+
+
+# ── Instalar ────────────────────────────────────────────────────────────────
+
+def test_o_manifesto_tem_o_escopo_do_prefixo():
+    """Escopo `/` capturaria index.html e producao.html -- as telas da grafica
+    -- dentro do aplicativo do cliente."""
+    m = json.loads(_ler("frontend/app.webmanifest"))
+    assert m["scope"] == "/ic/"
+    assert m["start_url"] == "/ic/"
+    assert m["display"] == "standalone"
+    assert m["theme_color"] == "#0a0f1e"
+
+
+def test_o_manifesto_aponta_para_icones_que_existem():
+    """Os `src` do manifesto resolvem contra a URL DELE, que fica em
+    `/ic/app.webmanifest` -- entao relativos caem em `/ic/icones/…`, dentro do
+    escopo."""
+    for icone in json.loads(_ler("frontend/app.webmanifest"))["icons"]:
+        assert not icone["src"].startswith("/"), icone["src"] + " e absoluto"
+        assert os.path.exists(os.path.join(FRENTE, icone["src"])), icone["src"]
+
+
+def test_as_telas_declaram_o_manifesto_do_aplicativo():
+    """Instalar so e oferecido de uma pagina DENTRO do escopo que declara o
+    manifesto. Sem ele na tela do dono -- que e a casa -- nao ha de onde
+    instalar."""
+    for nome in PAGINAS_DO_APLICATIVO:
+        html = _ler("frontend/" + nome)
+        assert 'href="app.webmanifest"' in html, nome + " nao declara o manifesto"
+
+
+def test_o_pre_cache_cobre_as_tres_telas():
+    """A portaria abria sem rede porque o service worker guardava os arquivos
+    DELA. Agora sao tres telas no mesmo aplicativo."""
+    sw = _ler("frontend/sw.js")
+    for arquivo in ("controle.html", "evento.html", "portaria.html",
+                    "supabase-js.min.js", "ler-qr.js"):
+        assert arquivo in sw, arquivo + " ficou fora do pre-cache"
+
+
+def test_o_pre_cache_e_relativo():
+    """O service worker e servido de `/ic/sw.js`. Caminho absoluto guardaria
+    `/portaria.js`, que ninguem pede -- as paginas pedem `/ic/portaria.js`."""
+    sw = _ler("frontend/sw.js")
+    lista = sw[sw.index("const ARQUIVOS"):sw.index("];", sw.index("const ARQUIVOS"))]
+    assert "'/" not in lista, "o pre-cache tem caminho absoluto"
+
+
+def test_o_service_worker_continua_sem_guardar_api():
+    sw = _ler("frontend/sw.js")
+    assert "self.location.origin" in sw
+    assert sw.count("ignoreSearch") == 1, (
+        "casamento exato nos subrecursos; ignorar a query prende o aparelho no "
+        "codigo da geracao em que instalou"
+    )
+
+
+def test_o_convite_para_instalar_so_aparece_onde_cabe():
+    """Botao morto e pior que botao nenhum -- e no iPhone nao existe evento de
+    instalacao, so instrucao."""
+    js = _ler("frontend/instalar.js")
+    assert "beforeinstallprompt" in js
+    assert "display-mode: standalone" in js, (
+        "o convite continuaria aparecendo depois de instalado"
+    )
+    assert "Compartilhar" in js, "falta o caminho do iPhone"
 
 
 def test_os_dois_construtores_apontam_para_o_prefixo():

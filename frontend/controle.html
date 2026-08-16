@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Configurar o evento — Ideal Control</title>
     <meta name="theme-color" content="#0a0f1e">
+    <meta name="description" content="Seus eventos e a leitura no portão. Funciona sem rede.">
+
+    <!-- Esta é a CASA do aplicativo (`/ic/` abre aqui), e por isso é daqui que
+         o navegador oferece instalar. O manifesto precisa estar declarado na
+         página de onde a instalação parte — e ela tem de estar dentro do
+         escopo dele. -->
+    <link rel="manifest" href="app.webmanifest">
+    <link rel="icon" href="icones/portaria-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Ideal Control">
+
     <link rel="stylesheet" href="controle.css?v=609">
 </head>
 <body>
@@ -18,6 +32,10 @@
          antes de decidir qual bloco mostrar (sem conta verificada, sem
          evento carregado), esta é a única coisa que aparece na tela. -->
     <div id="erro-arranque" class="aviso erro sumindo" role="alert"></div>
+
+    <!-- O convite para instalar. Fica vazio e escondido até o navegador dizer
+         que dá para instalar (Android) ou até se reconhecer um iPhone. -->
+    <div id="convite-instalar" class="sumindo"></div>
 
     <!-- A câmera fica ACIMA do login, e fora dele, de propósito: o porteiro não
          tem conta, e pedir login a ele seria travar o portão numa credencial
@@ -167,6 +185,7 @@
 <script src="jsqr.min.js?v=609"></script>
 <script src="portaria-camera.js?v=609"></script>
 <script src="ler-qr.js?v=609"></script>
+<script src="instalar.js?v=609"></script>
 
 <script src="controle.js?v=609"></script>
 </body>

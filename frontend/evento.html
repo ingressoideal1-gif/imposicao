@@ -7,6 +7,17 @@
     <meta name="description" content="Cadastre o evento do seu pedido no controle de acesso.">
     <meta name="theme-color" content="#0a0f1e">
 
+    <!-- O mesmo manifesto das outras telas: é um aplicativo só. Esta é
+         frequentemente a PRIMEIRA tela que o cliente vê — ele chega aqui pelo
+         QR —, então é dela que costuma partir o convite para instalar. -->
+    <link rel="manifest" href="app.webmanifest">
+    <link rel="icon" href="icones/portaria-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Ideal Control">
+
     <!--
         Esta página é a ÚNICA porta de entrada do evento no controle de acesso.
         O cliente chega aqui apontando a câmera do celular para o QR que o
@@ -155,6 +166,12 @@
             <span>Controle de acesso</span>
         </header>
 
+        <!-- O convite para instalar. Esta é quase sempre a primeira tela que o
+             cliente vê — ele chega pelo QR —, e é a hora natural de oferecer o
+             ícone na tela de início. Fica escondido até o navegador dizer que
+             dá, ou até se reconhecer um iPhone. -->
+        <div id="convite-instalar" class="sumindo"></div>
+
         <!-- 1. Enquanto busca o pedido -->
         <div id="carregando">
             <div class="girando" role="status" aria-label="Carregando"></div>
@@ -261,6 +278,7 @@
     <script src="supabase-js.min.js?v=609"></script>
     <script src="supabase-config.js?v=609"></script>
     <script src="acesso-conta.js?v=609"></script>
+    <script src="instalar.js?v=609"></script>
     <script src="evento.js?v=609"></script>
 </body>
 </html>

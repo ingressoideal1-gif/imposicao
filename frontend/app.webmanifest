@@ -1,0 +1,22 @@
+{
+  "id": "/ic/",
+  "name": "Ideal Control",
+  "short_name": "Ideal Control",
+  "description": "Seus eventos e a leitura no portão. Funciona sem rede.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/ic/",
+  "scope": "/ic/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0a0f1e",
+  "background_color": "#0a0f1e",
+  "categories": ["business", "utilities"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "icones/portaria-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icones/portaria-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icones/portaria-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icones/portaria-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -61,27 +61,30 @@ def test_o_icone_e_opaco(caminho, _lado):
 # ── Manifesto ───────────────────────────────────────────────────────────────
 
 def _manifesto():
-    return json.loads(_ler("frontend/portaria.webmanifest"))
+    # Desde 16/08/2026 a portaria e uma das telas de um aplicativo so, e o
+    # manifesto e comum as tres. O `portaria.webmanifest`, com escopo
+    # `/portaria.html`, saiu junto.
+    return json.loads(_ler("frontend/app.webmanifest"))
 
 
 def test_o_manifesto_e_json_valido_com_os_campos_que_o_chrome_exige():
     m = _manifesto()
     assert m["name"]
     assert m["short_name"]
-    assert m["start_url"] == "/portaria.html"
+    assert m["start_url"] == "/ic/"
     assert m["display"] == "standalone"
     assert m["icons"]
 
 
-def test_o_escopo_e_so_a_portaria():
-    """Escopo largo capturaria producao.html, controle.html e evento.html.
+def test_o_escopo_nao_alcanca_as_telas_da_grafica():
+    """Escopo `/` capturaria index.html e producao.html.
 
-    O service worker ja e registrado com `scope: '/portaria.html'` pelo mesmo
-    motivo. Um manifesto com escopo '/' faria o aplicativo instalado abrir a
-    tela da GRAFICA quando o porteiro tocasse num link do painel.
+    O service worker e registrado no mesmo escopo pelo mesmo motivo: um
+    aplicativo do cliente com escopo largo faria o porteiro tocar num link e
+    cair no painel de producao da grafica.
     """
     m = _manifesto()
-    assert m["scope"] == "/portaria.html"
+    assert m["scope"] == "/ic/"
     assert m["start_url"].startswith(m["scope"])
 
 
@@ -115,16 +118,16 @@ def test_as_tres_cores_sao_a_mesma():
 def test_a_pagina_declara_o_manifesto():
     texto = _ler("frontend/portaria.html")
     assert 'rel="manifest"' in texto
-    assert "portaria.webmanifest" in texto
+    assert "app.webmanifest" in texto
 
 
 def test_o_manifesto_nao_leva_versao_na_url():
     """O publicar.ps1 so renumera `.js?v=` e `.css?v=`.
 
-    Um `portaria.webmanifest?v=605` ficaria congelado no 605 para sempre, e o
+    Um `app.webmanifest?v=605` ficaria congelado no 605 para sempre, e o
     aparelho instalado nunca veria icone novo.
     """
-    assert "portaria.webmanifest?v=" not in _ler("frontend/portaria.html")
+    assert "app.webmanifest?v=" not in _ler("frontend/portaria.html")
 
 
 def test_a_pagina_tem_as_metas_do_iphone():
@@ -178,11 +181,13 @@ def test_o_evento_e_guardado_ao_ABRIR_a_pagina():
 # ── Service worker ──────────────────────────────────────────────────────────
 
 def test_o_pre_cache_inclui_o_manifesto_e_os_icones():
+    """Sem barra na frente: o service worker e servido de `/ic/sw.js`, e um
+    caminho absoluto guardaria endereco que ninguem visita."""
     sw = _ler("frontend/sw.js")
-    assert "/portaria.webmanifest" in sw
-    assert "/icones/portaria-192.png" in sw
-    assert "/icones/portaria-512.png" in sw
-    assert "/apple-touch-icon.png" in sw
+    assert "'app.webmanifest'" in sw
+    assert "'icones/portaria-192.png'" in sw
+    assert "'icones/portaria-512.png'" in sw
+    assert "'apple-touch-icon.png'" in sw
 
 
 def test_o_service_worker_ignora_outra_origem():

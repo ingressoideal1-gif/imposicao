@@ -1,11 +1,17 @@
 /**
- * O service worker da tela da portaria.
+ * O service worker do Ideal Control — as tres telas do aplicativo.
  *
- * Existe por um motivo so: a pagina precisa ABRIR sem rede. Depois de aberta,
- * quem decide e o IndexedDB — este arquivo nao guarda dado nenhum do evento.
+ * Nasceu servindo so a portaria, e desde 16/08/2026 serve o aplicativo inteiro:
+ * a casa (a lista de eventos), o cadastro do evento e o portao. O escopo e
+ * `/ic/`, que vem do endereco por onde ele e registrado.
  *
- * O nome do cache carrega a versao, que vem do `?v=` com que o portaria.html
- * registra este arquivo. O TEXTO daqui e quase sempre igual entre releases --
+ * Existe por um motivo so: a pagina precisa ABRIR sem rede. Isso e obrigacao no
+ * portao, onde nao ha sinal e ha fila. Depois de aberta, quem decide e o
+ * IndexedDB — este arquivo nao guarda dado nenhum do evento, e NUNCA guarda
+ * resposta de API.
+ *
+ * O nome do cache carrega a versao, que vem do `?v=` com que a pagina registra
+ * este arquivo. O TEXTO daqui e quase sempre igual entre releases --
  * a versao vem de `self.location` em tempo de execucao, nunca do proprio
  * codigo -- entao o navegador quase nunca detecta "o sw.js mudou" pelo
  * conteudo. Quem dispara a troca e OUTRA coisa: o `register` do portaria.html
@@ -25,25 +31,49 @@
  * rapido no portao sem prender o aparelho no codigo de uma geracao anterior.
  */
 const VERSAO = new URL(self.location).searchParams.get('v') || 'dev';
-const CACHE = 'portaria-' + VERSAO;
+const CACHE = 'ideal-control-' + VERSAO;
 
+// TODOS os caminhos RELATIVOS, e nao por estilo: este arquivo e servido de
+// `/ic/sw.js`, entao `'portaria.js'` vira `/ic/portaria.js` -- que e exatamente
+// o que as paginas pedem. Um `'/portaria.js'` guardaria um endereco que
+// ninguem visita.
 const ARQUIVOS = [
-    '/portaria.html',
-    '/qr-ideal-hash.js?v=' + VERSAO,
-    '/portaria-validacao.js?v=' + VERSAO,
-    '/portaria-deposito.js?v=' + VERSAO,
-    '/portaria-camera.js?v=' + VERSAO,
-    '/portaria.js?v=' + VERSAO,
-    '/jsqr.min.js?v=' + VERSAO,
+    // A casa. `'./'` e o endereco que o `start_url` do manifesto abre.
+    './',
+    'controle.html',
+    'controle.css?v=' + VERSAO,
+    'controle.js?v=' + VERSAO,
+    'ler-qr.js?v=' + VERSAO,
+    'qr-canvas.js?v=' + VERSAO,
+    'qrcode-generator.min.js?v=' + VERSAO,
+
+    'evento.html',
+    'evento.js?v=' + VERSAO,
+
+    'portaria.html',
+    'qr-ideal-hash.js?v=' + VERSAO,
+    'portaria-validacao.js?v=' + VERSAO,
+    'portaria-deposito.js?v=' + VERSAO,
+    'portaria.js?v=' + VERSAO,
+
+    // Compartilhados pelas tres telas.
+    'portaria-camera.js?v=' + VERSAO,
+    'jsqr.min.js?v=' + VERSAO,
+    'supabase-js.min.js?v=' + VERSAO,
+    'supabase-config.js?v=' + VERSAO,
+    'acesso-conta.js?v=' + VERSAO,
+    'instalar.js?v=' + VERSAO,
+
     // Sem versao, de proposito: o `publicar.ps1` so renumera `.js?v=` e
-    // `.css?v=`. Estes quatro sao servidos com `no-cache` pela Vercel, entao a
+    // `.css?v=`. Estes sao servidos com `no-cache` pela Vercel, entao a
     // instalacao seguinte ja guarda o arquivo novo. Sem eles aqui, o aplicativo
     // abre sem rede mas o Android nao consegue reler o manifesto, e o icone
     // pode voltar ao generico.
-    '/portaria.webmanifest',
-    '/icones/portaria-192.png',
-    '/icones/portaria-512.png',
-    '/apple-touch-icon.png',
+    'app.webmanifest',
+    'icones/portaria-192.png',
+    'icones/portaria-512.png',
+    'apple-touch-icon.png',
+    'Logo Ideal Dark.png',
 ];
 
 self.addEventListener('install', e => {
@@ -53,8 +83,12 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
     e.waitUntil(
         caches.keys()
+            // `portaria-` continua na lista de propósito: é o nome que os
+            // caches criados antes de 16/08/2026 carregam, e sem ele a geração
+            // antiga ficaria ocupando espaço no aparelho para sempre.
             .then(nomes => Promise.all(
-                nomes.filter(n => n.startsWith('portaria-') && n !== CACHE)
+                nomes.filter(n => (n.startsWith('ideal-control-') || n.startsWith('portaria-'))
+                                  && n !== CACHE)
                      .map(n => caches.delete(n))))
             .then(() => self.clients.claim())
     );
