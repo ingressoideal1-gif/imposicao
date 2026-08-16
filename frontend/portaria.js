@@ -191,7 +191,10 @@
         // lanterna depois de cada leitura, e um botao dizendo "acesa" com a luz
         // apagada e pior do que botao nenhum.
         $('btn-lanterna').textContent = 'Lanterna';
-        window.portariaCamera.ligar().then(function () {
+        // A funcao vai junto: a camera nao conhece mais esta tela pelo nome --
+        // ela e usada tambem pela casa do aplicativo, que faz outra coisa com o
+        // texto lido.
+        window.portariaCamera.ligar(validarTexto).then(function () {
             // So AGORA da para perguntar: antes de o getUserMedia resolver nao
             // ha trilha de video, e a resposta seria sempre "nao tem".
             $('btn-lanterna').classList.toggle('sumindo', !window.portariaCamera.temLanterna());

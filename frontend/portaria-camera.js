@@ -20,9 +20,15 @@
     // precisa apagar a lanterna DEPOIS de soltar o video da tela e ANTES de
     // parar a trilha, e nesse meio o `srcObject` ja foi a nulo.
     var fluxo = null, acesa = false;
+    // Quem ligou a camera e que decide o que fazer com o texto lido. Duas telas
+    // leem QR: a portaria, que valida o ingresso, e a casa do aplicativo, que
+    // despacha entre cadastrar evento e ligar aparelho. Chamar uma delas pelo
+    // nome daqui fazia deste arquivo o leitor de UMA tela so.
+    var aoLerAtual = null;
 
-    function ligar() {
+    function ligar(aoLer) {
         if (rodando) return Promise.resolve();
+        aoLerAtual = aoLer || null;
         rodando = true;
         video = document.getElementById('cam');
         canvas = canvas || document.createElement('canvas');
@@ -102,7 +108,7 @@
         if (texto === ultimo && agora - ultimoEm < 3000) return;
         ultimo = texto; ultimoEm = agora;
         desligar();
-        window.portaria.validarTexto(texto);
+        if (aoLerAtual) { aoLerAtual(texto); }
     }
 
     function quadro() {

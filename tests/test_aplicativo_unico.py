@@ -145,6 +145,28 @@ def test_ler_um_QR_nao_exige_conta():
     )
 
 
+def test_a_camera_entrega_a_leitura_a_quem_a_ligou():
+    """Duas telas leem QR agora: a portaria e a casa.
+
+    Enquanto a camera chamasse a portaria pelo NOME, ler um QR na casa
+    quebraria -- `window.portaria` nao existe la. E escrever um segundo leitor
+    faria o novo herdar os defeitos que o primeiro ja corrigiu.
+    """
+    js = _ler("frontend/portaria-camera.js")
+    assert "window.portaria.validarTexto" not in js, (
+        "a camera ainda chama a portaria pelo nome"
+    )
+    assert "function ligar(aoLer" in js
+
+
+def test_quem_liga_a_camera_diz_o_que_fazer_com_a_leitura():
+    for arquivo in ("frontend/portaria.js", "frontend/ler-qr.js"):
+        js = _ler(arquivo)
+        assert re.search(r"portariaCamera\.ligar\(\s*\w|portariaCamera\.ligar\(function", js), (
+            arquivo + " liga a camera sem dizer o que fazer com a leitura"
+        )
+
+
 def test_os_dois_construtores_apontam_para_o_prefixo():
     """`puro.ts`, e nao `index.ts`: a montagem da URL mora no modulo puro da
     Edge Function, que e o que tem teste proprio em Deno."""
