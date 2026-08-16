@@ -28988,9 +28988,17 @@ async function carregarCorImpressora(printerName) {
     const chkAtivo = document.getElementById('ped-print-cor-ativo');
     if (!selPerfil || !printerName) return;
     try {
+        // 127.0.0.1 e nao caminho relativo: o mapa e os perfis vivem no AGENTE
+        // (`printer_icc_map.json`), como diz o comentario acima deste bloco. Com
+        // caminho relativo, o painel aberto pela Vercel perguntava ao Render —
+        // que tem outro disco, e efemero. O seletor vinha vazio, e o que fosse
+        // salvo ali sumia na publicacao seguinte, sem erro na tela.
+        //
+        // E o MESMO desvio que ja tinha sido corrigido em `carregarCapacidades`
+        // e no mapa de PPDs; este bloco ficou para tras.
         const [perfis, mapa] = await Promise.all([
-            fetch('/api/icc').then(r => r.json()),
-            fetch('/api/printers/icc-map').then(r => r.json())
+            fetch(`${AGENTE_LOCAL_URL}/api/icc`).then(r => r.json()),
+            fetch(`${AGENTE_LOCAL_URL}/api/printers/icc-map`).then(r => r.json())
         ]);
         _corPerfisCache = perfis;
         selPerfil.innerHTML = '<option value="">— sem perfil —</option>' +
@@ -29035,14 +29043,14 @@ async function salvarCorImpressora() {
     const printerName = document.getElementById('ped-print-printer')?.value;
     if (!printerName) return;
     try {
-        const mapa = await fetch('/api/printers/icc-map').then(r => r.json()) || {};
+        const mapa = await fetch(`${AGENTE_LOCAL_URL}/api/printers/icc-map`).then(r => r.json()) || {};
         mapa[printerName] = {
             perfil: document.getElementById('ped-print-cor-perfil')?.value || '',
             intento: document.getElementById('ped-print-cor-intento')?.value || 'relativo',
             ativo: document.getElementById('ped-print-cor-ativo')?.checked === true,
             ajustes: _corAjustes
         };
-        await fetch('/api/printers/icc-map', {
+        await fetch(`${AGENTE_LOCAL_URL}/api/printers/icc-map`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(mapa)
@@ -29059,7 +29067,7 @@ async function enviarPerfilIcc(input) {
     const fd = new FormData();
     fd.append('file', file);
     try {
-        const res = await fetch('/api/icc/upload', { method: 'POST', body: fd });
+        const res = await fetch(`${AGENTE_LOCAL_URL}/api/icc/upload`, { method: 'POST', body: fd });
         const corpo = await res.json().catch(() => ({}));
         if (!res.ok) {
             alert('Perfil recusado: ' + (corpo.detail || 'arquivo inválido.'));
@@ -30121,16 +30129,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// - PRE-AQUECIMENTO DO SERVIDOR CLOUD (evita cold start do Render) -
-// Dispara um ping silencioso logo ao carregar a pagina.
-// Somente quando o frontend esta na nuvem (nao em localhost).
-(function _prewarmRenderServer() {
-    var isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (isLocalhost) return;
-    fetch('https://imposicao.onrender.com/api/health', { method: 'GET', mode: 'cors', cache: 'no-store' })
-        .then(function(r) { if (r.ok) console.log('[Render] Servidor cloud pre-aquecido'); })
-        .catch(function() {});
-})();
+// O PRE-AQUECIMENTO DO RENDER MORREU AQUI, em 16/08/2026.
+//
+// Ele disparava um ping ao `imposicao.onrender.com/api/health` em TODA página
+// carregada da nuvem, só para acordar o servidor antes que alguém precisasse
+// dele — o Render dorme depois de um tempo sem uso, e o primeiro pedido depois
+// disso levava dezenas de segundos.
+//
+// Não há mais o que acordar. As telas falam com Edge Functions, que não dormem,
+// e o que ainda mora no Render são caminhos de reserva que rodam sem cliente
+// Supabase — desenvolvimento, não produção. Manter o ping seria pagar uma
+// requisição por carregamento de página para manter de pé um servidor que a
+// Fase 4 vai desligar.
 
 // --- Exportação de PDF dos Modelos ---
 async function exportarPdfModelos() {
