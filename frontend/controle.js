@@ -202,6 +202,14 @@
         $('novo-aparelho-setores')
             .replaceWith(botoesDeSetor('novo-aparelho-setores', acesosAntes, null));
 
+        // O mesmo, para o cartão "Usar ESTE aparelho". Os dois formulários são
+        // irmãos e usam os mesmos botões de setor -- desenhar de outro jeito
+        // aqui daria ao dono duas maneiras diferentes de escolher a mesma
+        // coisa, na mesma tela.
+        var acesosAqui = setoresAcesos('aparelho-aqui-setores');
+        $('aparelho-aqui-setores')
+            .replaceWith(botoesDeSetor('aparelho-aqui-setores', acesosAqui, null));
+
         // Depois dos cartões de setor existirem no DOM: são eles que trazem os
         // campos de lotação e uso que a trava também precisa desligar.
         travarCampos();
@@ -693,6 +701,46 @@
     }
 
     /**
+     * ESTE celular vira o portão.
+     *
+     * Irmão do `criarAparelho`, e diferente dele em duas coisas: o servidor
+     * devolve o TOKEN em vez de um código para alguém digitar, e a tela não
+     * volta — ela vai para a leitura, sem a conta do dono.
+     *
+     * Não há `carregarPainel()` no fim de propósito: a sessão acabou de ser
+     * encerrada, e recarregar o painel com ela morta só produziria um 401 na
+     * cara de quem já está indo embora desta tela.
+     */
+    function usarEsteAparelho() {
+        var nome = $('aparelho-aqui-nome').value;
+        var setores = setoresAcesos('aparelho-aqui-setores');
+        var erro = $('erro-aparelho-aqui');
+        erro.classList.add('sumindo');
+
+        if (!setores.length) {
+            // Aparelho sem setor nenhum recusa TUDO na porta, com o laranja de
+            // "setor não autorizado", e o porteiro não teria como saber por
+            // quê. Melhor não deixar sair assim.
+            erro.textContent = 'Toque em pelo menos um setor: um aparelho sem '
+                + 'setor recusa todos os ingressos.';
+            erro.classList.remove('sumindo');
+            return Promise.resolve();
+        }
+
+        $('btn-usar-aparelho').disabled = true;
+        return gravar('/eventos/' + estado.evento_id + '/aparelhos/aqui',
+                      { nome: nome, setores: setores }, 'POST')
+            .then(function (r) {
+                return window.aparelhoAqui.assumir(r.token, r.nome);
+            })
+            .catch(function (e) {
+                $('btn-usar-aparelho').disabled = false;
+                erro.textContent = e.message || 'Não consegui configurar este aparelho.';
+                erro.classList.remove('sumindo');
+            });
+    }
+
+    /**
      * Gera outro código para um aparelho que já existe.
      *
      * Recarrega o painel depois de mostrar o código, igual a `criarAparelho`:
@@ -1026,7 +1074,18 @@
     }
 
     function abrir() {
-        if (ehAparelhoDePortaria()) {
+        // `?configurar=1` é a ÚNICA saída de um aparelho já pareado.
+        //
+        // Sem ela, este desvio prenderia o celular no portão para sempre: a
+        // casa manda para a leitura, e da leitura não há como voltar à
+        // configuração. O botão "Configurar este aparelho", na tela da
+        // portaria, é quem traz o dono para cá com esta marca na URL.
+        //
+        // Ela não abre nada sozinha: quem chega aqui cai no login, e mexer em
+        // aparelho continua exigindo a senha.
+        var querConfigurar = new URLSearchParams(location.search).get('configurar') === '1';
+
+        if (ehAparelhoDePortaria() && !querConfigurar) {
             // `replace`, e não `href`: o portão não entra no histórico, senão o
             // botão "voltar" do celular devolve o porteiro para a tela do dono.
             location.replace('portaria.html');
@@ -1314,6 +1373,10 @@
         $('btn-fechar-codigo').addEventListener('click', function () {
             $('caixa-codigo').classList.add('sumindo');
             $('codigo-valor').textContent = '';
+        });
+
+        $('btn-usar-aparelho').addEventListener('click', function () {
+            usarEsteAparelho();
         });
 
         $('btn-criar-aparelho').addEventListener('click', function () {

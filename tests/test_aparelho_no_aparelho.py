@@ -109,3 +109,37 @@ def test_a_rota_do_aparelho_daqui_exige_elevacao():
     corte = ts.index('p[3] === "aqui"')
     trecho = ts[corte:ts.index("return ok", corte)]
     assert "exigirElevacao" in trecho
+
+
+# ── O aparelho assume o portao ──────────────────────────────────────────────
+
+def test_o_token_e_guardado_ANTES_de_a_sessao_ser_encerrada():
+    """Ordem errada aqui nao da erro na tela -- da um aparelho inutil no meio de
+    um evento.
+
+    O token e o que NAO da para recuperar: ele sai do servidor uma vez so. A
+    conta, o dono reabre digitando a senha outra vez. Por isso o token vem
+    primeiro.
+    """
+    js = _ler("frontend/aparelho.js")
+    assert js.index("setItem(CHAVE_TOKEN") < js.index("signOut"), (
+        "a sessao e encerrada antes de o token estar guardado"
+    )
+
+
+def test_a_sessao_da_conta_nao_fica_no_aparelho():
+    """O ponto que faz a mudanca valer.
+
+    O codigo de seis caracteres existia para a senha do dono nunca chegar ao
+    celular que fica com o porteiro. Trocar o codigo pela senha e DEIXAR a
+    sessao aberta entregaria ao porteiro a conta inteira do cliente.
+    """
+    assert "signOut" in _ler("frontend/aparelho.js")
+
+
+def test_o_portao_nao_entra_no_historico():
+    """Sem `replace`, o botao "voltar" do celular devolveria o porteiro a tela
+    de configuracao do dono."""
+    js = _ler("frontend/aparelho.js")
+    assert "location.replace" in js
+    assert "location.href =" not in js

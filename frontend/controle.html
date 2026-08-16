@@ -129,7 +129,34 @@
         <div class="secao">
             <h2>Aparelhos da portaria</h2>
             <div id="aparelhos"></div>
+
+            <!-- O caminho novo: o dono está COM O CELULAR DO PORTÃO NA MÃO.
+                 Não há código para anotar nem para digitar em lugar nenhum — o
+                 aparelho recebe o token direto e a conta é desconectada dele. -->
+            <div class="cartao so-com-senha" id="usar-este-aparelho">
+                <h3>Usar ESTE aparelho na portaria</h3>
+                <p style="font-size:.82rem;color:var(--dim);margin:0 0 4px;">
+                    Dê um nome ao portão e toque nos setores que ele valida. Ao
+                    salvar, <strong>este celular</strong> passa a ler ingressos e
+                    a sua conta é desconectada dele — quem ficar com o aparelho
+                    não entra na sua conta.
+                </p>
+                <label for="aparelho-aqui-nome">Nome deste portão</label>
+                <input id="aparelho-aqui-nome" type="text" placeholder="Ex.: Portão A">
+                <p style="font-size:.82rem;color:var(--dim);margin:12px 0 4px;">
+                    Toque nos setores que este aparelho valida
+                </p>
+                <div id="aparelho-aqui-setores"></div>
+                <button id="btn-usar-aparelho">Salvar e começar a ler</button>
+                <div id="erro-aparelho-aqui" class="aviso erro sumindo" role="alert"
+                     style="margin-top:12px;"></div>
+            </div>
+
             <div class="cartao so-com-senha">
+                <p style="font-size:.82rem;color:var(--dim);margin:0 0 10px;">
+                    Ou crie um aparelho para <strong>outro</strong> celular, com
+                    código para digitar lá.
+                </p>
                 <label for="novo-aparelho-nome">Nome do novo aparelho</label>
                 <input id="novo-aparelho-nome" type="text" placeholder="Ex.: Portão A">
                 <p style="font-size:.82rem;color:var(--dim);margin:12px 0 4px;">
@@ -186,6 +213,10 @@
 <script src="portaria-camera.js?v=611"></script>
 <script src="ler-qr.js?v=611"></script>
 <script src="instalar.js?v=611"></script>
+<!-- O momento em que este celular vira um portão: guardar o token, encerrar a
+     sessão da conta, ir para a leitura. Arquivo próprio porque a ORDEM dessas
+     três coisas é o que impede o aparelho de ficar sem conta e sem token. -->
+<script src="aparelho.js?v=611"></script>
 <!-- Esta é a casa (`/ic/` abre aqui), e o Chrome só oferece "Instalar
      aplicativo" numa página que tenha service worker registrado. Sem isto, o
      botão de instalar nunca apareceria — que é o ponto do aplicativo. -->

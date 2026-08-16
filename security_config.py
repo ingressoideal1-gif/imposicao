@@ -123,6 +123,7 @@ PAINEL_ARQUIVOS = [
     "ler-qr.js",
     "instalar.js",
     "sw-registro.js",
+    "aparelho.js",
     "style.css",
 ]
 
