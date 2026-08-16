@@ -14,7 +14,7 @@
  * Rodar: deno test supabase/functions/portaria/puro_test.ts
  */
 import { assertEquals } from "jsr:@std/assert@1";
-import { iguaisEmTempoConstante, rotaPedida } from "./puro.ts";
+import { iguaisEmTempoConstante, origemPermitida, rotaPedida } from "./puro.ts";
 
 Deno.test("iguais em tempo constante: strings identicas", () => {
   assertEquals(iguaisEmTempoConstante("abc123", "abc123"), true);
@@ -65,4 +65,55 @@ Deno.test("rota: caminho desconhecido nao vira rota valida por acidente", () => 
   // que nao e nenhuma das tres rotas, entao o servidor devolve 404.
   const r = rotaPedida("/functions/v1/outra-coisa/entrar");
   assertEquals(r === "entrar", false);
+});
+
+// ── Politica de origem (CORS) ───────────────────────────────────────────────
+//
+// Estes casos existem porque o defeito que eles cobrem NAO aparece em teste de
+// servidor: `curl` e `urllib` nao fazem preflight nem olham
+// `Access-Control-Allow-Origin`. Ate 16/08/2026 a funcao nao respondia OPTIONS
+// coisa nenhuma, e so o celular do porteiro descobriria isso -- no portao.
+
+Deno.test("origem: a pagina de producao passa", () => {
+  assertEquals(
+    origemPermitida("https://ideal-imposition.vercel.app"),
+    "https://ideal-imposition.vercel.app",
+  );
+});
+
+Deno.test("origem: um preview do Vercel passa pela regex", () => {
+  const previa = "https://ideal-imposition-4kbywehmf-algum-projeto.vercel.app";
+  assertEquals(origemPermitida(previa), previa);
+});
+
+Deno.test("origem: desenvolvimento local em qualquer porta passa", () => {
+  assertEquals(origemPermitida("http://localhost:9123"), "http://localhost:9123");
+  assertEquals(origemPermitida("http://127.0.0.1"), "http://127.0.0.1");
+});
+
+Deno.test("origem: dominio de fora e recusado", () => {
+  assertEquals(origemPermitida("https://exemplo.com"), null);
+});
+
+Deno.test("origem: o sufixo enganoso NAO passa", () => {
+  // O caso que uma regex sem ancora deixaria entrar: `test()` casa pedaco, e
+  // um atacante que registrasse este dominio leria a carga do evento inteira.
+  assertEquals(
+    origemPermitida("https://ideal-imposition.vercel.app.exemplo.com"),
+    null,
+  );
+});
+
+Deno.test("origem: o prefixo enganoso NAO passa", () => {
+  assertEquals(origemPermitida("https://mal.com/https://imposicao.vercel.app"), null);
+});
+
+Deno.test("origem: requisicao sem cabecalho Origin nao ganha permissao", () => {
+  // Chamada de servidor para servidor nao e navegador e nao precisa de CORS;
+  // devolver `*` aqui seria dar permissao a quem nunca pediu.
+  assertEquals(origemPermitida(null), null);
+});
+
+Deno.test("origem: http na producao NAO passa", () => {
+  assertEquals(origemPermitida("http://ideal-imposition.vercel.app"), null);
 });

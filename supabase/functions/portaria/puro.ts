@@ -40,3 +40,40 @@ export function iguaisEmTempoConstante(a: string, b: string): boolean {
 export function rotaPedida(pathname: string): string {
   return pathname.replace(/^.*\/portaria\/?/, "");
 }
+
+/**
+ * A politica de CORS, copiada de `security_config.py` (ALLOWED_ORIGINS e
+ * ALLOWED_ORIGIN_REGEX) para nao divergir do Python enquanto os dois convivem.
+ *
+ * POR QUE ISTO PRECISOU EXISTIR: o Render respondia o preflight sozinho, via
+ * `CORSMiddleware` do FastAPI, e a Edge Function nao respondia nada -- OPTIONS
+ * caia no 404 de rota desconhecida. A pagina da portaria e servida pela Vercel
+ * e chama `supabase.co`, entao TODA requisicao dela e cross-origin; o POST de
+ * `/leituras` leva Authorization e Content-Type json, o que obriga o navegador
+ * a mandar o preflight ANTES. Sem resposta, o POST nunca sai.
+ *
+ * Nenhum teste de servidor pega isto: `urllib` e `curl` nao fazem preflight
+ * nem conferem cabecalho de origem. So o navegador -- e, na pratica, so o
+ * celular do porteiro no portao.
+ *
+ * A regex e ancorada de proposito. O Starlette casa `allow_origin_regex` com
+ * `fullmatch`; um `test()` do JavaScript casa PEDACO, e sem as ancoras
+ * `https://ideal-imposition.vercel.app.exemplo.com` passaria.
+ */
+const ORIGENS_PERMITIDAS = [
+  "https://ideal-imposition.vercel.app",
+  "https://imposicao.vercel.app",
+  "https://imposicao.onrender.com",
+];
+
+const ORIGEM_PERMITIDA = new RegExp(
+  "^(https://(ideal-imposition|imposicao)(-[a-z0-9-]+)?\\.vercel\\.app" +
+    "|http://(localhost|127\\.0\\.0\\.1)(:\\d+)?)$",
+);
+
+/** A origem a devolver no `Access-Control-Allow-Origin`, ou null para recusar. */
+export function origemPermitida(origem: string | null): string | null {
+  if (!origem) return null;
+  if (ORIGENS_PERMITIDAS.includes(origem)) return origem;
+  return ORIGEM_PERMITIDA.test(origem) ? origem : null;
+}

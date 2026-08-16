@@ -1186,6 +1186,40 @@ ingresso bom (tem de permitir) e um ingresso de outro setor (tem de dizer
 **Este passo não é opcional.** Nenhum teste substitui um ingresso de verdade na frente de
 uma câmera de verdade.
 
+**O que a Tarefa 6 achou (16/08/2026)**
+
+O plano dizia "troque o retorno de `base()`". Seguir isso ao pé da letra teria produzido dois
+defeitos, os dois invisíveis para os testes que existiam:
+
+1. **A URL ficaria sem sentido — e funcionaria assim mesmo.** O `api()` monta
+   `base() + '/api/acesso/portaria' + caminho`. Trocando só o host, sairia
+   `.../functions/v1/portaria/api/acesso/portaria/entrar`. E a função **aceitaria**: o `.*` do
+   `rotaPedida` é guloso e casa até o *último* `/portaria/`, então sobraria `entrar`. Uma URL
+   errada passando nos testes, esperando o dia em que aquela regex mudasse. O caminho inteiro
+   passou a morar dentro do `base()`.
+
+2. **CORS não existia na Edge Function.** O Render responde o preflight sozinho, via
+   `CORSMiddleware` do FastAPI; a função não respondia nada, e o `OPTIONS` caía no 404 de rota
+   desconhecida. Como a página vem da Vercel e chama `supabase.co`, **toda** requisição do
+   aparelho é cross-origin, e o POST de `/leituras` leva `Authorization` — o que obriga o
+   preflight antes. Medido contra os dois endereços no ar: Render `200` com os cabeçalhos,
+   função `404`. O corte teria quebrado todos os celulares, e nenhum teste de servidor pegaria
+   — `curl` e `urllib` não fazem preflight.
+
+   A política foi copiada de `security_config.py` para não divergir do Python, com a regex
+   **ancorada**: o Starlette casa com `fullmatch`, mas o `test()` do JavaScript casa pedaço, e
+   sem âncora `https://ideal-imposition.vercel.app.exemplo.com` passaria. Há teste para esse
+   caso e para o prefixo enganoso.
+
+   Os cabeçalhos entram num envelope único na saída do `Deno.serve`, e não em cada resposta —
+   inclusive nas recusas lançadas. Uma recusa sem cabeçalho faz o navegador esconder o corpo do
+   JavaScript, e a tela mostraria "erro de rede" em vez de "aparelho não pareado": a diferença
+   entre o porteiro saber o que fazer e ficar olhando para o celular.
+
+O dublê de `fetch` do `portaria_tela_harness.js` compara o `pathname` por **igualdade exata** e
+aborta o resto — é o que faz os testes de tela valerem como prova do endereço. Os quatro casos
+foram atualizados junto.
+
 ---
 
 ## O que fica para a Fase 2b

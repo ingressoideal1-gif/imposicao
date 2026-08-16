@@ -174,7 +174,7 @@ def test_atualizar_o_evento_troca_a_carga_sem_tocar_fila_ou_entradas():
     nova = carga()
     nova["evento"]["nome"] = "Festa Atualizada"
     nova["proxima"] = None
-    r = _atualizar({"method": "GET", "pathname": "/api/acesso/portaria/faixa",
+    r = _atualizar({"method": "GET", "pathname": "/functions/v1/portaria/faixa",
                     "status": 200, "body": nova})
     assert r["filaAntes"] == 2
     assert r["filaDepois"] == 2, "atualizar o evento apagou leituras da fila"
@@ -193,7 +193,7 @@ def _sincronizar(mock):
 
 
 def test_sincronizar_remove_da_fila_so_depois_da_confirmacao_do_servidor():
-    r = _sincronizar({"method": "POST", "pathname": "/api/acesso/portaria/leituras",
+    r = _sincronizar({"method": "POST", "pathname": "/functions/v1/portaria/leituras",
                       "status": 200, "body": {"gravadas": 2}})
     assert r["filaAntes"] == 2
     assert r["filaDepois"] == 0
@@ -203,7 +203,7 @@ def test_sincronizar_mantem_na_fila_se_o_servidor_nao_confirmar():
     """O teste que fica vermelho se alguem inverter a ordem: remover da fila
     ANTES do fetch faria a leitura sumir mesmo quando o servidor nunca
     recebeu -- e a lotacao contaria uma entrada que nunca chegou."""
-    r = _sincronizar({"method": "POST", "pathname": "/api/acesso/portaria/leituras",
+    r = _sincronizar({"method": "POST", "pathname": "/functions/v1/portaria/leituras",
                       "abort": True})
     assert r["filaAntes"] == 2
     assert r["filaDepois"] == 2
@@ -216,7 +216,7 @@ def test_401_na_sincronizacao_preserva_a_fila_em_vez_de_apagar():
     dono pode revogar o aparelho ERRADO (Portao B fica horas sem sinal e
     acumula leituras; o dono revoga o aparelho errado na tela dele) e o 401
     que vem depois nao pode comer o que o Portao B ainda nao mandou."""
-    r = _sincronizar({"method": "POST", "pathname": "/api/acesso/portaria/leituras",
+    r = _sincronizar({"method": "POST", "pathname": "/functions/v1/portaria/leituras",
                       "status": 401, "body": {"detail": "aparelho nao pareado ou revogado"}})
     assert r["filaAntes"] == 2
     assert r["filaDepois"] == 2, "o 401 apagou leituras que o servidor nunca confirmou"

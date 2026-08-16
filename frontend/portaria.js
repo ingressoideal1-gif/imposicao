@@ -26,10 +26,26 @@
     }
 
     function base() {
-        // Servida pela Vercel, a pagina fala com o motor do Render. Servida pelo
-        // agente (localhost:9000) nao ha router de acesso, entao tambem e o
-        // Render — o aparelho da portaria nunca usa o agente.
-        return 'https://imposicao.onrender.com';
+        // 16/08/2026: a portaria passou a ser Edge Function, ao lado do banco.
+        // Antes era `https://imposicao.onrender.com/api/acesso/portaria`, e cada
+        // consulta pagava DUAS travessias de internet (celular -> Render ->
+        // Supabase e volta), num servico que dorme quando ninguem usa. No
+        // portao, com fila e 4G, isso se sentia.
+        //
+        // O Python continua no ar no endereco antigo durante a transicao. Para
+        // voltar atras: troque esta linha de volta e republique. Os dois falam
+        // com o mesmo banco e dividem o mesmo freio de forca bruta, entao o
+        // aparelho nao percebe a diferenca -- o token continua valendo, e a
+        // fila que ele tiver acumulado sobe igual.
+        //
+        // O CAMINHO INTEIRO mora aqui, e nao so o host, de proposito. Os dois
+        // lados pedem prefixos diferentes (`/api/acesso/portaria` contra
+        // `/functions/v1/portaria`), e trocar so o host montaria
+        // `.../functions/v1/portaria/api/acesso/portaria/entrar` -- que o
+        // `rotaPedida` da funcao ACEITARIA, porque o `.*` dele e guloso e casa
+        // ate o ultimo `/portaria/`. Seria uma URL sem sentido passando nos
+        // testes, esperando o dia em que aquela regex mudasse.
+        return 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/portaria';
     }
 
     function api(caminho, opcoes) {
@@ -37,7 +53,7 @@
         opcoes.headers = opcoes.headers || {};
         if (estado.token) opcoes.headers['Authorization'] = 'Bearer ' + estado.token;
         if (opcoes.body) opcoes.headers['Content-Type'] = 'application/json';
-        return fetch(base() + '/api/acesso/portaria' + caminho, opcoes).then(function (r) {
+        return fetch(base() + caminho, opcoes).then(function (r) {
             return r.json().catch(function () { return {}; }).then(function (corpo) {
                 if (!r.ok) {
                     var e = new Error(corpo.detail || ('erro ' + r.status));

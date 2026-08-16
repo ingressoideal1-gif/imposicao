@@ -51,12 +51,18 @@ async function rodar(caso) {
         }
 
         // Fora de localhost: o unico caminho de rede que a tela tem hoje e o
-        // `fetch` que `sincronizar()` manda para o Render. So respondemos ao
-        // mock que o caso pediu explicitamente -- tudo o mais e abortado.
+        // `fetch` que `sincronizar()` manda para a Edge Function da portaria
+        // (era o Render ate 16/08/2026). So respondemos ao mock que o caso
+        // pediu explicitamente -- tudo o mais e abortado.
+        //
+        // A comparacao e de igualdade EXATA, e e isso que faz estes testes
+        // valerem como prova do endereco: se `base()` mudar sem que o caso
+        // mude junto, o `fetch` e abortado e o teste falha em vez de passar
+        // batendo num lugar errado.
         const mock = caso.mock;
         if (mock && u.pathname === mock.pathname) {
             if (req.method() === 'OPTIONS') {
-                // Preflight do CORS: e cross-origin (localhost -> onrender.com)
+                // Preflight do CORS: e cross-origin (localhost -> supabase.co)
                 // com Content-Type json e Authorization, entao o navegador
                 // manda isto ANTES do POST de verdade. Sem responder, o
                 // preflight falha e o POST nunca sai -- estariamos testando
