@@ -109,6 +109,11 @@ PAINEL_ARQUIVOS = [
     "mapas.js",
     "supabase-config.js",
     "pdf-lib.min.js",
+    # Vendorizados em 16/08/2026, quando sairam do CDN: sem eles aqui, a
+    # estacao serviria uma tela que referencia arquivo que ela nao tem, e a
+    # pagina abriria quebrada SO na maquina da grafica.
+    "supabase-js.min.js",
+    "qrcode-generator.min.js",
     "style.css",
 ]
 

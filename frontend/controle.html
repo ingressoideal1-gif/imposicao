@@ -125,14 +125,21 @@
     <p class="rodape">Ingresso Ideal</p>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Servido daqui, e nao de um CDN: esta tela vai virar uma das telas do
+     aplicativo instalavel, que precisa abrir sem rede -- e script de outra
+     origem que nao carrega derruba a pagina, sem cache que salve (resposta de
+     outra origem e opaca). Fora isso, buscar o codigo de AUTENTICACAO num
+     terceiro significa que quem controlar aquele endereco controla o portao.
+     O arquivo e o mesmo build UMD que o CDN servia (supabase-js 2.112.3), com
+     uma diferenca: a versao agora esta congelada aqui, em vez de flutuar. -->
+<script src="/supabase-js.min.js?v=609"></script>
 <script src="/supabase-config.js?v=609"></script>
 <script src="/acesso-conta.js?v=609"></script>
 
 <!-- O QR do endereço de pareamento. Mesma biblioteca do cliente.html e do
      index.html; o `qr-canvas.js` traz o `renderQRCodeOnCtx`, que é a função de
      "desenhar um QR num canvas" deste projeto. -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="/qrcode-generator.min.js?v=609"></script>
 <script src="/qr-canvas.js?v=609"></script>
 <script src="/controle.js?v=609"></script>
 </body>
