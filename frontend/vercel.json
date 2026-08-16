@@ -10,8 +10,8 @@
       "source": "/api/:path*",
       "destination": "https://imposicao.onrender.com/api/:path*"
     },
-    { "source": "/ic", "destination": "/inicio.html" },
-    { "source": "/ic/", "destination": "/inicio.html" },
+    { "source": "/ic", "destination": "/controle.html" },
+    { "source": "/ic/", "destination": "/controle.html" },
     { "source": "/ic/:path*", "destination": "/:path*" },
     {
       "source": "/cliente/:match*",

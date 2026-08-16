@@ -63,11 +63,11 @@
     },
     {
       "source": "/ic",
-      "destination": "/frontend/inicio.html"
+      "destination": "/frontend/controle.html"
     },
     {
       "source": "/ic/",
-      "destination": "/frontend/inicio.html"
+      "destination": "/frontend/controle.html"
     },
     {
       "source": "/ic/:path*",

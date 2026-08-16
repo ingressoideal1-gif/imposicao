@@ -1006,7 +1006,33 @@
     var mostrar = function (id) { $(id).classList.remove('sumindo'); };
     var esconder = function (id) { $(id).classList.add('sumindo'); };
 
+    /**
+     * Este aparelho é um portão?
+     *
+     * Desde que as telas do cliente e da portaria viraram um aplicativo só,
+     * `/ic/` é a casa de todo mundo — e o porteiro abre pelo mesmo ícone que o
+     * dono. Havendo token de aparelho guardado, este celular é um portão, e não
+     * há nada a decidir: vai direto para a leitura.
+     *
+     * A pergunta vem ANTES de tudo o que depende de rede, e é por isso que ela
+     * mora aqui em cima em vez de dentro do `abrir()`. O porteiro abre sem
+     * sinal e sem conta; `AcessoConta.sessao()` é ida ao Supabase. Invertida a
+     * ordem, o portão passaria a depender de rede — a única coisa que ele não
+     * pode fazer.
+     */
+    function ehAparelhoDePortaria() {
+        try { return !!localStorage.getItem('ideal_portaria_token'); }
+        catch (e) { return false; }   // aba anônima: trate como não-portaria
+    }
+
     function abrir() {
+        if (ehAparelhoDePortaria()) {
+            // `replace`, e não `href`: o portão não entra no histórico, senão o
+            // botão "voltar" do celular devolve o porteiro para a tela do dono.
+            location.replace('portaria.html');
+            return Promise.resolve();
+        }
+
         esconder('erro-arranque');
         // `Promise.resolve().then(...)` — não chamar `AcessoConta.sessao()`
         // direto — porque ela NÃO é async: se `supabaseClient` for nulo (sem
@@ -1031,6 +1057,9 @@
             if (pedido) {
                 estado.evento_id = pedido;
                 restaurarElevacao();
+                // A câmera é da CASA, não da configuração: dentro de um evento
+                // já aberto, "+ Novo Evento" não quer dizer nada.
+                esconder('ler-qr');
                 mostrar('evento');
                 return carregarPainel();
             }

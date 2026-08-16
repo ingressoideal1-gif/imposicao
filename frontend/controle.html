@@ -19,6 +19,25 @@
          evento carregado), esta é a única coisa que aparece na tela. -->
     <div id="erro-arranque" class="aviso erro sumindo" role="alert"></div>
 
+    <!-- A câmera fica ACIMA do login, e fora dele, de propósito: o porteiro não
+         tem conta, e pedir login a ele seria travar o portão numa credencial
+         que ninguém lhe deu. Um QR do portão lido aqui liga o aparelho sem que
+         ninguém entre em conta nenhuma — e ele não precisa rolar a tela para
+         passar por um formulário que não é dele. -->
+    <div id="ler-qr">
+        <button id="btn-ler-qr">+ Novo Evento</button>
+        <p style="font-size:.82rem;color:var(--dim);margin:6px 0 0;text-align:center;">
+            Leia o QR que a gráfica enviou.
+        </p>
+        <div id="caixa-qr" class="sumindo">
+            <video id="cam" playsinline muted
+                   style="width:100%;border-radius:12px;background:#000;aspect-ratio:4/3;margin-top:12px;"></video>
+            <button id="btn-lanterna-qr" class="secundario sumindo" type="button">Lanterna</button>
+            <button id="btn-fechar-qr" class="secundario">Cancelar</button>
+        </div>
+        <div id="erro-qr" class="aviso erro sumindo" role="alert" style="margin-top:12px;"></div>
+    </div>
+
     <!-- 1. Entrar -->
     <div id="bloco-entrar" class="cartao sumindo">
         <h1>Entre com a sua conta do Vibe</h1>
@@ -40,8 +59,8 @@
         <h1>Seus eventos</h1>
         <div id="eventos"></div>
         <p id="sem-eventos" class="aviso sumindo">
-            Você ainda não cadastrou nenhum evento. Leia o QR que a gráfica enviou
-            para cadastrar o primeiro.
+            Você ainda não cadastrou nenhum evento. Toque em <strong>+ Novo
+            Evento</strong> e leia o QR que a gráfica enviou.
         </p>
     </div>
 
@@ -141,6 +160,14 @@
      "desenhar um QR num canvas" deste projeto. -->
 <script src="qrcode-generator.min.js?v=609"></script>
 <script src="qr-canvas.js?v=609"></script>
+
+<!-- A câmera do "+ Novo Evento" é a MESMA da portaria: dois leitores (o
+     `BarcodeDetector` nativo e o `jsQR` de reserva no iPhone), já resolvidos
+     lá. Um segundo leitor herdaria os defeitos que o primeiro já corrigiu. -->
+<script src="jsqr.min.js?v=609"></script>
+<script src="portaria-camera.js?v=609"></script>
+<script src="ler-qr.js?v=609"></script>
+
 <script src="controle.js?v=609"></script>
 </body>
 </html>

@@ -93,6 +93,58 @@ def test_as_urls_antigas_continuam_valendo():
             assert destino[antiga].startswith("/ic/"), arquivo + " " + antiga
 
 
+def test_a_casa_do_aplicativo_e_a_lista_de_eventos():
+    """`/ic/` abre o `controle.html`, que SEM `?evento=` ja e a lista "Seus
+    eventos" e ja faz o login. Uma casa em pagina propria duplicaria os dois --
+    e duplicata de login tranca o cliente para fora do evento dele.
+    """
+    for arquivo in ("vercel.json", "frontend/vercel.json"):
+        conf = json.loads(_ler(arquivo))
+        casa = [r["destination"] for r in conf["rewrites"] if r["source"] in ("/ic", "/ic/")]
+        assert casa and all(c.endswith("controle.html") for c in casa), arquivo
+
+
+def test_o_aparelho_de_portaria_vai_direto_para_o_portao():
+    """O porteiro abre sem rede e sem conta.
+
+    `controle.js` comeca perguntando a sessao ao Supabase, que e ida a rede. A
+    pergunta do token de aparelho vem ANTES -- senao o portao passa a depender
+    de rede, que e a unica coisa que ele nao pode fazer.
+    """
+    js = _ler("frontend/controle.js")
+    assert "ideal_portaria_token" in js, "a casa nao olha se o aparelho e de portaria"
+
+    # Dentro do `abrir()`, e nao no arquivo inteiro: `AcessoConta.sessao`
+    # aparece tambem no tratamento do login, antes daqui, e comparar a primeira
+    # ocorrencia de cada um mediria duas coisas sem relacao.
+    corpo = js[js.index("function abrir()"):]
+    corpo = corpo[:corpo.index("AcessoConta.sessao")]
+    assert "ehAparelhoDePortaria" in corpo, (
+        "o arranque pergunta a sessao (ida a rede) antes de olhar o token do "
+        "aparelho -- assim o portao passa a depender de rede"
+    )
+
+
+def test_o_qr_de_fora_e_recusado():
+    """Um QR qualquer de rua nao pode abrir fluxo nenhum com dado estranho
+    dentro."""
+    js = _ler("frontend/ler-qr.js")
+    assert "location.origin" in js
+    assert "não é do Ideal Control" in js
+
+
+def test_ler_um_QR_nao_exige_conta():
+    """Pedir login ao porteiro seria travar o portao numa credencial que
+    ninguem lhe deu. O botao mora FORA do bloco de login."""
+    html = _ler("frontend/controle.html")
+    assert 'id="btn-ler-qr"' in html
+    inicio_login = html.index('id="bloco-entrar"')
+    fim_login = html.index('id="lista-eventos"')
+    assert not (inicio_login < html.index('id="btn-ler-qr"') < fim_login), (
+        "o botao de ler QR esta dentro do bloco de login"
+    )
+
+
 def test_os_dois_construtores_apontam_para_o_prefixo():
     """`puro.ts`, e nao `index.ts`: a montagem da URL mora no modulo puro da
     Edge Function, que e o que tem teste proprio em Deno."""
