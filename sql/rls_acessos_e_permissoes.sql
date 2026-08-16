@@ -93,9 +93,14 @@ COMMENT ON TABLE imposition_acessos_locais IS
 -- (UPDATE), `a` (INSERT) ou `d` (DELETE) significa que a escrita continua
 -- aberta.
 
+-- `p.polcmd::text` e NAO `p.polcmd`: a coluna e do tipo `"char"` (um byte), e
+-- `text || "char"` e ambíguo no Postgres — `operator is not unique`. O editor do
+-- Supabase roda o arquivo inteiro numa transação, então esse erro de digitação
+-- desfez o ALTER e o DROP junto com ele: o script parecia ter rodado e o banco
+-- continuava aberto.
 SELECT c.relname                                        AS tabela,
        c.relrowsecurity                                 AS rls_ligado,
-       COALESCE(string_agg(p.polname || ' [' || p.polcmd || ']', ', '),
+       COALESCE(string_agg(p.polname || ' [' || p.polcmd::text || ']', ', '),
                 '(nenhuma)')                            AS politicas
 FROM pg_class c
 LEFT JOIN pg_policy p ON p.polrelid = c.oid
