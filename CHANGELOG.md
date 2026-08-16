@@ -54,6 +54,12 @@ chegar o aparelho espera em vez de ler com a antiga. Trocando de **evento**, a f
 sobrou é esquecida: o servidor a gravaria com o evento do token atual — entrada de um evento
 contada em outro.
 
+**E uma correção achada conferindo esta leva:** o service worker não guardava `aparelho.js`
+nem `sw-registro.js`. Com sinal ninguém perceberia — a busca cai na rede. No modo avião, o
+script simplesmente não carrega, sem erro na tela, e o botão não faz nada. Agora uma guarda
+lê a lista **da própria tela**: acrescentar um `<script>` e esquecer o cache quebra o teste em
+vez de quebrar o aparelho na gráfica.
+
 ---
 
 ## [v611] — O convite para instalar aparecia só na tela do porteiro
