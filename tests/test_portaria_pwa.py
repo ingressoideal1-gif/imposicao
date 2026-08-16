@@ -193,3 +193,29 @@ def test_o_pre_cache_e_o_html_pedem_a_mesma_versao():
 
     versoes = set(re.findall(r"\.js\?v=(\d+)", _ler("frontend/portaria.html")))
     assert len(versoes) == 1, f"portaria.html tem versoes misturadas: {sorted(versoes)}"
+
+
+# ── Aviso de atualizacao ────────────────────────────────────────────────────
+
+def test_a_tela_avisa_quando_ha_versao_nova():
+    """Instalado, o aplicativo nao tem barra de endereco: sem este aviso o
+    porteiro nao tem como recarregar."""
+    html = _ler("frontend/portaria.html")
+    assert 'id="faixa-atualizacao"' in html
+    assert "updatefound" in html
+
+
+def test_a_atualizacao_nunca_recarrega_sozinha():
+    """Recarregar no meio de uma leitura assusta quem esta com a fila andando
+    na frente -- e pode ser justo quando a camera acabou de abrir."""
+    html = _ler("frontend/portaria.html")
+    assert "location.reload" in html
+    trecho = html[html.index("faixa-atualizacao"):]
+    assert "addEventListener('click'" in trecho or "onclick" in trecho
+
+
+def test_o_aviso_nao_aparece_na_primeira_instalacao():
+    """`navigator.serviceWorker.controller` existir e o que separa ATUALIZACAO
+    de PRIMEIRA instalacao. Sem esse teste, a faixa apareceria na estreia,
+    oferecendo recarregar uma pagina que acabou de carregar."""
+    assert "navigator.serviceWorker.controller" in _ler("frontend/portaria.html")

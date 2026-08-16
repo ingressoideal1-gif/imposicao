@@ -101,10 +101,25 @@
             color: var(--dim); margin-top: 12px;
         }
         .cam { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4/3; }
+
+        /* A faixa de atualizacao NAO e um botao de acao: menor e discreta, de
+           proposito. Ela nao pode competir com o alvo de toque que o porteiro
+           procura no escuro. */
+        #faixa-atualizacao {
+            margin: 0 0 12px; padding: 10px; min-height: 0;
+            font-size: 0.85rem; font-weight: 600;
+            background: rgba(20,184,166,0.14); color: var(--teal);
+            border: 1px solid rgba(20,184,166,0.4);
+        }
     </style>
 </head>
 <body>
 <div class="folha">
+    <!-- Escondida ate existir versao nova instalada e esperando a vez. -->
+    <button id="faixa-atualizacao" class="sumindo" type="button">
+        Atualização disponível — toque para aplicar
+    </button>
+
     <div class="topo">
         <span><strong id="topo-aparelho">Portaria</strong><br><span id="topo-setores"></span></span>
         <span id="topo-fila"></span>
@@ -180,6 +195,36 @@
             // e evento.html. Ele foi pensado so para a portaria; abas de
             // outra tela nao podem ter seu fetch interceptado por ele.
             navigator.serviceWorker.register('/sw.js?v=607', { scope: '/portaria.html' })
+                .then(function (reg) {
+                    // Instalado na tela de inicio, o aplicativo nao tem barra
+                    // de endereco: sem este aviso o porteiro nao tem COMO
+                    // recarregar, e ficaria na versao do dia da instalacao ate
+                    // alguem desinstalar.
+                    //
+                    // E nunca recarregar sozinho: a camera pode estar aberta e
+                    // a fila andando. A tela avisa; a hora e dele.
+                    var faixa = document.getElementById('faixa-atualizacao');
+                    if (!faixa) return;
+
+                    faixa.addEventListener('click', function () { location.reload(); });
+
+                    function vigiar(trabalhador) {
+                        if (!trabalhador) return;
+                        trabalhador.addEventListener('statechange', function () {
+                            // `navigator.serviceWorker.controller` existir e o
+                            // que separa ATUALIZACAO de PRIMEIRA instalacao --
+                            // sem esse teste, a faixa apareceria na estreia,
+                            // oferecendo recarregar uma pagina que acabou de
+                            // carregar.
+                            if (trabalhador.state === 'installed' && navigator.serviceWorker.controller) {
+                                faixa.classList.remove('sumindo');
+                            }
+                        });
+                    }
+
+                    vigiar(reg.installing);
+                    reg.addEventListener('updatefound', function () { vigiar(reg.installing); });
+                })
                 .catch(function (e) {
                     // Silencioso aqui seria o pior lugar para silenciar: "por
                     // que este aparelho nao abre offline" e a pergunta que
