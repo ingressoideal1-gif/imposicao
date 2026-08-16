@@ -360,10 +360,27 @@ def _setor_do_dono(setor_id: str, usuario: dict) -> dict:
     return linha
 
 
-def _gravar_evento(evento_id, usuario, elevacao, navegador, corpo: dict) -> dict:
-    _evento_do_dono(evento_id, usuario)
-    _exigir_elevacao(evento_id, usuario, elevacao, navegador)
+# ── O que muda, separado de quem pode mudar ─────────────────────────────────
+#
+# As funções `_aplicar_*` abaixo NÃO autorizam nada: elas conferem o corpo e
+# gravam. Quem responde "esta pessoa pode?" é a camada de cima, e são duas,
+# com regras deliberadamente diferentes:
+#
+#   - o cliente, em `controle.html`, precisa da senha cadastrada dele e só
+#     alcança os próprios eventos (`_evento_do_dono` + `_exigir_elevacao`);
+#   - a equipe da gráfica, em `acesso_interno.py`, precisa estar logada no
+#     painel como ADM ou Atendimento, e alcança qualquer evento — porque o
+#     trabalho dela é justamente pré-configurar o evento do cliente antes de
+#     entregá-lo.
+#
+# A separação existe para que a REGRA de negócio — o que é um nome de setor
+# válido, o que é uma janela invertida — tenha um lugar só. Duas cópias
+# divergiriam no dia em que uma delas mudasse, e o sintoma seria o pior
+# possível: a gráfica pré-configura um evento de um jeito que o cliente não
+# consegue reproduzir, ou pior, grava algo que a tela dele recusa.
 
+
+def _aplicar_evento(evento_id: str, corpo: dict) -> dict:
     mudanca = {}
     if "nome_evento" in corpo:
         mudanca["nome_evento"] = _texto(corpo["nome_evento"], "nome do evento", 1, 120)
@@ -378,13 +395,9 @@ def _gravar_evento(evento_id, usuario, elevacao, navegador, corpo: dict) -> dict
     return {"ok": True, "gravado": sorted(mudanca)}
 
 
-def _gravar_setor(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
-    # A elevação é exigida contra o evento DO SETOR, achado agora — nunca
-    # contra um evento_id que o chamador tivesse mandado por fora, o que
-    # deixaria a senha de um evento abrir a escrita de outro.
-    setor = _setor_do_dono(setor_id, usuario)
-    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
-
+def _aplicar_setor(setor: dict, corpo: dict) -> dict:
+    """`setor` é a linha JÁ LIDA do banco — quem chama é que decide como
+    encontrá-la e se pode tocá-la."""
     # Nem `quantidade` nem `lotacao` entram, e é a mesma razão para as duas:
     # quem manda na tiragem contratada é o ERP, e a lotação do setor É essa
     # tiragem. Aceitar qualquer uma delas aqui criaria uma segunda fonte da
@@ -416,9 +429,24 @@ def _gravar_setor(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
                          mudanca.get("fecha_em", setor.get("fecha_em")))
 
     if mudanca:
-        supabase("PATCH", f"producao_acesso_setores?id=eq.{setor_id}", mudanca,
+        supabase("PATCH", f"producao_acesso_setores?id=eq.{setor['id']}", mudanca,
                  prefer="return=minimal")
     return {"ok": True, "gravado": sorted(mudanca)}
+
+
+def _gravar_evento(evento_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    _evento_do_dono(evento_id, usuario)
+    _exigir_elevacao(evento_id, usuario, elevacao, navegador)
+    return _aplicar_evento(evento_id, corpo)
+
+
+def _gravar_setor(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    # A elevação é exigida contra o evento DO SETOR, achado agora — nunca
+    # contra um evento_id que o chamador tivesse mandado por fora, o que
+    # deixaria a senha de um evento abrir a escrita de outro.
+    setor = _setor_do_dono(setor_id, usuario)
+    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
+    return _aplicar_setor(setor, corpo)
 
 
 @router.patch("/eventos/{evento_id}")
@@ -475,10 +503,7 @@ def _faixa(corpo: dict, quantidade: int) -> tuple:
     return de, ate
 
 
-def _bloquear(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
-    setor = _setor_do_dono(setor_id, usuario)
-    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
-
+def _aplicar_bloqueio(setor: dict, corpo: dict, autor_id) -> dict:
     de, ate = _faixa(corpo, int(setor.get("quantidade") or 0))
     # Obrigatório, e é a razão de tudo isto existir: um bloqueio sem motivo
     # aparece na portaria como "recusado" e ninguém sabe o que dizer para a
@@ -492,16 +517,13 @@ def _bloquear(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
         "ate": ate,
         "motivo": motivo,
         "status": "ativo",
-        "criado_por": usuario["id"],
+        "criado_por": autor_id,
     }
     supabase("POST", "producao_acesso_bloqueios", linha, prefer="return=minimal")
     return {"ok": True, "de": de, "ate": ate}
 
 
-def _liberar(setor_id, bloqueio_id, usuario, elevacao, navegador) -> dict:
-    setor = _setor_do_dono(setor_id, usuario)
-    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
-
+def _aplicar_liberacao(setor: dict, bloqueio_id: str) -> dict:
     # O bloqueio tem de pertencer A ESTE setor. Sem esta conferência, o dono de
     # um evento liberaria o bloqueio de outro cliente mandando o id alheio pela
     # própria URL — a guarda de cima só provou que o SETOR é dele.
@@ -517,6 +539,18 @@ def _liberar(setor_id, bloqueio_id, usuario, elevacao, navegador) -> dict:
     supabase("PATCH", f"producao_acesso_bloqueios?id=eq.{bloqueio_id}",
              {"status": "removido"}, prefer="return=minimal")
     return {"ok": True, "liberado": bloqueio_id}
+
+
+def _bloquear(setor_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    setor = _setor_do_dono(setor_id, usuario)
+    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
+    return _aplicar_bloqueio(setor, corpo, usuario["id"])
+
+
+def _liberar(setor_id, bloqueio_id, usuario, elevacao, navegador) -> dict:
+    setor = _setor_do_dono(setor_id, usuario)
+    _exigir_elevacao(setor["evento_id"], usuario, elevacao, navegador)
+    return _aplicar_liberacao(setor, bloqueio_id)
 
 
 @router.post("/setores/{setor_id}/bloqueios")
@@ -610,10 +644,7 @@ def _aparelho_do_dono(aparelho_id: str, usuario: dict) -> dict:
     return linha
 
 
-def _criar_aparelho(evento_id, usuario, elevacao, navegador, corpo: dict) -> dict:
-    _evento_do_dono(evento_id, usuario)
-    _exigir_elevacao(evento_id, usuario, elevacao, navegador)
-
+def _aplicar_aparelho_novo(evento_id: str, corpo: dict) -> dict:
     nome = _texto(corpo.get("nome"), "nome do aparelho", 1, 60)
     setores = _conferir_setores(evento_id, corpo.get("setores"))
     codigo = _sortear_codigo()
@@ -629,10 +660,7 @@ def _criar_aparelho(evento_id, usuario, elevacao, navegador, corpo: dict) -> dic
     return {"id": criado["id"], "nome": nome, "codigo": codigo}
 
 
-def _gravar_aparelho(aparelho_id, usuario, elevacao, navegador, corpo: dict) -> dict:
-    aparelho = _aparelho_do_dono(aparelho_id, usuario)
-    _exigir_elevacao(aparelho["evento_id"], usuario, elevacao, navegador)
-
+def _aplicar_aparelho(aparelho: dict, corpo: dict) -> dict:
     mudanca = {}
     if "nome" in corpo:
         mudanca["nome"] = _texto(corpo["nome"], "nome do aparelho", 1, 60)
@@ -641,13 +669,33 @@ def _gravar_aparelho(aparelho_id, usuario, elevacao, navegador, corpo: dict) -> 
             raise HTTPException(status_code=422, detail="status: ativo ou revogado")
         mudanca["status"] = corpo["status"]
     if mudanca:
-        supabase("PATCH", f"producao_acesso_dispositivos?id=eq.{aparelho_id}", mudanca,
+        supabase("PATCH", f"producao_acesso_dispositivos?id=eq.{aparelho['id']}", mudanca,
                  prefer="return=minimal")
 
     if "setores" in corpo:
-        _trocar_setores(aparelho_id,
+        _trocar_setores(aparelho["id"],
                         _conferir_setores(aparelho["evento_id"], corpo["setores"]))
     return {"ok": True}
+
+
+def _aplicar_novo_codigo(aparelho: dict) -> dict:
+    codigo = _sortear_codigo()
+    supabase("PATCH", f"producao_acesso_dispositivos?id=eq.{aparelho['id']}",
+             {"codigo_hash": _hash_do_codigo(codigo, _sal_do_evento(aparelho["evento_id"]))},
+             prefer="return=minimal")
+    return {"codigo": codigo}
+
+
+def _criar_aparelho(evento_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    _evento_do_dono(evento_id, usuario)
+    _exigir_elevacao(evento_id, usuario, elevacao, navegador)
+    return _aplicar_aparelho_novo(evento_id, corpo)
+
+
+def _gravar_aparelho(aparelho_id, usuario, elevacao, navegador, corpo: dict) -> dict:
+    aparelho = _aparelho_do_dono(aparelho_id, usuario)
+    _exigir_elevacao(aparelho["evento_id"], usuario, elevacao, navegador)
+    return _aplicar_aparelho(aparelho, corpo)
 
 
 def _novo_codigo(aparelho_id, usuario, elevacao, navegador) -> dict:
@@ -660,12 +708,7 @@ def _novo_codigo(aparelho_id, usuario, elevacao, navegador) -> dict:
     """
     aparelho = _aparelho_do_dono(aparelho_id, usuario)
     _exigir_elevacao(aparelho["evento_id"], usuario, elevacao, navegador)
-
-    codigo = _sortear_codigo()
-    supabase("PATCH", f"producao_acesso_dispositivos?id=eq.{aparelho_id}",
-             {"codigo_hash": _hash_do_codigo(codigo, _sal_do_evento(aparelho["evento_id"]))},
-             prefer="return=minimal")
-    return {"codigo": codigo}
+    return _aplicar_novo_codigo(aparelho)
 
 
 @router.post("/eventos/{evento_id}/aparelhos")
@@ -714,7 +757,10 @@ def _importar_codigos(evento_id, usuario, elevacao, navegador, corpo: dict) -> d
     """
     _evento_do_dono(evento_id, usuario)
     _exigir_elevacao(evento_id, usuario, elevacao, navegador)
+    return _aplicar_codigos(evento_id, corpo)
 
+
+def _aplicar_codigos(evento_id: str, corpo: dict) -> dict:
     brutos = corpo.get("codigos") or []
     if len(brutos) > MAXIMO_CODIGOS:
         raise HTTPException(

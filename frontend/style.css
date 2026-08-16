@@ -2680,3 +2680,163 @@ input[type=number] {
     .perm-cabecalho, .perm-linha { grid-template-columns: 1fr 44px 52px; }
     .perm-nome small { display: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   IDEAL CONTROL — a tela da grafica (view-ideal-control)
+
+   Prefixo `ic-` em tudo, e nenhuma regra de elemento solto: esta folha e
+   compartilhada com trinta mil linhas de script.js, e um seletor generico
+   novo aqui mexeria em telas que ninguem esta olhando. O que da para
+   reaproveitar (.card, .btn, .badge, .form-control) e reaproveitado.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.ic-dim   { color: var(--text-dim); font-size: 0.85rem; }
+.ic-ajuda { color: var(--text-dim); font-size: 0.78rem; line-height: 1.45; margin: 4px 0 0; }
+
+.ic-secao-titulo {
+    font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--text-dim); margin: 22px 0 10px; font-weight: 700;
+}
+
+.ic-busca-linha { display: flex; gap: 10px; align-items: center; }
+.ic-busca-linha .form-control { flex: 1; min-width: 0; }
+
+.ic-recentes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+.ic-selos { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.ic-modelo {
+    display: grid; grid-template-columns: 1fr auto auto;
+    gap: 10px; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.ic-modelo:last-child { border-bottom: 0; }
+
+/* ── Os cartoes de numero do dashboard ─────────────────────────────────── */
+.ic-kpis {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+.ic-kpi {
+    background: var(--card, #1e293b); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px;
+    display: flex; flex-direction: column; gap: 2px;
+}
+.ic-kpi-rotulo { font-size: 0.72rem; text-transform: uppercase;
+                 letter-spacing: 0.06em; color: var(--text-dim); font-weight: 700; }
+.ic-kpi-valor  { font-size: 1.5rem; line-height: 1.2; }
+.ic-kpi-ajuda  { font-size: 0.7rem; color: var(--text-dim); line-height: 1.35; }
+
+.ic-duas-colunas {
+    display: grid; gap: 12px; margin-top: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+/* ── Barras horizontais (ocupacao, recusas) ────────────────────────────── */
+.ic-barra-linha {
+    display: grid; grid-template-columns: minmax(90px, 1fr) 2fr auto;
+    gap: 10px; align-items: center; padding: 5px 0;
+}
+.ic-barra-linha:only-child, .ic-barra-linha:last-child { padding-bottom: 0; }
+.ic-barra-nome { font-size: 0.85rem; }
+.ic-barra-trilho {
+    height: 8px; border-radius: 999px; overflow: hidden;
+    background: rgba(148, 163, 184, 0.18);
+}
+.ic-barra { height: 100%; background: var(--teal, #14b8a6); border-radius: 999px; }
+
+/* ── O grafico de entradas por hora ────────────────────────────────────── */
+/* Barras empilhadas em CSS puro: nenhuma biblioteca entra por causa de um
+   histograma de 24 colunas, e uma a menos e uma a menos para carregar. */
+.ic-grafico {
+    display: flex; align-items: flex-end; gap: 4px;
+    height: 140px; overflow-x: auto; padding-top: 8px;
+}
+.ic-coluna { display: flex; flex-direction: column; align-items: center;
+             gap: 4px; min-width: 26px; height: 100%; }
+.ic-pilha { flex: 1; width: 18px; display: flex; flex-direction: column;
+            justify-content: flex-end; border-radius: 4px; overflow: hidden;
+            background: rgba(148, 163, 184, 0.12); }
+.ic-parte-entrada { background: var(--teal, #14b8a6); }
+.ic-parte-recusa  { background: var(--red, #ef4444); }
+.ic-coluna-rotulo { font-size: 0.65rem; color: var(--text-dim); white-space: nowrap; }
+
+.ic-legenda { display: flex; align-items: center; gap: 6px;
+              font-size: 0.72rem; color: var(--text-dim); margin: 8px 0 0; }
+.ic-amostra-entrada, .ic-amostra-recusa {
+    display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+}
+.ic-amostra-entrada { background: var(--teal, #14b8a6); }
+.ic-amostra-recusa  { background: var(--red, #ef4444); margin-left: 10px; }
+
+/* ── Setores e aparelhos ───────────────────────────────────────────────── */
+.ic-setor, .ic-aparelho { padding: 16px; margin-bottom: 14px; }
+.ic-setor-topo { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+.ic-setor-topo h3 { margin: 0; font-size: 1rem; }
+
+.ic-grade {
+    display: grid; gap: 12px; margin-bottom: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.ic-campo { display: flex; flex-direction: column; gap: 4px; }
+.ic-campo label { font-size: 0.78rem; color: var(--text-dim); }
+
+.ic-bloco { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.ic-bloco h4 { margin: 0 0 4px; font-size: 0.9rem; }
+
+.ic-bloqueio {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;
+}
+.ic-bloqueio:last-child { border-bottom: 0; }
+.ic-lista-bloqueios { margin-top: 10px; }
+
+/* Um botao por setor, que acende ao ser tocado. Mesma decisao da tela do
+   cliente, e pelo mesmo motivo: a caixa de marcar saia esticada pela linha
+   inteira, com o nome do setor longe do quadradinho que ele nomeia. */
+.ic-setores-botoes { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+.ic-setor-botao {
+    padding: 8px 14px; min-height: 36px;
+    font-size: 0.84rem; font-weight: 600; font-family: inherit;
+    border: 1px solid var(--border); border-radius: 999px;
+    background: transparent; color: var(--text-dim); cursor: pointer;
+}
+.ic-setor-botao[aria-pressed="true"] {
+    background: var(--teal, #14b8a6); color: #06231f; border-color: var(--teal, #14b8a6);
+}
+
+/* ── A lista de ingressos ──────────────────────────────────────────────── */
+.ic-ingressos {
+    margin-top: 12px; max-height: 420px; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: 10px;
+}
+.ic-ingresso {
+    display: grid; grid-template-columns: 90px auto 1fr;
+    gap: 10px; align-items: center;
+    padding: 7px 12px; border-bottom: 1px solid var(--border); font-size: 0.85rem;
+}
+.ic-ingresso:last-child { border-bottom: 0; }
+.ic-ingresso-numero { font-family: ui-monospace, Consolas, monospace; }
+
+.ic-paginacao { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+
+/* ── O codigo de pareamento ────────────────────────────────────────────── */
+.ic-codigo-caixa { padding: 16px; margin-top: 16px; }
+.ic-codigo-valor {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 1.7rem; letter-spacing: 0.18em; text-align: center;
+    padding: 14px; border-radius: 8px;
+    background: rgba(20, 184, 166, 0.12); border: 1px dashed var(--teal, #14b8a6);
+}
+
+/* `.form-control` do painel nao define largura -- os formularios antigos a dao
+   pelo grid que os envolve. Aqui os campos vivem soltos dentro dos cartoes de
+   setor, entao a largura vem daqui; sem isto a caixa de colar codigos sai com
+   uns 180px e o botao encosta nela. */
+.ic-campo .form-control,
+.ic-bloco .form-control { width: 100%; display: block; }
+.ic-bloco textarea.form-control { resize: vertical; min-height: 84px; }
+.ic-bloco .btn { margin-top: 10px; }
+.ic-busca-linha .btn { margin-top: 0; flex-shrink: 0; }
+/* Os tres botoes de acao do cartao de aparelho ficavam encostados. */
+.ic-aparelho .btn { margin-right: 8px; }

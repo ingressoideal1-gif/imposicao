@@ -117,24 +117,48 @@ revogado.** Revogar é o botão de pânico da portaria, e botão de pânico é a
 engano; hoje o conserto é criar outro aparelho e digitar um código novo no celular. O
 backend já aceitaria a reativação — falta a decisão do usuário e o botão.
 
-### 🟡 Parte 3b — a portaria (**pronta, aguardando publicação**)
+### ✅ Parte 3b — a portaria (**no ar na v585**)
 
 O aparelho do porteiro: pareia com o código de 6 caracteres, baixa o evento inteiro para o
 IndexedDB e decide **sem rede**, pelas seis regras de
 [frontend/portaria-validacao.js](../frontend/portaria-validacao.js). Os três endpoints —
 `entrar`, `faixa` e `leituras` — ficam em [acesso_portaria.py](../acesso_portaria.py), e o
-`frontend/sw.js` novo é o que deixa `portaria.html` abrir sem rede. **Os 603 testes da
-suíte passam**; falta publicar (`.\publicar.ps1` e `.\publicar_agente.ps1`) e provar com um
-celular de verdade — a única prova que vale.
+`frontend/sw.js` novo é o que deixa `portaria.html` abrir sem rede. Falta a prova que
+vale: **um celular de verdade, com a rede desligada**.
 
 Plano: [docs/superpowers/plans/2026-08-15-controle-acesso-parte3b.md](superpowers/plans/2026-08-15-controle-acesso-parte3b.md)
 Spec: [docs/superpowers/specs/2026-08-15-controle-acesso-parte3b-design.md](superpowers/specs/2026-08-15-controle-acesso-parte3b-design.md)
 
-### ⏳ Parte 3c — painel ao vivo e relatórios (**não começou**)
+### 🟡 Parte 3c — o Ideal Control da gráfica (**pronto, aguardando publicação**)
 
-Lotação ao vivo, relatórios, e a mudança do Ideal Control (hoje em
-`../ideal-IdealControl/`) para dentro deste repositório. Cancelar credencial e desvincular
-pedido do evento também esperam esta parte.
+Uma tela nova no menu do painel — **🎟️ Ideal Control** — onde a gráfica pesquisa pelo
+número do pedido e configura o controle de acesso do cliente **por inteiro**: dados do
+evento, setores (nome na portaria, uso do ingresso, janela de horário), bloqueio de faixa,
+códigos de staff, aparelhos da portaria, e a lista paginada de todos os ingressos de cada
+setor com a situação de cada um.
+
+A razão de ela existir é entregar o Ideal Control **já pré-configurado**: o cliente recebe
+o QR do Pedido e encontra os portões prontos, em vez de uma tela em branco.
+
+Junto vem o **dashboard de gerenciamento de público** — contratado, publicado, entraram,
+presentes, comparecimento, recusas por motivo, ocupação por setor e entradas por hora. É a
+primeira versão, para o usuário ajustar depois.
+
+- Backend: [acesso_interno.py](../acesso_interno.py), prefixo `/api/acesso/interno`
+- Tela: [frontend/ideal-control.js](../frontend/ideal-control.js) e a
+  `<section id="view-ideal-control">` do `index.html`
+- **A porta é o papel, não a senha.** Decisão do usuário: basta estar logado como **ADM ou
+  Atendimento**. O backend confere o JWT do Supabase e depois o `role` em
+  `imposition_user_permissions` — 403 para qualquer outro papel, e 403 mesmo com sessão
+  boa. Esconder o botão no menu nunca impediu ninguém de chamar a rota.
+- A permissão `perm_ideal_control_view` é **derivada do papel no navegador**, nunca gravada:
+  ela não existe no banco nem no `ROLE_DEFAULTS`, justamente para não aparecer num `upsert`
+  e mexer na grade que o administrador edita ao vivo.
+
+O que ainda falta da parte 3c: o painel **ao vivo** (esta tela é sob demanda, não empurra
+atualização), cancelar credencial, desvincular pedido do evento, reativar aparelho revogado,
+e a mudança do Ideal Control antigo (hoje em `../ideal-IdealControl/`) para dentro deste
+repositório.
 
 O que a parte 3 inteira precisa entregar está no fim do
 [docs/controle_acesso.md](controle_acesso.md), com as decisões que o usuário já tomou.

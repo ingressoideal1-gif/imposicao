@@ -143,6 +143,15 @@
                 <span class="nav-badge" id="badge-impressoras" style="background:var(--success);display:none;">●</span>
             </button>
 
+            <!-- O Ideal Control da gráfica. Só ADM e Atendimento: é decisão do
+                 usuário, e o backend confere o papel de novo — esconder o botão
+                 nunca impediu ninguém de chamar a rota. -->
+            <button class="nav-btn equipe-only" data-view="view-ideal-control"
+                    id="nav-ideal-control" style="display:none;">
+                <span class="nav-icon">🎟️</span>
+                Ideal Control
+            </button>
+
             <span class="nav-group-label admin-only" style="margin-top:8px; display:none;">Administração</span>
 
             <button class="nav-btn admin-only" data-view="view-admin" id="nav-admin" style="display:none;">
@@ -2454,6 +2463,116 @@
             <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: ADMIN                                                    -->
             <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <!-- VIEW: IDEAL CONTROL (a tela da gráfica)                        -->
+            <!-- ══════════════════════════════════════════════════════════════ -->
+            <section id="view-ideal-control" class="view-section" style="max-width:100%;">
+                <div class="page-header">
+                    <div class="page-header-text">
+                        <h1>🎟️ Ideal Control</h1>
+                        <p>Pesquise pelo número do pedido e configure o controle de
+                           acesso do cliente. Sem senha de evento: basta estar logado
+                           como ADM ou Atendimento.</p>
+                    </div>
+                </div>
+
+                <div class="card" style="padding:16px;margin-bottom:18px;">
+                    <div class="ic-busca-linha">
+                        <input id="ic-busca" class="form-control" type="search"
+                               inputmode="numeric" placeholder="Número do pedido (ex.: 18560)">
+                        <button id="ic-buscar" class="btn btn-primary">Abrir pedido</button>
+                    </div>
+                    <p class="ic-ajuda" style="margin-top:10px;">Pedidos com controle de acesso:</p>
+                    <div id="ic-recentes" class="ic-recentes"></div>
+                </div>
+
+                <p id="ic-carregando" class="ic-dim" style="display:none;">Carregando…</p>
+                <div id="ic-vazio" class="empty-state" style="display:none;"></div>
+
+                <div id="ic-conteudo" style="display:none;">
+                    <h2 id="ic-titulo" style="margin:0 0 10px;font-size:1.1rem;"></h2>
+                    <div id="ic-situacao" class="ic-selos"></div>
+                    <div id="ic-modelos" class="card" style="padding:14px 16px;margin:12px 0 20px;"></div>
+
+                    <!-- Dashboard de público -->
+                    <div id="ic-dashboard-secao" style="display:none;">
+                        <h3 class="ic-secao-titulo">Gerenciamento de público</h3>
+                        <div id="ic-dashboard" class="ic-kpis"></div>
+                        <div class="ic-duas-colunas">
+                            <div class="card" style="padding:14px 16px;">
+                                <h4 style="margin:0 0 10px;font-size:.9rem;">Ocupação por setor</h4>
+                                <div id="ic-por-setor"></div>
+                            </div>
+                            <div class="card" style="padding:14px 16px;">
+                                <h4 style="margin:0 0 10px;font-size:.9rem;">Por que recusou</h4>
+                                <div id="ic-recusas"></div>
+                            </div>
+                        </div>
+                        <div class="card" style="padding:14px 16px;margin-top:12px;">
+                            <h4 style="margin:0 0 4px;font-size:.9rem;">Entradas por hora</h4>
+                            <p id="ic-pico" class="ic-ajuda"></p>
+                            <div id="ic-por-hora" class="ic-grafico"></div>
+                            <p class="ic-legenda">
+                                <span class="ic-amostra-entrada"></span> entradas
+                                <span class="ic-amostra-recusa"></span> recusas
+                            </p>
+                            <p id="ic-grafico-aviso" class="ic-ajuda" style="display:none;"></p>
+                        </div>
+                    </div>
+
+                    <!-- Dados do evento -->
+                    <p id="ic-sem-evento" class="empty-state" style="display:none;">
+                        Este pedido ainda não virou evento. O cliente precisa abrir o
+                        QR do Pedido para reivindicá-lo — só depois disso existem
+                        setores para configurar.
+                    </p>
+                    <div id="ic-evento-secao" style="display:none;">
+                        <h3 class="ic-secao-titulo">Dados do evento</h3>
+                        <div class="card" style="padding:14px 16px;">
+                            <div class="ic-grade">
+                                <div class="ic-campo">
+                                    <label for="ic-ev-nome">Nome do evento</label>
+                                    <input id="ic-ev-nome" class="form-control" type="text">
+                                </div>
+                                <div class="ic-campo">
+                                    <label for="ic-ev-data">Data e hora</label>
+                                    <input id="ic-ev-data" class="form-control" type="datetime-local">
+                                </div>
+                                <div class="ic-campo">
+                                    <label for="ic-ev-local">Local</label>
+                                    <input id="ic-ev-local" class="form-control" type="text">
+                                </div>
+                            </div>
+                            <button id="ic-ev-salvar" class="btn btn-sm btn-primary">Salvar dados do evento</button>
+                        </div>
+                    </div>
+
+                    <!-- Setores -->
+                    <div id="ic-setores-secao" style="display:none;">
+                        <h3 class="ic-secao-titulo">Setores</h3>
+                        <div id="ic-setores"></div>
+                    </div>
+
+                    <!-- Aparelhos -->
+                    <div id="ic-aparelhos-secao" style="display:none;">
+                        <h3 class="ic-secao-titulo">Aparelhos da portaria</h3>
+                        <div id="ic-aparelhos"></div>
+                    </div>
+
+                    <div id="ic-codigo-caixa" class="card ic-codigo-caixa" style="display:none;">
+                        <h4 id="ic-codigo-titulo" style="margin:0 0 8px;"></h4>
+                        <div id="ic-codigo-valor" class="ic-codigo-valor"></div>
+                        <p class="ic-ajuda">
+                            Anote agora: este código <strong>não aparece de novo</strong>.
+                            Se perder, é só gerar outro — e gerar outro
+                            <strong>não desconecta</strong> o aparelho que já está
+                            trabalhando. Para desligar, use "Revogar".
+                        </p>
+                        <button id="ic-codigo-fechar" class="btn btn-sm btn-ghost">Já anotei, fechar</button>
+                    </div>
+                </div>
+            </section>
+
             <section id="view-admin" class="view-section">
                 <div class="page-header">
                     <div class="page-header-text">
@@ -2712,6 +2831,7 @@
     <script src="gerenciador-fotos.js?v=586"></script>
     <script src="editor-foto.js?v=586"></script>
     <script src="script.js?v=586"></script>
+    <script src="ideal-control.js?v=586"></script>
     <script src="criador-arte.js?v=586"></script>
     <script src="/pedido.js?v=586"></script>
 

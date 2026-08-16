@@ -13620,6 +13620,7 @@ const PERM_NAV_MAP = {
     perm_producao_view:    ['nav-lista-impressao'],
     perm_lista_arte_view:  ['nav-lista-arte'],
     perm_impressoras_view: ['nav-impressoras'],
+    perm_ideal_control_view: ['nav-ideal-control'],
     perm_admin_view:       ['nav-admin', 'nav-adm'],
 };
 
@@ -13641,8 +13642,26 @@ const PERM_VIEW_MAP = {
     perm_producao_view:    ['view-lista-impressao'],
     perm_lista_arte_view:  ['view-lista-arte'],
     perm_impressoras_view: ['view-impressoras'],
+    perm_ideal_control_view: ['view-ideal-control'],
     perm_admin_view:       ['view-admin', 'view-adm'],
 };
+
+/**
+ * Os papéis que abrem o Ideal Control da gráfica.
+ *
+ * Decisão do usuário em 15/08/2026: "a edição será feita sem o uso de senha,
+ * basta estar logado na aplicação como ADM ou Atendimento".
+ *
+ * Esta é a única tela do painel presa ao PAPEL, e não a uma caixa da grade de
+ * permissões — por isso `perm_ideal_control_view` não existe no banco nem no
+ * ROLE_DEFAULTS: ele é DERIVADO do papel em `applyPermissions`, e derivar em
+ * vez de gravar é o que impede uma coluna nova de aparecer num `upsert` e
+ * reescrever a grade que o administrador edita ao vivo.
+ *
+ * O backend confere o mesmo (`acesso_interno.PAPEIS_QUE_CONFIGURAM`), e é ele
+ * que vale: esconder o botão nunca impediu ninguém de chamar a rota.
+ */
+const PAPEIS_DO_IDEAL_CONTROL = ['admin', 'atendimento'];
 
 // Índice invertido: tela → permissão exigida
 const VIEW_PERM_REQUERIDA = {};
@@ -13776,6 +13795,11 @@ const PERM_ACTIONS = [
 // ──── Aplicar permissões na sidebar ────────────────────────────────────────
 function applyPermissions(perms) {
     if (!perms) return;
+    // Derivada do papel, e nunca lida do banco: ver `PAPEIS_DO_IDEAL_CONTROL`.
+    // Escrita ANTES de `_currentPerms` receber o objeto, para que
+    // `podeAbrirView` — que lê de lá — já a encontre nesta mesma rodada.
+    perms.perm_ideal_control_view =
+        PAPEIS_DO_IDEAL_CONTROL.includes(String(perms.role || '').toLowerCase());
     window._currentPerms = perms;
 
     for (const [permKey, navIds] of Object.entries(PERM_NAV_MAP)) {
@@ -21838,6 +21862,12 @@ window.showView = function(viewId) {
     }
     if (viewId === 'view-fontes') {
         loadCatalogoFontes().then(() => renderCatFontesUI());
+    }
+    if (viewId === 'view-ideal-control' && window.IdealControl) {
+        // `iniciar()` é idempotente: liga os botões uma vez só e recarrega a
+        // lista de pedidos a cada abertura. Abrir a mesma tela duas vezes não
+        // pode duplicar os ouvintes — seria uma gravação por clique, duas.
+        window.IdealControl.iniciar();
     }
     if (viewId === 'view-pedido') {
         if (state.activeOSItem) {

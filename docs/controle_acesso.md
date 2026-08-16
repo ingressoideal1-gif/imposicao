@@ -581,6 +581,50 @@ pelas mesmas seis regras: é o caminho para ingresso rasgado e para código de b
 câmera do iPhone não lê. `frontend/sw.js` é o que deixa `portaria.html` **abrir sem rede**;
 ele guarda só os arquivos da tela, nunca a API.
 
+## O Ideal Control da gráfica (parte 3c, primeira metade)
+
+A mesma configuração, vista por quem atende o cliente. Fica no menu do painel —
+**🎟️ Ideal Control** —, pesquisa pelo número do pedido, e abre tudo: dados do evento,
+setores, bloqueios, códigos de staff, aparelhos, e a lista paginada dos ingressos de cada
+setor. Backend em [acesso_interno.py](../acesso_interno.py), prefixo
+`/api/acesso/interno`; tela em [frontend/ideal-control.js](../frontend/ideal-control.js).
+
+Ela existe para **entregar o Ideal Control pré-configurado**. Antes dela, o cliente
+reivindicava o pedido e caía numa tela onde nada estava nomeado nem horário nenhum
+marcado; agora a gráfica deixa os portões prontos antes de mandar o QR.
+
+**A porta é o papel, e não a senha.** Decisão do usuário em 15/08/2026: *"a edição será
+feita sem o uso de senha, basta estar logado na aplicação como ADM ou Atendimento"*. Isso
+dispensa a elevação, e **não** dispensa a identificação: `_equipe()` confere o JWT do
+Supabase e depois lê o `role` em `imposition_user_permissions`. Qualquer outro papel — e
+qualquer conta sem linha — leva 403, mesmo com sessão válida.
+
+Vale notar por que essa checagem é mais forte que a do resto do painel: o `get_current_user`
+do `app.py` ainda devolve um usuário fixo com `admin: True`, resto do RLS adiado. Este
+módulo não passa por ali.
+
+As regras de negócio são **compartilhadas** com a tela do cliente, não copiadas: as duas
+chamam as mesmas funções `_aplicar_*` do [acesso_config.py](../acesso_config.py), e só a
+camada de autorização difere. Duas cópias divergiriam, e o sintoma seria o pior possível —
+a gráfica pré-configurando um evento de um jeito que o cliente não consegue reproduzir.
+
+Três coisas que essa tela **não** faz, de propósito:
+
+- **não mostra o código do QR Ideal.** A lista de ingressos traz o número impresso e a
+  situação; `codigo_hash` não entra em nenhum `select`, e `codigo_visivel` só aparece nos
+  códigos de staff, que são a lista do próprio cliente. O sal do evento e o `token_hash`
+  do aparelho também não saem do servidor.
+- **não traz a lista inteira de uma vez.** Páginas de 200, teto de 500 — abaixo do corte
+  de 1.000 do PostgREST, que já mordeu este projeto três vezes.
+- **não corta em silêncio.** O gráfico por hora tem teto de 20.000 leituras; quando ele é
+  atingido, a resposta traz `grafico_truncado: true` e a tela escreve o aviso. Os totais
+  não passam por esse teto — eles saem de `contar()`, que é exato em qualquer tamanho.
+
+Todo id que vira filtro do PostgREST passa por `_uuid()` antes. Não é zelo abstrato: sem
+essa conferência, um `setor_id` com `%26select=*` dentro chega ao FastAPI já decodificado
+e emenda um filtro que ninguém escreveu — foi exatamente isso que a mutação de teste
+produziu (`producao_acesso_setores?id=eq.x&select=*&select=...`) antes da guarda existir.
+
 ## O que falta (a partir da parte 3c)
 
 A tela do dono (`controle.html`, parte 3a) **está no ar desde a v570**. Ela traz: login do
@@ -616,7 +660,8 @@ Em 15/08/2026 o usuário revisou essa tela usando-a, e quatro coisas mudaram por
   botão apagado e não acontecia nada. Foi assim que "criar aparelho" virou "não está
   funcionando".
 
-O que falta é a parte 3c: painel ao vivo, relatórios, cancelar credencial, desvincular
+O que falta da parte 3c, depois da tela da gráfica descrita acima: o painel **ao vivo**
+(aquela tela é sob demanda — não empurra atualização), cancelar credencial, desvincular
 pedido do evento, reativar aparelho revogado, e a limpeza dos oito setores órfãos citados
 acima, em [Só sobe o que a portaria tem como ler](#so-sobe-o-que-a-portaria-le).
 

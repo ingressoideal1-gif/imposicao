@@ -88,6 +88,7 @@ PAINEL_ARQUIVOS = [
     "controle.html",
     "controle.js",
     "controle.css",
+    "ideal-control.js",
     "script.js",
     "pedido.js",
     "cliente.js",
