@@ -138,12 +138,12 @@
     </div>
 </div>
 
-<script src="/jsqr.min.js?v=598"></script>
-<script src="/qr-ideal-hash.js?v=598"></script>
-<script src="/portaria-validacao.js?v=598"></script>
-<script src="/portaria-deposito.js?v=598"></script>
-<script src="/portaria-camera.js?v=598"></script>
-<script src="/portaria.js?v=598"></script>
+<script src="/jsqr.min.js?v=599"></script>
+<script src="/qr-ideal-hash.js?v=599"></script>
+<script src="/portaria-validacao.js?v=599"></script>
+<script src="/portaria-deposito.js?v=599"></script>
+<script src="/portaria-camera.js?v=599"></script>
+<script src="/portaria.js?v=599"></script>
 <script>
     // Registrar DEPOIS de tudo carregar: um service worker que instala no meio
     // do carregamento pode guardar resposta pela metade.
@@ -154,7 +154,7 @@
             // este service worker assumir TAMBEM producao.html, controle.html
             // e evento.html. Ele foi pensado so para a portaria; abas de
             // outra tela nao podem ter seu fetch interceptado por ele.
-            navigator.serviceWorker.register('/sw.js?v=598', { scope: '/portaria.html' })
+            navigator.serviceWorker.register('/sw.js?v=599', { scope: '/portaria.html' })
                 .catch(function (e) {
                     // Silencioso aqui seria o pior lugar para silenciar: "por
                     // que este aparelho nao abre offline" e a pergunta que
