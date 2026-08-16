@@ -1364,8 +1364,15 @@ def test_elevacao_de_outro_evento_no_storage_nao_e_restaurada():
         sessionStorage.setItem('acesso_elevacao', JSON.stringify({
             token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'outro-evento'
         }));
-        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
-        return { elevado: Controle.elevado() };
+        // Sem `await` na abertura: desde 16/08/2026 a senha e pedida numa caixa
+        // da propria pagina, que fica esperando um toque. O que o teste mede e
+        // o que aconteceu com o bilhete guardado ATE esse ponto.
+        var indo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 80));
+        var elevado = Controle.elevado();
+        document.getElementById('btn-cancelar-entrar-config').click();
+        await indo;
+        return { elevado };
     """)
     assert saida["elevado"] is False
 
@@ -1375,9 +1382,15 @@ def test_elevacao_vencida_no_storage_e_descartada_ao_abrir_a_engrenagem():
         sessionStorage.setItem('acesso_elevacao', JSON.stringify({
             token: 't', expira_em: Math.floor(Date.now()/1000) - 5, evento_id: 'ev-1'
         }));
-        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
-        return { elevado: Controle.elevado(),
-                 guardado: sessionStorage.getItem('acesso_elevacao') };
+        // Ver a nota do teste anterior: a caixa de senha espera um toque, e o
+        // que se mede aqui e o estado do bilhete ANTES de qualquer decisao.
+        var indo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 80));
+        var medido = { elevado: Controle.elevado(),
+                       guardado: sessionStorage.getItem('acesso_elevacao') };
+        document.getElementById('btn-cancelar-entrar-config').click();
+        await indo;
+        return medido;
     """)
     assert saida["elevado"] is False
     assert saida["guardado"] is None
@@ -1388,10 +1401,27 @@ def test_cancelar_a_senha_deixa_a_lista_na_tela_e_nao_abre_a_engrenagem():
 
     Mostrar os setores, a lista de portoes e o nome do evento e SO ENTAO pedir a
     senha entregaria tudo isso a quem estiver com o celular do porteiro na mao.
+
+    Desde 16/08/2026 o "Cancelar" e um botao da propria pagina, e nao mais o
+    Cancelar de um `window.prompt`. O que o teste mede continua sendo o mesmo:
+    desistir da senha devolve o dono a lista, com a engrenagem intacta.
     """
     saida = _no_navegador("""
-        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        // Sem `await`: a promessa so resolve ou rejeita quando alguem toca num
+        // dos botoes da caixa. Esperar por ela aqui prenderia o teste para
+        // sempre -- que e exatamente o que a caixa faz de proposito, ficar na
+        // tela ate a pessoa decidir.
+        var indo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 80));
+        var caixaApareceu = !document.getElementById('caixa-entrar-config')
+            .classList.contains('sumindo');
+
+        document.getElementById('btn-cancelar-entrar-config').click();
+        await indo;
         return {
+            caixaApareceu,
+            caixaFechou: document.getElementById('caixa-entrar-config')
+                .classList.contains('sumindo'),
             engrenagemEscondida: document.getElementById('engrenagem')
                 .classList.contains('sumindo'),
             listaNaTela: !document.getElementById('lista')
@@ -1399,9 +1429,92 @@ def test_cancelar_a_senha_deixa_a_lista_na_tela_e_nao_abre_a_engrenagem():
             setores: document.getElementById('setores').children.length,
         };
     """)
+    assert saida["caixaApareceu"] is True
+    assert saida["caixaFechou"] is True
     assert saida["engrenagemEscondida"] is True
     assert saida["listaNaTela"] is True
     assert saida["setores"] == 0
+
+
+def test_senha_que_nao_confere_APARECE_na_tela():
+    """O defeito que o usuario encontrou no celular em 16/08/2026.
+
+    A senha errada rejeitava a promessa, o `.catch` de `abrirEngrenagem`
+    engolia, e a tela nao dizia NADA -- ele digitava e o aparelho nao reagia.
+    Provado no navegador antes de consertar: a engrenagem nao abria e nenhum
+    elemento visivel recebia uma palavra.
+
+    O que este teste exige e so o resultado: a recusa vira texto A VISTA, e a
+    caixa FICA aberta para ele tentar de novo.
+    """
+    saida = _no_navegador("""
+        window.supabaseClient.auth.signInWithPassword = async () => ({
+            error: { message: 'Invalid login credentials' }
+        });
+        window.supabaseClient.auth.getSession = async () => ({
+            data: { session: null }
+        });
+
+        var indo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('entrar-config-email').value = 'dono@exemplo.com';
+        document.getElementById('entrar-config-senha').value = 'errada';
+        document.getElementById('btn-entrar-config').click();
+        await new Promise(r => setTimeout(r, 300));
+
+        var erro = document.getElementById('erro-entrar-config');
+        return {
+            erroVisivel: !erro.classList.contains('sumindo'),
+            erroTexto: erro.textContent,
+            caixaContinuaAberta: !document.getElementById('caixa-entrar-config')
+                .classList.contains('sumindo'),
+            engrenagemEscondida: document.getElementById('engrenagem')
+                .classList.contains('sumindo'),
+            botaoLiberado: !document.getElementById('btn-entrar-config').disabled,
+        };
+    """)
+    assert saida["erroVisivel"] is True, "a senha errada nao disse nada na tela"
+    assert saida["erroTexto"].strip(), "o aviso apareceu vazio"
+    # A frase e a do `acesso-conta.js`, em portugues e dizendo QUAL conta usar
+    # -- a do Supabase vem em ingles falando de "credentials".
+    assert "Vibe" in saida["erroTexto"] or "senha" in saida["erroTexto"].lower()
+    assert saida["caixaContinuaAberta"] is True, (
+        "fechar a caixa devolveria o dono a lista sem uma palavra"
+    )
+    assert saida["engrenagemEscondida"] is True
+    assert saida["botaoLiberado"] is True, (
+        "o botao ficou travado e ele nao consegue tentar de novo"
+    )
+
+
+def test_a_caixa_da_senha_oferece_o_esqueci_e_ele_usa_o_email_digitado():
+    """A saida que faltava, e o motivo de o `window.prompt` ter de sair: nao ha
+    onde caber um terceiro botao num prompt do navegador."""
+    saida = _no_navegador("""
+        window.supabaseClient.auth.getSession = async () => ({
+            data: { session: null }
+        });
+        var pedido = null;
+        window.supabaseClient.auth.resetPasswordForEmail = async (email) => {
+            pedido = email; return {};
+        };
+
+        var indo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('entrar-config-email').value = 'dono@exemplo.com';
+        document.getElementById('btn-esqueci-entrar-config').click();
+        await new Promise(r => setTimeout(r, 200));
+
+        var erro = document.getElementById('erro-entrar-config');
+        var saida = { pedido, resposta: erro.textContent,
+                      respostaVisivel: !erro.classList.contains('sumindo') };
+        document.getElementById('btn-cancelar-entrar-config').click();
+        try { await indo; } catch (e) { /* cancelado, e o esperado */ }
+        return saida;
+    """)
+    assert saida["pedido"] == "dono@exemplo.com"
+    assert saida["respostaVisivel"] is True
+    assert "e-mail" in saida["resposta"].lower()
 
 
 def test_desenhar_de_novo_nao_apaga_os_dados_do_evento_sendo_digitados():
@@ -1957,3 +2070,74 @@ def test_sem_supabase_a_casa_ainda_desenha_a_lista_deste_aparelho():
     assert saida["barras"] == 1
     assert "Baile do Hawaii" in saida["texto"]
     assert saida["verde"] == 1
+
+
+# ── A porta da configuração: a senha, o erro, e a saída de quem esqueceu ────
+#
+# Estes testes nasceram de um defeito que o usuário encontrou no celular, em
+# 16/08/2026: "ao clicar na barra ou engrenagem, abre modal da senha, mas não
+# funciona e nem dá erro e nem esqueci minha senha".
+#
+# Não era um defeito, eram três somados, e o resultado dos três era SILÊNCIO:
+#
+#   1. o `.catch` de `abrirEngrenagem` engolia qualquer falha, e o comentário
+#      dele afirmava que outra função avisaria — o que só era verdade no ramo
+#      em que JÁ havia sessão;
+#   2. o `avisar()` escreve no `#aviso-gravacao`, que vive DENTRO de
+#      `#engrenagem` — ainda escondida nesse momento. Mesmo o ramo que avisava
+#      escrevia numa caixa invisível;
+#   3. o `virarPortao.abrir` não tinha `catch` nenhum: tocar na barra do evento
+#      virava uma promessa rejeitada e nada mais.
+#
+# E o `window.prompt` do navegador não tem onde caber um terceiro botão, então
+# "Esqueci minha senha" não tinha como existir enquanto a senha fosse pedida
+# por ele.
+
+
+def test_a_senha_da_configuracao_e_pedida_em_campo_e_nao_no_prompt():
+    """O `prompt` do navegador não tem onde caber "Esqueci minha senha".
+
+    Ele também não mostra erro nenhum, e há navegador embutido de aplicativo
+    que simplesmente não o exibe. A porta da configuração precisa ser uma caixa
+    da própria página.
+    """
+    html = _ler("frontend/controle.html")
+    assert 'id="caixa-entrar-config"' in html
+    assert 'id="entrar-config-email"' in html
+    assert 'id="entrar-config-senha"' in html
+    assert 'id="btn-entrar-config"' in html
+
+
+def test_a_caixa_da_senha_fica_FORA_da_engrenagem():
+    """Dentro dela, a mensagem de erro nasceria escondida.
+
+    Foi metade do defeito de 16/08/2026: o aviso existia, era escrito, e vivia
+    dentro de um bloco com `sumindo`. Ninguém nunca o viu.
+    """
+    html = _ler("frontend/controle.html")
+    inicio = html.index('id="engrenagem"')
+    fim = html.index('id="caixa-entrar-config"')
+    assert fim < inicio, (
+        "a caixa da senha está dentro da engrenagem; o erro dela nasceria escondido"
+    )
+
+
+def test_quem_esqueceu_a_senha_tem_saida_ANTES_de_entrar():
+    """Já havia um "Esqueci minha senha" — dentro da engrenagem, alcançável só
+    depois de entrar. Ou seja: exatamente onde quem esqueceu a senha não chega.
+    """
+    html = _ler("frontend/controle.html")
+    caixa = html[html.index('id="caixa-entrar-config"'):]
+    caixa = caixa[:caixa.index("</div>\n\n") if "</div>\n\n" in caixa else 1500]
+    assert "Esqueci minha senha" in caixa
+
+
+def test_o_toque_na_barra_do_evento_nao_falha_calado():
+    """`virarPortao.abrir` chama `Controle.comSenha`, que pode rejeitar. Sem
+    tratamento, a rejeição não vira nada na tela — e o dono toca no evento, o
+    modal aparece, ele digita, e o aparelho simplesmente não reage."""
+    js = _ler("frontend/virar-portao.js")
+    trecho = js[js.index("Controle.comSenha"):]
+    assert ".catch(" in trecho[:600], (
+        "o toque na barra não trata a falha da senha"
+    )

@@ -88,6 +88,39 @@
         <div id="erro-login" class="aviso erro sumindo" style="margin-top:14px;"></div>
     </div>
 
+    <!-- A PORTA DA CONFIGURAÇÃO. Fica FORA da engrenagem de propósito: é aqui
+         que a falha da senha precisa aparecer, e a engrenagem ainda está
+         escondida nesse momento. O aviso que vivia lá dentro era escrito e
+         nunca visto.
+
+         A senha era pedida por dois `window.prompt` seguidos. Saiu por três
+         razões, e a primeira é do usuário: o `prompt` não tem onde caber um
+         "Esqueci minha senha", e sem essa saída quem não lembra a senha fica
+         trancado fora do próprio evento. As outras duas: ele não mostra erro
+         nenhum, e há navegador embutido de aplicativo que não o exibe.
+
+         Sem `<form>`, de propósito. Sem evento de submit o navegador não
+         oferece "salvar senha" — e ela não pode ficar memorizada no celular
+         que fica com o porteiro. É a mesma preocupação que fazia o `prompt`
+         ser escolhido lá atrás, resolvida de outro jeito. -->
+    <div id="caixa-entrar-config" class="cartao sumindo">
+        <h1 id="entrar-config-titulo">Configurar o evento</h1>
+        <p class="config-ajuda">
+            Entre com a <strong>mesma conta do Vibe</strong> com que você
+            acompanha os seus pedidos. Ela libera as alterações por 15 minutos e
+            sai deste aparelho quando você fechar a configuração.
+        </p>
+        <label for="entrar-config-email">E-mail</label>
+        <input id="entrar-config-email" type="email" autocomplete="off" inputmode="email">
+        <label for="entrar-config-senha">Senha</label>
+        <input id="entrar-config-senha" type="password" autocomplete="off">
+        <button id="btn-entrar-config">Entrar e configurar</button>
+        <button id="btn-esqueci-entrar-config" class="secundario">Esqueci minha senha</button>
+        <button id="btn-cancelar-entrar-config" class="secundario">Cancelar</button>
+        <div id="erro-entrar-config" class="aviso erro sumindo" role="alert"
+             style="margin-top:14px;"></div>
+    </div>
+
     <!-- A ENGRENAGEM: toda a configuração do evento, atrás de uma senha.
          `#engrenagem` e `#lista` são os dois estados desta página, e nunca
          aparecem juntos — quem faz a troca é o `abrirEngrenagem` /

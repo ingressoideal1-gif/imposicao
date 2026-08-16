@@ -150,6 +150,18 @@
             }
             return window.Controle.comSenha(evento_id, function (sessao, elevacao) {
                 return criar(evento_id, sessao, elevacao);
+            }).catch(function (e) {
+                // SEM este `catch`, uma senha que nao confere virava uma
+                // promessa rejeitada e nada mais: o dono tocava no evento,
+                // digitava, e o aparelho simplesmente nao reagia. Foi metade
+                // do defeito que ele relatou em 16/08/2026.
+                //
+                // "cancelado" nao e falha: ele tocou em Cancelar e a lista ja
+                // esta de volta na tela. Avisar ali seria acusar o proprio
+                // usuario de um erro que ele nao cometeu.
+                if (e && e.message === 'cancelado') { return; }
+                avisar('Não consegui abrir o portão deste evento. '
+                     + ((e && e.message) || 'Tente de novo em instantes.'));
             });
         });
     }

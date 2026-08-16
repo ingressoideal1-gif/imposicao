@@ -1045,36 +1045,127 @@
             if (s && elevado()) {
                 return { sessao: s, elevacao: estado.elevacao };
             }
-            if (s) {
-                return abrirCaixaDeSenha().then(function () {
-                    return { sessao: s, elevacao: estado.elevacao };
-                });
-            }
+            // Um caminho só, com ou sem sessão. Antes havia dois, e o de cima
+            // — sessão aberta, elevação vencida — pedia a senha num
+            // `window.prompt` e escrevia o erro no `#aviso-gravacao`, que vive
+            // DENTRO da engrenagem, ainda escondida neste instante. Ou seja:
+            // metade dos donos recebia o aviso numa caixa invisível.
+            //
+            // `haviaSessao` continua importando por uma razão só: se o dono já
+            // estava logado no PRÓPRIO celular, fechar a configuração não pode
+            // deslogá-lo. Ver `fecharEngrenagem`.
+            return pedirEntrada(evento_id, !!s);
+        });
+    }
 
-            var email = window.prompt(
-                'E-mail da sua conta do Vibe — a mesma com que você acompanha '
-                + 'os seus pedidos.', emailLembrado());
-            if (!email) { return Promise.reject(new Error('cancelado')); }
-            var senha = window.prompt('Senha desta conta. Ela libera as '
-                + 'alterações por ' + acesso_minutos() + ' minutos.');
-            if (!senha) { return Promise.reject(new Error('cancelado')); }
-            // O e-mail sim, a senha nunca: no portão o dono digita isto de pé,
-            // com pressa, e o e-mail é a metade que não é segredo.
-            try { localStorage.setItem(CHAVE_EMAIL, email); } catch (e) { /* aba anônima */ }
+    /**
+     * A caixa de entrar da configuração.
+     *
+     * Devolve uma promessa que só resolve quando a conta entra E a elevação
+     * chega. Enquanto a senha não conferir, a caixa FICA na tela com o motivo
+     * escrito — que é o defeito que ela nasceu para consertar: até 16/08/2026
+     * a senha era pedida por `window.prompt`, e uma senha errada não produzia
+     * absolutamente nada na tela.
+     *
+     * Os ouvintes são trocados a cada chamada (`onclick`, e não
+     * `addEventListener`): abrir a caixa duas vezes na mesma sessão da página
+     * empilharia dois ouvintes, e o segundo toque tentaria entrar duas vezes.
+     */
+    function pedirEntrada(evento_id, haviaSessao) {
+        var caixa = $('caixa-entrar-config');
+        var campoEmail = $('entrar-config-email');
+        var campoSenha = $('entrar-config-senha');
+        var erro = $('erro-entrar-config');
+        var botao = $('btn-entrar-config');
 
-            return AcessoConta.entrarEElevar(email, senha, evento_id)
-                .then(function (r) {
-                    estado.sessao = r.sessao;
-                    // A sessão foi aberta AQUI: é esta bandeira que faz o
-                    // `fecharEngrenagem` saber que precisa desfazê-la.
-                    estado.sessaoDaEngrenagem = true;
-                    guardarElevacao({
-                        token: r.elevacao.token,
-                        expira_em: r.elevacao.expira_em,
-                        evento_id: evento_id
+        campoEmail.value = emailLembrado();
+        campoSenha.value = '';
+        erro.classList.add('sumindo');
+        $('lista').classList.add('sumindo');
+        caixa.classList.remove('sumindo');
+        // O foco vai para o campo que falta preencher: com o e-mail lembrado,
+        // é a senha.
+        (campoEmail.value ? campoSenha : campoEmail).focus();
+
+        function mostrarErro(texto) {
+            erro.textContent = texto;
+            erro.classList.remove('sumindo');
+            botao.disabled = false;
+        }
+
+        function fechar() {
+            caixa.classList.add('sumindo');
+            campoSenha.value = '';        // a senha não fica na tela nem na memória do DOM
+            $('lista').classList.remove('sumindo');
+        }
+
+        return new Promise(function (resolver, recusar) {
+            botao.onclick = function () {
+                var email = (campoEmail.value || '').trim();
+                var senha = campoSenha.value || '';
+                if (!email || !senha) {
+                    return mostrarErro('Preencha o e-mail e a senha.');
+                }
+                // O e-mail sim, a senha nunca: no portão o dono digita isto de
+                // pé, com pressa, e o e-mail é a metade que não é segredo.
+                try { localStorage.setItem(CHAVE_EMAIL, email); }
+                catch (e) { /* aba anônima */ }
+
+                botao.disabled = true;
+                erro.classList.add('sumindo');
+                AcessoConta.entrarEElevar(email, senha, evento_id)
+                    .then(function (r) {
+                        estado.sessao = r.sessao;
+                        // A bandeira que faz o `fecharEngrenagem` desfazer a
+                        // sessão — e ela SÓ vale quando não havia sessão antes.
+                        // O dono que já estava logado no próprio celular não
+                        // pode ser deslogado por ter fechado uma caixa de
+                        // configuração; quem precisa sair é o celular do
+                        // porteiro, onde a conta chegou agora e só para isto.
+                        if (!haviaSessao) { estado.sessaoDaEngrenagem = true; }
+                        guardarElevacao({
+                            token: r.elevacao.token,
+                            expira_em: r.elevacao.expira_em,
+                            evento_id: evento_id
+                        });
+                        botao.disabled = false;
+                        fechar();
+                        resolver({ sessao: r.sessao, elevacao: r.elevacao });
+                    })
+                    .catch(function (e) {
+                        // A caixa FICA aberta, com o motivo escrito. Fechá-la
+                        // devolveria o dono à lista sem uma palavra — que era
+                        // exatamente o defeito.
+                        mostrarErro(e && e.message
+                            ? e.message
+                            : 'Não consegui entrar agora. Confira a internet e '
+                              + 'tente de novo.');
                     });
-                    return { sessao: r.sessao, elevacao: r.elevacao };
+            };
+
+            $('btn-esqueci-entrar-config').onclick = function () {
+                var email = (campoEmail.value || '').trim();
+                if (!email) {
+                    return mostrarErro('Escreva o seu e-mail acima e toque de '
+                        + 'novo — é para lá que o link vai.');
+                }
+                AcessoConta.esqueciSenha(email).then(function (frase) {
+                    // No mesmo lugar do erro, e não num alerta: é a resposta ao
+                    // toque que ele acabou de dar, e tem de aparecer onde ele
+                    // está olhando.
+                    erro.textContent = frase;
+                    erro.classList.remove('sumindo');
                 });
+            };
+
+            $('btn-cancelar-entrar-config').onclick = function () {
+                fechar();
+                recusar(new Error('cancelado'));
+            };
+
+            campoSenha.onkeydown = function (ev) {
+                if (ev.key === 'Enter') { botao.click(); }
+            };
         });
     }
 

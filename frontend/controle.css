@@ -19,7 +19,21 @@ body {
     font-size: 16px;             /* 16px evita o zoom automático do iOS ao focar um campo */
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
-    padding: 20px 16px calc(28px + env(safe-area-inset-bottom));
+    /* O TOPO precisa de `env(safe-area-inset-top)`, e não de um número fixo.
+       Esta página declara `viewport-fit=cover` e barra de status translúcida:
+       as duas juntas mandam desenhar POR BAIXO do relógio e da bateria — é o
+       que faz a cor do fundo subir até o alto da tela em vez de deixar uma
+       faixa branca. O preço é que o conteúdo tem de se afastar sozinho.
+
+       Aqui havia um `20px` seco. No navegador do computador nada parecia
+       errado, porque ali o `env()` vale zero e não existe barra de status; no
+       celular do usuário o logo ficava por baixo do relógio.
+
+       Os 38px são o "pelo menos 1cm" que ele pediu (1cm ≈ 37,8px de CSS), e
+       eles vêm SOMADOS à área segura, não no lugar dela: o `env()` cobre o
+       entalhe, e a folga é o respiro. */
+    padding: calc(env(safe-area-inset-top) + 38px) 16px
+             calc(28px + env(safe-area-inset-bottom));
 }
 
 .folha { max-width: 460px; margin: 0 auto; }
