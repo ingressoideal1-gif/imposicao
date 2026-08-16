@@ -525,7 +525,15 @@ async function prepararCarga(page) {
 
 // ── Cartelas, legendas e moldura ─────────────────────────────────────────────
 
-const FONTE_CSS = '-apple-system, "Segoe UI", Roboto, sans-serif';
+// Aspas SIMPLES em "Segoe UI", e isto não é estilo de escrita.
+//
+// Esta constante é interpolada dentro de atributos `style="…"`. Com aspas
+// duplas, o atributo TERMINA no `"` antes de Segoe, e tudo o que vem depois —
+// inclusive o `color` — deixa de ser estilo e vira atributo solto que o
+// navegador ignora. O sintoma foi título e legenda saindo em preto sobre fundo
+// escuro: praticamente invisíveis, num vídeo em que a legenda é metade do
+// recado.
+const FONTE_CSS = "-apple-system, 'Segoe UI', Roboto, sans-serif";
 
 async function desenharPecas(browser) {
     const page = await browser.newPage();
