@@ -9,7 +9,7 @@
  * Rodar: npx deno test _compartilhado/sessao_test.ts
  */
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
-import { Recusa, usuarioDoJwt } from "./sessao.ts";
+import { PAPEIS_QUE_CONFIGURAM, Recusa, usuarioDoJwt } from "./sessao.ts";
 
 function jwtDeMesa(claims: unknown): string {
   const b64 = (o: unknown) =>
@@ -65,4 +65,13 @@ Deno.test("jwt: claims sem `sub` e 401", () => {
 
 Deno.test("jwt: claims que nao sao JSON e 401", () => {
   assertThrows(() => usuarioDoJwt("Bearer aaa.bbbb.cccc"), Recusa);
+});
+
+Deno.test("papel: a lista e exatamente a do Python, e nao uma abreviacao dela", () => {
+  // Este teste existe por um defeito de 16/08/2026: o porte escreveu "adm", e a
+  // Edge Function passou a ACEITAR quem o Render recusa. Divergencia de
+  // permissao que ABRE nao aparece como erro -- aparece como alguem vendo uma
+  // tela que nao devia, sem nada no log.
+  assertEquals(PAPEIS_QUE_CONFIGURAM, ["admin", "atendimento"]);
+  assertEquals(PAPEIS_QUE_CONFIGURAM.includes("adm"), false);
 });

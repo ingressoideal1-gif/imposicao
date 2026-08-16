@@ -433,3 +433,19 @@ enabled = true
 # Fica aqui, e nao como `--no-verify-jwt` na linha de comando, porque aqui e
 # versionado: quem publicar amanha nao precisa lembrar da bandeira.
 verify_jwt = false
+
+[functions.acesso-interno]
+# LIGADO, e escrito por extenso mesmo sendo o padrao.
+#
+# Esta funcao e o oposto da portaria: quem fala com ela e uma pessoa logada no
+# painel da grafica, com JWT de verdade do Supabase. Ligado, o gateway confere a
+# ASSINATURA do token antes de invocar a funcao -- e e essa conferencia que
+# permite ao `_compartilhado/sessao.ts` ler o `sub` das claims sem rede e sem
+# desconfiar dele.
+#
+# Desligar isto nao daria erro nenhum de imediato: a funcao continuaria
+# respondendo, e o `sub` passaria a ser um campo que QUALQUER UM escreve. Um
+# estranho montaria um JWT com o `sub` de um ADM e a tela inteira abriria. Por
+# isso esta linha existe explicita, com este comentario: para ninguem a apagar
+# achando que remove redundancia.
+verify_jwt = true

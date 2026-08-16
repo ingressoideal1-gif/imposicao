@@ -28,8 +28,19 @@
  */
 import { banco } from "./banco.ts";
 
-/** Os papeis que podem configurar o Ideal Control da grafica. */
-export const PAPEIS_QUE_CONFIGURAM = ["adm", "atendimento"];
+/**
+ * Os papeis que podem configurar o Ideal Control da grafica.
+ *
+ * `"admin"`, e NAO `"adm"`. A primeira versao deste porte escreveu `"adm"`, e o
+ * efeito foi o pior possivel: a Edge Function ACEITAVA quem o Render recusa.
+ * Uma divergencia de permissao que abre, e nao que fecha, nao aparece como erro
+ * -- aparece como alguem vendo uma tela que nao devia, sem nada no log.
+ *
+ * Conferido contra o banco em 16/08/2026: os papeis que existem sao `admin`,
+ * `atendimento`, `designer` e `operador`. Designer e Operador trabalham na arte
+ * e na impressora, e nao tem o que fazer na configuracao de um evento.
+ */
+export const PAPEIS_QUE_CONFIGURAM = ["admin", "atendimento"];
 
 export class Recusa extends Error {
   constructor(public status: number, public detail: string) {

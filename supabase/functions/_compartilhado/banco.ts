@@ -80,3 +80,41 @@ export async function banco(
   const texto = await r.text();
   return texto ? JSON.parse(texto) : null;
 }
+
+/**
+ * Quantas linhas casam com o filtro, SEM trazer as linhas.
+ *
+ * Porte de `contar()` (`acesso_api.py:118`). Existe porque a tela precisa
+ * comparar o que o ERP encomendou com o que esta publicado, e um evento de
+ * 12.000 ingressos traria 12.000 objetos para chegar a um numero.
+ *
+ * O PostgREST devolve a contagem no cabecalho `Content-Range` quando se pede
+ * `Prefer: count=exact`. E a contagem e EXATA em qualquer tamanho -- ao
+ * contrario de contar o tamanho de uma lista, que o teto de 1.000 linhas
+ * limitaria em silencio.
+ */
+export async function contar(caminho: string): Promise<number> {
+  const urlBase = precisa("SUPABASE_URL");
+  const chave = precisa("SUPABASE_SERVICE_ROLE_KEY");
+
+  const juncao = caminho.includes("?") ? "&" : "?";
+  const r = await fetch(`${urlBase}/rest/v1/${caminho}${juncao}select=id&limit=1`, {
+    headers: {
+      apikey: chave,
+      Authorization: `Bearer ${chave}`,
+      Prefer: "count=exact",
+      // `Range` de uma linha so: sem ele o PostgREST traz a primeira pagina
+      // inteira para descobrir um numero que ja vem no cabecalho.
+      Range: "0-0",
+    },
+  });
+  if (!r.ok) {
+    throw new Error(
+      `PostgREST ${r.status} ao contar ${caminho}: ${(await r.text()).slice(0, 300)}`,
+    );
+  }
+  // "0-0/2000" -- o que interessa e o que vem depois da barra. "*/0" quando
+  // nao ha linha nenhuma.
+  const total = (r.headers.get("content-range") ?? "").split("/")[1];
+  return total && total !== "*" ? Number(total) : 0;
+}
