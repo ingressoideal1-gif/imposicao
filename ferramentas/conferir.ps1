@@ -90,6 +90,34 @@ if ($repo -and $manifesto -eq $repo) {
     Alerta "Agente: repositorio esta em $repo e o publicado em $manifesto. Ver GUIA_AGENTE.md."
 }
 
+# As TRES linhas acima respondem "esta maquina esta em dia?". A pergunta que
+# importa e outra: as ONZE estacoes da grafica estao? Elas se atualizam cada uma
+# no seu ritmo, e ate 16/08/2026 nada aqui as enxergava — descobrir que duas
+# rodavam agente de agosto exigia consultar o banco a mao.
+#
+# O `estacoes.py` so consulta, e imprime as linhas ja formatadas. As que
+# comecam com ALERTA: viram ponto de atencao aqui.
+Write-Host ""
+Write-Host "     Estacoes da grafica (versao / painel / ultimo sinal)" -ForegroundColor DarkGray
+$linhas = @()
+try {
+    $linhas = @(& "$raiz\venv\Scripts\python.exe" "$raiz\ferramentas\estacoes.py" 2>&1)
+} catch {
+    $linhas = @("     (nao consegui consultar as estacoes)")
+}
+foreach ($linha in $linhas) {
+    $texto = [string]$linha
+    if ($texto -like 'ALERTA:*') {
+        Alerta ($texto -replace '^ALERTA:\s*', '')
+    } elseif ($texto -like '`[db.py`]*') {
+        # O db.py anuncia a conexao ao ser importado; nao e resultado.
+    } elseif ($texto -match 'sem sinal') {
+        Write-Host $texto -ForegroundColor DarkGray
+    } else {
+        Write-Host $texto
+    }
+}
+
 # ─── 4. Branches e rascunhos ─────────────────────────────────────────────────
 Titulo "4. Branches e arquivos na raiz"
 $branches = @(git branch -a --format='%(refname:short)' | Where-Object { $_ -notmatch 'HEAD' })

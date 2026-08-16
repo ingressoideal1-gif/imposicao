@@ -92,11 +92,27 @@ O heartbeat leva o estado da estação em `print_agents.printers_json`:
 ```json
 "version": "1.2.37",
 "painel": { "versao": "537", "quando": "2026-08-12T12:58:45+00:00" },
+"acesso_base": "https://imposicao.onrender.com",
 "fontes": { "cache_arquivos": 270, "cache_mb": 142.8,
             "catalogo_total": 316, "catalogo_relativas": 0,
             "catalogo_gstatic": 0, "catalogo_storage": 316,
             "storage_alcancavel": true }
 ```
+
+Desde agosto/2026 as duas versões vão **também** em colunas próprias,
+`print_agents.versao` e `print_agents.painel_versao`
+(`sql/alter_print_agents_versao.sql`). O campo no JSON continua porque o modal
+"Qual é esta estação?" do painel o lê, e aquela tela pode estar desatualizada.
+
+Enquanto o `ALTER TABLE` não tiver rodado, o heartbeat tenta com as colunas,
+recebe a recusa, e **repete sem elas** — mandar coluna que o banco não tem faria
+o PostgREST recusar o UPSERT inteiro, e a estação sumiria do painel por parar de
+atualizar `last_seen`.
+
+Não é preciso consultar isso à mão: `.\ferramentas\conferir.ps1` lista as onze
+estações com versão, versão do painel e há quanto tempo cada uma falou, e
+levanta ponto de atenção para as que estão atrás do repositório ou não informam
+versão nenhuma. Quem monta a lista é `ferramentas/estacoes.py`, que só consulta.
 
 Como ler:
 
@@ -107,6 +123,8 @@ Como ler:
 | `storage_alcancavel: false` | **a rede daquela estação não alcança o Supabase** |
 | `version` desatualizada | ver a seção de auto-update |
 | `painel.versao` abaixo da `vNNN` publicada | a estação serve tela velha, com executável novo |
+| `version` ausente numa estação que falou hoje | agente anterior a agosto/2026: nem a versão ele reporta |
+| `acesso_base` apontando para o Render | aquela estação ainda publica a faixa pela pilha antiga |
 | `painel.quando` parado há horas | `sincronizar_painel` está falhando — o download é tudo-ou-nada |
 
 Para investigar na própria máquina, existe o `Diagnostico_Fontes.ps1` na raiz do

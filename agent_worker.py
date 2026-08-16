@@ -123,33 +123,76 @@ def get_local_ip():
     except Exception:
         return "127.0.0.1"
 
+# As colunas `versao` e `painel_versao` de print_agents existem neste banco?
+#
+# Comeca otimista e desliga sozinha na primeira recusa. O motivo de nao ser o
+# contrario — comecar desligada e ligar quando alguem avisasse — e que ninguem
+# avisaria: as onze estacoes rodam sem supervisao, e uma flag que exige acao
+# humana ficaria falsa para sempre em metade delas.
+_COLUNAS_DE_VERSAO = True
+
+
+def _e_coluna_ausente(codigo: int, corpo: str) -> bool:
+    """A recusa foi por coluna que o banco nao tem?
+
+    O PostgREST responde 400 com `PGRST204` e a frase "Could not find the
+    'versao' column of 'print_agents' in the schema cache". Distinguir esse caso
+    importa: qualquer outro 400 e defeito nosso e tem de continuar aparecendo no
+    log, em vez de virar uma tentativa silenciosa a menos.
+    """
+    if codigo not in (400, 404):
+        return False
+    texto = (corpo or "").lower()
+    return "pgrst204" in texto or ("column" in texto and "schema cache" in texto)
+
+
+def _acesso_base() -> str:
+    """Para qual pilha esta estacao publica a faixa de codigos.
+
+    Vai no heartbeat porque e a pergunta da Fase 3: quando as onze estacoes
+    tiverem migrado, o Render pode ser desligado. A VERSAO sozinha nao responde
+    isso — o endereco sai de `ACESSO_BASE_URL`, uma variavel de ambiente, e uma
+    estacao pode ser migrada sem trocar de executavel. Perguntar ao proprio
+    modulo que publica e a unica resposta que nao pode mentir.
+    """
+    try:
+        import acesso_publicacao
+        return acesso_publicacao._base()
+    except Exception:
+        return ""
+
+
 def sync_heartbeat():
     try:
         printers = print_service.get_printers()
         capabilities = {}
         for p in printers:
             capabilities[p] = print_service.get_printer_capabilities(p)
-            
+
         from agent_version import AGENT_VERSION
 
-        # A versao vai dentro do printers_json (JSONB) e nao numa coluna propria
-        # para nao exigir migracao na tabela print_agents — o local_ip ja segue
-        # essa pratica. Sem isto nao ha como saber remotamente qual estacao
-        # rodava qual versao.
-        #
+        painel = versao_do_painel()
+
         # `version` e o executavel; `painel` e a tela que o operador ve. Os dois
         # se atualizam por caminhos diferentes e ja divergiram em producao, entao
         # um so dos numeros nao diz se a estacao esta em dia.
+        #
+        # Estes campos continuam no JSON mesmo depois de existirem colunas para
+        # eles: o modal "Qual e esta estacao?" do painel le
+        # `printers_json.version`, e ele roda na tela do operador, que pode estar
+        # desatualizada. Quebrar aquela tela para arrumar a coluna seria trocar
+        # um incomodo de quem publica por um incomodo de quem imprime.
         printers_json = {
             "printers": printers,
             "capabilities": capabilities,
             "local_ip": get_local_ip(),
             "version": AGENT_VERSION,
-            "painel": versao_do_painel(),
+            "painel": painel,
+            "acesso_base": _acesso_base(),
             "fontes": diagnostico_fontes(),
             "ultimo_update": ultimo_update()
         }
-        
+
         # Formato UTC explícito com timezone, exigido pelo Supabase
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -161,23 +204,69 @@ def sync_heartbeat():
             "last_seen": now_iso,
             "printers_json": printers_json
         }
-        url = f"{db.SUPABASE_URL}/rest/v1/print_agents"
-        headers = {
-            "apikey": db.SUPABASE_KEY,
-            "Authorization": f"Bearer {db.SUPABASE_KEY}",
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates"
+
+        # As colunas vao SEPARADAS do resto, porque sao a unica parte que o banco
+        # pode nao ter ainda. Ver `sql/alter_print_agents_versao.sql`.
+        colunas = {
+            "versao": AGENT_VERSION,
+            "painel_versao": (painel or {}).get("versao"),
         }
-        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-        try:
-            urllib.request.urlopen(req, timeout=10)
-            print(f"[agent_worker] Heartbeat OK - {now_iso}", flush=True)
-        except urllib.error.HTTPError as e:
-            print(f"[agent_worker] Falha no heartbeat HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}", flush=True)
-        except Exception as e:
-            print(f"[agent_worker] Falha no heartbeat: {e}", flush=True)
+        _gravar_heartbeat(payload, colunas, now_iso)
     except Exception as e:
         print(f"[agent_worker] Erro fatal no sync_heartbeat: {e}", flush=True)
+
+
+def _gravar_heartbeat(payload: dict, colunas: dict, now_iso: str):
+    """Grava o heartbeat, com e sem as colunas novas.
+
+    A ordem importa e e a razao de esta funcao existir: enquanto o ALTER TABLE
+    nao for aplicado, mandar as colunas novas faria o PostgREST recusar o UPSERT
+    INTEIRO. Nao seria uma informacao a menos — seria a estacao inteira sumindo
+    do painel, porque `last_seen` para de ser atualizado. O operador veria
+    "nenhuma estacao com sinal recente" e nao teria como imprimir pelo relay.
+
+    Por isso a primeira recusa por coluna ausente derruba a flag e repete SEM
+    elas. A partir dai, aquele processo nem tenta.
+    """
+    global _COLUNAS_DE_VERSAO
+
+    url = f"{db.SUPABASE_URL}/rest/v1/print_agents"
+    headers = {
+        "apikey": db.SUPABASE_KEY,
+        "Authorization": f"Bearer {db.SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates"
+    }
+
+    def _enviar(corpo):
+        """(deu_certo, codigo_http, texto). Nunca levanta: o heartbeat e o
+        ultimo lugar onde uma excecao pode escapar — ela mataria a thread e a
+        estacao sumiria do painel em silencio."""
+        try:
+            req = urllib.request.Request(
+                url, data=json.dumps(corpo).encode("utf-8"), headers=headers, method="POST")
+            urllib.request.urlopen(req, timeout=10)
+            return True, 0, ""
+        except urllib.error.HTTPError as e:
+            return False, e.code, e.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            return False, 0, str(e)
+
+    ok, codigo, texto = _enviar({**payload, **colunas} if _COLUNAS_DE_VERSAO else payload)
+
+    if not ok and _COLUNAS_DE_VERSAO and _e_coluna_ausente(codigo, texto):
+        _COLUNAS_DE_VERSAO = False
+        print("[agent_worker] print_agents ainda nao tem as colunas de versao; "
+              "reportando so pelo printers_json. Rode "
+              "sql/alter_print_agents_versao.sql.", flush=True)
+        ok, codigo, texto = _enviar(payload)
+
+    if ok:
+        print(f"[agent_worker] Heartbeat OK - {now_iso}", flush=True)
+    elif codigo:
+        print(f"[agent_worker] Falha no heartbeat HTTP {codigo}: {texto}", flush=True)
+    else:
+        print(f"[agent_worker] Falha no heartbeat: {texto}", flush=True)
 
 def titulo_do_job(file_url, job_id):
     """
