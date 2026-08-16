@@ -69,6 +69,102 @@ if acesso_api.disponivel():
 else:
     print(f"[app] Controle de acesso inativo ({acesso_api.CHAVE_ENV} ausente).", flush=True)
 
+# ─── Nada de escrita anônima na nuvem ────────────────────────────────────────
+#
+# Medido em 16/08/2026, sem nenhuma credencial, de fora:
+#
+#     GET https://imposicao.onrender.com/api/acessos-locais  ->  200
+#     GET https://imposicao.onrender.com/api/user/permissions -> 200
+#
+# A primeira devolvia os CÓDIGOS de acesso local em texto claro — três pessoas,
+# uma delas com papel `admin`. É o código que destranca o painel do NewProd numa
+# estação. A segunda devolvia a grade de permissões inteira, e o `POST` dela
+# deixaria qualquer um se dar `admin`.
+#
+# A causa é que `get_current_user` (mais abaixo) é um carimbo: devolve admin para
+# todo mundo, sem conferir nada. Isso nunca foi um problema na estação, que vive
+# na LAN da gráfica atrás da trava do código local — mas o MESMO `app.py` roda no
+# Render, num endereço público.
+#
+# ## A regra
+#
+# Na NUVEM, toda escrita e toda leitura de dado sensível exige uma sessão de
+# verdade do Supabase. Na ESTAÇÃO nada muda: exigir sessão ali quebraria o
+# operador que entrou pelo código local, offline, que é justamente o caso para o
+# qual o `acesso_local` existe.
+#
+# O `/api/acesso/*` fica de fora porque já tem trava própria, e mais forte: token
+# de aparelho na portaria, segredo do agente na publicação, papel lido do banco
+# no Ideal Control.
+_LEITURAS_SENSIVEIS = (
+    "/api/user/permissions",
+    "/api/acessos-locais",
+    "/api/admin/users",
+    "/api/email",
+    "/api/diag",
+)
+
+
+def precisa_de_sessao(metodo: str, caminho: str) -> bool:
+    """Esta requisição, na nuvem, exige sessão? Pura, para poder ser testada."""
+    if not caminho.startswith("/api/"):
+        return False
+    # O preflight não carrega cabeçalho nenhum, por definição do navegador.
+    if metodo == "OPTIONS":
+        return False
+    # Trava própria, e mais forte que uma sessão de painel.
+    if caminho.startswith("/api/acesso/"):
+        return False
+    # A imposição na nuvem já recusa TODO MUNDO desde a Fase 1, com uma frase
+    # que diz ao operador por onde o trabalho sai ("use a estação, localhost:9000").
+    # Exigir sessão antes trocaria essa frase por um 401 seco, sem fechar nada
+    # que já não estivesse fechado.
+    if caminho == "/api/impose":
+        return False
+    if caminho.startswith(_LEITURAS_SENSIVEIS):
+        return True
+    return metodo in ("POST", "PUT", "PATCH", "DELETE")
+
+
+def _sessao_do_supabase(authorization: str | None) -> bool:
+    """O token é uma sessão viva? Quem responde é o próprio Supabase."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return False
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        return False
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(
+        f"{db.SUPABASE_URL}/auth/v1/user",
+        headers={"apikey": db.SUPABASE_KEY, "Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.status == 200
+    except urllib.error.HTTPError:
+        return False
+    except Exception as e:
+        # Rede fora não é credencial inválida. Recusar assim mesmo é o certo
+        # aqui: é uma escrita, e deixar passar por não conseguir conferir seria
+        # transformar uma falha de rede em porta aberta.
+        print(f"[app] nao consegui conferir a sessao: {e}", flush=True)
+        return False
+
+
+@app.middleware("http")
+async def exigir_sessao_na_nuvem(request: Request, call_next):
+    if security_config.is_cloud_runtime() and precisa_de_sessao(
+        request.method, request.url.path
+    ):
+        if not _sessao_do_supabase(request.headers.get("authorization")):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "faca login no painel para esta operacao"},
+            )
+    return await call_next(request)
+
+
 # allow_private_network permanece ligado: é o que autoriza a página HTTPS do
 # Vercel a falar com o agente local em 127.0.0.1:9000.
 # allow_credentials=False porque nenhuma chamada do frontend usa cookies/sessão

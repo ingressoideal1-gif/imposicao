@@ -26,3 +26,67 @@ const isPort9000 = window.location.port === "9000";
 const API_BASE_URL = (isLocalhost || isPort9000) && window.location.protocol !== 'file:'
     ? ""
     : "https://imposicao.onrender.com";
+
+// ─── Toda chamada ao motor leva a sessão junto ───────────────────────────────
+//
+// Até 16/08/2026 nenhuma chamada do painel se identificava, e o motor não pedia
+// nada: qualquer um, de qualquer lugar, lia os códigos de acesso local e a grade
+// de permissões de `imposicao.onrender.com`, e podia escrever nelas. O conserto
+// do lado do servidor está em `app.py` (`precisa_de_sessao`); este é o outro
+// lado dele.
+//
+// ## Por que aqui, e não em cada chamada
+//
+// São dezenas de pontos de chamada espalhados por `script.js`, `mapas.js`,
+// `pedido.js`, `criador-arte.js`. Cada um deles seria uma chance de esquecer — e
+// o esquecimento não apareceria como erro na tela de quem escreveu, só como um
+// 401 na tela de outra pessoa, depois. Um lugar só, no arquivo que TODA página
+// carrega antes das outras, não tem como ser esquecido.
+//
+// ## As duas armadilhas
+//
+// 1. `supabase.co` sai fora ANTES de qualquer coisa. O próprio SDK do Supabase
+//    usa `fetch` para renovar a sessão; sem este corte, pedir a sessão dentro do
+//    `fetch` chamaria `fetch` de novo, para sempre.
+// 2. O agente local (127.0.0.1:9000) não recebe cabeçalho, e nem precisa: ele
+//    vive na LAN da gráfica, atrás da trava do código local, e o operador que
+//    entrou offline não tem sessão nenhuma do Supabase para oferecer.
+(function () {
+    const fetchOriginal = window.fetch.bind(window);
+
+    function eDoNossoMotor(url) {
+        const u = String(url || '');
+        if (u.includes('supabase.co')) return false;
+        if (!u.includes('/api/')) return false;
+        if (/^https?:\/\//i.test(u)) {
+            return API_BASE_URL !== '' && u.startsWith(API_BASE_URL);
+        }
+        return u.indexOf('/api/') === 0;
+    }
+
+    window.fetch = function (entrada, opcoes) {
+        // `Request` como primeiro argumento é raro no painel e mesclar
+        // cabeçalhos nele daria uma cópia sutilmente diferente. Deixa passar.
+        const url = (typeof entrada === 'string') ? entrada : null;
+        if (!url || !supabaseClient || !eDoNossoMotor(url)) {
+            return fetchOriginal(entrada, opcoes);
+        }
+        return supabaseClient.auth.getSession().then(function (r) {
+            const token = r && r.data && r.data.session && r.data.session.access_token;
+            if (!token) return fetchOriginal(entrada, opcoes);
+            const novas = Object.assign({}, opcoes || {});
+            const cabecalhos = new Headers((opcoes && opcoes.headers) || {});
+            // Quem já mandou o seu não é sobrescrito: o QR do Pedido e o Ideal
+            // Control montam o cabeçalho na mão, e o deles é o certo.
+            if (!cabecalhos.has('Authorization')) {
+                cabecalhos.set('Authorization', 'Bearer ' + token);
+            }
+            novas.headers = cabecalhos;
+            return fetchOriginal(entrada, novas);
+        }).catch(function () {
+            // Falhar ao ler a sessão não pode impedir a chamada: sem sessão o
+            // motor recusa com 401, que é uma mensagem que a tela sabe mostrar.
+            return fetchOriginal(entrada, opcoes);
+        });
+    };
+})();
