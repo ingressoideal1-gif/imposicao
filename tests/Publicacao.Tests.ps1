@@ -137,6 +137,36 @@ Describe "Find-ProjetoSupabaseErrado" {
     }
 }
 
+Describe "Get-FuncoesEdgeDoRepo" {
+    It "lista as funcoes que existem no repositorio" {
+        $r = Get-FuncoesEdgeDoRepo -Raiz "$PSScriptRoot\.."
+        $r -contains 'portaria' | Should Be $true
+    }
+    It "IGNORA as pastas que comecam com underscore" {
+        # `_compartilhado` e biblioteca, nao funcao. Publicar como funcao criaria
+        # um endpoint publico que ninguem quis criar -- e ele exporia o que so
+        # deveria ser chamado de dentro.
+        $r = Get-FuncoesEdgeDoRepo -Raiz "$PSScriptRoot\.."
+        $r -contains '_compartilhado' | Should Be $false
+    }
+    It "devolve vazio quando nao ha pasta de funcoes" {
+        $vazio = Join-Path $env:TEMP "sem-funcoes-$(Get-Random)"
+        New-Item -ItemType Directory -Force $vazio | Out-Null
+        try {
+            @(Get-FuncoesEdgeDoRepo -Raiz $vazio).Count | Should Be 0
+        } finally {
+            Remove-Item -Recurse -Force $vazio
+        }
+    }
+    It "devolve ARRAY mesmo com uma funcao so" {
+        # Sem o @() o PowerShell devolve a string crua quando ha um item, e o
+        # `foreach` do publicar.ps1 passaria a iterar os CARACTERES do nome --
+        # tentando publicar uma funcao chamada "p", outra "o", outra "r"...
+        $r = Get-FuncoesEdgeDoRepo -Raiz "$PSScriptRoot\.."
+        $r -is [array] | Should Be $true
+    }
+}
+
 Describe "Get-ProximaVersao" {
     It "le a versao do index e soma um" {
         Get-ProximaVersao '<script src="script.js?v=490"></script>' | Should Be 491

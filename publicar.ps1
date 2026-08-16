@@ -158,6 +158,55 @@ if (-not $SemFreio) {
     }
 }
 
+# ─── Edge Functions ──────────────────────────────────────────────────────────
+# Um `git push` publica o site E o motor, porque o Render escuta o mesmo
+# repositorio. As Edge Functions NAO vao junto: elas saem por comando proprio.
+#
+# Sem este passo, publicar daria a impressao de ter publicado tudo -- a mesma
+# armadilha que ja existe com o agente, onde a tela nova chegava a estacao sem o
+# executavel que a faz funcionar.
+#
+# POR QUE ANTES DO PUSH, e nao depois do deploy da Vercel:
+#
+# 1. se falhar aqui, NADA foi ao ar, e o `Abortar` continua dizendo a verdade;
+# 2. a ordem segura e a funcao chegar ANTES da tela que aponta para ela. O
+#    contrario -- painel novo apontando para funcao que nao subiu -- deixa a
+#    portaria sem servidor.
+$funcoesEdge = Get-FuncoesEdgeDoRepo -Raiz $raiz
+if ($funcoesEdge.Count -gt 0) {
+    # O projeto e conferido contra o `security_config.py`, que e versionado, e
+    # nao contra o nome no painel: a conta tem projetos vazios chamados "Ideal
+    # Imposicao" e "Ideal Control", e uma funcao de controle de acesso publicada
+    # no projeto errado sobe sem erro, responde bonito e nao enxerga credencial
+    # nenhuma.
+    $refEsperado = ''
+    $sc = Get-Content -Raw -Encoding UTF8 "$raiz\security_config.py"
+    if ($sc -match 'https://([a-z0-9]+)\.supabase\.co') { $refEsperado = $Matches[1] }
+
+    $refLigado = ''
+    $arquivoRef = "$raiz\supabase\.temp\project-ref"
+    if (Test-Path -PathType Leaf $arquivoRef) {
+        $refLigado = Get-Content -Raw -Encoding UTF8 $arquivoRef
+    }
+
+    $problemaProjeto = Find-ProjetoSupabaseErrado -RefEsperado $refEsperado -RefLigado $refLigado
+    if ($problemaProjeto -ne '') {
+        Abortar "Edge Function no projeto errado: $problemaProjeto" `
+                "Rode: npx supabase link --project-ref $refEsperado"
+    }
+
+    Write-Host "Publicando as Edge Functions ($($funcoesEdge.Count))..." -ForegroundColor Cyan
+    foreach ($f in $funcoesEdge) {
+        Write-Host "  $f" -ForegroundColor White
+        npx supabase functions deploy $f --project-ref $refEsperado
+        if ($LASTEXITCODE -ne 0) {
+            Abortar "A Edge Function '$f' NAO subiu." `
+                    "Confira a mensagem acima. Nada foi publicado ainda."
+        }
+    }
+    Write-Host "  Edge Functions no ar." -ForegroundColor Green
+}
+
 # ─── Bump dos assets ─────────────────────────────────────────────────────────
 # Bumpa TODO asset local versionado (.js?v= e .css?v=) em todas as paginas,
 # por padrao e nao por nome: uma lista fixa deixava style.css, mapas.js e

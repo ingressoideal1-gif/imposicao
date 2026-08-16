@@ -203,6 +203,45 @@ function Find-ProjetoSupabaseErrado {
     return ''
 }
 
+function Get-FuncoesEdgeDoRepo {
+    <#
+    .SYNOPSIS
+        Nomes das Edge Functions versionadas neste repositorio.
+    .DESCRIPTION
+        Uma pasta por funcao, dentro de `supabase/functions/`.
+
+        As pastas que comecam com `_` sao biblioteca compartilhada e NAO sao
+        funcoes: `_compartilhado` guarda o hash do QR Ideal e o acesso ao banco,
+        e publica-lo como funcao criaria um endpoint publico que ninguem quis
+        criar -- expondo pela rede o que so deveria ser chamado de dentro.
+
+        Devolve sempre ARRAY, inclusive com um item so.
+
+        REPARE NA VIRGULA do `return ,@(...)`, e nao a apague: o `@()` sozinho
+        NAO basta, porque o PowerShell desembrulha array de um elemento na saida
+        da funcao. Com uma funcao so no repositorio -- que e o caso hoje, a
+        `portaria` --, quem chamasse receberia a string crua e o `foreach`
+        passaria a iterar os CARACTERES do nome, tentando publicar uma funcao
+        chamada "p", outra "o", outra "r".
+
+        A virgula cria um array de um elemento cujo unico item e o nosso array,
+        e o desembrulho da saida tira essa camada extra em vez da nossa.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param([Parameter(Mandatory)][string]$Raiz)
+
+    $pasta = Join-Path $Raiz "supabase\functions"
+    # SEM a virgula aqui, ao contrario do return de baixo: `,@()` produz um
+    # array que CONTEM um array vazio, e quem contasse acharia um item onde nao
+    # ha nenhum.
+    if (-not (Test-Path -PathType Container $pasta)) { return @() }
+
+    return ,@(Get-ChildItem -Path $pasta -Directory |
+              Where-Object { -not $_.Name.StartsWith('_') } |
+              ForEach-Object { $_.Name })
+}
+
 # ─── Versoes e tags ──────────────────────────────────────────────────────────
 function Get-ProximaVersao {
     <#
@@ -442,6 +481,7 @@ function Test-SegredoNoBuild {
 }
 
 Export-ModuleMember -Function Test-ArquivoDeRascunho, ConvertFrom-JwtPayload,
-    Find-SegredoNoTexto, Find-ProjetoSupabaseErrado, Get-ProximaVersao, ConvertTo-TuplaVersao,
+    Find-SegredoNoTexto, Find-ProjetoSupabaseErrado, Get-FuncoesEdgeDoRepo,
+    Get-ProximaVersao, ConvertTo-TuplaVersao,
     Test-VersaoMaior, Get-TagAnterior, ConvertFrom-VercelLs,
     New-SegredoDoAgente, Test-SegredoNoBuild

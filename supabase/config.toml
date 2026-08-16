@@ -412,3 +412,24 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Edge Functions
+# ─────────────────────────────────────────────────────────────────────────────
+[functions.portaria]
+# O SUPABASE VERIFICA JWT POR PADRAO, e isto TEM de ficar desligado aqui.
+#
+# O aparelho da portaria manda `Authorization: Bearer <token do aparelho>` --
+# 32 bytes sorteados por nos, guardados no banco como SHA-256, revogaveis um a
+# um pela tela do dono. Nao e um JWT do Supabase. Com a verificacao ligada, o
+# gateway recusaria TODA requisicao do porteiro com 401, antes de o nosso codigo
+# rodar, e o log da funcao ficaria vazio -- a investigacao comecaria olhando o
+# lugar errado.
+#
+# Isto NAO afrouxa nada em relacao a hoje: o `/api/acesso/portaria/*` do Render
+# ja e publico e ja e protegido pelo nosso proprio token, exatamente assim. O
+# que muda de lugar e so onde o codigo roda.
+#
+# Fica aqui, e nao como `--no-verify-jwt` na linha de comando, porque aqui e
+# versionado: quem publicar amanha nao precisa lembrar da bandeira.
+verify_jwt = false
