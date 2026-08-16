@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""As seis regras que decidem se uma pessoa entra no evento.
+"""As oito regras que decidem se uma pessoa entra no evento.
 
 A ORDEM e a resposta. Um ingresso pode falhar por dois motivos ao mesmo tempo --
 ser de outro setor E cair numa faixa bloqueada -- e o porteiro precisa ouvir o
@@ -224,6 +224,76 @@ def test_ambiguidade_nao_pergunta_quando_so_um_setor_e_autorizado():
     r = decidir(["h-igual"], c)
     assert r["estado"] == "permitido"
     assert r["credencial_id"] == "c-p"
+
+
+def test_regra_0_evento_inativo_recusa_qualquer_ingresso():
+    """O dono desligou o evento. Nenhum ingresso entra, nem o bom."""
+    c = carga()
+    c["evento"] = dict(c["evento"], ativo=False)
+    r = decidir(["h-pista-1"], c)
+    assert r["estado"] == "negado"
+    assert r["motivo"] == "evento_inativo"
+
+
+def test_evento_sem_o_campo_ativo_continua_deixando_entrar():
+    """Carga antiga, baixada antes desta versao, nao pode travar o portao.
+
+    O celular pode estar com uma carga de ontem, sem o campo novo. Tratar a
+    ausencia como "inativo" pararia um evento inteiro sem que ninguem tivesse
+    desligado nada.
+    """
+    r = decidir(["h-pista-1"])           # a carga base nao tem `ativo`
+    assert r["estado"] == "permitido"
+
+
+def test_regra_3_setor_bloqueado_recusa_e_diz_o_motivo():
+    c = carga()
+    c["setores"] = [
+        dict(s, bloqueado=True, bloqueado_motivo="Camarote interditado")
+        if s["id"] == PISTA else s
+        for s in c["setores"]
+    ]
+    r = decidir(["h-pista-1"], c)
+    assert r["estado"] == "negado"
+    assert r["motivo"] == "setor_bloqueado"
+    assert r["detalhe"]["motivoBloqueio"] == "Camarote interditado"
+
+
+def test_setor_bloqueado_vem_ANTES_de_fora_da_janela():
+    """As duas valem ao mesmo tempo, e o porteiro precisa ouvir a do dono.
+
+    "Fechou as 22h" e automatico e o porteiro nao resolve. "O dono interditou
+    o camarote" ele resolve: chama o dono.
+    """
+    c = carga()
+    c["setores"] = [
+        dict(s, bloqueado=True, bloqueado_motivo="Interditado",
+             fecha_em="2026-08-20T21:00:00Z")
+        if s["id"] == PISTA else s
+        for s in c["setores"]
+    ]
+    r = decidir(["h-pista-1"], c, agora="2026-08-20T22:00:00Z")
+    assert r["motivo"] == "setor_bloqueado"
+
+
+def test_evento_inativo_vem_ANTES_de_desconhecido():
+    """Com o evento desligado, ate o QR de rua ouve o motivo certo."""
+    c = carga()
+    c["evento"] = dict(c["evento"], ativo=False)
+    r = decidir(["h-de-outro-evento"], c)
+    assert r["motivo"] == "evento_inativo"
+
+
+def test_setor_bloqueado_nao_atrapalha_o_setor_vizinho():
+    """Bloquear o CAMAROTE nao pode fechar a PISTA."""
+    c = carga()
+    c["setores"] = [
+        dict(s, bloqueado=True, bloqueado_motivo="Interditado")
+        if s["id"] == VIP else s
+        for s in c["setores"]
+    ]
+    r = decidir(["h-pista-1"], c)
+    assert r["estado"] == "permitido"
 
 
 def test_o_sal_do_QR_IDEAL_sai_do_pedido_escrito_no_proprio_codigo():

@@ -389,8 +389,10 @@
     }
 
     var TITULOS = {
+        evento_inativo: 'EVENTO INATIVO',
         desconhecido: 'NÃO É DESTE EVENTO',
         setor_nao_autorizado: 'OUTRA PORTA',
+        setor_bloqueado: 'SETOR BLOQUEADO',
         fora_da_janela: 'FORA DO HORÁRIO',
         bloqueado: 'FAIXA BLOQUEADA',
         ja_entrou: 'JÁ ENTROU',
@@ -412,6 +414,10 @@
         // vermelho, indistinguivel de celular travado. Achado em revisao de
         // codigo, 15/08/2026.
         var setor = v.setor || {};
+        // O laranja (`porta`) e SO do `setor_nao_autorizado`: ele significa
+        // "ingresso bom, porta errada -- mande a pessoa para a outra fila".
+        // `evento_inativo` e `setor_bloqueado` sao vermelhos porque, neles, o
+        // ingresso nao entra em porta nenhuma.
         caixa.className = 'resposta ' + (
             v.estado === 'permitido' ? 'ok' :
             v.motivo === 'setor_nao_autorizado' ? 'porta' : 'recusa');
@@ -424,10 +430,21 @@
         if (v.estado === 'permitido') {
             $('resposta-detalhe').textContent = setor.nome;
             $('resposta-grande').textContent = 'nº ' + v.numero;
+        } else if (v.motivo === 'evento_inativo') {
+            // Nao ha setor nem numero a mostrar: a recusa e do evento inteiro,
+            // e vem antes de o aparelho saber de que ingresso se trata.
+            $('resposta-detalhe').textContent =
+                'Este evento foi desligado pelo organizador. Procure-o.';
         } else if (v.motivo === 'setor_nao_autorizado') {
             $('resposta-detalhe').textContent =
                 'Este ingresso é ' + (setor.nome || 'de outro setor') + '. Este aparelho lê ' +
                 (d.setoresDoAparelho || []).join(', ') + '.';
+        } else if (v.motivo === 'setor_bloqueado') {
+            // Mesma forma da `bloqueado` (faixa) logo abaixo: o setor e o
+            // numero na linha de detalhe, e o motivo do dono no corpo grande,
+            // que e o que o porteiro le em voz alta para a fila.
+            $('resposta-detalhe').textContent = setor.nome + ' · nº ' + v.numero;
+            $('resposta-motivo').textContent = d.motivoBloqueio;
         } else if (v.motivo === 'fora_da_janela') {
             $('resposta-detalhe').textContent = d.abre_em
                 ? (setor.nome + ' abre às ' + hora(d.abre_em))

@@ -1,5 +1,5 @@
 /**
- * As seis regras que decidem se uma pessoa entra no evento.
+ * As oito regras que decidem se uma pessoa entra no evento.
  *
  * PURO de proposito: nada de rede, DOM ou IndexedDB aqui. E onde mora a decisao
  * de deixar alguem entrar, e queremos poder testa-la com dados de mesa, sem
@@ -9,12 +9,19 @@
  * A ORDEM DAS REGRAS E A RESPOSTA. Um ingresso pode falhar por dois motivos ao
  * mesmo tempo, e o porteiro precisa ouvir o que ele consegue resolver:
  *
+ *   0. evento_inativo        -- o dono desligou o evento inteiro
  *   1. desconhecido          -- nao e deste evento
  *   2. setor_nao_autorizado  -- e deste evento, mas de outra porta
- *   3. fora_da_janela        -- o setor ainda nao abriu, ou ja fechou
- *   4. bloqueado             -- o dono suspendeu esta faixa, e disse por que
- *   5. ja_entrou             -- so para setor de entrada unica
- *   6. permitido
+ *   3. setor_bloqueado       -- o dono desligou ESTA porta, e disse por que
+ *   4. fora_da_janela        -- o setor ainda nao abriu, ou ja fechou
+ *   5. bloqueado             -- o dono suspendeu esta faixa, e disse por que
+ *   6. ja_entrou             -- so para setor de entrada unica
+ *   7. permitido
+ *
+ * `evento_inativo` vem antes de tudo porque e a resposta para qualquer ingresso
+ * e a unica frase que explica ao porteiro por que a fila parou.
+ * `setor_bloqueado` fica ao lado de `setor_nao_autorizado`: as duas dizem "esta
+ * porta nao e para voce agora", que e o que o porteiro consegue resolver.
  *
  * Trocar essa ordem nao quebra nada visivelmente: so faz a tela dizer a coisa
  * errada, na frente da fila.
@@ -78,6 +85,17 @@
         var escolhido = entrada.setorEscolhido || null;
         var autorizados = (carga.aparelho || {}).setores || [];
 
+        // 0. O dono desligou o evento inteiro. Vem antes de tudo: e a resposta
+        //    para qualquer ingresso, e a unica frase que explica ao porteiro
+        //    por que a fila parou.
+        //
+        //    `=== false` e nao `!carga.evento.ativo`: uma carga baixada ANTES
+        //    desta versao nao tem o campo, e tratar a ausencia como desligado
+        //    pararia um evento que ninguem desligou.
+        if (carga.evento && carga.evento.ativo === false) {
+            return negado('evento_inativo', null, null, {});
+        }
+
         // 1. Nao e deste evento.
         var todos = (carga.credenciais || []).filter(function (c) {
             return hashes.indexOf(c.h) !== -1;
@@ -130,7 +148,17 @@
         var cand = meus[0];
         var setor = setorPorId(carga, cand.s) || {};
 
-        // 3. O setor tem janela e agora esta fora dela. `abre_em` e `fecha_em`
+        // 3. O dono desligou ESTA porta. Antes da janela de proposito: as duas
+        //    podem valer ao mesmo tempo, e "o dono interditou o camarote" e o
+        //    que o porteiro resolve -- ele chama o dono. "Fechou as 22h" e
+        //    automatico, e nao ha o que fazer com essa informacao na fila.
+        if (setor.bloqueado) {
+            return negado('setor_bloqueado', cand, setor, {
+                motivoBloqueio: setor.bloqueado_motivo || '',
+            });
+        }
+
+        // 4. O setor tem janela e agora esta fora dela. `abre_em` e `fecha_em`
         //    sao momentos absolutos, nao horas do dia: comparacao ISO direta.
         if (setor.abre_em && agora < setor.abre_em) {
             return negado('fora_da_janela', cand, setor, { abre_em: setor.abre_em });
@@ -139,7 +167,7 @@
             return negado('fora_da_janela', cand, setor, { fecha_em: setor.fecha_em });
         }
 
-        // 4. Faixa bloqueada. Vem antes de `ja_entrou` porque bloqueio e decisao
+        // 5. Faixa bloqueada. Vem antes de `ja_entrou` porque bloqueio e decisao
         //    do dono, com motivo para ler em voz alta; "ja entrou" e consequencia
         //    e esconderia que aquele lote esta suspenso.
         var bloqueios = (carga.bloqueios || []).filter(function (b) {
@@ -149,13 +177,13 @@
             return negado('bloqueado', cand, setor, { motivoBloqueio: bloqueios[0].motivo });
         }
 
-        // 5. Ja entrou -- so onde o dono configurou entrada unica.
+        // 6. Ja entrou -- so onde o dono configurou entrada unica.
         var anterior = entradas[cand.id];
         if (setor.tipo_uso === 'unico' && anterior) {
             return negado('ja_entrou', cand, setor, { momentoAnterior: anterior });
         }
 
-        // 6. Passou por todas.
+        // 7. Passou por todas.
         return { estado: 'permitido', credencial_id: cand.id, numero: cand.n, setor: setor };
     }
 
