@@ -150,6 +150,59 @@ function Find-SegredoNoTexto {
     return ''
 }
 
+function Find-ProjetoSupabaseErrado {
+    <#
+    .SYNOPSIS
+        Devolve a descricao do problema, ou string vazia se o projeto ligado
+        for o certo.
+    .DESCRIPTION
+        Existe por causa de uma armadilha de NOME, confirmada em 16/08/2026.
+
+        A conta do usuario tem tres projetos Supabase com nomes que parecem os
+        certos -- "Ideal Imposicao", "Ideal Control", "Pagina da ARTE" -- e
+        NENHUM deles e o desta aplicacao. Sao restos de tentativas antigas, com
+        esquemas de outra epoca (catalogo sem o prefixo `imposition_`, acesso sem
+        o `producao_acesso_`) e algumas centenas de linhas dentro.
+
+        O projeto que roda a grafica se chama "e-deal", e vive na organizacao do
+        parceiro Vibe. Quem escolher pelo nome no painel acerta o nome e erra o
+        projeto.
+
+        O estrago disso e do tipo silencioso: uma Edge Function de controle de
+        acesso publicada no projeto errado sobe sem erro nenhum, responde
+        bonito, e simplesmente nao enxerga credencial alguma -- a portaria
+        recusa ingresso bom, e a investigacao comeca pelo lugar errado.
+
+        Por isso a conferencia e contra o `security_config.py`, que e versionado
+        e e a mesma fonte que o agente compila dentro do executavel. O nome do
+        painel nao entra nesta conta.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$RefEsperado,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$RefLigado
+    )
+
+    $esperado = ($RefEsperado -replace '\s', '').ToLower()
+    $ligado   = ($RefLigado   -replace '\s', '').ToLower()
+
+    # Nao saber o que conferir e pior que achar diferenca: um freio que perdeu a
+    # referencia passaria a aprovar qualquer projeto, calado.
+    if ([string]::IsNullOrEmpty($esperado)) {
+        return 'nao consegui ler o projeto esperado do security_config.py — o freio ficou sem referencia'
+    }
+    if ([string]::IsNullOrEmpty($ligado)) {
+        return "a CLI nao esta ligada a projeto nenhum. Rode: npx supabase link --project-ref $esperado"
+    }
+    if ($esperado -ne $ligado) {
+        return "a CLI esta ligada a '$ligado', mas o codigo aponta para '$esperado'. " +
+               "CUIDADO: ha projetos na conta com nomes parecidos e vazios. " +
+               "Rode: npx supabase link --project-ref $esperado"
+    }
+    return ''
+}
+
 # ─── Versoes e tags ──────────────────────────────────────────────────────────
 function Get-ProximaVersao {
     <#
@@ -389,6 +442,6 @@ function Test-SegredoNoBuild {
 }
 
 Export-ModuleMember -Function Test-ArquivoDeRascunho, ConvertFrom-JwtPayload,
-    Find-SegredoNoTexto, Get-ProximaVersao, ConvertTo-TuplaVersao,
+    Find-SegredoNoTexto, Find-ProjetoSupabaseErrado, Get-ProximaVersao, ConvertTo-TuplaVersao,
     Test-VersaoMaior, Get-TagAnterior, ConvertFrom-VercelLs,
     New-SegredoDoAgente, Test-SegredoNoBuild

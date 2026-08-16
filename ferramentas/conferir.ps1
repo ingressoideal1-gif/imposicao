@@ -7,7 +7,7 @@
     rodar a qualquer momento, quantas vezes quiser.
 
     Existe para que a vigilancia nao dependa de alguem lembrar os comandos
-    certos. Seis perguntas, sempre as mesmas:
+    certos. Sete perguntas, sempre as mesmas:
 
       1. Ha commits feitos que ainda nao foram publicados?
       2. Ha trabalho pendente na pasta?
@@ -15,6 +15,7 @@
       4. Ha branch ou rascunho acumulando?
       5. Ha algum segredo em arquivo versionado?
       6. Os testes passam?
+      7. A CLI do Supabase esta ligada ao projeto certo?
 
 .EXAMPLE
     .\ferramentas\conferir.ps1
@@ -132,6 +133,34 @@ if ($t.FailedCount -eq 0) {
         Write-Host "     $($_.Name)" -ForegroundColor Red
     }
     Alerta "$($t.FailedCount) teste(s) falhando. Rode: Invoke-Pester -Path tests"
+}
+
+# ─── 7. Projeto Supabase ─────────────────────────────────────────────────────
+# A conta tem projetos chamados "Ideal Imposicao" e "Ideal Control" que NAO sao
+# os desta aplicacao — sao restos de tentativas antigas. O que roda a grafica se
+# chama "e-deal". Escolher pelo nome no painel erra o projeto, e uma Edge
+# Function publicada no lugar errado falha calada.
+Titulo "7. Projeto Supabase ligado"
+$refEsperado = ''
+$sc = Get-Content -Raw -Encoding UTF8 -ErrorAction SilentlyContinue "$raiz\security_config.py"
+if ($sc -and $sc -match 'https://([a-z0-9]+)\.supabase\.co') { $refEsperado = $Matches[1] }
+
+$arquivoRef = "$raiz\supabase\.temp\project-ref"
+$refLigado = ''
+if (Test-Path -PathType Leaf $arquivoRef) {
+    $refLigado = (Get-Content -Raw -Encoding UTF8 $arquivoRef)
+}
+
+if (-not (Test-Path "$raiz\supabase")) {
+    Write-Host "     sem pasta supabase/ — a migracao ainda nao comecou aqui" -ForegroundColor Gray
+} else {
+    $problema = Find-ProjetoSupabaseErrado -RefEsperado $refEsperado -RefLigado $refLigado
+    if ($problema -eq '') {
+        Write-Host "     ligado a $refEsperado (o mesmo do security_config.py)" -ForegroundColor Green
+    } else {
+        Write-Host "     $problema" -ForegroundColor Red
+        Alerta "Projeto Supabase: $problema"
+    }
 }
 
 # ─── Resumo ──────────────────────────────────────────────────────────────────

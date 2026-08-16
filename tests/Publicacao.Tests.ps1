@@ -98,6 +98,45 @@ Describe "Find-SegredoNoTexto" {
     }
 }
 
+Describe "Find-ProjetoSupabaseErrado" {
+    # A conta do usuario tem projetos chamados "Ideal Imposicao" e "Ideal
+    # Control" que NAO sao os desta aplicacao -- sao restos de tentativas
+    # antigas, confirmados por ele em 16/08/2026. O que roda a grafica se chama
+    # "e-deal". Quem escolher pelo nome publica no lugar errado, e uma Edge
+    # Function de controle de acesso no projeto errado falha em silencio.
+    #
+    # Por isso o freio compara contra o que o CODIGO diz, que e versionado, e
+    # nao contra o nome, que so existe no painel.
+    $CERTO   = 'vwbtitjlpelrcnsytzqw'
+    $ERRADO  = 'atsxtuibeitloosckmlc'   # o projeto vazio chamado "Ideal Imposicao"
+
+    It "aprova quando o ref ligado e o mesmo que o codigo aponta" {
+        Find-ProjetoSupabaseErrado -RefEsperado $CERTO -RefLigado $CERTO | Should Be ''
+    }
+    It "acusa quando a CLI esta ligada a outro projeto, e diz qual" {
+        $r = Find-ProjetoSupabaseErrado -RefEsperado $CERTO -RefLigado $ERRADO
+        $r | Should Not Be ''
+        $r | Should Match $ERRADO
+    }
+    It "acusa quando nao ha projeto ligado" {
+        Find-ProjetoSupabaseErrado -RefEsperado $CERTO -RefLigado '' | Should Not Be ''
+    }
+    It "acusa quando nao consegue ler o ref esperado do codigo" {
+        # Silencio aqui seria pior que alarme: significaria que o freio parou de
+        # saber o que conferir, e passaria a aprovar qualquer coisa.
+        Find-ProjetoSupabaseErrado -RefEsperado '' -RefLigado $CERTO | Should Not Be ''
+    }
+    It "nao se incomoda com espaco em branco nem com caixa" {
+        Find-ProjetoSupabaseErrado -RefEsperado $CERTO -RefLigado "  $($CERTO.ToUpper())`r`n" | Should Be ''
+    }
+    It "o security_config.py deste repositorio continua apontando o projeto certo" {
+        # Regressao: se alguem trocar o projeto no codigo sem querer, e aqui que
+        # aparece -- antes de virar Edge Function publicada no lugar errado.
+        $texto = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\security_config.py"
+        $texto | Should Match 'https://vwbtitjlpelrcnsytzqw\.supabase\.co'
+    }
+}
+
 Describe "Get-ProximaVersao" {
     It "le a versao do index e soma um" {
         Get-ProximaVersao '<script src="script.js?v=490"></script>' | Should Be 491
