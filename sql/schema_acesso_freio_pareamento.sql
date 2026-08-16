@@ -53,6 +53,28 @@ as $$
 $$;
 
 -- ============================================================================
+-- RLS -- nao precisa ligar a mao, e isso foi CONFERIDO
+--
+-- Este projeto liga RLS sozinho em tabela nova do schema public. Verificado em
+-- 16/08/2026, logo depois de rodar este arquivo:
+--
+--     select relname, relrowsecurity from pg_class
+--      where relname = 'producao_acesso_falhas_pareamento';
+--     -> relrowsecurity = true
+--
+-- E conferido tambem pelo comportamento, que e o que importa: com a chave
+-- ANONIMA (que e publica, esta no frontend/supabase-config.js), ler a tabela
+-- devolve `[]` mesmo havendo linha, e um DELETE responde 204 sem apagar nada.
+--
+-- ATENCAO ao interpretar esses codigos: com RLS ligado e zero politicas, o
+-- PostgREST responde SUCESSO e nao faz nada. Um 200 ou um 204 aqui nao provam
+-- acesso -- so provar lendo a linha de volta com a chave de servico.
+--
+-- Se isso nao fosse verdade, o buraco seria grave: qualquer um com a chave
+-- anonima apagaria as proprias falhas e o freio deixaria de existir.
+-- ============================================================================
+
+-- ============================================================================
 -- CONFERENCIA -- rode depois e veja se devolve as tres linhas esperadas.
 -- ============================================================================
 -- select 'tabela' as o_que, count(*)::text as resultado
