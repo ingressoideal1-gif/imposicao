@@ -72,9 +72,11 @@ cobrem o que já foi emitido.
 Não há rota nova a inventar: os três parâmetros que já existem dizem qual tela abrir.
 
 ```
-?t=<token>      → reivindicar      (o QR do Pedido)
-?e=<evento_id>  → portaria         (o QR do portão)
-?evento=<id>    → configurar
+?t=<token>      → reivindicar o pedido            (o QR do Pedido)
+?e=<evento_id>  → o portão deste aparelho:        (o QR do portão)
+                    já configurado  → ler ingresso
+                    ainda não       → configurar (pede a senha do dono)
+?evento=<id>    → configurar o evento
 nada            → casa
 ```
 
@@ -104,8 +106,8 @@ O que ela mostra depende do que o aparelho **é**, e não de um modo escolhido:
 
 | Estado do aparelho | A casa mostra |
 |---|---|
-| pareado na portaria | o cartão do portão, grande, como primeira coisa; e um "Ler um QR" discreto |
-| logado, sem pareamento | **Meus Eventos** (a lista que já existe) e **+ Novo Evento** |
+| configurado como portão | o cartão do portão, grande, como primeira coisa — com o nome que o dono deu e os setores liberados; e um "Ler um QR" discreto |
+| logado, sem portão configurado | **Meus Eventos** (a lista que já existe) e **+ Novo Evento** |
 | nada ainda | **Ler um QR** e **Entrar com a conta do Vibe** |
 
 "Entrar" nunca é exigido para ler um QR: o porteiro não tem conta, e pedir login a ele
@@ -126,6 +128,63 @@ O texto lido é tratado como URL:
 
 Recusar QR de fora não é zelo abstrato: sem isso, um QR qualquer de rua faria a tela abrir
 um fluxo com dado estranho dentro.
+
+### O aparelho da portaria: o dono configura ali, com uma senha só
+
+**Decisão do usuário, 16/08/2026:** *"o dono faz a configuração em cada aparelho, apenas uma
+senha, nomeia o aparelho e libera o setor. ao salvar registra apenas entradas configuradas,
+e não deixa editar mais, somente com a senha"*.
+
+Isso substitui o pareamento de hoje, e **o código de seis caracteres deixa de existir**.
+
+| | Hoje | Passa a ser |
+|---|---|---|
+| Onde se configura | na tela do dono, longe do portão | **no próprio aparelho**, com o dono na frente dele |
+| O que se digita | e-mail + senha (para entrar) **e** a senha de novo (para elevar) **e** o código de 6 no celular do portão | **a senha, uma vez**, no aparelho |
+| Quem nomeia o portão | o dono, à distância, adivinhando qual celular é qual | o dono, com o aparelho na mão |
+
+O fluxo inteiro, no aparelho:
+
+1. o dono abre o aplicativo e escolhe o evento — pela lista, ou lendo o QR do portão;
+2. digita **a senha** (a mesma da conta do Vibe; não existe uma segunda);
+3. **nomeia o aparelho** — "Portão A", "Camarote";
+4. **libera os setores** que este aparelho valida;
+5. salva. O aparelho passa a ler ingressos e **só registra entrada dos setores liberados**.
+
+Daí em diante ele está **travado**: abre direto na leitura. "Configurar este aparelho" existe,
+e pede a senha de novo — conferida no servidor, na hora.
+
+**A trava cobre também apagar.** Desparear e limpar a configuração pedem a mesma senha.
+Uma trava que protege a edição e deixa o apagar livre não é trava: desfaz-se o trabalho
+inteiro e refaz-se do zero sem senha nenhuma.
+
+#### O que o aparelho guarda depois de salvar — e o que ele esquece
+
+Guarda **só o token do aparelho**. A sessão da conta do dono é **encerrada ali mesmo**,
+assim que ele salva.
+
+Isso não é detalhe de implementação, é o ponto que faz a mudança valer. O código de seis
+caracteres existia para que a senha do dono nunca chegasse ao celular que fica com o
+porteiro. Trocá-lo pela senha, e depois **deixar a sessão aberta**, entregaria ao porteiro
+a conta inteira do cliente — os eventos, a configuração, tudo. Encerrando a sessão, o
+aparelho volta a ser o que era: um terminal com um token que só serve para ler ingresso
+daquele evento, naqueles setores.
+
+Consequência a dizer em voz alta: **sem rede não se configura aparelho.** Conferir a senha
+é ida ao servidor. Isso é aceitável e é a divisão certa — configurar é ato do dono, feito
+com sinal, uma vez; ler ingresso é o que precisa funcionar no portão sem sinal, e continua
+funcionando pelo IndexedDB.
+
+#### O que fica na tela do dono
+
+A lista de aparelhos continua lá, e continua podendo **revogar** — celular perdido, porteiro
+desligado, aparelho trocado de mão. O que sai de lá é **criar e editar**: isso passa a
+acontecer no aparelho. Revogar à distância é a única coisa que só se pode fazer de longe, e
+por isso é a única que fica.
+
+O freio de força bruta continua: `producao_acesso_falhas_pareamento` passa a contar tentativa
+de **senha** em vez de tentativa de código, na mesma tabela e com a mesma regra — dez erros
+em cinco minutos fecham a configuração daquele evento por um tempo.
 
 ### Reivindicar e configurar
 
@@ -163,21 +222,21 @@ que instale; o link é a URL, e quem instala é o navegador. Então a casa mostr
 
 ## O que a decisão de "um aplicativo" custa, dito de frente
 
-Os dois modos **não compartilham credencial**: parear um portão não dá acesso à conta, e
-entrar na conta não dá acesso ao portão de outro aparelho. O que muda é a **exposição** — um
-aparelho passa a poder as duas coisas, se alguém fizer as duas nele.
+Os dois modos **não compartilham credencial**: o token do aparelho só serve para ler
+ingresso daquele evento, e não abre a conta; entrar na conta não dá acesso ao portão de
+outro aparelho.
 
-O caso concreto: o dono entra com a conta dele no celular e entrega o aparelho ao porteiro.
-A sessão do Supabase fica no aparelho, e o porteiro consegue **ver** os eventos do dono.
-Editar continua exigindo a senha cadastrada, que é conferida na hora — essa trava já existe
-e não muda aqui.
+O risco que a decisão cria é concreto e tem nome: **o dono digita a senha dele num celular
+que fica com outra pessoa.** Era exatamente isso que o código de seis caracteres evitava.
 
-Duas medidas entram por causa disso:
+O que responde a esse risco é a regra da seção anterior — **a sessão da conta é encerrada
+assim que o aparelho é salvo**. Sem ela, o desenho seria pior do que o de hoje, e não
+melhor. Junto com ela, entram duas medidas:
 
-- **"Sair da conta"** visível na casa, e não escondido dentro da configuração;
-- quando o aparelho está pareado como portaria, a casa **abre no portão** e a conta fica
-  atrás de um toque explícito. O aparelho do portão não pode mostrar a configuração do
-  evento de relance.
+- **"Sair da conta"** visível na casa, e não escondido dentro da configuração — para o caso
+  de o dono ter entrado num aparelho e não ter chegado a configurá-lo;
+- aparelho configurado **abre no portão**, e a conta fica atrás de um toque explícito. O
+  celular do portão não pode mostrar a configuração do evento de relance.
 
 ## Fora deste desenho, de propósito
 
@@ -197,8 +256,14 @@ Duas medidas entram por causa disso:
   `app.html?e=…` com token guardado abre a portaria **sem** nenhuma requisição de
   autenticação; abrir `app.html?t=…` abre a reivindicação; um QR de outra origem é recusado
   com a mensagem certa.
-- **No aparelho:** instalar no Android, parear pelo QR, ler um ingresso, pôr em modo avião e
-  confirmar que continua validando. No iPhone, o caminho do compartilhar.
+- **A trava do aparelho, que é o que a decisão de 16/08 acrescenta:** salvar encerra a
+  sessão da conta (o `localStorage` do Supabase fica sem sessão, e só o token do aparelho
+  permanece); reabrir a configuração exige a senha e o servidor a confere; **desparear e
+  limpar também exigem a senha**; e uma leitura de setor não liberado é recusada como
+  `setor_nao_autorizado`, que é o laranja que já existe.
+- **No aparelho:** instalar no Android, configurar o portão com a senha, ler um ingresso, pôr
+  em modo avião e confirmar que continua validando — e que **não** dá para reconfigurar sem
+  rede. No iPhone, o caminho do compartilhar.
 
 O teste que mais importa continua sendo o que já existe: o hash do navegador batendo com o
 do Python. Se divergirem, todo ingresso do evento é recusado na porta.
