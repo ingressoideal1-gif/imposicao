@@ -13,9 +13,9 @@ o painel para de ter para onde desviar e recusa começar quando não acha estaç
 **servidor**, o `/api/impose` recusa quando está rodando na nuvem — assim um painel antigo,
 já em cache no navegador de alguma estação, também é barrado.
 
-**Decisão que originou:** `docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md`,
+**Decisão que originou:** `docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md`,
 a partir de "até por questão de segurança, impressão só pode acontecer pela estação da
-gráfica" (usuário, 15/08/2026).
+gráfica" (usuário, 16/08/2026).
 
 **Tecnologias:** Python 3.10 / FastAPI / pytest no motor; JavaScript sem framework no
 painel; testes de frontend por leitura do arquivo, no estilo já usado em
@@ -69,7 +69,7 @@ por exemplo `http://192.168.1.50:9000` — acontece isto:
 3. `baseParaImposicao` olha esse endereço, vê que não é `localhost`, e devolve **a nuvem**.
 
 Ou seja: a tela diz AGENTE LOCAL e o trabalho vai para o Render — o mesmo modo de falhar de
-15/08/2026, por outro caminho. Remover o desvio corrige isso de graça.
+16/08/2026, por outro caminho. Remover o desvio corrige isso de graça.
 
 ---
 
@@ -100,12 +100,12 @@ Criar `tests/test_imposicao_so_na_estacao.py`:
 
 O QUE ESTE TESTE PREVINE
 
-Ate 15/08/2026 o painel, quando nao achava a estacao, mandava o trabalho para o
+Ate 16/08/2026 o painel, quando nao achava a estacao, mandava o trabalho para o
 motor na nuvem: o PDF da arte inteiro -- o material do cliente, centenas de MB --
 subia para um servidor de terceiro, e o operador via apenas um selo discreto
 escrito "NUVEM" no meio dos numeros do progresso.
 
-Em 15/08/2026 o usuario decidiu que isso acaba: "ate por questao de seguranca,
+Em 16/08/2026 o usuario decidiu que isso acaba: "ate por questao de seguranca,
 impressao so pode acontecer pela estacao da grafica".
 
 Sao DUAS barreiras, e este arquivo cobra as duas:
@@ -186,9 +186,9 @@ Em `app.py`, como **primeira instrução** do corpo de `impose_file` (logo depoi
 assinatura, antes do `try`):
 
 ```python
-    # 15/08/2026: imposicao e impressao so acontecem na estacao da grafica.
+    # 16/08/2026: imposicao e impressao so acontecem na estacao da grafica.
     # Decisao de seguranca do usuario -- ver
-    # docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+    # docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
     #
     # Esta e a SEGUNDA barreira. A primeira e o painel, que nao desvia mais para
     # ca. Esta existe porque painel fica em cache no navegador da estacao: sem
@@ -333,9 +333,9 @@ Substituir o bloco `else { ... }` da sondagem (linha ~10203):
 ```js
         } else {
 
-            // 15/08/2026: nao existe mais caminho para a nuvem. Imposicao e
+            // 16/08/2026: nao existe mais caminho para a nuvem. Imposicao e
             // impressao so acontecem na estacao -- decisao de seguranca do
-            // usuario. Ver docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+            // usuario. Ver docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
             //
             // O trabalho PARA aqui, antes de montar o FormData: sem isto a arte
             // do cliente ja teria sido lida para a memoria a toa.
@@ -362,9 +362,9 @@ tentando compartilhar essa parte:
 ```js
         } else {
 
-            // 15/08/2026: nao existe mais caminho para a nuvem. Imposicao e
+            // 16/08/2026: nao existe mais caminho para a nuvem. Imposicao e
             // impressao so acontecem na estacao -- decisao de seguranca do
-            // usuario. Ver docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+            // usuario. Ver docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
             const recusaSemEstacao = (typeof explicarEstacaoNaoEncontrada === 'function'
                 ? explicarEstacaoNaoEncontrada(window.location.origin) : '')
                 || 'A estacao (NewProd) nao respondeu nesta maquina. Abra o NewProd e tente de novo.';
@@ -466,7 +466,7 @@ que ficam no meio dele. No lugar do que saiu, deixar o registro:
 /**
  * NAO EXISTE motor de imposicao na nuvem, e nao deve voltar a existir.
  *
- * Ate 15/08/2026 havia aqui um `baseParaImposicao()` que, quando a pagina nao
+ * Ate 16/08/2026 havia aqui um `baseParaImposicao()` que, quando a pagina nao
  * estava em localhost, mandava o upload para `imposicao.onrender.com`. Isso
  * significava que a arte do cliente -- centenas de MB -- saia da grafica para um
  * servidor de terceiro, e o operador via so um selo discreto escrito "NUVEM".
@@ -475,7 +475,7 @@ que ficam no meio dele. No lugar do que saiu, deixar o registro:
  * acontecer pela estacao da grafica". Sem estacao, o trabalho para e o operador
  * le por que.
  *
- * Ver docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+ * Ver docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
  */
 ```
 

@@ -1,6 +1,6 @@
 # Desligar o Render e levar a nuvem para o Supabase — decisão e desenho
 
-**Data:** 15/08/2026
+**Data:** 16/08/2026
 **Estado:** decidido, não iniciado. A execução começa em 16/08/2026 pela Fase 1.
 
 ---
@@ -16,7 +16,7 @@ Durante a conversa, a única função do Render que não tinha para onde ir era 
 na nuvem**: PyMuPDF é Python, e Edge Function é Deno/TypeScript. Enquanto ela existisse, o
 Render existia junto.
 
-Em 15/08/2026 o usuário resolveu isso:
+Em 16/08/2026 o usuário resolveu isso:
 
 > "Até por questão de segurança, impressão só pode acontecer pela estação da gráfica."
 
@@ -145,7 +145,7 @@ plano detalhado quando chegar a vez; só a Fase 1 já tem plano escrito.
 
 ### Fase 1 — Fechar a porta da imposição na nuvem
 
-**Plano:** [2026-08-15-fechar-a-porta-da-nuvem.md](../plans/2026-08-15-fechar-a-porta-da-nuvem.md)
+**Plano:** [2026-08-16-fechar-a-porta-da-nuvem.md](../plans/2026-08-16-fechar-a-porta-da-nuvem.md)
 
 Independente de todo o resto, e por isso vem primeiro: o ganho de segurança vale por si e
 não precisa esperar migração nenhuma.

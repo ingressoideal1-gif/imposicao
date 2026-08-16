@@ -3522,39 +3522,36 @@ if (typeof window.renderQRCodeOnCtx !== 'function') {
  * passar por aqui: `ctx.drawImage(img, x, y, w, h)` cru estica a arte e faz a tela
  * divergir do papel.
  */
-/** Endereço do motor na nuvem — o mesmo destino do rewrite `/api/*` do vercel.json. */
-const MOTOR_NUVEM = 'https://imposicao.onrender.com';
-
 /**
- * Devolve para onde o **upload da imposição** deve ir.
+ * NAO EXISTE motor de imposicao na nuvem, e nao deve voltar a existir.
  *
- * As chamadas de API do site passam por `/api/*`, que o `vercel.json` reescreve para
- * o motor no Render. Isso é bom para tudo — menos para esta requisição, que carrega o
- * PDF da arte e pode ter centenas de MB. A Vercel recusa corpos grandes no caminho
- * dela, e devolve `413 Request Entity Too Large FUNCTION_PAYLOAD_TOO_LARGE`, um erro
- * que não vem do motor e que o operador não tem como contornar.
+ * Ate 15/08/2026 havia aqui um `baseParaImposicao()` que, quando a pagina nao
+ * estava em localhost, mandava o upload para `imposicao.onrender.com`. Isso
+ * significava que a arte do cliente -- centenas de MB -- saia da grafica para um
+ * servidor de terceiro, e o operador via so um selo discreto escrito "NUVEM".
  *
- * Como o destino final é o Render de qualquer jeito, o upload vai direto para lá e
- * pula o intermediário. O `security_config.ALLOWED_ORIGINS` já libera o domínio do
- * site (e o regex cobre os previews e o localhost), então o CORS responde.
+ * O usuario encerrou o assunto: "ate por questao de seguranca, impressao so pode
+ * acontecer pela estacao da grafica". Sem estacao, o trabalho para e o operador
+ * le por que.
  *
- * O servidor local e o agente **não são afetados**: quando a imposição roda em
- * `localhost` ou `127.0.0.1`, não há Vercel no meio e o endereço é mantido.
+ * A razao original daquela funcao tambem evaporou junto. Ela existia para o
+ * upload grande nao passar pelo rewrite `/api/*` da Vercel, que recusa corpos
+ * grandes com `FUNCTION_PAYLOAD_TOO_LARGE`. Agora o destino e sempre
+ * `http://localhost:8080` ou `http://...:9000` -- endereco direto, sem Vercel no
+ * caminho e sem limite de corpo. O problema nao pode mais ocorrer.
  *
- * @param baseUrl base já resolvida pelo chamador ('' = mesma origem da página)
- * @param origem  origem da página; parâmetro para poder ser testado
+ * De quebra, ela escondia um defeito: `baseParaImposicao` so reconhecia
+ * `localhost` e `127.0.0.1`, mas a sondagem tambem acha a estacao pelo IP de LAN
+ * do agente. Com a estacao achada por `http://192.168.1.50:9000`, a tela mostrava
+ * "AGENTE LOCAL" e o trabalho ia para o Render -- o mesmo modo de falhar de
+ * 15/08/2026, por outro caminho.
+ *
+ * Ver docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
  */
 function ehEnderecoDaPropriaMaquina(url) {
     return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test((url || '').replace(/\/+$/, ''));
 }
 window.ehEnderecoDaPropriaMaquina = ehEnderecoDaPropriaMaquina;
-
-function baseParaImposicao(baseUrl, origem) {
-    const alvo = (baseUrl || origem || window.location.origin || '').replace(/\/+$/, '');
-    if (ehEnderecoDaPropriaMaquina(alvo)) return baseUrl;
-    return MOTOR_NUVEM;
-}
-window.baseParaImposicao = baseParaImposicao;
 
 /**
  * O que dizer ao operador quando a estação não foi encontrada — e o trabalho,
@@ -3578,7 +3575,7 @@ window.baseParaImposicao = baseParaImposicao;
  * impossível; e a imposição saía da máquina do operador para a rede, contra a
  * razão de o agente existir, que é tempo.
  *
- * ## O que mudou em 15/08/2026
+ * ## O que mudou em 16/08/2026
  *
  * Não existe mais para onde cair. O usuário encerrou o assunto: "até por questão
  * de segurança, impressão só pode acontecer pela estação da gráfica". Sem
@@ -10207,10 +10204,10 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         } else {
 
-            // 15/08/2026: nao existe mais caminho para a nuvem. Imposicao e
+            // 16/08/2026: nao existe mais caminho para a nuvem. Imposicao e
             // impressao so acontecem na estacao -- decisao de seguranca do
             // usuario. Ver
-            // docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+            // docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
             //
             // O trabalho PARA aqui, antes de montar o FormData: sem isto a arte
             // do cliente ja teria sido lida para a memoria a toa.
@@ -10272,9 +10269,10 @@ window.runImposition = async function (mode, returnBlob = false) {
 
 
 
-        // Upload direto ao motor: o rewrite da Vercel recusa corpos grandes.
-        // Ver baseParaImposicao(), acima neste arquivo.
-        const urlImpose = `${baseParaImposicao(baseUrl, window.location.origin)}/api/impose`;
+        // O destino e sempre a estacao (localhost:8080 ou :9000): endereco
+        // direto, sem a Vercel no caminho e sem limite de corpo. Se nao houvesse
+        // estacao, o ramo `else` da sondagem ja teria lancado.
+        const urlImpose = `${baseUrl}/api/impose`;
 
         const res = await fetch(urlImpose, {
 

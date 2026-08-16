@@ -3,12 +3,12 @@
 
 O QUE ESTE TESTE PREVINE
 
-Ate 15/08/2026 o painel, quando nao achava a estacao, mandava o trabalho para o
+Ate 16/08/2026 o painel, quando nao achava a estacao, mandava o trabalho para o
 motor na nuvem: o PDF da arte inteiro -- o material do cliente, centenas de MB --
 subia para um servidor de terceiro, e o operador via apenas um selo discreto
 escrito "NUVEM" no meio dos numeros do progresso.
 
-Em 15/08/2026 o usuario encerrou o assunto: "ate por questao de seguranca,
+Em 16/08/2026 o usuario encerrou o assunto: "ate por questao de seguranca,
 impressao so pode acontecer pela estacao da grafica".
 
 Sao DUAS barreiras, e este arquivo cobra as duas:

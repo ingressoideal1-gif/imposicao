@@ -796,9 +796,9 @@ async def impose_file(
     background_tasks: BackgroundTasks = None,
     user: dict = Depends(get_current_user)
 ):
-    # 15/08/2026: imposicao e impressao so acontecem na estacao da grafica.
+    # 16/08/2026: imposicao e impressao so acontecem na estacao da grafica.
     # Decisao de seguranca do usuario -- ver
-    # docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+    # docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
     #
     # Esta e a SEGUNDA barreira. A primeira e o painel, que nao desvia mais para
     # ca. Esta existe porque painel fica em cache no navegador da estacao: sem

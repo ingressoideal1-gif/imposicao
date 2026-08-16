@@ -4850,10 +4850,10 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         } else {
 
-            // 15/08/2026: nao existe mais caminho para a nuvem. Imposicao e
+            // 16/08/2026: nao existe mais caminho para a nuvem. Imposicao e
             // impressao so acontecem na estacao -- decisao de seguranca do
             // usuario. Ver
-            // docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+            // docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
             //
             // Este bloco e copia do que esta no script.js, de proposito: sao
             // duas telas com sondagens separadas, e este projeto ja se queimou
@@ -4889,12 +4889,9 @@ window.runPedImposition = async function (mode, isRefazer) {
 
 
 
-        // O upload da imposição não passa pelo rewrite da Vercel: ela recusa corpos
-        // grandes com FUNCTION_PAYLOAD_TOO_LARGE. Ver baseParaImposicao() no script.js.
-        const baseUpload = typeof baseParaImposicao === 'function'
-            ? baseParaImposicao(baseUrl, window.location.origin)
-            : baseUrl;
-        const urlImpose = `${baseUpload}/api/impose`;
+        // O destino e sempre a estacao: endereco direto, sem a Vercel no caminho.
+        // Se nao houvesse estacao, o ramo `else` da sondagem ja teria lancado.
+        const urlImpose = `${baseUrl}/api/impose`;
 
         const res = await fetch(urlImpose, {
 
