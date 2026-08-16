@@ -106,20 +106,26 @@ def test_escrever_nao_depende_de_is_supabase_active(monkeypatch):
 
 
 def test_a_estacao_grava_a_fonte_nova_na_tabela_compartilhada(banco_de_mentira, monkeypatch):
-    """Cadastrar na estação tem de chegar à tabela — senão a fonte não sai dali."""
+    """Cadastrar na estação tem de chegar à tabela — senão a fonte não sai dali.
+
+    Desde 16/08/2026 o caminho é a Edge Function `acesso-estacao`, com o segredo
+    do agente, e não mais o PostgREST com a chave anônima — que qualquer pessoa
+    também usava para apagar o catálogo. Ver
+    `tests/test_catalogo_fontes_escreve_pela_funcao.py`.
+    """
     chamadas = []
 
-    def _falso(method, path, body=None):
-        chamadas.append((method, path))
-        return [dict(body or {})]
+    def _falso(metodo, caminho, corpo=None):
+        chamadas.append((metodo, caminho))
+        return {"fonte": dict(corpo or {})}
 
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", False)   # executável
     monkeypatch.setattr(db, "_catalogo_remoto_ativo", lambda: True)
-    monkeypatch.setattr(db, "_supabase_call", _falso)
+    monkeypatch.setattr(db, "_catalogo_pela_funcao", _falso)
 
     db.save_catalogo_fonte({"nome": "Gotham Book", "font_family": "Gotham Book"})
 
-    assert ("POST", "catalogo_fontes") in chamadas
+    assert ("POST", "fontes") in chamadas
     assert {f["nome"] for f in banco_de_mentira["catalogo_fontes"]} == {"Impact", "Gotham Book"}
 
 
@@ -173,18 +179,23 @@ def test_guardar_catalogo_local_avisa_quando_nao_mudou(banco_de_mentira):
 def test_duplicata_mantem_a_fonte_que_ja_estava(banco_de_mentira, monkeypatch):
     """Trocar o binário de uma fonte já usada em arte aprovada mudaria, em silêncio, o
     que sai impresso. O índice único da tabela recusa; aqui isso vira "fica a que
-    estava"."""
+    estava".
+
+    Quem resolve a duplicata passou a ser a Edge Function (`_compartilhado/
+    fontes.ts`), e não este arquivo: os dois caminhos de cadastro — o navegador
+    do painel e a estação — precisam herdar a MESMA regra. O que se garante aqui
+    é que o resultado da função é respeitado, e não sobrescrito pelo que a tela
+    mandou.
+    """
     ja_existente = {"id": "f1", "nome": "Impact", "font_family": "Impact",
                     "arquivo_url": "https://exemplo/antiga.ttf"}
 
-    def _falso(method, path, body=None):
-        if method == "POST":
-            raise RuntimeError('duplicate key value violates unique constraint (23505)')
-        return [ja_existente]
+    def _falso(metodo, caminho, corpo=None):
+        return {"fonte": ja_existente}
 
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", False)
     monkeypatch.setattr(db, "_catalogo_remoto_ativo", lambda: True)
-    monkeypatch.setattr(db, "_supabase_call", _falso)
+    monkeypatch.setattr(db, "_catalogo_pela_funcao", _falso)
 
     devolvida = db.save_catalogo_fonte(
         {"nome": "Impact", "font_family": "Impact",
@@ -206,27 +217,27 @@ def test_salvar_com_id_existente_substitui_em_vez_de_duplicar(banco_de_mentira, 
 def test_apagar_tira_da_tabela_e_do_disco(banco_de_mentira, monkeypatch):
     chamadas = []
 
-    def _falso(method, path, body=None):
-        chamadas.append((method, path))
+    def _falso(metodo, caminho, corpo=None):
+        chamadas.append((metodo, caminho))
         return None
 
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", False)
     monkeypatch.setattr(db, "_catalogo_remoto_ativo", lambda: True)
-    monkeypatch.setattr(db, "_supabase_call", _falso)
+    monkeypatch.setattr(db, "_catalogo_pela_funcao", _falso)
 
     db.delete_catalogo_fonte("f1")
 
-    assert chamadas == [("DELETE", "catalogo_fontes?id=eq.f1")]
+    assert chamadas == [("DELETE", "fontes/f1")]
     assert banco_de_mentira["catalogo_fontes"] == []
 
 
 def test_apagar_sem_rede_ainda_limpa_o_disco(banco_de_mentira, monkeypatch):
     """Rede fora não pode travar a tela do operador."""
-    def _quebra(method, path, body=None):
+    def _quebra(metodo, caminho, corpo=None):
         raise RuntimeError("sem rede")
 
     monkeypatch.setattr(db, "_catalogo_remoto_ativo", lambda: True)
-    monkeypatch.setattr(db, "_supabase_call", _quebra)
+    monkeypatch.setattr(db, "_catalogo_pela_funcao", _quebra)
 
     db.delete_catalogo_fonte("f1")
     assert banco_de_mentira["catalogo_fontes"] == []

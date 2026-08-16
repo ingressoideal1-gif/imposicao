@@ -42,6 +42,7 @@ import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
+import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
 import { iguaisEmTempoConstante } from "../_compartilhado/assinatura.ts";
 import {
   inteiro,
@@ -187,6 +188,32 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     return ok(await acessosLocais());
   }
 
+  // A estacao cadastra fonte no catalogo COMPARTILHADO, e isso e decisao de
+  // 15/08/2026: fonte cadastrada numa estacao tem de chegar as outras e ao link
+  // do cliente. Ate 16/08 ela gravava com a chave anonima, direto no PostgREST.
+  //
+  // Quando o REVOKE fechou aquela escrita, esta rota passou a ser o caminho da
+  // estacao. Amarrar a escrita do catalogo a uma flag local ja quebrou o
+  // cadastro de fonte duas vezes neste projeto -- esta escrito no `db.py` --,
+  // entao ela sai por aqui, com o segredo que a estacao ja carrega.
+  if (p[0] === "fontes") {
+    await conferirAgente(req);
+    if (p.length === 1 && req.method === "POST") {
+      let corpo: unknown;
+      try {
+        corpo = await req.json();
+      } catch {
+        throw new Recusa(422, "corpo invalido: esperava JSON");
+      }
+      return ok({ status: "success", fonte: await salvarFonte(corpo) });
+    }
+    if (p.length === 2 && req.method === "DELETE") {
+      await excluirFonte(p[1]);
+      return ok({ status: "success" });
+    }
+    recusaDeRotaDesconhecida(req.method);
+  }
+
   // Rota que nao e uma das tres -- por caminho ou por metodo -- cai na regra do
   // `app.py`, que depende do METODO e nao do caminho: GET vira 404, o resto vira
   // 405. Ver `recusaDeRotaDesconhecida`, onde a medicao esta registrada.
@@ -235,7 +262,7 @@ Deno.serve(async (req: Request) => {
     // desconhecida -- e para o dia em que alguem diagnosticar isto do navegador.
     return respostaDePreflight(
       origem,
-      "GET, POST, OPTIONS",
+      "GET, POST, DELETE, OPTIONS",
       "authorization,content-type,x-agente-segredo",
     );
   }

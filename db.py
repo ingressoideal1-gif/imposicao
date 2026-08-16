@@ -1232,6 +1232,48 @@ def get_catalogo_fontes() -> list:
     return list(lista)
 
 
+def _catalogo_pela_funcao(metodo: str, caminho: str, corpo: dict = None):
+    """Escreve no catálogo compartilhado pela Edge Function da estação.
+
+    ## Por que a escrita saiu do PostgREST direto
+
+    Até 16/08/2026 esta escrita saía com a chave ANÔNIMA — a mesma que está no
+    código-fonte de toda página do painel. Medido naquele dia: um `PATCH` em
+    `catalogo_fontes` com aquela chave voltou a linha alterada. Qualquer pessoa
+    apagava o catálogo de fontes da gráfica, e ele é compartilhado: desenha a
+    página do cliente, o Criador de Arte e as onze estações.
+
+    Fechar aquela porta (`sql/fontes_so_escrevem_pelas_funcoes.sql`) exigia dar
+    outro caminho a quem escreve de verdade. Este é o da estação: a mesma função
+    `acesso-estacao`, o mesmo `ACESSO_AGENTE_SEGREDO` que ela já carrega para
+    publicar faixa de códigos, e `service_role` do lado de lá.
+
+    ## O que NÃO pode voltar a acontecer aqui
+
+    Amarrar esta escrita a `IS_SUPABASE_ACTIVE` já quebrou o cadastro de fonte
+    duas vezes neste projeto — está registrado em `_catalogo_remoto_ativo`. A
+    fonte cadastrada numa estação morria ali, sem nunca chegar às outras nem ao
+    link do cliente, e sem erro na tela. Por isso a condição continua sendo só
+    "há para onde mandar", e a falha é ruidosa no log.
+    """
+    import acesso_publicacao
+
+    segredo = acesso_publicacao._segredo()
+    if not segredo:
+        raise RuntimeError(
+            "ACESSO_AGENTE_SEGREDO ausente: sem ele o catálogo compartilhado "
+            "não aceita escrita, e a fonte ficaria só nesta máquina.")
+
+    url = f"{acesso_publicacao._base()}/api/acesso/{caminho}"
+    dados = json.dumps(corpo).encode("utf-8") if corpo is not None else None
+    req = urllib.request.Request(
+        url, data=dados, method=metodo,
+        headers={"X-Agente-Segredo": segredo, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        texto = resp.read().decode("utf-8")
+        return json.loads(texto) if texto.strip() else None
+
+
 def save_catalogo_fonte(fonte_data: dict) -> dict:
     """Salva uma fonte no catálogo compartilhado e na cópia em disco.
 
@@ -1245,18 +1287,15 @@ def save_catalogo_fonte(fonte_data: dict) -> dict:
 
     if _catalogo_remoto_ativo():
         try:
-            gravada = _supabase_call("POST", "catalogo_fontes", fonte_data)
+            # A duplicata de nome é resolvida DENTRO da Edge Function, que
+            # devolve a fonte que já estava. Por isso não há mais o ramo do
+            # 23505 aqui: quem trata é um lugar só, e os dois caminhos de
+            # cadastro (navegador e estação) herdam a mesma regra.
+            gravada = _catalogo_pela_funcao("POST", "fontes", fonte_data)
             if gravada:
-                fonte_data = gravada[0] if isinstance(gravada, list) else gravada
+                fonte_data = gravada.get("fonte") or fonte_data
         except Exception as e:
-            if "23505" in str(e) or "duplicate key" in str(e).lower():
-                nome = (fonte_data.get("nome") or "").strip()
-                print(f"[db] Fonte '{nome}' ja existia no catalogo; mantida a que estava.")
-                existente = _fonte_por_nome(nome)
-                if existente:
-                    return existente
-            else:
-                print(f"[db] Nao consegui gravar a fonte no catalogo compartilhado: {e}")
+            print(f"[db] Nao consegui gravar a fonte no catalogo compartilhado: {e}")
 
     _CATALOGO_MEMO["lista"] = None
     db = _get_db()
@@ -1297,7 +1336,8 @@ def delete_catalogo_fonte(fonte_id: str):
     """
     if _catalogo_remoto_ativo():
         try:
-            _supabase_call("DELETE", f"catalogo_fontes?id=eq.{urllib.parse.quote(fonte_id)}")
+            _catalogo_pela_funcao(
+                "DELETE", f"fontes/{urllib.parse.quote(str(fonte_id), safe='')}")
         except Exception as e:
             print(f"[db] Nao consegui remover a fonte do catalogo compartilhado: {e}")
 
