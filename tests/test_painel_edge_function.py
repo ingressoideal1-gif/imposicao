@@ -140,6 +140,34 @@ def test_o_primeiro_acesso_e_escrito_pelo_servidor():
     assert "so um administrador muda a permissao de outra pessoa" in trecho
 
 
+def test_o_padrao_do_primeiro_acesso_so_usa_coluna_que_existe():
+    """Coluna inventada faz o PostgREST recusar a gravação INTEIRA com 400.
+
+    O efeito não é uma coluna a menos: é ninguém novo conseguindo entrar no
+    painel, num caminho que só roda no primeiro login de cada pessoa — ou seja,
+    que ninguém exercita ao testar com a própria conta. Já aconteceu aqui com
+    `email`, que a função escrevia e a tabela não tem.
+
+    A lista de referência é o `ROLE_DEFAULTS` do painel, que é o que a tela vem
+    mandando ao banco há meses e portanto é sabidamente aceito.
+    """
+    conhecidas = set(re.findall(r"\bperm_[a-z_]+", SCRIPT))
+    assert "perm_admin_edit" in conhecidas, "não achei o ROLE_DEFAULTS no script.js"
+
+    bloco = FUNCAO[FUNCAO.index("const PADRAO_VISUALIZADOR"):FUNCAO.index("/** A linha de permissoes")]
+    usadas = set(re.findall(r"\bperm_[a-z_]+", bloco))
+    assert usadas, "os padrões do primeiro acesso sumiram"
+    assert usadas <= conhecidas, f"colunas que a tela nunca gravou: {usadas - conhecidas}"
+
+
+def test_o_primeiro_acesso_nao_grava_email():
+    """A tabela não tem essa coluna — conferido contra o banco em 16/08/2026."""
+    trecho = FUNCAO[FUNCAO.index("async function gravarPermissoes"):]
+    trecho = trecho[:trecho.index("// ─── Acessos locais")]
+    corpo = trecho[trecho.index("corpo = {"):]
+    assert "email" not in corpo[:corpo.index("};")]
+
+
 def test_a_lista_de_codigos_exige_o_modulo_usuarios_ate_para_ler():
     """Ler já é o estrago: os códigos saem em texto claro, e cada um destranca
     o painel de uma estação."""
