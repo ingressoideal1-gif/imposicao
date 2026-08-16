@@ -46,8 +46,13 @@
 - Teste: `tests/test_portaria_pwa.py`
 
 **Interfaces:**
-- Consome: um PNG de origem. Padrão: `frontend/logo.png` (hoje 530×410, RGBA). Se o usuário entregar outro arquivo, ele entra como `frontend/icone-portaria-origem.png` e o script o prefere automaticamente.
+- Consome: um PNG de origem. Padrão: `frontend/logo.png`. Se o usuário entregar outro arquivo, ele entra como `frontend/icone-portaria-origem.png` e o script o prefere automaticamente.
 - Produz: os cinco caminhos acima, todos **quadrados** e **opacos**, que a Tarefa 2 referencia por nome.
+
+**Nota de execução (16/08/2026):** o `logo.png` foi trocado no meio do trabalho por um ícone de aplicativo pronto — quadrado arredondado com fundo próprio, entregue como imagem de catálogo: 983×1024, **fundo branco** e sombra em volta. Isso obrigou duas mudanças no gerador, que estão no arquivo final:
+
+- uma função `recortar_moldura()`, que tira o fundo por **preenchimento a partir dos quatro cantos** (e não por "todo pixel claro vira transparente" — o próprio ícone tem uma etiqueta branca no meio do desenho, que um teste por cor apagaria por dentro);
+- a tolerância desse preenchimento é a **soma das três bandas**, que é como o `ImageDraw.floodfill` compara. O primeiro valor tentado (60) valia 20 por banda, ou seja, branco quase puro — e deixou a sombra para trás como auréola cinza em volta do ícone. Com 240 o recorte saiu exato: 676×676, sem sombra.
 
 - [ ] **Passo 1: escrever o teste que falha**
 
@@ -149,18 +154,17 @@ FUNDO = (10, 15, 30)  # #0a0f1e -- o mesmo --bg da portaria.html
 
 # (caminho de saida, lado em pixels, fracao do lado que a marca ocupa)
 #
-# 0.86 nos icones comuns: quase cheio, que e como o Android desenha quando NAO
-#      aplica mascara.
-# 0.60 nos "maskable": a mascara pode comer ate 20% de cada borda, e o circulo
-#      seguro tem 80% do lado. 0.60 cabe com folga em qualquer mascara --
-#      circulo, quadrado arredondado ou gota.
-# 0.80 no do iPhone: o iOS arredonda os cantos por conta, sem mascara agressiva.
+# 1.00 nos icones comuns e no do iPhone: a marca JA e um icone de aplicativo --
+#      quadrado arredondado, com fundo proprio. Encolhe-la deixaria moldura em
+#      volta, e o resultado seria um icone pequeno dentro de um quadrado escuro.
+# 0.80 nos "maskable": a mascara do Android pode comer ate 20% de cada borda; o
+#      que sobra na beirada e a cor de fundo, que e o que a mascara corta.
 SAIDAS = [
-    (os.path.join(FRENTE, "icones", "portaria-192.png"), 192, 0.86),
-    (os.path.join(FRENTE, "icones", "portaria-512.png"), 512, 0.86),
-    (os.path.join(FRENTE, "icones", "portaria-192-maskable.png"), 192, 0.60),
-    (os.path.join(FRENTE, "icones", "portaria-512-maskable.png"), 512, 0.60),
-    (os.path.join(FRENTE, "apple-touch-icon.png"), 180, 0.80),
+    (os.path.join(FRENTE, "icones", "portaria-192.png"), 192, 1.00),
+    (os.path.join(FRENTE, "icones", "portaria-512.png"), 512, 1.00),
+    (os.path.join(FRENTE, "icones", "portaria-192-maskable.png"), 192, 0.80),
+    (os.path.join(FRENTE, "icones", "portaria-512-maskable.png"), 512, 0.80),
+    (os.path.join(FRENTE, "apple-touch-icon.png"), 180, 1.00),
 ]
 
 
