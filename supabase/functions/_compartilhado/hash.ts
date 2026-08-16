@@ -93,3 +93,32 @@ export async function hashCodigo(conteudo: string, sal: string): Promise<string>
   );
   return bytesParaHex(bits);
 }
+
+/**
+ * Um token de aparelho novo: 32 bytes sorteados, em hexadecimal.
+ *
+ * Sai em claro UMA vez, na resposta a quem o pediu. O banco guarda so o
+ * `hashDoToken` dele.
+ */
+export function tokenNovo(): string {
+  return bytesParaHex(crypto.getRandomValues(new Uint8Array(32)).buffer);
+}
+
+/**
+ * O hash do token do aparelho.
+ *
+ * SHA-256 puro, sem sal e sem KDF lento -- ao contrario do codigo de seis
+ * caracteres, que precisa de PBKDF2. Aqui a entrada tem 32 bytes sorteados: nao
+ * ha dicionario que ataque isso, e o token e conferido a CADA requisicao do
+ * aparelho, onde 10.000 voltas seriam desperdicio puro.
+ *
+ * MORA AQUI, e nao dentro da portaria, porque duas pontas dependem dele: quem
+ * CUNHA o token (a criacao do aparelho) e quem o CONFERE (a portaria, a cada
+ * leitura). Duas definicoes divergiriam algum dia, e o sintoma seria o pior
+ * possivel -- aparelho recusado sem motivo aparente, no portao, com fila.
+ */
+export async function hashDoToken(token: string): Promise<string> {
+  const dados = new TextEncoder().encode(token);
+  const bits = await crypto.subtle.digest("SHA-256", dados as BufferSource);
+  return bytesParaHex(bits);
+}

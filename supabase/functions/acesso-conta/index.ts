@@ -41,6 +41,7 @@ import {
 } from "../_compartilhado/assinatura.ts";
 import {
   aplicarAparelho,
+  aplicarAparelhoAqui,
   aplicarAparelhoNovo,
   aplicarBloqueio,
   aplicarCodigos,
@@ -512,6 +513,16 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     const evento = await eventoDoDono(p[1], usuario);
     await exigirElevacao(evento.id, usuario, req);
     return ok(await aplicarAparelhoNovo(evento.id, await corpo()));
+  }
+  // O aparelho configurado NESTE aparelho: o dono esta com o celular do portao
+  // na mao. Devolve o token direto, sem codigo intermediario. Mesma exigencia de
+  // elevacao da rota acima -- criar portao e escrita de configuracao, e sem ela
+  // quem pegasse o celular do dono destrancado criaria um.
+  if (metodo === "POST" && p.length === 4 && p[0] === "eventos"
+      && p[2] === "aparelhos" && p[3] === "aqui") {
+    const evento = await eventoDoDono(p[1], usuario);
+    await exigirElevacao(evento.id, usuario, req);
+    return ok(await aplicarAparelhoAqui(evento.id, await corpo()));
   }
   if (metodo === "PATCH" && p.length === 2 && p[0] === "aparelhos") {
     const ap = await aparelhoDoDono(p[1], usuario);

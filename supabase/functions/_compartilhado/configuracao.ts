@@ -10,7 +10,7 @@
  * `acesso-conta` e `acesso-interno`, cada uma com sua regra, antes de chamar.
  */
 import { banco } from "./banco.ts";
-import { hashCodigo } from "./hash.ts";
+import { hashCodigo, hashDoToken, tokenNovo } from "./hash.ts";
 import { Recusa } from "./sessao.ts";
 
 /** A portaria decide a fila por isto; nada mais existe. */
@@ -370,6 +370,40 @@ export async function aplicarAparelhoNovo(eventoId: string, corpo: any): Promise
 
   // O codigo volta AQUI e nunca mais: o que fica guardado e o hash.
   return { id: criado.id, nome, codigo };
+}
+
+/**
+ * O aparelho configurado NO PROPRIO APARELHO.
+ *
+ * Difere do `aplicarAparelhoNovo` numa coisa que muda tudo: nao sorteia codigo
+ * nenhum. O dono esta com o celular do portao na mao e acabou de digitar a
+ * senha; o token vai DIRETO para este aparelho. Nao ha por que existir um
+ * segredo intermediario para alguem digitar -- e existir seria pior, porque
+ * codigo guardado no banco e codigo que pearia um SEGUNDO celular naquele
+ * portao.
+ *
+ * O token sai em claro UMA vez, nesta resposta. O banco guarda so o hash, pelo
+ * mesmo `hashDoToken` com que a portaria o confere a cada leitura.
+ *
+ * `ultimo_visto` ja nasce preenchido: o aparelho comeca a trabalhar agora, e
+ * deixa-lo nulo faria a tela do dono mostrar um portao que "nunca apareceu"
+ * enquanto ele le ingresso.
+ */
+export async function aplicarAparelhoAqui(eventoId: string, corpo: any): Promise<any> {
+  const nome = texto(corpo?.nome, "nome do aparelho", 1, 60);
+  const setores = await conferirSetores(eventoId, corpo?.setores);
+  const token = tokenNovo();
+
+  const criado = (await banco("POST", "producao_acesso_dispositivos", {
+    evento_id: eventoId,
+    nome,
+    codigo_hash: null,
+    token_hash: await hashDoToken(token),
+    ultimo_visto: "now()",
+  }))[0];
+  await trocarSetores(criado.id, setores);
+
+  return { id: criado.id, nome, setores, token };
 }
 
 export async function aplicarAparelho(aparelho: any, corpo: any): Promise<any> {

@@ -45,3 +45,44 @@ def test_o_sql_nao_apaga_nada():
     sql = _ler("sql/acesso_aparelho_sem_codigo.sql").upper()
     for perigoso in ("DROP TABLE", "DROP COLUMN", "DELETE FROM", "TRUNCATE"):
         assert perigoso not in sql, "a migracao contem " + perigoso
+
+
+# ── O servidor ──────────────────────────────────────────────────────────────
+
+def test_o_hash_do_token_tem_uma_definicao_so():
+    """O defeito mais caro possivel aqui seria silencioso.
+
+    Quem CUNHA o token e a criacao do aparelho; quem o CONFERE, a cada
+    requisicao, e a portaria. Duas definicoes do mesmo hash divergiriam algum
+    dia, e o sintoma seria o aparelho recusado sem motivo aparente -- no
+    portao, com fila.
+    """
+    compartilhado = _ler("supabase/functions/_compartilhado/hash.ts")
+    assert "export async function hashDoToken" in compartilhado
+    assert "export function tokenNovo" in compartilhado
+
+    portaria = _ler("supabase/functions/portaria/index.ts")
+    assert "async function hashDoToken" not in portaria, (
+        "a portaria tem copia propria do hash do token"
+    )
+    assert "hashDoToken" in portaria, "a portaria deixou de conferir o token"
+
+
+def test_o_aparelho_daqui_nasce_com_token_e_sem_codigo():
+    ts = _ler("supabase/functions/_compartilhado/configuracao.ts")
+    assert "aplicarAparelhoAqui" in ts
+    corpo = ts[ts.index("export async function aplicarAparelhoAqui"):]
+    corpo = corpo[:corpo.index("\n}")]
+    assert "codigo_hash: null" in corpo, (
+        "codigo guardado e codigo que pearia um segundo celular naquele portao"
+    )
+    assert "token_hash" in corpo
+
+
+def test_a_rota_do_aparelho_daqui_exige_elevacao():
+    """Criar aparelho e escrita de configuracao. Sem elevacao, quem pegasse o
+    celular do dono destrancado criaria portao."""
+    ts = _ler("supabase/functions/acesso-conta/index.ts")
+    corte = ts.index('p[3] === "aqui"')
+    trecho = ts[corte:ts.index("return ok", corte)]
+    assert "exigirElevacao" in trecho

@@ -18,7 +18,7 @@
  * aparelho revogado e evento inexistente devolvem a MESMA coisa, porque
  * responder diferente conta a um estranho o que existe do outro lado.
  */
-import { hashCodigo } from "../_compartilhado/hash.ts";
+import { hashCodigo, hashDoToken, tokenNovo } from "../_compartilhado/hash.ts";
 import { banco } from "../_compartilhado/banco.ts";
 import { iguaisEmTempoConstante, rotaPedida } from "./puro.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
@@ -66,23 +66,12 @@ function ok(corpo: unknown): Response {
   return new Response(JSON.stringify(corpo), { headers: JSON_HEADERS });
 }
 
-function bytesParaHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-/**
- * SHA-256 puro, sem sal e sem KDF lento -- ao contrario do codigo de seis
- * caracteres, que precisa de PBKDF2. Aqui a entrada tem 32 bytes sorteados: nao
- * ha dicionario que ataque isso, e o token e conferido a CADA requisicao do
- * aparelho, onde 10.000 voltas seriam desperdicio puro.
- */
-async function hashDoToken(token: string): Promise<string> {
-  const dados = new TextEncoder().encode(token);
-  const bits = await crypto.subtle.digest("SHA-256", dados as BufferSource);
-  return bytesParaHex(bits);
-}
+// `hashDoToken` e `tokenNovo` moram no `_compartilhado/hash.ts` desde
+// 16/08/2026. Eram daqui, e nao podiam continuar sendo: desde que o dono passou
+// a configurar o aparelho no proprio aparelho, quem CUNHA o token e a criacao
+// do aparelho, e quem o CONFERE e esta funcao. Duas definicoes do mesmo hash
+// divergiriam algum dia, e o sintoma seria aparelho recusado sem motivo
+// aparente -- no portao, com fila.
 
 async function conferirForcaBruta(eventoId: string): Promise<void> {
   // `toISOString()` termina em `Z`. NAO trocar por nada que produza `+00:00`:
@@ -176,7 +165,7 @@ async function entrar(corpo: any): Promise<Response> {
   );
   if (!achado) await recusarPareamento(eventoId);
 
-  const token = bytesParaHex(crypto.getRandomValues(new Uint8Array(32)).buffer);
+  const token = tokenNovo();
   await banco(
     "PATCH",
     `producao_acesso_dispositivos?id=eq.${achado.id}`,
