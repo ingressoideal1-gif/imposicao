@@ -187,11 +187,11 @@ lento com a arte viajando para fora da gráfica.
 
 Pontos que o plano da Fase 2 terá de resolver, e que já se sabe que existem:
 
-1. **A regra do hash não se reescreve** — mas o arquivo precisa de um ajuste antes de poder
-   ser reaproveitado. O `frontend/qr-ideal-hash.js` é uma IIFE que se publica por `window` e
-   `module.exports`, e nenhum dos dois existe em Deno (risco 2). Acrescentar um `export`
-   preservando os dois caminhos legados é o primeiro passo da fase, não um detalhe dela. O
-   teste que compara Python e JavaScript passa a cobrir os três consumidores.
+1. **O `frontend/qr-ideal-hash.js` não se toca.** Ele é script clássico na tela da portaria
+   e um `export` a quebraria (risco 2). A Edge Function escreve o seu próprio PBKDF2 em
+   `crypto.subtle`, e a garantia vem do `tests/test_qr_ideal_hash.py` passando a comparar os
+   **três** consumidores contra o vetor congelado que já existe. Esse teste é o primeiro
+   passo da fase, escrito antes da função.
 2. **O `_FALHAS` vira tabela**, com limpeza por janela de tempo. Sem isso o freio de força
    bruta some — hoje ele já é frágil, mas na Edge Function seria inexistente.
 3. **O teto de 1000 linhas do PostgREST continua valendo**, e a paginação de 500 do
@@ -272,9 +272,30 @@ if (typeof module !== 'undefined' && module.exports) { module.exports = {...}; }
 ```
 
 Em Deno não existe `module`, e `window` foi removido no Deno 2. Os dois caminhos falham em
-silêncio e a função não sai do arquivo. O conserto é pequeno — acrescentar um `export`
-mantendo os dois caminhos legados —, mas **não é zero**, e o `tests/test_qr_ideal_hash.py`
-precisa passar a comparar os **três** consumidores, não dois.
+silêncio e a função não sai do arquivo.
+
+**O conserto proposto aqui — "acrescentar um `export`" — está errado, e é perigoso.**
+Verificado em 16/08/2026: o arquivo é carregado como **script clássico** em
+`frontend/portaria.html:142` (`<script src="/qr-ideal-hash.js?v=590">`), está na lista de
+cache do `frontend/sw.js`, e o harness de teste o injeta com `page.addScriptTag({path})`,
+que também é carregamento clássico. Um `export` no topo transforma o arquivo em módulo ES,
+e um `<script src>` clássico apontando para um módulo **falha com erro de sintaxe**: a tela
+da portaria deixa de carregar por completo. Trocar para `<script type="module">` resolveria
+a sintaxe, mas mexe na ordem de carregamento da única tela que não pode falhar, e ainda
+obriga a mexer no service worker e no harness.
+
+**O caminho de menor risco é não tocar no arquivo.** A Edge Function implementa o PBKDF2
+com o mesmo `crypto.subtle` (são cerca de quinze linhas), e a garantia passa a vir do
+teste: o `tests/test_qr_ideal_hash.py` compara os **três** consumidores contra o mesmo
+vetor congelado que já existe hoje —
+`8cc48cd725a2a437b8a7bf25c312a0f7b85303d85438d0a39842ac21ed4bad9e`, para o conteúdo
+`27202HM4IKCBY` e sal `00`×32.
+
+Isso parece contrariar o "a regra não se reescreve", mas não contraria: o que o princípio
+proíbe é **divergência não verificada**. Três implementações amarradas a um vetor que nunca
+pode mudar — mudá-lo invalidaria todo hash já publicado — são verificadas por construção. É
+exatamente o mecanismo que hoje já protege Python contra JavaScript. O risco existe no
+momento em que a terceira é escrita, e é aí que o teste morde.
 
 ### 3. O catálogo já tem duas implementações, e a Fase 3 cria a terceira
 
@@ -325,10 +346,34 @@ local de fontes.
 
 ---
 
-### Ferramenta que falta
+### Ferramenta — resolvido em parte, 16/08/2026
 
-Não existe pasta `supabase/` no repositório e **a CLI do Supabase não está instalada** nesta
-máquina. O primeiro passo da próxima sessão é instalar, `supabase init` e `supabase link`.
+A CLI do Supabase **foi instalada** como dependência de desenvolvimento do próprio
+repositório (`npm install --save-dev supabase`, versão 2.114.0), e não globalmente: assim
+ela é versionada junto com o resto e não depende do que está no PATH de cada máquina.
+Roda-se por `npx supabase`.
+
+Falta `supabase init` e `supabase link`, que dependem do token abaixo.
+
+### O MCP do Supabase
+
+Decidido em 16/08/2026, a pedido do usuário: instalar, **em modo somente-leitura** e preso
+a este projeto:
+
+```
+npx -y @supabase/mcp-server-supabase@latest --read-only --project-ref=vwbtitjlpelrcnsytzqw
+```
+
+O `--read-only` não é timidez, é coerência com a disciplina de publicação deste repositório.
+Ele dá o que falta hoje — enxergar tabelas, logs de Edge Function e estado do projeto, que
+é justamente a perda registrada em "O que se perde, sendo justo" — sem abrir um **segundo
+caminho de escrita para a produção**, fora do `publicar.ps1` e fora do git. Publicação
+continua sendo um comando com freio e uma tag de restauração; o MCP é a janela, não a porta.
+
+O token **não pode** entrar em arquivo versionado. Vai no escopo local do Claude Code
+(`claude mcp add --scope local`), que grava fora do repositório, e uma cópia no
+`.env.local` para a CLI. Um `.mcp.json` versionado com o token dentro seria pego pelo
+freio 5 do `conferir.ps1` — corretamente.
 
 ### O que não deu para verificar daqui
 

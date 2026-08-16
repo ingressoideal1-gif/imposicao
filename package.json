@@ -2,5 +2,8 @@
   "dependencies": {
     "pdf-lib": "^1.17.1",
     "puppeteer": "^25.3.0"
+  },
+  "devDependencies": {
+    "supabase": "^2.114.0"
   }
 }
