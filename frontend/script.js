@@ -13843,7 +13843,7 @@ function applyPermissions(perms) {
  * alguém que continuava trancado do lado de fora.
  */
 async function salvarPermissoesNoMotor(payload) {
-    const resp = await fetch(`${API_BASE_URL}/api/user/permissions`, {
+    const resp = await fetch(`${API_NUVEM}/api/user/permissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -13869,7 +13869,7 @@ async function salvarPermissoesNoMotor(payload) {
  */
 async function loadUserPermissions(userId) {
     try {
-        const resp = await fetch(`${API_BASE_URL}/api/user/permissions/${userId}`);
+        const resp = await fetch(`${API_NUVEM}/api/user/permissions/${userId}`);
         if (!resp.ok) {
             console.warn('[auth] O motor não respondeu as permissões:', resp.status);
             return { estado: 'indisponivel' };
@@ -13902,7 +13902,7 @@ async function ensureUserPermissions(userId, email) {
     // Só aqui é primeiro acesso de verdade: o motor respondeu, e disse que não
     // há linha para este usuário.
     try {
-        const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
+        const resp = await fetch(`${API_NUVEM}/api/user/permissions`);
         if (!resp.ok) return null;
         const data = await resp.json();
         if (!data.ok || !Array.isArray(data.permissions)) return null;
@@ -14645,7 +14645,7 @@ window.loadAdminUsers = async function() {
         // mundo em "SEM ACESSO" — e um administrador que acreditasse nisso sairia
         // concedendo acesso de novo por cima de permissões que existiam.
         let permsMap = {};
-        const resp = await fetch(`${API_BASE_URL}/api/user/permissions`);
+        const resp = await fetch(`${API_NUVEM}/api/user/permissions`);
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.ok || !Array.isArray(data.permissions)) {
             tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:20px;">
@@ -14843,7 +14843,7 @@ window.loadAcessosLocais = async function() {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando...</td></tr>';
 
     try {
-        const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`);
+        const resp = await fetch(`${API_NUVEM}/api/acessos-locais`);
         const data = await resp.json();
         _acessosLocais = (data.ok && data.acessos) ? data.acessos : [];
 
@@ -14907,7 +14907,7 @@ window.loadAcessosLocais = async function() {
  * separa "não deu certo" de "esse código já é de outro operador".
  */
 async function salvarAcessoLocalNoMotor(payload) {
-    const resp = await fetch(`${API_BASE_URL}/api/acessos-locais`, {
+    const resp = await fetch(`${API_NUVEM}/api/acessos-locais`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -15020,7 +15020,7 @@ window.toggleAcessoLocalPerm = async function(id, permKey, valor) {
 window.excluirAcessoLocal = async function(id, nome) {
     if (!confirm(`Excluir o acesso de ${nome}? O código dele deixa de funcionar nas estações.`)) return;
     try {
-        await fetch(`${API_BASE_URL}/api/acessos-locais/${id}`, { method: 'DELETE' });
+        await fetch(`${API_NUVEM}/api/acessos-locais/${id}`, { method: 'DELETE' });
         toast('Acesso excluído', 'success');
         loadAcessosLocais();
     } catch (e) {

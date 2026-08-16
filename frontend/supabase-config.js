@@ -27,6 +27,17 @@ const API_BASE_URL = (isLocalhost || isPort9000) && window.location.protocol !==
     ? ""
     : "https://imposicao.onrender.com";
 
+// O motor da NUVEM, sempre — mesmo quando a página é servida pela estação.
+//
+// Duas coisas só a nuvem faz: gravar permissões e gravar acessos locais. As duas
+// tabelas ganharam RLS em 16/08/2026, e escrever nelas exige a chave de serviço
+// do banco — que NÃO vai para as estações, por decisão registrada em
+// `acesso_api.py`: ela abre cliente, proposta e financeiro do parceiro.
+//
+// Sem isto, o administrador que abrisse o Menu Usuários pelo painel da estação
+// receberia 503 num botão que sempre funcionou.
+const API_NUVEM = "https://imposicao.onrender.com";
+
 // ─── Toda chamada ao motor leva a sessão junto ───────────────────────────────
 //
 // Até 16/08/2026 nenhuma chamada do painel se identificava, e o motor não pedia
@@ -59,6 +70,11 @@ const API_BASE_URL = (isLocalhost || isPort9000) && window.location.protocol !==
         if (u.includes('supabase.co')) return false;
         if (!u.includes('/api/')) return false;
         if (/^https?:\/\//i.test(u)) {
+            // `API_NUVEM` entra aqui de propósito: quando a página é servida
+            // pela estação, `API_BASE_URL` é vazio, e sem esta linha a chamada
+            // que vai à nuvem por obrigação (permissões, acessos locais) sairia
+            // sem sessão e levaria 401.
+            if (u.startsWith(API_NUVEM)) return true;
             return API_BASE_URL !== '' && u.startsWith(API_BASE_URL);
         }
         return u.indexOf('/api/') === 0;

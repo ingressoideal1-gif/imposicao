@@ -231,6 +231,18 @@ if not SUPABASE_URL:
 if not SUPABASE_KEY:
     SUPABASE_KEY = DEFAULT_SUPABASE_KEY
 
+# A chave de serviço, quando este processo a tiver. Existe no Render e em
+# desenvolvimento; NUNCA nas estações, por decisão registrada em
+# `acesso_api.py` — ela abre o banco inteiro, incluindo cliente, proposta e
+# financeiro do parceiro.
+#
+# Desde 16/08/2026 ela é o que faz as escritas em `imposition_user_permissions` e
+# `imposition_acessos_locais` funcionarem: aquelas duas tabelas passaram a ter
+# RLS, e a chave anônima — que é pública e está no código-fonte de toda página —
+# deixou de poder escrever nelas. Ver `sql/rls_acessos_e_permissoes.sql`.
+SUPABASE_SERVICE_KEY = (os.environ.get("SUPABASE_SERVICE_KEY")
+                        or ler_env_local("SUPABASE_SERVICE_KEY"))
+
 import sys
 # Forçar modo local no executável compilado (Windows Agent) para rodar 100% offline
 if getattr(sys, 'frozen', False):
@@ -1301,6 +1313,30 @@ def _headers():
         "Authorization": f"Bearer {SUPABASE_KEY}"
     }
 
+
+def _headers_servico():
+    """Cabeçalhos com a chave de SERVIÇO, para o que o RLS fecha à chave pública.
+
+    Levanta `BancoIndisponivel` quando este processo não tem a chave — o que é o
+    caso de toda estação, de propósito.
+
+    Falhar alto aqui é o ponto. Sem isto, a escrita sairia com a chave anônima,
+    o PostgREST responderia 200 com ZERO linhas afetadas (é assim que o RLS
+    recusa um UPDATE: a linha simplesmente não existe para quem pediu), e o
+    painel diria "permissão ativada" para uma gravação que nunca aconteceu.
+    Um administrador não tem como desconfiar de um visto verde — a mesma lição
+    que o `upsert_user_permissions` já carrega no próprio docstring.
+    """
+    if not SUPABASE_SERVICE_KEY:
+        raise BancoIndisponivel(
+            "Esta operacao so acontece pela nuvem: a chave de servico do banco "
+            "nao vai para as estacoes. Use o painel em imposicao.vercel.app."
+        )
+    return {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+    }
+
 # ─── Configuracao de impressao por produto ────────────────────────────────────
 # Fica em disco, nesta maquina, e nao no banco compartilhado: nome de impressora,
 # IDs de bandeja e tamanhos de papel sao propriedades fisicas da estacao. Guardar
@@ -1547,7 +1583,7 @@ def upsert_user_permissions(data):
         data['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         body = json.dumps(data).encode('utf-8')
         url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?on_conflict=user_id"
-        headers = _headers()
+        headers = _headers_servico()
         headers['Content-Type'] = 'application/json'
         headers['Prefer'] = 'resolution=merge-duplicates,return=representation'
         req = urllib.request.Request(url, data=body, headers=headers, method='POST')
@@ -1555,7 +1591,14 @@ def upsert_user_permissions(data):
             result = resp.read().decode('utf-8')
             print(f"[db] upsert_user_permissions: {resp.status} -> {result[:200]}")
             linhas = json.loads(result) if result.strip() else []
-            return linhas[0] if linhas else data
+            # Resposta vazia é gravação que não aconteceu. Devolver `data` aqui
+            # era dizer "salvo" com base no que o CHAMADOR mandou, e não no que
+            # o banco gravou -- e é assim que uma recusa de RLS (200, zero
+            # linhas) vira visto verde na tela do administrador.
+            if not linhas:
+                raise BancoIndisponivel(
+                    "o banco aceitou a requisicao e nao gravou linha nenhuma")
+            return linhas[0]
     except urllib.error.HTTPError as e:
         # O corpo do erro do PostgREST diz o motivo (coluna que nao existe,
         # RLS ligado, chave unica). Sem ele a tela so poderia dizer "deu erro".
@@ -1566,6 +1609,10 @@ def upsert_user_permissions(data):
             pass
         print(f"[db] upsert_user_permissions erro HTTP {e.code}: {detalhe}")
         raise BancoIndisponivel(detalhe or f"HTTP {e.code}") from e
+    except BancoIndisponivel:
+        # Já é a exceção certa, com a mensagem certa. Sem esta linha ela cairia
+        # no `except Exception` abaixo e seria embrulhada em si mesma.
+        raise
     except Exception as e:
         print(f"[db] upsert_user_permissions erro: {e}")
         raise BancoIndisponivel(str(e)) from e
@@ -1578,7 +1625,7 @@ def delete_user_permissions(user_id):
         return False
     try:
         url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?user_id=eq.{user_id}"
-        req = urllib.request.Request(url, headers=_headers(), method='DELETE')
+        req = urllib.request.Request(url, headers=_headers_servico(), method='DELETE')
         with urllib.request.urlopen(req, timeout=8) as resp:
             return True
     except Exception as e:
@@ -1678,7 +1725,7 @@ def salvar_acesso_local(data):
     # antes de chegar ao UPDATE. O PATCH so escreve as colunas que vieram, que e
     # exatamente o que "atualizacao parcial" quer dizer.
     try:
-        headers = _headers()
+        headers = _headers_servico()
         headers['Content-Type'] = 'application/json'
         headers['Prefer'] = 'return=representation'
 
@@ -1694,7 +1741,20 @@ def salvar_acesso_local(data):
         req = urllib.request.Request(url, data=body, headers=headers, method=metodo)
         with urllib.request.urlopen(req, timeout=10) as resp:
             resultado = json.loads(resp.read().decode('utf-8') or '[]')
-            return resultado[0] if resultado else registro
+            # Resposta VAZIA é gravação que não aconteceu, e não sucesso. Era
+            # `return registro`, e isso diria "salvo" para um PATCH que não casou
+            # linha nenhuma -- inclusive para o caso em que o RLS recusa, que
+            # responde 200 com zero linhas. Visto verde sobre gravação que não
+            # existiu é o defeito mais caro desta tela.
+            if not resultado:
+                print("[db] salvar_acesso_local: o banco nao devolveu linha "
+                      "(id inexistente, ou escrita recusada).")
+                return None
+            return resultado[0]
+    except BancoIndisponivel:
+        # A mensagem dela diz o que fazer ("use o painel da nuvem"). Virar None
+        # aqui a trocaria por "nao foi possivel salvar", que não diz nada.
+        raise
     except urllib.error.HTTPError as e:
         print(f"[db] salvar_acesso_local erro: {e} -> {e.read().decode('utf-8')[:300]}")
         return None
@@ -1709,9 +1769,11 @@ def excluir_acesso_local(acesso_id):
         return False
     try:
         url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais?id=eq.{acesso_id}"
-        req = urllib.request.Request(url, headers=_headers(), method='DELETE')
+        req = urllib.request.Request(url, headers=_headers_servico(), method='DELETE')
         with urllib.request.urlopen(req, timeout=8):
             return True
+    except BancoIndisponivel:
+        raise
     except Exception as e:
         print(f"[db] excluir_acesso_local erro: {e}")
         return False

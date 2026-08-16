@@ -1671,6 +1671,10 @@ async def salvar_acesso_local_endpoint(request: Request):
     except db.CodigoInvalido as e:
         # 400 e nao 500: quem digitou o codigo precisa ler o motivo na tela.
         raise HTTPException(status_code=400, detail=str(e))
+    except db.BancoIndisponivel as e:
+        # A mensagem dela diz o que fazer — tipicamente "use o painel da nuvem",
+        # porque a chave de servico nao vai para as estacoes.
+        raise HTTPException(status_code=503, detail=str(e))
     if not acesso:
         raise HTTPException(status_code=500, detail="Nao foi possivel salvar o acesso local")
     return {"ok": True, "acesso": acesso}
@@ -1678,7 +1682,10 @@ async def salvar_acesso_local_endpoint(request: Request):
 
 @app.delete("/api/acessos-locais/{acesso_id}")
 async def excluir_acesso_local_endpoint(acesso_id: str):
-    return {"ok": db.excluir_acesso_local(acesso_id)}
+    try:
+        return {"ok": db.excluir_acesso_local(acesso_id)}
+    except db.BancoIndisponivel as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.get("/api/local/login/estado")
