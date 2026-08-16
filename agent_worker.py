@@ -717,6 +717,27 @@ def sincronizar_acessos():
     if acessos is None:
         print("[agent_worker] Acessos locais nao sincronizados. Segue a copia atual.", flush=True)
         return False
+
+    # LISTA VAZIA NAO SUBSTITUI LISTA CHEIA, e este e o freio mais importante
+    # deste arquivo. `acesso_local.ha_lista()` responde ao `app.py` se a estacao
+    # deve pedir codigo no login; com a lista vazia ela responde NAO, e o painel
+    # abre para quem sentar na maquina.
+    #
+    # Uma resposta vazia quase nunca significa "ninguem tem acesso": significa
+    # que a leitura foi recusada. E vai significar isso literalmente quando o RLS
+    # fechar a leitura desta tabela para a chave anonima -- o passo 3 de
+    # `sql/rls_acessos_e_permissoes.sql`. Sem este freio, aquele passo destrancaria
+    # onze computadores em vez de trancar um vazamento.
+    #
+    # Esvaziar de verdade a lista continua possivel: desative os operadores um a
+    # um, ou apague a copia da estacao. O que nao se faz por acidente e destrancar
+    # tudo com uma requisicao que voltou vazia.
+    if not acessos and acesso_local.carregar_lista():
+        print("[agent_worker] Acessos locais vieram VAZIOS e a estacao ja tinha "
+              "lista: mantendo a copia atual. Confira a permissao de leitura da "
+              "tabela imposition_acessos_locais.", flush=True)
+        return False
+
     if acesso_local.salvar_lista(acessos):
         ativos = sum(1 for a in acessos if a.get("ativo") is not False)
         print(f"[agent_worker] Acessos locais sincronizados ({ativos} ativos).", flush=True)
