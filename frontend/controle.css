@@ -263,3 +263,60 @@ body.somente-leitura .so-com-senha { opacity: .55; }
 .pareamento { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .pareamento a { display: block; word-break: break-all; font-size: 0.82rem; margin: 6px 0 10px; }
 .pareamento canvas { background: #fff; border-radius: 8px; padding: 8px; }
+
+/* ── A tela inicial ──────────────────────────────────────────────────────── */
+
+.cabecalho { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.cabecalho img { height: 46px; }
+.cabecalho .titulos { display: flex; flex-direction: column; line-height: 1.15; }
+.cabecalho .titulos strong { font-size: 1.5rem; }
+.cabecalho .titulos span { font-size: 1.05rem; color: var(--dim); }
+
+.rotulo-secao {
+    font-size: 1.15rem; color: var(--dim); text-align: center;
+    margin: 24px 0 12px; font-weight: 700;
+}
+
+/* A engrenagem fica FORA da barra, como na imagem que o usuário mandou. Dentro
+   dela, o toque no evento cairia na configuração por engano -- e no portão isso
+   é a fila parada enquanto alguém procura o botão de voltar. */
+.linha-evento { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+
+.barra-evento {
+    flex: 1; display: flex; align-items: center; gap: 14px;
+    /* 64px: o alvo de toque de quem está de pé, no escuro, com uma mão. */
+    min-height: 64px; padding: 12px 18px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    color: var(--text); font-family: inherit; font-size: 1.25rem; font-weight: 700;
+    text-align: left; cursor: pointer;
+    /* `margin-top: 16px` da regra geral de `button` empurraria cada barra para
+       fora do alinhamento com a engrenagem ao lado. */
+    margin: 0;
+}
+.barra-evento.destaque { justify-content: center; }
+.barra-evento .nome-evento { flex: 1; }
+.barra-evento .icone-ler { color: #60a5fa; display: flex; }
+
+.luz {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid var(--dim); background: transparent; flex: none;
+}
+.luz.acesa { background: #16a34a; border-color: #16a34a; }
+
+.marca-inativo {
+    font-size: .78rem; font-weight: 600; color: var(--dim);
+    border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px;
+}
+
+.botao-engrenagem {
+    width: 52px; height: 52px; flex: none; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--dim); font-size: 1.6rem; font-family: inherit; cursor: pointer;
+    margin: 0; padding: 0;
+    /* `min-height: 48px` da regra geral não basta: sem zerar aqui, a bolinha
+       cresceria e deixaria de ser redonda. */
+    min-height: 0;
+}
+
+.cam-qr { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4/3; margin-top: 12px; }
