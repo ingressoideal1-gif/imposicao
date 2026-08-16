@@ -375,6 +375,34 @@ O token **não pode** entrar em arquivo versionado. Vai no escopo local do Claud
 `.env.local` para a CLI. Um `.mcp.json` versionado com o token dentro seria pego pelo
 freio 5 do `conferir.ps1` — corretamente.
 
+### Onde as Edge Functions vão morar — decidido em 16/08/2026
+
+Levantado ao ligar a CLI, e não é detalhe: **o banco de produção não está numa organização
+do usuário.**
+
+| Organização | Dono | Conteúdo |
+|---|---|---|
+| `aovixjbfultdwccwhowi` | `everton.prd@gmail.com` (parceiro Vibe) | **`e-deal` = `vwbtitjlpelrcnsytzqw`**, o banco da gráfica |
+| `okmqhgbdpmbacyzpcgcc` | EDISON JUNIOR (o usuário) | "Ideal Imposição", "Ideal Control", "Página da ARTE" — **todos vazios** |
+
+O token de acesso é da conta do usuário e alcança as duas, mas ele não é dono da primeira.
+
+Isso muda o peso da migração: hoje o Render é infraestrutura dele, e o parceiro só hospeda
+dados. Depois da Fase 2, a lógica de controle de acesso — portaria, publicação de
+credenciais, o PBKDF2 do QR Ideal — passa a **executar** dentro da conta do parceiro. Se o
+acesso for revogado, a portaria para.
+
+Apresentada a alternativa (um projeto Supabase próprio só para as funções, lendo o banco do
+parceiro pela chave de serviço), **o usuário decidiu: "sim, na conta do parceiro".** Fica
+resolvido; não é para reabrir a cada fase.
+
+**A armadilha dos nomes, porém, continua**, e é a que pode custar caro: escolher o projeto
+pelo nome no painel leva ao lugar errado. O que se chama "Ideal Imposição" está vazio; o
+que roda a gráfica se chama "e-deal". O critério correto é o que o usuário deu ao me
+corrigir — **é onde está o banco de dados** —, ou seja, o ref `vwbtitjlpelrcnsytzqw`, o
+mesmo do `db.py`, do `security_config.py` e do `frontend/supabase-config.js`. Conferido
+tabela a tabela em 16/08/2026: as cinco da aplicação respondem nesse ref e em nenhum outro.
+
 ### O que não deu para verificar daqui
 
 **O plano do projeto Supabase.** A chave que temos é de projeto (`service_role`), não de
