@@ -124,6 +124,16 @@ PAINEL_ARQUIVOS = [
     "instalar.js",
     "sw-registro.js",
     "aparelho.js",
+    # A tela nova do Ideal Control (v613): o `controle.js` se partiu em quatro
+    # arquivos com uma responsabilidade cada -- o chaveiro dos portoes deste
+    # aparelho, a lista de eventos da tela inicial, o toque que vira portao e a
+    # parede que exige o aplicativo instalado. Os quatro entram juntos: um deles
+    # de fora e a estacao servindo uma tela que referencia arquivo que ela nao
+    # tem.
+    "chaveiro.js",
+    "lista-eventos.js",
+    "virar-portao.js",
+    "parede-pwa.js",
     "style.css",
 ]
 
