@@ -1,6 +1,6 @@
 # Status do Projeto — Ideal Imposition
 
-**Última atualização: 15 de agosto de 2026, madrugada**
+**Última atualização: 16 de agosto de 2026, madrugada**
 
 Este documento diz onde o projeto está **hoje** e por onde continuar. Se você está
 retomando depois de um tempo, comece por aqui.
@@ -11,11 +11,23 @@ retomando depois de um tempo, comece por aqui.
 
 | | Versão | Publicado em |
 |---|---|---|
-| Site + motor | **v582** | 15/08/2026 |
-| Agente NewProd | **1.2.81** | 15/08/2026 |
+| Site + motor | **v589** | 16/08/2026 |
+| Agente NewProd | **1.2.86** | 16/08/2026 |
 
 As estações checam atualização a cada 30 minutos. Para adiantar numa delas: menu da
 bandeja → **Atualizar agora**.
+
+> ⚠️ **O motor está no tipo de instância `free` do Render**, em Ohio. Isso quer dizer que
+> ele **dorme** depois de ~15 minutos parado, e o primeiro acesso paga uma partida a frio —
+> **32,8 s medidos em 16/08**. Não é pane e não trava mais nenhuma tela; é espera.
+>
+> O conserto é um ajuste por serviço, e a API do Render **recusa** fazê-lo (500) porque é
+> operação de cobrança: **painel do Render → serviço `imposicao` → Settings → Instance Type
+> → Starter**. Pagar o plano do workspace não basta — são coisas separadas.
+>
+> Vale saber também que **todo `git push` dispara uma reconstrução de ~1 minuto**, e
+> `publicar_agente.ps1` empurra um segundo commit, logo uma segunda reconstrução. Abrir a
+> tela no minuto seguinte a publicar é pegar essa janela.
 
 **O controle de acesso está inteiro no servidor — as quatro variáveis.** Conferido em 14/08
 contra o Render, não assumido:
@@ -129,7 +141,7 @@ vale: **um celular de verdade, com a rede desligada**.
 Plano: [docs/superpowers/plans/2026-08-15-controle-acesso-parte3b.md](superpowers/plans/2026-08-15-controle-acesso-parte3b.md)
 Spec: [docs/superpowers/specs/2026-08-15-controle-acesso-parte3b-design.md](superpowers/specs/2026-08-15-controle-acesso-parte3b-design.md)
 
-### 🟡 Parte 3c — o Ideal Control da gráfica (**pronto, aguardando publicação**)
+### ✅ Parte 3c, primeira metade — o Ideal Control da gráfica (**no ar na v589**)
 
 Uma tela nova no menu do painel — **🎟️ Ideal Control** — onde a gráfica pesquisa pelo
 número do pedido e configura o controle de acesso do cliente **por inteiro**: dados do
@@ -331,6 +343,78 @@ fallback — porque o defeito não foi uma linha errada, foi quatro cópias que 
 
 ---
 
+## 📓 O dia 16/08: a tela do dono revisada, o Ideal Control da gráfica, e dois defeitos meus
+
+Sete publicações, da v583 à v589. O que ficou de guarda está abaixo; o que ficou por fazer,
+mais adiante.
+
+### A tela do dono, revisada usando-a (v586)
+
+O usuário abriu a `controle.html` e apontou quatro coisas. Todas viraram correção, e a
+razão de cada uma está em [controle_acesso.md](controle_acesso.md):
+
+1. **O cartão do setor mostra a faixa impressa** — `400 ingressos contratados · de 0005 a
+   0500`. Só a quantidade não identifica o lote: dois setores de 400 são idênticos na tela,
+   e o que o dono tem na mão é um ingresso com um número escrito.
+2. **"Quando vale" diz em frase** que sem data e hora o setor já está valendo. O
+   `(vazio = sempre)` entre parênteses se lia como instrução do que ele *precisa* preencher.
+3. **Os setores de um aparelho viraram botões que acendem**, e passam a valer no toque.
+   Eram caixas de marcar, e saíam tortas — medidas no navegador: **385px × 13px**, com o
+   nome do setor jogado no extremo direito. A regra `input { width: 100% }` da folha valia
+   para elas, e a exceção do CSS cobria só `input[type="radio"]`.
+4. **"Digitar a senha do dono" virou "Digitar a Senha Cadastrada"**, com "Esqueci minha
+   senha" ao lado, e a tranca ficou grudada no topo. A frase antiga se lia como uma segunda
+   senha, especial, que o cliente nunca recebeu.
+
+O item 4 é o que explica o relato **"criar aparelho não está funcionando no desktop"**: a
+explicação de por que os botões estavam apagados morava no alto de uma página de três telas
+de altura. O dono rolava até os aparelhos, tocava num botão apagado e não acontecia nada.
+
+### O Ideal Control da gráfica (v587)
+
+A tela nova do menu, descrita na seção da parte 3c acima. O que vale registrar aqui é a
+decisão de autorização: **sem senha de evento, mas nunca sem identificação**. O backend
+confere o JWT do Supabase e depois o papel em `imposition_user_permissions` — 403 para
+quem não for ADM ou Atendimento, mesmo com sessão válida.
+
+### Dois defeitos meus, e o que cada um custou
+
+**A tela ficou três minutos em "Carregando…"** e nunca saiu. Foram dois defeitos, um
+escondendo o outro, e os dois estão explicados em [controle_acesso.md](controle_acesso.md):
+
+- eu procurava o cliente do Supabase em `window.supabaseClient`, e ele **não mora lá** —
+  `supabase-config.js` o declara com `let`, que não cria propriedade no objeto global. A
+  tela nunca teve cliente, em navegador nenhum;
+- a falha era **muda**: a chamada lançava de forma síncrona, o `throw` escapava do
+  `.catch()` que nem existia ainda, e o "Carregando…" ficava para sempre.
+
+O segundo é o que tornou o primeiro caro. Sem mensagem na tela, levou duas publicações e o
+log do Render — que provou o essencial, **nenhuma requisição chegou ao motor** — para
+chegar ao primeiro.
+
+**A lição de método, e ela é minha:** eu tinha uma otimização pendente em mãos (a tela fazia
+20 idas ao banco ao abrir) e tratei os três minutos como se fossem a mesma coisa, só que
+pior. A aritmética já dizia que não fechava — 20 × 160ms são três segundos, não três
+minutos — e eu não tinha parado para fazê-la. Foi o usuário quem me redirecionou:
+*"motivo de não carregar pode ser outro"*.
+
+**A lição de teste:** o arnês de navegador semeava `window.supabaseClient` e passava com a
+tela quebrada. Ele era **mais generoso que a página** — exatamente o que o dublê de banco
+já tinha ensinado na véspera, e que eu não transferi. O teste que pega agora carrega o
+`supabase-config.js` de verdade.
+
+### Onde a tela ficou, em número de consultas
+
+| | idas ao banco | tempo (medido de fora) |
+|---|---|---|
+| abrir o pedido 18560, na v587 | 20 | 3,18 s |
+| abrir o pedido 18560, hoje | **8** | **1,21 s** |
+
+Nada que custe contagem carrega na abertura — é decisão do usuário: *"não deve carregar de
+imediato os códigos, apenas se solicitado, cada setor de uma vez"*.
+
+---
+
 ## ▶️ Por onde continuar — amanhã, nesta ordem
 
 ### 1. ✅ Pedido 20508 — fechado no que era alcançável
@@ -364,18 +448,39 @@ de barras**. Nenhuma correção de software resolve: não existe nada para a por
 esse evento vai ter controle de acesso, esse modelo precisa de outra numeração e de
 reimpressão de verdade, com papel novo.
 
-### 3. O teste da tela do dono com um cliente de verdade
+### 3. ✅ O teste da tela do dono — feito em 16/08, e rendeu quatro correções
 
-Ninguém ainda entrou na `controle.html` com a conta do Vibe, digitou a senha, configurou um
-setor e cadastrou um aparelho. É o único jeito de saber se a tela se explica sozinha.
+O usuário usou a `controle.html` e apontou o que não se explicava. Ver
+"O dia 16/08", acima. **A tela do Ideal Control da gráfica ainda não teve esse teste** —
+ela subiu na v589 e ninguém a usou de verdade.
 
-### 4. Publicar a parte 3b, e testar com um celular de verdade
+### 4. ⏳ O teste da portaria com um celular de verdade — CONTINUA ABERTO
 
-A portaria já tem spec, plano e os 603 testes passam (ver "Parte 3b", acima) — falta
-publicar e provar num aparelho real: parear, desligar Wi-Fi e dados, ler um ingresso do
-pedido 18560 e ver o verde. É ela que fecha o ciclo — sem publicar, tudo o que está na
-nuvem continua sem ser lido por ninguém. A parte 3c, que merece a própria spec como a 3a
-teve, vem depois.
+**É a única prova que vale, e ela não foi feita.** A portaria está no ar desde a v585;
+falta o que sempre faltou: parear um aparelho, **desligar Wi-Fi e dados**, e ler.
+
+Dois casos importam mais que os outros:
+
+- ler um ingresso do **1000110 (CAMAROTE, pedido 18560)**, que tem QR Ideal → verde;
+- ler um ingresso do **VIP** num aparelho aceso só para **CAMAROTE** → tem de sair
+  **laranja**, dizendo qual porta é a certa. Se sair vermelho, é o erro que a tela inteira
+  existe para não cometer.
+
+> **Cuidado ao escolher o evento.** Conferido no banco em 15/08: o **"Click"** (pedido
+> 19775) e a **"Festa da Uva"** (18360) têm **zero credenciais publicadas** — os pedidos
+> nunca foram impressos. Todo ingresso lido neles sai vermelho, corretamente, e isso não é
+> defeito da portaria. **O único evento testável é o "Teste Ideal Control"** (pedido 18560):
+> 2.000 de 2.000.
+
+### 5. Tirar o motor do plano `free` do Render
+
+Ver o aviso no topo deste documento. Enquanto estiver no `free`, o serviço dorme e o
+primeiro acesso do dia paga ~30 s. É um clique no painel do Render, que a API não faz.
+
+### 6. Usar o Ideal Control da gráfica e apontar o que não se explica
+
+Foi o que rendeu as quatro correções da tela do dono. A tela da gráfica é maior, tem mais
+o que dar errado, e ninguém ainda pesquisou um pedido nela em condição de trabalho.
 
 ---
 
@@ -475,8 +580,21 @@ entregando as cinco linhas que explicavam tudo.
 
 **Dois modelos com a mesma numeração imprimem o mesmo código.** Continua verdade depois da
 correção de 15/08 — o que mudou é que agora os dois são gravados, cada um com o seu setor,
-em vez de o segundo ser descartado. Quem separa na leitura é o setor do aparelho, e isso é
-trabalho da **parte 3b**: enquanto ela não existir, ninguém está lendo nada.
+em vez de o segundo ser descartado. Quem separa na leitura é o setor do aparelho — a
+**parte 3b**, que está no ar desde a v585 e ainda não foi provada num celular de verdade.
+
+**Dois eventos têm setor cadastrado e zero credencial publicada.** Conferido no banco em
+15/08: o **"Click"** (pedido 19775, 5.000 contratados) e a **"Festa da Uva"** (18360, 300).
+Os pedidos nunca foram impressos, então não há o que a portaria reconheça — todo ingresso
+lido neles sai vermelho, corretamente. Não é defeito, mas é uma armadilha de teste: um
+aparelho pareado ali dá a impressão de que a portaria não funciona.
+
+**As 163 credenciais órfãs do pedido 20508 continuam órfãs, e o reparo não as alcança.**
+Elas não têm setor a que se ligar: o 20508 foi impresso e publicado, mas **nunca virou
+evento** (`evento_id` nulo, `qr_gerado_em` nunca). O conserto não é SQL — é gerar o QR do
+Pedido para o 20508 e mandar ao cliente; a própria reivindicação carimba as 163 de uma vez.
+Os dois arquivos de reparo em `sql/` foram medidos em 15/08 e **não mudariam nada hoje**;
+ficam como rede de segurança se o defeito voltar.
 
 **O `catalogo_fontes` virou tabela de verdade em 15/08 — e o motivo é uma perda real.** Em
 14/08 o usuário tinha decidido o contrário: o `sql/schema_catalogo_fontes.sql` existia desde
@@ -511,9 +629,14 @@ vermelha por elemento desenhado.
 
 ## Saúde do repositório
 
-- **524 testes pytest + 171 Pester**, todos passando. `pytest tests/` roda inteiro, sem
-  exclusão, em cerca de 20 segundos — quase metade num teste só, o que publica 1.200
-  credenciais de verdade pelo KDF lento.
+- **714 testes pytest + 171 Pester**, todos passando. `pytest tests/` roda inteiro, sem
+  exclusão, em cerca de **3 minutos** — a maior parte em testes de navegador, que sobem um
+  Chrome por teste, mais o que publica 1.200 credenciais de verdade pelo KDF lento.
+- **Os testes de navegador precisam parecer com a página, não com o que é conveniente.**
+  Duas vezes em 15–16/08 um dublê mais generoso que a realidade escondeu um defeito real: o
+  dublê de banco que devolvia lista vazia onde o PostgREST levanta erro, e o arnês de tela
+  que semeava `window.supabaseClient` onde a página usa uma ligação de escopo de script.
+  Nos dois casos a suíte estava verde com o código quebrado em produção.
 - Em 13/08 a suíte foi recuperada: **dez** arquivos não rodavam, e um deles disparava um
   POST de verdade contra o Render de produção a cada execução.
   `tests/test_a_suite_esta_sa.py` impede a reincidência.
