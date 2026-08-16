@@ -178,7 +178,31 @@ git commit -m "app(fase1): o prefixo /ic/, e os caminhos que viram relativos"
 
 ---
 
-## Tarefa 3: A casa
+## Tarefa 2 — CONCLUÍDA, e Tarefa 3 — CONCLUÍDA
+
+**Tarefa 2** (commit `94ca120`): o prefixo `/ic/` por reescrita na Vercel, as URLs antigas
+redirecionando, e todos os caminhos das três páginas virando relativos. Dois ajustes que o
+navegador exigiu e que não estavam previstos: o registro do service worker passou a
+acontecer **só sob `/ic/`** (servida na raiz pela estação, a mesma página registraria com
+escopo `/`, assumindo o painel de produção — que é justamente o que o escopo estreito sempre
+existiu para impedir), e o `test_existe_uma_implementacao_so_de_login` passou a ignorar
+`.min.js`, porque o SDK vendorizado contém `signInWithPassword` por ser quem **define** o
+método.
+
+**Tarefa 3** (commit `e457a86`): a casa **não** virou página nova. `controle.html`, sem
+`?evento=`, já é a lista "Seus eventos" e já faz o login — uma casa em `inicio.html`
+duplicaria os dois, e duplicata de login tranca o cliente para fora do evento dele. Então
+`/ic/` abre o `controle.html`, e ele ganhou o botão **+ Novo Evento** com a câmera, num
+módulo próprio ([frontend/ler-qr.js](../../../frontend/ler-qr.js)), acima e fora do bloco de
+login. O arranque passou a mandar aparelho pareado direto ao portão, antes de qualquer coisa
+que dependa de rede.
+
+**Tarefa 4** (commit `beda272`): a câmera passou a entregar a leitura a quem a ligou.
+
+O que segue abaixo é o plano original da casa, mantido só como registro do que foi
+considerado. **O que valeu foi o parágrafo acima.**
+
+## Tarefa 3 (plano original — não executado assim): A casa
 
 **Arquivos:**
 - Criar: `frontend/inicio.html`, `frontend/inicio.js`, `frontend/inicio.css`
