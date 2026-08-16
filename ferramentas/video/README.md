@@ -24,6 +24,14 @@ Para mudar uma frase, mexa **só** no `roteiro.js` e rode
 `.\ferramentas\video\gerar.ps1 -SoMontar` — ele reaproveita os quadros já
 gravados e remonta em menos de um minuto.
 
+O `ROTEIRO.md` ao lado é o roteiro **humano**: o que se leva para uma gravação de
+verdade, com preparação, tempos por cena e nota de produção. Ele tem **27**
+cenas; a amostra tem **24**, e a diferença está no Ato 4. Desde a v612 há dois
+jeitos de montar o portão, e a amostra só cobre o do código de 6 caracteres —
+salvar "Usar ESTE aparelho" encerra a sessão e joga o navegador para a portaria,
+o que interromperia as cenas seguintes da gravação automática. Se um dia esse
+caminho entrar na amostra, ele precisa de um navegador só para ele.
+
 ## A decisão que governa tudo isto
 
 **O vídeo é gravado das telas de verdade.** Não há imitação da interface em

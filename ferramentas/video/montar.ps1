@@ -44,6 +44,25 @@ $RAIZ = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $Trabalho) { $Trabalho = Join-Path $RAIZ 'midia\_trabalho' }
 if (-not $Saida)    { $Saida    = Join-Path $RAIZ 'midia\ideal-control-como-usar.mp4' }
 
+<#
+    Caminho relativo vira absoluto aqui, e nao e zelo.
+
+    O demuxer `concat` do ffmpeg resolve os caminhos de dentro da lista a partir
+    da PASTA DO ARQUIVO DE LISTA, e nao do diretorio de trabalho. Chamado com
+    `-Trabalho midia\_trabalho`, cada linha saia relativa e o ffmpeg procurava
+    `midia\_trabalho\midia/_trabalho/pedacos/01-abertura.mp4` -- depois de ja ter
+    narrado e codificado as 24 cenas, que e o unico pedaco caro do script.
+
+    A base e a RAIZ do repositorio, e nao o diretorio atual: assim o comando faz
+    a mesma coisa venha de onde vier.
+#>
+function Caminho-Absoluto([string]$p) {
+    if ([IO.Path]::IsPathRooted($p)) { return [IO.Path]::GetFullPath($p) }
+    return [IO.Path]::GetFullPath((Join-Path $RAIZ $p))
+}
+$Trabalho = Caminho-Absoluto $Trabalho
+$Saida    = Caminho-Absoluto $Saida
+
 # ── Onde está o ffmpeg ───────────────────────────────────────────────────────
 #
 # Instalado por `winget install Gyan.FFmpeg`, ele nem sempre está no PATH da
@@ -228,8 +247,14 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Saida) | Out-Null
 & $FFMPEG -hide_banner -loglevel error -y -f concat -safe 0 -i $listaArquivo -c copy $Saida
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg falhou ao emendar as cenas" }
 
+# A legenda vai COM marca de ordem de byte, ao contrário da lista acima, e a
+# diferença não é descuido: quem lê o `.srt` é um tocador de vídeo, e sem a
+# marca muitos deles adivinham a codificação da região do computador. Em
+# português isso troca cada acento por dois caracteres errados -- "Ideal
+# Control Ã© o aplicativo". O ffmpeg, que lê a lista, não adivinha nada.
+$comBOM = New-Object System.Text.UTF8Encoding($true)
 $srtArquivo = [IO.Path]::ChangeExtension($Saida, '.srt')
-[IO.File]::WriteAllText($srtArquivo, $srt.ToString().TrimEnd(), $semBOM)
+[IO.File]::WriteAllText($srtArquivo, $srt.ToString().TrimEnd(), $comBOM)
 
 $tamanho = [Math]::Round((Get-Item $Saida).Length / 1MB, 1)
 Write-Host ''

@@ -862,6 +862,11 @@ async function main() {
     gp.abrirCena('17-parear');
     await gp.segurar(2.5);
     await gp.digitar('#campo-codigo', CODIGO_APARELHO);
+    // Segura o código digitado ANTES de tocar em Ligar. Sem isto a cena tem
+    // menos imagem do que narração, e o quadro esticado no fim passa a ser o
+    // "Baixando o evento" — a legenda falando de digitar o código sobre uma
+    // tela que já saiu daquele passo.
+    await gp.segurar(3.5);
     // O atraso é o que dá DURAÇÃO à cena seguinte. Num aparelho de verdade quem
     // demora é a rede; aqui o backend falso responde na hora, e sem isto a tela
     // "Baixando o evento" apareceria por um quadro e sumiria.
