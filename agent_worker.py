@@ -702,6 +702,48 @@ def versao_do_painel(pasta: str = None) -> dict:
     return resultado
 
 
+def _acessos_da_nuvem():
+    """A lista de acessos locais, pelo caminho autenticado — com volta.
+
+    ## Por que deixou de ser uma leitura direta do PostgREST
+
+    Ate 16/08/2026 esta lista vinha de `imposition_acessos_locais` com a chave
+    ANONIMA, a mesma que esta no codigo-fonte de toda pagina do painel. Quer
+    dizer que os codigos que destrancam o painel da grafica eram publicos — e
+    nao so legiveis: davam para trocar.
+
+    Fechar aquela leitura (passo 3 de `sql/rls_acessos_e_permissoes.sql`) exige
+    que a estacao tenha outro caminho, e ele e a Edge Function `acesso-estacao`,
+    que ja e o canal autenticado do agente: mesmo segredo, mesma base.
+
+    ## A volta ao caminho antigo, e por que ela existe e some sozinha
+
+    Onze estacoes se atualizam cada uma no seu ritmo. Enquanto a leitura direta
+    ainda funcionar, uma falha do caminho novo cai nela e ninguem fica sem
+    lista. Quando o RLS fechar a leitura, a volta passa a devolver lista VAZIA —
+    e ai o freio do `sincronizar_acessos` segura a copia boa em vez de
+    destrancar a estacao.
+
+    Devolve `None` quando os DOIS caminhos falharam: e o sinal de "nao mexa na
+    copia atual".
+    """
+    try:
+        import acesso_publicacao
+        segredo = acesso_publicacao._segredo()
+        if segredo:
+            url = f"{acesso_publicacao._base()}/api/acesso/acessos-locais"
+            req = urllib.request.Request(url, headers={"X-Agente-Segredo": segredo})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return json.loads(resp.read().decode("utf-8") or "[]")
+        print("[agent_worker] Sem segredo do agente; acessos locais pelo caminho antigo.",
+              flush=True)
+    except Exception as e:
+        print(f"[agent_worker] Acessos locais pela Edge Function falharam ({e}); "
+              "tentando o caminho antigo.", flush=True)
+
+    return _supabase_request("GET", "imposition_acessos_locais?select=*")
+
+
 def sincronizar_acessos():
     """Baixa a lista de acessos locais e grava a copia da estacao.
 
@@ -713,7 +755,7 @@ def sincronizar_acessos():
     import acesso_local
     if not _relay_ativo():
         return False
-    acessos = _supabase_request("GET", "imposition_acessos_locais?select=*")
+    acessos = _acessos_da_nuvem()
     if acessos is None:
         print("[agent_worker] Acessos locais nao sincronizados. Segue a copia atual.", flush=True)
         return False

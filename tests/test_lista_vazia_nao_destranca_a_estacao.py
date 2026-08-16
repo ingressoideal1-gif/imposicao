@@ -46,8 +46,14 @@ def estacao(tmp_path, monkeypatch):
 
 
 def _responder(monkeypatch, corpo):
-    monkeypatch.setattr(agent_worker, "_supabase_request",
-                        lambda *a, **k: corpo)
+    """O que a nuvem devolveu, seja qual for o caminho que a trouxe.
+
+    Costura em `_acessos_da_nuvem` de propósito: estes testes são sobre o que a
+    estação FAZ com a lista, e não sobre de onde ela veio. A origem tem os seus,
+    mais abaixo — e costurar mais fundo faria estes aqui saírem à rede de
+    verdade na máquina de quem tem o segredo do agente configurado.
+    """
+    monkeypatch.setattr(agent_worker, "_acessos_da_nuvem", lambda: corpo)
 
 
 def test_a_lista_boa_e_gravada(estacao, monkeypatch):
@@ -101,3 +107,73 @@ def test_erro_de_rede_nao_toca_na_copia(estacao, monkeypatch):
     _responder(monkeypatch, None)
     assert agent_worker.sincronizar_acessos() is False
     assert len(acesso_local.carregar_lista()) == 2
+
+
+# ─── De onde a lista vem ──────────────────────────────────────────────────────
+
+
+class _Resposta:
+    def __init__(self, corpo):
+        self.corpo = corpo
+
+    def read(self):
+        return json.dumps(self.corpo).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _edge(monkeypatch, corpo=None, falhar=False):
+    """Finge a Edge Function e conta se ela foi mesmo chamada."""
+    vistas = []
+
+    def urlopen(req, timeout=None):
+        vistas.append({"url": req.full_url,
+                       "segredo": req.headers.get("X-agente-segredo")})
+        if falhar:
+            raise OSError("rede fora")
+        return _Resposta(corpo if corpo is not None else LISTA)
+
+    monkeypatch.setattr(agent_worker.urllib.request, "urlopen", urlopen)
+    return vistas
+
+
+def test_a_lista_vem_pelo_caminho_autenticado(monkeypatch):
+    """O que fecha o vazamento: o código não viaja mais pela chave pública."""
+    vistas = _edge(monkeypatch)
+    monkeypatch.setattr(agent_worker, "_supabase_request",
+                        lambda *a, **k: pytest.fail("caiu no caminho antigo"))
+
+    assert agent_worker._acessos_da_nuvem() == LISTA
+    assert vistas[0]["url"].endswith("/api/acesso/acessos-locais")
+    assert vistas[0]["segredo"], "a chamada saiu sem o segredo do agente"
+
+
+def test_falha_da_edge_function_cai_no_caminho_antigo(monkeypatch):
+    """Enquanto a leitura direta existir, uma falha do caminho novo não pode
+    deixar a estação sem lista — são onze máquinas atualizando cada uma no seu
+    ritmo."""
+    _edge(monkeypatch, falhar=True)
+    monkeypatch.setattr(agent_worker, "_supabase_request", lambda *a, **k: LISTA)
+
+    assert agent_worker._acessos_da_nuvem() == LISTA
+
+
+def test_sem_segredo_do_agente_usa_o_caminho_antigo(monkeypatch):
+    import acesso_publicacao
+    monkeypatch.setattr(acesso_publicacao, "_segredo", lambda: None)
+    monkeypatch.setattr(agent_worker, "_supabase_request", lambda *a, **k: LISTA)
+
+    assert agent_worker._acessos_da_nuvem() == LISTA
+
+
+def test_os_dois_caminhos_fora_nao_e_lista_vazia(monkeypatch):
+    """`None` e não `[]`: a diferença entre 'não mexa na cópia' e 'não há mais
+    ninguém com acesso'. Confundir as duas destranca a estação."""
+    _edge(monkeypatch, falhar=True)
+    monkeypatch.setattr(agent_worker, "_supabase_request", lambda *a, **k: None)
+
+    assert agent_worker._acessos_da_nuvem() is None

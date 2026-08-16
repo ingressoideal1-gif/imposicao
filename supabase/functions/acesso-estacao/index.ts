@@ -150,10 +150,42 @@ async function fecharPedido(pedidoIdInt: number): Promise<unknown> {
   return { total, esperado, completo: total === esperado };
 }
 
+/**
+ * A lista de acessos locais que a estacao usa para o login offline.
+ *
+ * ## Por que ela passou a sair por aqui
+ *
+ * Ate 16/08/2026 a estacao lia `imposition_acessos_locais` direto do PostgREST,
+ * com a chave ANONIMA -- a mesma que esta no codigo-fonte de toda pagina. Quer
+ * dizer que os codigos de acesso ao painel da grafica eram publicos, e nao so
+ * legiveis: davam para trocar.
+ *
+ * Fechar aquela leitura exige que a estacao tenha outro caminho, e este e ele:
+ * mesma funcao, mesmo segredo do agente, service_role do lado de ca. E o unico
+ * pedaco desta funcao que nao tem nada a ver com publicar faixa -- mora aqui
+ * porque o CONSUMIDOR e o mesmo, e o segredo tambem.
+ *
+ * Devolve so o que o login precisa. `criado_em`, `atualizado_em` e `id` ficam:
+ * a estacao nao os usa, e o que nao viaja nao vaza.
+ */
+async function acessosLocais(): Promise<unknown> {
+  const linhas = (await banco(
+    "GET",
+    "imposition_acessos_locais?select=codigo,nome,role,permissoes,ativo&order=nome.asc",
+  )) ?? [];
+  return linhas;
+}
+
 async function rotear(req: Request, url: URL): Promise<Response> {
   const p = pedacosDaRota(url.pathname);
   const ok = (corpo: unknown) =>
     new Response(JSON.stringify(corpo), { headers: JSON_HEADERS });
+
+  if (p.length === 1 && p[0] === "acessos-locais") {
+    if (req.method !== "GET") recusaDeRotaDesconhecida(req.method);
+    await conferirAgente(req);
+    return ok(await acessosLocais());
+  }
 
   // Rota que nao e uma das tres -- por caminho ou por metodo -- cai na regra do
   // `app.py`, que depende do METODO e nao do caminho: GET vira 404, o resto vira
@@ -203,7 +235,7 @@ Deno.serve(async (req: Request) => {
     // desconhecida -- e para o dia em que alguem diagnosticar isto do navegador.
     return respostaDePreflight(
       origem,
-      "POST, OPTIONS",
+      "GET, POST, OPTIONS",
       "authorization,content-type,x-agente-segredo",
     );
   }
