@@ -28,7 +28,23 @@ import urllib.request
 import qr_ideal
 
 BASE_ENV = "ACESSO_BASE_URL"
-BASE_PADRAO = "https://imposicao.onrender.com"
+
+# 16/08/2026: a publicação da faixa passou a falar com uma Edge Function, ao
+# lado do banco. Antes era `https://imposicao.onrender.com`, e cada lote de 500
+# credenciais atravessava a internet duas vezes — estação -> Render -> Supabase.
+# Numa tiragem de 12.000 são 24 lotes, e o Render dorme quando ninguém usa.
+#
+# ## Por que o `/api/acesso/` continua no `_post`
+#
+# A função `acesso-estacao` aceita o prefixo antigo no meio do caminho, de
+# propósito. É o que torna a migração de cada estação uma variável de ambiente
+# (`ACESSO_BASE_URL`) em vez de um executável novo: numa gráfica com onze
+# máquinas que se atualizam cada uma no seu ritmo, essa diferença é a diferença
+# entre migrar uma por vez e migrar todas de uma vez.
+#
+# Voltar atrás, numa estação ou em todas, é apontar `ACESSO_BASE_URL` de volta
+# para o Render — que continua no ar, respondendo o mesmo, durante a transição.
+BASE_PADRAO = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-estacao"
 
 SEGREDO_ENV = "ACESSO_AGENTE_SEGREDO"
 
