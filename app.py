@@ -796,6 +796,29 @@ async def impose_file(
     background_tasks: BackgroundTasks = None,
     user: dict = Depends(get_current_user)
 ):
+    # 15/08/2026: imposicao e impressao so acontecem na estacao da grafica.
+    # Decisao de seguranca do usuario -- ver
+    # docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+    #
+    # Esta e a SEGUNDA barreira. A primeira e o painel, que nao desvia mais para
+    # ca. Esta existe porque painel fica em cache no navegador da estacao: sem
+    # ela, uma copia antiga continuaria mandando a arte do cliente para a nuvem
+    # por semanas, sem ninguem perceber.
+    #
+    # Fica ANTES do `try` de proposito. Dentro dele a primeira coisa que
+    # acontece e `db.get_formato(...)`, que vai a rede: recusar depois disso
+    # seria pagar uma viagem ao Supabase para dizer nao.
+    #
+    # 403 e nao 404 de proposito: aqui o operador PRECISA ler o motivo, porque a
+    # mensagem e o que o manda para a estacao. O /api/update esconde que existe;
+    # este avisa que existe e nao serve aqui.
+    if security_config.is_cloud_runtime():
+        raise HTTPException(
+            status_code=403,
+            detail=("A imposicao so roda na estacao da grafica. Abra o painel por "
+                    "http://localhost:9000, na maquina onde o NewProd esta aberto, "
+                    "e refaca o trabalho por la."),
+        )
 
     try:
         import csv
