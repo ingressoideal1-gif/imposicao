@@ -1,16 +1,25 @@
 # Guardas da tela Configuracoes > Fontes.
 #
 # O bug que originou este arquivo: o frontend chamava DELETE /api/fontes?id=X,
-# mas a rota do FastAPI e DELETE /api/fontes/{fonte_id}. O FastAPI responde 405
-# e o botao Excluir falhava SEMPRE, desde que existiu. Estas guardas leem o
-# fonte (source) para o desvio nao voltar.
+# mas a rota e DELETE /api/fontes/{fonte_id}. O servidor responde 405 e o botao
+# Excluir falhava SEMPRE, desde que existiu. Estas guardas leem o fonte (source)
+# para o desvio nao voltar.
+#
+# Em 16/08/2026 o endereco deixou de ser montado aqui: quem decide entre o
+# agente da estacao e a Edge Function `painel` e o `urlDeEscritaDeFontes`, em
+# `supabase-config.js`. O que se guarda continua sendo o mesmo -- o id vai no
+# CAMINHO, e nao em `?id=`.
 
 $repo = Split-Path $PSScriptRoot -Parent
 $js   = Get-Content "$repo\frontend\script.js" -Raw
+$cfg  = Get-Content "$repo\frontend\supabase-config.js" -Raw
 
 Describe 'catalogo de fontes -- o Excluir fala com a rota que existe' {
     It 'DELETE leva o id no caminho, como a rota do app.py' {
-        ($js -match 'api/fontes/\$\{encodeURIComponent\(id\)\}') | Should Be $true
+        ($js -match 'urlDeEscritaDeFontes\(`/\$\{encodeURIComponent\(id\)\}`\)') | Should Be $true
+    }
+    It 'o montador de endereco poe o sufixo depois de /api/fontes' {
+        ($cfg -match '/api/fontes\$\{sufixo') | Should Be $true
     }
     It 'DELETE nao usa mais ?id= (que dava 405)' {
         ($js -match 'api/fontes\?id=') | Should Be $false
