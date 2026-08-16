@@ -30,8 +30,7 @@ import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
-import { hashCodigo } from "../_compartilhado/hash.ts";
-import { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
+import { gerarSal, modelosLegiveis } from "../_compartilhado/pedidos.ts";
 import {
   conferirElevacao,
   conferirQrPedido,
@@ -308,38 +307,6 @@ async function painel(eventoId: string): Promise<any> {
 
 // ── O QR do Pedido ──────────────────────────────────────────────────────────
 
-async function modelosLegiveis(pedidoIdInt: number): Promise<any[]> {
-  const modelos = (await banco(
-    "GET",
-    `pedidos_modelos?id_int=eq.${pedidoIdInt}` +
-      "&select=id,nome_modelo,quantidade,amostra_num_id&order=ordem.asc",
-  )) ?? [];
-
-  const ids = [...new Set(
-    modelos.filter((m: any) => m.amostra_num_id).map((m: any) => String(m.amostra_num_id)),
-  )].sort();
-  const numeracoes: Record<string, unknown> = {};
-  if (ids.length) {
-    const lista = ids.map((i) => `"${i}"`).join(",");
-    for (
-      const n of (await banco(
-        "GET",
-        `producao_numeracoes?id=in.(${lista})&select=id,elements`,
-      )) ?? []
-    ) {
-      numeracoes[String(n.id)] = n.elements;
-    }
-  }
-
-  return modelos
-    .filter((m: any) => numeracaoDoModelo(numeracoes[String(m.amostra_num_id)]))
-    .map((m: any) => ({
-      modelo_id: Number(m.id),
-      nome: String(m.nome_modelo ?? `Modelo ${m.id}`).trim(),
-      quantidade: Number(m.quantidade ?? 0),
-    }));
-}
-
 async function sha256Hex(texto: string): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));
   return Array.from(new Uint8Array(bytes))
@@ -387,18 +354,6 @@ async function esqueleto(token: string): Promise<any> {
     setores,
     total: setores.reduce((s: number, x: any) => s + x.quantidade, 0),
   };
-}
-
-/**
- * Sal de evento novo. `crypto.randomUUID()` NAO serve: o `gerar_sal` do
- * `qr_ideal` produz hexadecimal, e o sal entra no PBKDF2 dos codigos que o
- * cliente carrega. Formato diferente daria hash diferente do que o Python
- * gravaria para o mesmo codigo.
- */
-function gerarSal(): string {
-  const b = new Uint8Array(16);
-  crypto.getRandomValues(b);
-  return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
 async function reivindicar(
@@ -581,7 +536,15 @@ Deno.serve(async (req: Request) => {
   const origem = origemPermitida(req.headers.get("origin"));
 
   if (req.method === "OPTIONS") {
-    return respostaDePreflight(origem, "GET, POST, PATCH, DELETE, OPTIONS");
+    // `x-elevacao` e `x-navegador` PRECISAM estar aqui: a tela do dono os manda
+    // em toda escrita (`frontend/controle.js`), e o navegador bloqueia a
+    // requisicao de verdade quando o preflight nao autoriza cabecalho que ela
+    // pretende usar. A chamada morreria no navegador, sem log deste lado.
+    return respostaDePreflight(
+      origem,
+      "GET, POST, PATCH, DELETE, OPTIONS",
+      "authorization,content-type,x-elevacao,x-navegador",
+    );
   }
 
   try {

@@ -85,17 +85,30 @@ export function comCors(resposta: Response, origem: string | null): Response {
  *
  * Responder ANTES do roteamento e o certo: o preflight nao e uma rota, e
  * trata-lo como rota da 404 -- que foi o defeito de 16/08/2026.
+ *
+ * ## `cabecalhos`, e por que ele nao pode ficar so no padrao
+ *
+ * O navegador manda no preflight a lista de cabecalhos que PRETENDE usar, e
+ * bloqueia a requisicao de verdade se a resposta nao os autorizar TODOS. A tela
+ * do dono manda `X-Elevacao` e `X-Navegador` em toda escrita
+ * (`frontend/controle.js`); com a lista fixa em `authorization,content-type`,
+ * cada uma dessas chamadas morreria no navegador -- sem chegar ao servidor,
+ * portanto sem log e sem erro do nosso lado.
+ *
+ * Nenhum teste de servidor pega isto: `urllib` e `curl` nao fazem preflight. So
+ * o navegador, e so depois do corte.
  */
 export function respostaDePreflight(
   origem: string | null,
   metodos = "GET, POST, OPTIONS",
+  cabecalhos = "authorization,content-type",
 ): Response {
   return comCors(
     new Response(null, {
       status: 204,
       headers: {
         "Access-Control-Allow-Methods": metodos,
-        "Access-Control-Allow-Headers": "authorization,content-type",
+        "Access-Control-Allow-Headers": cabecalhos,
         "Access-Control-Max-Age": "600",
       },
     }),

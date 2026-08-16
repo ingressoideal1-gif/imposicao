@@ -22,7 +22,7 @@ import { banco } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
-import { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
+import { modelosLegiveis } from "../_compartilhado/pedidos.ts";
 import { conferirQrPedido, SEGREDO_QR_PEDIDO } from "../_compartilhado/assinatura.ts";
 import { recusaHumana } from "../acesso-conta/puro.ts";
 
@@ -36,38 +36,6 @@ async function exigirSegredo(nome: string): Promise<void> {
 }
 
 // ── O QR do Pedido ──────────────────────────────────────────────────────────
-
-async function modelosLegiveis(pedidoIdInt: number): Promise<any[]> {
-  const modelos = (await banco(
-    "GET",
-    `pedidos_modelos?id_int=eq.${pedidoIdInt}` +
-      "&select=id,nome_modelo,quantidade,amostra_num_id&order=ordem.asc",
-  )) ?? [];
-
-  const ids = [...new Set(
-    modelos.filter((m: any) => m.amostra_num_id).map((m: any) => String(m.amostra_num_id)),
-  )].sort();
-  const numeracoes: Record<string, unknown> = {};
-  if (ids.length) {
-    const lista = ids.map((i) => `"${i}"`).join(",");
-    for (
-      const n of (await banco(
-        "GET",
-        `producao_numeracoes?id=in.(${lista})&select=id,elements`,
-      )) ?? []
-    ) {
-      numeracoes[String(n.id)] = n.elements;
-    }
-  }
-
-  return modelos
-    .filter((m: any) => numeracaoDoModelo(numeracoes[String(m.amostra_num_id)]))
-    .map((m: any) => ({
-      modelo_id: Number(m.id),
-      nome: String(m.nome_modelo ?? `Modelo ${m.id}`).trim(),
-      quantidade: Number(m.quantidade ?? 0),
-    }));
-}
 
 async function sha256Hex(texto: string): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(texto));

@@ -26,6 +26,7 @@
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa, quemConfigura } from "../_compartilhado/sessao.ts";
+import { inteiro, RecusaDeValidacao } from "../_compartilhado/validacao.ts";
 import {
   aplicarAparelho,
   aplicarAparelhoNovo,
@@ -76,46 +77,10 @@ function uuid(valor: string, oque: string): string {
   return v;
 }
 
-/**
- * A recusa que o FastAPI produz sozinho quando um `int` nao converte.
- *
- * Reproduzida ao pe da letra -- `type`, `loc`, `msg` e `input` -- e medida
- * contra o Render em 16/08/2026. Nao e capricho: enquanto as duas pilhas
- * conviverem, a mesma tela pode falar com qualquer uma das duas, e uma recusa
- * com formato diferente e uma tela que quebra de um jeito num endereco e de
- * outro no outro.
- *
- * A `loc` diz de onde veio o valor ruim: `["path", "pedido"]` ou
- * `["query", "limite"]`. E o que permite a tela apontar o campo errado.
- */
-class RecusaDeValidacao extends Recusa {
-  constructor(public detalhes: unknown[]) {
-    super(422, "");
-  }
-}
-
-function recusaDeInteiro(onde: "path" | "query", nome: string, valor: unknown): never {
-  throw new RecusaDeValidacao([{
-    type: "int_parsing",
-    loc: [onde, nome],
-    msg: "Input should be a valid integer, unable to parse string as an integer",
-    input: valor,
-  }]);
-}
-
-/**
- * O `int` de um parametro de caminho ou de busca.
- *
- * O Python aceita o que `int()` aceita: `"18560"` sim, `"18560.0"` nao,
- * `" 18560 "` sim (o `int()` apara espacos). O `Number()` do JavaScript e mais
- * frouxo -- `Number("")` e 0 e `Number("0x10")` e 16 --, entao a conferencia e
- * por regex antes de converter.
- */
-function inteiro(valor: unknown, onde: "path" | "query", nome: string): number {
-  const texto = String(valor ?? "").trim();
-  if (!/^[+-]?\d+$/.test(texto)) recusaDeInteiro(onde, nome, valor);
-  return Number(texto);
-}
+// A recusa 422 do FastAPI e o `int` de parametro moram em
+// `_compartilhado/validacao.ts` desde a Tarefa 3: `acesso-pedido` e
+// `acesso-estacao` precisam do MESMO formato de erro, e tres copias de um
+// formato de erro divergiriam no dia em que uma delas fosse ajustada.
 
 // ── Leitura ─────────────────────────────────────────────────────────────────
 

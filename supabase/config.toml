@@ -473,3 +473,13 @@ verify_jwt = true
 # banco. Aqui nao existe `sub` a confiar -- e por isso ela pode ficar sozinha
 # com a verificacao desligada sem abrir nada.
 verify_jwt = false
+
+[functions.acesso-pedido]
+# LIGADO. Esta rota MINTA acesso: o token que ela devolve e o que permite
+# reivindicar o evento de um pedido. Deixa-la aberta desfaria todas as travas
+# anteriores -- qualquer um geraria o QR do pedido alheio e tomaria o evento.
+#
+# O que o portao do Supabase garante e que quem pede esta mesmo logado no painel
+# da grafica. Papel NAO e exigido, aqui nem no Render: quem gera o QR e o
+# atendente que esta falando com o cliente ao telefone.
+verify_jwt = true
