@@ -1,7 +1,8 @@
 # Desligar o Render e levar a nuvem para o Supabase — decisão e desenho
 
 **Data:** 16/08/2026
-**Estado:** decidido, não iniciado. A execução começa em 16/08/2026 pela Fase 1.
+**Estado:** **Fase 1 concluída** em 16/08/2026 (commits `ce9f4b4`, `abbe98e`, `beac8f3`,
+`ef6b878`) — falta publicar. Fases 2 a 4 desenhadas, não iniciadas.
 
 ---
 
@@ -72,6 +73,20 @@ O [render.yaml](../../../render.yaml) declara três variáveis que existem apena
 do Render: `SUPABASE_SERVICE_KEY`, `ACESSO_AGENTE_SEGREDO` e `QR_PEDIDO_SEGREDO`. Elas
 somem do inventário de segredos junto com o serviço.
 
+São **quatro**, na verdade. O `ACESSO_ELEVACAO_SEGREDO` está configurado no Render e é
+conhecido pelo `ferramentas/copiar_para_render.ps1`, mas ficou de fora do `render.yaml` —
+que existe justamente para que o inventário do que o serviço precisa esteja versionado.
+Conferido ao vivo em 16/08/2026 pelo `/api/acesso/saude`: as quatro presentes, banco ok.
+Não vale corrigir o `render.yaml` de um serviço que vai sair, mas o inventário do lado do
+Supabase tem de nascer com as quatro.
+
+Nenhum desses valores precisa ser redescoberto: todos estão no `.env.local`. Dentro de uma
+Edge Function o Supabase injeta `SUPABASE_URL`, `SUPABASE_ANON_KEY` e
+`SUPABASE_SERVICE_ROLE_KEY` sozinho, então só os três segredos nossos precisam ser
+enviados. O que **falta** é um Personal Access Token do Supabase (`SUPABASE_ACCESS_TOKEN`),
+que autoriza publicar Edge Functions pela linha de comando — o equivalente da
+`RENDER_API_KEY` que já existe no `.env.local`.
+
 ## O risco que eu levantei e depois retirei
 
 Na primeira análise eu disse que reescrever a regra do QR Ideal em TypeScript criaria uma
@@ -84,9 +99,15 @@ da portaria. E existe um teste que abre um navegador de verdade e compara os doi
 ([tests/test_qr_ideal_hash.py](../../../tests/test_qr_ideal_hash.py)).
 
 Edge Function é Deno, que usa o mesmo `crypto.subtle` do navegador. A função na nuvem
-**importa o arquivo que já existe e já é testado**. O número de implementações da regra
+**reaproveita o arquivo que já existe e já é testado**. O número de implementações da regra
 continua dois (Python na estação, que publica; JavaScript na nuvem e no celular, que
 conferem) — igual a hoje.
+
+**Ressalva medida depois, e que corrige este parágrafo:** reaproveitar não é só apontar o
+`import` para o arquivo. Ele hoje é uma IIFE que se publica por `window` e por
+`module.exports`, e nenhum dos dois existe em Deno — ver o risco 2 do levantamento abaixo.
+O conserto é pequeno, mas não é zero, e precisa entrar no plano da Fase 2 em vez de ser
+descoberto durante ela.
 
 ## O que se perde, sendo justo
 
@@ -128,7 +149,7 @@ tendo de sair junto com o site.
 | Catálogo: formatos, numerações, saídas, cores, modelos, mapas, fontes | Edge Function | 3 |
 | Permissões e acessos locais | Edge Function | 3 |
 | `GET /api/proxy` e `GET /api/fonte` | Storage direto (o navegador já pode) | 3 |
-| `POST /api/email/enviar` | Edge Function | 3 |
+| `POST /api/email/enviar` | **Apagar** — código morto, zero chamadores | 3 |
 | `GET /api/health`, `/api/status`, `/api/version` | Somem — eram do agente, não da nuvem | 4 |
 | `GET /api/qr-ideal` | **Não se aplica** — o pool de 24 MB nunca esteve na nuvem | — |
 | `POST /api/update`, `/api/update/check` | **Não se aplica** — já recusam na nuvem hoje | — |
@@ -166,9 +187,11 @@ lento com a arte viajando para fora da gráfica.
 
 Pontos que o plano da Fase 2 terá de resolver, e que já se sabe que existem:
 
-1. **A regra do hash não se reescreve.** A Edge Function importa o
-   `frontend/qr-ideal-hash.js`. O teste que compara Python e JavaScript passa a cobrir os
-   três consumidores.
+1. **A regra do hash não se reescreve** — mas o arquivo precisa de um ajuste antes de poder
+   ser reaproveitado. O `frontend/qr-ideal-hash.js` é uma IIFE que se publica por `window` e
+   `module.exports`, e nenhum dos dois existe em Deno (risco 2). Acrescentar um `export`
+   preservando os dois caminhos legados é o primeiro passo da fase, não um detalhe dela. O
+   teste que compara Python e JavaScript passa a cobrir os três consumidores.
 2. **O `_FALHAS` vira tabela**, com limpeza por janela de tempo. Sem isso o freio de força
    bruta some — hoje ele já é frágil, mas na Edge Function seria inexistente.
 3. **O teto de 1000 linhas do PostgREST continua valendo**, e a paginação de 500 do
