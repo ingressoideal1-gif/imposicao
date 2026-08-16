@@ -44,59 +44,79 @@ agente sincroniza para dentro de cada estação. Uma pasta obrigaria o agente a 
 caminho, e o custo cairia sobre código aprovado e rodando na gráfica — para resolver um
 problema de front-end.
 
-## A arquitetura: uma página, três telas, três apelidos
+## A arquitetura: um prefixo comum, e as três telas ficam onde estão
 
-Nasce **`frontend/app.html`**: uma página só, que contém as três telas e é o aplicativo
-instalável. O escopo é `/app.html` — estreito, e por isso incapaz de capturar as telas da
-gráfica.
+> **Revisto em 16/08/2026, no meio da execução.** O primeiro desenho era uma página só
+> (`app.html`) contendo as três telas. Ele foi abandonado ao chegar a hora de fazê-lo: fundir
+> as três exigia fundir três folhas de estilo que definem as mesmas classes (`.cartao`,
+> `.aviso`, `button`, `input` — e o `controle.css` repete as cores do `evento.html` **de
+> propósito**), fundir três marcações, e refatorar `portaria.js`, `evento.js` e `controle.js`
+> para deixarem de arrancar sozinhos. Cirurgia grande em cima da portaria, que está aprovada
+> e rodando. O desenho abaixo entrega o mesmo aplicativo sem nada disso.
 
-As três URLs de hoje viram **apelidos** que redirecionam para ela, preservando a
-querystring:
-
-| URL de hoje | Vira | Abre |
-|---|---|---|
-| `evento.html?t=<token>` | `app.html?t=<token>` | reivindicar o pedido |
-| `portaria.html?e=<evento>` | `app.html?e=<evento>` | a portaria |
-| `controle.html?evento=<id>` | `app.html?evento=<id>` | configurar o evento |
-| — | `app.html` | a casa: Meus Eventos e + Novo Evento |
-
-Isso preserva **tudo o que já circula**: o QR do Pedido impresso e mandado por WhatsApp, o
-endereço que a tela do dono mostra ao porteiro, e a lista `PAINEL_ARQUIVOS` continua plana
-(ganha um nome, não uma pasta). Os dois construtores de URL —
-[acesso_api.py:505](../../../acesso_api.py) e
-[controle.js:948](../../../frontend/controle.js) — passam a gerar `app.html`, e os apelidos
-cobrem o que já foi emitido.
-
-### O roteador é a própria querystring
-
-Não há rota nova a inventar: os três parâmetros que já existem dizem qual tela abrir.
+Um aplicativo instalável **não precisa ser uma página só**. Precisa de um **escopo** — um
+prefixo de URL comum. E dá para dar um prefixo comum às três telas **sem mover arquivo
+nenhum**, por reescrita na Vercel:
 
 ```
-?t=<token>      → reivindicar o pedido            (o QR do Pedido)
-?e=<evento_id>  → o portão deste aparelho:        (o QR do portão)
-                    já configurado  → ler ingresso
-                    ainda não       → configurar (pede a senha do dono)
-?evento=<id>    → configurar o evento
-nada            → casa
+/ic/            →  frontend/inicio.html    a casa: Meus Eventos e + Novo Evento
+/ic/:arquivo    →  frontend/:arquivo       controle.html, evento.html, portaria.html…
 ```
 
-E é exatamente o mesmo despacho que a câmera usa: ler um QR é obter uma URL, tirar dela o
-parâmetro, e chamar a mesma função. **Uma câmera, dois tipos de QR** — o próprio QR diz o
-que ele é. Não existe seletor de modo para o usuário errar.
+Escopo `/ic/`. As três telas continuam **três páginas separadas**, cada uma com a sua folha
+de estilo e o seu JavaScript, exatamente como estão hoje. Trocar de tela é navegação — e
+navegação dentro do escopo continua dentro do aplicativo instalado.
 
-### A ordem de arranque, que não é detalhe
+O nome curto é de propósito: ele aparece na barra de endereço de quem ainda não instalou, e
+entra no QR do Pedido, que é lido de foto de WhatsApp comprimida — cada caractere a menos é
+um módulo a menos no QR.
 
-O porteiro precisa abrir **sem rede e sem login**. O `controle.js` de hoje começa
-perguntando a sessão ao Supabase, que é ida à rede. O roteador tem de decidir **antes**
-disso:
+### O que muda em cada arquivo
 
-1. tem aparelho pareado guardado (`ideal_portaria_token`)? → abre a portaria, sem tocar em
-   autenticação;
-2. senão, resolve pela querystring;
-3. só a casa e a configuração é que perguntam a sessão.
+**Os caminhos dos arquivos passam a ser relativos.** Hoje as páginas pedem
+`/controle.css?v=609`, com barra na frente. Em `/ic/controle.html` isso continuaria pedindo
+`/controle.css` — que a Vercel serve, mas que fica **fora do escopo `/ic/`** e portanto fora
+do alcance do service worker. Sem service worker não há "abrir sem rede", que é a única
+coisa que a portaria não pode perder.
 
-Inverter isso faz o portão depender de rede — que é a única coisa que a portaria não pode
-fazer.
+`controle.css?v=609`, sem barra, resolve para `/ic/controle.css` na Vercel e para
+`/controle.css` na estação — os dois certos, com uma escrita só.
+
+**Os dois construtores de URL** — [acesso_api.py:505](../../../acesso_api.py) e
+[controle.js:948](../../../frontend/controle.js) — passam a gerar `/ic/evento.html?t=` e
+`/ic/portaria.html?e=`.
+
+**As URLs de hoje continuam valendo**, por redirecionamento declarado na Vercel (e não por
+página-fantasma no repositório): `/evento.html?t=…` leva a `/ic/evento.html?t=…`, com a
+querystring preservada. É isso que mantém vivo o QR do Pedido que já circula por WhatsApp e
+o endereço que já foi passado a porteiro. A estação, que não é a Vercel, continua servindo
+os arquivos na raiz como sempre serviu.
+
+### A casa, e o despacho do QR
+
+`frontend/inicio.html` é a única página nova. Ela é a casa — **Meus Eventos** e **+ Novo
+Evento** — e é ela que abre a câmera.
+
+Ler um QR é obter uma URL e olhar o parâmetro:
+
+```
+?t=<token>      → /ic/evento.html?t=…     reivindicar o pedido
+?e=<evento_id>  → /ic/portaria.html?e=…   a portaria
+outra coisa     → "Este QR não é do Ideal Control."
+```
+
+**Uma câmera, dois tipos de QR** — o próprio QR diz o que ele é. Não existe seletor de modo
+para o usuário errar.
+
+### Aparelho de portaria abre no portão
+
+O porteiro precisa abrir **sem rede e sem login**, e a casa começa perguntando a sessão ao
+Supabase, que é ida à rede. Então a casa faz **uma pergunta antes de qualquer outra**: há
+token de aparelho guardado (`ideal_portaria_token`)? Havendo, ela manda para
+`/ic/portaria.html` na hora, sem tocar em autenticação.
+
+O `start_url` do manifesto é `/ic/`, e é essa pergunta que faz o ícone abrir no lugar certo
+para cada pessoa.
 
 ## As telas
 
@@ -188,14 +208,10 @@ em cinco minutos fecham a configuração daquele evento por um tempo.
 
 ### Reivindicar e configurar
 
-Reusam `evento.js` e `controle.js` **como estão**, não copiados. Duas cópias divergiriam, e
-o sintoma seria a gráfica cadastrando de um jeito e o cliente de outro — é a mesma razão
-pela qual as regras de negócio de hoje são compartilhadas entre a tela do cliente e a da
-gráfica.
-
-O que muda neles: os dois hoje se iniciam sozinhos ao carregar e falam com ids de DOM da
-própria página. Passam a expor uma função de abertura que o roteador chama — e só ela toca
-no DOM.
+Continuam sendo `evento.html` e `controle.html`, **inteiros e intocados** — é o ganho do
+desenho revisto. Delas muda uma coisa só: os caminhos dos arquivos que elas pedem passam a
+ser relativos, para caírem dentro do escopo `/ic/` e, portanto, dentro do alcance do service
+worker.
 
 ## O CDN tem de sair primeiro
 
@@ -212,19 +228,25 @@ Descoberto ao detalhar o plano, e é pré-requisito de tudo o mais.
 usa é local — e não pode haver"*. Existe até um teste que varre a página atrás de `script`,
 `link` e `img` de fora (`test_a_tela_da_portaria_nao_carrega_nada_de_fora`).
 
-Juntar as três numa página só faz o CDN entrar no caminho do portão. Isso é inaceitável por
-duas razões independentes:
+Pôr as três dentro de um aplicativo instalável faz o CDN entrar no caminho. Isso é
+inaceitável por duas razões independentes:
 
-- **Sem rede não abre.** Um `<script>` de fora que não carrega derruba a página inteira,
-  que é justamente o que o service worker existe para impedir. Cache não resolve: resposta
-  de outra origem é opaca.
-- **Cadeia de suprimento.** Este aplicativo guarda a sessão do dono e decide quem entra num
-  evento. Buscar o código de autenticação num terceiro a cada carregamento significa que
-  quem controlar aquele endereço controla o portão.
+- **Sem rede não abre.** Um `<script>` de fora que não carrega derruba a página inteira, que
+  é justamente o que o service worker existe para impedir — e ele não pode impedir: resposta
+  de outra origem é opaca, então não há como guardá-la. Um aplicativo instalado que morre sem
+  rede em três das quatro páginas não é um aplicativo instalado.
+- **Cadeia de suprimento.** Estas telas guardam a sessão do dono e configuram quem entra num
+  evento. Buscar o código de autenticação num terceiro a cada carregamento significa que quem
+  controlar aquele endereço controla o portão.
 
 **Os dois passam a ser servidos daqui**, como o `jsqr.min.js` já é — foi vendorizado pela
-mesma razão. E são carregados **sob demanda**: a tela da portaria nunca precisa do SDK do
-Supabase nem do gerador de QR, e não deve pagar por eles ao abrir no portão.
+mesma razão.
+
+Carregá-los **sob demanda** foi considerado e descartado: `supabase-config.js` cria o
+cliente no momento em que é carregado (`supabase.createClient(...)` no corpo do arquivo),
+então adiar o SDK exigiria mexer justamente no arquivo cujo defeito de escopo já custou duas
+publicações a este projeto. Servidos localmente e guardados pelo service worker, eles custam
+o tempo de interpretar um arquivo que já está no aparelho — e nenhuma ida à rede.
 
 Entram na `PAINEL_ARQUIVOS` junto com os demais, para a estação continuar servindo as telas
 inteiras.
@@ -235,7 +257,7 @@ O trabalho se parte em duas, e a primeira entrega algo usável sozinha:
 
 | | O que entra | Pareamento |
 |---|---|---|
-| **Fase 1** | tirar o CDN, `app.html` com as três telas, o roteador, os apelidos, manifesto, service worker, o convite para instalar, e a câmera do **+ Novo Evento** | continua o de hoje (código de seis) |
+| **Fase 1** | tirar o CDN, o prefixo `/ic/`, a casa (`inicio.html`), caminhos relativos, manifesto, service worker no escopo novo, o convite para instalar, e a câmera do **+ Novo Evento** | continua o de hoje (código de seis) |
 | **Fase 2** | o dono configurando no próprio aparelho: uma senha, nomear, liberar setor, travar; e a tela do dono perdendo criar e editar | passa a ser por senha |
 
 Separadas porque a Fase 2 muda o modelo de segurança, e misturá-la com a mudança de casca
@@ -243,17 +265,21 @@ faria uma publicação em que, se algo sair errado, não se sabe qual das duas f
 
 ## Instalar
 
-**Um manifesto** (`app.webmanifest`), escopo e `start_url` em `/app.html`, os mesmos cinco
+**Um manifesto** (`/ic/app.webmanifest`), escopo e `start_url` em `/ic/`, os mesmos cinco
 ícones já gerados, `display: standalone`, cores `#0a0f1e`.
 
-**Um service worker** em `/sw-app.js`, escopo `/app.html`. Ele guarda **só a casca**: os
-HTML, JS e CSS das três telas. **Nunca a API** — configuração de evento servida de cache
-mentiria sobre o que está no banco, e neste projeto o que o parceiro escreve no banco é a
-origem da verdade. Quem precisa decidir sem rede é a portaria, e ela decide pelo IndexedDB,
-que não é cache de rede.
+**Um service worker** em `/ic/sw.js`, escopo `/ic/`. Ele guarda **só a casca**: os HTML, JS e
+CSS das quatro páginas. **Nunca a API** — configuração de evento servida de cache mentiria
+sobre o que está no banco, e neste projeto o que o parceiro escreve no banco é a origem da
+verdade. Quem precisa decidir sem rede é a portaria, e ela decide pelo IndexedDB, que não é
+cache de rede.
 
-O `sw.js` da portaria de hoje **sai**, e o novo assume: manter os dois vivos deixaria dois
-service workers com escopos que se encavalam na mesma origem.
+O service worker de hoje vive em `/sw.js` com escopo `/portaria.html`. O arquivo é o mesmo e
+continua sendo `frontend/sw.js` — o que muda é **o endereço por onde ele é registrado**
+(`/ic/sw.js`, que a reescrita resolve para o mesmo arquivo) e, com ele, o escopo. A página de
+redirecionamento não existe mais para desregistrar o antigo: quem estava em
+`/portaria.html` é levado a `/ic/portaria.html` pelo redirecionamento da Vercel, e o registro
+velho morre sozinho quando o navegador não achar mais o script na origem antiga.
 
 **O convite para instalar** é o que falta para "receber um link e instalar". Não existe link
 que instale; o link é a URL, e quem instala é o navegador. Então a casa mostra:
@@ -293,13 +319,14 @@ melhor. Junto com ela, entram duas medidas:
 
 ## Como se prova que funciona
 
-- **Estrutura, em pytest:** manifesto válido com escopo `/app.html`; os três apelidos
-  redirecionando com a querystring preservada; o service worker sem nada de API; a câmera
-  recebendo callback em vez de chamar a portaria pelo nome.
-- **Navegador de verdade, com puppeteer** (o arnês já existe em `tests/`): abrir
-  `app.html?e=…` com token guardado abre a portaria **sem** nenhuma requisição de
-  autenticação; abrir `app.html?t=…` abre a reivindicação; um QR de outra origem é recusado
-  com a mensagem certa.
+- **Estrutura, em pytest:** manifesto válido com escopo `/ic/`; os redirecionamentos
+  declarados na Vercel preservando a querystring; nenhuma das quatro páginas pedindo arquivo
+  por caminho absoluto (é o que as tira do alcance do service worker); o service worker sem
+  nada de API; a câmera recebendo callback em vez de chamar a portaria pelo nome.
+- **Navegador de verdade, com puppeteer** (o arnês já existe em `tests/`): abrir `/ic/` com
+  token de aparelho guardado leva à portaria **sem** nenhuma requisição de autenticação; um
+  QR do Pedido lido pela câmera leva a `/ic/evento.html?t=…`; um QR de outra origem é
+  recusado com a mensagem certa.
 - **A trava do aparelho, que é o que a decisão de 16/08 acrescenta:** salvar encerra a
   sessão da conta (o `localStorage` do Supabase fica sem sessão, e só o token do aparelho
   permanece); reabrir a configuração exige a senha e o servidor a confere; **desparear e
