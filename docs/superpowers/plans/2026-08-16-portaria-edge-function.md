@@ -1222,6 +1222,47 @@ foram atualizados junto.
 
 ---
 
+## Fase 2a: fechada em 16/08/2026
+
+O corte saiu na **v595**, com a Edge Function e o agente **1.2.92** na mesma leva.
+
+**O que ficou provado com aparelho de verdade**, lido do banco às 06:45 UTC — 25 leituras
+entre 06:43 e 06:44, vindas do celular "Portaria a" pela Edge Function:
+
+| | |
+|---|---|
+| 14 | `permitido`, `motivo` nulo (correto: permitir não tem por quê) |
+| 9 | `negado`, `motivo='ja_entrou'` |
+| 0 | `desconhecido` |
+
+As 9 recusas com `motivo` preenchido são a prova ponta a ponta do defeito da Tarefa 5: era
+exatamente esse campo que a Edge Function perdia. Nenhum `desconhecido` em 25 leituras é
+evidência de que a carga chegou inteira — somada ao teste de paginação, que percorre as 4
+páginas e compara as 2000 credenciais uma a uma.
+
+**O passo 4 do roteiro estava errado.** Ele mandava ler "um ingresso de outro setor" para ver
+`setor_nao_autorizado`. Mas o aparelho "Portaria a" está vinculado aos **cinco** setores do
+evento, então não existe ingresso de outro setor para ele — o caso é inalcançável sem antes
+tirar um setor do aparelho na tela do dono. Fica registrado como conferência ainda não feita,
+não como conferência feita e aprovada.
+
+### Pendências deixadas em aberto
+
+1. **O aparelho "Paridade (teste)" continua ativo, de propósito.** Eu tinha dito que o apagaria
+   depois do corte; mudei de ideia por um motivo: é o token dele que faz
+   `tests/test_portaria_paridade.py` rodar, e enquanto o Python do Render existir esse teste é
+   a única guarda contra as duas portarias divergirem. **Revogar quando o Render for desligado**
+   — junto com a linha `PORTARIA_TOKEN_DE_TESTE` do `.env.local`.
+
+2. **Aparelhos ativos que nunca foram usados**: "Jr", "Entrada Principal" e dois chamados
+   "Teste 7" estão `ativo` com `ultimo_visto` nulo. Cada um carrega um código de pareamento
+   válido. Não é urgente, mas aparelho ativo que ninguém usa é porta aberta sem dono — vale
+   revogar na tela do dono.
+
+3. **`setor_nao_autorizado` sem conferência em campo**, pelo motivo acima.
+
+---
+
 ## O que fica para a Fase 2b
 
 `acesso_config.py`, `acesso_interno.py`, `acesso_elevacao.py`, `acesso_api.py` e o
