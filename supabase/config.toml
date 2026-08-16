@@ -483,3 +483,21 @@ verify_jwt = false
 # da grafica. Papel NAO e exigido, aqui nem no Render: quem gera o QR e o
 # atendente que esta falando com o cliente ao telefone.
 verify_jwt = true
+
+[functions.acesso-estacao]
+# DESLIGADO, pela mesma razao da portaria: quem chama e o `NewProd.exe` da
+# estacao, que nao tem sessao do Supabase. Ele apresenta o
+# `ACESSO_AGENTE_SEGREDO`, um segredo nosso que so autoriza publicar faixa de
+# codigos e nada mais, conferido em tempo constante dentro da funcao.
+#
+# Com a verificacao ligada, o gateway recusaria TODA publicacao com 401 antes de
+# o nosso codigo rodar -- e o papel ja estaria impresso. O log da funcao ficaria
+# vazio, e a investigacao comecaria olhando o lugar errado.
+#
+# Isto NAO afrouxa nada em relacao a hoje: o `/api/acesso/pedidos/{p}/abrir` do
+# Render ja e publico e ja e protegido pelo mesmo segredo. O que muda de lugar e
+# so onde o codigo roda.
+#
+# A falha e FECHADA: sem o segredo configurado, a funcao recusa tudo com 503, em
+# vez de virar porta aberta por esquecimento.
+verify_jwt = false
