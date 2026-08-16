@@ -199,6 +199,19 @@ que dependa de rede.
 
 **Tarefa 4** (commit `beda272`): a câmera passou a entregar a leitura a quem a ligou.
 
+**Tarefa 5** (commit `8f4fa9a`): o `portaria.webmanifest` deu lugar ao `app.webmanifest`, com
+escopo `/ic/` e o nome **Ideal Control** — não é mais só o portão. O service worker passou a
+guardar as três telas, com todos os caminhos relativos. E entrou o convite para instalar,
+numa caixa **opcional** (`id="convite-instalar"`): é assim que a portaria fica de fora sem
+precisar de exceção no código — o porteiro não instala nada, o dono é que instala e entrega
+o aparelho.
+
+O teste do `PAINEL_ARQUIVOS` passou a ler a lista **da própria tela** em vez de conferir
+nomes escritos à mão: acrescentar um `<script>` e esquecer a lista agora quebra o teste, em
+vez de quebrar a página só na máquina da gráfica.
+
+**Falta a Tarefa 6**: conferir na Vercel e no celular, e publicar.
+
 O que segue abaixo é o plano original da casa, mantido só como registro do que foi
 considerado. **O que valeu foi o parágrafo acima.**
 
