@@ -930,8 +930,11 @@ Só existe no Chrome/Android (o iPhone não expõe a lanterna a página nenhuma)
 - Teste: `tests/test_portaria_pwa.py`
 
 **Interfaces:**
-- Consome: o `getUserMedia` já existente em `portaria-camera.js:35-36`.
-- Produz: `window.portariaCamera.temLanterna()` → `boolean`, e `window.portariaCamera.alternarLanterna()` → `Promise<boolean>` (o novo estado).
+- Consome: o `getUserMedia` já existente em `portaria-camera.js:35-42`, e a função `desligar()` (linhas 45-51).
+- Produz, no `window.portariaCamera`:
+  - `ligar()` → `Promise<void>` — **hoje devolve `undefined`**; passa a devolver a promessa, porque o botão da lanterna só pode ser decidido depois que a câmera abriu de verdade.
+  - `temLanterna()` → `boolean`
+  - `alternarLanterna()` → `Promise<boolean>` (o novo estado)
 
 - [ ] **Passo 1: escrever o teste que falha**
 
