@@ -55,6 +55,11 @@ export async function salvarFonte(dados: unknown): Promise<unknown> {
   const nome = String(registro.nome ?? "").trim();
   if (!nome) throw new Recusa(400, "a fonte precisa de nome");
   if (!registro.id) registro.id = crypto.randomUUID();
+  // `font_family` e NOT NULL na tabela, e cair nela devolvia 500 "erro interno"
+  // -- uma recusa do banco por campo faltando aparecendo como defeito nosso. O
+  // padrao e o nome, que e o que o painel ja manda: iguais de proposito, para
+  // matar o desvio entre nome e familia.
+  if (!String(registro.font_family ?? "").trim()) registro.font_family = nome;
 
   try {
     const linhas = await banco("POST", TABELA, registro, "return=representation");
@@ -63,6 +68,11 @@ export async function salvarFonte(dados: unknown): Promise<unknown> {
     const texto = String(e);
     // 23505 e a violacao de chave unica do Postgres.
     if (!texto.includes("23505") && !texto.toLowerCase().includes("duplicate key")) {
+      // Recusa do BANCO nao e defeito nosso: 400 com o motivo, para a tela
+      // poder mostrar o que faltou em vez de "erro interno".
+      if (/PostgREST 4\d\d/.test(texto)) {
+        throw new Recusa(400, texto.slice(texto.indexOf(":") + 1).trim().slice(0, 300));
+      }
       throw e;
     }
   }
