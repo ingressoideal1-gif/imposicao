@@ -4,11 +4,73 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v608** — 2026-08-16 | Agente **1.2.103**
+## Versão atual: **v609** — 2026-08-16 | Agente **1.2.104**
 
 ---
 
-## [v608] — A portaria vira aplicativo
+## [v609] — O perfil de cor volta a falar com a estação
+
+**O bug era silencioso das duas pontas.** O bloco de Gerenciamento de Cores já dizia no
+próprio comentário onde o dado mora — o mapa vive no agente da estação
+(`printer_icc_map.json`) —, mas as cinco chamadas usavam caminho **relativo**. No painel
+aberto pela nuvem elas iam parar no servidor antigo, que tem outro disco e efêmero. O
+seletor de perfil vinha vazio, como se a estação não tivesse perfil nenhum, e o que fosse
+salvo sumia na publicação seguinte **sem erro na tela**. Quem configurasse cor pelo painel
+da nuvem imprimiria com a configuração antiga e não teria como saber.
+
+É o mesmo desvio já corrigido antes em `carregarCapacidades` e no mapa de PPDs; este bloco
+tinha ficado para trás.
+
+**Sai o ping de pré-aquecimento.** Ele disparava em toda página carregada da nuvem só para
+acordar o servidor. Não há mais o que acordar: as telas falam com Edge Functions, que não
+dormem.
+
+**Arrumação na chave pública** ([sql/fontes_tirar_o_que_sobrou_da_chave_publica.sql](sql/fontes_tirar_o_que_sobrou_da_chave_publica.sql)):
+a chave anônima ainda tinha `REFERENCES`, `TRIGGER` e `TRUNCATE` em `catalogo_fontes` —
+sobra do `GRANT ALL` padrão do Supabase, porque o arquivo anterior revogou **por nome** em
+vez de revogar tudo e devolver o `SELECT`. Não era urgente (o `TRUNCATE` não tem verbo HTTP,
+então o PostgREST não o alcança), mas `TRUNCATE` **ignora RLS**, e não há motivo para uma
+chave que está no código-fonte de toda página continuar com ele. A regra que fica: revogar
+tudo e devolver o que se usa — lista por nome envelhece em silêncio.
+
+**E o ícone do aplicativo da portaria.** Os ícones publicados na v608 tinham sido gerados a
+partir da marca anterior. Com o logo novo — que veio como imagem de catálogo, com fundo
+branco e sombra em volta — o gerador ganhou um recorte por preenchimento a partir dos
+quatro cantos, e não por "todo pixel claro vira transparente": o próprio ícone tem uma
+etiqueta branca no meio do desenho, que um teste por cor apagaria por dentro. A arte final
+foi entregue já com transparência, que é o caminho mais confiável dos dois.
+
+---
+
+## [v608] — Fora do Render: proxy e fontes. E a portaria vira aplicativo
+
+### O proxy de arquivos e o catálogo de fontes saem do Render
+
+Os últimos consumidores vivos do Render no caminho do navegador. Metade das rotas que
+faltavam já era **código morto em produção** — `mapas.js`, `/api/ordens`, `/api/os_itens` e
+`/api/numeracoes` são todos ramos `else` de um `if (supabaseClient)`, e o caminho de verdade
+fala direto com o banco há tempos.
+
+Sobraram três coisas, e as três seguem o mesmo critério: **página servida pela estação → o
+agente local, sempre; página servida pela nuvem → Edge Function**.
+
+**`/api/proxy` virou a função `arquivo`.** Porte fiel, allowlist inclusive. Ele só é chamado
+como *segunda* tentativa — o `fetch` direto resolve quase tudo, porque o Storage responde
+`Access-Control-Allow-Origin: *`. O que ainda o justifica são três registros de
+`producao_numeracoes` cujo `pdf_content` aponta para o bucket antigo do Firebase. A allowlist
+é por **sufixo de host**, com teste próprio: um `includes("supabase.co")` deixaria
+`https://supabase.co.exemplo.com` passar, e esse domínio qualquer um registra. Proxy sem
+allowlist é SSRF — no agente, alcança a rede interna da gráfica.
+
+**O catálogo de fontes:** a leitura na nuvem passou a sair da tabela, direto — o Render fazia
+exatamente aquela consulta e devolvia o mesmo JSON, uma travessia por nada. Ler
+`catalogo_fontes` com a chave pública continua permitido de propósito: é a única tabela ainda
+aberta à leitura, porque `cliente.html` não tem login e precisa das fontes para desenhar a
+arte que o cliente vai aprovar. A **escrita** vai para a função `painel`, que exige sessão.
+
+Na estação nada disso muda: catálogo do disco, proxy do cache local.
+
+### A portaria vira aplicativo
 
 A tela do porteiro já abria sem rede e já guardava o evento inteiro no celular. O que
 faltava era ela ser um **aplicativo**: com ícone na tela de início, sem barra de navegador,
