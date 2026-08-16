@@ -235,6 +235,29 @@ def test_o_service_worker_continua_sem_guardar_api():
     )
 
 
+def test_as_tres_telas_registram_o_service_worker():
+    """O Chrome so oferece "Instalar aplicativo" numa pagina que TENHA service
+    worker registrado.
+
+    Enquanto so o portaria.html registrava, a casa -- que e o que `/ic/` abre --
+    nunca ofereceria instalar, e o convite ficaria pendurado num evento que
+    jamais dispararia.
+    """
+    for nome in PAGINAS_DO_APLICATIVO:
+        assert "sw-registro.js" in _ler("frontend/" + nome), nome
+
+
+def test_o_registro_do_service_worker_e_um_so():
+    """Uma copia por pagina divergiria, e divergencia aqui e do tipo calado: a
+    tela que ficasse para tras pararia de abrir sem rede, e ninguem descobre
+    isso antes do portao."""
+    donos = []
+    for nome in os.listdir(FRENTE):
+        if nome.endswith(".html") and "serviceWorker.register" in _ler("frontend/" + nome):
+            donos.append(nome)
+    assert donos == [], "ha registro de service worker escrito dentro de HTML: " + str(donos)
+
+
 def test_o_convite_para_instalar_so_aparece_onde_cabe():
     """Botao morto e pior que botao nenhum -- e no iPhone nao existe evento de
     instalacao, so instrucao."""

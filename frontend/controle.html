@@ -186,6 +186,10 @@
 <script src="portaria-camera.js?v=610"></script>
 <script src="ler-qr.js?v=610"></script>
 <script src="instalar.js?v=610"></script>
+<!-- Esta é a casa (`/ic/` abre aqui), e o Chrome só oferece "Instalar
+     aplicativo" numa página que tenha service worker registrado. Sem isto, o
+     botão de instalar nunca apareceria — que é o ponto do aplicativo. -->
+<script src="sw-registro.js?v=610"></script>
 
 <script src="controle.js?v=610"></script>
 </body>

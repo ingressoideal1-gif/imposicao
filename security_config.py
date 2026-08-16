@@ -122,6 +122,7 @@ PAINEL_ARQUIVOS = [
     "portaria-camera.js",
     "ler-qr.js",
     "instalar.js",
+    "sw-registro.js",
     "style.css",
 ]
 

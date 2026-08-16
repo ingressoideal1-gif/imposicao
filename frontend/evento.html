@@ -279,6 +279,10 @@
     <script src="supabase-config.js?v=610"></script>
     <script src="acesso-conta.js?v=610"></script>
     <script src="instalar.js?v=610"></script>
+    <!-- Esta é quase sempre a primeira tela do cliente, e o convite para
+         instalar está nela: sem service worker registrado, o navegador não
+         oferece. -->
+    <script src="sw-registro.js?v=610"></script>
     <script src="evento.js?v=610"></script>
 </body>
 </html>

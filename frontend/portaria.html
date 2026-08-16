@@ -187,68 +187,6 @@
 <script src="portaria-deposito.js?v=610"></script>
 <script src="portaria-camera.js?v=610"></script>
 <script src="portaria.js?v=610"></script>
-<script>
-    // Registrar DEPOIS de tudo carregar: um service worker que instala no meio
-    // do carregamento pode guardar resposta pela metade.
-    // SO sob o prefixo `/ic/`. A estacao serve esta mesma pagina na RAIZ, e la
-    // o `scope: './'` abaixo resolveria para `/` -- fazendo este service worker
-    // assumir tambem o index.html e o producao.html do painel da grafica, que
-    // e exatamente o que o escopo estreito sempre existiu para impedir.
-    //
-    // E nao ha o que perder: o service worker existe para o aplicativo
-    // INSTALADO, e o aplicativo so mora em `/ic/`. Na estacao nao ha o que
-    // instalar.
-    if ('serviceWorker' in navigator && location.pathname.indexOf('/ic/') === 0) {
-        window.addEventListener('load', function () {
-            // Endereco e escopo RELATIVOS, os dois. Servida em `/ic/`, esta
-            // pagina registra `/ic/sw.js` com escopo `/ic/` -- o do aplicativo
-            // inteiro, que e o que permite ao service worker guardar tambem a
-            // casa, o evento.html e o controle.html.
-            //
-            // O escopo continua ESTREITO onde importa: `/ic/` nao alcanca
-            // index.html nem producao.html, que sao as telas da grafica. Um
-            // escopo `/` faria o self.clients.claim() daqui assumir o painel de
-            // producao, e abas de outra tela nao podem ter seu fetch
-            // interceptado por este arquivo.
-            navigator.serviceWorker.register('sw.js?v=610', { scope: './' })
-                .then(function (reg) {
-                    // Instalado na tela de inicio, o aplicativo nao tem barra
-                    // de endereco: sem este aviso o porteiro nao tem COMO
-                    // recarregar, e ficaria na versao do dia da instalacao ate
-                    // alguem desinstalar.
-                    //
-                    // E nunca recarregar sozinho: a camera pode estar aberta e
-                    // a fila andando. A tela avisa; a hora e dele.
-                    var faixa = document.getElementById('faixa-atualizacao');
-                    if (!faixa) return;
-
-                    faixa.addEventListener('click', function () { location.reload(); });
-
-                    function vigiar(trabalhador) {
-                        if (!trabalhador) return;
-                        trabalhador.addEventListener('statechange', function () {
-                            // `navigator.serviceWorker.controller` existir e o
-                            // que separa ATUALIZACAO de PRIMEIRA instalacao --
-                            // sem esse teste, a faixa apareceria na estreia,
-                            // oferecendo recarregar uma pagina que acabou de
-                            // carregar.
-                            if (trabalhador.state === 'installed' && navigator.serviceWorker.controller) {
-                                faixa.classList.remove('sumindo');
-                            }
-                        });
-                    }
-
-                    vigiar(reg.installing);
-                    reg.addEventListener('updatefound', function () { vigiar(reg.installing); });
-                })
-                .catch(function (e) {
-                    // Silencioso aqui seria o pior lugar para silenciar: "por
-                    // que este aparelho nao abre offline" e a pergunta que
-                    // esta tela existe para responder.
-                    console.error('service worker da portaria nao registrou -- o aparelho nao vai abrir sem rede:', e);
-                });
-        });
-    }
-</script>
+<script src="sw-registro.js?v=610"></script>
 </body>
 </html>
