@@ -440,6 +440,13 @@
 
     // ── Partida ─────────────────────────────────────────────────────────────
 
+    // Lembrar o evento ASSIM QUE A PAGINA ABRE, e nao so na hora de parear: o
+    // porteiro abre o endereco compartilhado (`/portaria.html?e=<evento>`),
+    // INSTALA o aplicativo, e so entao digita o codigo -- e o icone abre
+    // `/portaria.html` sem query nenhuma. Guardar dentro do `parear` cobriria
+    // so o caso que ja funcionava, com a URL ainda na tela.
+    eventoDaUrl();
+
     estado.token = localStorage.getItem(CHAVE_TOKEN);
     if (!estado.token) {
         mostrar('pareando');

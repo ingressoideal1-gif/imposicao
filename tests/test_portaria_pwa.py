@@ -159,6 +159,22 @@ def test_o_evento_e_lembrado_fora_da_url():
     assert "CHAVE_EVENTO" in js
 
 
+def test_o_evento_e_guardado_ao_ABRIR_a_pagina():
+    """Nao basta guardar dentro do `parear`.
+
+    A sequencia real e: o porteiro abre o endereco compartilhado (com `?e=`),
+    INSTALA o aplicativo, e so entao digita o codigo -- ja pelo icone, que abre
+    sem query nenhuma. Guardar so no `parear` cobriria o caso que ja
+    funcionava. Achado dirigindo a pagina num navegador de verdade.
+    """
+    import re
+
+    js = _ler("frontend/portaria.js")
+    assert re.search(r"^\s*eventoDaUrl\(\);\s*$", js, flags=re.MULTILINE), (
+        "`eventoDaUrl()` nunca e chamada na partida da pagina"
+    )
+
+
 # ── Service worker ──────────────────────────────────────────────────────────
 
 def test_o_pre_cache_inclui_o_manifesto_e_os_icones():

@@ -4,7 +4,55 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v561** — 2026-08-14 | Agente **1.2.60**
+## Versão atual: **v608** — 2026-08-16 | Agente **1.2.103**
+
+---
+
+## [v608] — A portaria vira aplicativo
+
+A tela do porteiro já abria sem rede e já guardava o evento inteiro no celular. O que
+faltava era ela ser um **aplicativo**: com ícone na tela de início, sem barra de navegador,
+e com os recursos que só fazem sentido com o aparelho na mão, no portão.
+
+**Instalável.** Um *web app manifest* ([frontend/portaria.webmanifest](frontend/portaria.webmanifest))
+com nome, cores e ícones próprios — cinco PNGs gerados por
+[ferramentas/gerar_icones_pwa.py](ferramentas/gerar_icones_pwa.py), incluindo os *maskable*
+que o Android exige para não desenhar a marca dentro de um quadrado branco. No Chrome do
+Android o menu passa a oferecer **"Instalar aplicativo"**. No iPhone, que ignora o
+manifesto, as metas `apple-*` dão o mesmo resultado pelo "Adicionar à Tela de Início" — e
+instalado o iOS **para de apagar** o armazenamento do site depois de 7 dias sem uso, onde
+moram a carga do evento e a fila de leituras que ainda não subiram.
+
+O escopo é só `/portaria.html`, o mesmo do service worker: escopo largo faria o aplicativo
+do porteiro abrir a tela da gráfica.
+
+**A tela não apaga durante a leitura.** Ler QR não conta como uso para o sistema, então o
+celular apagava a tela em 30 segundos com o aparelho na mão e a fila andando — cada apagada
+custava um desbloqueio. A trava vale nas telas de trabalho e é repedida ao voltar do segundo
+plano, porque o sistema a solta sozinha ao minimizar.
+
+**Lanterna**, onde o aparelho tem (Chrome no Android; o iPhone não a expõe a página
+nenhuma). Ingresso escuro em portão sem luz é onde a leitura falha. O botão só aparece onde
+funciona — botão morto no escuro faz o porteiro concluir que o aparelho travou.
+
+**Aviso de versão nova.** Instalado não há barra de endereço: sem isso, um aparelho ficaria
+na versão do dia da instalação até alguém desinstalar. A faixa avisa e **espera o toque** —
+recarregar sozinho no meio de uma leitura, com a fila na frente, não é opção.
+
+**Duas correções que só apareceriam depois de instalado:**
+
+- O `start_url` do ícone não leva `?e=<evento>` — não pode levar, senão o ícone prenderia o
+  aparelho no primeiro evento para sempre. Quem instalasse **antes** de parear abriria o
+  aplicativo e o pareamento mandaria evento vazio. O evento passa a ser lembrado.
+- O service worker casava os arquivos **ignorando a versão** na URL, então um pedido de
+  `portaria.js?v=608` era servido com o `?v=607` guardado: HTML novo rodando código antigo,
+  isto é, a regra de validação publicada hoje não seria a regra que decide na porta. Agora
+  o casamento é exato. Abrir sem rede continua garantido — sem rede a navegação cai no HTML
+  do cache, que pede exatamente os `?v=` daquela mesma geração.
+
+Além disso, o teste de "nunca cachear a API" passou a ser por **origem**: ele era por
+caminho (`/api/`), de quando a API ficava no mesmo domínio, e desde a migração para as Edge
+Functions do Supabase não casava mais com nada.
 
 ---
 
