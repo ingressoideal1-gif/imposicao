@@ -7,12 +7,27 @@ um token proprio, revogavel um a um pela tela do dono.
 """
 
 import hashlib
+import os
 
 import pytest
 from fastapi import HTTPException
 
 import acesso_portaria as ap
 import qr_ideal
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _ler(caminho):
+    """O texto cru de um arquivo do repositorio.
+
+    A carga que o aparelho baixa e servida por uma Edge Function em
+    TypeScript, que este pytest nao executa. Ler o arquivo e o que resta para
+    provar que os campos novos estao la -- e e melhor que nao provar nada.
+    """
+    with open(os.path.join(RAIZ, caminho), encoding="utf-8") as f:
+        return f.read()
+
 
 SAL = "aa" * 32
 # UUID de verdade, e nao "e1", porque o banco real so aceita UUID. Um dublê que
@@ -486,3 +501,23 @@ def test_a_leitura_nunca_confia_no_dispositivo_id_que_o_corpo_mandar(banco):
          "credencial_id": "c1", "setor_id": PISTA, "dispositivo_id": "OUTRO"},
     ]})
     assert banco.leituras[0]["dispositivo_id"] == "d1"
+
+
+# ── O que a carga leva ao portao ────────────────────────────────────────────
+
+
+def test_a_carga_diz_se_o_evento_esta_ativo():
+    """Sem este campo, inativar o evento nao chega ao portao.
+
+    A decisao no portao e tomada com a carga guardada no celular. Se ela nao
+    disser o estado do evento, o aparelho continua deixando gente entrar num
+    evento que o dono desligou.
+    """
+    texto = _ler("supabase/functions/portaria/index.ts")
+    assert "ativo:" in texto and "status" in texto
+
+
+def test_a_carga_traz_o_bloqueio_de_setor():
+    texto = _ler("supabase/functions/portaria/index.ts")
+    assert "bloqueado" in texto
+    assert "bloqueado_motivo" in texto

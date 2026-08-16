@@ -163,6 +163,16 @@ export async function aplicarEvento(eventoId: string, corpo: any): Promise<any> 
     mudanca.local_evento = texto(corpo.local_evento, "local", 0, 200) || null;
   }
   if ("data_evento" in corpo) mudanca.data_evento = corpo.data_evento || null;
+  // `excluido` NAO entra, e a coluna aceita. Apagar evento nao e o que a
+  // engrenagem oferece, e um valor a mais aqui e a diferenca entre "o dono
+  // desligou o evento" e "o evento sumiu da conta dele" -- sem volta.
+  if ("status" in corpo) {
+    const s = String(corpo.status ?? "").trim();
+    if (s !== "ativo" && s !== "encerrado") {
+      throw new Recusa(422, "status do evento: ativo ou encerrado");
+    }
+    mudanca.status = s;
+  }
 
   if (Object.keys(mudanca).length) {
     await banco("PATCH", `producao_acesso_eventos?id=eq.${eventoId}`, mudanca, "return=minimal");
@@ -194,6 +204,32 @@ export async function aplicarSetor(setor: any, corpo: any): Promise<any> {
   }
   if ("abre_em" in corpo) mudanca.abre_em = momento(corpo.abre_em, "hora em que abre");
   if ("fecha_em" in corpo) mudanca.fecha_em = momento(corpo.fecha_em, "hora em que fecha");
+
+  // Bloquear o setor INTEIRO. Diferente do bloqueio de faixa, que mora em outra
+  // tabela: aqui a porta para de receber gente, e nao um lote de numeros.
+  if ("bloqueado" in corpo) {
+    // Booleano de verdade, e nao o que o JavaScript considera verdadeiro: a
+    // palavra "sim" -- ou qualquer texto -- fecharia o setor sem que ninguem
+    // tivesse pedido, e o dono so descobriria pela fila parada na porta.
+    if (typeof corpo.bloqueado !== "boolean") {
+      throw new Recusa(422, "bloqueado: verdadeiro ou falso");
+    }
+    mudanca.bloqueado = corpo.bloqueado;
+    if (corpo.bloqueado) {
+      // O motivo e o que o porteiro le em voz alta para quem esta na fila.
+      // Bloqueio mudo vira "nao sei, o sistema nao deixou".
+      mudanca.bloqueado_motivo = texto(
+        corpo.bloqueado_motivo,
+        "motivo do bloqueio",
+        1,
+        200,
+      );
+    } else {
+      // Liberou, o motivo vai junto: motivo velho grudado num setor liberado
+      // reapareceria na proxima recusa, falando de um bloqueio que ja acabou.
+      mudanca.bloqueado_motivo = null;
+    }
+  }
 
   // Contra o que JA ESTA gravado, e nao so contra o que veio no corpo: a tela
   // manda apenas o que o dono mexeu. Comparar so os dois campos do corpo

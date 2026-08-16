@@ -14,9 +14,17 @@
  *
  * Rodar: npx deno test _compartilhado/configuracao_test.ts
  */
-import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import casos from "./momento_casos.json" with { type: "json" };
-import { conferirJanela, faixa, momento, sortearCodigo, texto } from "./configuracao.ts";
+import {
+  aplicarEvento,
+  aplicarSetor,
+  conferirJanela,
+  faixa,
+  momento,
+  sortearCodigo,
+  texto,
+} from "./configuracao.ts";
 import { Recusa } from "./sessao.ts";
 
 Deno.test("momento: aceita e recusa exatamente o que o Python", () => {
@@ -132,4 +140,103 @@ Deno.test("codigo: nao repete a cada chamada", () => {
   // Uma implementacao que devolvesse constante passaria em tudo acima.
   const vistos = new Set(Array.from({ length: 50 }, () => sortearCodigo()));
   assertEquals(vistos.size > 45, true, `so ${vistos.size} codigos distintos em 50`);
+});
+
+// ── O banco, de mesa ────────────────────────────────────────────────────────
+//
+// Os testes acima sao de funcoes puras. `aplicarEvento` e `aplicarSetor` nao
+// sao: as duas GRAVAM antes de devolver o `gravado`, e o `banco()` chega no
+// PostgREST por `fetch`.
+//
+// O dublê e no `fetch`, e nao numa troca do `banco()`, de proposito: assim o
+// caminho real do modulo continua sendo percorrido -- validacao, monta a
+// mudanca, monta a URL, grava. Um dublê mais alto deixaria de exercitar
+// exatamente a parte que se quer conferir aqui, que e O QUE cada funcao aceita
+// gravar.
+
+const fetchDeVerdade = globalThis.fetch;
+
+/**
+ * Roda a tarefa com o banco dublado e devolve o fetch verdadeiro no fim.
+ *
+ * O `finally` importa mesmo quando a tarefa recusa: sem ele, uma Recusa
+ * esperada deixaria o `fetch` trocado para os testes seguintes, e a falha
+ * apareceria longe de quem a causou.
+ */
+async function comBancoDeMesa<T>(tarefa: () => Promise<T>): Promise<T> {
+  Deno.env.set("SUPABASE_URL", "https://banco.de.mesa");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "chave-de-mesa");
+  // `return=minimal` responde 204 sem corpo, que e como os `aplicar*` gravam.
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response(null, { status: 204 }))) as typeof fetch;
+  try {
+    return await tarefa();
+  } finally {
+    globalThis.fetch = fetchDeVerdade;
+  }
+}
+
+/** O setor ja lido do banco, que e o que `aplicarSetor` recebe. */
+const SETOR = { id: "s1", evento_id: "e1", abre_em: null, fecha_em: null };
+
+Deno.test("evento: status aceita ativo e encerrado", async () => {
+  for (const valor of ["ativo", "encerrado"]) {
+    const r = await comBancoDeMesa(() => aplicarEvento("e1", { status: valor }));
+    assertEquals(r.gravado, ["status"], `recusou o status ${valor}`);
+  }
+});
+
+Deno.test("evento: status `excluido` NAO passa", async () => {
+  // A coluna aceita, e e por isso que o teste existe. Apagar evento nao e o que
+  // a engrenagem oferece, e um valor a mais aqui e a diferenca entre "o dono
+  // desligou o evento" e "o evento sumiu da conta dele" -- sem volta.
+  await assertRejects(
+    () => comBancoDeMesa(() => aplicarEvento("e1", { status: "excluido" })),
+    Recusa,
+  );
+});
+
+Deno.test("evento: status desconhecido nao passa", async () => {
+  await assertRejects(
+    () => comBancoDeMesa(() => aplicarEvento("e1", { status: "pausado" })),
+    Recusa,
+  );
+});
+
+Deno.test("setor: bloquear com motivo grava os dois campos", async () => {
+  const r = await comBancoDeMesa(() =>
+    aplicarSetor(SETOR, {
+      bloqueado: true,
+      bloqueado_motivo: "Camarote interditado pelos bombeiros",
+    })
+  );
+  assertEquals(r.gravado, ["bloqueado", "bloqueado_motivo"]);
+});
+
+Deno.test("setor: bloquear SEM dizer por que nao passa", async () => {
+  // O motivo e o que o porteiro le em voz alta para quem esta na fila. Bloqueio
+  // mudo vira "nao sei, o sistema nao deixou" na frente da pessoa.
+  await assertRejects(
+    () =>
+      comBancoDeMesa(() =>
+        aplicarSetor(SETOR, { bloqueado: true, bloqueado_motivo: "  " })
+      ),
+    Recusa,
+  );
+});
+
+Deno.test("setor: desbloquear apaga o motivo junto", async () => {
+  // Motivo velho grudado num setor liberado reapareceria na proxima recusa,
+  // falando de um bloqueio que ja acabou.
+  const r = await comBancoDeMesa(() => aplicarSetor(SETOR, { bloqueado: false }));
+  assertEquals(r.gravado, ["bloqueado", "bloqueado_motivo"]);
+});
+
+Deno.test("setor: `bloqueado` que nao e booleano nao passa", async () => {
+  // "sim" e verdadeiro em JavaScript. Aceita-lo faria a tela mandar qualquer
+  // coisa e o setor fechar sem que ninguem tivesse pedido.
+  await assertRejects(
+    () => comBancoDeMesa(() => aplicarSetor(SETOR, { bloqueado: "sim" })),
+    Recusa,
+  );
 });

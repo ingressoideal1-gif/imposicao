@@ -204,14 +204,22 @@ async function faixa(
 
   const evento = ((await banco(
     "GET",
-    `producao_acesso_eventos?id=eq.${eventoId}&select=id,nome_evento,sal`,
+    `producao_acesso_eventos?id=eq.${eventoId}&select=id,nome_evento,sal,status`,
   )) ?? [])[0];
   if (!evento) return erro(409, "evento nao existe mais");
 
+  // `bloqueado`/`bloqueado_motivo` vem junto com o resto do setor de proposito:
+  // a decisao no portao e tomada sem rede, com esta carga, e um bloqueio que
+  // dependesse de uma segunda consulta simplesmente nao chegaria la.
+  //
+  // Nao confundir com `producao_acesso_bloqueios`, logo abaixo: aquilo e faixa
+  // de NUMEROS suspensa dentro do setor; isto aqui e a porta inteira desligada
+  // pelo dono.
   const setores = (await banco(
     "GET",
     `producao_acesso_setores?evento_id=eq.${eventoId}&status=eq.ativo` +
-      `&select=id,nome,quantidade,tipo_uso,abre_em,fecha_em&order=nome.asc`,
+      `&select=id,nome,quantidade,tipo_uso,abre_em,fecha_em` +
+      `,bloqueado,bloqueado_motivo&order=nome.asc`,
   )) ?? [];
   const bloqueios = (await banco(
     "GET",
@@ -245,7 +253,14 @@ async function faixa(
   for (const p of pedidos) sais[String(p.pedido_id_int)] = p.sal;
 
   return ok({
-    evento: { id: evento.id, nome: evento.nome_evento, sal: evento.sal },
+    evento: {
+      id: evento.id,
+      nome: evento.nome_evento,
+      sal: evento.sal,
+      // Booleano, e nao o texto do status: quem le e o `portaria-validacao.js`,
+      // que decide sem rede e nao pode ficar sabendo dos valores do banco.
+      ativo: evento.status === "ativo",
+    },
     aparelho: {
       id: aparelho.id,
       nome: aparelho.nome,

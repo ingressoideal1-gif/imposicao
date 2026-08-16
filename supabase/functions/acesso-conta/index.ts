@@ -217,7 +217,8 @@ async function painel(eventoId: string): Promise<any> {
   const setores = (await banco(
     "GET",
     `producao_acesso_setores?evento_id=eq.${eventoId}&status=eq.ativo` +
-      "&select=id,nome,quantidade,tipo_uso,abre_em,fecha_em,pedido_id_int,modelo_id" +
+      "&select=id,nome,quantidade,tipo_uso,abre_em,fecha_em,pedido_id_int,modelo_id," +
+      "bloqueado,bloqueado_motivo" +
       "&order=nome.asc",
   )) ?? [];
 
@@ -459,10 +460,15 @@ async function rotear(req: Request, url: URL): Promise<Response> {
 
   if (metodo === "GET" && p.length === 1 && p[0] === "meus-eventos") {
     return ok({
+      // Sem `status=eq.ativo`. Com o filtro, inativar o evento o fazia sumir da
+      // lista do proprio dono -- e nao sobrava tela nenhuma de onde reativar.
+      // A lista MOSTRA o inativo, e por isso o `status` vem junto: e ele que
+      // vira a palavra `inativo` ao lado do nome.
       eventos: (await banco(
         "GET",
         `producao_acesso_eventos?dono_auth_id=eq.${usuario.id}` +
-          "&status=eq.ativo&select=id,nome_evento,data_evento&order=created_at.desc",
+          "&status=neq.excluido&select=id,nome_evento,data_evento,status" +
+          "&order=created_at.desc",
       )) ?? [],
     });
   }
