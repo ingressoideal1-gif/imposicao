@@ -52,6 +52,24 @@ def test_a_tela_nunca_explica_como_o_codigo_do_QR_e_gerado():
             assert palavra not in texto, f"{arquivo} explica o mecanismo: '{palavra}'"
 
 
+# A UNICA excecao a regra do rotulo em texto, nomeada uma a uma de proposito.
+#
+# O `+` redondo da tela inicial nao tem palavra dentro dele, e mesmo assim nao
+# obriga o dono a adivinhar coisa nenhuma: ele e o segundo alvo de toque de uma
+# acao cujo rotulo, "Novo Evento", esta escrito na MESMA linha, doze pixels a
+# esquerda. Ele existe para fechar a coluna da direita, onde cada linha de
+# evento tem a sua engrenagem -- e sai da imagem que o usuario mandou.
+#
+# Nomeado por id, e nao liberado por `aria-label`: liberar pelo atributo
+# transformaria a regra em "todo botao precisa de rotulo, menos os que nao
+# tiverem", e o proximo botao so-com-icone entraria calado. Acrescentar um id
+# aqui obriga quem for faze-lo a escrever por que aquele caso tambem tem a
+# palavra a vista em outro lugar.
+BOTOES_SEM_TEXTO_COM_MOTIVO = {
+    "btn-ler-qr-mais": 'a barra "Novo Evento" esta na mesma linha, ao lado',
+}
+
+
 def test_todo_botao_tem_rotulo_em_texto():
     """Regra do projeto: controle novo precisa de rotulo em texto.
 
@@ -59,10 +77,23 @@ def test_todo_botao_tem_rotulo_em_texto():
     talvez na porta do evento.
     """
     html = _ler("frontend/controle.html")
-    for botao in re.findall(r"<button[^>]*>(.*?)</button>", html, re.S):
-        sem_tag = re.sub(r"<[^>]+>", "", botao)
+    for aberta, dentro in re.findall(r"<button([^>]*)>(.*?)</button>", html, re.S):
+        casou = re.search(r'id="([^"]+)"', aberta)
+        if casou and casou.group(1) in BOTOES_SEM_TEXTO_COM_MOTIVO:
+            continue
+        sem_tag = re.sub(r"<[^>]+>", "", dentro)
         letras = re.sub(r"[^A-Za-zÀ-ÿ]", "", sem_tag)
-        assert len(letras) >= 3, f"botao sem rotulo em texto: {botao.strip()[:60]}"
+        assert len(letras) >= 3, f"botao sem rotulo em texto: {dentro.strip()[:60]}"
+
+
+def test_o_botao_sem_texto_pelo_menos_se_anuncia_a_quem_nao_ve():
+    """A excecao acima e sobre o rotulo VISIVEL. O rotulo acessivel continua
+    obrigatorio -- sem ele, o botao e um simbolo mudo para leitor de tela."""
+    html = _ler("frontend/controle.html")
+    for id_ in BOTOES_SEM_TEXTO_COM_MOTIVO:
+        casou = re.search(r"<button[^>]*id=\"" + id_ + r"\"[^>]*>", html)
+        assert casou, f"o botao {id_} sumiu da tela; tire-o da lista de excecoes"
+        assert "aria-label" in casou.group(0), f"{id_} nao tem aria-label"
 
 
 def test_a_tela_do_QR_leva_a_tela_do_dono():
@@ -80,6 +111,66 @@ def test_o_status_do_projeto_conhece_a_tela_nova():
     texto = _ler("docs/STATUS_PROJETO.md")
     assert "controle.html" in texto
     assert "ACESSO_ELEVACAO_SEGREDO" in texto
+
+
+# ── A engrenagem ────────────────────────────────────────────────────────────
+#
+# Desde 16/08/2026 o `controle.js` faz uma coisa so: a configuracao atras de
+# uma senha. A lista de eventos mudou-se para o `lista-eventos.js`, e o momento
+# em que este celular vira portao, para o `virar-portao.js`.
+
+def test_a_engrenagem_pede_email_e_senha_numa_vez_so():
+    """Login relampago: uma senha faz login E libera os 15 minutos.
+
+    Duas digitacoes no portao, com o dono de pe na frente do aparelho, e o que
+    a decisao de 15/08/2026 ja proibia.
+    """
+    assert "entrarEElevar" in _ler("frontend/controle.js")
+
+
+def test_a_engrenagem_lembra_o_email_e_NUNCA_a_senha():
+    texto = _ler("frontend/controle.js")
+    assert "ideal_control_email" in texto
+    assert "setItem('acesso_senha" not in texto
+
+
+def test_ao_fechar_a_engrenagem_a_conta_sai_do_aparelho():
+    """O celular fica com o porteiro. Sessao esquecida ali entrega a conta
+    inteira do cliente -- eventos, configuracao, tudo."""
+    texto = _ler("frontend/controle.js")
+    assert "signOut" in texto
+
+
+def test_a_engrenagem_tem_os_quatro_blocos():
+    texto = _ler("frontend/controle.html")
+    for id_ in ("bloco-evento", "bloco-portoes", "bloco-setores", "bloco-este-aparelho"):
+        assert 'id="' + id_ + '"' in texto
+
+
+def test_da_para_inativar_o_evento_e_a_tela_avisa_o_limite():
+    """Portao SEM REDE so descobre a inativacao quando sincronizar. Guardar o
+    celular achando que os portoes pararam no mesmo segundo e o erro que esta
+    frase evita."""
+    texto = _ler("frontend/controle.js") + _ler("frontend/controle.html")
+    assert "Inativar" in texto
+    assert "sem internet" in texto or "sem rede" in texto
+
+
+def test_da_para_bloquear_o_setor_inteiro_com_motivo():
+    texto = _ler("frontend/controle.js")
+    assert "bloqueado_motivo" in texto
+
+
+def test_os_portoes_de_TODOS_os_aparelhos_aparecem():
+    """Decisao do usuario: todos os portoes aparecem em todos os aparelhos."""
+    assert "aparelhos" in _ler("frontend/controle.js")
+
+
+def test_nao_sobrou_nenhum_caminho_de_codigo():
+    texto = _ler("frontend/controle.js") + _ler("frontend/controle.html")
+    for proibido in ("Gerar outro código", "caixa-codigo", "Criar aparelho",
+                     "caixaDePareamento", "Código deste aparelho"):
+        assert proibido not in texto, f"sobrou o caminho de codigo: {proibido}"
 
 
 # ── No navegador ────────────────────────────────────────────────────────────
@@ -619,92 +710,6 @@ def test_cancelar_o_pedido_de_senha_avisa_e_nao_perde_o_que_foi_digitado():
     assert saida["digitado"] == "Nome que eu digitei"
 
 
-def test_o_codigo_novo_aparece_uma_vez_com_o_aviso_de_que_nao_volta():
-    """Ele nao esta guardado em lugar nenhum. Se a tela nao avisar, o dono
-    fecha a caixa achando que consulta depois."""
-    saida = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.mostrarCodigo('K7M2QP');
-        const caixa = document.getElementById('caixa-codigo');
-        return {
-            codigo: document.getElementById('codigo-valor').textContent,
-            texto: caixa.textContent.replace(/\\s+/g, ' ').toLowerCase(),
-        };
-    """)
-    assert saida["codigo"] == "K7M2QP"
-    assert "não" in saida["texto"] and ("de novo" in saida["texto"] or "outra vez" in saida["texto"])
-
-
-def test_a_tela_diz_que_gerar_outro_codigo_nao_derruba_a_portaria():
-    """Sem essa frase o dono nao gera com medo, e fica sem o codigo.
-
-    A frase tem de ser verdade no backend, e o
-    `test_gerar_outro_codigo_NAO_desconecta_quem_ja_entrou` cobra o outro lado.
-    """
-    html = _ler("frontend/controle.html").lower()
-    assert "não desconecta" in html or "nao desconecta" in html
-
-
-def test_criar_aparelho_manda_a_lista_de_setores_escolhida():
-    saida = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        let enviado = null;
-        Controle._pedirParaTeste = async (caminho, opcoes) => {
-            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
-            return { id: 'a2', nome: 'Portao B', codigo: 'ABC234' };
-        };
-        await Controle.criarAparelho('Portao B', ['s1', 's2']);
-        return enviado;
-    """)
-    assert saida["caminho"] == "/eventos/ev-1/aparelhos"
-    assert saida["corpo"]["nome"] == "Portao B"
-    assert saida["corpo"]["setores"] == ["s1", "s2"]
-
-
-def test_criar_aparelho_PELO_BOTAO_leva_os_setores_acesos():
-    """O caminho que o dono percorre de verdade: digita o nome, toca nos
-    setores, toca em "Criar aparelho".
-
-    O teste acima chama `Controle.criarAparelho` direto e por isso nao tocava
-    no `DOMContentLoaded`, que e onde a leitura da escolha mora -- ela lia
-    `input:checked` de uma lista que deixou de ter `input`. Um teste que so
-    chama a funcao teria passado com a tela quebrada.
-    """
-    saida = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle.desenhar();
-
-        let enviado = null;
-        Controle._pedirParaTeste = async (caminho, opcoes) => {
-            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
-            return { id: 'a2', nome: 'Portao B', codigo: 'ABC234' };
-        };
-
-        document.getElementById('novo-aparelho-nome').value = 'Portao B';
-        document.getElementById('novo-aparelho-setores-s2').click();
-        document.getElementById('btn-criar-aparelho').click();
-        await new Promise(r => setTimeout(r, 80));
-
-        return { enviado,
-                 codigo: document.getElementById('codigo-valor').textContent,
-                 nome_limpo: document.getElementById('novo-aparelho-nome').value };
-    """)
-    assert saida["enviado"]["caminho"] == "/eventos/ev-1/aparelhos"
-    assert saida["enviado"]["corpo"]["nome"] == "Portao B"
-    assert saida["enviado"]["corpo"]["setores"] == ["s2"]
-    # E o codigo apareceu uma vez, que e a razao de a caixa existir.
-    assert saida["codigo"] == "ABC234"
-    assert saida["nome_limpo"] == ""
-
-
 def test_o_setor_do_aparelho_e_botao_e_nao_caixa_de_marcar():
     """Regra do usuario, 15/08/2026: "sem checkbox, cada setor e um botao".
 
@@ -719,14 +724,14 @@ def test_o_setor_do_aparelho_e_botao_e_nao_caixa_de_marcar():
         await Controle.carregarPainel();
         Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
         Controle.desenhar();
-        document.getElementById('evento').classList.remove('sumindo');
+        document.getElementById('engrenagem').classList.remove('sumindo');
 
         const medir = el => { const r = el.getBoundingClientRect();
                               return { w: Math.round(r.width), h: Math.round(r.height) }; };
-        const botoes = [...document.querySelectorAll('#novo-aparelho-setores button')];
+        const botoes = [...document.querySelectorAll('#aparelho-setores-a1 button')];
         return {
             caixas_de_marcar: document.querySelectorAll(
-                '#novo-aparelho-setores input, [id^="aparelho-setores-"] input').length,
+                '[id^="aparelho-setores-"] input').length,
             rotulos: botoes.map(b => b.textContent),
             medidas: botoes.map(medir),
             largura_da_folha: Math.round(
@@ -756,7 +761,7 @@ def test_a_tranca_fica_a_vista_enquanto_o_evento_esta_so_para_olhar():
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
         await Controle.carregarPainel();
-        document.getElementById('evento').classList.remove('sumindo');
+        document.getElementById('engrenagem').classList.remove('sumindo');
         const tranca = document.getElementById('tranca');
         const leitura = {
             visivel: !tranca.classList.contains('sumindo'),
@@ -822,7 +827,7 @@ def test_esqueci_minha_senha_usa_o_email_de_quem_ja_entrou():
                                    user: { email: 'dono@exemplo.com' } };
         Controle.estado.evento_id = 'ev-1';
         await Controle.carregarPainel();
-        document.getElementById('evento').classList.remove('sumindo');
+        document.getElementById('engrenagem').classList.remove('sumindo');
 
         let pedido = null;
         window.supabaseClient.auth.resetPasswordForEmail = async (email) => {
@@ -868,25 +873,6 @@ def test_importar_anuncia_QUANTOS_entraram():
         return { aviso: document.getElementById('aviso-gravacao').textContent };
     """)
     assert "3" in saida["aviso"]
-
-
-def test_gerar_outro_codigo_mostra_o_codigo_novo_na_caixa():
-    """`novoCodigo` e a acao que o cartao do aparelho oferece de verdade --
-    sem este teste, ela ficava exportada e nunca chamada por nada."""
-    saida = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle._pedirParaTeste = async () => ({ codigo: 'ZZZ999' });
-        await Controle.novoCodigo('a1');
-        return {
-            codigo: document.getElementById('codigo-valor').textContent,
-            visivel: !document.getElementById('caixa-codigo').classList.contains('sumindo'),
-        };
-    """)
-    assert saida["codigo"] == "ZZZ999"
-    assert saida["visivel"] is True
 
 
 def test_revogar_manda_status_revogado():
@@ -938,34 +924,32 @@ def test_os_controles_do_aparelho_existem_com_rotulo_e_entram_na_trava():
         const semSenha = {
             nome: document.getElementById('aparelho-nome-a1').disabled,
             salvar: document.getElementById('aparelho-salvar-a1').disabled,
-            novoCodigo: document.getElementById('aparelho-novo-codigo-a1').disabled,
             revogar: document.getElementById('aparelho-revogar-a1').disabled,
             rotulos: {
                 salvar: document.getElementById('aparelho-salvar-a1').textContent.trim(),
-                novoCodigo: document.getElementById('aparelho-novo-codigo-a1').textContent.trim(),
                 revogar: document.getElementById('aparelho-revogar-a1').textContent.trim(),
             },
+            // O "Gerar outro codigo" saiu em 16/08/2026 junto com todo o
+            // caminho de codigo de seis caracteres.
+            novoCodigo: !!document.getElementById('aparelho-novo-codigo-a1'),
         };
         Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
         Controle.desenhar();
         const comSenha = {
             nome: document.getElementById('aparelho-nome-a1').disabled,
             salvar: document.getElementById('aparelho-salvar-a1').disabled,
-            novoCodigo: document.getElementById('aparelho-novo-codigo-a1').disabled,
             revogar: document.getElementById('aparelho-revogar-a1').disabled,
         };
         return { semSenha, comSenha };
     """)
     assert len(saida["semSenha"]["rotulos"]["salvar"]) > 3
-    assert len(saida["semSenha"]["rotulos"]["novoCodigo"]) > 3
     assert len(saida["semSenha"]["rotulos"]["revogar"]) > 3
+    assert saida["semSenha"]["novoCodigo"] is False
     assert saida["semSenha"]["nome"] is True
     assert saida["semSenha"]["salvar"] is True
-    assert saida["semSenha"]["novoCodigo"] is True
     assert saida["semSenha"]["revogar"] is True
     assert saida["comSenha"]["nome"] is False
     assert saida["comSenha"]["salvar"] is False
-    assert saida["comSenha"]["novoCodigo"] is False
     assert saida["comSenha"]["revogar"] is False
 
 
@@ -1340,59 +1324,84 @@ def test_navegador_id_e_memorizado_quando_o_localstorage_falha_ao_escrever():
     assert saida["iguais"] is True
 
 
-def test_elevacao_e_restaurada_do_sessionstorage_ao_abrir():
-    """IMPORTANT da revisao final: a elevacao era gravada no sessionStorage
-    e nunca lida de volta. '<- Meus eventos' e todo link de evento sao
-    recarga de pagina inteira, entao o dono digitava a senha de novo em
-    toda navegacao -- o storage so custava usabilidade, sem comprar nada."""
+def test_elevacao_ainda_viva_dispensa_a_senha_ao_reabrir_a_engrenagem():
+    """IMPORTANT da revisao final: a elevacao era gravada no sessionStorage e
+    nunca lida de volta, e o dono digitava a senha de novo a cada navegacao.
+
+    Com a engrenagem, o mesmo vale dentro de uma sessao da pagina: fechar a
+    configuracao de um evento e abrir a de outro nao pode cobrar a senha duas
+    vezes dentro dos 15 minutos que ela ja comprou.
+    """
     saida = _no_navegador("""
         sessionStorage.setItem('acesso_elevacao', JSON.stringify({
             token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'ev-1'
         }));
-        const url = new URL(location.href);
-        url.searchParams.set('evento', 'ev-1');
-        history.replaceState(null, '', url);
-        await Controle.abrir();
+        let perguntou = false;
+        window.prompt = () => { perguntou = true; return null; };
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
         return {
+            perguntou,
             elevado: Controle.elevado(),
             somenteLeitura: document.body.classList.contains('somente-leitura'),
+            engrenagemAberta: !document.getElementById('engrenagem')
+                .classList.contains('sumindo'),
+            listaEscondida: document.getElementById('lista')
+                .classList.contains('sumindo'),
         };
     """)
+    assert saida["perguntou"] is False
     assert saida["elevado"] is True
     assert saida["somenteLeitura"] is False
+    assert saida["engrenagemAberta"] is True
+    assert saida["listaEscondida"] is True
 
 
 def test_elevacao_de_outro_evento_no_storage_nao_e_restaurada():
     """O `navegador` ja impede um bilhete de outro navegador; isto impede um
-    bilhete de outro EVENTO no MESMO navegador -- a aba trocou de evento sem
-    fechar, o storage ainda tem o token antigo."""
+    bilhete de outro EVENTO no MESMO navegador -- a engrenagem trocou de evento
+    e o storage ainda tem o token antigo."""
     saida = _no_navegador("""
         sessionStorage.setItem('acesso_elevacao', JSON.stringify({
             token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'outro-evento'
         }));
-        const url = new URL(location.href);
-        url.searchParams.set('evento', 'ev-1');
-        history.replaceState(null, '', url);
-        await Controle.abrir();
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
         return { elevado: Controle.elevado() };
     """)
     assert saida["elevado"] is False
 
 
-def test_elevacao_vencida_no_storage_e_descartada_ao_abrir():
+def test_elevacao_vencida_no_storage_e_descartada_ao_abrir_a_engrenagem():
     saida = _no_navegador("""
         sessionStorage.setItem('acesso_elevacao', JSON.stringify({
             token: 't', expira_em: Math.floor(Date.now()/1000) - 5, evento_id: 'ev-1'
         }));
-        const url = new URL(location.href);
-        url.searchParams.set('evento', 'ev-1');
-        history.replaceState(null, '', url);
-        await Controle.abrir();
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
         return { elevado: Controle.elevado(),
                  guardado: sessionStorage.getItem('acesso_elevacao') };
     """)
     assert saida["elevado"] is False
     assert saida["guardado"] is None
+
+
+def test_cancelar_a_senha_deixa_a_lista_na_tela_e_nao_abre_a_engrenagem():
+    """A configuracao nao pode aparecer antes da senha.
+
+    Mostrar os setores, a lista de portoes e o nome do evento e SO ENTAO pedir a
+    senha entregaria tudo isso a quem estiver com o celular do porteiro na mao.
+    """
+    saida = _no_navegador("""
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        return {
+            engrenagemEscondida: document.getElementById('engrenagem')
+                .classList.contains('sumindo'),
+            listaNaTela: !document.getElementById('lista')
+                .classList.contains('sumindo'),
+            setores: document.getElementById('setores').children.length,
+        };
+    """)
+    assert saida["engrenagemEscondida"] is True
+    assert saida["listaNaTela"] is True
+    assert saida["setores"] == 0
 
 
 def test_desenhar_de_novo_nao_apaga_os_dados_do_evento_sendo_digitados():
@@ -1692,6 +1701,182 @@ def test_desenhar_de_novo_nao_apaga_o_bloqueio_sendo_digitado():
     assert saida["motivo"] == "lote nao pago"
 
 
+def test_bloquear_o_setor_INTEIRO_manda_o_motivo_junto():
+    """Diferente de bloquear uma FAIXA, logo acima no mesmo painel: aqui a
+    porta para de receber.
+
+    O motivo vai junto porque e ele que o porteiro le em voz alta. Bloqueio
+    mudo vira "nao sei, o sistema nao deixou" na frente da fila -- e o servidor
+    recusa esta gravacao sem ele, de proposito.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
+            return { ok: true };
+        };
+        document.getElementById('setor-configurar-s1').click();
+        document.getElementById('setor-bloq-motivo-s1').value =
+            'camarote interditado pelos bombeiros';
+        document.getElementById('setor-bloquear-s1').click();
+        await new Promise(r => setTimeout(r, 120));
+        return { chamadas };
+    """)
+    assert len(saida["chamadas"]) == 1
+    assert saida["chamadas"][0]["caminho"] == "/setores/s1"
+    assert saida["chamadas"][0]["corpo"] == {
+        "bloqueado": True,
+        "bloqueado_motivo": "camarote interditado pelos bombeiros",
+    }
+
+
+def test_o_setor_bloqueado_mostra_o_motivo_e_o_botao_de_liberar():
+    """Sem o botao, o dono bloqueia a porta e nao tem como reabri-la -- com a
+    fila esperando do outro lado."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.estado.painel.setores[0].bloqueado = true;
+        Controle.estado.painel.setores[0].bloqueado_motivo = 'camarote interditado';
+        Controle.desenhar();
+        document.getElementById('setor-configurar-s1').click();
+
+        // Lido ANTES do clique: liberar termina em `carregarPainel()`, que
+        // reconstroi o cartao inteiro a partir do painel do servidor -- e ali o
+        // setor ja volta desbloqueado.
+        const texto = document.getElementById('setor-config-s1')
+                        .textContent.replace(/\\s+/g, ' ');
+        // Com o setor bloqueado nao ha por que oferecer bloquea-lo de novo.
+        const temBotaoDeBloquear = !!document.getElementById('setor-bloquear-s1');
+
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
+            return { ok: true };
+        };
+        document.getElementById('setor-liberar-s1').click();
+        await new Promise(r => setTimeout(r, 120));
+        return { texto, temBotaoDeBloquear, chamadas };
+    """)
+    assert "camarote interditado" in saida["texto"]
+    assert saida["temBotaoDeBloquear"] is False
+    assert len(saida["chamadas"]) == 1
+    # Sem `bloqueado_motivo`: quem apaga o motivo velho e o servidor, para que
+    # ele nao reapareca numa recusa de um bloqueio que ja acabou.
+    assert saida["chamadas"][0]["corpo"] == {"bloqueado": False}
+
+
+def test_inativar_o_evento_pede_confirmacao_e_manda_encerrado():
+    """Desligar o evento para TODOS os portoes de uma vez nao pode acontecer
+    com um toque solto no meio da tela."""
+    recusou = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.estado.painel.evento.status = 'ativo';
+        Controle.desenhar();
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
+            return { ok: true };
+        };
+        const botao = document.getElementById('btn-ativar-evento');
+        const rotulo = botao.textContent;
+        botao.click();
+        await new Promise(r => setTimeout(r, 80));
+        return { chamadas, rotulo };
+    """)
+    assert recusou["rotulo"] == "Inativar este evento"
+    assert recusou["chamadas"] == []
+
+    aceitou = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.estado.painel.evento.status = 'ativo';
+        Controle.desenhar();
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
+            return { ok: true };
+        };
+        document.getElementById('btn-ativar-evento').click();
+        await new Promise(r => setTimeout(r, 120));
+        return { chamadas };
+    """, aceitar_dialogo=True)
+    assert aceitou["chamadas"][0]["caminho"] == "/eventos/ev-1"
+    assert aceitou["chamadas"][0]["corpo"] == {"status": "encerrado"}
+
+
+def test_reativar_o_evento_NAO_pede_confirmacao():
+    """Ligar de volta nao para fila nenhuma: cobrar uma confirmacao por isso
+    ensinaria o dono a confirmar sem ler, e a proxima confirmacao e a que
+    desliga o evento."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.estado.painel.evento.status = 'encerrado';
+        Controle.desenhar();
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (opcoes && opcoes.body) {
+                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            }
+            return { ok: true };
+        };
+        const rotulo = document.getElementById('btn-ativar-evento').textContent;
+        document.getElementById('btn-ativar-evento').click();
+        await new Promise(r => setTimeout(r, 120));
+        return { chamadas, rotulo };
+    """)
+    assert saida["rotulo"] == "Ativar este evento"
+    assert saida["chamadas"][0]["corpo"] == {"status": "ativo"}
+
+
+def test_o_portao_DESTE_aparelho_vem_marcado_na_lista_de_portoes():
+    """Todos os portoes do evento aparecem em todos os celulares -- decisao do
+    usuario. Sem a marca, o dono renomeia ou REVOGA o errado, e revogar desliga
+    o aparelho na hora, no meio do evento."""
+    saida = _no_navegador("""
+        localStorage.setItem('ideal_control_portoes', JSON.stringify([{
+            evento_id: 'ev-1', nome_evento: 'Baile do Hawaii',
+            aparelho_id: 'a1', nome_portao: 'Portão 1', token: 't-1'
+        }]));
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const meu = document.querySelector('#aparelhos .cartao').textContent;
+
+        // O mesmo painel, num celular que NAO e portao deste evento: ali a
+        // marca nao pode aparecer, senao ela nao distingue nada.
+        localStorage.removeItem('ideal_control_portoes');
+        Controle.desenhar();
+        return { meu, outro: document.querySelector('#aparelhos .cartao').textContent };
+    """)
+    assert "★" in saida["meu"]
+    assert "★" not in saida["outro"]
+
+
 def test_o_motivo_do_bloqueio_e_TEXTO_nunca_HTML():
     """O motivo e escrito pelo dono do evento, e a tela do dono e a tela de um
     cliente -- nao nossa. Um `<img onerror>` no motivo rodaria no navegador de
@@ -1743,52 +1928,32 @@ def test_desenhar_de_novo_nao_fecha_o_painel_nem_desmarca_o_uso():
     assert saida["reentrada"] is True
 
 
-def test_a_caixa_do_codigo_mostra_o_nome_do_aparelho_ao_criar():
-    """Achado da revisao final: com varios aparelhos configurados, gerar um
-    codigo novo antes de fechar a caixa do anterior e como um codigo acaba
-    digitado no celular errado -- o titulo generico "Codigo deste aparelho"
-    nao dizia QUAL aparelho."""
-    saida = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle._pedirParaTeste = async () => ({ id: 'a2', nome: 'Portao B', codigo: 'ABC234' });
-        await Controle.criarAparelho('Portao B', ['s1']);
-        return { titulo: document.getElementById('codigo-titulo').textContent };
-    """)
-    assert "Portao B" in saida["titulo"]
-
-
-def test_a_caixa_do_codigo_mostra_o_nome_do_aparelho_ao_gerar_outro():
-    saida = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle._pedirParaTeste = async () => ({ codigo: 'ZZZ999' });
-        await Controle.novoCodigo('a1');
-        return { titulo: document.getElementById('codigo-titulo').textContent };
-    """)
-    assert "Portao A" in saida["titulo"]
-
-
-def test_sem_supabase_a_tela_explica_em_vez_de_ficar_em_branco():
+def test_sem_supabase_a_casa_ainda_desenha_a_lista_deste_aparelho():
     """`supabaseClient` fica nulo sem rede, sem o CDN, ou no modo offline
-    deliberado do `supabase-config.js` (`?offline=true` / `offline_mode`). Sem
-    tratamento, `AcessoConta.sessao()` LANCA em vez de resolver "sem sessao"
-    -- e como `abrir()` roda sozinho no DOMContentLoaded, essa excecao morre
-    calada. Os tres blocos de estado nascem com "sumindo", entao o dono
-    encara uma tela inteiramente em branco, sem uma palavra do porque.
+    deliberado do `supabase-config.js` (`?offline=true` / `offline_mode`).
+
+    Antes de 16/08/2026 isso dava uma tela EM BRANCO: `AcessoConta.sessao()`
+    LANCA em vez de resolver "sem sessao", a excecao morria calada no
+    `DOMContentLoaded`, e os tres blocos de estado nasciam todos com "sumindo".
+
+    Agora a casa nao depende disso para existir. O chaveiro e sincrono e nao
+    fala com ninguem: a lista dos portoes que ESTE aparelho ja le sai na tela
+    de qualquer jeito -- que e exatamente o celular do porteiro no dia do
+    evento, sem sinal e sem a conta do dono.
     """
     saida = _no_navegador("""
         window.supabaseClient = null;
-        await Controle.abrir();
-        const caixa = document.getElementById('erro-arranque');
+        localStorage.setItem('ideal_control_portoes', JSON.stringify([{
+            evento_id: 'ev-1', nome_evento: 'Baile do Hawaii',
+            aparelho_id: 'a1', nome_portao: 'Portão 1', token: 't-1'
+        }]));
+        await window.listaEventos.arrancar();
         return {
-            escondido: caixa.classList.contains('sumindo'),
-            texto: (caixa.textContent || '').trim(),
+            barras: document.querySelectorAll('#eventos .barra-evento').length,
+            texto: document.getElementById('eventos').textContent,
+            verde: document.querySelectorAll('#eventos .luz.acesa').length,
         };
     """)
-    assert saida["escondido"] is False
-    assert len(saida["texto"]) > 10
+    assert saida["barras"] == 1
+    assert "Baile do Hawaii" in saida["texto"]
+    assert saida["verde"] == 1

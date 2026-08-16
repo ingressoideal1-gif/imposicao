@@ -142,24 +142,37 @@ def test_a_casa_do_aplicativo_e_a_lista_de_eventos():
         assert casa and all(c.endswith("controle.html") for c in casa), arquivo
 
 
-def test_o_aparelho_de_portaria_vai_direto_para_o_portao():
+def test_o_aparelho_de_portaria_ve_o_portao_dele_sem_rede():
     """O porteiro abre sem rede e sem conta.
 
-    `controle.js` comeca perguntando a sessao ao Supabase, que e ida a rede. A
-    pergunta do token de aparelho vem ANTES -- senao o portao passa a depender
-    de rede, que e a unica coisa que ele nao pode fazer.
-    """
-    js = _ler("frontend/controle.js")
-    assert "ideal_portaria_token" in js, "a casa nao olha se o aparelho e de portaria"
+    Ate 16/08/2026 a casa DESVIAVA sozinha para a leitura quando achava um
+    token de aparelho guardado. O desvio saiu de proposito: um celular so
+    servia a um evento, e da leitura nao havia como voltar. A casa agora abre
+    sempre na lista, e um toque na barra do evento e que leva ao portao.
 
-    # Dentro do `abrir()`, e nao no arquivo inteiro: `AcessoConta.sessao`
-    # aparece tambem no tratamento do login, antes daqui, e comparar a primeira
-    # ocorrencia de cada um mediria duas coisas sem relacao.
-    corpo = js[js.index("function abrir()"):]
+    O que continua valendo, e e o que este teste guarda, e a ORDEM. Perguntar a
+    sessao ao Supabase e ida a rede; a lista do chaveiro e sincrona e nao falha.
+    Se a rede vier primeiro, o portao passa a depender dela -- a unica coisa que
+    ele nao pode fazer.
+    """
+    js = _ler("frontend/lista-eventos.js")
+
+    # Dentro do `arrancar()`, e nao no arquivo inteiro: `chaveiro.listar` e
+    # `AcessoConta.sessao` aparecem tambem no `carregar()`, e comparar a
+    # primeira ocorrencia de cada um no arquivo mediria duas coisas sem relacao.
+    corpo = js[js.index("function arrancar()"):]
     corpo = corpo[:corpo.index("AcessoConta.sessao")]
-    assert "ehAparelhoDePortaria" in corpo, (
-        "o arranque pergunta a sessao (ida a rede) antes de olhar o token do "
-        "aparelho -- assim o portao passa a depender de rede"
+    assert "chaveiro.migrar" in corpo, (
+        "o arranque pergunta a sessao (ida a rede) antes de converter a "
+        "instalacao antiga -- o portao que ja trabalha acordaria sem o evento"
+    )
+
+    # E a lista sai com o que houver, sem esperar o servidor: o `desenhar` do
+    # chaveiro acontece ANTES de a resposta da conta chegar.
+    carregar = js[js.index("function carregar("):]
+    assert carregar.index("desenhar(") < carregar.index("AcessoConta.pedir"), (
+        "a lista espera a rede para aparecer -- um 4G ruim deixaria o porteiro "
+        "sem lista nenhuma"
     )
 
 
@@ -173,13 +186,28 @@ def test_o_qr_de_fora_e_recusado():
 
 def test_ler_um_QR_nao_exige_conta():
     """Pedir login ao porteiro seria travar o portao numa credencial que
-    ninguem lhe deu. O botao mora FORA do bloco de login."""
+    ninguem lhe deu. O botao mora FORA do bloco de login, e ACIMA dele.
+
+    Desde 16/08/2026 o wrapper da lista chama-se `#lista` (era
+    `#lista-eventos`), e `#bloco-entrar` desceu para depois dela: quem abre o
+    aplicativo ve primeiro os eventos que ESTE aparelho ja le, e o login e o
+    ultimo recurso de quem nao tem nenhum. Por isso o teste compara posicoes em
+    vez de procurar o botao dentro de uma faixa -- a faixa mudou de lugar, a
+    regra nao.
+    """
     html = _ler("frontend/controle.html")
     assert 'id="btn-ler-qr"' in html
-    inicio_login = html.index('id="bloco-entrar"')
-    fim_login = html.index('id="lista-eventos"')
-    assert not (inicio_login < html.index('id="btn-ler-qr"') < fim_login), (
+    assert 'id="lista"' in html, "o wrapper da lista sumiu da tela"
+
+    botao = html.index('id="btn-ler-qr"')
+    login = html.index('id="bloco-entrar"')
+    fim_login = html.index("</div>", login)
+    assert not (login < botao < fim_login), (
         "o botao de ler QR esta dentro do bloco de login"
+    )
+    assert botao < login, (
+        "o botao de ler QR esta abaixo do login -- o porteiro rolaria a tela "
+        "passando por um formulario que nao e para ele"
     )
 
 
@@ -300,4 +328,9 @@ def test_os_dois_construtores_apontam_para_o_prefixo():
     Edge Function, que e o que tem teste proprio em Deno."""
     assert "/ic/evento.html?t=" in _ler("acesso_api.py")
     assert "/ic/evento.html?t=" in _ler("supabase/functions/acesso-pedido/puro.ts")
-    assert "/ic/portaria.html?e=" in _ler("frontend/controle.js")
+    # O terceiro construtor era o `enderecoDaPortaria()` do `controle.js`, que
+    # montava o endereco de pareamento para o dono passar ao porteiro. Ele saiu
+    # em 16/08/2026 junto com o codigo de seis caracteres: nao ha mais endereco
+    # para passar, porque quem vira portao e o proprio celular que o dono tem na
+    # mao. O `virar-portao.js` navega para `portaria.html` por caminho relativo,
+    # que ja resolve dentro do `/ic/` sem construtor nenhum.

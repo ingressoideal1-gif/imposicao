@@ -43,6 +43,14 @@ const ARQUIVOS = [
     'controle.html',
     'controle.css?v=' + VERSAO,
     'controle.js?v=' + VERSAO,
+    // A tela inicial nova (v613). Sem estes quatro aqui, o aplicativo
+    // INSTALADO abre sem rede e mostra a casa VAZIA -- sem lista, sem luzes,
+    // sem o toque que vira portao. E a casa e a unica tela que o porteiro ve
+    // antes de comecar a ler, entao ela e justamente a que nao pode faltar.
+    'chaveiro.js?v=' + VERSAO,
+    'lista-eventos.js?v=' + VERSAO,
+    'virar-portao.js?v=' + VERSAO,
+    'parede-pwa.js?v=' + VERSAO,
     'ler-qr.js?v=' + VERSAO,
     'qr-canvas.js?v=' + VERSAO,
     'qrcode-generator.min.js?v=' + VERSAO,

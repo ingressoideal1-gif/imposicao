@@ -1,10 +1,23 @@
 /**
- * A tela do dono do evento.
+ * A ENGRENAGEM: toda a configuração do evento, atrás de uma senha.
  *
- * Cada setor mostra o que o ERP contratou e nada mais: a lotação de um setor É
- * a quantidade contratada, então não há onde digitar outra. O que se configura
- * por setor fica atrás do botão "Configurar", num painel que abre no próprio
- * cartão.
+ * Este arquivo já foi a tela inteira do dono — lista de eventos, leitura de QR e
+ * configuração no mesmo lugar. Desde 16/08/2026 ele faz uma coisa só. Quem
+ * desenha a casa é o `lista-eventos.js`; quem transforma este celular em portão
+ * é o `virar-portao.js`; quem guarda os portões deste aparelho é o
+ * `chaveiro.js`. Aqui mora o que abre pelo ícone de engrenagem ao lado da barra
+ * do evento.
+ *
+ * ## Como esta tela autoriza
+ *
+ * No celular do porteiro NÃO existe sessão — ela foi encerrada quando o aparelho
+ * virou portão, e é isso que impede quem ficar com ele de entrar na conta do
+ * cliente. A engrenagem faz um login relâmpago (`comSenha`): entra, deixa
+ * configurar por 15 minutos, e sai da conta ao fechar.
+ *
+ * Cada setor mostra o que o ERP contratou e nada mais: a lotação de um setor É a
+ * quantidade contratada, então não há onde digitar outra. O que se configura por
+ * setor fica atrás do botão "Configurar", num painel que abre no próprio cartão.
  *
  * Enquanto não houver elevação, a tela se declara somente leitura. Aceitar o
  * toque e não gravar seria a pior das combinações.
@@ -16,7 +29,12 @@
         sessao: null,
         evento_id: null,
         painel: null,
-        elevacao: null       // { token, expira_em, evento_id }
+        elevacao: null,            // { token, expira_em, evento_id }
+        // A sessão foi aberta PELA engrenagem? É esta bandeira que faz o
+        // `fecharEngrenagem` saber se precisa desfazê-la. Uma sessão que já
+        // existia — o dono no próprio celular — não pode ser encerrada só
+        // porque uma caixa de configuração foi fechada.
+        sessaoDaEngrenagem: false
     };
 
     // Achado da revisão final: `desenhar()` reatribuía `campo-nome-evento`,
@@ -69,7 +87,7 @@
      * A trava de verdade, não só a de olhar.
      *
      * O CSS já esmaece os campos em `body.somente-leitura`, mas opacidade não
-     * impede toque: sem `disabled`, o dono digita uma nova lotação, vê o campo
+     * impede toque: sem `disabled`, o dono digita uma nova data, vê o campo
      * reagir, e nada persiste — a mesma armadilha que o cabeçalho deste
      * arquivo condena. `#btn-elevar` e `#btn-sair-config` ficam de fora de
      * propósito: são a saída do modo leitura, e travá-los exigiria senha para
@@ -94,9 +112,9 @@
         // acima, já está dizendo.
         $('tranca').classList.toggle('sumindo', !leitura);
 
-        document.querySelectorAll('#evento input, #evento select, #evento textarea')
+        document.querySelectorAll('#engrenagem input, #engrenagem select, #engrenagem textarea')
             .forEach(function (el) { el.disabled = leitura; });
-        document.querySelectorAll('#evento button.so-com-senha, #evento .so-com-senha button')
+        document.querySelectorAll('#engrenagem button.so-com-senha, #engrenagem .so-com-senha button')
             .forEach(function (el) { el.disabled = leitura; });
     }
 
@@ -153,6 +171,10 @@
                 bloq_de: valor('bloq-de'),
                 bloq_ate: valor('bloq-ate'),
                 bloq_motivo: valor('bloq-motivo'),
+                // O motivo de bloquear o SETOR INTEIRO, pela mesma razão: o
+                // dono escreve a frase que o porteiro vai ler em voz alta, e um
+                // redesenho no meio da digitação a apagaria.
+                setor_bloq_motivo: valor('setor-bloq-motivo'),
                 // Pelo mesmo motivo, e com mais razão ainda: a lista de
                 // códigos de staff é colada de uma planilha e pode ter
                 // centenas de linhas. Perdê-la num redesenho é perder o
@@ -166,12 +188,12 @@
             $('setores').appendChild(cartaoDeSetor(s, edicoesDeSetorAntes[s.id]));
         });
 
-        // Mesma lógica do formulário de novo aparelho, um degrau abaixo: cada
-        // cartão de aparelho tem seu próprio campo de nome e suas próprias
-        // caixas de setor, e o cartão inteiro é substituído a cada painel. Sem
-        // isto, o dono que está editando o nome de um aparelho e marcando
-        // setores perde os dois se QUALQUER outra gravação nesta tela disparar
-        // um `carregarPainel()` por baixo dele.
+        // Mesma lógica, um degrau abaixo: cada cartão de aparelho tem seu
+        // próprio campo de nome e suas próprias caixas de setor, e o cartão
+        // inteiro é substituído a cada painel. Sem isto, o dono que está
+        // editando o nome de um aparelho e marcando setores perde os dois se
+        // QUALQUER outra gravação nesta tela disparar um `carregarPainel()` por
+        // baixo dele.
         var edicoesDeAparelhoAntes = {};
         (p.aparelhos || []).forEach(function (a) {
             var campoNome = $('aparelho-nome-' + a.id);
@@ -186,34 +208,41 @@
         p.aparelhos.forEach(function (a) {
             $('aparelhos').appendChild(cartaoDeAparelho(a, edicoesDeAparelhoAntes[a.id]));
         });
-        $('aparelhos').appendChild(caixaDePareamento(p.evento.id));
 
-        // Os botões de setor do formulário de aparelho novo. Redesenhados junto
-        // com o painel para nunca oferecerem um setor que deixou de existir.
-        //
-        // Guardar o que já estava aceso ANTES de recriar: um `gravar()` de
-        // outro cartão desta mesma tela chama `carregarPainel()` por baixo do
-        // dono, e sem isto ele perderia os setores que tinha acabado de
-        // escolher aqui — sem nunca ter tocado neste formulário.
-        //
-        // Sem `aoTrocar`: aqui o aparelho ainda não existe, então não há o que
-        // gravar. A escolha só sai da tela no "Criar aparelho".
-        var acesosAntes = setoresAcesos('novo-aparelho-setores');
-        $('novo-aparelho-setores')
-            .replaceWith(botoesDeSetor('novo-aparelho-setores', acesosAntes, null));
-
-        // O mesmo, para o cartão "Usar ESTE aparelho". Os dois formulários são
-        // irmãos e usam os mesmos botões de setor -- desenhar de outro jeito
-        // aqui daria ao dono duas maneiras diferentes de escolher a mesma
-        // coisa, na mesma tela.
-        var acesosAqui = setoresAcesos('aparelho-aqui-setores');
-        $('aparelho-aqui-setores')
-            .replaceWith(botoesDeSetor('aparelho-aqui-setores', acesosAqui, null));
+        desenharAtivacao();
 
         // Depois dos cartões de setor existirem no DOM: são eles que trazem os
-        // campos de lotação e uso que a trava também precisa desligar.
+        // campos de uso e de bloqueio que a trava também precisa desligar.
         travarCampos();
         desenharFaixa();
+    }
+
+    /**
+     * Ligar e desligar o evento INTEIRO.
+     *
+     * A ressalva vai junto, no `confirm` e no texto do bloco: um portão SEM
+     * REDE só descobre a inativação quando sincronizar. Não há como ser
+     * diferente — a decisão no portão é tomada com a carga que o aparelho tem.
+     * Sem essa frase, o dono guarda o celular achando que os portões pararam no
+     * mesmo segundo.
+     */
+    function desenharAtivacao() {
+        var botao = $('btn-ativar-evento');
+        if (!botao) { return; }
+        var inativo = (estado.painel.evento || {}).status !== 'ativo';
+        botao.textContent = inativo ? 'Ativar este evento' : 'Inativar este evento';
+        botao.onclick = function () {
+            if (!inativo && !window.confirm(
+                    'Inativar "' + estado.painel.evento.nome_evento + '"? Todos '
+                    + 'os portões param de aceitar ingresso. Portão sem internet '
+                    + 'só recebe a mudança quando voltar a ter sinal.')) {
+                return;
+            }
+            gravar('/eventos/' + estado.evento_id,
+                   { status: inativo ? 'ativo' : 'encerrado' }, 'PATCH')
+                .then(carregarPainel)
+                .catch(function () { /* `gravar()` já avisou na tela */ });
+        };
     }
 
     /**
@@ -295,11 +324,79 @@
         painel.appendChild(quandoVale(s, edicaoAnterior));
         painel.appendChild(opcoesDeUso(s, edicaoAnterior));
         painel.appendChild(recado);
+        painel.appendChild(bloqueioDoSetorInteiro(s, edicaoAnterior));
         painel.appendChild(bloqueiosDoSetor(s, edicaoAnterior));
         painel.appendChild(codigosDoSetor(s, edicaoAnterior));
         el.appendChild(painel);
 
         return el;
+    }
+
+    /**
+     * Desligar o setor INTEIRO.
+     *
+     * Diferente de "Bloquear ingressos", logo abaixo, que suspende uma faixa de
+     * números. Aqui a porta para de receber, e o motivo é o que o porteiro lê em
+     * voz alta para quem está na fila. Bloqueio mudo vira "não sei, o sistema
+     * não deixou" na frente da fila.
+     */
+    function bloqueioDoSetorInteiro(s, edicaoAnterior) {
+        var caixa = grupo('Bloquear este setor');
+
+        var ajuda = document.createElement('p');
+        ajuda.className = 'config-ajuda';
+        ajuda.textContent = 'A portaria para de aceitar TODOS os ingressos deste '
+            + 'setor e mostra o motivo que você escrever. Portão sem internet '
+            + 'só recebe a mudança quando voltar a ter sinal.';
+        caixa.appendChild(ajuda);
+
+        if (s.bloqueado) {
+            var agora = document.createElement('p');
+            agora.className = 'config-ajuda';
+            // O motivo é escrito pelo dono: TEXTO, nunca HTML.
+            agora.textContent = 'Bloqueado: ' + (s.bloqueado_motivo || '');
+            caixa.appendChild(agora);
+
+            var liberar = document.createElement('button');
+            liberar.type = 'button';
+            liberar.className = 'secundario so-com-senha';
+            liberar.id = 'setor-liberar-' + s.id;
+            liberar.textContent = 'Liberar este setor';
+            liberar.addEventListener('click', function () {
+                gravarSetor(s.id, { bloqueado: false })
+                    .then(function () { avisarSalvo(s.id); })
+                    .catch(function () { /* `gravar()` já avisou na tela */ });
+            });
+            caixa.appendChild(liberar);
+            return caixa;
+        }
+
+        var rot = document.createElement('label');
+        rot.setAttribute('for', 'setor-bloq-motivo-' + s.id);
+        rot.textContent = 'Motivo (a portaria vai ler isto)';
+        caixa.appendChild(rot);
+
+        var motivo = document.createElement('input');
+        motivo.type = 'text';
+        motivo.id = 'setor-bloq-motivo-' + s.id;
+        motivo.placeholder = 'Ex.: camarote interditado pelos bombeiros';
+        motivo.value = edicaoAnterior ? (edicaoAnterior.setor_bloq_motivo || '') : '';
+        caixa.appendChild(motivo);
+
+        var botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'so-com-senha';
+        botao.id = 'setor-bloquear-' + s.id;
+        botao.textContent = 'Bloquear este setor';
+        botao.addEventListener('click', function () {
+            gravarSetor(s.id, {
+                bloqueado: true, bloqueado_motivo: motivo.value
+            }).then(function () { avisarSalvo(s.id); })
+              .catch(function () { /* `gravar()` já avisou na tela */ });
+        });
+        caixa.appendChild(botao);
+
+        return caixa;
     }
 
     /**
@@ -672,94 +769,6 @@
         return gravar('/setores/' + setor_id, corpo, 'PATCH').then(carregarPainel);
     }
 
-    /**
-     * Mostra o código curto UMA vez.
-     *
-     * Ele não está guardado em lugar nenhum — o que fica é um resumo dele. Se a
-     * tela não disser isso em texto, o dono fecha a caixa achando que consulta
-     * depois, e descobre na porta do evento que não dá.
-     *
-     * `nomeAparelho`, quando vem, entra no título da caixa. Achado da revisão
-     * final: com vários aparelhos configurados, gerar um código novo antes de
-     * fechar a caixa do anterior é como um código acaba digitado no celular
-     * errado — o título genérico "Código deste aparelho" não dizia QUAL.
-     */
-    function mostrarCodigo(codigo, nomeAparelho) {
-        $('codigo-titulo').textContent = nomeAparelho
-            ? ('Código de "' + nomeAparelho + '"') : 'Código deste aparelho';
-        $('codigo-valor').textContent = codigo;
-        $('caixa-codigo').classList.remove('sumindo');
-    }
-
-    function criarAparelho(nome, setores) {
-        return gravar('/eventos/' + estado.evento_id + '/aparelhos',
-                      { nome: nome, setores: setores }, 'POST')
-            .then(function (r) {
-                mostrarCodigo(r.codigo, nome);
-                return carregarPainel().then(function () { return r; });
-            });
-    }
-
-    /**
-     * ESTE celular vira o portão.
-     *
-     * Irmão do `criarAparelho`, e diferente dele em duas coisas: o servidor
-     * devolve o TOKEN em vez de um código para alguém digitar, e a tela não
-     * volta — ela vai para a leitura, sem a conta do dono.
-     *
-     * Não há `carregarPainel()` no fim de propósito: a sessão acabou de ser
-     * encerrada, e recarregar o painel com ela morta só produziria um 401 na
-     * cara de quem já está indo embora desta tela.
-     */
-    function usarEsteAparelho() {
-        var nome = $('aparelho-aqui-nome').value;
-        var setores = setoresAcesos('aparelho-aqui-setores');
-        var erro = $('erro-aparelho-aqui');
-        erro.classList.add('sumindo');
-
-        if (!setores.length) {
-            // Aparelho sem setor nenhum recusa TUDO na porta, com o laranja de
-            // "setor não autorizado", e o porteiro não teria como saber por
-            // quê. Melhor não deixar sair assim.
-            erro.textContent = 'Toque em pelo menos um setor: um aparelho sem '
-                + 'setor recusa todos os ingressos.';
-            erro.classList.remove('sumindo');
-            return Promise.resolve();
-        }
-
-        $('btn-usar-aparelho').disabled = true;
-        return gravar('/eventos/' + estado.evento_id + '/aparelhos/aqui',
-                      { nome: nome, setores: setores }, 'POST')
-            .then(function (r) {
-                return window.aparelhoAqui.assumir(r.token, r.nome);
-            })
-            .catch(function (e) {
-                $('btn-usar-aparelho').disabled = false;
-                erro.textContent = e.message || 'Não consegui configurar este aparelho.';
-                erro.classList.remove('sumindo');
-            });
-    }
-
-    /**
-     * Gera outro código para um aparelho que já existe.
-     *
-     * Recarrega o painel depois de mostrar o código, igual a `criarAparelho`:
-     * o cartão deste aparelho pode ter mudado por outro caminho enquanto o
-     * dono estava aqui, e a tela não pode ficar desatualizada só porque esta
-     * ação não mexeu em nome nem em setor. `mostrarCodigo` roda ANTES do
-     * `carregarPainel`, e `desenhar()` nunca toca em `#caixa-codigo` — por
-     * isso o código continua na tela depois do redesenho.
-     */
-    function novoCodigo(aparelho_id) {
-        var aparelho = (estado.painel.aparelhos || [])
-            .find(function (a) { return a.id === aparelho_id; });
-        return gravar('/aparelhos/' + aparelho_id + '/codigo', {}, 'POST')
-            .then(function (r) {
-                mostrarCodigo(r.codigo, aparelho && aparelho.nome);
-                return carregarPainel().then(function () { return r; });
-            });
-    }
-
     function renomearAparelho(aparelho_id, nome) {
         return gravar('/aparelhos/' + aparelho_id, { nome: nome }, 'PATCH')
             .then(carregarPainel);
@@ -786,9 +795,7 @@
      * o nome do setor, e não há como errar qual dos dois se está tocando.
      *
      * `aoTrocar`, quando vem, recebe a lista nova a cada toque — é o que faz
-     * o setor "passar a valer" na hora num aparelho que já existe. O
-     * formulário do aparelho novo não passa nada: ali a escolha só vale
-     * quando o dono toca em "Criar aparelho".
+     * o setor "passar a valer" na hora num aparelho que já existe.
      */
     function botoesDeSetor(id, escolhidos, aoTrocar) {
         var caixa = document.createElement('div');
@@ -824,10 +831,9 @@
      *
      * O estado mora no `aria-pressed` do próprio botão, e não numa variável
      * fechada dentro de `botoesDeSetor`: `desenhar()` reconstrói estas caixas
-     * a cada painel, e quem lê a escolha depois — o "Criar aparelho", lá no
-     * `DOMContentLoaded` — não tem como alcançar uma variável de outra
-     * chamada. Perguntar ao DOM é a única leitura que continua verdadeira
-     * depois de um redesenho.
+     * a cada painel, e quem lê a escolha depois não tem como alcançar uma
+     * variável de outra chamada. Perguntar ao DOM é a única leitura que
+     * continua verdadeira depois de um redesenho.
      */
     function setoresAcesos(id) {
         var caixa = $(id);
@@ -865,11 +871,13 @@
     }
 
     /**
-     * O cartão de um aparelho: nome, situação, e os três controles que a
-     * caixa `#caixa-codigo` promete por escrito desde a Tarefa 9 — gerar
-     * outro código, revogar, e editar nome/setores. Uma tela que promete e
-     * não entrega o botão está mentindo para o dono tanto quanto uma que
-     * mostra o número errado.
+     * O cartão de um portão: nome, situação, os setores que ele valida e a
+     * revogação.
+     *
+     * TODOS os portões do evento aparecem, de todos os celulares — decisão do
+     * usuário em 16/08/2026. Por isso o portão DESTE aparelho vem marcado com
+     * ★: sem a marca, o dono renomeia ou revoga o errado, e revogar desliga o
+     * aparelho na hora, no meio do evento.
      *
      * `edicaoAnterior`, se vier, é o que o dono tinha digitado/marcado ANTES
      * do painel recarregar por baixo dele — ver o comentário em `desenhar()`.
@@ -881,6 +889,16 @@
         var titulo = document.createElement('h3');
         titulo.textContent = a.nome;            // digitado pelo cliente: TEXTO
         el.appendChild(titulo);
+
+        // Qual destes portões é ESTE celular. O chaveiro responde sem rede: é
+        // ele que sabe qual aparelho foi criado aqui.
+        var meu = window.chaveiro ? window.chaveiro.procurar(estado.evento_id) : null;
+        if (meu && meu.aparelho_id === a.id) {
+            var marca = document.createElement('p');
+            marca.className = 'config-ajuda';
+            marca.textContent = '★ Este é o portão deste aparelho.';
+            el.appendChild(marca);
+        }
 
         var situacao = document.createElement('p');
         situacao.style.fontSize = '.84rem';
@@ -895,7 +913,7 @@
         // ── Editar nome e setores ───────────────────────────────────────────
         var rotNome = document.createElement('label');
         rotNome.setAttribute('for', 'aparelho-nome-' + a.id);
-        rotNome.textContent = 'Nome do aparelho';
+        rotNome.textContent = 'Nome do portão';
         el.appendChild(rotNome);
 
         var campoNome = document.createElement('input');
@@ -908,7 +926,7 @@
         rotSetores.style.fontSize = '.82rem';
         rotSetores.style.color = 'var(--dim)';
         rotSetores.style.margin = '12px 0 4px';
-        rotSetores.textContent = 'Toque nos setores que este aparelho valida. '
+        rotSetores.textContent = 'Toque nos setores que este portão valida. '
             + 'O que estiver aceso vale na hora.';
         el.appendChild(rotSetores);
 
@@ -949,17 +967,6 @@
         });
         el.appendChild(btnSalvar);
 
-        // ── Código e revogação ──────────────────────────────────────────────
-        var btnNovoCodigo = document.createElement('button');
-        btnNovoCodigo.type = 'button';
-        btnNovoCodigo.className = 'so-com-senha secundario';
-        btnNovoCodigo.id = 'aparelho-novo-codigo-' + a.id;
-        btnNovoCodigo.textContent = 'Gerar outro código';
-        btnNovoCodigo.addEventListener('click', function () {
-            novoCodigo(a.id).catch(function () { /* já avisado */ });
-        });
-        el.appendChild(btnNovoCodigo);
-
         if (a.status === 'ativo') {
             var btnRevogar = document.createElement('button');
             btnRevogar.type = 'button';
@@ -968,13 +975,13 @@
             btnRevogar.textContent = 'Revogar (desliga o aparelho)';
             btnRevogar.addEventListener('click', function () {
                 // Confirmação, não senha de novo: a elevação já cobre isso. O
-                // que falta avisar é a diferença para "gerar outro código" —
-                // aquele não desconecta ninguém, revogar desconecta na hora.
+                // que falta avisar é o tamanho do estrago — revogar desconecta
+                // o aparelho na hora, no meio do evento.
                 var confirmou = window.confirm(
                     'Revogar "' + a.nome + '"? Isso DESLIGA o aparelho agora — ele para '
-                    + 'de validar QR na portaria imediatamente. Gerar outro código não '
-                    + 'faz isso; só revogar desliga. Nesta versão não há como reativar um '
-                    + 'aparelho revogado — para voltar a usar, será preciso criar outro.'
+                    + 'de validar QR na portaria imediatamente. Nesta versão não há como '
+                    + 'reativar um portão revogado — para voltar a usar, será preciso '
+                    + 'abrir o evento de novo naquele celular.'
                 );
                 if (!confirmou) { return; }
                 revogarAparelho(a.id).catch(function () { /* já avisado */ });
@@ -985,177 +992,169 @@
         return el;
     }
 
-    /**
-     * O endereço que o porteiro abre no aparelho.
-     *
-     * O código de seis caracteres, sozinho, não leva a lugar nenhum: ninguém
-     * adivinha a URL da portaria. `portaria.html` lê o `?e=` para saber de
-     * qual evento é o aparelho antes mesmo de pedir o código.
-     */
-    function enderecoDaPortaria(eventoId) {
-        // `/ic/` e o prefixo do aplicativo instalavel. Endereco JA passado a
-        // porteiro continua valendo: `/portaria.html` redireciona para ca com
-        // a querystring intacta.
-        return location.origin + '/ic/portaria.html?e=' + encodeURIComponent(eventoId);
-    }
+    // ── A senha, e quem abre e fecha a engrenagem ────────────────────────────
+
+    var CHAVE_EMAIL = 'ideal_control_email';
 
     /**
-     * A caixa que mostra o endereço de pareamento, com QR.
+     * A senha, no aparelho que não tem conta.
      *
-     * O porteiro precisa de DOIS dados: onde abrir e qual o código. Mostrar só
-     * o código deixa o aparelho parado — ninguém digita 60 caracteres de URL
-     * de cabeça. O QR existe pelo mesmo motivo: digitar esses 60 caracteres
-     * num celular, no portão, é pedir erro de digitação.
+     * No celular do porteiro não existe sessão — ela foi encerrada quando o
+     * aparelho virou portão, e é isso que impede quem ficar com ele de entrar na
+     * conta do cliente. A engrenagem faz um login RELÂMPAGO: entra, deixa
+     * configurar por 15 minutos, e sai ao fechar.
+     *
+     * O e-mail fica lembrado; a senha, nunca. Ela vive no argumento desta função
+     * e morre com ela — a mesma regra que o `entrarEElevar` já segue.
+     *
+     * `prompt` de propósito para a senha: é a única caixa de texto que o
+     * navegador não guarda em preenchimento automático, e a senha do dono não
+     * pode ficar memorizada no celular do porteiro.
      */
-    function caixaDePareamento(eventoId) {
-        var caixa = document.createElement('div');
-        caixa.className = 'pareamento';
-
-        var url = enderecoDaPortaria(eventoId);
-
-        var texto = document.createElement('p');
-        texto.className = 'config-ajuda';
-        texto.textContent = 'No celular do porteiro, abra este endereço e digite '
-            + 'o código do aparelho:';
-        caixa.appendChild(texto);
-
-        var link = document.createElement('a');
-        link.href = url;
-        link.textContent = url;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        caixa.appendChild(link);
-
-        var tela = document.createElement('canvas');
-        tela.width = tela.height = 220;
-        if (typeof window.renderQRCodeOnCtx === 'function') {
-            var ctx = tela.getContext('2d');
-            // `renderQRCodeOnCtx` desenha CENTRADO no ponto (x, y) que recebe
-            // — ver frontend/qr-canvas.js — e não a partir do canto. Sem este
-            // translate para o centro do canvas, só o quadrante inferior
-            // direito do QR apareceria; o resto cairia em coordenada
-            // negativa, fora da tela. É o mesmo padrão que o QR do evento usa
-            // no script.js.
-            ctx.translate(110, 110);
-            // Fundo branco explícito: o painel é escuro, e QR preto sobre
-            // fundo escuro não é lido por leitor nenhum.
-            window.renderQRCodeOnCtx(ctx, url, 0, 0, 220, '#000000', '#ffffff');
-        }
-        caixa.appendChild(tela);
-
-        return caixa;
-    }
-
-    // ── O arranque ───────────────────────────────────────────────────────────
-    //
-    // Três caminhos, nesta ordem: sem sessão, entrar; com sessão e `?evento=`,
-    // abrir aquele evento; com sessão e sem evento, listar os que a conta tem.
-
-    var mostrar = function (id) { $(id).classList.remove('sumindo'); };
-    var esconder = function (id) { $(id).classList.add('sumindo'); };
-
-    /**
-     * Este aparelho é um portão?
-     *
-     * Desde que as telas do cliente e da portaria viraram um aplicativo só,
-     * `/ic/` é a casa de todo mundo — e o porteiro abre pelo mesmo ícone que o
-     * dono. Havendo token de aparelho guardado, este celular é um portão, e não
-     * há nada a decidir: vai direto para a leitura.
-     *
-     * A pergunta vem ANTES de tudo o que depende de rede, e é por isso que ela
-     * mora aqui em cima em vez de dentro do `abrir()`. O porteiro abre sem
-     * sinal e sem conta; `AcessoConta.sessao()` é ida ao Supabase. Invertida a
-     * ordem, o portão passaria a depender de rede — a única coisa que ele não
-     * pode fazer.
-     */
-    function ehAparelhoDePortaria() {
-        try { return !!localStorage.getItem('ideal_portaria_token'); }
-        catch (e) { return false; }   // aba anônima: trate como não-portaria
-    }
-
-    function abrir() {
-        // `?configurar=1` é a ÚNICA saída de um aparelho já pareado.
-        //
-        // Sem ela, este desvio prenderia o celular no portão para sempre: a
-        // casa manda para a leitura, e da leitura não há como voltar à
-        // configuração. O botão "Configurar este aparelho", na tela da
-        // portaria, é quem traz o dono para cá com esta marca na URL.
-        //
-        // Ela não abre nada sozinha: quem chega aqui cai no login, e mexer em
-        // aparelho continua exigindo a senha.
-        var querConfigurar = new URLSearchParams(location.search).get('configurar') === '1';
-
-        if (ehAparelhoDePortaria() && !querConfigurar) {
-            // `replace`, e não `href`: o portão não entra no histórico, senão o
-            // botão "voltar" do celular devolve o porteiro para a tela do dono.
-            location.replace('portaria.html');
-            return Promise.resolve();
-        }
-
-        esconder('erro-arranque');
-        // `Promise.resolve().then(...)` — não chamar `AcessoConta.sessao()`
-        // direto — porque ela NÃO é async: se `supabaseClient` for nulo (sem
-        // rede, CDN bloqueado, ou o modo offline deliberado do
-        // `supabase-config.js`), ela LANÇA na hora, em vez de rejeitar uma
-        // promessa. Um throw síncrono aqui escaparia do `.catch()` abaixo e
-        // subiria cru até o `DOMContentLoaded`, que não tem tratamento
-        // nenhum — a promessa morre em silêncio e os três blocos de estado
-        // ficam todos com "sumindo": uma tela em branco, sem uma palavra do
-        // porquê.
-        return Promise.resolve().then(function () {
-            return AcessoConta.sessao();
-        }).then(function (s) {
-            if (!s) {
-                mostrar('bloco-entrar');
-                return null;
-            }
-            estado.sessao = s;
-            esconder('bloco-entrar');
-
-            var pedido = new URLSearchParams(location.search).get('evento');
-            if (pedido) {
-                estado.evento_id = pedido;
-                restaurarElevacao();
-                // A câmera é da CASA, não da configuração: dentro de um evento
-                // já aberto, "+ Novo Evento" não quer dizer nada.
-                esconder('ler-qr');
-                mostrar('evento');
-                return carregarPainel();
-            }
-            return listarEventos();
-        }).catch(function (e) {
-            mostrar('bloco-entrar');
-            falharArranque('Não consegui verificar a sua conta agora. Pode ser '
-                + 'a internet: confira o sinal e toque em "Entrar" de novo.');
+    function comSenha(evento_id, tarefa) {
+        return sessaoOuLogin(evento_id).then(function (r) {
+            return tarefa(r.sessao, r.elevacao);
         });
     }
 
-    function listarEventos() {
-        return AcessoConta.pedir('/meus-eventos', { headers: cabecalhos() })
-            .then(function (d) {
-                var eventos = d.eventos || [];
-                mostrar('lista-eventos');
-                if (!eventos.length) { mostrar('sem-eventos'); return; }
+    function emailLembrado() {
+        try { return localStorage.getItem(CHAVE_EMAIL) || ''; }
+        catch (e) { return ''; }
+    }
 
-                var caixa = $('eventos');
-                caixa.innerHTML = '';
-                eventos.forEach(function (ev) {
-                    var link = document.createElement('a');
-                    link.href = '/controle.html?evento=' + encodeURIComponent(ev.id);
-                    link.className = 'cartao';
-                    link.style.display = 'block';
-                    link.style.textDecoration = 'none';
-                    link.style.color = 'inherit';
-                    link.textContent = ev.nome_evento;   // digitado pelo cliente: TEXTO
-                    caixa.appendChild(link);
+    /**
+     * Três situações, e cada uma pede uma coisa diferente da pessoa:
+     *
+     *   sessão + elevação válida  — nada. Já está autorizado.
+     *   sessão sem elevação       — só a SENHA. O dono está no próprio celular e
+     *                               já entrou; pedir o e-mail que ele acabou de
+     *                               digitar seria uma chance de errar sem ganho.
+     *   sem sessão                — e-mail e senha, numa digitação só
+     *                               (`entrarEElevar`). É o celular do porteiro.
+     *
+     * `Promise.resolve().then(...)` — e não chamar `AcessoConta.sessao()` direto
+     * — porque ela NÃO é async: com `supabaseClient` nulo (sem rede, ou o modo
+     * offline deliberado do `supabase-config.js`) ela LANÇA na hora, e o throw
+     * síncrono escaparia deste encadeamento inteiro.
+     */
+    function sessaoOuLogin(evento_id) {
+        return Promise.resolve().then(function () {
+            return AcessoConta.sessao();
+        }).then(function (s) {
+            if (s) { estado.sessao = s; }
+            if (s && elevado()) {
+                return { sessao: s, elevacao: estado.elevacao };
+            }
+            if (s) {
+                return abrirCaixaDeSenha().then(function () {
+                    return { sessao: s, elevacao: estado.elevacao };
                 });
-            })
-            .catch(function (e) {
-                // Mesma lacuna de `carregarPainel`: sem isto, uma falha aqui
-                // deixa a tela sem `lista-eventos` E sem `sem-eventos` — nada.
-                falharArranque('Não consegui carregar os seus eventos. Confira '
-                    + 'a internet e tente de novo em instantes.');
-            });
+            }
+
+            var email = window.prompt(
+                'E-mail da sua conta do Vibe — a mesma com que você acompanha '
+                + 'os seus pedidos.', emailLembrado());
+            if (!email) { return Promise.reject(new Error('cancelado')); }
+            var senha = window.prompt('Senha desta conta. Ela libera as '
+                + 'alterações por ' + acesso_minutos() + ' minutos.');
+            if (!senha) { return Promise.reject(new Error('cancelado')); }
+            // O e-mail sim, a senha nunca: no portão o dono digita isto de pé,
+            // com pressa, e o e-mail é a metade que não é segredo.
+            try { localStorage.setItem(CHAVE_EMAIL, email); } catch (e) { /* aba anônima */ }
+
+            return AcessoConta.entrarEElevar(email, senha, evento_id)
+                .then(function (r) {
+                    estado.sessao = r.sessao;
+                    // A sessão foi aberta AQUI: é esta bandeira que faz o
+                    // `fecharEngrenagem` saber que precisa desfazê-la.
+                    estado.sessaoDaEngrenagem = true;
+                    guardarElevacao({
+                        token: r.elevacao.token,
+                        expira_em: r.elevacao.expira_em,
+                        evento_id: evento_id
+                    });
+                    return { sessao: r.sessao, elevacao: r.elevacao };
+                });
+        });
+    }
+
+    /**
+     * O toque na engrenagem, ao lado da barra do evento.
+     *
+     * A senha vem ANTES de a tela aparecer: mostrar a configuração e só então
+     * pedir a senha deixaria o nome do evento, os setores e a lista de portões
+     * à vista de quem estiver com o celular do porteiro na mão.
+     */
+    function abrirEngrenagem(evento_id, nome) {
+        estado.evento_id = evento_id;
+        // Evento novo, campos novos: sem isto, abrir a engrenagem de um segundo
+        // evento na mesma sessão da página manteria o nome e a data do primeiro
+        // escritos nos campos, porque `jaDesenhouEvento` os protege de
+        // redesenhos. Ver o comentário daquela bandeira.
+        jaDesenhouEvento = false;
+        restaurarElevacao();
+        return comSenha(evento_id, function () {
+            $('engrenagem').classList.remove('sumindo');
+            $('lista').classList.add('sumindo');
+            if (nome) { $('nome-evento-titulo').textContent = nome; }
+            return carregarPainel();
+        }).catch(function () {
+            // Cancelou a senha, ou ela não conferiu: a lista continua na tela,
+            // que é onde ele já estava. Quem explica o erro é o `avisar()` de
+            // dentro de `abrirCaixaDeSenha`.
+        });
+    }
+
+    /**
+     * Fechar a engrenagem tira a conta do aparelho.
+     *
+     * O celular fica com o porteiro. Sessão esquecida ali entrega a conta
+     * inteira do cliente — eventos, configuração, tudo. A elevação de 15
+     * minutos morre junto.
+     */
+    function fecharEngrenagem() {
+        guardarElevacao(null);
+        $('engrenagem').classList.add('sumindo');
+        $('lista').classList.remove('sumindo');
+        if (!estado.sessaoDaEngrenagem) { return Promise.resolve(); }
+        estado.sessaoDaEngrenagem = false;
+        estado.sessao = null;
+        try {
+            return supabaseClient.auth.signOut().catch(function () { });
+        } catch (e) {
+            return Promise.resolve();   // sem SDK: não há sessão para encerrar
+        }
+    }
+
+    /**
+     * "Sair deste portão": este aparelho deixa de ler os ingressos deste evento.
+     *
+     * NÃO apaga a fila — a mesma regra do `desparear()` da portaria: o que a
+     * fila guarda é contagem que o cliente pagou para ter, e ela sobe sozinha
+     * quando a internet voltar.
+     *
+     * As chaves antigas saem junto SÓ se apontarem para este evento. Deixá-las
+     * seria dizer "saí do portão" e o celular continuar validando ingresso.
+     */
+    function sairDoPortao() {
+        if (!window.confirm('Sair deste portão? Este aparelho deixa de ler os '
+                + 'ingressos deste evento. As leituras que ainda não subiram '
+                + 'continuam guardadas e sobem quando a internet voltar.')) {
+            return Promise.resolve();
+        }
+        window.chaveiro.esquecer(estado.evento_id);
+        try {
+            if (localStorage.getItem('ideal_portaria_evento') === estado.evento_id) {
+                localStorage.removeItem('ideal_portaria_token');
+                localStorage.removeItem('ideal_portaria_evento');
+            }
+        } catch (e) { /* aba anônima */ }
+        return Promise.resolve(fecharEngrenagem()).then(function () {
+            // Recarregar, e não redesenhar: a lista é montada pelo
+            // `lista-eventos.js` no arranque, e recarregar é o único caminho que
+            // não põe dois arquivos decidindo quem manda na mesma tela.
+            location.reload();
+        });
     }
 
     var CHAVE_ELEVACAO = 'acesso_elevacao';
@@ -1175,12 +1174,9 @@
     /**
      * Lê a elevação de volta do `sessionStorage`, se houver uma válida PARA
      * ESTE EVENTO. Achado da revisão final: o token era gravado e nunca lido
-     * de volta — "← Meus eventos" e todo link de evento são recarga de
-     * página inteira, então o dono digitava a senha de novo em toda
-     * navegação, e o `sessionStorage` só custava usabilidade sem comprar
-     * nada. Chamada de dentro de `abrir()`, antes de `carregarPainel()`, para
-     * que a faixa e a trava dos campos já saiam corretas no primeiro
-     * `desenhar()`.
+     * de volta — e a tela recarregava a cada navegação, então o dono digitava
+     * a senha de novo toda vez. Chamada de dentro de `abrirEngrenagem()`,
+     * antes de `comSenha()`, para que uma elevação ainda viva dispense a senha.
      */
     function restaurarElevacao() {
         var bruto = null;
@@ -1330,10 +1326,31 @@
     function acesso_minutos() { return 15; }
 
     document.addEventListener('DOMContentLoaded', function () {
-        $('btn-sair-config').addEventListener('click', sairDaConfiguracao);
+        // A engrenagem pode não estar nesta página (o arquivo é carregado só
+        // pelo `controle.html`, mas o teste de outra tela o serve junto).
+        if (!$('engrenagem')) { return; }
+
+        $('btn-sair-config').addEventListener('click', function () {
+            // Fechar a faixa devolve a tela ao modo leitura SEM sair da
+            // engrenagem: quem sai dela é o "Fechar configuração", abaixo.
+            sairDaConfiguracao();
+        });
+
+        $('btn-fechar-engrenagem').addEventListener('click', function () {
+            fecharEngrenagem();
+        });
 
         $('btn-elevar').addEventListener('click', function () {
-            abrirCaixaDeSenha();
+            // O `.catch` vazio existe porque a promessa desta caixa serve a
+            // OUTRO chamador: o `gravar()`, que precisa saber se a senha veio
+            // para repetir a gravação. Aqui não há gravação repetindo, e uma
+            // rejeição solta viraria erro no console -- a recusa e o motivo já
+            // foram escritos na tela pelo `avisar()`.
+            abrirCaixaDeSenha().catch(function () { });
+        });
+
+        $('btn-sair-do-portao').addEventListener('click', function () {
+            sairDoPortao();
         });
 
         $('btn-gravar-evento').addEventListener('click', function () {
@@ -1349,11 +1366,17 @@
             }, 'PATCH').then(carregarPainel).catch(function () { /* já avisado */ });
         });
 
+        // O formulário de login continua sendo a porta de quem abre o
+        // aplicativo com a conta e sem nenhum portão guardado. Ao entrar, quem
+        // redesenha a casa é o `lista-eventos.js` — ele é o dono da lista.
         $('btn-entrar').addEventListener('click', function () {
             var erro = $('erro-login');
             erro.classList.add('sumindo');
             AcessoConta.entrar($('email').value, $('senha').value)
-                .then(abrir)
+                .then(function () {
+                    $('bloco-entrar').classList.add('sumindo');
+                    return window.listaEventos.arrancar();
+                })
                 .catch(function (e) {
                     erro.textContent = e.message;
                     erro.classList.remove('sumindo');
@@ -1370,27 +1393,11 @@
             });
         });
 
-        $('btn-fechar-codigo').addEventListener('click', function () {
-            $('caixa-codigo').classList.add('sumindo');
-            $('codigo-valor').textContent = '';
-        });
-
-        $('btn-usar-aparelho').addEventListener('click', function () {
-            usarEsteAparelho();
-        });
-
-        $('btn-criar-aparelho').addEventListener('click', function () {
-            criarAparelho($('novo-aparelho-nome').value,
-                          setoresAcesos('novo-aparelho-setores'))
-                .then(function () { $('novo-aparelho-nome').value = ''; })
-                .catch(function () { /* já avisado */ });
-        });
-
         // O e-mail vem da sessão, e não de um campo: quem está aqui já entrou.
         // Pedir para digitar de novo o e-mail com que ele acabou de entrar
         // seria uma chance de errar sem nenhum ganho.
         $('btn-esqueci-config').addEventListener('click', function () {
-            var email = ((estado.sessao || {}).user || {}).email || '';
+            var email = ((estado.sessao || {}).user || {}).email || emailLembrado();
             if (!email) {
                 avisar('Não consegui identificar a sua conta agora. Recarregue a '
                      + 'página e tente de novo.', 'erro');
@@ -1400,8 +1407,6 @@
                 avisar(frase, 'ok');
             });
         });
-
-        abrir();
     });
 
     window.Controle = {
@@ -1409,14 +1414,15 @@
         carregarPainel: carregarPainel,
         desenhar: desenhar,
         elevado: elevado,
-        abrir: abrir,
         elevar: elevar,
         gravar: gravar,
         gravarSetor: gravarSetor,
         sairDaConfiguracao: sairDaConfiguracao,
-        mostrarCodigo: mostrarCodigo,
-        criarAparelho: criarAparelho,
-        novoCodigo: novoCodigo,
+        // O que a lista e o `virar-portao.js` chamam.
+        abrirEngrenagem: abrirEngrenagem,
+        fecharEngrenagem: fecharEngrenagem,
+        comSenha: comSenha,
+        sairDoPortao: sairDoPortao,
         renomearAparelho: renomearAparelho,
         trocarSetoresDoAparelho: trocarSetoresDoAparelho,
         revogarAparelho: revogarAparelho,

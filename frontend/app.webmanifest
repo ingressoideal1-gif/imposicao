@@ -8,6 +8,7 @@
   "start_url": "/ic/",
   "scope": "/ic/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "theme_color": "#0a0f1e",
   "background_color": "#0a0f1e",

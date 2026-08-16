@@ -100,10 +100,21 @@ def test_o_service_worker_so_guarda_arquivos_da_portaria():
     assert not intrusos, f"o sw.js guarda arquivo que nao e da portaria: {intrusos}"
 
 
-def test_a_tela_do_dono_mostra_o_endereco_de_pareamento():
-    """Sem ele o dono tem um codigo de seis caracteres e nenhum lugar para
-    digita-lo — o aparelho nunca sai do lugar."""
+def test_a_tela_do_dono_NAO_tem_mais_endereco_de_pareamento():
+    """O contrario do que este teste exigia ate 16/08/2026, e de proposito.
+
+    Ele guardava o endereco que o dono passava ao porteiro junto com um codigo
+    de seis caracteres. Os dois sairam na mesma leva, por decisao do usuario:
+    quem vira portao agora e o proprio celular que ele tem na mao, tocando na
+    barra do evento. Nao ha mais nada para anotar, ditar ou digitar.
+
+    Continua sendo um teste, e nao a ausencia de um: se o endereco de
+    pareamento voltar a aparecer na tela do dono, e porque alguem ressuscitou
+    metade de um fluxo que so funciona inteiro -- e o dono ficaria com um
+    endereco e nenhum codigo para acompanha-lo.
+    """
     junto = _texto("controle.html") + _texto("controle.js")
-    assert "portaria.html" in junto, (
-        "a tela do dono nao diz por onde o porteiro abre o aparelho"
+    assert "portaria.html?e=" not in junto, (
+        "o endereco de pareamento voltou a tela do dono, mas o codigo que ele "
+        "precisa nao existe mais"
     )

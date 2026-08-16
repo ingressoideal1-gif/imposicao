@@ -19,13 +19,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Ideal Control">
 
-    <link rel="stylesheet" href="controle.css?v=612">
+    <link rel="stylesheet" href="controle.css?v=613">
 </head>
 <body>
 <div class="folha">
-    <header>
+    <header class="cabecalho">
         <img src="Logo Ideal Dark.png" alt="Ingresso Ideal">
-        <span>Controle de acesso</span>
+        <div class="titulos">
+            <strong>Ideal Control</strong>
+            <span>Controle de Acesso</span>
+        </div>
     </header>
 
     <!-- Fora de qualquer bloco de estado, de propósito: se o arranque falhar
@@ -33,30 +36,43 @@
          evento carregado), esta é a única coisa que aparece na tela. -->
     <div id="erro-arranque" class="aviso erro sumindo" role="alert"></div>
 
-    <!-- O convite para instalar. Fica vazio e escondido até o navegador dizer
-         que dá para instalar (Android) ou até se reconhecer um iPhone. -->
-    <div id="convite-instalar" class="sumindo"></div>
+    <!-- Duas portas para a MESMA ação: a barra é o rótulo em texto (regra do
+         projeto: nada só com ícone) e o `+` fecha a coluna da direita, onde
+         cada linha de evento tem a sua engrenagem.
 
-    <!-- A câmera fica ACIMA do login, e fora dele, de propósito: o porteiro não
-         tem conta, e pedir login a ele seria travar o portão numa credencial
-         que ninguém lhe deu. Um QR do portão lido aqui liga o aparelho sem que
-         ninguém entre em conta nenhuma — e ele não precisa rolar a tela para
-         passar por um formulário que não é dele. -->
-    <div id="ler-qr">
-        <button id="btn-ler-qr">+ Novo Evento</button>
-        <p style="font-size:.82rem;color:var(--dim);margin:6px 0 0;text-align:center;">
-            Leia o QR que a gráfica enviou.
-        </p>
-        <div id="caixa-qr" class="sumindo">
-            <video id="cam" playsinline muted
-                   style="width:100%;border-radius:12px;background:#000;aspect-ratio:4/3;margin-top:12px;"></video>
-            <button id="btn-lanterna-qr" class="secundario sumindo" type="button">Lanterna</button>
-            <button id="btn-fechar-qr" class="secundario">Cancelar</button>
-        </div>
-        <div id="erro-qr" class="aviso erro sumindo" role="alert" style="margin-top:12px;"></div>
+         Fica ACIMA do login, e fora dele, de propósito: o porteiro não tem
+         conta, e pedir login a ele seria travar o portão numa credencial que
+         ninguém lhe deu. -->
+    <div class="linha-evento">
+        <button id="btn-ler-qr" class="barra-evento destaque">
+            <span class="nome-evento">Novo Evento</span>
+        </button>
+        <button id="btn-ler-qr-mais" class="botao-engrenagem"
+                aria-label="Novo Evento" title="Novo Evento">+</button>
     </div>
 
-    <!-- 1. Entrar -->
+    <div id="caixa-qr" class="sumindo">
+        <video id="cam" playsinline muted class="cam-qr"></video>
+        <button id="btn-lanterna-qr" class="secundario sumindo" type="button">Lanterna</button>
+        <button id="btn-fechar-qr" class="secundario">Cancelar</button>
+    </div>
+    <div id="erro-qr" class="aviso erro sumindo" role="alert"></div>
+
+    <!-- Envolve a lista inteira para a engrenagem poder escondê-la de uma vez.
+         `#engrenagem` e `#lista` são os dois estados desta página, e nunca
+         aparecem juntos. -->
+    <div id="lista">
+        <h1 class="rotulo-secao">Meus Eventos</h1>
+        <div id="eventos"></div>
+        <p id="sem-eventos" class="aviso sumindo">
+            Nenhum evento aqui ainda. Toque em <strong>Novo Evento</strong> e leia o
+            QR que a gráfica enviou.
+        </p>
+    </div>
+
+    <!-- O formulário de login não muda: mesmos ids e mesmas frases. Ele
+         continua sendo a porta de quem abre o aplicativo sem nenhum portão
+         guardado. -->
     <div id="bloco-entrar" class="cartao sumindo">
         <h1>Entre com a sua conta do Vibe</h1>
         <p style="font-size:.84rem;color:var(--dim);margin:0;">
@@ -72,34 +88,35 @@
         <div id="erro-login" class="aviso erro sumindo" style="margin-top:14px;"></div>
     </div>
 
-    <!-- 2. Escolher o evento -->
-    <div id="lista-eventos" class="sumindo">
-        <h1>Seus eventos</h1>
-        <div id="eventos"></div>
-        <p id="sem-eventos" class="aviso sumindo">
-            Você ainda não cadastrou nenhum evento. Toque em <strong>+ Novo
-            Evento</strong> e leia o QR que a gráfica enviou.
-        </p>
-    </div>
+    <!-- A ENGRENAGEM: toda a configuração do evento, atrás de uma senha.
+         `#engrenagem` e `#lista` são os dois estados desta página, e nunca
+         aparecem juntos — quem faz a troca é o `abrirEngrenagem` /
+         `fecharEngrenagem`, do script da engrenagem.
 
-    <!-- 3. O evento -->
-    <div id="evento" class="sumindo">
+         Não sobrou nenhum caminho de código de seis caracteres nesta tela: nem
+         a caixa que o mostrava uma vez, nem o botão que gerava outro em cada
+         portão, nem o cartão que criava aparelho para um segundo celular, nem
+         o QR de pareamento. O caminho passou a ser o dono entrar com a conta
+         dele NAQUELE celular e tocar na barra do evento. -->
+    <div id="engrenagem" class="sumindo">
         <div id="faixa-elevacao" class="sumindo">
             <span id="faixa-tempo">Modo configuração</span>
             <button id="btn-sair-config" class="secundario">Sair do modo configuração</button>
         </div>
 
-        <a href="controle.html" style="color:var(--dim);font-size:.84rem;">← Meus eventos</a>
+        <!-- FORA da faixa de propósito: a faixa só existe enquanto a senha
+             estiver valendo, e uma elevação que vence com a engrenagem aberta
+             deixaria o dono sem nenhum caminho de volta para a lista. -->
+        <button id="btn-fechar-engrenagem" class="secundario">← Voltar aos meus eventos</button>
         <h1 id="nome-evento-titulo">Evento</h1>
 
         <div id="aviso-gravacao" class="aviso sumindo" role="status"></div>
 
         <!-- A tranca fica GRUDADA no topo enquanto o evento está só para
              olhar. Antes ela morava aqui e rolava para fora da tela: no
-             desktop, a seção de aparelhos está a uma tela e meia daqui, e o
+             desktop, a seção de portões está a uma tela e meia daqui, e o
              dono chegava lá, tocava num botão apagado e não acontecia nada —
-             sem nenhuma palavra à vista dizendo o porquê. É assim que "criar
-             aparelho" virou "não está funcionando". -->
+             sem nenhuma palavra à vista dizendo o porquê. -->
         <div id="tranca" class="sumindo">
             <div id="aviso-leitura" class="aviso"></div>
             <button id="btn-elevar">Digitar a Senha Cadastrada</button>
@@ -108,9 +125,18 @@
             <button id="btn-esqueci-config" class="secundario">Esqueci minha senha</button>
         </div>
 
-        <div class="secao">
-            <h2>Dados do evento</h2>
+        <div class="secao" id="bloco-evento">
+            <h2>Evento</h2>
             <div class="cartao">
+                <!-- O rótulo deste botão é escrito pelo `desenharAtivacao()`,
+                     porque ele alterna entre "Inativar" e "Ativar" conforme o
+                     estado que o painel devolve. -->
+                <button id="btn-ativar-evento" class="so-com-senha">Inativar este evento</button>
+                <p class="config-ajuda">
+                    Inativar desliga o evento para <strong>todos</strong> os
+                    portões. Portão sem internet só recebe a mudança quando
+                    voltar a ter sinal.
+                </p>
                 <label for="campo-nome-evento">Nome do evento</label>
                 <input id="campo-nome-evento" type="text">
                 <label for="campo-data">Data e hora</label>
@@ -121,77 +147,28 @@
             </div>
         </div>
 
-        <div class="secao">
+        <div class="secao" id="bloco-portoes">
+            <h2>Portões</h2>
+            <p class="config-ajuda">
+                Todos os portões deste evento, de todos os celulares. O deste
+                aparelho vem marcado com ★.
+            </p>
+            <div id="aparelhos"></div>
+        </div>
+
+        <div class="secao" id="bloco-setores">
             <h2>Setores</h2>
             <div id="setores"></div>
         </div>
 
-        <div class="secao">
-            <h2>Aparelhos da portaria</h2>
-            <div id="aparelhos"></div>
-
-            <!-- O caminho novo: o dono está COM O CELULAR DO PORTÃO NA MÃO.
-                 Não há código para anotar nem para digitar em lugar nenhum — o
-                 aparelho recebe o token direto e a conta é desconectada dele. -->
-            <div class="cartao so-com-senha" id="usar-este-aparelho">
-                <h3>Usar ESTE aparelho na portaria</h3>
-                <p style="font-size:.82rem;color:var(--dim);margin:0 0 4px;">
-                    Dê um nome ao portão e toque nos setores que ele valida. Ao
-                    salvar, <strong>este celular</strong> passa a ler ingressos e
-                    a sua conta é desconectada dele — quem ficar com o aparelho
-                    não entra na sua conta.
-                </p>
-                <label for="aparelho-aqui-nome">Nome deste portão</label>
-                <input id="aparelho-aqui-nome" type="text" placeholder="Ex.: Portão A">
-                <p style="font-size:.82rem;color:var(--dim);margin:12px 0 4px;">
-                    Toque nos setores que este aparelho valida
-                </p>
-                <div id="aparelho-aqui-setores"></div>
-                <button id="btn-usar-aparelho">Salvar e começar a ler</button>
-                <div id="erro-aparelho-aqui" class="aviso erro sumindo" role="alert"
-                     style="margin-top:12px;"></div>
-            </div>
-
-            <!-- O caminho ANTIGO, e ele fica. Tirá-lo no mesmo release em que
-                 o novo estreia deixaria o dono sem saída se o novo tropeçar no
-                 portão — e este aqui está aprovado e rodando desde 15/08/2026.
-                 A remoção é limpeza de um release seguinte, depois que o novo
-                 tiver passado por um evento de verdade. -->
-            <div class="cartao so-com-senha">
-                <p style="font-size:.82rem;color:var(--dim);margin:0 0 10px;">
-                    Ou crie um aparelho para <strong>outro</strong> celular: aqui
-                    sai um código de 6 caracteres, e alguém digita esse código
-                    lá. Se você está <strong>com o celular do portão na mão</strong>,
-                    prefira "Usar ESTE aparelho", acima — não há código para
-                    anotar nem para digitar.
-                </p>
-                <label for="novo-aparelho-nome">Nome do novo aparelho</label>
-                <input id="novo-aparelho-nome" type="text" placeholder="Ex.: Portão A">
-                <p style="font-size:.82rem;color:var(--dim);margin:12px 0 4px;">
-                    Toque nos setores que este aparelho valida
-                </p>
-                <div id="novo-aparelho-setores"></div>
-                <button id="btn-criar-aparelho">Criar aparelho</button>
-            </div>
-        </div>
-
-        <div id="caixa-codigo" class="cartao sumindo">
-            <h2 id="codigo-titulo">Código deste aparelho</h2>
-            <div class="codigo-gerado" id="codigo-valor"></div>
-            <p style="font-size:.84rem;color:var(--dim);">
-                Anote agora: este código <strong>não aparece de novo</strong>. Se
-                você perdê-lo, é só gerar outro — e gerar outro
-                <strong>não desconecta</strong> o aparelho que já está trabalhando
-                na portaria. Para desligar um aparelho, use "Revogar".
+        <div class="secao" id="bloco-este-aparelho">
+            <h2>Este aparelho</h2>
+            <p class="config-ajuda">
+                Sair não apaga as leituras que ainda não subiram: elas continuam
+                guardadas aqui e sobem quando a internet voltar.
             </p>
-            <button id="btn-fechar-codigo" class="secundario">Já anotei, fechar</button>
+            <button id="btn-sair-do-portao" class="secundario">Sair deste portão</button>
         </div>
-
-        <!-- Os códigos de staff e cortesia moravam aqui, numa seção própria com
-             um seletor de setor e um contador global. Passaram para dentro do
-             "Configurar" de cada setor: lá o setor já está escolhido — não há
-             lista onde errar — e a contagem passa a dizer algo acionável, que
-             é quantos códigos valem NAQUELE portão. -->
     </div>
 
     <p class="rodape">Ingresso Ideal</p>
@@ -204,32 +181,39 @@
      terceiro significa que quem controlar aquele endereco controla o portao.
      O arquivo e o mesmo build UMD que o CDN servia (supabase-js 2.112.3), com
      uma diferenca: a versao agora esta congelada aqui, em vez de flutuar. -->
-<script src="supabase-js.min.js?v=612"></script>
-<script src="supabase-config.js?v=612"></script>
-<script src="acesso-conta.js?v=612"></script>
+<script src="supabase-js.min.js?v=613"></script>
+<script src="supabase-config.js?v=613"></script>
+<script src="acesso-conta.js?v=613"></script>
 
 <!-- O QR do endereço de pareamento. Mesma biblioteca do cliente.html e do
      index.html; o `qr-canvas.js` traz o `renderQRCodeOnCtx`, que é a função de
      "desenhar um QR num canvas" deste projeto. -->
-<script src="qrcode-generator.min.js?v=612"></script>
-<script src="qr-canvas.js?v=612"></script>
+<script src="qrcode-generator.min.js?v=613"></script>
+<script src="qr-canvas.js?v=613"></script>
 
-<!-- A câmera do "+ Novo Evento" é a MESMA da portaria: dois leitores (o
+<!-- A câmera do "Novo Evento" é a MESMA da portaria: dois leitores (o
      `BarcodeDetector` nativo e o `jsQR` de reserva no iPhone), já resolvidos
      lá. Um segundo leitor herdaria os defeitos que o primeiro já corrigiu. -->
-<script src="jsqr.min.js?v=612"></script>
-<script src="portaria-camera.js?v=612"></script>
-<script src="ler-qr.js?v=612"></script>
-<script src="instalar.js?v=612"></script>
+<script src="jsqr.min.js?v=613"></script>
+<script src="portaria-camera.js?v=613"></script>
+<script src="ler-qr.js?v=613"></script>
+<script src="instalar.js?v=613"></script>
 <!-- O momento em que este celular vira um portão: guardar o token, encerrar a
      sessão da conta, ir para a leitura. Arquivo próprio porque a ORDEM dessas
      três coisas é o que impede o aparelho de ficar sem conta e sem token. -->
-<script src="aparelho.js?v=612"></script>
+<script src="aparelho.js?v=613"></script>
 <!-- Esta é a casa (`/ic/` abre aqui), e o Chrome só oferece "Instalar
      aplicativo" numa página que tenha service worker registrado. Sem isto, o
      botão de instalar nunca apareceria — que é o ponto do aplicativo. -->
-<script src="sw-registro.js?v=612"></script>
+<script src="sw-registro.js?v=613"></script>
 
-<script src="controle.js?v=612"></script>
+<!-- A ordem importa. `chaveiro.js` é puro e vem antes de quem o usa; a lista e
+     o "virar portão" vêm depois; `controle.js` (a engrenagem) por último entre
+     eles; e a parede do PWA no fim, para não competir com o arranque da tela. -->
+<script src="chaveiro.js?v=613"></script>
+<script src="lista-eventos.js?v=613"></script>
+<script src="virar-portao.js?v=613"></script>
+<script src="controle.js?v=613"></script>
+<script src="parede-pwa.js?v=613"></script>
 </body>
 </html>
