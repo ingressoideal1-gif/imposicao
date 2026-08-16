@@ -79,6 +79,29 @@ def test_o_aparelho_daqui_nasce_com_token_e_sem_codigo():
     assert "token_hash" in corpo
 
 
+def test_uma_senha_serve_para_entrar_e_para_elevar():
+    """Decisao do usuario: "apenas uma senha".
+
+    Entrar e elevar sao duas chamadas, e continuam sendo -- o login e do
+    Supabase, a elevacao e nossa, assinada e com prazo. O que a decisao proibe e
+    a PESSOA digitar duas vezes, e no portao, com o dono de pe, isso pesa.
+    """
+    js = _ler("frontend/acesso-conta.js")
+    assert "entrarEElevar" in js
+    corpo = js[js.index("function entrarEElevar"):]
+    corpo = corpo[:corpo.index("\n    }")]
+    assert "entrar(" in corpo and "/elevar" in corpo
+
+
+def test_a_senha_nao_e_guardada():
+    """Ela vive no argumento da funcao e morre com ela."""
+    js = _ler("frontend/acesso-conta.js")
+    corpo = js[js.index("function entrarEElevar"):]
+    corpo = corpo[:corpo.index("\n    }")]
+    for guardar in ("localStorage", "sessionStorage", "indexedDB"):
+        assert guardar not in corpo, "a senha encosta em " + guardar
+
+
 def test_a_rota_do_aparelho_daqui_exige_elevacao():
     """Criar aparelho e escrita de configuracao. Sem elevacao, quem pegasse o
     celular do dono destrancado criaria portao."""

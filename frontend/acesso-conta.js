@@ -88,6 +88,36 @@
     }
 
     /**
+     * Entra e eleva com a MESMA senha digitada.
+     *
+     * São duas chamadas ao servidor, e continuam sendo: o login é do Supabase,
+     * e a elevação é nossa — assinada, com prazo, e presa a este navegador. O
+     * que a decisão do usuário proíbe é a PESSOA digitar duas vezes, e no
+     * portão, com ele de pé na frente do aparelho, isso pesa.
+     *
+     * A senha não é guardada em lugar nenhum: ela vive no argumento desta
+     * função e morre com ela.
+     *
+     * A elevação vem DEPOIS do login de propósito. O contrário não existe: o
+     * endpoint de elevar exige a sessão para saber de quem é a senha que está
+     * conferindo.
+     */
+    function entrarEElevar(email, senha, eventoId) {
+        return entrar(email, senha).then(function (sessao) {
+            return pedir('/eventos/' + eventoId + '/elevar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + sessao.access_token
+                },
+                body: JSON.stringify({ senha: senha, navegador: navegadorId() })
+            }).then(function (elevacao) {
+                return { sessao: sessao, elevacao: elevacao };
+            });
+        });
+    }
+
+    /**
      * Recuperar age sobre a conta que JÁ existe. É a saída certa para quem
      * esqueceu a senha — criar outra conta "resolveria" o login e quebraria o
      * vínculo com o cadastro do cliente.
@@ -145,6 +175,7 @@
         pedir: pedir,
         sessao: sessao,
         entrar: entrar,
+        entrarEElevar: entrarEElevar,
         esqueciSenha: esqueciSenha,
         navegadorId: navegadorId
     };
