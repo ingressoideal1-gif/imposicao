@@ -17,7 +17,10 @@
         centenas de regras que esta página não usa. O CSS abaixo é o mínimo, e
         nasce pensado para telefone.
 
-        A única dependência externa é o SDK do Supabase, que faz o login.
+        E não há dependência externa nenhuma: o SDK do Supabase, que faz o
+        login, passou a ser servido daqui em 16/08/2026. Script de outra origem
+        que não carrega derruba a página, e o service worker não tem como
+        guardá-lo — resposta de outra origem é opaca.
     -->
     <style>
         :root {
@@ -148,7 +151,7 @@
 <body>
     <div class="folha">
         <header>
-            <img src="/Logo Ideal Dark.png" alt="Ingresso Ideal">
+            <img src="Logo Ideal Dark.png" alt="Ingresso Ideal">
             <span>Controle de acesso</span>
         </header>
 
@@ -244,7 +247,7 @@
             <!-- O href por padrão já aponta para controle.html: o script troca
                  por este + "?evento=<id>" assim que sabe qual evento é, mas o
                  link nunca fica apontando para lugar nenhum. -->
-            <a id="ir-para-controle" href="/controle.html" style="display:block;text-decoration:none;">
+            <a id="ir-para-controle" href="controle.html" style="display:block;text-decoration:none;">
                 <button>Configurar o evento agora</button>
             </a>
         </div>
@@ -255,9 +258,9 @@
     <!-- Servido daqui, e nao de um CDN. O porque esta no controle.html, na
          mesma troca: a pagina precisa abrir sem rede, e o codigo de
          autenticacao nao pode vir de um terceiro. -->
-    <script src="/supabase-js.min.js?v=609"></script>
-    <script src="/supabase-config.js?v=609"></script>
-    <script src="/acesso-conta.js?v=609"></script>
-    <script src="/evento.js?v=609"></script>
+    <script src="supabase-js.min.js?v=609"></script>
+    <script src="supabase-config.js?v=609"></script>
+    <script src="acesso-conta.js?v=609"></script>
+    <script src="evento.js?v=609"></script>
 </body>
 </html>

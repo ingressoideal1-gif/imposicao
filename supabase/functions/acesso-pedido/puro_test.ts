@@ -32,8 +32,8 @@ Deno.test("rota: pedido com caractere escapado volta decodificado", () => {
 });
 
 Deno.test("url do evento: o padrao e o painel versionado", () => {
-  assertEquals(urlDoEvento(null, "1.2.abc"), `${PAINEL_PADRAO}/evento.html?t=1.2.abc`);
-  assertEquals(urlDoEvento("", "1.2.abc"), `${PAINEL_PADRAO}/evento.html?t=1.2.abc`);
+  assertEquals(urlDoEvento(null, "1.2.abc"), `${PAINEL_PADRAO}/ic/evento.html?t=1.2.abc`);
+  assertEquals(urlDoEvento("", "1.2.abc"), `${PAINEL_PADRAO}/ic/evento.html?t=1.2.abc`);
 });
 
 Deno.test("url do evento: a barra do fim nunca duplica", () => {
@@ -41,10 +41,10 @@ Deno.test("url do evento: a barra do fim nunca duplica", () => {
   // chegar com mais de uma.
   assertEquals(
     urlDoEvento("https://exemplo.app///", "t"),
-    "https://exemplo.app/evento.html?t=t",
+    "https://exemplo.app/ic/evento.html?t=t",
   );
   assertEquals(
     urlDoEvento("https://exemplo.app", "t"),
-    "https://exemplo.app/evento.html?t=t",
+    "https://exemplo.app/ic/evento.html?t=t",
   );
 });

@@ -1,10 +1,18 @@
 {
   "framework": null,
+  "redirects": [
+    { "source": "/evento.html", "destination": "/ic/evento.html" },
+    { "source": "/portaria.html", "destination": "/ic/portaria.html" },
+    { "source": "/controle.html", "destination": "/ic/controle.html" }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://imposicao.onrender.com/api/:path*"
     },
+    { "source": "/ic", "destination": "/inicio.html" },
+    { "source": "/ic/", "destination": "/inicio.html" },
+    { "source": "/ic/:path*", "destination": "/:path*" },
     {
       "source": "/cliente/:match*",
       "destination": "/cliente.html"

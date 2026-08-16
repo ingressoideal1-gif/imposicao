@@ -33,10 +33,16 @@ def test_existe_uma_implementacao_so_de_login():
     que existiam antes desta tarefa e nao fazem parte dela. Unificar os dois
     trocaria uma refatoracao de login do cliente por uma reescrita do login da
     equipe, fora do escopo pedido aqui.
+
+    Os `.min.js` tambem ficam de fora, e por outra razao: sao BIBLIOTECAS
+    vendorizadas, nao codigo nosso. Desde 16/08/2026 o SDK do Supabase e
+    servido daqui (`supabase-js.min.js`), e ele contem `signInWithPassword`
+    porque e ele quem DEFINE o metodo -- contar isso como "mais um dono do
+    login" seria acusar a biblioteca de implementar a si mesma.
     """
     donos = []
     for nome in os.listdir(os.path.join(RAIZ, "frontend")):
-        if nome == "script.js":
+        if nome == "script.js" or nome.endswith(".min.js"):
             continue
         if nome.endswith(".js") and "signInWithPassword" in _ler(f"frontend/{nome}"):
             donos.append(nome)

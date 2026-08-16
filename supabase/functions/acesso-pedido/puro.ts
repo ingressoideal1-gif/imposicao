@@ -44,5 +44,8 @@ export const PAINEL_PADRAO = "https://imposicao.vercel.app";
 
 export function urlDoEvento(base: string | null | undefined, token: string): string {
   const raiz = (base || PAINEL_PADRAO).replace(/\/+$/, "");
-  return `${raiz}/evento.html?t=${token}`;
+  // `/ic/` e o prefixo do aplicativo instalavel -- ele existe para dar ESCOPO
+  // as telas do cliente e do portao. QR emitido antes desta mudanca continua
+  // valendo: `/evento.html` redireciona para ca, com a querystring intacta.
+  return `${raiz}/ic/evento.html?t=${token}`;
 }

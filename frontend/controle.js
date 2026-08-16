@@ -945,7 +945,10 @@
      * qual evento é o aparelho antes mesmo de pedir o código.
      */
     function enderecoDaPortaria(eventoId) {
-        return location.origin + '/portaria.html?e=' + encodeURIComponent(eventoId);
+        // `/ic/` e o prefixo do aplicativo instalavel. Endereco JA passado a
+        // porteiro continua valendo: `/portaria.html` redireciona para ca com
+        // a querystring intacta.
+        return location.origin + '/ic/portaria.html?e=' + encodeURIComponent(eventoId);
     }
 
     /**

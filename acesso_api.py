@@ -502,7 +502,10 @@ def _url_do_evento(token: str) -> str:
     if not base:
         import security_config
         base = security_config.PAINEL_BASE_URL
-    return f"{base.rstrip('/')}/evento.html?t={token}"
+    # `/ic/` e o prefixo do aplicativo instalavel -- ele existe para dar ESCOPO
+    # as telas do cliente e do portao. QR emitido antes desta mudanca continua
+    # valendo: `/evento.html` redireciona para ca, com a querystring intacta.
+    return f"{base.rstrip('/')}/ic/evento.html?t={token}"
 
 
 @router.post("/pedidos/{pedido}/qr")

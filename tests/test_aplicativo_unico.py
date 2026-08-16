@@ -6,6 +6,7 @@ fora), que o roteador leve cada QR a tela certa, e que o endereco que ja circula
 por WhatsApp continue valendo.
 """
 
+import json
 import os
 import re
 
@@ -55,3 +56,46 @@ def test_a_estacao_sincroniza_os_arquivos_novos():
 
     for nome in ("supabase-js.min.js", "qrcode-generator.min.js"):
         assert nome in security_config.PAINEL_ARQUIVOS, nome
+
+
+# ── O prefixo /ic/ ──────────────────────────────────────────────────────────
+
+def test_nenhuma_pagina_pede_arquivo_por_caminho_absoluto():
+    """Com barra na frente, o arquivo cai FORA do escopo /ic/ -- e portanto
+    fora do alcance do service worker, sem o qual a portaria nao abre sem rede.
+
+    Sem barra, o mesmo texto resolve certo nos dois lugares: /ic/ na Vercel e
+    / na estacao, que serve os arquivos na raiz.
+    """
+    for nome in PAGINAS_DO_APLICATIVO:
+        html = _ler("frontend/" + nome)
+        absolutos = re.findall(
+            r'<(?:script|link)[^>]+(?:src|href)="(/[^/][^"]*)"', html)
+        assert not absolutos, nome + " pede por caminho absoluto: " + str(absolutos)
+
+
+def test_a_vercel_serve_as_telas_sob_o_prefixo():
+    for arquivo in ("vercel.json", "frontend/vercel.json"):
+        conf = json.loads(_ler(arquivo))
+        fontes = [r["source"] for r in conf.get("rewrites", [])]
+        assert "/ic" in fontes, arquivo + " nao serve a casa em /ic"
+        assert "/ic/:path*" in fontes, arquivo + " nao serve as telas sob /ic/"
+
+
+def test_as_urls_antigas_continuam_valendo():
+    """O QR do Pedido ja circula por WhatsApp, e o endereco do portao ja foi
+    passado a porteiro. Nenhum dos dois volta atras."""
+    for arquivo in ("vercel.json", "frontend/vercel.json"):
+        conf = json.loads(_ler(arquivo))
+        destino = {r["source"]: r["destination"] for r in conf.get("redirects", [])}
+        for antiga in ("/evento.html", "/portaria.html", "/controle.html"):
+            assert antiga in destino, arquivo + " perdeu " + antiga
+            assert destino[antiga].startswith("/ic/"), arquivo + " " + antiga
+
+
+def test_os_dois_construtores_apontam_para_o_prefixo():
+    """`puro.ts`, e nao `index.ts`: a montagem da URL mora no modulo puro da
+    Edge Function, que e o que tem teste proprio em Deno."""
+    assert "/ic/evento.html?t=" in _ler("acesso_api.py")
+    assert "/ic/evento.html?t=" in _ler("supabase/functions/acesso-pedido/puro.ts")
+    assert "/ic/portaria.html?e=" in _ler("frontend/controle.js")

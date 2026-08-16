@@ -42,10 +42,36 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/evento.html",
+      "destination": "/ic/evento.html"
+    },
+    {
+      "source": "/portaria.html",
+      "destination": "/ic/portaria.html"
+    },
+    {
+      "source": "/controle.html",
+      "destination": "/ic/controle.html"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://imposicao.onrender.com/api/:path*"
+    },
+    {
+      "source": "/ic",
+      "destination": "/frontend/inicio.html"
+    },
+    {
+      "source": "/ic/",
+      "destination": "/frontend/inicio.html"
+    },
+    {
+      "source": "/ic/:path*",
+      "destination": "/frontend/:path*"
     },
     {
       "source": "/cliente/:match*",
