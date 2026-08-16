@@ -4,6 +4,7 @@
     "puppeteer": "^25.3.0"
   },
   "devDependencies": {
+    "deno": "^2.9.5",
     "supabase": "^2.114.0"
   }
 }

@@ -232,9 +232,24 @@ export async function hashCodigo(conteudo: string, sal: string): Promise<string>
 
 ```
 python -m pytest tests/test_qr_ideal_hash.py -v
+./node_modules/.bin/deno check supabase/functions/_compartilhado/hash.ts
 ```
 
-Esperado: todos passam, **nenhum pulado**.
+Esperado: todos passam, **nenhum pulado**, e o `deno check` sai com 0.
+
+> **Armadilha encontrada ao executar, em 16/08/2026 — vale para toda a Tarefa 3
+> também.** O teste pode passar com o `deno check` FALHANDO, porque o erro é só de
+> tipo. `new Uint8Array(n)` produz `Uint8Array<ArrayBufferLike>`, que inclui
+> `SharedArrayBuffer`, e o `BufferSource` que o `crypto.subtle` espera exige
+> `ArrayBuffer` de verdade. Em execução é a mesma coisa; em type check, não. E o
+> deploy de Edge Function faz type check — o arquivo simplesmente não subiria.
+>
+> A correção é `new Uint8Array(new ArrayBuffer(n))` com retorno anotado como
+> `Uint8Array<ArrayBuffer>`.
+>
+> **Nunca conferir o `deno check` por `| tail`**: o código de saída do pipe é o do
+> `tail`, e um `&& echo OK` depois dele mente. Use `; echo $?` ou rode o comando
+> sozinho.
 
 - [ ] **Passo 6: Commit**
 
