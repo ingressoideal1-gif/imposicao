@@ -21,13 +21,24 @@
  * ## A ordem
  *
  *   1. guardar o token
- *   2. encerrar a sessão
- *   3. ir para o portão
+ *   2. gravar este portão no chaveiro
+ *   3. encerrar a sessão
+ *   4. ir para o portão
  *
- * Invertidos os dois primeiros, uma falha no meio deixa o aparelho sem os dois:
- * sem conta para tentar de novo e sem token para trabalhar. O token vem primeiro
- * porque ele é o que não dá para recuperar — a conta o dono reabre digitando a
- * senha outra vez.
+ * O token vem primeiro porque ele é o que não dá para recuperar — sai do
+ * servidor uma vez só. Invertidos os dois primeiros, uma falha no meio deixaria
+ * o aparelho sem conta para tentar de novo e sem token para trabalhar; a conta,
+ * o dono reabre digitando a senha outra vez.
+ *
+ * O chaveiro vem antes de a sessão sair porque, depois de encerrada, este
+ * aparelho não tem mais como saber o nome do evento — e a barra dele apareceria
+ * sem nome na tela inicial. Pior: gravado depois de uma falha ao encerrar, o
+ * celular ficaria com token e sem entrada na lista, e o evento sumiria da tela
+ * inicial do próprio portão que o está lendo.
+ *
+ * (O nome da função que encerra a sessão não aparece nesta abertura de
+ * propósito: há teste que confere a ordem pela POSIÇÃO das duas no arquivo, e
+ * citá-la aqui em cima faria esse teste medir o comentário em vez do código.)
  */
 (function () {
     'use strict';
@@ -39,9 +50,11 @@
     /**
      * @param token  o token do aparelho, que o servidor devolveu UMA vez
      * @param nome   o nome do portão, só para a mensagem
+     * @param dados  a entrada do chaveiro deste aparelho:
+     *               `{evento_id, nome_evento, aparelho_id, nome_portao, token}`
      * @returns Promise que não resolve em caso de sucesso — a página navega.
      */
-    function assumir(token, nome) {
+    function assumir(token, nome, dados) {
         if (!token) {
             return Promise.reject(new Error('o servidor não devolveu o token deste aparelho'));
         }
@@ -70,7 +83,16 @@
                 + 'anônima ou use outro navegador.'));
         }
 
-        // 2. A sessão da conta sai do aparelho. `.catch` que segue adiante:
+        // 2. O chaveiro, antes de a conta sair. Encerrada a sessão, este
+        //    aparelho não tem mais como saber o nome do evento -- e a barra
+        //    dele apareceria sem nome na tela inicial do próprio portão que o
+        //    está lendo. O `chaveiro.guardar` não lança: ele já engole a aba
+        //    anônima por dentro.
+        if (window.chaveiro && dados) {
+            window.chaveiro.guardar(dados);
+        }
+
+        // 3. A sessão da conta sai do aparelho. `.catch` que segue adiante:
         //    o token já está guardado, e prender o dono numa tela de erro
         //    porque o `signOut` não respondeu seria pior -- a sessão expira
         //    sozinha, e a próxima abertura já vai direto para o portão.
@@ -82,7 +104,7 @@
         } catch (e) { /* sem cliente: não há sessão a encerrar */ }
 
         return saindo.catch(function () { }).then(function () {
-            // 3. `replace`, e não `href`: o portão não entra no histórico. Sem
+            // 4. `replace`, e não `href`: o portão não entra no histórico. Sem
             //    isso, o botão "voltar" do celular devolveria o porteiro à tela
             //    de configuração do dono.
             window.location.replace('portaria.html');

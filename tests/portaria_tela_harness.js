@@ -41,10 +41,10 @@ async function rodar(caso) {
                 html = html.replace(/\?v=\d+/g, '');
                 return req.respond({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
             }
-            // A tela do dono e so um destino aqui: o que estes testes provam e
-            // que a portaria SAI para ela, com a marca `?configurar=1` na URL.
-            // Servir a `controle.html` de verdade traria supabase-js, login e
-            // rede para dentro de um teste que nao e sobre nada disso.
+            // A casa do aplicativo e so um destino aqui: o que estes testes
+            // provam e que a portaria SAI para ela. Servir a `controle.html` de
+            // verdade traria supabase-js, login e rede para dentro de um teste
+            // que nao e sobre nada disso.
             if (nome === 'controle.html') {
                 return req.respond({
                     status: 200, contentType: 'text/html; charset=utf-8',
@@ -99,6 +99,14 @@ async function rodar(caso) {
         return req.abort('connectionrefused');
     });
 
+    // O token e semeado ANTES de a portaria abrir pela primeira vez. Desde
+    // 16/08/2026 o arranque manda para a casa do aplicativo o celular que nao
+    // tem token -- nao ha mais tela de codigo onde ele possa esperar --, e sem
+    // esta semente a pagina que estes testes querem medir sai da frente antes
+    // de qualquer medicao. A escala e a mesma que o `semear()` usa; os modos que
+    // precisam de um aparelho SEM token apagam a chave e recarregam.
+    await page.goto('http://localhost/controle.html');
+    await page.evaluate(() => localStorage.setItem('ideal_portaria_token', 'token-de-teste'));
     await page.goto('http://localhost/portaria.html', { waitUntil: 'networkidle0' });
 
     if (caso.modo === 'sincronizar') {
@@ -133,17 +141,26 @@ async function rodar(caso) {
             });
             const filaAntes = await window.portariaDeposito.contarFila();
             const entradasAntes = await window.portariaDeposito.entradasPermitidas();
+            // A tela de recado volta ao repouso antes da sincronizacao: o
+            // arranque desta pagina de teste ja passou por ela (nao ha carga
+            // semeada, e a rede esta bloqueada), e medir o que estava ali antes
+            // faria o teste do 401 passar sem que o 401 tivesse feito nada.
+            document.getElementById('tela-aviso').classList.add('sumindo');
+            document.getElementById('erro-aviso').textContent = '';
             await window.portaria.sincronizar();
             const filaDepois = await window.portariaDeposito.contarFila();
             const entradasDepois = await window.portariaDeposito.entradasPermitidas();
-            const telaPareandoVisivel =
-                !document.getElementById('tela-pareando').classList.contains('sumindo');
-            const mensagem = document.getElementById('erro-pareamento').textContent;
+            // `tela-aviso` substituiu a antiga `tela-pareando` em 16/08/2026:
+            // nao ha mais codigo para digitar, e o que sobrou daquela tela e a
+            // frase que diz ao porteiro por que este celular parou de ler.
+            const telaAvisoVisivel =
+                !document.getElementById('tela-aviso').classList.contains('sumindo');
+            const mensagem = document.getElementById('erro-aviso').textContent;
             return {
                 filaAntes: filaAntes, filaDepois: filaDepois,
                 entradasAntes: entradasAntes, entradasDepois: entradasDepois,
                 tokenDepois: window.portaria.estado.token,
-                telaPareandoVisivel: telaPareandoVisivel, mensagem: mensagem,
+                telaAvisoVisivel: telaAvisoVisivel, mensagem: mensagem,
             };
         }, caso);
         await browser.close();
@@ -229,10 +246,16 @@ async function rodar(caso) {
 
     if (caso.modo === 'configurar') {
         await semear(caso);
-        await esperar(`!document.getElementById('btn-configurar-aparelho')`
-            + `.classList.contains('sumindo')`);
-        const visivel = await page.evaluate(() =>
-            !document.getElementById('btn-configurar-aparelho').classList.contains('sumindo'));
+        // O `document.getElementById` pode devolver null aqui, e isso NAO e
+        // defesa decorativa: o aparelho sem token sai sozinho para a casa do
+        // aplicativo no arranque, e a partir dai a pagina em que estas linhas
+        // rodam ja e outra -- sem botao nenhum para procurar.
+        const temBotao = `(function () {`
+            + ` var b = document.getElementById('btn-configurar-aparelho');`
+            + ` return !!b && !b.classList.contains('sumindo'); })()`;
+        await esperar(temBotao
+            + ` || window.location.pathname.indexOf('controle.html') !== -1`);
+        const visivel = await page.evaluate(temBotao);
         if (visivel) await page.click('#btn-configurar-aparelho');
         // Ou a pagina navega, ou a recusa aparece. Espera as duas.
         await esperar(`window.location.pathname.indexOf('controle.html') !== -1`
@@ -255,7 +278,7 @@ async function rodar(caso) {
     if (caso.modo === 'reconfigurado') {
         await semear(caso);
         await esperar(`!document.getElementById('tela-lendo').classList.contains('sumindo')`
-            + ` || !document.getElementById('tela-pareando').classList.contains('sumindo')`);
+            + ` || !document.getElementById('tela-aviso').classList.contains('sumindo')`);
         const saida = await page.evaluate(async () => {
             const guardada = await window.portariaDeposito.lerCarga();
             return {

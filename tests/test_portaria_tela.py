@@ -17,6 +17,11 @@ import pytest
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HARNESS = os.path.join(RAIZ, "tests", "portaria_tela_harness.js")
 
+
+def _ler(caminho):
+    with open(os.path.join(RAIZ, caminho), encoding="utf-8") as f:
+        return f.read()
+
 PISTA = "11111111-1111-1111-1111-111111111111"
 VIP = "22222222-2222-2222-2222-222222222222"
 SAL = "aa" * 32
@@ -222,8 +227,36 @@ def test_401_na_sincronizacao_preserva_a_fila_em_vez_de_apagar():
     assert r["filaDepois"] == 2, "o 401 apagou leituras que o servidor nunca confirmou"
     assert r["entradasAntes"] == r["entradasDepois"], "o 401 apagou a marca de quem ja entrou"
     assert r["tokenDepois"] is None, "o token revogado tem de ser esquecido"
-    assert r["telaPareandoVisivel"] is True
-    assert r["mensagem"], "o porteiro tem de saber por que voltou para o pareamento"
+    assert r["telaAvisoVisivel"] is True
+    assert r["mensagem"], "o porteiro tem de saber por que o aparelho parou de ler"
+
+
+# ── O codigo de seis caracteres saiu da tela ─────────────────────────────────
+#
+# Decisao do usuario, 16/08/2026: retirar TODAS as opcoes de codigo. Quem poe um
+# portao no ar e o dono, com a conta dele, tocando na barra do evento na casa do
+# aplicativo -- e nao alguem digitando seis caracteres anotados num papel.
+
+
+def test_a_tela_de_digitar_codigo_saiu():
+    """Decisao do usuario: retirar todas as opcoes de codigo.
+
+    O caminho novo e o dono entrar com a conta dele NAQUELE celular e tocar na
+    barra do evento. Nao ha mais codigo para anotar nem para digitar.
+    """
+    texto = _ler("frontend/portaria.html")
+    assert "tela-pareando" not in texto
+
+
+def test_o_botao_de_configurar_leva_a_lista_e_nao_ao_login():
+    texto = _ler("frontend/portaria.js")
+    assert "controle.html?configurar=1" not in texto
+
+
+def test_a_trava_da_fila_continua_valendo_ao_sair_do_portao():
+    """Ela protege a contagem que o cliente pagou para ter. Sair sem ela faz o
+    que ficou para tras nunca subir."""
+    assert "ainda não subiram" in _ler("frontend/portaria.js")
 
 
 # ── A trava: sair do portao passa pela senha ─────────────────────────────────
@@ -258,14 +291,18 @@ def _configurar(**caso):
     return _harness(base)
 
 
-def test_configurar_este_aparelho_leva_a_tela_que_pede_a_senha():
+def test_configurar_este_aparelho_leva_a_lista_de_eventos():
     """A saida do portao. Sem ela o celular fica preso: com token guardado, a
     casa do aplicativo devolve este aparelho para a leitura, e da leitura nao
-    havia como voltar."""
+    havia como voltar.
+
+    O destino e a lista, sem `?configurar=1`: a senha agora e pedida pela
+    engrenagem de cada evento, e nao por uma tela de login separada.
+    """
     r = _configurar()
     assert r["botaoVisivel"] is True, "o botao nao aparece na tela de leitura"
     assert r["saiu"] is True
-    assert r["url"] == "/controle.html?configurar=1"
+    assert r["url"] == "/controle.html"
 
 
 def test_configurar_recusa_enquanto_ha_leitura_por_subir():
@@ -288,14 +325,18 @@ def test_configurar_manda_a_fila_antes_de_sair():
     assert r["filaDepois"] == 0
 
 
-def test_aparelho_revogado_nao_fica_preso_com_a_fila():
-    """Revogado o aparelho, `aparelhoRevogado()` esquece o token e GUARDA a
-    fila -- essas leituras ja nao tem como subir daqui. Recusar a saida por
-    causa delas prenderia o celular para sempre, e nao as salvaria: o que as
-    salva e reconfigurar para o MESMO evento, o que o arranque respeita."""
+def test_aparelho_sem_token_vai_sozinho_para_a_lista_e_NAO_perde_a_fila():
+    """Sem token este celular nao e portao de nada, e nao ha mais tela de
+    codigo onde ele possa esperar: o arranque o manda para a casa do
+    aplicativo, onde o dono toca na barra do evento.
+
+    A fila fica. Revogado o aparelho, `aparelhoRevogado()` esquece o token e
+    GUARDA as leituras -- elas ja nao tem como subir daqui, e apaga-las nao as
+    salvaria. O que as salva e o celular voltar a ser portao do MESMO evento, e
+    o arranque respeita isso."""
     r = _configurar(token=None, fila=FILA_DE_TESTE, online=False)
-    assert r["botaoVisivel"] is True, "a tela de pareamento tambem precisa da saida"
-    assert r["saiu"] is True
+    assert r["saiu"] is True, "o celular sem token ficou preso na portaria"
+    assert r["url"] == "/controle.html"
     assert r["filaDepois"] == 2, "a saida apagou a fila do aparelho revogado"
 
 

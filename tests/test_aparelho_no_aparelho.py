@@ -127,6 +127,17 @@ def test_o_token_e_guardado_ANTES_de_a_sessao_ser_encerrada():
     )
 
 
+def test_o_token_entra_no_chaveiro_ANTES_de_a_sessao_sair():
+    """A ordem inteira deste arquivo existe por isso.
+
+    Gravar o chaveiro depois do `signOut` deixaria o aparelho com token e sem
+    entrada na lista: o evento sumiria da tela inicial do proprio portao que o
+    esta lendo.
+    """
+    texto = _ler("frontend/aparelho.js")
+    assert texto.index("chaveiro.guardar") < texto.index("signOut")
+
+
 def test_a_sessao_da_conta_nao_fica_no_aparelho():
     """O ponto que faz a mudanca valer.
 
@@ -174,9 +185,13 @@ def test_a_trava_cobre_tambem_apagar():
         assert apagar not in corpo, "desparear ainda apaga por conta propria"
 
 
-def test_a_saida_do_portao_leva_a_tela_que_pede_a_senha():
+def test_a_saida_do_portao_leva_a_lista_onde_a_senha_e_pedida():
+    """O destino mudou em 16/08/2026: era `controle.html?configurar=1`, a tela
+    de login, e passou a ser a lista de eventos. A senha continua sendo exigida
+    -- quem a pede agora e a engrenagem de cada evento."""
     corpo = _corpo(_ler("frontend/portaria.js"), "function irParaConfiguracao")
-    assert "configurar=1" in corpo
+    assert "controle.html" in corpo
+    assert "configurar=1" not in corpo
 
 
 def test_ha_saida_para_reconfigurar_o_aparelho():

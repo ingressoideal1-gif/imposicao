@@ -125,18 +125,22 @@
         <span id="topo-fila"></span>
     </div>
 
-    <div id="tela-pareando">
-        <h1>Ligar este aparelho</h1>
-        <p style="color:var(--dim);font-size:0.9rem;">
-            Peça o código de 6 caracteres a quem organiza o evento. Se quem
-            organiza está aqui com você, use "Configurar este aparelho", no fim
-            da tela: ele entra com a conta dele e escolhe os setores deste
-            portão, sem código nenhum.
-        </p>
-        <input id="campo-codigo" maxlength="6" autocomplete="off"
-               autocapitalize="characters" placeholder="ABC234">
-        <button id="btn-parear">Ligar</button>
-        <div id="erro-pareamento" class="aviso sumindo"></div>
+    <!--
+        O recado, no lugar da antiga tela de digitar o código.
+
+        Não há mais código de 6 caracteres: quem põe um portão no ar é o dono,
+        na casa do aplicativo, tocando na barra do evento com a conta dele. Um
+        aparelho que abre sem token já não para aqui — ele vai direto para a
+        lista.
+
+        O que sobrou desta tela é o que ela fazia de mais importante: dizer POR
+        QUE este celular parou de ler. Sem uma frase, o aparelho desligado pelo
+        organizador e o aparelho sem sinal têm a mesma cara — uma tela que não
+        responde.
+    -->
+    <div id="tela-aviso" class="sumindo">
+        <h1>Este aparelho não está lendo</h1>
+        <div id="erro-aviso" class="aviso sumindo" role="alert"></div>
     </div>
 
     <div id="tela-carregando" class="sumindo">
@@ -188,9 +192,10 @@
         o `mostrar()` a acende só onde este aparelho ficaria preso sem ela.
 
         Ela existe porque, com token guardado, a casa do aplicativo devolve
-        este celular para a leitura — não há "voltar". Quem chega do outro
-        lado cai no login: reconfigurar e apagar exigem a senha do dono, que é
-        a trava inteira.
+        este celular para a leitura — não há "voltar". Do outro lado está a
+        lista de eventos, e a engrenagem de cada um pede a senha do dono:
+        reconfigurar e apagar continuam passando por ela, que é a trava
+        inteira.
     -->
     <button id="btn-configurar-aparelho" class="discreto sumindo" type="button">
         Configurar este aparelho

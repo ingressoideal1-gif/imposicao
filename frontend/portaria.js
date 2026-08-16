@@ -1,5 +1,10 @@
 /**
- * O aparelho da portaria: pareamento, carga, leitura e fila.
+ * O aparelho da portaria: carga, leitura e fila.
+ *
+ * O pareamento por codigo de seis caracteres saiu daqui em 16/08/2026. Quem poe
+ * um portao no ar agora e o dono, na casa do aplicativo, com a conta dele --
+ * este arquivo so trabalha com o token que ja esta guardado, e manda para a
+ * lista de eventos o celular que nao tem nenhum.
  *
  * A decisao de deixar entrar NAO mora aqui -- mora no `portaria-validacao.js`,
  * que e puro e testado com dados de mesa. Este arquivo orquestra: pega o texto
@@ -24,19 +29,22 @@
 
     function $(id) { return document.getElementById(id); }
     function mostrar(qual) {
-        ['pareando', 'carregando', 'lendo', 'resposta', 'ambiguo'].forEach(function (t) {
+        // 'pareando' saiu daqui em 16/08/2026, junto com o codigo de seis
+        // caracteres: nao ha mais o que digitar nesta tela. No lugar dela ficou
+        // 'aviso', que so diz por que este aparelho parou de ler.
+        ['aviso', 'carregando', 'lendo', 'resposta', 'ambiguo'].forEach(function (t) {
             $('tela-' + t).classList.toggle('sumindo', t !== qual);
         });
         // A saida para a configuracao aparece so nas duas telas em que o
-        // aparelho ficaria PRESO sem ela: a de leitura e a de pareamento. Nas
+        // aparelho ficaria PRESO sem ela: a de leitura e a de aviso. Nas
         // outras ela atrapalha -- em `resposta` a tela inteira e a decisao,
         // lida de longe, e nada pode competir com o "Ler o proximo"; em
         // `carregando` ainda nao ha o que configurar.
         $('btn-configurar-aparelho').classList.toggle('sumindo',
-            qual !== 'lendo' && qual !== 'pareando');
+            qual !== 'lendo' && qual !== 'aviso');
         $('erro-configurar').classList.add('sumindo');
         // A trava vale nas telas de trabalho -- ler o codigo e mostrar a
-        // resposta. Nas de pareamento e carga o aparelho pode dormir.
+        // resposta. Nas de aviso e carga o aparelho pode dormir.
         if (qual === 'lendo' || qual === 'resposta' || qual === 'ambiguo') acenderTela();
         else apagarPermitido();
     }
@@ -115,7 +123,14 @@
         });
     }
 
-    // ── Pareamento ──────────────────────────────────────────────────────────
+    // ── O evento deste aparelho ─────────────────────────────────────────────
+
+    /** A tela de recado, com a frase que explica por que este celular parou. */
+    function avisar(frase) {
+        mostrar('aviso');
+        $('erro-aviso').textContent = frase;
+        $('erro-aviso').classList.remove('sumindo');
+    }
 
     function eventoDaUrl() {
         // O `start_url` do manifesto e `/portaria.html`, SEM `?e=`. Tem de ser
@@ -123,33 +138,23 @@
         // icone na tela de inicio e um so, e um `?e=` cravado nele prenderia o
         // aparelho no primeiro evento para sempre.
         //
-        // Depois de pareado nada disso importa -- o token e que manda, e o boot
-        // le a carga do IndexedDB. O caso que estas linhas cobrem e o porteiro
-        // que INSTALA antes de parear: ele abre pelo icone, a URL vem limpa, e
-        // sem esta memoria o `parear` mandaria `evento_id: ''`.
+        // Com o aparelho ja no portao nada disso importa -- o token e que
+        // manda, e o boot le a carga do IndexedDB. O caso que estas linhas
+        // cobrem e o porteiro que INSTALA o aplicativo antes de o aparelho
+        // virar portao: ele abre pelo icone, a URL vem limpa, e sem esta
+        // memoria a casa do aplicativo nao saberia de que evento se trata.
         var daUrl = new URLSearchParams(window.location.search).get('e') || '';
         if (daUrl) {
             // try/catch nao e decoracao: em aba privada do Safari o setItem
-            // LANCA, e um throw aqui derrubaria o pareamento inteiro.
+            // LANCA, e um throw aqui derrubaria o arranque inteiro.
             try { localStorage.setItem(CHAVE_EVENTO, daUrl); } catch (e) { }
             return daUrl;
         }
         try { return localStorage.getItem(CHAVE_EVENTO) || ''; } catch (e) { return ''; }
     }
 
-    function parear(codigo) {
-        return api('/entrar', {
-            method: 'POST',
-            body: JSON.stringify({ evento_id: eventoDaUrl(), codigo: codigo }),
-        }).then(function (r) {
-            estado.token = r.token;
-            localStorage.setItem(CHAVE_TOKEN, r.token);
-            return baixarCarga();
-        });
-    }
-
     /**
-     * A saida do portao: leva para a tela que pede a conta do dono.
+     * A saida do portao: leva para a lista de eventos.
      *
      * Nada e apagado aqui, e nao pode ser -- e essa e a trava inteira. Quem
      * apaga e o dono, do outro lado, depois da senha.
@@ -184,7 +189,11 @@
                 $('erro-configurar').classList.remove('sumindo');
                 return;
             }
-            window.location.href = 'controle.html?configurar=1';
+            // A lista de eventos, e nao mais a tela de login: a engrenagem de
+            // cada evento e que pede a senha agora. A marca que este endereco
+            // levava servia para pular o desvio que mandava aparelho com token
+            // direto ao portao -- desvio que saiu junto com a tela de codigo.
+            window.location.href = 'controle.html';
         });
     }
 
@@ -232,11 +241,8 @@
             // carga do aparelho anterior.
             try { localStorage.removeItem(CHAVE_RECONFIG); } catch (e) { }
         }).catch(function () {
-            mostrar('pareando');
-            $('erro-pareamento').textContent =
-                'Não deu para baixar o evento neste aparelho. Conecte-o à '
-                + 'internet e abra de novo.';
-            $('erro-pareamento').classList.remove('sumindo');
+            avisar('Não deu para baixar o evento neste aparelho. Conecte-o à '
+                + 'internet e abra de novo.');
         });
     }
 
@@ -250,9 +256,8 @@
         // So esquece o token. Carga, fila e entradas continuam no celular.
         localStorage.removeItem(CHAVE_TOKEN);
         estado.token = null;
-        $('erro-pareamento').textContent = 'Este aparelho foi desligado pelo organizador.';
-        $('erro-pareamento').classList.remove('sumindo');
-        mostrar('pareando');
+        avisar('Este aparelho foi desligado pelo organizador. Use "Configurar '
+            + 'este aparelho" para ligá-lo de novo.');
         return Promise.resolve();
     }
 
@@ -489,16 +494,6 @@
 
     // ── Amarração da tela ───────────────────────────────────────────────────
 
-    $('btn-parear').onclick = function () {
-        var codigo = ($('campo-codigo').value || '').trim().toUpperCase();
-        $('erro-pareamento').classList.add('sumindo');
-        $('btn-parear').disabled = true;
-        parear(codigo).catch(function (e) {
-            $('erro-pareamento').textContent = e.message;
-            $('erro-pareamento').classList.remove('sumindo');
-        }).then(function () { $('btn-parear').disabled = false; });
-    };
-
     $('btn-proximo').onclick = function () {
         mostrar('lendo');
         ligarCamera();
@@ -541,7 +536,7 @@
         if (window.portariaCamera) window.portariaCamera.desligar();
         baixarCarga().catch(function () {
             // Uma atualizacao que falha NAO pode jogar o porteiro para a
-            // tela de pareamento -- o aparelho ja esta pareado e
+            // tela de recado -- o aparelho ja e portao e esta
             // funcionando, so a atualizacao e que nao completou. Volta para
             // a leitura com a carga que ja tinha (baixarCarga so grava a
             // carga NOVA depois que TODAS as paginas chegam; uma pagina que
@@ -558,32 +553,50 @@
 
     // ── Partida ─────────────────────────────────────────────────────────────
 
-    // Lembrar o evento ASSIM QUE A PAGINA ABRE, e nao so na hora de parear: o
-    // porteiro abre o endereco compartilhado (`/portaria.html?e=<evento>`),
-    // INSTALA o aplicativo, e so entao digita o codigo -- e o icone abre
-    // `/portaria.html` sem query nenhuma. Guardar dentro do `parear` cobriria
-    // so o caso que ja funcionava, com a URL ainda na tela.
-    eventoDaUrl();
-
-    estado.token = localStorage.getItem(CHAVE_TOKEN);
-    if (!estado.token) {
-        mostrar('pareando');
-    } else if (recemConfigurado()) {
-        recarregarDepoisDeConfigurar();
-    } else {
-        D.lerCarga().then(function (c) {
-            if (c) { estado.carga = c; entrarEmLeitura(); sincronizar(); }
-            else { baixarCarga().catch(function () { mostrar('pareando'); }); }
-        });
-    }
-
     function recemConfigurado() {
         try { return !!localStorage.getItem(CHAVE_RECONFIG); }
         catch (e) { return false; }   // aba anonima: nao ha marca a ler
     }
 
+    function arrancar() {
+        // Lembrar o evento ASSIM QUE A PAGINA ABRE, e nao so quando alguem
+        // precisar dele: o porteiro abre o endereco compartilhado
+        // (`/portaria.html?e=<evento>`), INSTALA o aplicativo, e o icone passa
+        // a abrir `/portaria.html` sem query nenhuma.
+        eventoDaUrl();
+
+        estado.token = localStorage.getItem(CHAVE_TOKEN);
+        // Sem token, este celular nao e portao de nada. A casa do aplicativo e
+        // que resolve isso agora -- o dono toca na barra do evento e o portao
+        // nasce ali. Nao ha mais codigo para digitar, e por isso nao ha mais
+        // tela nenhuma a mostrar aqui.
+        if (!estado.token) {
+            window.location.replace('controle.html');
+            return;
+        }
+        if (recemConfigurado()) {
+            recarregarDepoisDeConfigurar();
+            return;
+        }
+        D.lerCarga().then(function (c) {
+            if (c) { estado.carga = c; entrarEmLeitura(); sincronizar(); }
+            else {
+                baixarCarga().catch(function () {
+                    avisar('Não deu para baixar o evento neste aparelho. '
+                        + 'Conecte-o à internet e abra de novo.');
+                });
+            }
+        });
+    }
+
     window.portaria = {
         estado: estado, validarTexto: validarTexto,
-        sincronizar: sincronizar, parear: parear, desparear: desparear,
+        sincronizar: sincronizar, desparear: desparear,
     };
+
+    // Depois do `window.portaria`, de proposito: o arranque pode navegar para
+    // fora daqui (aparelho sem token), e quem inspeciona esta pagina -- o
+    // harness dos testes, o console do navegador -- precisa do objeto exportado
+    // de qualquer jeito.
+    arrancar();
 })();
