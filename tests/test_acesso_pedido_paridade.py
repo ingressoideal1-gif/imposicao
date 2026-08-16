@@ -28,6 +28,7 @@ bate e o teste falha na hora, em vez de o cliente descobrir no celular dele.
 """
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -212,13 +213,31 @@ def test_o_qr_anterior_morre_quando_outro_e_gerado(jwt):
 
     Sem ela, quem recebeu a imagem antiga por WhatsApp continuaria podendo
     reivindicar o pedido depois de o atendente ter gerado outro.
+
+    ## A espera de um segundo, que não é frescura
+
+    O corpo assinado é `<pedido>.<vencimento>`, e o vencimento tem resolução de
+    UM SEGUNDO. Duas gerações dentro do mesmo segundo produzem o MESMO token,
+    byte a byte — e aí não há nada a revogar: o hash guardado continua batendo,
+    e o "QR anterior" É o atual.
+
+    Isso não é defeito: dois QR idênticos valem a mesma coisa e vencem juntos.
+    Mas sem a espera este teste falha de vez em quando, conforme os dois pedidos
+    caiam ou não no mesmo segundo — e teste que pisca é pior do que teste
+    nenhum, porque ensina a ignorar vermelho.
     """
     situacao, primeiro = _pedir(f"{EDGE_QR}/pedidos/{PEDIDO_DE_TESTE}/qr", "POST", jwt)
     assert situacao == 200, primeiro
-    situacao, _segundo = _pedir(f"{EDGE_QR}/pedidos/{PEDIDO_DE_TESTE}/qr", "POST", jwt)
+
+    time.sleep(1.2)
+
+    situacao, segundo = _pedir(f"{EDGE_QR}/pedidos/{PEDIDO_DE_TESTE}/qr", "POST", jwt)
     assert situacao == 200
 
     velho = _token_da_url(primeiro["url"])
+    assert velho != _token_da_url(segundo["url"]), (
+        "os dois QR saíram idênticos: a espera de um segundo não foi suficiente"
+    )
     for base in (f"{PYTHON}/evento", EDGE_EVENTO):
         situacao, corpo = _pedir(f"{base}?t={urllib.parse.quote(velho)}", "GET")
         assert situacao == 403, f"{base} ainda aceita o QR substituído: {corpo}"
