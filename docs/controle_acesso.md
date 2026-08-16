@@ -582,11 +582,35 @@ guardado, e nenhum foi usado.
 
 `portaria.html` é a tela do porteiro. Depois de pareada, ela **decide sem rede**.
 
-O porteiro abre o endereço que a tela do dono mostra — `portaria.html?e=<evento_id>`,
-também como QR — e digita o código de 6 caracteres daquele aparelho. O servidor troca o
-código por um token próprio, guardado como `sha256` na coluna `token_hash` que existe desde
+Há **dois** jeitos de pôr um portão no ar, e desde a v612 o primeiro é o preferido.
+
+**O dono, com o celular do portão na mão** (v612). Ele abre o aplicativo nesse aparelho,
+entra com a conta do Vibe, escolhe o evento e usa **"Usar ESTE aparelho na portaria"**: dá um
+nome ao portão, toca nos setores e salva. O servidor cunha o token **na criação** e o devolve
+uma vez só; o aparelho o guarda e **a sessão da conta é encerrada ali mesmo**. Não há código
+nenhum nesse caminho, e não deve haver — código guardado no banco é código que parearia um
+*segundo* celular naquele portão (por isso `codigo_hash` passou a aceitar nulo).
+
+A ordem das operações é a parte que não pode sair errada, e é a razão de `frontend/aparelho.js`
+ser um arquivo sozinho: **guardar o token → encerrar a sessão → ir para a leitura**.
+Invertidas as duas primeiras, uma falha no meio deixa o aparelho sem conta *e* sem token, no
+meio de um evento.
+
+**O código de 6 caracteres** (v585), para quando o celular do portão **não** está ali. O
+porteiro abre o endereço que a tela do dono mostra — `portaria.html?e=<evento_id>`, também
+como QR — e digita o código daquele aparelho. O servidor troca o código por um token próprio.
+
+Nos dois casos o token é guardado como `sha256` na coluna `token_hash`, que existe desde
 13/08. **Revogar o aparelho é o único jeito de derrubá-lo**: gerar um código novo não
 desconecta ninguém, porque quem já pareou não usa mais o código.
+
+**A trava** (v612). Salvo o aparelho, ele abre direto na leitura, e a única saída é o botão
+*"Configurar este aparelho"*, que leva ao login. Reeditar **e apagar** passam pela senha — o
+`desparear`, que apagava token, carga, fila e entradas ali mesmo, deixou de fazer isso.
+Antes de sair, a fila sobe: configurar cunha um token novo, e leitura enfileirada sob o token
+velho não sobe mais depois. E a carga é rebaixada antes da primeira leitura, porque ela
+guarda o **nome** do portão e os **setores** que ele valida — reusá-la mostraria o portão
+velho e recusaria ingresso bom como "OUTRA PORTA".
 
 Em seguida o aparelho baixa a carga — o evento **inteiro**, em páginas de 5.000 — para o
 IndexedDB: hashes, sais de cada pedido, setores, bloqueios, e quais setores este aparelho

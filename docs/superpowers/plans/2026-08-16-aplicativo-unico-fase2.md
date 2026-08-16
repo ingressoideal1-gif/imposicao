@@ -1,6 +1,6 @@
 # Aplicativo único — Fase 2: o dono configura no próprio aparelho
 
-> **Para quem executar com agentes:** SUB-SKILL OBRIGATÓRIA: use `superpowers:subagent-driven-development` ou `superpowers:executing-plans`. Os passos usam caixas (`- [ ]`).
+> **Para quem executar com agentes:** SUB-SKILL OBRIGATÓRIA: use `superpowers:subagent-driven-development` ou `superpowers:executing-plans`. Os passos usam caixas (`- [x]`).
 
 **Objetivo:** o dono vai até cada aparelho, digita **a senha** (uma), nomeia o portão, libera os setores e salva. O aparelho passa a registrar só as entradas configuradas e trava — reeditar exige a senha de novo, e apagar também.
 
@@ -38,7 +38,7 @@
 
 **Arquivos:** criar `sql/acesso_aparelho_sem_codigo.sql`; teste em `tests/test_aparelho_no_aparelho.py`.
 
-- [ ] **Passo 1: escrever o teste que falha**
+- [x] **Passo 1: escrever o teste que falha**
 
 ```python
 def test_o_sql_libera_o_codigo_nulo_e_diz_por_que():
@@ -48,9 +48,9 @@ def test_o_sql_libera_o_codigo_nulo_e_diz_por_que():
     assert "codigo_hash" in sql
 ```
 
-- [ ] **Passo 2: rodar e ver falhar.**
+- [x] **Passo 2: rodar e ver falhar.**
 
-- [ ] **Passo 3: escrever o SQL**
+- [x] **Passo 3: escrever o SQL**
 
 ```sql
 -- ═════════════════════════════════════════════════════════════════════════════
@@ -94,9 +94,9 @@ SELECT column_name, is_nullable
  ORDER BY column_name;
 ```
 
-- [ ] **Passo 4: rodar o teste, e aplicar o SQL no Supabase.** A aplicação é ato do usuário — o arquivo vai pronto para colar.
+- [x] **Passo 4: rodar o teste, e aplicar o SQL no Supabase.** A aplicação é ato do usuário — o arquivo vai pronto para colar.
 
-- [ ] **Passo 5: commit.**
+- [x] **Passo 5: commit.**
 
 ---
 
@@ -108,7 +108,7 @@ SELECT column_name, is_nullable
 - Produz: `POST /eventos/{id}/aparelhos/aqui` com `{ nome, setores: [] }` → `{ id, nome, setores, token }`. Exige JWT **e** elevação, como toda escrita de configuração.
 - O `token` sai **uma vez só**, na resposta. O banco guarda o `sha256` dele, como o `entrar` já faz.
 
-- [ ] **Passo 1: escrever os testes que falham**
+- [x] **Passo 1: escrever os testes que falham**
 
 ```python
 def test_o_aparelho_daqui_nasce_com_token_e_sem_codigo():
@@ -131,9 +131,9 @@ def test_a_rota_do_aparelho_daqui_exige_elevacao():
     assert "exigirElevacao" in trecho
 ```
 
-- [ ] **Passo 2: rodar e ver falhar.**
+- [x] **Passo 2: rodar e ver falhar.**
 
-- [ ] **Passo 3: implementar em `_compartilhado/configuracao.ts`**
+- [x] **Passo 3: implementar em `_compartilhado/configuracao.ts`**
 
 ```typescript
 /**
@@ -177,9 +177,9 @@ E a rota, em `acesso-conta/index.ts`, ao lado da que já existe para `aparelhos`
   }
 ```
 
-- [ ] **Passo 4: rodar os testes** (pytest e `npx deno test`).
+- [x] **Passo 4: rodar os testes** (pytest e `npx deno test`).
 
-- [ ] **Passo 5: commit.**
+- [x] **Passo 5: commit.**
 
 ---
 
@@ -192,7 +192,7 @@ E a rota, em `acesso-conta/index.ts`, ao lado da que já existe para `aparelhos`
 **Interfaces:**
 - Produz: `AcessoConta.entrarEElevar(email, senha, eventoId)` → `Promise<{sessao, elevacao}>`.
 
-- [ ] **Passo 1: escrever o teste que falha**
+- [x] **Passo 1: escrever o teste que falha**
 
 ```python
 def test_uma_senha_serve_para_entrar_e_para_elevar():
@@ -206,9 +206,9 @@ def test_uma_senha_serve_para_entrar_e_para_elevar():
     assert "entrar(" in corpo and "/elevar" in corpo
 ```
 
-- [ ] **Passo 2: rodar e ver falhar.**
+- [x] **Passo 2: rodar e ver falhar.**
 
-- [ ] **Passo 3: implementar**
+- [x] **Passo 3: implementar**
 
 ```javascript
     /**
@@ -238,7 +238,7 @@ def test_uma_senha_serve_para_entrar_e_para_elevar():
     }
 ```
 
-- [ ] **Passo 4: rodar os testes. Passo 5: commit.**
+- [x] **Passo 4: rodar os testes. Passo 5: commit.**
 
 ---
 
@@ -248,7 +248,7 @@ def test_uma_senha_serve_para_entrar_e_para_elevar():
 
 **O fluxo, na ordem:** escolher o evento → nomear o portão → tocar nos setores → salvar → **a sessão é encerrada** → vai para `portaria.html`.
 
-- [ ] **Passo 1: escrever os testes que falham**
+- [x] **Passo 1: escrever os testes que falham**
 
 ```python
 def test_salvar_o_aparelho_encerra_a_sessao_da_conta():
@@ -274,9 +274,9 @@ def test_o_aparelho_guarda_o_token_e_nada_mais():
     )
 ```
 
-- [ ] **Passo 2: rodar e ver falhar.**
+- [x] **Passo 2: rodar e ver falhar.**
 
-- [ ] **Passo 3: implementar `frontend/aparelho.js`**
+- [x] **Passo 3: implementar `frontend/aparelho.js`**
 
 A ordem das operações é a parte que não pode sair errada:
 
@@ -287,7 +287,7 @@ A ordem das operações é a parte que não pode sair errada:
 
 Encerrar a sessão antes de guardar o token deixaria o aparelho sem os dois — sem conta para tentar de novo e sem token para trabalhar, no meio de um portão.
 
-- [ ] **Passo 4: a marcação, em `controle.html`**, dentro da seção "Aparelhos da portaria":
+- [x] **Passo 4: a marcação, em `controle.html`**, dentro da seção "Aparelhos da portaria":
 
 ```html
     <div class="cartao" id="usar-este-aparelho">
@@ -305,9 +305,9 @@ Encerrar a sessão antes de guardar o token deixaria o aparelho sem os dois — 
     </div>
 ```
 
-- [ ] **Passo 5: o desvio do `?configurar=1` em `controle.js`.** O arranque manda aparelho pareado direto ao portão; sem uma saída, não haveria como reconfigurar. `?configurar=1` pula esse desvio e mostra o login.
+- [x] **Passo 5: o desvio do `?configurar=1` em `controle.js`.** O arranque manda aparelho pareado direto ao portão; sem uma saída, não haveria como reconfigurar. `?configurar=1` pula esse desvio e mostra o login.
 
-- [ ] **Passo 6: rodar os testes e conferir no navegador. Passo 7: commit.**
+- [x] **Passo 6: rodar os testes e conferir no navegador. Passo 7: commit.**
 
 ---
 
@@ -317,7 +317,7 @@ Salvo o aparelho, ele abre direto na leitura. Reabrir a configuração — e **a
 
 **Arquivos:** `frontend/portaria.html`, `frontend/portaria.js`.
 
-- [ ] **Passo 1: escrever os testes que falham**
+- [x] **Passo 1: escrever os testes que falham**
 
 ```python
 def test_a_trava_cobre_tambem_apagar():
@@ -335,11 +335,11 @@ def test_ha_saida_para_reconfigurar_o_aparelho():
     assert 'id="btn-configurar-aparelho"' in _ler("frontend/portaria.html")
 ```
 
-- [ ] **Passo 2: rodar e ver falhar. Passo 3: implementar.**
+- [x] **Passo 2: rodar e ver falhar. Passo 3: implementar.**
 
 O botão **Configurar este aparelho**, na tela de leitura, leva a `controle.html?configurar=1`. O `desparear` deixa de apagar por conta própria e passa pelo mesmo caminho: quem apaga é a tela de configuração, depois da senha.
 
-- [ ] **Passo 4: rodar os testes. Passo 5: commit.**
+- [x] **Passo 4: rodar os testes. Passo 5: commit.**
 
 ---
 
@@ -349,11 +349,11 @@ A spec diz que criar e editar aparelho migram para o aparelho, e que da tela do 
 
 **Nesta fase, o caminho antigo FICA.** Removê-lo no mesmo release em que o novo estreia deixaria o dono sem saída se o novo tiver problema no portão — e o antigo está aprovado e rodando. A tela ganha uma frase apontando o caminho novo; a remoção é limpeza de um release seguinte, depois que o novo tiver rodado num evento de verdade.
 
-- [ ] **Passo 1: a frase, no cartão de criar aparelho:**
+- [x] **Passo 1: a frase, no cartão de criar aparelho:**
 
 > Se você está **com o celular do portão na mão**, prefira "Usar ESTE aparelho": não precisa anotar código nenhum.
 
-- [ ] **Passo 2: commit.**
+- [x] **Passo 2: commit.**
 
 ---
 

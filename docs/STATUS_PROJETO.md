@@ -131,7 +131,9 @@ backend já aceitaria a reativação — falta a decisão do usuário e o botão
 
 ### ✅ Parte 3b — a portaria (**no ar na v585**)
 
-O aparelho do porteiro: pareia com o código de 6 caracteres, baixa o evento inteiro para o
+O aparelho do porteiro: pareia — desde a v612, com o **dono configurando no próprio
+aparelho**, e ainda pelo código de 6 caracteres quando o celular do portão não está ali —,
+baixa o evento inteiro para o
 IndexedDB e decide **sem rede**, pelas seis regras de
 [frontend/portaria-validacao.js](../frontend/portaria-validacao.js). Os três endpoints —
 `entrar`, `faixa` e `leituras` — ficam em [acesso_portaria.py](../acesso_portaria.py), e o

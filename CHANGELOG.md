@@ -4,7 +4,64 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v610** — 2026-08-16 | Agente **1.2.105**
+## Versão atual: **v612** — 2026-08-16 | Agente **1.2.106**
+
+---
+
+## [v612] — O dono configura o portão no próprio celular
+
+Até aqui, pôr um portão no ar era: o dono criava o aparelho na tela dele, o servidor
+sorteava um código de seis caracteres, e alguém digitava esse código no celular do portão.
+Agora o dono vai até o aparelho, **digita a senha uma vez**, dá um nome ao portão, toca nos
+setores e salva. Não há código para anotar nem para ditar por telefone.
+
+**A conta sai do aparelho ao salvar.** O código de seis caracteres existia por uma razão: a
+senha do dono nunca chegava ao celular que fica com o porteiro. Trocar o código pela senha e
+**deixar a sessão aberta** entregaria ao porteiro a conta inteira do cliente — os eventos, a
+configuração, tudo. Salvo o aparelho, a sessão é encerrada ali mesmo e o celular fica só com
+o token, que serve para ler ingresso daquele evento, naqueles setores, e nada mais.
+
+**A ordem das três operações é a parte que não pode sair errada:** guardar o token, encerrar
+a sessão, ir para a leitura. Invertidas as duas primeiras, uma falha no meio deixa o aparelho
+sem as duas coisas — sem conta para tentar de novo e sem token para trabalhar, no meio de um
+evento. O token vem primeiro porque é o que não dá para recuperar: ele sai do servidor uma
+vez só.
+
+**Uma senha, uma vez.** Entrar e elevar continuam sendo duas chamadas — o login é do
+Supabase, a elevação é nossa, assinada e com prazo. O que a decisão do usuário proíbe é a
+pessoa digitar duas vezes.
+
+**O aparelho nasce sem código**, e é assim de propósito: código guardado no banco é código
+que parearia um **segundo** celular naquele portão. A coluna `codigo_hash` passou a aceitar
+nulo (`sql/acesso_aparelho_sem_codigo.sql`); nada foi apagado, e o caminho antigo continua
+funcionando para quem precisa configurar um celular que não está ali.
+
+**A trava.** Salvo o aparelho, ele abre direto na leitura, e a única saída é
+"Configurar este aparelho" — que leva à tela de login. Reeditar **e apagar** passam pela
+senha: o `desparear`, que apagava token, carga, fila e entradas ali mesmo, deixou de fazer
+isso. Trava que protege a edição e deixa o apagar livre não é trava.
+
+**A fila sobe antes de o aparelho trocar de identidade.** Configurar cunha um token novo, e
+leitura enfileirada sob o token velho não sobe mais depois — some a contagem que o cliente
+pagou para ter. Sem sinal, a saída espera e diz por quê; configurar exige rede de qualquer
+forma. A exceção é o aparelho revogado, que já ficou sem token: prendê-lo não salvaria nada.
+
+**Achado escrevendo a trava:** a carga guarda o **nome** do portão e os **setores** que ele
+valida. Reconfigurado o celular, a carga que está nele é do aparelho anterior — o topo
+mostraria o portão velho e a validação recusaria ingresso bom como "OUTRA PORTA", sem nada na
+tela que explicasse. Agora a carga é baixada de novo antes da primeira leitura, e se ela não
+chegar o aparelho espera em vez de ler com a antiga. Trocando de **evento**, a fila que
+sobrou é esquecida: o servidor a gravaria com o evento do token atual — entrada de um evento
+contada em outro.
+
+---
+
+## [v611] — O convite para instalar aparecia só na tela do porteiro
+
+A v610 estreou o aplicativo instalável, mas só o `portaria.html` registrava o service worker.
+O Chrome só oferece "Instalar aplicativo" numa página que tenha um registrado — e a **casa**
+do aplicativo é o `controle.html`. Na prática, quem abrisse `/ic/` nunca via o convite, que
+era o ponto do release. O registro virou um arquivo compartilhado pelas três telas.
 
 ---
 
