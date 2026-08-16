@@ -157,3 +157,39 @@ def test_o_evento_e_lembrado_fora_da_url():
     js = _ler("frontend/portaria.js")
     assert "ideal_portaria_evento" in js
     assert "CHAVE_EVENTO" in js
+
+
+# ── Service worker ──────────────────────────────────────────────────────────
+
+def test_o_pre_cache_inclui_o_manifesto_e_os_icones():
+    sw = _ler("frontend/sw.js")
+    assert "/portaria.webmanifest" in sw
+    assert "/icones/portaria-192.png" in sw
+    assert "/icones/portaria-512.png" in sw
+    assert "/apple-touch-icon.png" in sw
+
+
+def test_o_service_worker_ignora_outra_origem():
+    """A API vive em outro dominio (Edge Function do Supabase).
+
+    Sem esta saida, cada leitura de ingresso passa por uma consulta ao cache
+    antes de ir a rede -- e um nome que colida um dia devolveria resposta velha
+    a uma pergunta de controle de acesso.
+    """
+    assert "self.location.origin" in _ler("frontend/sw.js")
+
+
+def test_o_ignoreSearch_so_vale_para_a_navegacao():
+    """Com ignoreSearch nos subrecursos, um pedido de `portaria.js?v=608` casa
+    com o `?v=607` guardado, e o aparelho instalado fica preso no codigo do dia
+    em que instalou."""
+    assert _ler("frontend/sw.js").count("ignoreSearch") == 1
+
+
+def test_o_pre_cache_e_o_html_pedem_a_mesma_versao():
+    """O `publicar.ps1` renumera os dois no mesmo passo; se um dia deixarem de
+    combinar, a instalacao guarda um arquivo que a pagina nunca pede."""
+    import re
+
+    versoes = set(re.findall(r"\.js\?v=(\d+)", _ler("frontend/portaria.html")))
+    assert len(versoes) == 1, f"portaria.html tem versoes misturadas: {sorted(versoes)}"

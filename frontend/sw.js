@@ -5,20 +5,24 @@
  * quem decide e o IndexedDB — este arquivo nao guarda dado nenhum do evento.
  *
  * O nome do cache carrega a versao, que vem do `?v=` com que o portaria.html
- * registra este arquivo. MAS o TEXTO deste arquivo e byte-identico entre
- * releases -- a versao vem de `self.location` em tempo de execucao, nunca do
- * proprio codigo -- e por isso o navegador NUNCA detecta "o sw.js mudou" e
- * NUNCA reinstala este service worker sozinho. Um comentario anterior aqui
- * afirmava o contrario; corrigido em revisao de codigo, 15/08/2026, junto
- * com o defeito que ele escondia: sem isto, um aparelho pareado num release
- * antigo ficava preso NA PAGINA antiga para sempre, mesmo com o servidor ja
- * publicado.
+ * registra este arquivo. O TEXTO daqui e quase sempre igual entre releases --
+ * a versao vem de `self.location` em tempo de execucao, nunca do proprio
+ * codigo -- entao o navegador quase nunca detecta "o sw.js mudou" pelo
+ * conteudo. Quem dispara a troca e OUTRA coisa: o `register('/sw.js?v=NNN')`
+ * do portaria.html passa a apontar para uma URL diferente a cada release, e
+ * registrar um script novo no mesmo escopo instala um service worker novo.
+ * Um comentario anterior aqui dizia que o conteudo mudava; corrigido em
+ * revisao de codigo, 15/08/2026, junto com o defeito que ele escondia: sem
+ * isto, um aparelho pareado num release antigo ficava preso NA PAGINA antiga
+ * para sempre, mesmo com o servidor ja publicado.
  *
  * A saida esta no `fetch` abaixo: a NAVEGACAO (abrir ou recarregar
  * portaria.html) e network-first, entao toda abertura pega o HTML mais
- * novo -- que ja chega com os `?v=` novos nas tags `<script>`. Os outros
- * arquivos continuam cache-first, que e o que garante "abrir sem rede" e o
- * carregamento rapido no portao.
+ * novo -- que ja chega com os `?v=` novos nas tags `<script>` e com o
+ * `register('/sw.js?v=NNN')` novo, que e o que faz este proprio arquivo se
+ * trocar. Os outros arquivos continuam cache-first, casando a URL INTEIRA
+ * (`?v=` incluido), que e o que garante "abrir sem rede" e o carregamento
+ * rapido no portao sem prender o aparelho no codigo de uma geracao anterior.
  */
 const VERSAO = new URL(self.location).searchParams.get('v') || 'dev';
 const CACHE = 'portaria-' + VERSAO;
@@ -31,6 +35,15 @@ const ARQUIVOS = [
     '/portaria-camera.js?v=' + VERSAO,
     '/portaria.js?v=' + VERSAO,
     '/jsqr.min.js?v=' + VERSAO,
+    // Sem versao, de proposito: o `publicar.ps1` so renumera `.js?v=` e
+    // `.css?v=`. Estes quatro sao servidos com `no-cache` pela Vercel, entao a
+    // instalacao seguinte ja guarda o arquivo novo. Sem eles aqui, o aplicativo
+    // abre sem rede mas o Android nao consegue reler o manifesto, e o icone
+    // pode voltar ao generico.
+    '/portaria.webmanifest',
+    '/icones/portaria-192.png',
+    '/icones/portaria-512.png',
+    '/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', e => {
@@ -49,19 +62,15 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
-    // A API NUNCA vem do cache: uma carga velha faria o aparelho recusar
-    // ingresso que ja existe, ou aceitar um que foi cancelado.
-    if (url.pathname.startsWith('/api/')) return;
+
+    // Outra ORIGEM nunca passa por aqui. A API da portaria e uma Edge Function
+    // do Supabase (`…supabase.co/functions/v1/portaria`), em outro dominio --
+    // antes era `/api/...` no mesmo dominio, e o teste era pelo caminho. Uma
+    // resposta de controle de acesso servida de cache faria o aparelho recusar
+    // ingresso que existe, ou aceitar um que foi cancelado.
+    if (url.origin !== self.location.origin) return;
     if (e.request.method !== 'GET') return;
 
-    // ignoreSearch, nas duas estrategias abaixo: o endereco que o dono
-    // compartilha (e o porteiro reabre) e "/portaria.html?e=<evento_id>" --
-    // mas o install guardou a chave sem query. Sem ignorar a busca, o match
-    // exato falharia bem no caso que este arquivo existe para cobrir: abrir
-    // de novo sem rede. Isso e seguro porque cada pathname so tem UMA
-    // entrada por geracao de cache (o nome do cache ja carrega a versao);
-    // nao ha como um "?v=" velho responder no lugar de um novo.
-    //
     // caches.open(CACHE).then(c => c.match(...)), e nao caches.match(...)
     // global: o origin ja tem outro cache (frontend/editor-foto.js abre
     // 'ideal-modelos-ia' para modelos ONNX). O global varreria os dois: sem
@@ -70,11 +79,15 @@ self.addEventListener('fetch', e => {
 
     if (e.request.mode === 'navigate') {
         // SO a navegacao (abrir/recarregar portaria.html) e network-first.
-        // Este SW nunca reinstala sozinho (ver comentario no topo do
-        // arquivo), entao cache-first aqui prenderia a pagina na versao do
-        // dia em que o aparelho pareou -- para sempre, mesmo publicando de
-        // novo. "abrir sem rede" continua garantido: o catch so cai no
-        // cache quando a rede falha de verdade.
+        // Cache-first aqui prenderia a pagina na versao do dia em que o
+        // aparelho pareou -- para sempre, mesmo publicando de novo. "Abrir sem
+        // rede" continua garantido: o catch so cai no cache quando a rede
+        // falha de verdade.
+        //
+        // Ignorar a query AQUI, e so aqui: o endereco que o dono compartilha
+        // (e o porteiro reabre) e "/portaria.html?e=<evento_id>", mas o install
+        // guardou a chave sem query. Sem isso, o match falharia bem no caso que
+        // este arquivo existe para cobrir -- reabrir sem rede.
         e.respondWith(
             fetch(e.request).catch(() =>
                 caches.open(CACHE).then(c => c.match(e.request, { ignoreSearch: true })))
@@ -82,17 +95,24 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // Os arquivos que a pagina referencia (JS): CACHE-FIRST, de proposito.
-    // Rede so quando o cache nao tem -- e o que faz o aparelho abrir rapido
-    // e continuar funcionando sem sinal no portao, que e a razao deste
-    // arquivo existir. Ficam presos na versao com que este SW instalou ate
-    // ele proprio ser substituido (o que exige o TEXTO do sw.js mudar, nao
-    // so a query string) -- essa limitacao mais funda nao e o que este
-    // achado pediu para resolver; o que ele pediu, e que este `if` acima
-    // resolve, e a PAGINA nunca mais ficar presa.
+    // Os arquivos que a pagina referencia: CACHE-FIRST, com casamento EXATO da
+    // URL (o `?v=` incluido). Rede so quando o cache nao tem -- e o que faz o
+    // aparelho abrir rapido e continuar funcionando sem sinal no portao, que e
+    // a razao deste arquivo existir.
+    //
+    // Por que exato, e nao ignorando a query como na navegacao: ignorando-a,
+    // um pedido de `/portaria.js?v=608` casaria com o `/portaria.js?v=607`
+    // guardado, e o aparelho INSTALADO rodaria codigo antigo sob HTML novo.
+    // Numa portaria isso e a pior forma de bug: a regra de validacao publicada
+    // hoje nao seria a regra que decide na porta.
+    //
+    // E "abrir sem rede" continua de pe -- reparar que as duas pontas usam a
+    // MESMA geracao. Sem rede, a navegacao cai no HTML do cache, e esse HTML
+    // pede exatamente os `?v=` que o install daquela geracao guardou. Com rede,
+    // o HTML novo pede `?v=` novo, o cache nao tem, e a rede responde.
     e.respondWith(
         caches.open(CACHE)
-            .then(c => c.match(e.request, { ignoreSearch: true }))
+            .then(c => c.match(e.request))
             .then(r => r || fetch(e.request))
     );
 });
