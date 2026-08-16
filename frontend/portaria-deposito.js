@@ -140,6 +140,20 @@
         });
     }
 
+    function esquecerFila() {
+        // Existe para UM caso, e nao deve ser usada fora dele: o aparelho
+        // trocou de EVENTO. A fila e gravada no servidor com o evento do token
+        // ATUAL, entao leitura que sobrou do evento anterior viraria entrada de
+        // um evento contada em outro.
+        //
+        // Em qualquer outra situacao, apagar a fila e perder a contagem que o
+        // cliente pagou para ter -- e por isso que nem o 401 da sincronizacao
+        // faz isso (ver `aparelhoRevogado`, no portaria.js). `entradas` fica:
+        // a chave dela e o id da credencial, unico entre eventos, entao o que e
+        // do evento antigo simplesmente nunca casa.
+        return comLoja('fila', 'readwrite', function (loja) { loja.clear(); });
+    }
+
     function limpar() {
         return Promise.all(['carga', 'fila', 'entradas'].map(function (nome) {
             return comLoja(nome, 'readwrite', function (loja) { loja.clear(); });
@@ -150,6 +164,7 @@
         gravarCarga: gravarCarga, lerCarga: lerCarga,
         enfileirar: enfileirar, lerFila: lerFila,
         removerDaFila: removerDaFila, contarFila: contarFila,
-        entradasPermitidas: entradasPermitidas, limpar: limpar,
+        entradasPermitidas: entradasPermitidas,
+        esquecerFila: esquecerFila, limpar: limpar,
     };
 })();

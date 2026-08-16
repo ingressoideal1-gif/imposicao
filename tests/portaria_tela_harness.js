@@ -41,6 +41,16 @@ async function rodar(caso) {
                 html = html.replace(/\?v=\d+/g, '');
                 return req.respond({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
             }
+            // A tela do dono e so um destino aqui: o que estes testes provam e
+            // que a portaria SAI para ela, com a marca `?configurar=1` na URL.
+            // Servir a `controle.html` de verdade traria supabase-js, login e
+            // rede para dentro de um teste que nao e sobre nada disso.
+            if (nome === 'controle.html') {
+                return req.respond({
+                    status: 200, contentType: 'text/html; charset=utf-8',
+                    body: '<!doctype html><title>configuracao</title>',
+                });
+            }
             if (ARQUIVOS.indexOf(nome) !== -1) {
                 return req.respond({
                     status: 200, contentType: 'application/javascript; charset=utf-8',
@@ -166,6 +176,100 @@ async function rodar(caso) {
             await new Promise(function (r) { setTimeout(r, 100); });
             return { desligarChamado: chamado };
         }, caso);
+        await browser.close();
+        console.log(JSON.stringify(saida));
+        return;
+    }
+
+    // ── A trava ─────────────────────────────────────────────────────────────
+    //
+    // Os dois modos abaixo semeiam o celular e RECARREGAM a pagina, em vez de
+    // chamar funcoes soltas: o que se quer provar mora no arranque -- qual tela
+    // abre, e com qual carga. Semear e chamar `entrarEmLeitura()` na mao
+    // pularia justamente a decisao que esta sendo testada.
+
+    async function semear(c) {
+        await page.evaluate(async (c) => {
+            await window.portariaDeposito.limpar();
+            if (c.carga) await window.portariaDeposito.gravarCarga(c.carga);
+            for (const l of (c.fila || [])) await window.portariaDeposito.enfileirar(l);
+            if (c.token) localStorage.setItem('ideal_portaria_token', c.token);
+            else localStorage.removeItem('ideal_portaria_token');
+            if (c.reconfigurado) localStorage.setItem('ideal_portaria_reconfigurado', '1');
+            else localStorage.removeItem('ideal_portaria_reconfigurado');
+        }, c);
+        // `Object.defineProperty` nao sobrevive ao reload; isto roda antes de
+        // qualquer script da pagina nova.
+        await page.evaluateOnNewDocument((online) => {
+            Object.defineProperty(navigator, 'onLine', { value: online, configurable: true });
+        }, !!c.online);
+        await page.reload({ waitUntil: 'networkidle0' });
+    }
+
+    function esperar(condicao, ms) {
+        return page.waitForFunction(condicao, { timeout: ms || 5000 }).catch(() => { });
+    }
+
+    // Le a fila direto do IndexedDB, sem passar pelo `portariaDeposito`: depois
+    // que a portaria sai para a tela de configuracao, aquele objeto nao existe
+    // mais na pagina -- e e justamente ali que se quer saber se a fila
+    // sobreviveu.
+    function contarFilaCrua() {
+        return page.evaluate(() => new Promise((ok) => {
+            const r = indexedDB.open('ideal-portaria', 1);
+            r.onsuccess = () => {
+                const c = r.result.transaction('fila', 'readonly')
+                    .objectStore('fila').count();
+                c.onsuccess = () => ok(c.result);
+                c.onerror = () => ok(-1);
+            };
+            r.onerror = () => ok(-1);
+        }));
+    }
+
+    if (caso.modo === 'configurar') {
+        await semear(caso);
+        await esperar(`!document.getElementById('btn-configurar-aparelho')`
+            + `.classList.contains('sumindo')`);
+        const visivel = await page.evaluate(() =>
+            !document.getElementById('btn-configurar-aparelho').classList.contains('sumindo'));
+        if (visivel) await page.click('#btn-configurar-aparelho');
+        // Ou a pagina navega, ou a recusa aparece. Espera as duas.
+        await esperar(`window.location.pathname.indexOf('controle.html') !== -1`
+            + ` || !document.getElementById('erro-configurar').classList.contains('sumindo')`);
+        const url = page.url();
+        const saiu = url.indexOf('controle.html') !== -1;
+        const saida = {
+            botaoVisivel: visivel,
+            url: url.replace('http://localhost', ''),
+            saiu: saiu,
+            mensagem: saiu ? '' : await page.evaluate(() =>
+                document.getElementById('erro-configurar').textContent),
+            filaDepois: await contarFilaCrua(),
+        };
+        await browser.close();
+        console.log(JSON.stringify(saida));
+        return;
+    }
+
+    if (caso.modo === 'reconfigurado') {
+        await semear(caso);
+        await esperar(`!document.getElementById('tela-lendo').classList.contains('sumindo')`
+            + ` || !document.getElementById('tela-pareando').classList.contains('sumindo')`);
+        const saida = await page.evaluate(async () => {
+            const guardada = await window.portariaDeposito.lerCarga();
+            return {
+                topo: document.getElementById('topo-aparelho').textContent,
+                setoresNoTopo: document.getElementById('topo-setores').textContent,
+                eventoDepois: guardada ? guardada.evento.id : null,
+                aparelhoDepois: guardada ? guardada.aparelho.nome : null,
+                filaDepois: await window.portariaDeposito.contarFila(),
+                entradasDepois: Object.keys(
+                    await window.portariaDeposito.entradasPermitidas()).length,
+                marcaDepois: localStorage.getItem('ideal_portaria_reconfigurado'),
+                lendo: !document.getElementById('tela-lendo').classList.contains('sumindo'),
+            };
+        });
         await browser.close();
         console.log(JSON.stringify(saida));
         return;

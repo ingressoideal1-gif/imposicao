@@ -143,3 +143,65 @@ def test_o_portao_nao_entra_no_historico():
     js = _ler("frontend/aparelho.js")
     assert "location.replace" in js
     assert "location.href =" not in js
+
+
+# ── A trava ─────────────────────────────────────────────────────────────────
+#
+# Decisao do usuario, 16/08/2026: "ao salvar registra apenas entradas
+# configuradas, e nao deixa editar mais, somente com a senha".
+
+
+def _corpo(js, assinatura):
+    """O corpo de uma funcao de primeiro nivel destes arquivos.
+
+    Todas moram dentro de um IIFE, entao a chave que as fecha e a primeira que
+    aparece com exatamente quatro espacos de recuo.
+    """
+    corpo = js[js.index(assinatura):]
+    return corpo[:corpo.index("\n    }")]
+
+
+def test_a_trava_cobre_tambem_apagar():
+    """Trava que protege a edicao e deixa o apagar livre nao e trava: desfaz-se
+    o trabalho inteiro e refaz-se do zero sem senha nenhuma.
+
+    `desparear` apagava token, carga, fila E entradas ali mesmo, sem que
+    ninguem tivesse de provar quem era.
+    """
+    corpo = _corpo(_ler("frontend/portaria.js"), "function desparear")
+    assert "irParaConfiguracao" in corpo
+    for apagar in ("removeItem", "D.limpar"):
+        assert apagar not in corpo, "desparear ainda apaga por conta propria"
+
+
+def test_a_saida_do_portao_leva_a_tela_que_pede_a_senha():
+    corpo = _corpo(_ler("frontend/portaria.js"), "function irParaConfiguracao")
+    assert "configurar=1" in corpo
+
+
+def test_ha_saida_para_reconfigurar_o_aparelho():
+    """Sem ela o celular fica preso no portao: com token guardado, a casa do
+    aplicativo devolve este aparelho para a leitura, e da leitura nao havia
+    como voltar."""
+    assert 'id="btn-configurar-aparelho"' in _ler("frontend/portaria.html")
+
+
+def test_a_fila_sobe_antes_de_o_aparelho_trocar_de_identidade():
+    """Configurar cunha um token NOVO. Leitura enfileirada sob o token velho
+    nao sobe depois -- e some a contagem que o cliente pagou para ter."""
+    corpo = _corpo(_ler("frontend/portaria.js"), "function irParaConfiguracao")
+    assert "sincronizar()" in corpo
+    assert "contarFila" in corpo
+
+
+def test_a_carga_do_aparelho_anterior_nao_sobrevive_a_configuracao():
+    """A carga guarda o NOME do portao e os SETORES que ele valida.
+
+    Reconfigurado o aparelho, a carga que esta no celular e do aparelho
+    anterior: o topo mostraria o nome velho e a validacao usaria os setores
+    velhos -- ingresso bom recusado como "OUTRA PORTA", sem nada na tela que
+    explique. Quem avisa e esta marca, escrita ao assumir e lida no arranque.
+    """
+    marca = "ideal_portaria_reconfigurado"
+    assert marca in _ler("frontend/aparelho.js")
+    assert marca in _ler("frontend/portaria.js")

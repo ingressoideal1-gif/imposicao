@@ -16,6 +16,9 @@
     var V = window.portariaValidacao;
     var CHAVE_TOKEN = 'ideal_portaria_token';
     var CHAVE_EVENTO = 'ideal_portaria_evento';
+    // Escrita pelo `aparelho.js` quando o dono configura este celular na tela
+    // dele. Ver `recarregarDepoisDeConfigurar`.
+    var CHAVE_RECONFIG = 'ideal_portaria_reconfigurado';
 
     var estado = { carga: null, token: null, pendente: null };
 
@@ -24,6 +27,14 @@
         ['pareando', 'carregando', 'lendo', 'resposta', 'ambiguo'].forEach(function (t) {
             $('tela-' + t).classList.toggle('sumindo', t !== qual);
         });
+        // A saida para a configuracao aparece so nas duas telas em que o
+        // aparelho ficaria PRESO sem ela: a de leitura e a de pareamento. Nas
+        // outras ela atrapalha -- em `resposta` a tela inteira e a decisao,
+        // lida de longe, e nada pode competir com o "Ler o proximo"; em
+        // `carregando` ainda nao ha o que configurar.
+        $('btn-configurar-aparelho').classList.toggle('sumindo',
+            qual !== 'lendo' && qual !== 'pareando');
+        $('erro-configurar').classList.add('sumindo');
         // A trava vale nas telas de trabalho -- ler o codigo e mostrar a
         // resposta. Nas de pareamento e carga o aparelho pode dormir.
         if (qual === 'lendo' || qual === 'resposta' || qual === 'ambiguo') acenderTela();
@@ -137,15 +148,96 @@
         });
     }
 
+    /**
+     * A saida do portao: leva para a tela que pede a conta do dono.
+     *
+     * Nada e apagado aqui, e nao pode ser -- e essa e a trava inteira. Quem
+     * apaga e o dono, do outro lado, depois da senha.
+     *
+     * Antes de sair, a fila sobe. Configurar cunha um token NOVO para este
+     * celular, e leitura enfileirada sob o token velho nao sobe mais depois:
+     * some a contagem que o cliente pagou para ter. Se ela nao subir, este
+     * caminho recusa e diz por que -- configurar exige rede de qualquer jeito
+     * (e login e gravacao no servidor), entao esperar o sinal nao custa nada
+     * que ja nao fosse necessario.
+     */
+    function irParaConfiguracao() {
+        if (window.portariaCamera) window.portariaCamera.desligar();
+        $('erro-configurar').classList.add('sumindo');
+        return sincronizar().then(function () {
+            return D.contarFila();
+        }).catch(function () {
+            return 0;   // IndexedDB fora do ar: nao ha fila a proteger
+        }).then(function (n) {
+            // Sem token nao ha o que mandar: o dono revogou este aparelho na
+            // tela dele, e o servidor ja recusa essas leituras. Prender o
+            // celular aqui nao as salvaria -- o que as salva e reconfigurar
+            // para o MESMO evento, e o arranque cuida disso.
+            if (n > 0 && estado.token) {
+                $('erro-configurar').textContent =
+                    (n === 1
+                        ? 'Há 1 leitura que ainda não subiu'
+                        : 'Há ' + n + ' leituras que ainda não subiram')
+                    + ' para o servidor. Conecte este aparelho à internet e espere'
+                    + ' a fila zerar: configurar dá a este celular uma identidade'
+                    + ' nova, e o que ficou para trás não sobe mais.';
+                $('erro-configurar').classList.remove('sumindo');
+                return;
+            }
+            window.location.href = 'controle.html?configurar=1';
+        });
+    }
+
     function desparear() {
-        // Despareamento DELIBERADO -- o operador escolheu tirar este evento
-        // do aparelho (celular trocado de mao, por exemplo). Apaga TUDO:
-        // carga, fila e entradas. Nao chamar isto a partir de um 401 de
-        // sincronizacao: ver `aparelhoRevogado` abaixo.
-        localStorage.removeItem(CHAVE_TOKEN);
-        estado.token = null;
-        estado.carga = null;
-        return D.limpar().then(function () { mostrar('pareando'); });
+        // Ate 16/08/2026 esta funcao apagava tudo aqui mesmo -- token, carga,
+        // fila e entradas -- sem que ninguem tivesse de provar quem era. Isso e
+        // o oposto de uma trava: bastava o celular na mao para desfazer o
+        // trabalho inteiro do aparelho. A decisao do usuario foi que reeditar E
+        // apagar passam pela senha.
+        //
+        // Agora ela so LEVA para a configuracao, e nao apaga nada no caminho.
+        return irParaConfiguracao();
+    }
+
+    /**
+     * O aparelho acabou de receber uma configuracao nova, feita pelo dono na
+     * tela dele, neste mesmo celular.
+     *
+     * A carga guardada e do aparelho ANTERIOR: ela traz o nome do portao e a
+     * lista de setores que ele valida. Ler ingresso com ela mostraria o nome
+     * velho no topo e recusaria ingresso bom como "OUTRA PORTA", sem nada na
+     * tela que explicasse. Por isso a carga vem do servidor de novo, antes da
+     * primeira leitura.
+     */
+    function recarregarDepoisDeConfigurar() {
+        var eventoAntes = null;
+        return D.lerCarga().then(function (c) {
+            eventoAntes = c && c.evento ? c.evento.id : null;
+            return baixarCarga();
+        }).then(function () {
+            var eventoAgora = estado.carga && estado.carga.evento
+                ? estado.carga.evento.id : null;
+            // Trocou de EVENTO. O que sobrou na fila e leitura de outro evento,
+            // e o servidor grava a fila com o evento do token ATUAL -- entrada
+            // de um evento contada em outro. Essas leituras ja nao tinham como
+            // subir (o token que as criou se foi), e o que resta e nao
+            // corromper a contagem nova. Mesmo evento: a fila FICA, e sobe com
+            // o token novo.
+            if (eventoAntes && eventoAgora && eventoAntes !== eventoAgora) {
+                return D.esquecerFila();
+            }
+        }).then(function () {
+            // So agora a marca sai. Se a carga nova nao tivesse chegado, a
+            // proxima abertura precisa tentar de novo, e nunca trabalhar com a
+            // carga do aparelho anterior.
+            try { localStorage.removeItem(CHAVE_RECONFIG); } catch (e) { }
+        }).catch(function () {
+            mostrar('pareando');
+            $('erro-pareamento').textContent =
+                'Não deu para baixar o evento neste aparelho. Conecte-o à '
+                + 'internet e abra de novo.';
+            $('erro-pareamento').classList.remove('sumindo');
+        });
     }
 
     function aparelhoRevogado() {
@@ -441,6 +533,12 @@
         });
     };
 
+    $('btn-configurar-aparelho').onclick = function () {
+        var botao = $('btn-configurar-aparelho');
+        botao.disabled = true;
+        irParaConfiguracao().then(function () { botao.disabled = false; });
+    };
+
     // ── Partida ─────────────────────────────────────────────────────────────
 
     // Lembrar o evento ASSIM QUE A PAGINA ABRE, e nao so na hora de parear: o
@@ -453,11 +551,18 @@
     estado.token = localStorage.getItem(CHAVE_TOKEN);
     if (!estado.token) {
         mostrar('pareando');
+    } else if (recemConfigurado()) {
+        recarregarDepoisDeConfigurar();
     } else {
         D.lerCarga().then(function (c) {
             if (c) { estado.carga = c; entrarEmLeitura(); sincronizar(); }
             else { baixarCarga().catch(function () { mostrar('pareando'); }); }
         });
+    }
+
+    function recemConfigurado() {
+        try { return !!localStorage.getItem(CHAVE_RECONFIG); }
+        catch (e) { return false; }   // aba anonima: nao ha marca a ler
     }
 
     window.portaria = {

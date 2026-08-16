@@ -224,3 +224,139 @@ def test_401_na_sincronizacao_preserva_a_fila_em_vez_de_apagar():
     assert r["tokenDepois"] is None, "o token revogado tem de ser esquecido"
     assert r["telaPareandoVisivel"] is True
     assert r["mensagem"], "o porteiro tem de saber por que voltou para o pareamento"
+
+
+# ── A trava: sair do portao passa pela senha ─────────────────────────────────
+#
+# Decisao do usuario, 16/08/2026: o aparelho "nao deixa editar mais, somente
+# com a senha". A tela da portaria nao tem senha nenhuma -- o que ela tem e a
+# SAIDA para a tela que pede. Estes testes recarregam a pagina de proposito: o
+# que se prova mora no arranque, e semear a tela na mao pularia a decisao.
+
+FILA_DE_TESTE = [
+    {"id_local": "negada-1", "momento": "2026-08-20T21:00:00Z", "credencial_id": None,
+     "setor_id": None, "resultado": "negado", "motivo": "desconhecido"},
+    {"id_local": "entrada-1", "momento": "2026-08-20T21:01:00Z",
+     "credencial_id": "c-p1", "setor_id": PISTA, "resultado": "permitido", "motivo": None},
+]
+
+
+def _harness(caso):
+    r = subprocess.run(
+        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
+        input=json.dumps(caso),
+    )
+    if r.returncode != 0:
+        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
+    return json.loads(r.stdout)
+
+
+def _configurar(**caso):
+    base = {"modo": "configurar", "carga": carga(), "token": "token-de-teste",
+            "fila": [], "online": False}
+    base.update(caso)
+    return _harness(base)
+
+
+def test_configurar_este_aparelho_leva_a_tela_que_pede_a_senha():
+    """A saida do portao. Sem ela o celular fica preso: com token guardado, a
+    casa do aplicativo devolve este aparelho para a leitura, e da leitura nao
+    havia como voltar."""
+    r = _configurar()
+    assert r["botaoVisivel"] is True, "o botao nao aparece na tela de leitura"
+    assert r["saiu"] is True
+    assert r["url"] == "/controle.html?configurar=1"
+
+
+def test_configurar_recusa_enquanto_ha_leitura_por_subir():
+    """Configurar cunha um token NOVO para este celular, e leitura enfileirada
+    sob o token velho nao sobe mais depois -- some a contagem que o cliente
+    pagou para ter. Sem sinal, a saida espera."""
+    r = _configurar(fila=FILA_DE_TESTE, online=False)
+    assert r["saiu"] is False, "saiu do portao com leitura ainda na fila"
+    assert r["mensagem"], "recusou sem dizer por que"
+    assert r["filaDepois"] == 2, "a recusa apagou a fila que estava protegendo"
+
+
+def test_configurar_manda_a_fila_antes_de_sair():
+    """Com sinal, a fila sobe e o caminho segue -- a espera acima nao pode
+    virar uma porta que nunca abre."""
+    r = _configurar(fila=FILA_DE_TESTE, online=True,
+                    mock={"method": "POST", "pathname": "/functions/v1/portaria/leituras",
+                          "status": 200, "body": {"gravadas": 2}})
+    assert r["saiu"] is True
+    assert r["filaDepois"] == 0
+
+
+def test_aparelho_revogado_nao_fica_preso_com_a_fila():
+    """Revogado o aparelho, `aparelhoRevogado()` esquece o token e GUARDA a
+    fila -- essas leituras ja nao tem como subir daqui. Recusar a saida por
+    causa delas prenderia o celular para sempre, e nao as salvaria: o que as
+    salva e reconfigurar para o MESMO evento, o que o arranque respeita."""
+    r = _configurar(token=None, fila=FILA_DE_TESTE, online=False)
+    assert r["botaoVisivel"] is True, "a tela de pareamento tambem precisa da saida"
+    assert r["saiu"] is True
+    assert r["filaDepois"] == 2, "a saida apagou a fila do aparelho revogado"
+
+
+# ── A carga do aparelho ANTERIOR nao pode ler ingresso ───────────────────────
+
+
+def _reconfigurado(nova, fila=None):
+    return _harness({
+        "modo": "reconfigurado", "carga": carga(), "token": "token-novo",
+        "reconfigurado": True, "fila": fila or FILA_DE_TESTE, "online": True,
+        "mock": {"method": "GET", "pathname": "/functions/v1/portaria/faixa",
+                 "status": 200, "body": nova},
+    })
+
+
+def _outro_aparelho(evento_id="e1"):
+    c = carga()
+    c["evento"] = {"id": evento_id, "nome": "Festa", "sal": SAL}
+    c["aparelho"] = {"id": "d2", "nome": "Portao B", "setores": [VIP]}
+    c["proxima"] = None
+    return c
+
+
+def test_reconfigurar_troca_o_nome_e_os_setores_antes_da_primeira_leitura():
+    """A carga guarda o nome do portao e os setores que ele valida. Reusada
+    depois de reconfigurar, o topo mostraria "Portao A" e a validacao recusaria
+    ingresso do VIP como "OUTRA PORTA" -- ingresso bom devolvido na porta, sem
+    nada na tela que explique."""
+    r = _reconfigurado(_outro_aparelho())
+    assert r["lendo"] is True
+    assert r["aparelhoDepois"] == "Portao B", "a carga continua sendo a do aparelho anterior"
+    assert r["topo"] == "Portao B"
+    assert "VIP" in r["setoresNoTopo"]
+    assert r["marcaDepois"] is None, "a marca ficou para tras e a carga se refaria toda abertura"
+
+
+def test_reconfigurar_no_mesmo_evento_preserva_a_fila():
+    """A fila e do porteiro, nao da configuracao: ela sobe com o token novo."""
+    r = _reconfigurado(_outro_aparelho())
+    assert r["filaDepois"] == 2
+    assert r["entradasDepois"] == 1
+
+
+def test_trocar_de_evento_esquece_a_fila_do_evento_anterior():
+    """O servidor grava a fila com o evento do token ATUAL. Leitura que sobrou
+    do evento anterior viraria entrada de um evento contada em outro -- e ela
+    ja nao tinha como subir, porque o token que a criou se foi."""
+    r = _reconfigurado(_outro_aparelho(evento_id="e2"))
+    assert r["filaDepois"] == 0, "a fila do evento anterior foi para o evento novo"
+
+
+def test_sem_a_carga_nova_o_aparelho_NAO_le_com_a_antiga():
+    """O caso que faz a marca ser apagada so no fim. Se a carga nova nao chega,
+    o aparelho tem de esperar -- ler com a do aparelho anterior e pior que nao
+    ler."""
+    r = _harness({
+        "modo": "reconfigurado", "carga": carga(), "token": "token-novo",
+        "reconfigurado": True, "fila": [], "online": True,
+        "mock": {"method": "GET", "pathname": "/functions/v1/portaria/faixa",
+                 "abort": True},
+    })
+    assert r["lendo"] is False, "abriu a leitura com a carga do aparelho anterior"
+    assert r["marcaDepois"] == "1", "a marca sumiu; a proxima abertura leria com a carga velha"
+    assert r["aparelhoDepois"] == "Portao A", "apagou a carga que ainda era a unica que havia"

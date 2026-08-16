@@ -33,6 +33,8 @@
     'use strict';
 
     var CHAVE_TOKEN = 'ideal_portaria_token';
+    // O recado para a portaria: "a carga que está aí é de outro aparelho".
+    var CHAVE_RECONFIG = 'ideal_portaria_reconfigurado';
 
     /**
      * @param token  o token do aparelho, que o servidor devolveu UMA vez
@@ -48,6 +50,15 @@
         //    a conta continua aberta e o dono tenta de novo.
         try {
             localStorage.setItem(CHAVE_TOKEN, token);
+            // Este celular pode já ter sido um portão — o mesmo, com outros
+            // setores, ou até de outro evento. A carga guardada no IndexedDB é
+            // do aparelho ANTERIOR: ela traz o nome do portão e a lista de
+            // setores que ele valida. Sem esta marca, a portaria abriria com o
+            // nome velho no topo e recusaria ingresso bom como "OUTRA PORTA",
+            // sem nada na tela que explicasse por quê. Quem a lê é o arranque
+            // do `portaria.js`, que baixa a carga de novo antes da primeira
+            // leitura.
+            localStorage.setItem(CHAVE_RECONFIG, '1');
         } catch (e) {
             // Aba anônima, armazenamento cheio. Sem `localStorage` não há
             // portaria possível -- ela guarda a carga do evento e a fila de

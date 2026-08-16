@@ -179,6 +179,20 @@
         </p>
         <div class="escolha" id="escolha-setores"></div>
     </div>
+
+    <!--
+        A saída do portão. Fica FORA das telas porque não pertence a nenhuma:
+        o `mostrar()` a acende só onde este aparelho ficaria preso sem ela.
+
+        Ela existe porque, com token guardado, a casa do aplicativo devolve
+        este celular para a leitura — não há "voltar". Quem chega do outro
+        lado cai no login: reconfigurar e apagar exigem a senha do dono, que é
+        a trava inteira.
+    -->
+    <button id="btn-configurar-aparelho" class="discreto sumindo" type="button">
+        Configurar este aparelho
+    </button>
+    <div id="erro-configurar" class="aviso sumindo" role="alert"></div>
 </div>
 
 <script src="jsqr.min.js?v=611"></script>
