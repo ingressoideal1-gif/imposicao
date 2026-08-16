@@ -20,7 +20,6 @@ import hashlib
 import hmac
 import re
 import secrets
-import time
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -51,19 +50,48 @@ MAXIMO_LEITURAS = 500
 # Forca bruta no pareamento: 31^6 sao 887 milhoes de codigos, e cada tentativa
 # ja custa um PBKDF2 de 10.000 voltas. Isto aqui e o segundo freio.
 #
-# LIMITE CONHECIDO, registrado de proposito: a contagem vive na memoria do
-# processo. Nao sobrevive a um reinicio do Render nem a duas instancias. Hoje o
-# Render roda uma instancia so, e o dono pode revogar o aparelho a qualquer
-# momento. Endereca-lo de verdade e assunto da parte 3c.
+# A contagem mora no BANCO, e nao na memoria do processo. Ate 16/08/2026 era um
+# dicionario aqui, e o comentario original ja registrava o defeito: nao
+# sobrevivia a um reinicio do Render nem a duas instancias.
+#
+# O que forcou a troca foi a migracao para Edge Function, que e stateless por
+# natureza -- la cada invocacao comecaria a contagem do zero, e o segundo freio
+# deixaria de existir. E enquanto as duas versoes conviverem, contar em lugares
+# separados daria ao atacante o dobro de tentativas, bastando alternar entre os
+# dois enderecos.
 MAXIMO_FALHAS = 10
 JANELA_DE_FALHAS = 300          # segundos
-_FALHAS = {}                    # {evento_id: [momento, ...]}
+TABELA_FALHAS = "producao_acesso_falhas_pareamento"
+
+
+def _instante_para_url(d) -> str:
+    """ISO 8601 terminado em `Z`, sem o `+00:00` do `isoformat()`.
+
+    ARMADILHA, e ela custaria um 500 no portao: `datetime.isoformat()` produz
+    `2026-08-16T04:52:51.988513+00:00`, e o `supabase()` monta a URL por
+    concatenacao, sem escapar nada. Numa query string o `+` significa ESPACO --
+    o servidor recebe `...988513 00:00`, o PostgREST recusa o filtro, o
+    `supabase()` levanta, e o porteiro leva "Internal Server Error" com fila na
+    frente.
+
+    O `Z` diz a mesma coisa e nao tem caractere que precise de escape.
+    """
+    return d.replace(tzinfo=None).isoformat(timespec="milliseconds") + "Z"
 
 
 def _conferir_forca_bruta(evento_id: str):
-    agora = time.time()
-    recentes = [t for t in _FALHAS.get(evento_id, []) if agora - t < JANELA_DE_FALHAS]
-    _FALHAS[evento_id] = recentes
+    from datetime import datetime, timedelta, timezone
+    desde = _instante_para_url(
+        datetime.now(timezone.utc) - timedelta(seconds=JANELA_DE_FALHAS)
+    )
+    # `limit=MAXIMO_FALHAS`: nao interessa se sao 10 ou 10.000 falhas, so se
+    # chegou ao teto. Trazer a lista inteira seria pagar, em trafego, o tamanho
+    # do ataque.
+    recentes = supabase(
+        "GET",
+        f"{TABELA_FALHAS}?evento_id=eq.{evento_id}&momento=gte.{desde}"
+        f"&select=id&limit={MAXIMO_FALHAS}",
+    ) or []
     if len(recentes) >= MAXIMO_FALHAS:
         raise HTTPException(
             status_code=429,
@@ -72,7 +100,14 @@ def _conferir_forca_bruta(evento_id: str):
 
 
 def _anotar_falha(evento_id: str):
-    _FALHAS.setdefault(evento_id, []).append(time.time())
+    # `return=minimal`: a resposta nao interessa, e devolver a linha gravada
+    # seria trafego a toa num caminho que ja esta sob ataque.
+    #
+    # O `momento` nao vai no corpo de proposito: quem carimba e o banco
+    # (`default now()`). Mandar daqui deixaria o freio a merce do relogio de
+    # quem chama -- e, na Edge Function, de um relogio diferente do da estacao.
+    supabase("POST", TABELA_FALHAS, {"evento_id": evento_id},
+             prefer="return=minimal")
 
 
 def _recusar_pareamento(evento_id: str):
@@ -154,7 +189,11 @@ def _entrar(corpo: dict) -> dict:
              {"token_hash": _hash_do_token(token), "ultimo_visto": "now()"},
              prefer="return=minimal")
 
-    _FALHAS.pop(evento_id, None)
+    # Quem acertou provou que nao e o atacante. Deixar a contagem de pe faria o
+    # porteiro que errou duas vezes antes de acertar chegar mais perto do teto
+    # sem motivo -- e o teto existe para quem NAO acerta.
+    supabase("DELETE", f"{TABELA_FALHAS}?evento_id=eq.{evento_id}",
+             prefer="return=minimal")
     return {
         "token": token,
         "aparelho": {"id": achado["id"], "nome": achado["nome"],

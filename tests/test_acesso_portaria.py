@@ -24,6 +24,23 @@ PISTA = "11111111-1111-1111-1111-111111111111"
 VIP = "22222222-2222-2222-2222-222222222222"
 
 
+def _momento(valor):
+    """Um instante comparavel, venha ele como texto ISO ou como datetime.
+
+    Comparar as strings direto quase funciona -- e o "quase" e o problema: o
+    Postgres devolve `+00:00` e o Python as vezes escreve `Z`, e ai a ordem
+    lexicografica mente. Parsear e barato e nao tem esse jeito de falhar.
+    """
+    from datetime import datetime, timezone
+    if isinstance(valor, str):
+        d = datetime.fromisoformat(valor.replace("Z", "+00:00"))
+    else:
+        d = valor
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    return d
+
+
 class FakeBanco:
     """Um Supabase de mentira, que guarda em dicionario o que foi gravado."""
 
@@ -47,6 +64,10 @@ class FakeBanco:
         ]
         self.pedidos = [{"pedido_id_int": 18560, "sal": "bb" * 32, "evento_id": EVENTO}]
         self.leituras = []
+        # O freio de forca bruta do pareamento. Ate 16/08/2026 era um dicionario
+        # na memoria do processo; virou tabela porque Edge Function e stateless
+        # e, la, o freio simplesmente nao existiria.
+        self.falhas_pareamento = []
         self.chamadas = []
 
     def _status_pedido(self, path):
@@ -146,6 +167,45 @@ class FakeBanco:
                 limite = int(path.split("limit=", 1)[1].split("&", 1)[0])
                 linhas = linhas[:limite]
             return linhas
+        if path.startswith("producao_acesso_falhas_pareamento"):
+            # Obedece a URL, como o resto deste dublê. O codigo filtra por
+            # `evento_id=eq.` e `momento=gte.`; se um dia ele perder o segundo
+            # filtro, uma falha de ontem passaria a trancar o porteiro de hoje --
+            # e um fake que filtrasse por conta propria esconderia isso.
+            if method == "GET":
+                linhas = list(self.falhas_pareamento)
+                if "evento_id=eq." in path:
+                    alvo = path.split("evento_id=eq.", 1)[1].split("&", 1)[0]
+                    linhas = [f for f in linhas if str(f["evento_id"]) == alvo]
+                if "momento=gte." in path:
+                    from urllib.parse import unquote
+                    bruto = unquote(path.split("momento=gte.", 1)[1].split("&", 1)[0])
+                    corte = _momento(bruto)
+                    linhas = [f for f in linhas if _momento(f["momento"]) >= corte]
+                if "limit=" in path:
+                    limite = int(path.split("limit=", 1)[1].split("&", 1)[0])
+                    linhas = linhas[:limite]
+                return linhas
+            if method == "POST":
+                # O banco carimba o `momento` sozinho (default now()); o dublê
+                # tem de fazer o mesmo, senao a linha nasce sem o campo que a
+                # consulta seguinte filtra.
+                from datetime import datetime, timezone
+                self.falhas_pareamento.append({
+                    "evento_id": body["evento_id"],
+                    "momento": datetime.now(timezone.utc).isoformat(),
+                })
+                return []
+            if method == "DELETE":
+                if "evento_id=eq." in path:
+                    alvo = path.split("evento_id=eq.", 1)[1].split("&", 1)[0]
+                    self.falhas_pareamento = [
+                        f for f in self.falhas_pareamento
+                        if str(f["evento_id"]) != alvo
+                    ]
+                else:
+                    self.falhas_pareamento = []
+                return []
         if path.startswith("producao_acesso_leituras"):
             if method == "POST":
                 vistos = {(l["dispositivo_id"], l["id_local"]) for l in self.leituras}
@@ -162,7 +222,6 @@ class FakeBanco:
 def banco(monkeypatch):
     b = FakeBanco()
     monkeypatch.setattr(ap, "supabase", b)
-    ap._FALHAS.clear()
     return b
 
 
@@ -228,7 +287,7 @@ def test_evento_id_malformado_e_recusado_igual_e_nao_estoura(banco):
     contam a um estranho qual dos dois ids chegou a ser procurado.
     """
     for ruim in ("nao-e-uuid", "123", "'; drop table --", "0000"):
-        ap._FALHAS.clear()
+        banco.falhas_pareamento.clear()
         with pytest.raises(HTTPException) as e:
             entrar(evento=ruim)
         assert e.value.status_code == 401, f"{ruim!r} nao devolveu 401"
@@ -253,6 +312,83 @@ def test_dez_erros_seguidos_fecham_o_pareamento_daquele_evento(banco):
     with pytest.raises(HTTPException) as e:
         entrar(codigo="ABC234")          # ate o codigo CERTO e recusado agora
     assert e.value.status_code == 429
+
+
+def test_o_freio_conta_pelo_BANCO_e_nao_pela_memoria(banco):
+    """O QUE ISTO PREVINE
+
+    Ate 16/08/2026 a contagem vivia num dicionario na memoria do processo, e o
+    proprio codigo admitia num comentario que ela nao sobrevivia a um reinicio
+    do Render nem a duas instancias.
+
+    A Edge Function e stateless por natureza: la, cada invocacao comecaria a
+    contagem do zero e o freio simplesmente NAO EXISTIRIA -- 887 milhoes de
+    codigos deixariam de estar protegidos pelo segundo freio.
+
+    E enquanto as duas versoes conviverem, contar em lugares separados daria ao
+    atacante o dobro de tentativas, bastando alternar entre os dois enderecos.
+    """
+    for _ in range(3):
+        with pytest.raises(HTTPException):
+            entrar(codigo="ZZZZZZ")
+
+    assert len(banco.falhas_pareamento) == 3, (
+        "as falhas nao foram parar no banco -- o freio continua so na memoria, "
+        "e some quando o processo reinicia"
+    )
+    assert all(f["evento_id"] == EVENTO for f in banco.falhas_pareamento)
+
+
+def test_a_data_do_filtro_nao_leva_MAIS_na_url(banco):
+    """O `+` de `+00:00` vira ESPACO quando o servidor le a query string.
+
+    `datetime.isoformat()` produz `2026-08-16T04:52:51.988513+00:00`, e o
+    `supabase()` monta a URL por concatenacao, sem escapar nada. O servidor
+    decodifica aquele `+` como espaco e o filtro chega quebrado -- o PostgREST
+    recusa, o `supabase()` levanta, e o porteiro recebe 500 no portao.
+
+    Um dublê nao pega isso sozinho, porque ele nunca passa por um decodificador
+    de URL de verdade. Por isso o teste olha a URL crua que o codigo montou.
+    """
+    with pytest.raises(HTTPException):
+        entrar(codigo="ZZZZZZ")
+
+    urls = [p for m, p in banco.chamadas if p.startswith("producao_acesso_falhas")]
+    assert urls, "o freio nao consultou a tabela de falhas"
+    for u in urls:
+        assert "+" not in u, (
+            f"a URL leva um '+' que o servidor vai ler como espaco: {u}"
+        )
+
+
+def test_falha_velha_nao_tranca_o_porteiro_de_hoje(banco):
+    """A janela e de cinco minutos. Sem o filtro por tempo, um porteiro que
+    errou o codigo ontem chegaria hoje com o pareamento fechado -- e o freio
+    que existe para atrapalhar atacante passaria a atrapalhar so ele."""
+    from datetime import datetime, timedelta, timezone
+    velho = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    banco.falhas_pareamento = [
+        {"evento_id": EVENTO, "momento": velho} for _ in range(50)
+    ]
+
+    r = entrar()                          # codigo CERTO
+    assert "token" in r, "falhas fora da janela estao trancando o pareamento"
+
+
+def test_parear_com_sucesso_limpa_as_falhas_daquele_evento(banco):
+    """Quem acertou provou que nao e o atacante. Deixar a contagem de pe faria
+    o porteiro que errou duas vezes antes de acertar chegar mais perto do teto
+    sem motivo -- e o teto existe para quem NAO acerta."""
+    for _ in range(3):
+        with pytest.raises(HTTPException):
+            entrar(codigo="ZZZZZZ")
+    assert banco.falhas_pareamento
+
+    entrar()                              # codigo certo
+
+    assert banco.falhas_pareamento == [], (
+        "parear com sucesso nao limpou as falhas daquele evento"
+    )
 
 
 def token_de(banco):
