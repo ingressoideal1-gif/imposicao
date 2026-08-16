@@ -46,6 +46,7 @@ const ARQUIVOS = [
     'ler-qr.js?v=' + VERSAO,
     'qr-canvas.js?v=' + VERSAO,
     'qrcode-generator.min.js?v=' + VERSAO,
+    'aparelho.js?v=' + VERSAO,
 
     'evento.html',
     'evento.js?v=' + VERSAO,
@@ -63,6 +64,7 @@ const ARQUIVOS = [
     'supabase-config.js?v=' + VERSAO,
     'acesso-conta.js?v=' + VERSAO,
     'instalar.js?v=' + VERSAO,
+    'sw-registro.js?v=' + VERSAO,
 
     // Sem versao, de proposito: o `publicar.ps1` so renumera `.js?v=` e
     // `.css?v=`. Estes sao servidos com `no-cache` pela Vercel, entao a

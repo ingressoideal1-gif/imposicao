@@ -70,6 +70,32 @@ def test_a_estacao_sincroniza_tudo_o_que_as_telas_pedem():
                 )
 
 
+def test_o_service_worker_guarda_tudo_o_que_as_telas_pedem():
+    """O mesmo defeito da estacao, com outra roupa -- e pior, porque so aparece
+    SEM REDE.
+
+    O `install` guarda uma lista escrita a mao. Arquivo que as telas pedem e
+    que nao esta nela nunca entra no cache: com sinal ninguem percebe (a busca
+    cai na rede), e no portao, no modo aviao, o script simplesmente nao carrega
+    -- sem erro visivel, so um botao que nao faz nada.
+
+    Foi assim que `aparelho.js` e `sw-registro.js` ficaram de fora ate
+    16/08/2026. Por isso a lista sai da propria tela, e nao da leitura do sw.js.
+    """
+    sw = _ler("frontend/sw.js")
+    guardados = set(re.findall(r"'([^']+?)(?:\?v=' \+ VERSAO|')", sw))
+    for pagina in PAGINAS_DO_APLICATIVO:
+        html = _ler("frontend/" + pagina)
+        pedidos = re.findall(r'<(?:script|link)[^>]+(?:src|href)="([^"?]+)', html)
+        for pedido in pedidos:
+            if not (pedido.endswith(".js") or pedido.endswith(".css")):
+                continue
+            assert pedido in guardados, (
+                pagina + " pede " + pedido + ", que o service worker nao guarda"
+                " -- a tela abre sem rede com esse arquivo faltando"
+            )
+
+
 # ── O prefixo /ic/ ──────────────────────────────────────────────────────────
 
 def test_nenhuma_pagina_pede_arquivo_por_caminho_absoluto():
