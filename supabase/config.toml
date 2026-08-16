@@ -484,6 +484,18 @@ verify_jwt = false
 # atendente que esta falando com o cliente ao telefone.
 verify_jwt = true
 
+[functions.painel]
+# LIGADO. Quem fala com esta funcao e uma pessoa logada no painel da grafica, e
+# o portao do Supabase confere a ASSINATURA do token antes de invocar a funcao.
+#
+# Aqui a verificacao carrega mais peso do que nas outras: as decisoes desta
+# funcao sao TODAS tomadas a partir do `sub` das claims -- "esta e a sua propria
+# linha", "voce tem o modulo Usuarios", "este e o seu primeiro acesso". Com a
+# verificacao desligada, o `sub` vira um campo que qualquer um escreve, e as
+# tres viram nada: bastaria montar um JWT com o `sub` de um administrador para
+# ler os codigos de acesso de todas as estacoes.
+verify_jwt = true
+
 [functions.acesso-estacao]
 # DESLIGADO, pela mesma razao da portaria: quem chama e o `NewProd.exe` da
 # estacao, que nao tem sessao do Supabase. Ele apresenta o

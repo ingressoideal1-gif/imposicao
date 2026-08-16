@@ -38,6 +38,19 @@ const API_BASE_URL = (isLocalhost || isPort9000) && window.location.protocol !==
 // receberia 503 num botão que sempre funcionou.
 const API_NUVEM = "https://imposicao.onrender.com";
 
+// As rotas sensíveis do painel, já fora do Render.
+//
+// Porte de `/api/user/permissions` e `/api/acessos-locais` para Edge Function
+// (`supabase/functions/painel`). O caminho depois da base continua o MESMO — a
+// função aceita o prefixo `api/` de propósito —, então o corte é uma troca de
+// base e nada mais, e voltar atrás é trocar de volta.
+//
+// A função corrige uma coisa que o Render não corrigia: lá, qualquer sessão
+// válida gravava na grade de permissões, e "qualquer sessão" inclui todo cliente
+// do ERP parceiro, porque a conta é a mesma. Aqui, mexer na grade de outra
+// pessoa exige o módulo Usuários, e o primeiro acesso é escrito pelo servidor.
+const API_PAINEL = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/painel";
+
 // ─── Toda chamada ao motor leva a sessão junto ───────────────────────────────
 //
 // Até 16/08/2026 nenhuma chamada do painel se identificava, e o motor não pedia
@@ -67,6 +80,12 @@ const API_NUVEM = "https://imposicao.onrender.com";
 
     function eDoNossoMotor(url) {
         const u = String(url || '');
+        // A Edge Function do painel vem ANTES do corte de `supabase.co`, e a
+        // ordem é o ponto: ela mora em `supabase.co` e mesmo assim precisa da
+        // sessão — é justamente com ela que a função decide quem é você. O corte
+        // logo abaixo existe contra RECURSÃO (o SDK usa `fetch` para renovar a
+        // sessão), e o `/auth/v1/` que ele protege nunca casa com este prefixo.
+        if (u.startsWith(API_PAINEL)) return true;
         if (u.includes('supabase.co')) return false;
         if (!u.includes('/api/')) return false;
         if (/^https?:\/\//i.test(u)) {
