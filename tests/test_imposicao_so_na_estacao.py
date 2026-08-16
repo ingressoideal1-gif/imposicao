@@ -87,3 +87,69 @@ def test_na_estacao_o_motor_nao_recusa(monkeypatch):
         f"a estacao devia ter entrado no endpoint e falhado no payload, "
         f"e respondeu {r.status_code}"
     )
+
+
+# ─── A barreira do painel ─────────────────────────────────────────────────────
+#
+# As telas que impoem. Ambas carregam script.js antes de pedido.js, e cada uma
+# tem a SUA sondagem da estacao -- copiada, nao compartilhada. Por isso o teste
+# le as duas: este projeto ja perdeu uma madrugada com copias divergentes da
+# mesma regra.
+TELAS = ["script.js", "pedido.js"]
+
+
+def _texto(nome):
+    return (FRONT / nome).read_text(encoding="utf-8")
+
+
+def test_nenhuma_tela_continua_sem_estacao():
+    """Sem estacao, o trabalho para. Nao ha caminho alternativo."""
+    culpados = []
+    for nome in TELAS:
+        corpo = _texto(nome)
+        if "explicarEstacaoNaoEncontrada" not in corpo:
+            culpados.append(f"{nome}: nao trata a estacao ausente")
+            continue
+        if "recusaSemEstacao" not in corpo:
+            culpados.append(f"{nome}: nao recusa quando a estacao nao responde")
+    assert not culpados, "\n  ".join(["tela que segue sem estacao:"] + culpados)
+
+
+def test_a_recusa_do_painel_nunca_fica_muda():
+    """Servido pelo proprio agente, `explicarEstacaoNaoEncontrada` devolve ''
+    de proposito -- ali nao ha navegador bloqueando nada, o NewProd e que esta
+    fechado. Sem frase de reserva, a recusa ficaria muda justamente na estacao,
+    que e onde o operador esta."""
+    culpados = []
+    for nome in TELAS:
+        corpo = _texto(nome)
+        if "recusaSemEstacao" not in corpo:
+            continue
+        if "|| 'A estacao (NewProd) nao respondeu" not in corpo:
+            culpados.append(f"{nome}: sem frase de reserva quando o aviso vem vazio")
+    assert not culpados, "\n  ".join(["recusa muda:"] + culpados)
+
+
+def test_a_recusa_para_o_trabalho_de_verdade():
+    """Mostrar a tarja vermelha e seguir imponto seria pior que nao avisar: o
+    operador leria o alerta e veria o trabalho andando, e concluiria que o
+    alerta e decorativo."""
+    culpados = []
+    for nome in TELAS:
+        corpo = _texto(nome)
+        if "recusaSemEstacao" not in corpo:
+            continue
+        if "throw new Error(recusaSemEstacao)" not in corpo:
+            culpados.append(f"{nome}: avisa e continua, em vez de parar")
+    assert not culpados, "\n  ".join(["recusa que nao recusa:"] + culpados)
+
+
+def test_a_frase_nao_promete_mais_a_nuvem():
+    """A frase antiga dizia que o trabalho ia para a nuvem "mais devagar, e SEM
+    QR Ideal". Ela virou mentira no instante em que a nuvem parou de aceitar --
+    e mentira na tela e o modo de falhar classico deste projeto."""
+    corpo = _texto("script.js")
+    for promessa in ("vai para a nuvem", "vai cair na nuvem"):
+        assert promessa not in corpo, (
+            f"a tela ainda promete ao operador um caminho que nao existe: {promessa!r}"
+        )

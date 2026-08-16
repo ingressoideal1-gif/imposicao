@@ -4850,16 +4850,20 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         } else {
 
-            console.log("[Imposition] Processando na nuvem (Render)");
-
-            avisoDaNuvem = typeof explicarEstacaoNaoEncontrada === 'function'
-                ? explicarEstacaoNaoEncontrada(window.location.origin) : '';
-            const selo = `<span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,0.35);vertical-align:middle;">&#9729; NUVEM</span>`;
-            const alerta = avisoDaNuvem
-                ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:#7f1d1d;color:#fee2e2;font-size:0.8rem;line-height:1.45;text-align:left;font-weight:600;">&#9888; ${avisoDaNuvem}</div>`
-                : '';
-            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... ${selo}${alerta}`;
-            if (avisoDaNuvem) console.warn('[Imposition] ' + avisoDaNuvem);
+            // 15/08/2026: nao existe mais caminho para a nuvem. Imposicao e
+            // impressao so acontecem na estacao -- decisao de seguranca do
+            // usuario. Ver
+            // docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+            //
+            // Este bloco e copia do que esta no script.js, de proposito: sao
+            // duas telas com sondagens separadas, e este projeto ja se queimou
+            // tentando compartilhar esta parte. O teste le os DOIS arquivos.
+            const recusaSemEstacao = (typeof explicarEstacaoNaoEncontrada === 'function'
+                ? explicarEstacaoNaoEncontrada(window.location.origin) : '')
+                || 'A estacao (NewProd) nao respondeu nesta maquina. Abra o NewProd e tente de novo.';
+            if (sub) sub.innerHTML = `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:#7f1d1d;color:#fee2e2;font-size:0.85rem;line-height:1.45;text-align:left;font-weight:600;">&#9888; ${recusaSemEstacao}</div>`;
+            console.warn('[Imposition] ' + recusaSemEstacao);
+            throw new Error(recusaSemEstacao);
 
         }
 

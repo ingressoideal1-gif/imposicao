@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cair na nuvem por a estação estar bloqueada não pode ser silencioso.
+"""Quando o navegador bloqueia a estação, o operador tem de ler a saída.
 
 O QUE ESTE TESTE PREVINE, E QUE JÁ ACONTECEU
 
@@ -14,28 +14,35 @@ bastar. Da noite para o dia a estação virou inalcançável a partir do painel 
 Vercel — e o painel caía para a nuvem **em silêncio**, com um selo "NUVEM" discreto que
 ninguém olha no meio de uma tiragem.
 
-O estrago é o de sempre neste projeto: a tela diz uma coisa e o papel é outra.
+O estrago era o de sempre neste projeto: a tela dizia uma coisa e o papel era outra.
 
-- Na nuvem não existe o `qr_ideal_pool.bin`, então o QR Ideal fica impossível — e o
-  operador lê "falta a lista de codigos desta estacao" **estando na frente de uma estação
+- Na nuvem não existe o `qr_ideal_pool.bin`, então o QR Ideal ficava impossível — e o
+  operador lia "falta a lista de codigos desta estacao" **estando na frente de uma estação
   que tem a lista**. Foi exatamente essa frase que fez a investigação do pedido 20508
   durar dois dias.
-- A imposição sai da máquina do operador para a rede, contra a razão de o agente existir.
+- A imposição saía da máquina do operador para a rede, contra a razão de o agente existir.
 
-Isso vai acontecer em TODA estação conforme o navegador dela atualizar, e cada estação da
-gráfica usa um navegador diferente — então a saída não pode ser permissão concedida site a
-site. A saída é abrir o painel pelo endereço do próprio agente, e é isso que o aviso
-manda fazer.
+## O que mudou em 16/08/2026
 
-O que este arquivo cobra:
+O caminho para a nuvem **deixou de existir**, por decisão do usuário: *"até por questão de
+segurança, impressão só pode acontecer pela estação da gráfica"*. Sem estação, o trabalho
+para e o operador lê por quê.
 
-1. existe uma explicação, ela diz o endereço a abrir, e ela se cala quando a página já vem
-   da própria máquina;
-2. NENHUMA tela mostra o selo "NUVEM" sem mostrar também o motivo — a sondagem está
-   duplicada entre `script.js` e `pedido.js`, e este projeto já perdeu uma madrugada com
-   cópias divergentes da mesma regra;
-3. a mensagem de erro carrega o motivo junto, porque a recusa do motor sabe o que faltou
-   mas não sabe por que o trabalho foi parar na nuvem.
+Isso não aposenta este arquivo — **aposenta metade dele**. O Chrome 151 continua
+bloqueando a estação exatamente como antes; o que mudou é o que acontece depois do
+bloqueio. A explicação continua sendo a peça que salva o operador, e ela continua tendo de
+dizer o endereço que funciona em qualquer navegador.
+
+O que este arquivo cobra hoje:
+
+1. existe uma explicação, ela diz o endereço a abrir, ela nomeia o navegador como culpado
+   provável, e ela se cala quando a página já vem da própria máquina;
+2. **nenhuma tela conhece um motor de imposição na nuvem** — a sondagem está duplicada
+   entre `script.js` e `pedido.js`, e este projeto já perdeu uma madrugada com cópias
+   divergentes da mesma regra.
+
+A recusa em si — o `throw` que para o trabalho — é cobrada em
+`tests/test_imposicao_so_na_estacao.py`, junto da barreira do servidor.
 """
 
 import re
@@ -53,8 +60,8 @@ def _texto(nome):
 
 
 def test_a_explicacao_existe_e_diz_o_que_fazer():
-    """Não basta dizer que foi para a nuvem: o operador precisa da saída, e a
-    saída é um endereço que ele digita."""
+    """Não basta dizer que não deu: o operador precisa da saída, e a saída é um
+    endereço que ele digita."""
     corpo = _texto("script.js")
     m = re.search(r"function explicarEstacaoNaoEncontrada\(.*?\n\}", corpo, re.S)
     assert m, "nao existe explicacao para a estacao nao encontrada"
@@ -62,7 +69,9 @@ def test_a_explicacao_existe_e_diz_o_que_fazer():
     assert "localhost:9000" in frase, (
         "o aviso nao diz o endereco pelo qual o painel funciona em qualquer navegador"
     )
-    for palavra in ("nuvem", "navegador"):
+    # "estacao" porque é onde o trabalho acontece; "navegador" porque é o culpado
+    # provável, e sem nomeá-lo o operador procura defeito no NewProd.
+    for palavra in ("estacao", "navegador"):
         assert palavra in frase.lower(), f"o aviso nao menciona {palavra!r}"
 
 
@@ -76,28 +85,20 @@ def test_a_explicacao_se_cala_quando_a_pagina_ja_vem_da_propria_maquina():
     )
 
 
-def test_NENHUMA_tela_cai_na_nuvem_sem_dizer_o_motivo():
+def test_NENHUMA_tela_conhece_um_motor_de_imposicao_na_nuvem():
     """A regra lida dos próprios arquivos, e não de uma lista que alguém precise
-    lembrar de atualizar: onde houver o selo "NUVEM", tem de haver o aviso."""
+    lembrar de atualizar: nenhuma tela pode ter endereço de nuvem para onde
+    mandar imposição, nem o selo que anunciava esse caminho.
+
+    Substitui os dois testes que cobravam "se mostrar o selo NUVEM, explique o
+    motivo". Eles protegiam um caminho que deixou de existir — e um teste que
+    guarda um caminho morto passa por vácuo para sempre, sem avisar ninguém.
+    """
     culpados = []
     for nome in TELAS:
         corpo = _texto(nome)
-        if "NUVEM</span>" not in corpo:
-            continue
-        if "explicarEstacaoNaoEncontrada" not in corpo:
-            culpados.append(f"{nome}: mostra o selo NUVEM e nao explica o motivo")
-    assert not culpados, "\n  ".join(["tela caindo na nuvem em silencio:"] + culpados)
-
-
-def test_a_mensagem_de_erro_carrega_o_motivo():
-    """"Falta a lista de codigos desta estacao", lido na frente de uma estação que
-    tem a lista, manda o operador procurar no lugar errado. Foi assim que dois
-    dias foram gastos atrás de um defeito de numeração que não existia."""
-    culpados = []
-    for nome in TELAS:
-        corpo = _texto(nome)
-        if "NUVEM</span>" not in corpo:
-            continue
-        if not re.search(r"toast\(`Erro: \$\{err\.message\}\$\{causa\}`", corpo):
-            culpados.append(f"{nome}: a mensagem de erro nao diz por que caiu na nuvem")
-    assert not culpados, "\n  ".join(["erro sem a causa:"] + culpados)
+        if "MOTOR_NUVEM" in corpo or "baseParaImposicao" in corpo:
+            culpados.append(f"{nome}: ainda conhece um motor de imposicao na nuvem")
+        if "NUVEM</span>" in corpo:
+            culpados.append(f"{nome}: ainda mostra o selo NUVEM")
+    assert not culpados, "\n  ".join(["tela com caminho para a nuvem:"] + culpados)

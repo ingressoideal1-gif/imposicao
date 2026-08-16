@@ -3557,8 +3557,8 @@ function baseParaImposicao(baseUrl, origem) {
 window.baseParaImposicao = baseParaImposicao;
 
 /**
- * O que dizer ao operador quando a estação não foi encontrada e o trabalho vai
- * cair na nuvem.
+ * O que dizer ao operador quando a estação não foi encontrada — e o trabalho,
+ * por isso, não vai acontecer.
  *
  * ## Por que este aviso existe
  *
@@ -3573,10 +3573,20 @@ window.baseParaImposicao = baseParaImposicao;
  * publicado na Vercel — e o painel caía para a nuvem em silêncio, com um
  * discreto selo "NUVEM" que ninguém olha durante uma tiragem.
  *
- * O estrago é o de sempre neste projeto: a tela diz uma coisa e o papel é
- * outra. Na nuvem não existe o `qr_ideal_pool.bin`, então o QR Ideal fica
- * impossível; e a imposição sai da máquina do operador para a rede, contra a
+ * O estrago era o de sempre neste projeto: a tela dizia uma coisa e o papel era
+ * outra. Na nuvem não existe o `qr_ideal_pool.bin`, então o QR Ideal ficava
+ * impossível; e a imposição saía da máquina do operador para a rede, contra a
  * razão de o agente existir, que é tempo.
+ *
+ * ## O que mudou em 15/08/2026
+ *
+ * Não existe mais para onde cair. O usuário encerrou o assunto: "até por questão
+ * de segurança, impressão só pode acontecer pela estação da gráfica". Sem
+ * estação, o trabalho **para**, e esta frase é o que o operador lê no lugar dele.
+ *
+ * Isso torna a frase mais importante, não menos: antes ela explicava uma
+ * degradação, agora ela é a única coisa que o operador recebe. Se ela não
+ * disser o que fazer, ele fica sem saída.
  *
  * Isso vai acontecer em TODA estação conforme o navegador dela atualizar, e
  * cada estação da gráfica usa um navegador diferente — então a saída não pode
@@ -3589,10 +3599,10 @@ window.baseParaImposicao = baseParaImposicao;
  */
 function explicarEstacaoNaoEncontrada(origem) {
     if (ehEnderecoDaPropriaMaquina(origem || window.location.origin)) return '';
-    return 'A estacao (NewProd) nao foi encontrada, entao este trabalho vai para a nuvem: '
-        + 'mais devagar, e SEM QR Ideal. Se o NewProd esta aberto nesta maquina, quem bloqueou '
-        + 'foi o navegador — pagina da internet nao pode mais falar com a propria maquina. '
-        + 'Abra o painel por http://localhost:9000 e refaca por la.';
+    return 'A estacao (NewProd) nao foi encontrada, entao este trabalho NAO pode ser feito: '
+        + 'imposicao e impressao so acontecem na estacao da grafica. Se o NewProd esta aberto '
+        + 'nesta maquina, quem bloqueou foi o navegador — pagina da internet nao pode mais '
+        + 'falar com a propria maquina. Abra o painel por http://localhost:9000 e refaca por la.';
 }
 window.explicarEstacaoNaoEncontrada = explicarEstacaoNaoEncontrada;
 
@@ -10197,18 +10207,23 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         } else {
 
-            console.log("[Imposition] Processando na nuvem (Render)");
-
-            // O selo sozinho nao basta: ele e discreto e some entre os numeros
-            // do progresso. Quando a estacao existia e o navegador a bloqueou, o
-            // operador precisa LER o motivo e o que fazer, na hora, sem procurar.
-            avisoDaNuvem = explicarEstacaoNaoEncontrada(window.location.origin);
-            const selo = `<span style="display:inline-block;margin-left:8px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,0.35);vertical-align:middle;">&#9729; NUVEM</span>`;
-            const alerta = avisoDaNuvem
-                ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:#7f1d1d;color:#fee2e2;font-size:0.8rem;line-height:1.45;text-align:left;font-weight:600;">&#9888; ${avisoDaNuvem}</div>`
-                : '';
-            if (sub) sub.innerHTML = `Gerando ${total.toLocaleString('pt-BR')} itens... ${selo}${alerta}`;
-            if (avisoDaNuvem) console.warn('[Imposition] ' + avisoDaNuvem);
+            // 15/08/2026: nao existe mais caminho para a nuvem. Imposicao e
+            // impressao so acontecem na estacao -- decisao de seguranca do
+            // usuario. Ver
+            // docs/superpowers/specs/2026-08-15-migrar-render-para-supabase-design.md
+            //
+            // O trabalho PARA aqui, antes de montar o FormData: sem isto a arte
+            // do cliente ja teria sido lida para a memoria a toa.
+            //
+            // A frase de reserva existe porque `explicarEstacaoNaoEncontrada`
+            // devolve '' de proposito quando a pagina ja vem da propria maquina
+            // -- ali nao ha navegador bloqueando nada, o NewProd e que esta
+            // fechado. Sem ela, a recusa ficaria muda justamente na estacao.
+            const recusaSemEstacao = explicarEstacaoNaoEncontrada(window.location.origin)
+                || 'A estacao (NewProd) nao respondeu nesta maquina. Abra o NewProd e tente de novo.';
+            if (sub) sub.innerHTML = `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:#7f1d1d;color:#fee2e2;font-size:0.85rem;line-height:1.45;text-align:left;font-weight:600;">&#9888; ${recusaSemEstacao}</div>`;
+            console.warn('[Imposition] ' + recusaSemEstacao);
+            throw new Error(recusaSemEstacao);
 
         }
 
