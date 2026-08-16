@@ -629,10 +629,10 @@ self.addEventListener('fetch', e => {
         // rede" continua garantido: o catch so cai no cache quando a rede
         // falha de verdade.
         //
-        // ignoreSearch AQUI, e so aqui: o endereco que o dono compartilha e
-        // "/portaria.html?e=<evento_id>", mas o install guardou a chave sem
-        // query. Sem ignorar a busca, o match falharia bem no caso que este
-        // arquivo existe para cobrir.
+        // Ignorar a query AQUI, e so aqui: o endereco que o dono compartilha
+        // e "/portaria.html?e=<evento_id>", mas o install guardou a chave sem
+        // query. Sem isso, o match falharia bem no caso que este arquivo
+        // existe para cobrir -- reabrir sem rede.
         e.respondWith(
             fetch(e.request).catch(() =>
                 caches.open(CACHE).then(c => c.match(e.request, { ignoreSearch: true })))
@@ -948,6 +948,13 @@ def test_a_lanterna_so_aparece_onde_funciona():
     html = _ler("frontend/portaria.html")
     assert 'id="btn-lanterna"' in html
     assert "sumindo" in html
+
+
+def test_o_ligar_da_camera_devolve_promessa():
+    """Perguntar pela lanterna antes de o getUserMedia resolver responde
+    sempre "nao tem" -- e o botao nunca apareceria em aparelho que tem."""
+    js = _ler("frontend/portaria-camera.js")
+    assert "return navigator.mediaDevices.getUserMedia" in js
 ```
 
 - [ ] **Passo 2: rodar e ver falhar**
@@ -955,32 +962,99 @@ def test_a_lanterna_so_aparece_onde_funciona():
 Rode: `.\venv\Scripts\python.exe -m pytest tests\test_portaria_pwa.py -k lanterna -v`
 Esperado: FALHA em `assert "torch" in js`.
 
-- [ ] **Passo 3: implementar na câmera**
+- [ ] **Passo 3: guardar o fluxo e devolver a promessa**
 
-Abra `frontend/portaria-camera.js`. Onde a stream é guardada (logo depois do `getUserMedia` resolver, por volta da linha 36), guarde também a trilha e acrescente as duas funções ao objeto exportado:
+Hoje o `portaria-camera.js` só guarda o fluxo dentro de `video.srcObject`, e o `ligar()` não devolve nada. A lanterna precisa das duas coisas: a trilha de vídeo, e um jeito de saber **quando** ela existe (o `getUserMedia` é assíncrono — perguntar pela lanterna logo depois de chamar `ligar()` responderia sempre "não tem").
+
+Em `frontend/portaria-camera.js`, troque a linha 17-18 por:
+
+```javascript
+    var video = null, canvas = null, ctx = null, detector = null;
+    var rodando = false, ultimo = '', ultimoEm = 0;
+    // O fluxo em variavel propria, e nao so em `video.srcObject`: o `desligar`
+    // precisa apagar a lanterna DEPOIS de soltar o video da tela e ANTES de
+    // parar a trilha, e nesse meio o `srcObject` ja foi a nulo.
+    var fluxo = null, acesa = false;
+```
+
+Troque o `ligar()` (linhas 20-43) por — repare no `return` novo em três pontos:
+
+```javascript
+    function ligar() {
+        if (rodando) return Promise.resolve();
+        rodando = true;
+        video = document.getElementById('cam');
+        canvas = canvas || document.createElement('canvas');
+        ctx = ctx || canvas.getContext('2d', { willReadFrequently: true });
+
+        if (!detector && window.BarcodeDetector) {
+            try {
+                detector = new window.BarcodeDetector({
+                    formats: ['qr_code', 'code_128', 'ean_13'],
+                });
+            } catch (e) { detector = null; }
+        }
+
+        // Devolve a promessa: quem chama precisa saber QUANDO a camera abriu,
+        // para so entao perguntar se este aparelho tem lanterna.
+        return navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' }, audio: false,
+        }).then(function (f) {
+            fluxo = f;
+            video.srcObject = f;
+            return video.play();
+        }).then(quadro).catch(function () {
+            rodando = false;   // sem camera a tela continua util pelo "Digitar o numero"
+        });
+    }
+```
+
+Troque o `desligar()` (linhas 45-51) por:
+
+```javascript
+    function desligar() {
+        rodando = false;
+        var f = fluxo;
+        fluxo = null;
+        if (video && video.srcObject) video.srcObject = null;
+        if (!f) return;
+
+        // Apagar a lanterna ANTES de parar a trilha, e esperar de verdade:
+        // parar a trilha com a luz acesa deixa a lanterna do celular ligada em
+        // varios aparelhos Android, e nao sobra tela nenhuma para apaga-la.
+        var apagando = Promise.resolve();
+        if (acesa) {
+            var t = f.getVideoTracks()[0];
+            if (t && t.applyConstraints) {
+                try {
+                    apagando = t.applyConstraints({ advanced: [{ torch: false }] });
+                } catch (e) { /* aparelho que nao aceita: a parada resolve */ }
+            }
+        }
+        acesa = false;
+        apagando.catch(function () { }).then(function () {
+            f.getTracks().forEach(function (t) { t.stop(); });
+        });
+    }
+```
+
+Acrescente a lanterna, logo depois do `desligar()`:
 
 ```javascript
     // ── Lanterna ────────────────────────────────────────────────────────────
-    // So o Chrome no Android expõe isto (`torch` nas capacidades da trilha);
-    // no iPhone nao existe para pagina nenhuma. Quem chama tem de perguntar
-    // `temLanterna()` antes de mostrar botao.
-    var acesa = false;
-
-    function trilha() {
-        // `stream` e a MediaStream que o getUserMedia devolveu; ajuste o nome
-        // para o que o arquivo ja usa.
-        return stream ? stream.getVideoTracks()[0] : null;
-    }
-
+    // So o Chrome no Android expoe isto (`torch` nas capacidades da trilha).
+    // No iPhone nao existe para pagina nenhuma -- e por isso `temLanterna()`
+    // e uma pergunta, e nao uma suposicao: quem chama tem de perguntar antes
+    // de mostrar botao.
     function temLanterna() {
-        var t = trilha();
+        var t = fluxo ? fluxo.getVideoTracks()[0] : null;
         if (!t || !t.getCapabilities) return false;
         return !!t.getCapabilities().torch;
     }
 
     function alternarLanterna() {
-        var t = trilha();
         if (!temLanterna()) return Promise.resolve(false);
+        var t = fluxo.getVideoTracks()[0];
         var alvo = !acesa;
         return t.applyConstraints({ advanced: [{ torch: alvo }] })
             .then(function () { acesa = alvo; return acesa; })
@@ -988,21 +1062,13 @@ Abra `frontend/portaria-camera.js`. Onde a stream é guardada (logo depois do `g
     }
 ```
 
-E no `desligar()`, **antes** de parar a trilha:
+E troque a linha 86 (o objeto exportado) por:
 
 ```javascript
-        // Apagar antes de soltar a camera: parar a trilha com a lanterna acesa
-        // deixa a luz ligada em alguns aparelhos, e o porteiro fica com a
-        // lanterna do celular acesa sem nada na tela para apaga-la.
-        if (acesa) {
-            try { alternarLanterna(); } catch (e) { /* a camera ja foi */ }
-        }
-```
-
-E acrescente ao objeto exportado (`window.portariaCamera = { … }`):
-
-```javascript
+    window.portariaCamera = {
+        ligar: ligar, desligar: desligar,
         temLanterna: temLanterna, alternarLanterna: alternarLanterna,
+    };
 ```
 
 - [ ] **Passo 4: implementar na tela**
@@ -1013,7 +1079,35 @@ Em `frontend/portaria.html`, dentro de `#tela-lendo`, logo abaixo do vídeo:
             <button id="btn-lanterna" class="discreto sumindo" type="button">Lanterna</button>
 ```
 
-E em `frontend/portaria.js`, junto dos outros `onclick`:
+Em `frontend/portaria.js` há **dois** lugares que ligam a câmera (`entrarEmLeitura`, linha 142, e o `btn-proximo`, linha 324). Em vez de repetir o ajuste do botão nos dois, crie uma função só — logo antes de `entrarEmLeitura` (linha 133):
+
+```javascript
+    function ligarCamera() {
+        if (!window.portariaCamera) return;
+        // O rotulo volta ao repouso a cada abertura: o `desligar` apaga a
+        // lanterna depois de cada leitura, e um botao dizendo "acesa" com a
+        // luz apagada e pior do que botao nenhum.
+        $('btn-lanterna').textContent = 'Lanterna';
+        window.portariaCamera.ligar().then(function () {
+            // So AGORA da para perguntar: antes de o getUserMedia resolver,
+            // nao ha trilha de video e a resposta seria sempre "nao tem".
+            //
+            // O botao so aparece onde a lanterna existe de verdade -- Chrome
+            // no Android. Botao morto no escuro faz o porteiro concluir que o
+            // aparelho travou, e ele nao tem como saber que nao e isso.
+            $('btn-lanterna').classList.toggle('sumindo', !window.portariaCamera.temLanterna());
+        });
+    }
+```
+
+Troque as duas chamadas por `ligarCamera();`:
+
+```javascript
+        mostrar('lendo');
+        ligarCamera();
+```
+
+E acrescente o clique, junto dos outros:
 
 ```javascript
     $('btn-lanterna').onclick = function () {
@@ -1023,14 +1117,6 @@ E em `frontend/portaria.js`, junto dos outros `onclick`:
             $('btn-lanterna').textContent = acesa ? 'Lanterna acesa' : 'Lanterna';
         });
     };
-```
-
-E onde a câmera é ligada (dentro de `entrarEmLeitura`, depois do `ligar()` resolver):
-
-```javascript
-        // O botao so aparece onde a lanterna existe de verdade -- Chrome no
-        // Android. Botao morto no escuro faz o porteiro achar que travou.
-        $('btn-lanterna').classList.toggle('sumindo', !window.portariaCamera.temLanterna());
 ```
 
 - [ ] **Passo 5: rodar os testes**

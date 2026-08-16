@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Portaria — Ideal Control</title>
     <meta name="theme-color" content="#0a0f1e">
+    <meta name="description" content="Leitura de ingressos no portão. Funciona sem rede.">
+    <link rel="manifest" href="/portaria.webmanifest">
+    <link rel="icon" href="/icones/portaria-192.png" type="image/png">
+
+    <!--
+        O iOS NAO le o manifesto: nome, icone e "abrir sem barra do Safari" so
+        saem destas metas. Sem elas, "Adicionar a Tela de Inicio" no iPhone cria
+        um atalho com print da pagina no lugar do icone, e abre dentro do Safari
+        com a barra ocupando a tela.
+
+        `black-translucent` combina com o `viewport-fit=cover` e o
+        `env(safe-area-inset-*)` que o `body` ja usa: a cor da pagina sobe ate
+        embaixo do relogio, e nada de util fica escondido pelo entalhe.
+
+        Um efeito colateral que vale saber: instalado na tela de inicio, o iOS
+        deixa de apagar o armazenamento do site depois de 7 dias sem uso. A
+        carga do evento e a fila de leituras que ainda nao subiram vivem no
+        IndexedDB -- sem instalar, um celular parado entre um evento e outro
+        pode acordar vazio.
+    -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Portaria">
     <!--
         A tela do porteiro. Uma mao, no escuro, com sol de refletor na cara e a
         fila andando. Por isso: alvos de toque grandes, cor ocupando a tela
