@@ -1,0 +1,79 @@
+﻿{
+  "emitido_por": "deno",
+  "segredo_qr": "segredo-de-mesa-do-qr-pedido-2026",
+  "segredo_elevacao": "segredo-de-mesa-da-elevacao-2026",
+  "corpos_crus": [
+    {
+      "corpo": "",
+      "assinatura": "wiP53o87_oCdNOP1BJmmr1O5Gc7"
+    },
+    {
+      "corpo": "a",
+      "assinatura": "2yhQnxTd34tWFup_EdLbfWflvX2"
+    },
+    {
+      "corpo": "0.0",
+      "assinatura": "aGo6lbDgYRRurujLSb29SZ5O2oD"
+    },
+    {
+      "corpo": "18560.1800000000",
+      "assinatura": "bzLM-syodgiAstZBrMjNhnF3ZlE"
+    },
+    {
+      "corpo": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "assinatura": "OpYylTxx5CXYEyCnv2k6wOzL4TA"
+    },
+    {
+      "corpo": "acentos-nao-entram-mas-bytes-altos-sim-ção",
+      "assinatura": "dFowWx_1v491kLFECaYpmJV0HTE"
+    },
+    {
+      "corpo": "..",
+      "assinatura": "8YxxM2-SQKj-B9txn3UDYn28n_X"
+    },
+    {
+      "corpo": "1.2.3.4.5",
+      "assinatura": "AuHbufAqLwnqQgiVwO9w6rraYoO"
+    }
+  ],
+  "qr": [
+    {
+      "pedido": 1,
+      "expira": 0,
+      "token": "1.0.fOrPHvYtvjhN4tevGNFJspelmPV"
+    },
+    {
+      "pedido": 18560,
+      "expira": 1800000000,
+      "token": "18560.1800000000.bzLM-syodgiAstZBrMjNhnF3ZlE"
+    },
+    {
+      "pedido": 999999999,
+      "expira": 2147483647,
+      "token": "999999999.2147483647.1qKC015PuBmRD5Z5Fa-tYs7obSu"
+    }
+  ],
+  "elevacao": [
+    {
+      "evento_id": "8242dfbd-021a-4dfc-8f1f-9b240e28c65a",
+      "conta_id": "abc123",
+      "navegador": "nav-1",
+      "expira": 1800000000,
+      "token": "8242dfbd-021a-4dfc-8f1f-9b240e28c65a.abc123.nav-1.1800000000.sFLJ3NnoWq5grrwBbxm3ria2jXM"
+    },
+    {
+      "evento_id": "e",
+      "conta_id": "c",
+      "navegador": "n",
+      "expira": 0,
+      "token": "e.c.n.0.bX8igiWiVD_hX00j2plDe5Jhqy9"
+    },
+    {
+      "evento_id": "A_-9",
+      "conta_id": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+      "navegador": "nav_2-x",
+      "expira": 2147483647,
+      "token": "A_-9.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz.nav_2-x.2147483647.TOjLjGrY7yhidPOa2neY5x-57ms"
+    }
+  ]
+}

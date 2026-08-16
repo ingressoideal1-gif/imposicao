@@ -175,13 +175,36 @@ deslocar campos e fazer uma assinatura valer para outra combinação.
 
 ---
 
+## Correção do usuário, 16/08/2026 — os dois maiores riscos não existem hoje
+
+Escrito o desenho acima, o usuário corrigiu a premissa: **"nenhum QR foi enviado a cliente,
+aplicação está em fase de testes, nenhum dos eventos é um evento real"**.
+
+Isso derruba o risco nº 1 inteiro. Não há QR do Pedido em circulação para invalidar, então
+a paridade nos dois sentidos deixa de ser portão e vira higiene — continua no plano porque
+custa pouco e porque o dia em que houver QR de verdade chega sem avisar, mas não é mais
+motivo para isolar o `acesso-pedido` numa etapa própria.
+
+Encolhe também o risco nº 2, com um cuidado: **a impressão é real**, a gráfica trabalha
+todo dia. O que não é real são os *eventos de controle de acesso* — as faixas que
+`acesso_publicacao.py` publica hoje são de evento de teste. Então uma falha na publicação
+não estraga trabalho de cliente; ela estraga um teste. O bloqueador do heartbeat continua
+valendo como conserto certo a fazer, mas deixa de ser pré-requisito.
+
+Consequência prática: **a estação entra nesta fase**, e as quatro funções são um trabalho
+só. A ordem abaixo continua valendo — ela ainda é a ordem que aprende barato antes de
+arriscar caro —, mas nenhuma etapa espera dias por migração de estação.
+
 ## Riscos, do maior para o menor
 
+> Os dois primeiros valem para quando a aplicação sair de testes. Hoje, pela correção
+> acima, nenhum dos dois está armado.
+
 1. **QR do Pedido em circulação** — um byte de diferença no HMAC invalida o que já está com
-   os clientes. Mitigação: paridade nos dois sentidos antes de emitir.
+   os clientes. Mitigação: paridade nos dois sentidos antes de emitir. *Não armado hoje.*
 2. **Publicação da estação falha em silêncio** — papel impresso, ingresso inválido,
-   descoberto no portão. Mitigação: vai por último, e só depois de o heartbeat reportar
-   versão.
+   descoberto no portão. Mitigação: vai por último, e o heartbeat passa a reportar versão.
+   *Não armado hoje: os eventos são de teste.*
 3. **Elevação divergente** — o dono perde acesso de configuração, ou o pior: ganha sem
    direito. Mitigação: casos de mesa nos dois lados; a validade curta limita o estrago.
 4. **Papel lido diferente** (`imposition_user_permissions`) — alguém vê tela que não devia.
@@ -191,13 +214,10 @@ deslocar campos e fazer uma assinatura valer para outra combinação.
 
 ---
 
-## O que preciso de você
+## Decidido
 
-Uma decisão, e ela muda o tamanho do trabalho:
+A pergunta era se a estação entrava nesta fase ou virava uma Fase 2c. Com a correção
+acima, **entra**: as quatro funções mais o conserto do heartbeat são um trabalho só.
 
-**A etapa 4 (estação) entra nesta fase ou vira a Fase 2c?** Ela é a única que depende de
-mudar o agente e esperar 11 estações migrarem — trabalho de dias, não de horas, e com
-janela de risco em produção. As três primeiras não dependem dela e podem ir inteiras.
-
-Minha recomendação: **fazer 1, 2 e 3 agora, e a estação depois**, com o conserto do
-heartbeat começando junto (é pequeno e destrava a medição enquanto o resto anda).
+O plano de execução está em
+`docs/superpowers/plans/2026-08-16-fase-2b-execucao.md`.

@@ -20,7 +20,8 @@
  */
 import { hashCodigo } from "../_compartilhado/hash.ts";
 import { banco } from "../_compartilhado/banco.ts";
-import { iguaisEmTempoConstante, origemPermitida, rotaPedida } from "./puro.ts";
+import { iguaisEmTempoConstante, rotaPedida } from "./puro.ts";
+import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 
 // Quantas credenciais por pagina da carga.
 //
@@ -336,32 +337,6 @@ async function leituras(cabecalho: string | null, corpo: any): Promise<Response>
   return ok({ gravadas: linhas.length });
 }
 
-/**
- * Os cabecalhos de CORS entram AQUI, num lugar so, e nao em cada `ok()`/`erro()`.
- *
- * A alternativa seria passar a origem ate o fundo das funcoes, e as recusas sao
- * lancadas de dentro de `aparelhoDoToken` e `recusarPareamento` -- teriam de
- * carregar a origem junto so para isso. Envelopar a resposta pronta na saida
- * cobre os tres caminhos (sucesso, recusa lancada e defeito nosso) sem que
- * nenhum deles precise saber que CORS existe.
- *
- * Origem que nao passa na politica nao recebe o cabecalho, e o navegador
- * bloqueia -- mesmo comportamento do `CORSMiddleware` do FastAPI.
- */
-function comCors(resposta: Response, origem: string | null): Response {
-  if (!origem) return resposta;
-  const cabecalhos = new Headers(resposta.headers);
-  cabecalhos.set("Access-Control-Allow-Origin", origem);
-  // Sem `Vary: Origin`, um intermediario que guardasse a resposta da Vercel
-  // poderia servi-la a outra origem com o cabecalho errado colado.
-  cabecalhos.append("Vary", "Origin");
-  return new Response(resposta.body, {
-    status: resposta.status,
-    statusText: resposta.statusText,
-    headers: cabecalhos,
-  });
-}
-
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const rota = rotaPedida(url.pathname);
@@ -371,22 +346,10 @@ Deno.serve(async (req: Request) => {
   // O preflight vem ANTES de qualquer POST com Authorization, e nao carrega
   // token nenhum -- responder aqui, antes do roteamento, e o certo: ele nao e
   // uma rota, e tratar como rota daria 404 (que foi o defeito de 16/08/2026).
-  if (req.method === "OPTIONS") {
-    return comCors(
-      new Response(null, {
-        status: 204,
-        headers: {
-          // So o que a portaria usa. O Render devolve a lista inteira de
-          // metodos porque o middleware dele e generico; aqui da para ser
-          // exato sem custo nenhum.
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "authorization,content-type",
-          "Access-Control-Max-Age": "600",
-        },
-      }),
-      origem,
-    );
-  }
+  //
+  // A portaria so usa GET e POST. O Render devolve a lista inteira de metodos
+  // porque o middleware dele e generico; aqui da para ser exato sem custo.
+  if (req.method === "OPTIONS") return respostaDePreflight(origem, "GET, POST, OPTIONS");
 
   try {
     if (req.method === "POST" && rota === "entrar") {
