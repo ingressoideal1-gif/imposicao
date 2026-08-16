@@ -59,6 +59,20 @@ def _texto(nome):
     return (FRONT / nome).read_text(encoding="utf-8")
 
 
+def _codigo(nome):
+    """O arquivo SEM os comentários de bloco.
+
+    O registro de que a nuvem não existe mais precisa citar os nomes que foram
+    apagados — é o que impede alguém de recriá-los sem saber a história. Uma
+    busca textual crua leria essa prosa como se fosse o código de volta, e o
+    teste passaria a acusar justamente a documentação da própria remoção.
+
+    Só `/* ... */`, e não `//`: comentário de linha é onde moram URLs, e cortar
+    a linha num `https://` esconderia código de verdade escrito depois dele.
+    """
+    return re.sub(r"/\*.*?\*/", "", _texto(nome), flags=re.S)
+
+
 def test_a_explicacao_existe_e_diz_o_que_fazer():
     """Não basta dizer que não deu: o operador precisa da saída, e a saída é um
     endereço que ele digita."""
@@ -96,9 +110,28 @@ def test_NENHUMA_tela_conhece_um_motor_de_imposicao_na_nuvem():
     """
     culpados = []
     for nome in TELAS:
-        corpo = _texto(nome)
+        corpo = _codigo(nome)
         if "MOTOR_NUVEM" in corpo or "baseParaImposicao" in corpo:
             culpados.append(f"{nome}: ainda conhece um motor de imposicao na nuvem")
         if "NUVEM</span>" in corpo:
             culpados.append(f"{nome}: ainda mostra o selo NUVEM")
     assert not culpados, "\n  ".join(["tela com caminho para a nuvem:"] + culpados)
+
+    # NÃO se cobra aqui a ausência de `imposicao.onrender.com` no arquivo. O
+    # Render continua servindo controle de acesso e catálogo até as Fases 2 a 4
+    # da migração para o Supabase, e o `script.js` ainda tem um `fetch` de
+    # pré-aquecimento para acordá-lo. O que esta regra proíbe é mandar
+    # IMPOSIÇÃO para lá — não mencionar o endereço.
+
+
+def test_o_registro_da_remocao_continua_no_arquivo():
+    """O comentário que conta por que a nuvem sumiu é parte da correção.
+
+    Sem ele, a próxima pessoa que topar com um `FUNCTION_PAYLOAD_TOO_LARGE`
+    recria o desvio — que era exatamente a razão original daquela função — sem
+    saber que ele foi removido por decisão de segurança.
+    """
+    corpo = _texto("script.js")
+    assert "NAO EXISTE motor de imposicao na nuvem" in corpo, (
+        "o registro de por que a nuvem foi removida saiu do arquivo"
+    )

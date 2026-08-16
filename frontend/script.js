@@ -3525,7 +3525,7 @@ if (typeof window.renderQRCodeOnCtx !== 'function') {
 /**
  * NAO EXISTE motor de imposicao na nuvem, e nao deve voltar a existir.
  *
- * Ate 15/08/2026 havia aqui um `baseParaImposicao()` que, quando a pagina nao
+ * Ate 16/08/2026 havia aqui um `baseParaImposicao()` que, quando a pagina nao
  * estava em localhost, mandava o upload para `imposicao.onrender.com`. Isso
  * significava que a arte do cliente -- centenas de MB -- saia da grafica para um
  * servidor de terceiro, e o operador via so um selo discreto escrito "NUVEM".
@@ -10072,11 +10072,6 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         let baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
 
-        // Preenchido so quando o trabalho cai na nuvem por a estacao nao ter
-        // sido encontrada. Serve a duas telas: o alerta durante a geracao e a
-        // mensagem de erro, que sem ele diz o que faltou mas nao o que fazer.
-        let avisoDaNuvem = '';
-
         // 1. Verificar primeiro se o servidor FastAPI principal está rodando localmente (porta 8080)
 
         let localApiActive = false;
@@ -10497,13 +10492,11 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         } else {
 
-            // A recusa do motor diz o que faltou; ela nao tem como saber que o
-            // trabalho foi parar na nuvem porque o navegador barrou a estacao.
-            // Sem esta frase, o operador le "falta a lista de codigos desta
-            // estacao" estando na frente de uma estacao que TEM a lista.
-            const causa = avisoDaNuvem ? `\n\n${avisoDaNuvem}` : '';
-
-            toast(`Erro: ${err.message}${causa}`, 'error');
+            // Nao se cola mais causa nenhuma aqui. Quando a estacao nao e
+            // encontrada, o `throw` la de cima JA carrega a explicacao inteira
+            // -- e nao ha mais o caso antigo, em que o trabalho seguia para a
+            // nuvem e o erro vinha de la sem saber por que tinha ido parar ali.
+            toast(`Erro: ${err.message}`, 'error');
 
         }
 

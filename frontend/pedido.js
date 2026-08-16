@@ -4752,11 +4752,6 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         let baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
 
-        // Ver o comentario de `explicarEstacaoNaoEncontrada` no script.js: esta
-        // tela tem a sondagem duplicada, e um aviso que valha so para metade das
-        // telas some sem ninguem notar.
-        let avisoDaNuvem = '';
-
         // 1. Verificar primeiro se o servidor FastAPI principal está rodando localmente (porta 8080)
 
         let localApiActive = false;
@@ -5193,9 +5188,9 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         } else {
 
-            const causa = avisoDaNuvem ? `\n\n${avisoDaNuvem}` : '';
-
-            toast(`Erro: ${err.message}${causa}`, 'error');
+            // Ver o mesmo trecho no script.js: a recusa por falta de estacao ja
+            // vem com a explicacao inteira dentro do proprio erro.
+            toast(`Erro: ${err.message}`, 'error');
 
         }
 
