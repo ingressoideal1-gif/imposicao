@@ -449,3 +449,27 @@ verify_jwt = false
 # isso esta linha existe explicita, com este comentario: para ninguem a apagar
 # achando que remove redundancia.
 verify_jwt = true
+
+[functions.acesso-conta]
+# LIGADO. A tela do dono do evento fala com JWT de verdade, e e o portao do
+# Supabase quem confere a assinatura antes de invocar a funcao.
+#
+# A rota publica `/evento` NAO mora nesta funcao, e a razao e exatamente esta
+# chave: `verify_jwt` e por FUNCAO, nao por rota. Se as duas coisas morassem
+# juntas, desligar a verificacao por causa da rota publica desligaria para todas
+# -- e o `sub` das claims viraria um campo que qualquer um escreve. Um estranho
+# montaria um JWT com o `sub` do dono e configuraria o evento dele.
+verify_jwt = true
+
+[functions.acesso-evento]
+# DESLIGADO, e e a unica rota do controle de acesso que pode ficar assim.
+#
+# O cliente abre `/evento?t=<token>` lendo o QR com a camera, ANTES de ter
+# conta. Nao ha JWT nenhum para conferir, e exigir um recusaria com 401 antes de
+# o codigo rodar.
+#
+# O que protege esta rota e a ASSINATURA do proprio token do QR, conferida por
+# `_compartilhado/assinatura.ts`, mais a conferencia de revogacao contra o
+# banco. Aqui nao existe `sub` a confiar -- e por isso ela pode ficar sozinha
+# com a verificacao desligada sem abrir nada.
+verify_jwt = false
