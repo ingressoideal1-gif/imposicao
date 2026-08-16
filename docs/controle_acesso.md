@@ -634,21 +634,48 @@ Na primeira vez que o usuário abriu esta tela em produção, ela ficou em
 "Carregando…" e nunca saiu. O log do Render provou o essencial: **nenhuma
 requisição chegou ao motor**. O problema estava antes da rede.
 
-`frontend/supabase-config.js` deixa `window.supabaseClient` **nulo** quando o SDK
-do CDN não carrega, ou quando o modo offline está ligado. O `cabecalhos()` desta
-tela chamava `supabaseClient.auth.getSession()` direto — e isso **lança na hora**,
-em vez de rejeitar uma promessa. Um `throw` síncrono escapa do `.catch()` de quem
-chamou, porque a corrente de promessas nem chegou a existir: a tela não recebe
-erro nenhum e o "Carregando…" fica para sempre.
+Foram **dois** defeitos, um escondendo o outro.
 
-É exatamente a armadilha que o `controle.js` documenta no próprio cabeçalho —
-repetida no arquivo ao lado. As duas defesas agora são:
+**O primeiro: o cliente do Supabase não mora em `window`.**
+`frontend/supabase-config.js` faz `let supabaseClient = null;` no topo de um
+script clássico — e `let`/`const` ali criam a ligação no **escopo de script**,
+nunca no objeto global. Só `var` cria propriedade em `window`. Medido no
+navegador: `typeof window.supabaseClient` é `"undefined"`, e `window` nem tem a
+chave, enquanto o identificador nu entrega o cliente com `.auth`.
 
-1. `cabecalhos()` e `pedir()` começam com `Promise.resolve().then(...)`, então
+Esta tela procurava por `window.supabaseClient`. Ou seja, ela **nunca** teve
+cliente — em navegador nenhum, para usuário nenhum. O resto do painel sempre
+usou o nome nu (`script.js` faz exatamente
+`typeof supabaseClient !== 'undefined' && supabaseClient`), e por isso o login
+do painel funcionava enquanto esta tela não falava com o motor.
+
+**O segundo: a falha era muda.** `cabecalhos()` chamava
+`supabaseClient.auth.getSession()` direto, e isso **lança na hora** em vez de
+rejeitar uma promessa. Um `throw` síncrono escapa do `.catch()` de quem chamou,
+porque a corrente de promessas nem chegou a existir: a tela não recebia erro
+nenhum e o "Carregando…" ficava para sempre. É exatamente a armadilha que o
+`controle.js` documenta no próprio cabeçalho, repetida no arquivo ao lado.
+
+O segundo defeito é o que tornou o primeiro tão caro: com a mensagem na tela, o
+`window.` teria aparecido em minutos, e não depois de duas publicações.
+
+As três defesas agora:
+
+1. `clienteDoPainel()` procura pelo **identificador nu**, com `typeof` e um
+   `try` para a zona morta temporal;
+2. `cabecalhos()` e `pedir()` começam com `Promise.resolve().then(...)`, então
    qualquer falha vira **rejeição**, nunca exceção;
-2. o `.catch` de `abrirPedido` cobre também o `desenhar()`, e sempre tira o
+3. o `.catch` de `abrirPedido` cobre também o `desenhar()`, e sempre tira o
    "Carregando…" da tela. Numa tela de atendimento, ficar carregando é o pior
    fim possível: a pessoa espera, e não há o que ela possa fazer.
+
+O teste que teria pego o primeiro defeito é
+`test_a_tela_acha_o_cliente_do_supabase_como_o_painel_o_declara`: ele carrega o
+`supabase-config.js` **de verdade** na página de teste. Os demais semeavam
+`window.supabaseClient = …` e passavam com a tela quebrada — sem o `let` do
+config real, o identificador nu cai na propriedade de `window` e tudo parece
+funcionar. O arnês era mais generoso que a página, a mesma lição que o dublê de
+banco já tinha ensinado.
 
 Três coisas que essa tela **não** faz, de propósito:
 

@@ -162,7 +162,7 @@ DASHBOARD_FALSO = {
 }
 
 
-def _no_navegador(script_extra, aceitar_dialogo=False):
+def _no_navegador(script_extra, aceitar_dialogo=False, config_real=False):
     """Abre a secao do index.html num Chrome de verdade, sem backend.
 
     A pagina hospedeira e minima de proposito: carregar o index.html inteiro
@@ -170,10 +170,22 @@ def _no_navegador(script_extra, aceitar_dialogo=False):
     script.js -- nada disso participa desta tela, e cada um deles e uma forma
     de o teste falhar por motivo que nao e o dele.
     """
+    # `config_real=True` carrega o `supabase-config.js` DE VERDADE, com um SDK
+    # de mentira no lugar do CDN. E o unico jeito de exercitar como o cliente
+    # do Supabase de fato existe na pagina -- ver
+    # `test_a_tela_acha_o_cliente_do_supabase_como_o_painel_o_declara`.
+    config = (
+        '<script>window.supabase = { createClient: () => ({ auth: {'
+        ' getSession: async () => ({ data: { session: '
+        '{ access_token: "jwt-do-painel" } } }) } }) };</script>'
+        '<script src="/supabase-config.js"></script>'
+    ) if config_real else ''
+
     hospedeira = (
         '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
         '<link rel="stylesheet" href="/style.css"></head><body>'
         '<main class="main-content">' + _secao_do_index() + '</main>'
+        + config +
         '<script src="/ideal-control.js"></script></body></html>'
     )
 
@@ -905,3 +917,88 @@ def test_paginar_nao_apaga_os_numeros_do_setor():
         return { linha: document.getElementById('ic-numeros-s1').textContent };
     """)
     assert "1.300 publicadas" in saida["linha"]
+
+
+# ── O cliente do Supabase, como ele existe DE VERDADE na pagina ─────────────
+
+def test_o_painel_NAO_publica_o_cliente_do_supabase_em_window():
+    """O fato que quebrou esta tela, medido e fixado.
+
+    `supabase-config.js` faz `let supabaseClient = null;` no topo de um script
+    classico. `let`/`const` ali criam a ligacao no ESCOPO DE SCRIPT, nunca em
+    `window` -- so `var` cria propriedade no objeto global.
+
+    Se um dia alguem trocar aquele `let` por `var`, este teste reprova e avisa:
+    nao e um problema, mas e uma mudanca de contrato que esta tela depende de
+    conhecer.
+    """
+    assert "let supabaseClient" in _ler("frontend/supabase-config.js")
+
+    saida = _no_navegador("""
+        return {
+            em_window: typeof window.supabaseClient,
+            window_tem_a_chave: Object.prototype.hasOwnProperty.call(window, 'supabaseClient'),
+            nu: typeof supabaseClient,
+            nu_tem_auth: !!(typeof supabaseClient !== 'undefined'
+                            && supabaseClient && supabaseClient.auth),
+        };
+    """, config_real=True)
+    assert saida["em_window"] == "undefined"
+    assert saida["window_tem_a_chave"] is False
+    assert saida["nu"] == "object"
+    assert saida["nu_tem_auth"] is True
+
+
+def test_a_tela_acha_o_cliente_do_supabase_como_o_painel_o_declara():
+    """O teste que teria pego o defeito de 16/08/2026.
+
+    Os outros testes semeiam `window.supabaseClient = ...` e passavam mesmo com
+    a tela quebrada: sem o `let` do config real, o identificador nu cai na
+    propriedade de `window` e tudo parece funcionar. O arnes era mais generoso
+    que a pagina -- a mesma licao do dube de banco que era mais generoso que o
+    Supabase.
+
+    Aqui o `supabase-config.js` de verdade entra na pagina, e o `let` dele passa
+    a sombrear `window`. So acha o cliente quem o procura pelo nome nu.
+    """
+    saida = _no_navegador("""
+        let enviado = null;
+        window.fetch = async (url, o) => {
+            enviado = { url, auth: (o.headers || {})['Authorization'] };
+            return { ok: true, json: async () => ({ pedidos: [] }) };
+        };
+        await IdealControl.listarRecentes();
+        return { enviado,
+                 recentes: document.getElementById('ic-recentes').textContent };
+    """, config_real=True)
+    # A requisicao SAIU, com o token do painel no cabecalho.
+    assert saida["enviado"] is not None, "a tela nao chegou a chamar o motor"
+    assert "/api/acesso/interno/pedidos" in saida["enviado"]["url"]
+    assert saida["enviado"]["auth"] == "Bearer jwt-do-painel"
+    # E nada de "login nao carregou".
+    assert "login" not in saida["recentes"].lower()
+
+
+def test_abrir_o_pedido_com_o_config_real_chega_ao_motor():
+    """O caminho inteiro, do clique ate a chamada: e o que o usuario fez e nao
+    funcionou."""
+    saida = _no_navegador("""
+        const chamadas = [];
+        window.fetch = async (url, o) => {
+            chamadas.push(url);
+            return { ok: true, json: async () => (
+                url.indexOf('/pedidos/') >= 0 ? window.PAINEL : { pedidos: [] }) };
+        };
+        IdealControl.iniciar();
+        document.getElementById('ic-busca').value = '18560';
+        document.getElementById('ic-buscar').click();
+        await new Promise(r => setTimeout(r, 200));
+        return { chamadas,
+                 carregando: document.getElementById('ic-carregando').style.display,
+                 conteudo: document.getElementById('ic-conteudo').style.display,
+                 titulo: document.getElementById('ic-titulo').textContent };
+    """, config_real=True)
+    assert any("/pedidos/18560" in c for c in saida["chamadas"]), saida["chamadas"]
+    assert saida["carregando"] == "none"
+    assert saida["conteudo"] != "none"
+    assert "Baile do Hawaii" in saida["titulo"]

@@ -42,29 +42,55 @@
     }
 
     /**
+     * O cliente do Supabase do painel — pelo IDENTIFICADOR NU, nunca por
+     * `window`.
+     *
+     * `supabase-config.js` faz `let supabaseClient = null;` no topo de um
+     * script clássico, e `let`/`const` ali criam a ligação no **escopo de
+     * script**, não em `window` — só `var` cria propriedade no objeto global.
+     * Medido no navegador: `typeof window.supabaseClient` é `"undefined"` e
+     * `window` nem tem a chave, enquanto o identificador nu entrega o cliente
+     * com `.auth`.
+     *
+     * Foi por isso que esta tela nunca falou com o motor: eu escrevi
+     * `window.supabaseClient`, que é sempre nulo, e concluí "modo offline". O
+     * resto do painel sempre usou o nome nu — ver `script.js`, que faz
+     * exatamente `typeof supabaseClient !== 'undefined' && supabaseClient`.
+     *
+     * O `try` cobre a zona morta temporal: se um dia esta tela carregar antes
+     * do `supabase-config.js`, ler a ligação lançaria `ReferenceError` em vez
+     * de devolver `undefined`.
+     */
+    function clienteDoPainel() {
+        try {
+            return (typeof supabaseClient !== 'undefined' && supabaseClient
+                    && supabaseClient.auth) ? supabaseClient : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
      * O cabeçalho de toda chamada.
      *
      * O token vem da sessão do Supabase, a mesma do resto do painel. Sem ele o
      * servidor responde 401 — e é ele que prova QUEM está pedindo, mesmo que
      * esta tela não peça senha de evento nenhuma.
      *
-     * `Promise.resolve().then(...)`, e não a chamada direta: o
-     * `supabase-config.js` deixa `window.supabaseClient` NULO quando o SDK do
-     * CDN não carrega, ou quando o modo offline está ligado. Chamado direto,
+     * `Promise.resolve().then(...)`, e não a chamada direta: sem cliente,
      * `supabaseClient.auth` LANÇA na hora — um throw síncrono, que escapa do
      * `.catch()` de quem chamou porque a corrente de promessas nem chegou a
      * existir. O resultado observado em 16/08/2026 foi o pior possível: a tela
-     * ficou em "Carregando…" por três minutos, sem uma palavra, e nenhuma
-     * requisição chegou ao motor. É a mesma armadilha que o `controle.js`
-     * documenta no cabeçalho dele — e que eu repeti aqui.
+     * ficou em "Carregando…" por três minutos, sem uma palavra. É a mesma
+     * armadilha que o `controle.js` documenta no cabeçalho dele.
      */
     function cabecalhos() {
         return Promise.resolve().then(function () {
-            var cliente = window.supabaseClient;
-            if (!cliente || !cliente.auth) {
+            var cliente = clienteDoPainel();
+            if (!cliente) {
                 throw new Error('Esta tela precisa da sua conta do painel, e o '
-                    + 'login não carregou neste navegador. Recarregue a página; '
-                    + 'se continuar, o painel está em modo offline.');
+                    + 'login não carregou neste navegador. Recarregue a página '
+                    + '(Ctrl+F5). Se continuar, saia e entre de novo no painel.');
             }
             return cliente.auth.getSession();
         }).then(function (r) {
