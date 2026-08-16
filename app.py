@@ -1660,7 +1660,13 @@ async def delete_user_permissions_endpoint(user_id: str):
 
 @app.get("/api/acessos-locais")
 async def listar_acessos_locais_endpoint():
-    return {"ok": True, "acessos": db.listar_acessos_locais()}
+    # 503 e nao lista vazia, pela mesma razao das permissoes logo acima: "nao
+    # consegui perguntar" e "nao ha operador nenhum" sao respostas opostas, e a
+    # segunda faria o administrador recadastrar quem ja existe.
+    try:
+        return {"ok": True, "acessos": db.listar_acessos_locais()}
+    except db.BancoIndisponivel as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.post("/api/acessos-locais")

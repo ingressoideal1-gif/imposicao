@@ -1541,7 +1541,7 @@ def get_user_permissions(user_id):
         raise BancoIndisponivel("Supabase desativado neste processo")
     try:
         url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?user_id=eq.{user_id}&select=*"
-        req = urllib.request.Request(url, headers=_headers(), method='GET')
+        req = urllib.request.Request(url, headers=_headers_servico(), method='GET')
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             return data[0] if data else None
@@ -1561,7 +1561,7 @@ def list_all_user_permissions():
         raise BancoIndisponivel("Supabase desativado neste processo")
     try:
         url = f"{SUPABASE_URL}/rest/v1/imposition_user_permissions?select=*&order=created_at.asc"
-        req = urllib.request.Request(url, headers=_headers(), method='GET')
+        req = urllib.request.Request(url, headers=_headers_servico(), method='GET')
         with urllib.request.urlopen(req, timeout=8) as resp:
             return json.loads(resp.read().decode('utf-8'))
     except Exception as e:
@@ -1673,17 +1673,32 @@ def validar_codigo_acesso(codigo, existentes=None) -> str:
 
 
 def listar_acessos_locais():
-    """Lista os operadores com acesso ao NewProd local."""
+    """Lista os operadores com acesso ao NewProd local.
+
+    Levanta `BancoIndisponivel` quando a pergunta não chegou ao banco, em vez de
+    devolver lista vazia. Devolver `[]` dizia ao Menu Usuários "não há operador
+    nenhum cadastrado" — e o administrador que lesse isso cadastraria de novo
+    quem já existe, ou concluiria que a tranca da estação sumiu. É a mesma lição
+    do freio em `sincronizar_acessos`: resposta vazia por recusa não é resposta
+    vazia por verdade.
+
+    A leitura sai pela chave de SERVIÇO desde 16/08/2026. A chave anônima perdeu
+    o `SELECT` desta tabela (`sql/rls_acessos_e_permissoes.sql`, passo 3) porque
+    ela é pública — está no código-fonte de toda página do painel — e com ela
+    qualquer pessoa lia os códigos de acesso da gráfica.
+    """
     if not IS_SUPABASE_ACTIVE:
-        return []
+        raise BancoIndisponivel("Supabase desativado neste processo")
     try:
         url = f"{SUPABASE_URL}/rest/v1/imposition_acessos_locais?select=*&order=nome.asc"
-        req = urllib.request.Request(url, headers=_headers(), method='GET')
+        req = urllib.request.Request(url, headers=_headers_servico(), method='GET')
         with urllib.request.urlopen(req, timeout=8) as resp:
             return json.loads(resp.read().decode('utf-8'))
+    except BancoIndisponivel:
+        raise
     except Exception as e:
         print(f"[db] listar_acessos_locais erro: {e}")
-        return []
+        raise BancoIndisponivel(str(e)) from e
 
 
 def salvar_acesso_local(data):

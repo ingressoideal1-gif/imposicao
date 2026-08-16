@@ -31,6 +31,7 @@ def test_sem_linha_devolve_none(monkeypatch):
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", True)
     monkeypatch.setattr(db, "SUPABASE_URL", "https://exemplo.invalido")
     monkeypatch.setattr(db, "_headers", lambda: {})
+    monkeypatch.setattr(db, "_headers_servico", lambda: {})
     monkeypatch.setattr(db.urllib.request, "urlopen", _resposta(b"[]"))
 
     assert db.get_user_permissions("qualquer") is None
@@ -40,6 +41,7 @@ def test_linha_encontrada_volta_como_dicionario(monkeypatch):
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", True)
     monkeypatch.setattr(db, "SUPABASE_URL", "https://exemplo.invalido")
     monkeypatch.setattr(db, "_headers", lambda: {})
+    monkeypatch.setattr(db, "_headers_servico", lambda: {})
     monkeypatch.setattr(
         db.urllib.request, "urlopen",
         _resposta(b'[{"user_id": "u1", "role": "designer", "perm_pedidos_view": true}]'))
@@ -54,6 +56,7 @@ def test_banco_mudo_levanta_em_vez_de_devolver_none(monkeypatch):
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", True)
     monkeypatch.setattr(db, "SUPABASE_URL", "https://exemplo.invalido")
     monkeypatch.setattr(db, "_headers", lambda: {})
+    monkeypatch.setattr(db, "_headers_servico", lambda: {})
     monkeypatch.setattr(db.urllib.request, "urlopen", _explode(TimeoutError("demorou")))
 
     with pytest.raises(db.BancoIndisponivel):
@@ -66,6 +69,7 @@ def test_lista_vazia_por_falha_nao_vira_lista_vazia(monkeypatch):
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", True)
     monkeypatch.setattr(db, "SUPABASE_URL", "https://exemplo.invalido")
     monkeypatch.setattr(db, "_headers", lambda: {})
+    monkeypatch.setattr(db, "_headers_servico", lambda: {})
     monkeypatch.setattr(db.urllib.request, "urlopen", _explode(OSError("rede caiu")))
 
     with pytest.raises(db.BancoIndisponivel):
@@ -77,6 +81,7 @@ def test_gravacao_recusada_levanta_com_o_motivo(monkeypatch):
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", True)
     monkeypatch.setattr(db, "SUPABASE_URL", "https://exemplo.invalido")
     monkeypatch.setattr(db, "_headers", lambda: {})
+    monkeypatch.setattr(db, "_headers_servico", lambda: {})
 
     import io
     erro = urllib.error.HTTPError(
@@ -93,6 +98,7 @@ def test_gravacao_confirmada_devolve_a_linha(monkeypatch):
     monkeypatch.setattr(db, "IS_SUPABASE_ACTIVE", True)
     monkeypatch.setattr(db, "SUPABASE_URL", "https://exemplo.invalido")
     monkeypatch.setattr(db, "_headers", lambda: {})
+    monkeypatch.setattr(db, "_headers_servico", lambda: {})
     monkeypatch.setattr(
         db.urllib.request, "urlopen",
         _resposta(b'[{"user_id": "u1", "role": "designer"}]'))

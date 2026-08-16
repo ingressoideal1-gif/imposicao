@@ -18,9 +18,11 @@ Esvaziar de verdade continua possível: desative os operadores um a um, ou apagu
 a cópia da estação. O que não se faz por acidente é destrancar tudo com uma
 requisição que voltou vazia.
 """
+import io
 import json
 import os
 import sys
+import urllib.error
 
 import pytest
 
@@ -177,3 +179,43 @@ def test_os_dois_caminhos_fora_nao_e_lista_vazia(monkeypatch):
     monkeypatch.setattr(agent_worker, "_supabase_request", lambda *a, **k: None)
 
     assert agent_worker._acessos_da_nuvem() is None
+
+
+# ─── O que o passo 3 do RLS devolve ───────────────────────────────────────────
+
+
+def test_leitura_revogada_e_erro_e_nao_lista_vazia(estacao, monkeypatch):
+    """O que torna `sql/rls_passo3_fechar_leitura.sql` seguro HOJE.
+
+    Fechar a leitura tem duas formas, e elas não são equivalentes do lado de cá:
+
+        RLS sem política de SELECT  ->  200 com corpo `[]`
+        REVOKE SELECT               ->  401 `permission denied for table`
+
+    O `_supabase_request` devolve `None` em erro de HTTP — e devolvia desde
+    11/08/2026, quando o login local nasceu. Quer dizer que o 401 do REVOKE
+    chega ao agente ANTIGO na única língua de recusa que ele já sabia ouvir, e
+    a cópia da estação sobrevive sem depender do freio de 1.2.96.
+
+    Este teste costura no `urlopen`, e não em `_acessos_da_nuvem`, justamente
+    porque o que está sendo verificado é a tradução do 401 em `None`.
+    """
+    # A cópia é semeada direto, e não pelo `_responder`: ele substitui o próprio
+    # `_acessos_da_nuvem`, que é justamente a função sob teste aqui.
+    acesso_local.salvar_lista(LISTA)
+    assert acesso_local.ha_lista()
+
+    negado = urllib.error.HTTPError(
+        "https://exemplo/rest/v1/imposition_acessos_locais", 401, "Unauthorized",
+        {}, io.BytesIO(b'{"code":"42501","message":"permission denied for table"}'))
+
+    def urlopen(req, timeout=None):
+        raise negado
+
+    monkeypatch.setattr(agent_worker.urllib.request, "urlopen", urlopen)
+
+    assert agent_worker._acessos_da_nuvem() is None, "401 virou lista vazia"
+    assert agent_worker.sincronizar_acessos() is False
+    assert len(acesso_local.carregar_lista()) == 2, "a cópia foi apagada"
+    assert acesso_local.ha_lista(), "a estação parou de pedir código"
+    assert acesso_local.validar("Y6P4KN")
