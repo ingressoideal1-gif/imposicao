@@ -860,9 +860,10 @@ Em `frontend/portaria.js`, logo depois da função `mostrar` (linha 26), acresce
     // segundos -- e mesmo assim o celular apaga a tela sozinho em 30s, porque
     // ler QR nao conta como "uso" para o sistema. Cada apagada custa um
     // desbloqueio com a fila parada.
-    var trava = null;
+    var trava = null, querAcesa = false;
 
     function acenderTela() {
+        querAcesa = true;
         if (!('wakeLock' in navigator) || trava) return;
         navigator.wakeLock.request('screen').then(function (t) {
             trava = t;
@@ -877,6 +878,7 @@ Em `frontend/portaria.js`, logo depois da função `mostrar` (linha 26), acresce
     }
 
     function apagarPermitido() {
+        querAcesa = false;
         if (trava) { trava.release(); trava = null; }
     }
 
@@ -884,9 +886,11 @@ Em `frontend/portaria.js`, logo depois da função `mostrar` (linha 26), acresce
         // Voltar do segundo plano SEMPRE solta a trava, sem avisar. Sem este
         // repedido, a tela fica acesa ate a primeira vez que o porteiro atende
         // uma ligacao -- e nunca mais.
-        if (document.visibilityState === 'visible' && !$('tela-lendo').classList.contains('sumindo')) {
-            acenderTela();
-        }
+        //
+        // `querAcesa`, e nao olhar o DOM: a intencao ja foi decidida pelo
+        // `mostrar()`, e reler classe de tela aqui duplicaria essa regra em
+        // dois lugares que teriam de mudar juntos.
+        if (document.visibilityState === 'visible' && querAcesa) acenderTela();
     });
 ```
 

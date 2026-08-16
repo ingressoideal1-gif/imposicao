@@ -24,7 +24,45 @@
         ['pareando', 'carregando', 'lendo', 'resposta', 'ambiguo'].forEach(function (t) {
             $('tela-' + t).classList.toggle('sumindo', t !== qual);
         });
+        // A trava vale nas telas de trabalho -- ler o codigo e mostrar a
+        // resposta. Nas de pareamento e carga o aparelho pode dormir.
+        if (qual === 'lendo' || qual === 'resposta' || qual === 'ambiguo') acenderTela();
+        else apagarPermitido();
     }
+
+    // ── A tela nao apaga ────────────────────────────────────────────────────
+    // No portao o aparelho fica na mao, lendo um ingresso a cada poucos
+    // segundos -- e mesmo assim o celular apaga a tela sozinho em 30s, porque
+    // ler QR nao conta como "uso" para o sistema. Cada apagada custa um
+    // desbloqueio com a fila parada.
+    var trava = null, querAcesa = false;
+
+    function acenderTela() {
+        querAcesa = true;
+        if (!('wakeLock' in navigator) || trava) return;
+        navigator.wakeLock.request('screen').then(function (t) {
+            trava = t;
+            // O sistema pode soltar por conta propria (bateria fraca, tela
+            // desligada pelo botao). Zerar aqui e o que permite repedir.
+            t.addEventListener('release', function () { trava = null; });
+        }).catch(function () {
+            // Recusa e normal: navegador sem suporte, economia de bateria, aba
+            // em segundo plano. A portaria funciona igual -- so apaga a tela
+            // como qualquer site. Nao vale incomodar o porteiro com isso.
+        });
+    }
+
+    function apagarPermitido() {
+        querAcesa = false;
+        if (trava) { trava.release(); trava = null; }
+    }
+
+    document.addEventListener('visibilitychange', function () {
+        // Voltar do segundo plano SEMPRE solta a trava, sem avisar. Sem este
+        // repedido, a tela fica acesa ate a primeira vez que o porteiro atende
+        // uma ligacao -- e nunca mais.
+        if (document.visibilityState === 'visible' && querAcesa) acenderTela();
+    });
 
     function base() {
         // 16/08/2026: a portaria passou a ser Edge Function, ao lado do banco.

@@ -219,3 +219,15 @@ def test_o_aviso_nao_aparece_na_primeira_instalacao():
     de PRIMEIRA instalacao. Sem esse teste, a faixa apareceria na estreia,
     oferecendo recarregar uma pagina que acabou de carregar."""
     assert "navigator.serviceWorker.controller" in _ler("frontend/portaria.html")
+
+
+# ── A tela nao apaga ────────────────────────────────────────────────────────
+
+def test_a_tela_fica_acesa_enquanto_le():
+    """30 segundos de inatividade apagariam a tela entre uma pessoa e outra --
+    ler QR nao conta como "uso" para o sistema."""
+    js = _ler("frontend/portaria.js")
+    assert "wakeLock" in js
+    assert "visibilitychange" in js, (
+        "o sistema solta a trava ao minimizar; sem repedir, ela nao volta"
+    )
