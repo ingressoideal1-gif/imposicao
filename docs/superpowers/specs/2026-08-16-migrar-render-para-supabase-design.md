@@ -213,6 +213,109 @@ não uma recriação de serviço.
 
 ---
 
+## Levantamento de riscos — 16/08/2026
+
+Feito a pedido do usuário antes de começar as Fases 2 a 4, e **medido**, não estimado.
+Conclusão curta: **não há bloqueio que impeça a migração.** Há cinco coisas que vão morder,
+em ordem de custo, e quatro que pareciam problema e não são.
+
+### 1. O agente instalado é o acoplamento duro — e é o maior risco
+
+`acesso_publicacao.py:31` tem `BASE_PADRAO = "https://imposicao.onrender.com"`, e esse
+arquivo é **compilado dentro do NewProd.exe**. Toda estação instalada carrega esse endereço.
+
+Ele é lido de variável de ambiente com esse valor como reserva, então trocá-lo no código é
+fácil — o problema é a **frota**. Uma estação que não atualizou continua publicando a faixa
+no Render; com o Render desligado, ela **para de publicar em silêncio**: o papel sai
+impresso, com QR, e o código nunca chega à nuvem. O operador não tem como perceber — é o
+modo de falhar preferido deste projeto.
+
+O agente só atualiza quando está **aberto**, e checa a cada 30 minutos. Uma estação
+desligada por uma semana fica com o endereço velho a semana inteira.
+
+**Consequência para a Fase 4:** desligar o Render não é o passo seguinte a publicar. É o
+passo seguinte a **confirmar que toda estação ativa já está na versão nova** — dá para
+conferir pelo `ultimo_visto` dos agentes. Vale considerar deixar o Render no ar respondendo
+só um redirecionamento, por um período de carência.
+
+### 2. `qr-ideal-hash.js` não é um módulo ES
+
+A spec diz que a Edge Function "importa o arquivo que já existe e já é testado". **Não
+importa, do jeito que ele está.** O arquivo é uma IIFE que publica o resultado assim:
+
+```js
+if (typeof window !== 'undefined') { window.qrIdealHash = qrIdealHash; }
+if (typeof module !== 'undefined' && module.exports) { module.exports = {...}; }
+```
+
+Em Deno não existe `module`, e `window` foi removido no Deno 2. Os dois caminhos falham em
+silêncio e a função não sai do arquivo. O conserto é pequeno — acrescentar um `export`
+mantendo os dois caminhos legados —, mas **não é zero**, e o `tests/test_qr_ideal_hash.py`
+precisa passar a comparar os **três** consumidores, não dois.
+
+### 3. O catálogo já tem duas implementações, e a Fase 3 cria a terceira
+
+`db.py:236` força `IS_SUPABASE_ACTIVE = False` quando `sys.frozen` — ou seja, **na estação
+o catálogo é lido do disco**, não do Supabase. Isso é deliberado, e é a razão de o painel
+da estação ser rápido.
+
+Então já existem hoje dois caminhos para o mesmo catálogo: JSON local na estação, Supabase
+no Render. A Fase 3 acrescentaria um terceiro, em TypeScript, e toda regra que hoje vive no
+`db.py` passaria a ter três cópias.
+
+**Vale decidir se a Fase 3 compensa.** Alternativas: deixar o catálogo como está e não
+migrar nada dele; ou o navegador falar direto com o PostgREST — mais rápido que as duas, e
+dependente do RLS, que está adiado por decisão.
+
+### 4. O freio de força bruta precisa virar tabela
+
+`acesso_portaria.py:60`: `_FALHAS = {}` na memória do processo. Edge Function é stateless
+por natureza — sem tabela, o freio das dez tentativas em cinco minutos deixa de existir. Já
+estava previsto na spec; o levantamento confirma que é a **única** estrutura em memória no
+caminho da portaria.
+
+### 5. A publicação vira três comandos
+
+Já registrado acima. O `publicar.ps1` precisa aprender antes de o Render sair.
+
+---
+
+### O que **não** é problema (verificado, não suposto)
+
+**Nenhuma dependência exclusiva de Python no caminho migrado.** Os módulos de acesso
+importam só biblioteca padrão — `hashlib`, `hmac`, `json`, `urllib`, `secrets`, `re`,
+`time`, `base64`, `datetime`, `collections` — mais o FastAPI. Nada de PyMuPDF, Pillow ou
+reportlab. Todos têm equivalente direto em Deno (`crypto.subtle`, `fetch`).
+
+**O tamanho das respostas cabe.** Medido contra produção: a faixa inteira do evento de
+2.000 ingressos — a resposta mais pesada de todas, a que o celular baixa e guarda — dá
+**423 KB**, em cinco páginas. Projetando para 12.000 ingressos, ~2,5 MB. Longe de qualquer
+limite de Edge Function.
+
+**O endpoint de e-mail é código morto.** `/api/email/enviar` usa `smtplib`, que é TCP cru e
+seria de fato impossível numa Edge Function. Mas a busca por chamadores no frontend e no
+Python devolve **zero** — só a própria definição. É caso de apagar, não de migrar.
+
+**`/api/proxy` traduz direto.** Usa `requests.get` com allowlist; em Deno é `fetch` com a
+mesma allowlist. E continua existindo no **agente** de qualquer jeito, porque serve o cache
+local de fontes.
+
+---
+
+### Ferramenta que falta
+
+Não existe pasta `supabase/` no repositório e **a CLI do Supabase não está instalada** nesta
+máquina. O primeiro passo da próxima sessão é instalar, `supabase init` e `supabase link`.
+
+### O que não deu para verificar daqui
+
+**O plano do projeto Supabase.** A chave que temos é de projeto (`service_role`), não de
+gerência, então a API de gerenciamento não responde. Edge Functions existem em todos os
+planos, inclusive o gratuito, então não espero bloqueio — mas os limites de invocação do
+plano atual valem uma olhada no painel antes da Fase 2.
+
+---
+
 ## O que fica registrado como fora de escopo
 
 - **RLS.** Continua adiado por decisão do usuário. A migração foi desenhada para não
