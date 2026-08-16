@@ -484,6 +484,18 @@ verify_jwt = false
 # atendente que esta falando com o cliente ao telefone.
 verify_jwt = true
 
+[functions.arquivo]
+# DESLIGADO. `cliente.html` e a tela de quem comprou, aberta pelo link do QR,
+# sem login nenhum -- e e ela quem mais usa o proxy, para desenhar a arte que o
+# cliente vai aprovar. Exigir sessao recusaria o cliente antes de o codigo
+# rodar.
+#
+# O que protege aqui nao e sessao: e a ALLOWLIST. Um proxy sem allowlist e um
+# SSRF -- alcanca a rede interna de quem o hospeda. Ela esta em `puro.ts`, com
+# teste proprio, e e por SUFIXO DE HOST: um `includes("supabase.co")` deixaria
+# `https://supabase.co.exemplo.com` entrar, e esse dominio qualquer um registra.
+verify_jwt = false
+
 [functions.painel]
 # LIGADO. Quem fala com esta funcao e uma pessoa logada no painel da grafica, e
 # o portao do Supabase confere a ASSINATURA do token antes de invocar a funcao.

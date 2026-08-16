@@ -1977,14 +1977,11 @@ async function fetchPdfBytes(content) {
         if (resp.ok) return await resp.arrayBuffer();
         throw new Error(`HTTP ${resp.status}`);
     } catch (directErr) {
-        // Fallback: usa proxy se API_BASE_URL estiver disponível (backend local)
-        const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-        if (baseUrl) {
-            const resp = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(content)}`);
-            if (resp.ok) return await resp.arrayBuffer();
-            throw new Error(`Proxy falhou: HTTP ${resp.status}`);
-        }
-        throw new Error(`Não foi possível buscar o PDF: ${directErr.message}`);
+        // Fallback pelo proxy — o agente na estação, a Edge Function na nuvem.
+        // `urlDoProxy` decide (`supabase-config.js`).
+        const resp = await fetch(urlDoProxy(content));
+        if (resp.ok) return await resp.arrayBuffer();
+        throw new Error(`Proxy falhou: HTTP ${resp.status}`);
     }
 }
 
@@ -2979,7 +2976,7 @@ async function initPdfViewer(idx, pdfUrl, osId) {
             }
         } catch (directErr) {
             console.warn('[PDF Viewer Cliente] Fetch direto falhou, tentando proxy...', directErr);
-            const proxyUrl = `/api/proxy?url=${encodeURIComponent(pdfUrl)}`;
+            const proxyUrl = urlDoProxy(pdfUrl);
             const proxyResponse = await fetch(proxyUrl);
             if (!proxyResponse.ok) throw new Error('Proxy fetch failed: ' + proxyResponse.status);
             arrayBuffer = await proxyResponse.arrayBuffer();

@@ -51,6 +51,79 @@ const API_NUVEM = "https://imposicao.onrender.com";
 // pessoa exige o módulo Usuários, e o primeiro acesso é escrito pelo servidor.
 const API_PAINEL = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/painel";
 
+// O proxy de arquivos, para quando o `fetch` direto não serve.
+const API_ARQUIVO = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/arquivo";
+
+/**
+ * O endereço do proxy para buscar um PDF ou imagem.
+ *
+ * ## Por que existe uma função em vez de uma constante
+ *
+ * Porque a resposta certa depende de QUEM está servindo a página, e há cinco
+ * lugares que perguntam:
+ *
+ *   - servida pela ESTAÇÃO (`API_BASE_URL` vazio) → o agente local, sempre. Ele
+ *     tem o arquivo em cache no disco e responde sem rede. Mandar a estação à
+ *     nuvem para buscar um PDF que está do lado dela seria trocar disco por
+ *     internet no caminho de quem espera na frente da impressora.
+ *   - servida pela NUVEM → a Edge Function, ao lado do banco.
+ *
+ * Antes daqui, três dos cinco pontos usavam `/api/proxy` relativo — o que na
+ * Vercel dependia de um desvio no `vercel.json` para chegar ao Render.
+ */
+function urlDoProxy(endereco) {
+    const base = (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? API_ARQUIVO : '';
+    return `${base}/api/proxy?url=${encodeURIComponent(endereco)}`;
+}
+
+/**
+ * O catálogo de fontes compartilhado.
+ *
+ * ## Dois caminhos, e o motivo de cada um
+ *
+ * **Servida pela estação** → o agente local, que responde do DISCO e sem rede.
+ * Ler o catálogo é passo obrigatório de toda imposição, e o operador está de pé
+ * na frente da impressora: pôr a internet nesse caminho é o oposto da razão de
+ * o agente existir.
+ *
+ * **Servida pela nuvem** → a tabela, direto. Ler `catalogo_fontes` com a chave
+ * pública é permitido DE PROPÓSITO — é a única das quatro tabelas nossas que
+ * continua aberta à leitura depois de 16/08/2026, porque `cliente.html` não tem
+ * login e precisa das fontes para desenhar a arte que o cliente vai aprovar.
+ * Nome de fonte e URL de Storage não são segredo; o que fechou naquele dia foi
+ * a ESCRITA (`sql/fontes_so_escrevem_pelas_funcoes.sql`).
+ *
+ * Antes daqui esse caminho passava pelo Render, que fazia exatamente esta
+ * consulta e devolvia o mesmo JSON — uma travessia a mais por nada.
+ */
+async function lerCatalogoDeFontes() {
+    const naNuvem = (typeof API_BASE_URL !== 'undefined') && API_BASE_URL;
+    if (naNuvem && supabaseClient) {
+        const { data, error } = await supabaseClient
+            .from('catalogo_fontes').select('*').order('nome', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    }
+    // Estação, desenvolvimento, ou modo offline: quem responde é o `/api/fontes`
+    // de quem serviu a página.
+    const res = await fetch(`${naNuvem ? API_BASE_URL : ''}/api/fontes`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) || [];
+}
+
+/**
+ * Onde se ESCREVE no catálogo de fontes.
+ *
+ * Na nuvem, a Edge Function `painel`, que exige sessão. Na estação, o agente —
+ * que desde 16/08/2026 repassa à Edge Function `acesso-estacao` com o segredo
+ * dele (`db._catalogo_pela_funcao`). Os dois acabam na mesma função de gravação
+ * do lado do banco, e é por isso que a regra de duplicata vale igual nos dois.
+ */
+function urlDeEscritaDeFontes(sufixo) {
+    const base = (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? API_PAINEL : '';
+    return `${base}/api/fontes${sufixo || ''}`;
+}
+
 // ─── Toda chamada ao motor leva a sessão junto ───────────────────────────────
 //
 // Até 16/08/2026 nenhuma chamada do painel se identificava, e o motor não pedia

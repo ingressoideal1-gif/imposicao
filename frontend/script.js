@@ -179,14 +179,15 @@ async function fetchPdfBytes(content) {
         if (resp.ok) return await resp.arrayBuffer();
         throw new Error(`HTTP ${resp.status}`);
     } catch (directErr) {
-        // Fallback: usa proxy se API_BASE_URL estiver disponível (backend local)
-        const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-        if (baseUrl) {
-            const resp = await fetch(`${baseUrl}/api/proxy?url=${encodeURIComponent(content)}`);
-            if (resp.ok) return await resp.arrayBuffer();
-            throw new Error(`Proxy falhou: HTTP ${resp.status}`);
-        }
-        throw new Error(`Não foi possível buscar o PDF: ${directErr.message}`);
+        // Fallback pelo proxy — o agente na estação, a Edge Function na nuvem.
+        // `urlDoProxy` decide (`supabase-config.js`).
+        //
+        // Antes daqui havia um `if (baseUrl)`: na Vercel o proxy não existia, e
+        // a tentativa levaria 404. Existe desde 16/08/2026, então o caminho de
+        // fallback vale nas duas pontas.
+        const resp = await fetch(urlDoProxy(content));
+        if (resp.ok) return await resp.arrayBuffer();
+        throw new Error(`Proxy falhou: HTTP ${resp.status} (direto: ${directErr.message})`);
     }
 }
 // - Utility -- getFontCSS / buildCanvasFont / garantirFontesCarregadas -
@@ -226,10 +227,10 @@ const state_fonts = {
 
 async function loadCatalogoFontes() {
     try {
-        const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-        const res = await fetch(`${apiBase}/api/fontes`);
-        if (res.ok) {
-            const list = await res.json();
+        // `lerCatalogoDeFontes` (supabase-config.js) escolhe entre o disco do
+        // agente e a tabela, conforme quem serviu a página.
+        const list = await lerCatalogoDeFontes();
+        {
             // Ordem alfabetica UMA vez, aqui: tabela, font picker e o select do
             // Criar Arte leem todos de state_fonts.catalogo e herdam a ordem.
             state_fonts.catalogo = (list || []).slice().sort((a, b) =>
@@ -343,7 +344,6 @@ async function salvarNovaFonteWeb() {
     }
 
     const cadastradas = [], puladas = [], falhas = [];
-    const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
 
     for (let i = 0; i < arquivos.length; i++) {
         const arquivo = arquivos[i];
@@ -368,7 +368,7 @@ async function salvarNovaFonteWeb() {
                 .from('chat-ideal')
                 .getPublicUrl(storagePath);
 
-            const res = await fetch(`${apiBase}/api/fontes`, {
+            const res = await fetch(urlDeEscritaDeFontes(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -412,10 +412,9 @@ async function deletarFonteWeb(id) {
     if (!confirm('Deseja realmente remover esta fonte do catálogo?')) return;
     
     try {
-        const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-        // A rota do app.py e DELETE /api/fontes/{fonte_id}; mandar ?id= dava 405
-        // e o Excluir nunca funcionou.
-        const res = await fetch(`${apiBase}/api/fontes/${encodeURIComponent(id)}`, {
+        // A rota e DELETE /api/fontes/{fonte_id}; mandar ?id= dava 405 e o
+        // Excluir nunca funcionou.
+        const res = await fetch(urlDeEscritaDeFontes(`/${encodeURIComponent(id)}`), {
             method: 'DELETE'
         });
         
@@ -24466,7 +24465,7 @@ async function initPdfViewer(key, pdfUrl, osId = null, idx = 0) {
         } catch (directErr) {
             console.warn('[PDF Viewer] Fetch direto falhou, tentando proxy...', directErr);
             // Fallback: usar proxy local (quando rodando com backend Python)
-            const proxyUrl = `/api/proxy?url=${encodeURIComponent(pdfUrl)}`;
+            const proxyUrl = urlDoProxy(pdfUrl);
             const proxyResponse = await fetch(proxyUrl);
             if (!proxyResponse.ok) throw new Error('Proxy fetch failed: ' + proxyResponse.status);
             arrayBuffer = await proxyResponse.arrayBuffer();

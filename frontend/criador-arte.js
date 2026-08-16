@@ -1649,7 +1649,7 @@ async function adicionarAnexoNaArte(url, nome, tipo) {
                     throw new Error('Direct fetch failed');
                 }
             } catch (err) {
-                const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+                const proxyUrl = urlDoProxy(url);
                 const proxyResponse = await fetch(proxyUrl);
                 if (!proxyResponse.ok) throw new Error('Proxy fetch failed');
                 arrayBuffer = await proxyResponse.arrayBuffer();
@@ -1708,7 +1708,7 @@ async function adicionarAnexoNaArte(url, nome, tipo) {
             };
             tempImg.onerror = () => {
                 // Fallback com proxy local se a imagem falhar por CORS
-                const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+                const proxyUrl = urlDoProxy(url);
                 const proxyImg = new Image();
                 proxyImg.onload = () => {
                     const fImg = new fabric.Image(proxyImg);

@@ -164,10 +164,9 @@
         if (_promessaCatalogo) return _promessaCatalogo;
         _promessaCatalogo = (async () => {
             try {
-                const apiBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
-                const res = await fetch(`${apiBase}/api/fontes`);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                _catalogo = (await res.json()) || [];
+                // `lerCatalogoDeFontes` (supabase-config.js) escolhe entre o
+                // disco do agente e a tabela, conforme quem serviu a página.
+                _catalogo = await lerCatalogoDeFontes();
                 injetarFontFaceDoCatalogo(_catalogo);
                 console.log(`[Fonts] Catalogo de fontes web carregado: ${_catalogo.length} fonte(s)`);
             } catch (e) {
