@@ -18,17 +18,37 @@
 (function () {
     'use strict';
 
-    // Mesma regra do resto do app: servido pela estação, fala com a estação;
-    // servido pela Vercel, fala com o motor na nuvem.
-    var ehLocal = ['localhost', '127.0.0.1'].indexOf(location.hostname) >= 0;
-    var API = (ehLocal || location.port === '9000') ? '' : 'https://imposicao.onrender.com';
+    // 16/08/2026: as telas do cliente passaram a falar com Edge Functions, ao
+    // lado do banco. Antes era `https://imposicao.onrender.com/api/acesso`, e
+    // cada toque pagava DUAS travessias de internet (navegador -> Render ->
+    // Supabase e volta) — mais uma terceira, escondida, porque o Render
+    // perguntava ao Supabase quem estava falando a cada chamada. Quem sente é o
+    // dono do evento no celular, no dia do evento.
+    //
+    // O Python continua no ar no endereço antigo durante a transição. Para
+    // voltar atrás: troque estas duas linhas de volta e republique.
+    var BASE = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-conta';
+
+    // `/evento` mora numa função SEPARADA, e isso não é organização: é a única
+    // rota sem login — o cliente a abre lendo o QR com a câmera, antes de ter
+    // conta —, e a verificação de JWT do Supabase é por FUNÇÃO, não por rota.
+    // Se as duas morassem juntas, desligar a verificação por causa desta
+    // desligaria para todas, e um estranho montaria um token com o `sub` do
+    // dono para configurar o evento dele.
+    var BASE_EVENTO = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-evento';
+
+    function endereco(caminho) {
+        return /^\/evento(\?|$)/.test(caminho)
+            ? BASE_EVENTO + caminho.slice('/evento'.length)
+            : BASE + caminho;
+    }
 
     /**
      * Uma chamada ao backend. Erro vira `Error` com `.status` e `.corpo`, para
      * quem chama poder distinguir "sessão caiu" de "elevação venceu".
      */
     function pedir(caminho, opcoes) {
-        return fetch(API + '/api/acesso' + caminho, opcoes).then(function (r) {
+        return fetch(endereco(caminho), opcoes).then(function (r) {
             return r.json().catch(function () { return {}; }).then(function (corpo) {
                 if (!r.ok) {
                     var detalhe = corpo.detail;
@@ -120,7 +140,8 @@
     }
 
     window.AcessoConta = {
-        API: API,
+        API: BASE,
+        endereco: endereco,
         pedir: pedir,
         sessao: sessao,
         entrar: entrar,

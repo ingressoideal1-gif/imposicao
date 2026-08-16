@@ -166,14 +166,18 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
   page.on('request', req => {{
     const url = req.url();
 
-    if (url.includes('/api/acesso/') && req.method() === 'OPTIONS') {{
+    // 16/08/2026: a tela do dono passou a falar com as Edge Functions
+    // `acesso-conta` e `acesso-evento`, e nao mais com `/api/acesso` no Render.
+    // O arnes intercepta pelo nome da FUNCAO: e o que este teste tem de seguir,
+    // porque e o endereco que a pagina realmente chama.
+    if (url.includes('/functions/v1/acesso-') && req.method() === 'OPTIONS') {{
       return req.respond({{ status: 204, headers: CORS }});
     }}
-    if (url.includes('/api/acesso/eventos/')) {{
+    if (url.includes('/acesso-conta/eventos/')) {{
       return req.respond({{ status: 200, contentType: 'application/json',
                            headers: CORS, body: JSON.stringify(PAINEL) }});
     }}
-    if (url.includes('/api/acesso/meus-eventos')) {{
+    if (url.includes('/acesso-conta/meus-eventos')) {{
       return req.respond({{ status: 200, contentType: 'application/json',
                            headers: CORS, body: JSON.stringify({{ eventos: [] }}) }});
     }}
