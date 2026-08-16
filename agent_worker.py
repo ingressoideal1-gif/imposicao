@@ -131,6 +131,20 @@ def get_local_ip():
 # humana ficaria falsa para sempre em metade delas.
 _COLUNAS_DE_VERSAO = True
 
+# ...e volta a tentar de hora em hora.
+#
+# A primeira versao disto desistia PARA SEMPRE dentro do processo, e o defeito
+# apareceu no mesmo dia: o ALTER TABLE roda no editor do Supabase, por uma
+# pessoa, com os onze agentes JA no ar. Todos eles ja tinham desistido, entao a
+# coluna nasceu e continuou vazia — ate cada estacao reiniciar, o que pode levar
+# dias.
+#
+# Uma hora e o meio-termo: uma tentativa a cada 120 ciclos de heartbeat nao e
+# desperdicio que se meça, e a informacao aparece sozinha na primeira hora
+# depois do ALTER, sem ninguem ter de ir a lugar nenhum.
+_INTERVALO_RETENTAR_COLUNAS_S = 3600
+_QUANDO_RETENTAR_COLUNAS = 0.0
+
 
 def _e_coluna_ausente(codigo: int, corpo: str) -> bool:
     """A recusa foi por coluna que o banco nao tem?
@@ -226,9 +240,10 @@ def _gravar_heartbeat(payload: dict, colunas: dict, now_iso: str):
     "nenhuma estacao com sinal recente" e nao teria como imprimir pelo relay.
 
     Por isso a primeira recusa por coluna ausente derruba a flag e repete SEM
-    elas. A partir dai, aquele processo nem tenta.
+    elas. A partir dai, aquele processo so volta a tentar de hora em hora — ver
+    `_INTERVALO_RETENTAR_COLUNAS_S`, e a razao de nao ser "nunca mais".
     """
-    global _COLUNAS_DE_VERSAO
+    global _COLUNAS_DE_VERSAO, _QUANDO_RETENTAR_COLUNAS
 
     url = f"{db.SUPABASE_URL}/rest/v1/print_agents"
     headers = {
@@ -252,14 +267,24 @@ def _gravar_heartbeat(payload: dict, colunas: dict, now_iso: str):
         except Exception as e:
             return False, 0, str(e)
 
-    ok, codigo, texto = _enviar({**payload, **colunas} if _COLUNAS_DE_VERSAO else payload)
+    tentar_colunas = _COLUNAS_DE_VERSAO or time.time() >= _QUANDO_RETENTAR_COLUNAS
+    ok, codigo, texto = _enviar({**payload, **colunas} if tentar_colunas else payload)
 
-    if not ok and _COLUNAS_DE_VERSAO and _e_coluna_ausente(codigo, texto):
+    if tentar_colunas and not ok and _e_coluna_ausente(codigo, texto):
+        if _COLUNAS_DE_VERSAO:
+            print("[agent_worker] print_agents ainda nao tem as colunas de versao; "
+                  "reportando so pelo printers_json. Rode "
+                  "sql/alter_print_agents_versao.sql.", flush=True)
         _COLUNAS_DE_VERSAO = False
-        print("[agent_worker] print_agents ainda nao tem as colunas de versao; "
-              "reportando so pelo printers_json. Rode "
-              "sql/alter_print_agents_versao.sql.", flush=True)
+        _QUANDO_RETENTAR_COLUNAS = time.time() + _INTERVALO_RETENTAR_COLUNAS_S
         ok, codigo, texto = _enviar(payload)
+    elif tentar_colunas and ok and not _COLUNAS_DE_VERSAO:
+        # O ALTER TABLE rodou enquanto este processo estava no ar. E o caso
+        # normal, e nao a excecao: o SQL e colado por uma pessoa, no editor do
+        # Supabase, com os agentes todos ja rodando.
+        _COLUNAS_DE_VERSAO = True
+        print("[agent_worker] as colunas de versao apareceram; voltando a "
+              "preenche-las.", flush=True)
 
     if ok:
         print(f"[agent_worker] Heartbeat OK - {now_iso}", flush=True)

@@ -95,6 +95,7 @@ def _rodar(monkeypatch, recusar_colunas):
     espiao = _Espiao(recusar_colunas)
     monkeypatch.setattr(agent_worker.urllib.request, "urlopen", espiao)
     monkeypatch.setattr(agent_worker, "_COLUNAS_DE_VERSAO", True)
+    monkeypatch.setattr(agent_worker, "_QUANDO_RETENTAR_COLUNAS", 0.0)
     monkeypatch.setattr(agent_worker.db, "SUPABASE_URL", "https://exemplo.supabase.co")
     monkeypatch.setattr(agent_worker.db, "SUPABASE_KEY", "chave")
     return espiao
@@ -140,6 +141,52 @@ def test_depois_da_primeira_recusa_nem_tenta_de_novo(monkeypatch):
     agent_worker._gravar_heartbeat(dict(PAYLOAD), dict(COLUNAS), "depois")
     assert len(espiao.envios) == 1
     assert "versao" not in espiao.envios[0]
+
+
+def test_uma_hora_depois_ele_tenta_de_novo(monkeypatch):
+    """O caso que aconteceu em 16/08/2026, uma hora depois do ALTER TABLE.
+
+    O SQL é colado por uma pessoa, no editor do Supabase, com os onze agentes
+    JÁ no ar — esse é o caso normal, não a exceção. Todos já desistiram das
+    colunas quando elas nascem. Sem esta volta, a coluna ficaria vazia até cada
+    estação reiniciar, o que pode levar dias.
+    """
+    espiao = _rodar(monkeypatch, recusar_colunas=True)
+    agent_worker._gravar_heartbeat(dict(PAYLOAD), dict(COLUNAS), "agora")
+    assert agent_worker._COLUNAS_DE_VERSAO is False
+
+    # O ALTER TABLE rodou: o banco para de recusar.
+    espiao.recusar_colunas = False
+    espiao.envios.clear()
+
+    # Antes da hora, nem tenta — não adianta bater no banco a cada 30 segundos.
+    agent_worker._gravar_heartbeat(dict(PAYLOAD), dict(COLUNAS), "logo depois")
+    assert "versao" not in espiao.envios[0]
+
+    # Passada a hora, tenta — e como agora funciona, volta a preencher sozinho.
+    monkeypatch.setattr(agent_worker, "_QUANDO_RETENTAR_COLUNAS", 0.0)
+    espiao.envios.clear()
+    agent_worker._gravar_heartbeat(dict(PAYLOAD), dict(COLUNAS), "uma hora depois")
+    assert espiao.envios[0]["versao"] == "1.2.93"
+    assert agent_worker._COLUNAS_DE_VERSAO is True, "devia ter voltado a confiar nas colunas"
+
+
+def test_a_retentativa_que_falha_de_novo_nao_perde_o_heartbeat(monkeypatch):
+    """A hora passou, o ALTER ainda não rodou: a tentativa cai, e o sinal de
+    vida tem de sair mesmo assim."""
+    espiao = _rodar(monkeypatch, recusar_colunas=True)
+    agent_worker._gravar_heartbeat(dict(PAYLOAD), dict(COLUNAS), "agora")
+
+    monkeypatch.setattr(agent_worker, "_QUANDO_RETENTAR_COLUNAS", 0.0)
+    espiao.envios.clear()
+    agent_worker._gravar_heartbeat(dict(PAYLOAD), dict(COLUNAS), "uma hora depois")
+
+    assert len(espiao.envios) == 2, "devia ter tentado e repetido sem as colunas"
+    assert "versao" in espiao.envios[0], "a primeira era a retentativa"
+    assert "versao" not in espiao.envios[1], "a segunda tinha de ir sem as colunas"
+    # O que importa: o sinal de vida saiu. Sem ele a estacao some do painel.
+    assert espiao.envios[1]["printers_json"]["version"] == "1.2.93"
+    assert agent_worker._COLUNAS_DE_VERSAO is False
 
 
 def test_a_versao_de_agora_tambem_vai_pelo_json():
