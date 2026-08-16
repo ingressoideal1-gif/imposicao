@@ -15058,8 +15058,18 @@ window.gerarQrDoEvento = async function (osId, numeroPedido) {
             return;
         }
 
-        const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
-        const resp = await fetch(`${base}/api/acesso/pedidos/${encodeURIComponent(numeroPedido)}/qr`, {
+        // 16/08/2026: passou a ser Edge Function, ao lado do banco. Antes era
+        // `${API_BASE_URL}/api/acesso/pedidos/.../qr`, no Render — que dorme
+        // quando ninguém usa, e o atendente está com o cliente ao telefone
+        // esperando o QR sair. O Python continua no ar no endereço antigo
+        // durante a transição; para voltar atrás, troque esta linha e republique.
+        //
+        // A assinatura do token é a MESMA dos dois lados, e isso está provado
+        // nos dois sentidos contra o banco de verdade
+        // (`tests/test_acesso_pedido_paridade.py`): o QR que um lado emite, o
+        // outro abre. Um byte de diferença invalidaria todo QR em circulação.
+        const base = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-pedido';
+        const resp = await fetch(`${base}/pedidos/${encodeURIComponent(numeroPedido)}/qr`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${session.access_token}` }
         });
