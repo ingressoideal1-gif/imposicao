@@ -1,0 +1,117 @@
+[
+  {
+    "texto": "2026-09-28T20:00",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00"
+  },
+  {
+    "texto": "2026-09-28T20:00:00",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00:00"
+  },
+  {
+    "texto": "2026-09-28T20:00:00.123456",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00:00.123456"
+  },
+  {
+    "texto": "2026-09-28T20:00:00Z",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00:00Z"
+  },
+  {
+    "texto": "2026-09-28T20:00:00+00:00",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00:00+00:00"
+  },
+  {
+    "texto": "2026-09-28T20:00:00-03:00",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00:00-03:00"
+  },
+  {
+    "texto": "2026-09-28",
+    "aceito": true,
+    "devolve": "2026-09-28"
+  },
+  {
+    "texto": "2026-09-28 20:00",
+    "aceito": true,
+    "devolve": "2026-09-28 20:00"
+  },
+  {
+    "texto": "2026-09-28T20:00:00+0300",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00:00+0300"
+  },
+  {
+    "texto": "",
+    "aceito": true,
+    "devolve": null
+  },
+  {
+    "texto": "   ",
+    "aceito": true,
+    "devolve": null
+  },
+  {
+    "texto": null,
+    "aceito": true,
+    "devolve": null
+  },
+  {
+    "texto": "2026",
+    "aceito": false,
+    "devolve": null
+  },
+  {
+    "texto": "2026-09",
+    "aceito": false,
+    "devolve": null
+  },
+  {
+    "texto": "Sept 28 2026",
+    "aceito": false,
+    "devolve": null
+  },
+  {
+    "texto": "28/09/2026",
+    "aceito": false,
+    "devolve": null
+  },
+  {
+    "texto": "amanha",
+    "aceito": false,
+    "devolve": null
+  },
+  {
+    "texto": "2026-13-45T99:99",
+    "aceito": false,
+    "devolve": null
+  },
+  {
+    "texto": "2026-02-30T10:00",
+    "aceito": false,
+    "devolve": null
+  },
+  {
+    "texto": "20260928T2000",
+    "aceito": true,
+    "devolve": "20260928T2000"
+  },
+  {
+    "texto": "2026-9-8T20:00",
+    "aceito": false,
+    "devolve": null
+  },
+  {
+    "texto": "2026-09-28T20:00:00.1",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00:00.1"
+  },
+  {
+    "texto": "2026-09-28T20:00:00.1234567",
+    "aceito": true,
+    "devolve": "2026-09-28T20:00:00.1234567"
+  }
+]
