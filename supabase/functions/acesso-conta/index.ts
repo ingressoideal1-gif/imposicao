@@ -29,6 +29,7 @@
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
+import { segredo } from "../_compartilhado/segredos.ts";
 import { hashCodigo } from "../_compartilhado/hash.ts";
 import { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
 import {
@@ -80,10 +81,10 @@ class RecusaComCodigo extends Recusa {
   }
 }
 
-function precisaDoSegredo(nome: string): void {
-  if (!Deno.env.get(nome)) {
-    // 503, e nao 500: faltar configuracao no servidor nao e defeito de quem
-    // chamou, e a mensagem diz exatamente qual variavel colar.
+/** 503, e nao 500: faltar configuracao no servidor nao e defeito de quem
+ * chamou, e a mensagem diz exatamente qual variavel falta. */
+async function exigirSegredo(nome: string): Promise<void> {
+  if (!(await segredo(nome))) {
     throw new Recusa(503, `${nome} nao configurada neste servidor`);
   }
 }
@@ -164,7 +165,7 @@ async function elevar(
   navegador: string,
 ): Promise<any> {
   await eventoDoDono(eventoId, usuario);
-  precisaDoSegredo(SEGREDO_ELEVACAO);
+  await exigirSegredo(SEGREDO_ELEVACAO);
   if (!(await conferirSenha(usuario.email ?? "", senha ?? ""))) {
     // Uma frase so: nao dizer se o problema foi o e-mail ou a senha.
     throw new Recusa(401, "senha nao confere");
@@ -183,7 +184,7 @@ async function exigirElevacao(
     // Segredo ausente entra no MESMO caminho de bilhete invalido, de proposito:
     // um token bem formado chegando na janela em que a variavel ainda nao foi
     // colada nao pode virar 500 numa tela que ja sabe tratar 401.
-    precisaDoSegredo(SEGREDO_ELEVACAO);
+    await exigirSegredo(SEGREDO_ELEVACAO);
     await conferirElevacao(
       req.headers.get("x-elevacao") ?? "",
       eventoId,
@@ -347,7 +348,7 @@ async function sha256Hex(texto: string): Promise<string> {
 }
 
 async function esqueleto(token: string): Promise<any> {
-  precisaDoSegredo(SEGREDO_QR_PEDIDO);
+  await exigirSegredo(SEGREDO_QR_PEDIDO);
 
   let pedido: number;
   try {

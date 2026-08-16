@@ -21,14 +21,16 @@
 import { banco } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
+import { segredo } from "../_compartilhado/segredos.ts";
 import { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
 import { conferirQrPedido, SEGREDO_QR_PEDIDO } from "../_compartilhado/assinatura.ts";
 import { recusaHumana } from "../acesso-conta/puro.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
-function precisaDoSegredo(nome: string): void {
-  if (!Deno.env.get(nome)) {
+/** 503, e nao 500: faltar configuracao nao e defeito de quem chamou. */
+async function exigirSegredo(nome: string): Promise<void> {
+  if (!(await segredo(nome))) {
     throw new Recusa(503, `${nome} nao configurada neste servidor`);
   }
 }
@@ -75,7 +77,7 @@ async function sha256Hex(texto: string): Promise<string> {
 }
 
 async function esqueleto(token: string): Promise<any> {
-  precisaDoSegredo(SEGREDO_QR_PEDIDO);
+  await exigirSegredo(SEGREDO_QR_PEDIDO);
 
   let pedido: number;
   try {

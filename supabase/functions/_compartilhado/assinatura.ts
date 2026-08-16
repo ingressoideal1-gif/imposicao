@@ -27,6 +27,8 @@
  * vencimento e justamente o campo que o atacante controla no palpite.
  */
 
+import { precisaDoSegredo } from "./segredos.ts";
+
 const TAMANHO_ASSINATURA = 27;
 
 /** `re.compile(r"^[A-Za-z0-9_-]{1,64}$")` do `acesso_elevacao.py:41`. */
@@ -49,19 +51,8 @@ export function iguaisEmTempoConstante(a: string, b: string): boolean {
   return diferenca === 0;
 }
 
-function precisaDoSegredo(nome: string): string {
-  const v = Deno.env.get(nome);
-  if (!v) {
-    // Falha alto, como o Python. Assinar com segredo vazio seria pior do que
-    // nao assinar: pareceria protegido.
-    throw new Error(
-      `${nome} nao esta no ambiente desta funcao. Configure com ` +
-        `\`supabase secrets set ${nome}=...\` -- o mesmo valor do Render, sem ` +
-        `rotacionar, enquanto as duas pilhas convivem.`,
-    );
-  }
-  return v;
-}
+// Falha alto, como o Python. Assinar com segredo vazio seria pior do que nao
+// assinar: pareceria protegido. Ver `segredos.ts` para de onde ele vem.
 
 /**
  * `base64.urlsafe_b64encode(mac).rstrip("=")[:27]` do Python.
@@ -73,7 +64,7 @@ function precisaDoSegredo(nome: string): string {
 async function assinar(segredoNome: string, corpo: string): Promise<string> {
   const chave = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(precisaDoSegredo(segredoNome)),
+    new TextEncoder().encode(await precisaDoSegredo(segredoNome)),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
