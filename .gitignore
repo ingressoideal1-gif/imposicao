@@ -109,3 +109,9 @@ test_out.txt
 scratch_func.txt
 snapshot.jpg
 engine_backup.py
+
+# O video gerado pelo ferramentas\video\gerar.ps1, mais os quadros, as narracoes
+# e os pedacos que ele usa no caminho. O que precisa sobreviver e a RECEITA --
+# roteiro.js, gravar.js, montar.ps1 --, que regenera tudo isso quando a tela
+# mudar. Video em git incha o repositorio para sempre, e este e regeneravel.
+midia/
