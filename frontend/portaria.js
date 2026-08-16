@@ -15,6 +15,7 @@
     var D = window.portariaDeposito;
     var V = window.portariaValidacao;
     var CHAVE_TOKEN = 'ideal_portaria_token';
+    var CHAVE_EVENTO = 'ideal_portaria_evento';
 
     var estado = { carga: null, token: null, pendente: null };
 
@@ -68,7 +69,23 @@
     // ── Pareamento ──────────────────────────────────────────────────────────
 
     function eventoDaUrl() {
-        return new URLSearchParams(window.location.search).get('e') || '';
+        // O `start_url` do manifesto e `/portaria.html`, SEM `?e=`. Tem de ser
+        // assim: o endereco que o dono compartilha carrega o evento, mas o
+        // icone na tela de inicio e um so, e um `?e=` cravado nele prenderia o
+        // aparelho no primeiro evento para sempre.
+        //
+        // Depois de pareado nada disso importa -- o token e que manda, e o boot
+        // le a carga do IndexedDB. O caso que estas linhas cobrem e o porteiro
+        // que INSTALA antes de parear: ele abre pelo icone, a URL vem limpa, e
+        // sem esta memoria o `parear` mandaria `evento_id: ''`.
+        var daUrl = new URLSearchParams(window.location.search).get('e') || '';
+        if (daUrl) {
+            // try/catch nao e decoracao: em aba privada do Safari o setItem
+            // LANCA, e um throw aqui derrubaria o pareamento inteiro.
+            try { localStorage.setItem(CHAVE_EVENTO, daUrl); } catch (e) { }
+            return daUrl;
+        }
+        try { return localStorage.getItem(CHAVE_EVENTO) || ''; } catch (e) { return ''; }
     }
 
     function parear(codigo) {

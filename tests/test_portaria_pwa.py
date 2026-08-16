@@ -144,3 +144,16 @@ def test_a_vercel_serve_o_manifesto_com_o_tipo_certo():
         tipos = [c["value"] for r in regras for c in r["headers"]
                  if c["key"].lower() == "content-type"]
         assert tipos == ["application/manifest+json"], arquivo
+
+
+# ── O evento sobrevive ao start_url sem querystring ─────────────────────────
+
+def test_o_evento_e_lembrado_fora_da_url():
+    """O `start_url` do manifesto nao leva `?e=`.
+
+    Quem instalar o aplicativo ANTES de parear abriria o icone e mandaria
+    `evento_id: ''` ao servidor.
+    """
+    js = _ler("frontend/portaria.js")
+    assert "ideal_portaria_evento" in js
+    assert "CHAVE_EVENTO" in js
