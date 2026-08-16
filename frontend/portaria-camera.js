@@ -16,9 +16,13 @@
 
     var video = null, canvas = null, ctx = null, detector = null;
     var rodando = false, ultimo = '', ultimoEm = 0;
+    // O fluxo em variavel propria, e nao so em `video.srcObject`: o `desligar`
+    // precisa apagar a lanterna DEPOIS de soltar o video da tela e ANTES de
+    // parar a trilha, e nesse meio o `srcObject` ja foi a nulo.
+    var fluxo = null, acesa = false;
 
     function ligar() {
-        if (rodando) return;
+        if (rodando) return Promise.resolve();
         rodando = true;
         video = document.getElementById('cam');
         canvas = canvas || document.createElement('canvas');
@@ -32,10 +36,13 @@
             } catch (e) { detector = null; }
         }
 
-        navigator.mediaDevices.getUserMedia({
+        // Devolve a promessa: quem chama precisa saber QUANDO a camera abriu,
+        // para so entao perguntar se este aparelho tem lanterna.
+        return navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'environment' }, audio: false,
-        }).then(function (fluxo) {
-            video.srcObject = fluxo;
+        }).then(function (f) {
+            fluxo = f;
+            video.srcObject = f;
             return video.play();
         }).then(quadro).catch(function () {
             rodando = false;   // sem camera a tela continua util pelo "Digitar o numero"
@@ -44,10 +51,47 @@
 
     function desligar() {
         rodando = false;
-        if (video && video.srcObject) {
-            video.srcObject.getTracks().forEach(function (t) { t.stop(); });
-            video.srcObject = null;
+        var f = fluxo;
+        fluxo = null;
+        if (video && video.srcObject) video.srcObject = null;
+        if (!f) return;
+
+        // Apagar a lanterna ANTES de parar a trilha, e esperar de verdade:
+        // parar a trilha com a luz acesa deixa a lanterna do celular ligada em
+        // varios aparelhos Android, e nao sobra tela nenhuma para apaga-la.
+        var apagando = Promise.resolve();
+        if (acesa) {
+            var t = f.getVideoTracks()[0];
+            if (t && t.applyConstraints) {
+                try {
+                    apagando = t.applyConstraints({ advanced: [{ torch: false }] });
+                } catch (e) { /* aparelho que nao aceita: a parada resolve */ }
+            }
         }
+        acesa = false;
+        apagando.catch(function () { }).then(function () {
+            f.getTracks().forEach(function (t) { t.stop(); });
+        });
+    }
+
+    // ── Lanterna ────────────────────────────────────────────────────────────
+    // So o Chrome no Android expoe isto (`torch` nas capacidades da trilha).
+    // No iPhone nao existe para pagina nenhuma -- e por isso `temLanterna()` e
+    // uma pergunta, e nao uma suposicao: quem chama tem de perguntar antes de
+    // mostrar botao.
+    function temLanterna() {
+        var t = fluxo ? fluxo.getVideoTracks()[0] : null;
+        if (!t || !t.getCapabilities) return false;
+        return !!t.getCapabilities().torch;
+    }
+
+    function alternarLanterna() {
+        if (!temLanterna()) return Promise.resolve(false);
+        var t = fluxo.getVideoTracks()[0];
+        var alvo = !acesa;
+        return t.applyConstraints({ advanced: [{ torch: alvo }] })
+            .then(function () { acesa = alvo; return acesa; })
+            .catch(function () { return acesa; });
     }
 
     function achou(texto) {
@@ -83,5 +127,8 @@
         requestAnimationFrame(quadro);
     }
 
-    window.portariaCamera = { ligar: ligar, desligar: desligar };
+    window.portariaCamera = {
+        ligar: ligar, desligar: desligar,
+        temLanterna: temLanterna, alternarLanterna: alternarLanterna,
+    };
 })();

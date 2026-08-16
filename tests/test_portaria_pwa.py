@@ -231,3 +231,31 @@ def test_a_tela_fica_acesa_enquanto_le():
     assert "visibilitychange" in js, (
         "o sistema solta a trava ao minimizar; sem repedir, ela nao volta"
     )
+
+
+# ── Lanterna ────────────────────────────────────────────────────────────────
+
+def test_a_lanterna_so_aparece_onde_funciona():
+    """Botao morto na tela e pior que botao ausente -- o porteiro toca no
+    escuro e conclui que o aparelho travou."""
+    js = _ler("frontend/portaria-camera.js")
+    assert "torch" in js
+    assert "temLanterna" in js
+    html = _ler("frontend/portaria.html")
+    assert 'id="btn-lanterna"' in html
+    assert "sumindo" in html
+
+
+def test_o_ligar_da_camera_devolve_promessa():
+    """Perguntar pela lanterna antes de o getUserMedia resolver responde sempre
+    "nao tem" -- e o botao nunca apareceria em aparelho que tem."""
+    assert "return navigator.mediaDevices.getUserMedia" in _ler("frontend/portaria-camera.js")
+
+
+def test_a_lanterna_apaga_antes_de_soltar_a_camera():
+    """Parar a trilha com a luz acesa deixa a lanterna do celular ligada em
+    varios aparelhos -- e nao sobra tela nenhuma para apaga-la."""
+    js = _ler("frontend/portaria-camera.js")
+    corpo = js[js.index("function desligar"):js.index("function achou")]
+    assert "torch: false" in corpo
+    assert corpo.index("torch: false") < corpo.index(".stop()")

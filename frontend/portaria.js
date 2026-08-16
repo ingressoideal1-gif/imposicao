@@ -32,7 +32,7 @@
 
     // ── A tela nao apaga ────────────────────────────────────────────────────
     // No portao o aparelho fica na mao, lendo um ingresso a cada poucos
-    // segundos -- e mesmo assim o celular apaga a tela sozinho em 30s, porque
+    // segundos -- e ainda assim o celular apaga a tela sozinho em 30s, porque
     // ler QR nao conta como "uso" para o sistema. Cada apagada custa um
     // desbloqueio com a fila parada.
     var trava = null, querAcesa = false;
@@ -185,6 +185,19 @@
         return pagina(0);
     }
 
+    function ligarCamera() {
+        if (!window.portariaCamera) return;
+        // O rotulo volta ao repouso a cada abertura: o `desligar` apaga a
+        // lanterna depois de cada leitura, e um botao dizendo "acesa" com a luz
+        // apagada e pior do que botao nenhum.
+        $('btn-lanterna').textContent = 'Lanterna';
+        window.portariaCamera.ligar().then(function () {
+            // So AGORA da para perguntar: antes de o getUserMedia resolver nao
+            // ha trilha de video, e a resposta seria sempre "nao tem".
+            $('btn-lanterna').classList.toggle('sumindo', !window.portariaCamera.temLanterna());
+        });
+    }
+
     function entrarEmLeitura() {
         var c = estado.carga;
         $('topo-aparelho').textContent = c.aparelho.nome;
@@ -194,7 +207,7 @@
         }).join(' · ');
         atualizarFila();
         mostrar('lendo');
-        if (window.portariaCamera) window.portariaCamera.ligar();
+        ligarCamera();
     }
 
     function atualizarFila() {
@@ -376,7 +389,15 @@
 
     $('btn-proximo').onclick = function () {
         mostrar('lendo');
-        if (window.portariaCamera) window.portariaCamera.ligar();
+        ligarCamera();
+    };
+
+    $('btn-lanterna').onclick = function () {
+        window.portariaCamera.alternarLanterna().then(function (acesa) {
+            // O rotulo diz o ESTADO, nao a acao: no escuro, com a fila andando,
+            // "Lanterna acesa" se le mais rapido que "Apagar".
+            $('btn-lanterna').textContent = acesa ? 'Lanterna acesa' : 'Lanterna';
+        });
     };
 
     $('btn-digitar').onclick = function () {

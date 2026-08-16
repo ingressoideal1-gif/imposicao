@@ -147,6 +147,9 @@
 
     <div id="tela-lendo" class="sumindo">
         <video id="cam" class="cam" playsinline muted></video>
+        <!-- So aparece onde a lanterna existe de verdade (Chrome no Android).
+             Botao morto no escuro faz o porteiro achar que o aparelho travou. -->
+        <button id="btn-lanterna" class="discreto sumindo" type="button">Lanterna</button>
         <button id="btn-digitar" class="discreto">Digitar o número</button>
         <div id="caixa-digitar" class="sumindo">
             <input id="campo-numero" inputmode="numeric" placeholder="000001">

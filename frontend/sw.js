@@ -8,9 +8,9 @@
  * registra este arquivo. O TEXTO daqui e quase sempre igual entre releases --
  * a versao vem de `self.location` em tempo de execucao, nunca do proprio
  * codigo -- entao o navegador quase nunca detecta "o sw.js mudou" pelo
- * conteudo. Quem dispara a troca e OUTRA coisa: o `register('/sw.js?v=NNN')`
- * do portaria.html passa a apontar para uma URL diferente a cada release, e
- * registrar um script novo no mesmo escopo instala um service worker novo.
+ * conteudo. Quem dispara a troca e OUTRA coisa: o `register` do portaria.html
+ * aponta para este arquivo com um `?v=` novo a cada release, e registrar um
+ * script de URL diferente no mesmo escopo instala um service worker novo.
  * Um comentario anterior aqui dizia que o conteudo mudava; corrigido em
  * revisao de codigo, 15/08/2026, junto com o defeito que ele escondia: sem
  * isto, um aparelho pareado num release antigo ficava preso NA PAGINA antiga
@@ -19,8 +19,8 @@
  * A saida esta no `fetch` abaixo: a NAVEGACAO (abrir ou recarregar
  * portaria.html) e network-first, entao toda abertura pega o HTML mais
  * novo -- que ja chega com os `?v=` novos nas tags `<script>` e com o
- * `register('/sw.js?v=NNN')` novo, que e o que faz este proprio arquivo se
- * trocar. Os outros arquivos continuam cache-first, casando a URL INTEIRA
+ * `register` apontando para um `?v=` novo, que e o que faz este proprio
+ * arquivo se trocar. Os outros arquivos continuam cache-first, casando a URL INTEIRA
  * (`?v=` incluido), que e o que garante "abrir sem rede" e o carregamento
  * rapido no portao sem prender o aparelho no codigo de uma geracao anterior.
  */
@@ -77,17 +77,17 @@ self.addEventListener('fetch', e => {
     // pathname em comum hoje, mas restringir ao cache desta versao da
     // portaria e o que garante que um nome futuro nunca colida por acidente.
 
+    // SO a navegacao (abrir/recarregar portaria.html) e network-first.
+    // Cache-first ali prenderia a pagina na versao do dia em que o aparelho
+    // pareou -- para sempre, mesmo publicando de novo. "Abrir sem rede"
+    // continua garantido: o catch so cai no cache quando a rede falha de
+    // verdade.
+    //
+    // Ignorar a query so acontece nesse ramo: o endereco que o dono compartilha
+    // (e o porteiro reabre) e "/portaria.html?e=<evento_id>", mas o install
+    // guardou a chave sem query. Sem isso, o match falharia bem no caso que
+    // este arquivo existe para cobrir -- reabrir sem rede.
     if (e.request.mode === 'navigate') {
-        // SO a navegacao (abrir/recarregar portaria.html) e network-first.
-        // Cache-first aqui prenderia a pagina na versao do dia em que o
-        // aparelho pareou -- para sempre, mesmo publicando de novo. "Abrir sem
-        // rede" continua garantido: o catch so cai no cache quando a rede
-        // falha de verdade.
-        //
-        // Ignorar a query AQUI, e so aqui: o endereco que o dono compartilha
-        // (e o porteiro reabre) e "/portaria.html?e=<evento_id>", mas o install
-        // guardou a chave sem query. Sem isso, o match falharia bem no caso que
-        // este arquivo existe para cobrir -- reabrir sem rede.
         e.respondWith(
             fetch(e.request).catch(() =>
                 caches.open(CACHE).then(c => c.match(e.request, { ignoreSearch: true })))
