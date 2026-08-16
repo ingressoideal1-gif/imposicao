@@ -53,6 +53,51 @@ A estação simplesmente não serve esses endpoints — e é por isso que o log 
 `[app] Controle de acesso inativo (SUPABASE_SERVICE_KEY ausente)`, que é o certo, não um
 defeito.
 
+## Onde cada consumidor fala hoje (16/08/2026)
+
+O desenho acima continua valendo — o que mudou foi **onde o código roda**. Desde a Fase 2b
+o controle de acesso inteiro vive em Edge Functions, ao lado do banco, e o Render deixou de
+estar no caminho:
+
+```
+Agente (tem o pool)  ──hash──►  Edge Function (service_role)  ──►  Supabase
+                                       ▲
+                                       │ JWT do cliente
+                              evento.html (página no celular)
+```
+
+| Quem fala | Função | Antes, no Render | `verify_jwt` |
+|---|---|---|---|
+| Ideal Control da gráfica (`ideal-control.js`) | `acesso-interno` | `/api/acesso/interno/*` | sim |
+| Tela do dono (`controle.html`) | `acesso-conta` | `/api/acesso/*` | sim |
+| Leitura do QR pelo cliente (`evento.html`) | `acesso-evento` | `/api/acesso/evento` | **não** |
+| Botão "QR do Pedido" do painel | `acesso-pedido` | `/api/acesso/pedidos/{p}/qr` | sim |
+| Estação, publicando a faixa | `acesso-estacao` | `/api/acesso/pedidos/{p}/…` | **não** |
+| Celular da portaria | `portaria` | `/api/acesso/portaria/*` | **não** |
+
+O que cada corte economiza é uma travessia de internet inteira — antes toda chamada ia ao
+Render e o Render ia ao Supabase — mais, nas três primeiras, uma segunda ida escondida: o
+Render perguntava ao Supabase **quem está falando** a cada requisição, porque não tinha como
+conferir o JWT sozinho. Numa Edge Function o portão do Supabase já conferiu a assinatura
+antes de invocar a função, e a identidade sai das claims sem rede nenhuma.
+
+As duas com `verify_jwt = false` não são exceção descuidada: quem fala com elas não tem
+sessão do Supabase. O celular da portaria apresenta um token de aparelho nosso, a estação
+apresenta o `ACESSO_AGENTE_SEGREDO`, e o cliente que lê o QR ainda **nem tem conta** — o que
+protege aquela rota é a assinatura do próprio token do QR. Ligar a verificação nelas
+recusaria tudo com 401 antes de o nosso código rodar.
+
+**O Python continua no ar em `imposicao.onrender.com`, respondendo o mesmo.** É a volta
+atrás: cada corte é uma linha, e trocá-la de volta devolve o consumidor à pilha antiga sem
+migração de dado nenhuma, porque as duas falam com o mesmo banco. Desligar o Render é a
+Fase 3, e só depois que as onze estações tiverem migrado — o `conferir.ps1` conta quantas
+já falam com cada pilha.
+
+Cada corte é guardado por um teste de paridade que bate nos **dois** endereços com a mesma
+credencial e compara: `tests/test_acesso_interno_paridade.py`,
+`tests/test_acesso_pedido_paridade.py`, `tests/test_acesso_estacao_paridade.py` e
+`tests/test_portaria_paridade.py`.
+
 ## O que a nuvem guarda no lugar do código
 
 Nunca o código. Guarda `codigo_hash` — PBKDF2-HMAC-SHA256, 10.000 voltas, sal por pedido.

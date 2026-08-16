@@ -90,3 +90,47 @@ máquina local.
 ## Tarefa 6: os cortes
 
 Um por vez, cada um com sua paridade verde antes.
+
+---
+
+# Fechada em 16/08/2026
+
+As seis tarefas foram executadas. As cinco funções estão no ar, os quatro consumidores
+foram cortados, e o Render continua respondendo o mesmo endereço antigo como volta atrás.
+
+## O que o plano previu errado, e o que isso ensinou
+
+**O bloqueador do heartbeat não era bem um bloqueador.** O plano dizia que `print_agents`
+não guardava a versão do agente. Não guardava em *coluna* — mas o heartbeat já a mandava
+dentro do `printers_json` havia semanas. O que faltava era alguém **olhar**: a conferência
+diária respondia "esta máquina está em dia?" quando a pergunta era "as onze estações
+estão?". Consultar o banco antes de escrever custou dois minutos e mudou a tarefa inteira.
+
+**Deduzir o comportamento do FastAPI em vez de medi-lo custou quatro divergências.** O 404
+e o 405 do Render dependem do MÉTODO, e não do caminho: `GET /pedidos/1/qr` responde 404
+mesmo com o caminho existindo para POST, porque o apanhador de arquivos estáticos do
+`app.py` casa qualquer GET. Quem descobriu foram os testes de paridade, rodando contra as
+duas pilhas — e a mesma dedução errada já estava na `acesso-interno` desde a Tarefa 1,
+onde o teste dela só exercitava GET.
+
+**Consolidar duplicações revelou três defeitos** que nenhum teste pegaria: o sal de evento
+novo saía com metade dos bytes, o nome padrão do setor divergia entre as duas pilhas, e o
+preflight não autorizava os cabeçalhos da elevação — este último teria bloqueado **toda
+escrita** da tela do dono, no navegador, sem log nenhum do nosso lado.
+
+## O que ficou provado contra o banco de verdade
+
+41 casos de paridade, nas quatro pilhas. Os dois que valem por todos:
+
+- **O QR do Pedido, nos dois sentidos:** o token que uma pilha emite, a outra abre. Os
+  casos de mesa provam o algoritmo; só isto prova que as duas usam o mesmo **segredo de
+  produção** — que é o que invalidaria QR em circulação.
+- **O sal do pedido é o mesmo nas duas.** Se regredisse, todo ingresso já impresso pararia
+  de valer, e a descoberta seria na portaria do evento.
+
+## O que a Fase 3 precisa antes de desligar o Render
+
+O `conferir.ps1` agora conta quantas estações falam com cada pilha, lendo o `acesso_base`
+que o heartbeat reporta. Enquanto houver uma apontando para `imposicao.onrender.com`, o
+Render fica. Duas estações rodam agente velho demais para reportar qualquer coisa
+(`PRD-ACABAMENTO` e `CESAR-CPD`) — elas precisam atualizar antes de a conta fechar.
