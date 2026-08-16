@@ -47,6 +47,13 @@
 --   2. A estação passa a sincronizar por caminho autenticado, e já recusa lista
 --      vazia (`agent_worker.sincronizar_acessos`, desde 16/08/2026).
 --   3. Só então a leitura fecha.
+--
+-- Os três passos foram concluídos em 16/08/2026. O passo 3 está em
+-- `sql/rls_passo3_fechar_leitura.sql`, e ele fecha a leitura por REVOKE e não
+-- por política ausente: REVOKE responde 401, política ausente responde 200 com
+-- `[]`, e só a primeira forma chega à estação como recusa. Medido depois de
+-- aplicado: leitura e escrita anônimas nas duas tabelas respondem
+-- `401 permission denied for table`.
 
 -- ─── 1. Apaga TODA política que exista hoje nas duas tabelas ─────────────────
 

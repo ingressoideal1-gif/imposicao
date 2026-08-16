@@ -9,10 +9,14 @@ quem sentar na máquina. É o contrário do que a lista existe para fazer.
 
 Até 16/08/2026 uma resposta vazia da nuvem era gravada como se fosse verdade. E
 uma resposta vazia quase nunca significa "ninguém tem acesso": significa que a
-leitura foi recusada. Vai significar isso literalmente quando o RLS fechar a
-leitura de `imposition_acessos_locais` para a chave anônima — o passo 3 de
-`sql/rls_acessos_e_permissoes.sql`. Sem este freio, aquele passo **destrancaria
-onze computadores** em vez de trancar um vazamento.
+leitura foi recusada.
+
+A leitura de `imposition_acessos_locais` pela chave anônima fechou naquele mesmo
+dia (`sql/rls_passo3_fechar_leitura.sql`). Ela fechou por REVOKE, e não por
+política ausente, justamente porque REVOKE responde **401** e política ausente
+responde **200 com `[]`** — e a segunda forma teria destrancado onze
+computadores em vez de trancar um vazamento. Este freio continua sendo a rede de
+segurança para o dia em que alguém trocar um pelo outro sem saber disso.
 
 Esvaziar de verdade continua possível: desative os operadores um a um, ou apague
 a cópia da estação. O que não se faz por acidente é destrancar tudo com uma
