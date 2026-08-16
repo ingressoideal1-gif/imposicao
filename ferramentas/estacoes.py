@@ -166,8 +166,15 @@ def main():
         print(f"     publica em {base}: {quantas}")
 
     if mudas:
+        # Nao e "esta desatualizada": e uma estacao SEM TRANCA. O heartbeat passou
+        # a informar a versao no agente 1.2.7 (07/08/2026), e o login por codigo
+        # local so nasceu no 1.2.27 (11/08/2026) — quatro dias depois. Logo, quem
+        # nao informa versao roda algo anterior aos dois, e o painel daquela
+        # maquina abre para quem sentar nela, sem pedir codigo nenhum.
         print("ALERTA: estacao(oes) que nao informam a versao: " + ", ".join(mudas) +
-              ". Rodam agente anterior a agosto/2026 — atualize o NewProd.exe.")
+              ". Rodam agente anterior ao 1.2.7 (07/08/2026), logo anterior ao "
+              "login por codigo local (1.2.27) — o painel dessas maquinas ABRE SEM "
+              "PEDIR CODIGO. Instale o NewProd atual nelas.")
     if atrasadas:
         print(f"ALERTA: estacao(oes) atras do repositorio ({repo}): " +
               ", ".join(atrasadas) + ". Ver GUIA_AGENTE.md.")

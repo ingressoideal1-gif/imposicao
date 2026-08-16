@@ -106,3 +106,31 @@ WHERE table_name IN ('imposition_acessos_locais', 'imposition_user_permissions')
   AND grantee IN ('anon', 'authenticated', 'service_role')
 GROUP BY table_name, grantee
 ORDER BY table_name, grantee;
+
+-- ─── 4. Nenhuma VIEW servindo de porta dos fundos ────────────────────────────
+--
+-- Uma view roda com o privilégio de QUEM A CRIOU, e não de quem a consulta, a
+-- menos que tenha sido feita com `security_invoker = on`. Quer dizer que uma
+-- view sobre estas tabelas, criada pelo `postgres`, continuaria devolvendo os
+-- códigos à chave anônima depois de todo o REVOKE acima — e o PostgREST publica
+-- automaticamente toda view do schema `public`.
+--
+-- O esperado é NENHUMA linha. Se aparecer alguma, o REVOKE não terminou o
+-- serviço: aquela view precisa do mesmo tratamento.
+
+SELECT dependente.relname                          AS view_que_le,
+       origem.relname                              AS tabela,
+       COALESCE(
+           (SELECT string_agg(g.grantee, ', ')
+            FROM information_schema.role_table_grants g
+            WHERE g.table_name = dependente.relname
+              AND g.grantee IN ('anon', 'authenticated')),
+           '(fechada)')                            AS aberta_para
+FROM pg_depend d
+JOIN pg_rewrite r    ON r.oid = d.objid
+JOIN pg_class dependente ON dependente.oid = r.ev_class
+JOIN pg_class origem     ON origem.oid = d.refobjid
+WHERE origem.relname IN ('imposition_acessos_locais', 'imposition_user_permissions')
+  AND dependente.relkind IN ('v', 'm')
+  AND dependente.relname <> origem.relname
+GROUP BY dependente.relname, origem.relname;
