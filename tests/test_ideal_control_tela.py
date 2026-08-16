@@ -973,7 +973,10 @@ def test_a_tela_acha_o_cliente_do_supabase_como_o_painel_o_declara():
     """, config_real=True)
     # A requisicao SAIU, com o token do painel no cabecalho.
     assert saida["enviado"] is not None, "a tela nao chegou a chamar o motor"
-    assert "/api/acesso/interno/pedidos" in saida["enviado"]["url"]
+    # 16/08/2026: o motor desta tela e a Edge Function `acesso-interno`, e nao
+    # mais o `/api/acesso/interno` do Render. Ver o comentario do `BASE` em
+    # `frontend/ideal-control.js`.
+    assert "/functions/v1/acesso-interno/pedidos" in saida["enviado"]["url"]
     assert saida["enviado"]["auth"] == "Bearer jwt-do-painel"
     # E nada de "login nao carregou".
     assert "login" not in saida["recentes"].lower()

@@ -24,9 +24,29 @@
 (function () {
     'use strict';
 
-    var API = (['localhost', '127.0.0.1'].indexOf(location.hostname) >= 0
-               || location.port === '9000') ? '' : 'https://imposicao.onrender.com';
-    var BASE = API + '/api/acesso/interno';
+    // 16/08/2026: esta tela passou a falar com uma Edge Function, ao lado do
+    // banco. Antes era `https://imposicao.onrender.com/api/acesso/interno`, e
+    // cada consulta pagava DUAS travessias de internet (navegador -> Render ->
+    // Supabase e volta), num servico que dorme quando ninguem usa. Some-se a
+    // isso que o Render perguntava ao Supabase QUEM ESTA FALANDO a cada chamada;
+    // na Edge Function o proprio portao ja conferiu o JWT antes de invocar.
+    //
+    // O Python continua no ar no endereco antigo durante a transicao, e
+    // `tests/test_acesso_interno_paridade.py` compara os dois com o mesmo token.
+    // Para voltar atras: troque esta linha de volta e republique.
+    //
+    // O CAMINHO INTEIRO mora aqui, e nao so o host, de proposito. Os dois lados
+    // pedem prefixos diferentes (`/api/acesso/interno` contra
+    // `/functions/v1/acesso-interno`), e trocar so o host montaria uma URL sem
+    // sentido que o roteamento da funcao aceitaria por acidente.
+    //
+    // O desvio por `localhost`/porta 9000 SUMIU junto, e isso conserta uma
+    // tela que nunca funcionou ali: na estacao o `app.py` nem monta o
+    // `/api/acesso/*` -- a chave de servico do banco nao vai para as estacoes,
+    // por decisao registrada em `acesso_api.py`. Quem abrisse o Ideal Control
+    // pela porta 9000 recebia 404 em tudo. Agora fala com a nuvem, como o resto
+    // desta tela sempre precisou.
+    var BASE = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-interno';
 
     var estado = {
         pedido: null,        // o número pesquisado
