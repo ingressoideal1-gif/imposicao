@@ -287,7 +287,24 @@
         </div>
     </div>
 
-    <p class="rodape">Ingresso Ideal</p>
+    <!-- O rodapé diz QUAL versão está rodando, e oferece o conserto de um
+         toque quando ela está velha.
+
+         Isto nasceu de um dia inteiro perdido em 16/08/2026. O dono relatou
+         três vezes que um defeito consertado continuava acontecendo; eu dirigi
+         a produção num navegador limpo três vezes e ela funcionava. O celular
+         dele estava numa versão anterior, e NÃO HAVIA COMO NENHUM DOS DOIS
+         SABER DISSO — aplicativo instalado não tem barra de endereço, e a tela
+         não dizia a versão em lugar nenhum.
+
+         "Atualizar o aplicativo" descadastra o service worker e apaga os
+         caches, e a recarga seguinte vem inteira do servidor. É seguro AQUI e
+         não seria na portaria: o chaveiro dos portões vive no `localStorage` e
+         a fila de leituras no IndexedDB, e nenhum dos dois é tocado. -->
+    <p class="rodape">
+        Ingresso Ideal · <span id="versao-do-app">—</span> ·
+        <button id="btn-forcar-atualizacao" type="button">Atualizar o aplicativo</button>
+    </p>
 </div>
 
 <!-- Servido daqui, e nao de um CDN: esta tela vai virar uma das telas do

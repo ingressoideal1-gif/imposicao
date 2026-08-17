@@ -2492,3 +2492,51 @@ def test_reabrir_devolve_o_evento_como_INATIVO_e_nao_como_ativo():
     assert saida["chamadas"][0]["caminho"] == "/eventos/ev-9"
     assert saida["chamadas"][0]["metodo"] == "PATCH"
     assert saida["chamadas"][0]["corpo"] == {"status": "encerrado"}
+
+
+# ── A tela diz em que versão está, e sabe se desentalar ─────────────────────
+#
+# Custou um dia. Em 16/08/2026 o dono relatou TRÊS vezes que um defeito
+# consertado continuava acontecendo. Eu dirigi a produção num navegador limpo
+# três vezes, e ela funcionava nas três. O celular dele estava numa versão
+# anterior — e não havia como nenhum dos dois saber disso: aplicativo instalado
+# não tem barra de endereço, e a tela não dizia a versão em lugar nenhum.
+#
+# Sem esse número, "o conserto não funcionou" e "o conserto não chegou" são
+# indistinguíveis, e a conversa inteira vira adivinhação.
+
+
+def test_a_tela_mostra_em_que_versao_esta():
+    assert 'id="versao-do-app"' in _ler("frontend/controle.html")
+
+
+def test_a_versao_e_lida_da_tag_e_nao_escrita_a_mao():
+    """Constante aqui é constante que ninguém lembra de trocar — e uma versão
+    escrita à mão que envelhece mente com mais confiança do que não ter versão
+    nenhuma."""
+    js = _ler("frontend/controle.js")
+    trecho = js[js.index("function versaoDestaTela"):][:700]
+    assert "currentScript" in trecho
+    assert "v=" in trecho
+
+
+def test_ha_como_desentalar_o_aplicativo_de_uma_versao_velha():
+    js = _ler("frontend/controle.js")
+    assert "unregister" in js and "caches.delete" in js
+
+
+def test_forcar_a_atualizacao_NAO_apaga_o_chaveiro_nem_a_fila():
+    """O que o botão limpa é CACHE. O chaveiro dos portões vive no
+    `localStorage` e a fila de leituras no IndexedDB — as duas são do dono, e
+    perdê-las custaria a contagem que o cliente pagou para ter."""
+    js = _ler("frontend/controle.js")
+    trecho = js[js.index("function forcarAtualizacao"):][:1600]
+    assert "localStorage.clear" not in trecho
+    assert "indexedDB.deleteDatabase" not in trecho
+    assert "portariaDeposito.limpar" not in trecho
+
+
+def test_o_botao_de_atualizar_NAO_existe_na_portaria():
+    """Lá a câmera pode estar aberta e a fila andando. A portaria tem a faixa
+    de atualização, que avisa e deixa a hora com o porteiro."""
+    assert "btn-forcar-atualizacao" not in _ler("frontend/portaria.html")

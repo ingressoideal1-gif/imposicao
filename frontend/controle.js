@@ -1592,10 +1592,78 @@
         });
     }
 
+    /**
+     * A versão que ESTE arquivo carrega, lida da própria tag que o trouxe.
+     *
+     * Não é uma constante de propósito: o `publicar.ps1` renumera os `?v=`
+     * sozinho, e uma constante aqui teria de ser lembrada a cada release — a
+     * que ninguém lembra é a que envelhece e passa a mentir. Mesmo caminho que
+     * o `sw-registro.js` usa.
+     */
+    function versaoDestaTela() {
+        var eu = document.currentScript;
+        if (!eu) {
+            var todos = document.getElementsByTagName('script');
+            for (var i = todos.length - 1; i >= 0; i--) {
+                if (/controle\.js/.test(todos[i].src || '')) { eu = todos[i]; break; }
+            }
+        }
+        var casou = /[?&]v=(\d+)/.exec((eu && eu.src) || '');
+        return casou ? 'v' + casou[1] : 'versão desconhecida';
+    }
+
+    var VERSAO_DESTA_TELA = versaoDestaTela();
+
+    /**
+     * A saída de emergência para o aplicativo instalado que ficou preso numa
+     * versão antiga.
+     *
+     * Descadastra o service worker e limpa os caches; a recarga seguinte vem
+     * inteira do servidor. NÃO toca em `localStorage` nem no IndexedDB — é lá que
+     * moram o chaveiro dos portões deste aparelho e a fila de leituras que
+     * ainda não subiram, e as duas coisas são do dono, não do cache.
+     */
+    function forcarAtualizacao() {
+        var botao = $('btn-forcar-atualizacao');
+        if (botao) { botao.disabled = true; botao.textContent = 'Atualizando…'; }
+
+        var passos = [];
+        try {
+            if ('serviceWorker' in navigator) {
+                passos.push(navigator.serviceWorker.getRegistrations()
+                    .then(function (todos) {
+                        return Promise.all(todos.map(function (r) { return r.unregister(); }));
+                    }));
+            }
+        } catch (e) { /* navegador sem service worker: nada a descadastrar */ }
+        try {
+            if (window.caches && caches.keys) {
+                passos.push(caches.keys().then(function (nomes) {
+                    return Promise.all(nomes.map(function (n) { return caches.delete(n); }));
+                }));
+            }
+        } catch (e) { /* sem Cache Storage: idem */ }
+
+        return Promise.all(passos).catch(function () { }).then(function () {
+            // `location.replace` com um parâmetro que muda: alguns navegadores
+            // devolvem a página do próprio histórico num `reload()` simples, e
+            // aí a atualização não teria acontecido — que é justamente o
+            // problema que este botão existe para resolver.
+            location.replace('controle.html?atualizado=' + Date.now());
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         // Fora do `if` abaixo, de propósito: a atualização precisa chegar mesmo
         // nas páginas que não têm a engrenagem.
         recarregarQuandoTrocarDeVersao();
+
+        if ($('versao-do-app')) {
+            $('versao-do-app').textContent = VERSAO_DESTA_TELA;
+        }
+        if ($('btn-forcar-atualizacao')) {
+            $('btn-forcar-atualizacao').addEventListener('click', forcarAtualizacao);
+        }
 
         // A engrenagem pode não estar nesta página (o arquivo é carregado só
         // pelo `controle.html`, mas o teste de outra tela o serve junto).

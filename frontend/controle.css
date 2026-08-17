@@ -143,6 +143,17 @@ button.secundario { background: transparent; color: var(--dim); border: 1px soli
 
 .rodape { text-align: center; font-size: 0.72rem; color: #475569; margin-top: 24px; }
 
+/* O botão do rodapé não é um botão de ação: é uma saída de emergência que
+   precisa estar à mão sem competir com nada. Por isso ele tem cara de link e
+   não a barra verde-água que a folha dá a todo `button`. */
+.rodape button {
+    width: auto; margin: 0; padding: 0; min-height: 0;
+    background: none; border: 0; font-family: inherit;
+    font-size: inherit; font-weight: 400;
+    color: var(--teal); text-decoration: underline; cursor: pointer;
+}
+#versao-do-app { font-variant-numeric: tabular-nums; }
+
 /*
  * A tela do dono do evento. Celular primeiro, uma coluna, sem abas.
  *
