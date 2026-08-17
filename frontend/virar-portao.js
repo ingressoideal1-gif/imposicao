@@ -155,7 +155,7 @@
         }).then(function (painel) {
             // O numero conta os portoes que ja existem NO EVENTO, e nao neste
             // aparelho: o dono ve a lista inteira na engrenagem, e dois
-            // "Portão 1" ali seriam indistinguiveis.
+            // "Aparelho 1" ali seriam indistinguiveis.
             var nome = 'Aparelho ' + ((painel.aparelhos || []).length + 1);
             return window.AcessoConta.pedir(
                 '/eventos/' + evento_id + '/aparelhos/aqui',

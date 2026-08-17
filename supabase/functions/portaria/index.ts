@@ -459,7 +459,7 @@ async function entrada(cabecalho: string | null, corpo: any): Promise<Response> 
         )) ?? [])[0];
         anterior = {
           momento: dono.momento,
-          portao: outro?.nome ?? "outro portao",
+          portao: outro?.nome ?? "outro aparelho",
         };
         resultado = "negado";
         motivo = "ja_entrou";

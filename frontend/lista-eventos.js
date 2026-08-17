@@ -25,7 +25,7 @@
      *
      * @param doChaveiro  o que `chaveiro.listar()` devolveu
      * @param daConta     o que `/meus-eventos` devolveu (vazio sem sessao)
-     * @returns [{ id, nome, ativo, ehPortao, nomePortao }]
+     * @returns [{ id, nome, ativo, ehAparelho, nomeAparelho }]
      */
     function unir(doChaveiro, daConta) {
         var porId = {};

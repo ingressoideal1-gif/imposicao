@@ -1368,14 +1368,14 @@
     }
 
     /**
-     * "Sair deste portão": este aparelho deixa de ler os ingressos deste evento.
+     * "Sair deste aparelho": este aparelho deixa de ler os ingressos deste evento.
      *
      * NÃO descarta a fila — a mesma regra do `desparear()` da portaria: o que a
      * fila guarda é contagem que o cliente pagou para ter, e ela sobe sozinha
      * quando a internet voltar.
      *
      * As chaves antigas saem junto SÓ se apontarem para este evento. Deixá-las
-     * seria dizer "saí do portão" e o celular continuar validando ingresso.
+     * seria dizer "saí do aparelho" e o celular continuar validando ingresso.
      */
     function sairDoAparelho() {
         // A FILA VEM PRIMEIRO, e este é o único lugar que pode perdê-la.

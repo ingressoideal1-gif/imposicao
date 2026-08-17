@@ -694,16 +694,14 @@
             // A fila leva o veredito do SERVIDOR, e nao o local: e ele que vale.
             leitura.resultado = 'negado';
             leitura.motivo = 'ja_entrou';
-            // O campo do endpoint /entrada ainda chama-se `portao` no contrato
-            // com a Edge Function (supabase/functions/portaria): e o mesmo
-            // conceito do `nome_portao` que o chaveiro guarda, so que vindo do
-            // aparelho que ganhou a corrida, nao deste.
-            var nome_portao = a.portao;
+            // campo `portao` da resposta do servidor: o nome do aparelho que
+            // registrou a primeira entrada.
+            var nome_portao_anterior = a.portao;
             return {
                 estado: 'negado', motivo: 'ja_entrou',
                 setor: v.setor, numero: v.numero,
                 credencial_id: v.credencial_id,
-                detalhe: { momentoAnterior: a.momento, aparelhoAnterior: nome_portao },
+                detalhe: { momentoAnterior: a.momento, aparelhoAnterior: nome_portao_anterior },
             };
         });
     }
