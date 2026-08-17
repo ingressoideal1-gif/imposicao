@@ -7,7 +7,13 @@
  */
 import { banco } from "./banco.ts";
 import { Recusa } from "./sessao.ts";
-import { criarUsuario, trocarSenhaDoUsuario, usuarioPorEmail } from "./auth_admin.ts";
+import {
+  apagarUsuario,
+  criarUsuario,
+  obterUsuario,
+  trocarSenhaDoUsuario,
+  usuarioPorEmail,
+} from "./auth_admin.ts";
 
 // O mesmo alfabeto do codigo de pareamento: sem 0 O 1 I L, que se confundem
 // quando ditados por telefone -- e a senha provisoria e ditada por telefone.
@@ -87,6 +93,15 @@ export async function contasDoCliente(idCliente: number): Promise<any[]> {
  * E-mail que JA tem conta: so liga, sem mexer na senha -- nunca redefinimos a
  * senha de uma conta que nao criamos. E-mail novo: cria com senha provisoria,
  * que sai UMA vez na resposta e nao e guardada em claro em lugar nenhum.
+ *
+ * As duas idas (criar a conta no GoTrue, gravar a ligacao no banco) nao sao
+ * atomicas -- sao dois servicos diferentes. Se a segunda falhar (rede,
+ * PostgREST fora do ar), o codigo abaixo desfaz a conta criada, para o e-mail
+ * voltar a poder tentar do zero. E se a propria desfeita falhar, a conta fica
+ * orfa -- e e por isso que o ramo "ja tinha conta", logo acima na leitura mas
+ * depois na ordem de checagem, sabe reconhece-la pelo `user_metadata` e
+ * completar a ligacao que faltou, em vez de tratar como conta de outra
+ * origem para sempre.
  */
 export async function liberarAcesso(
   idCliente: number,
@@ -96,6 +111,9 @@ export async function liberarAcesso(
   const e = emailLimpo(email);
   const existente = await usuarioPorEmail(e);
   if (existente) {
+    const recuperada = await recuperarOrfaSeForNossa(existente, idCliente, e, criadoPor);
+    if (recuperada) return recuperada;
+
     await banco("POST", "producao_acesso_contas?on_conflict=auth_user_id,id_cliente", {
       auth_user_id: existente,
       id_cliente: idCliente,
@@ -107,18 +125,76 @@ export async function liberarAcesso(
     }, "resolution=merge-duplicates,return=minimal");
     return { email: e, ja_tinha_conta: true, senha_provisoria: null };
   }
+
   const senha = senhaProvisoria();
   const criado = await criarUsuario(e, senha, { origem: "ideal-control", id_cliente: idCliente });
+  try {
+    await banco("POST", "producao_acesso_contas", {
+      auth_user_id: criado.id,
+      id_cliente: idCliente,
+      email: e,
+      criada_aqui: true,
+      senha_provisoria_em: new Date().toISOString(),
+      criado_por: criadoPor,
+      ativo: true,
+    }, "return=minimal");
+  } catch (erro) {
+    // Sem desfazer, esta conta fica orfa PARA SEMPRE: a proxima tentativa com
+    // o mesmo e-mail cairia no ramo "ja tinha conta", com criada_aqui:false --
+    // e dai `novaSenhaProvisoria` recusaria com 403 uma conta que a grafica
+    // criou de verdade. Melhor desfazer e deixar o e-mail livre para tentar de
+    // novo.
+    try {
+      await apagarUsuario(criado.id);
+    } catch {
+      // Se nem a desfeita for possivel, a conta fica orfa mesmo -- mas
+      // `recuperarOrfaSeForNossa`, acima, cobre esse caso na proxima tentativa.
+    }
+    throw erro;
+  }
+  return { email: e, ja_tinha_conta: false, senha_provisoria: senha };
+}
+
+/**
+ * Uma conta que existe no GoTrue mas nao tem NENHUMA linha em
+ * `producao_acesso_contas` e suspeita: ou e de outro sistema (o Vibe tambem
+ * usa este projeto Supabase), ou e uma orfa nossa de uma `liberarAcesso`
+ * anterior que criou a conta e caiu antes de gravar a ligacao.
+ *
+ * So tratamos como nossa quando o `user_metadata.origem` bate com o que
+ * `criarUsuario` grava -- do contrario, "adotar" resetaria a senha de uma
+ * conta de outra origem, o que seria muito pior que o problema que resolve.
+ *
+ * Devolve `null` quando nao e o caso (a conta ja tem ligacao, ou nao e nossa)
+ * -- e `liberarAcesso` segue para o ramo normal de so ligar.
+ */
+async function recuperarOrfaSeForNossa(
+  authUserId: string,
+  idCliente: number,
+  email: string,
+  criadoPor: string,
+): Promise<{ email: string; ja_tinha_conta: boolean; senha_provisoria: string | null } | null> {
+  const ligacoes = (await banco(
+    "GET",
+    `producao_acesso_contas?auth_user_id=eq.${authUserId}&select=auth_user_id&limit=1`,
+  )) ?? [];
+  if (ligacoes.length) return null;
+
+  const usuario = await obterUsuario(authUserId);
+  if (usuario?.user_metadata?.origem !== "ideal-control") return null;
+
+  const senha = senhaProvisoria();
+  await trocarSenhaDoUsuario(authUserId, senha);
   await banco("POST", "producao_acesso_contas", {
-    auth_user_id: criado.id,
+    auth_user_id: authUserId,
     id_cliente: idCliente,
-    email: e,
+    email,
     criada_aqui: true,
     senha_provisoria_em: new Date().toISOString(),
     criado_por: criadoPor,
     ativo: true,
   }, "return=minimal");
-  return { email: e, ja_tinha_conta: false, senha_provisoria: senha };
+  return { email, ja_tinha_conta: false, senha_provisoria: senha };
 }
 
 /** So para conta que a grafica criou. A anterior deixa de valer no mesmo ato. */

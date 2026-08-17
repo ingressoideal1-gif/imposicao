@@ -1,13 +1,17 @@
 /**
  * A admin API do GoTrue, com a service_role que a Edge Function ja tem.
  *
- * Tres coisas, e so tres: achar uma conta pelo e-mail, criar uma conta com
- * senha, trocar a senha de uma conta. Nada aqui devolve token nem hash.
+ * Achar uma conta pelo e-mail ou pelo id, criar uma conta com senha, trocar a
+ * senha de uma conta, apagar uma conta. Nada aqui devolve token nem hash.
  *
  * `usuarioPorEmail` passa pelo banco (a funcao SQL `acesso_usuario_por_email`,
  * SECURITY DEFINER, so da service_role) porque `auth.users` nao esta exposta
  * ao PostgREST e a admin API nao filtra por e-mail -- listar todos os usuarios
  * para achar um seria pagina por pagina, e um dia sao milhares.
+ *
+ * `obterUsuario` e `apagarUsuario` existem para `contas.ts` conseguir desfazer
+ * uma conta que criou aqui e, no caso de sobrar orfa (ligacao no banco falhou
+ * depois da conta criada), reconhece-la de volta pelo `user_metadata`.
  */
 import { banco } from "./banco.ts";
 import { Recusa } from "./sessao.ts";
@@ -21,7 +25,19 @@ function ambiente(): { url: string; chave: string } {
   return { url, chave };
 }
 
-async function admin(metodo: string, caminho: string, corpo: unknown): Promise<any> {
+/**
+ * `corpo` e opcional -- DELETE e GET nao mandam corpo, e `JSON.stringify(undefined)`
+ * viraria a string `"undefined"`, que nao e JSON valido.
+ *
+ * `aceita404`: so `obterUsuario` usa, para devolver `null` em vez de lancar
+ * quando a conta nao existe mais.
+ */
+async function admin(
+  metodo: string,
+  caminho: string,
+  corpo?: unknown,
+  aceita404 = false,
+): Promise<any> {
   const { url, chave } = ambiente();
   const r = await fetch(`${url}/auth/v1/admin/${caminho}`, {
     method: metodo,
@@ -30,8 +46,9 @@ async function admin(metodo: string, caminho: string, corpo: unknown): Promise<a
       Authorization: `Bearer ${chave}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(corpo),
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
   });
+  if (aceita404 && r.status === 404) return null;
   const texto = await r.text();
   if (!r.ok) {
     // O GoTrue responde `{msg}` ou `{error_description}`; nenhum dos dois
@@ -65,4 +82,21 @@ export async function criarUsuario(
 
 export async function trocarSenhaDoUsuario(id: string, senha: string): Promise<void> {
   await admin("PUT", `users/${encodeURIComponent(id)}`, { password: senha });
+}
+
+/** A conta pelo id, ou `null` se ja nao existe mais. So o que `contas.ts` precisa. */
+export async function obterUsuario(
+  id: string,
+): Promise<{ id: string; user_metadata: Record<string, unknown> } | null> {
+  const u = await admin("GET", `users/${encodeURIComponent(id)}`, undefined, true);
+  if (!u?.id) return null;
+  return { id: String(u.id), user_metadata: u.user_metadata ?? {} };
+}
+
+/**
+ * Desfaz uma conta criada aqui. So chamado quando a ligacao dela em
+ * `producao_acesso_contas` falhou depois de criar -- ver `liberarAcesso`.
+ */
+export async function apagarUsuario(id: string): Promise<void> {
+  await admin("DELETE", `users/${encodeURIComponent(id)}`);
 }
