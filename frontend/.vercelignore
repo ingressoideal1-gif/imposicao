@@ -1,0 +1,26 @@
+# O .vercelignore que VALE é este, e não o da raiz.
+#
+# O `publicar.ps1` faz `Push-Location frontend` antes de chamar `vercel --prod`,
+# então a raiz do projeto na Vercel é esta pasta. Um ignore escrito na raiz do
+# repositório não é lido por ninguém.
+#
+# Isso custou caro em 17/08/2026: uma anotação com senha deixada aqui dentro
+# (`user_senha_correios`) subiu na v628 e ficou pública em
+# https://ideal-imposition.vercel.app/user_senha_correios, com HTTP 200. O ignore
+# tinha sido escrito no arquivo errado, e o `.gitignore` não ajuda — o deploy da
+# Vercel sobe a PASTA, não o que está no git.
+#
+# A regra que fica: o que não é do site não mora aqui. Este arquivo é a segunda
+# linha de defesa, não a primeira.
+
+# Anotações e credenciais que porventura caiam nesta pasta.
+user_senha_correios
+*.senha
+*.credencial
+credenciais*
+.env
+.env.*
+
+# Restos de ferramenta.
+.vercel/
+__pycache__/

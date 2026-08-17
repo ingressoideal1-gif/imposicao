@@ -7,11 +7,45 @@ block_cipher = None
 # Este build NAO serve para release — as 222 fontes com arquivo_url relativo
 # (/fonts_local/...) deixam de existir em disco e o agente falharia ao embuti-las.
 # So vale depois que as fontes forem hospedadas e o catalogo migrado para URL absoluta.
+# O que o git se RECUSA a versionar nao entra no executavel.
+#
+# Este walk embute a pasta `frontend/` inteira, arquivo por arquivo, sem olhar
+# o que e. Em 17/08/2026 uma anotacao com senha foi deixada ali dentro; ela nao
+# chegou a entrar em nenhum MSI por sorte de horario — as compilacoes daquele dia
+# sao todas anteriores ao arquivo —, mas a proxima teria embutido a senha num
+# instalador de 67 MB que fica num bucket PUBLICO, e de la nao se tira.
+#
+# O criterio e o do git de proposito: se um arquivo esta no `.gitignore`, alguem
+# ja decidiu que ele nao deve sair desta maquina. Sem git disponivel o build para,
+# em vez de seguir embutindo tudo — um bundle a menos custa minutos, um segredo
+# publicado nao se desfaz.
+import subprocess
+
+try:
+    _saida = subprocess.run(
+        ['git', 'ls-files', '--others', '--ignored', '--exclude-standard', '--', 'frontend'],
+        capture_output=True, text=True, check=True, timeout=60).stdout
+    _ignorados = {os.path.normpath(_l.strip()) for _l in _saida.splitlines() if _l.strip()}
+except Exception as _e:
+    raise SystemExit(
+        f'[agent_tray.spec] Nao consegui perguntar ao git o que e ignorado ({_e}).\n'
+        '  O build para aqui de proposito: sem essa lista, um arquivo com segredo\n'
+        '  deixado em frontend/ entraria no instalador publico.')
+
 _frontend_datas = []
+_pulados = []
 for _raiz, _dirs, _arqs in os.walk('frontend'):
     _dirs[:] = [d for d in _dirs if d != 'fonts_local']
     for _a in _arqs:
-        _frontend_datas.append((os.path.join(_raiz, _a), os.path.relpath(_raiz, '.')))
+        _caminho = os.path.join(_raiz, _a)
+        if os.path.normpath(_caminho) in _ignorados:
+            _pulados.append(_caminho)
+            continue
+        _frontend_datas.append((_caminho, os.path.relpath(_raiz, '.')))
+
+if _pulados:
+    print('[agent_tray.spec] fora do executavel por estarem no .gitignore: '
+          + ', '.join(_pulados))
 
 a = Analysis(
     ['agent_tray.py'],
