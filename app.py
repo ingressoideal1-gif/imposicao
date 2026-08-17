@@ -662,6 +662,122 @@ def remove_fonte(fonte_id: str, user: dict = Depends(get_current_user)):
     return {"status": "success"}
 
 # ─── Embutir fontes do sistema nos elementos da numeração ─────────────────────
+#
+# ## A ponte entre dois jeitos de chamar a mesma fonte
+#
+# O elemento guarda a FAMÍLIA, como o Windows a chama: `system:Comic Sans MS`.
+# O catálogo guarda as 222 fontes de sistema pelo nome do ARQUIVO: `comic`,
+# `comicbd`, `arial`, `arialbd`. Onde os dois coincidem — `arial` — casava por
+# sorte; onde não coincidem, a fonte sumia calada e o papel saía em Helvetica.
+#
+# A tela não denunciava porque ela resolve por outro caminho: o `@font-face` tem
+# `local('Comic Sans MS')`, então a fonte instalada no Windows daquela máquina
+# desenha a prévia sem tocar no catálogo. O motor não tem esse recurso — PyMuPDF
+# só aceita bytes. Daí o defeito do pedido 19775, em 17/08/2026: os dois modelos
+# certos na janela e errados no papel.
+#
+# A tradução família → arquivo é a que o próprio Windows guarda no registro, e
+# ela vale exatamente quando a prévia também vale: se a fonte está instalada, os
+# dois lados acertam. Se não estiver, cai no que já havia — o nome próprio no
+# catálogo, e o alerta no log.
+
+_FONTES_INSTALADAS = None
+
+# `Bold`/`Italic` só contam como estilo no FIM do nome: há família com essas
+# palavras no meio, e tratá-las como estilo apagaria a família inteira.
+_SUFIXOS_DE_ESTILO = (
+    ("bold italic", True, True),
+    ("bolditalic", True, True),
+    ("bold oblique", True, True),
+    ("bold", True, False),
+    ("italic", False, True),
+    ("oblique", False, True),
+)
+
+
+def _familia_e_estilo_do_registro(nome: str):
+    """"Comic Sans MS Bold (TrueType)" -> ("comic sans ms", True, False)."""
+    import re
+    n = re.sub(r"\s*\((TrueType|OpenType|All res|VGA res)\)\s*$", "", nome or "",
+               flags=re.IGNORECASE).strip().lower()
+    for sufixo, bold, italic in _SUFIXOS_DE_ESTILO:
+        if n.endswith(" " + sufixo):
+            return n[: -(len(sufixo) + 1)].strip(), bold, italic
+    return n, False, False
+
+
+def _fontes_instaladas() -> dict:
+    """{(familia, bold, italic): "comic.ttf"} das fontes instaladas no Windows.
+
+    Lida uma vez por processo. Fora do Windows devolve vazio, e aí tudo continua
+    funcionando como antes desta função existir.
+    """
+    global _FONTES_INSTALADAS
+    if _FONTES_INSTALADAS is not None:
+        return _FONTES_INSTALADAS
+
+    _FONTES_INSTALADAS = {}
+    try:
+        import winreg
+        import os as _os
+        caminho = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+        # HKCU cobre a fonte instalada só para o usuário, que e o caso comum de
+        # quem instala fonte de cliente sem ser administrador da maquina.
+        for raiz in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            try:
+                with winreg.OpenKey(raiz, caminho) as chave:
+                    total = winreg.QueryInfoKey(chave)[1]
+                    for i in range(total):
+                        try:
+                            nome, valor, _ = winreg.EnumValue(chave, i)
+                        except OSError:
+                            continue
+                        if not isinstance(valor, str) or not valor:
+                            continue
+                        # Uma colecao (.ttc) lista varios arquivos numa entrada.
+                        arquivo = _os.path.basename(valor.split(",")[0].strip())
+                        _FONTES_INSTALADAS.setdefault(
+                            _familia_e_estilo_do_registro(nome), arquivo)
+            except OSError:
+                continue
+    except Exception as e:  # pragma: no cover — so em Windows quebrado
+        print(f"[impose] nao consegui ler as fontes instaladas: {e}", flush=True)
+
+    return _FONTES_INSTALADAS
+
+
+def _chaves_de_fonte(family: str, bold: bool, italic: bool, instaladas: dict) -> list:
+    """As chaves a tentar no catálogo, da melhor para a reserva.
+
+    Pura de propósito: é o coração do conserto, e precisa poder ser conferida
+    sem Windows, sem registro e sem rede.
+    """
+    import os as _os
+    fam = (family or "").strip().lower()
+    chaves = []
+
+    def _por(bold_, italic_):
+        arquivo = instaladas.get((fam, bold_, italic_))
+        if not arquivo:
+            return
+        base = _os.path.splitext(arquivo)[0].lower()
+        if base and base not in chaves:
+            chaves.append(base)
+
+    if bold or italic:
+        _por(bold, italic)
+        # Nem toda familia tem as quatro variacoes. Sem esta escada, um
+        # `bold italic` numa familia que so tem bold voltaria para a regular —
+        # perdendo os dois estilos em vez de um.
+        if bold and italic:
+            _por(True, False)
+            _por(False, True)
+
+    if fam and fam not in chaves:
+        chaves.append(fam)
+    _por(False, False)
+    return chaves
+
 
 def _embed_system_fonts(numeracao_obj):
     """Embute o binário das fontes do sistema nos elementos para garantir
@@ -688,18 +804,31 @@ def _embed_system_fonts(numeracao_obj):
             continue
             
         # Limpar prefixo "system:" caso ainda venha do frontend por cache antigo
+        bold = italic = False
         if raw_fn.startswith("system:"):
             parts = raw_fn[7:].split("|")
             family = parts[0]
+            marcas = [p.strip().lower() for p in parts[1:]]
+            bold = "bold" in marcas
+            italic = "italic" in marcas
         else:
             family = raw_fn
-            
+
+        # O elemento tambem pode trazer o estilo em campo proprio, que e o que o
+        # engine.py le. Considerar os dois evita embutir a regular num texto que
+        # o motor vai desenhar como negrito.
+        bold = bold or el.get("font_weight") == "bold" or el.get("bold") is True
+        italic = italic or el.get("font_style") == "italic"
+
         family_lower = family.lower()
 
         if el.get("_font_data"):
             continue
 
-        if family_lower not in fontes_map:
+        chave = next((c for c in _chaves_de_fonte(family, bold, italic, _fontes_instaladas())
+                      if c in fontes_map), None)
+
+        if chave is None:
             # Fallback: talvez o frontend já tenha injetado o arquivo_url via _injectFontUrls
             fallback_url = el.get("arquivo_url") or el.get("font_url")
             if fallback_url:
@@ -717,8 +846,8 @@ def _embed_system_fonts(numeracao_obj):
                 if family_lower not in base14:
                     print(f"[impose] ALERTA: Fonte '{family}' solicitada, mas não está no Catálogo Web e sem arquivo_url. Fallback Helvetica. Chaves disponíveis: {list(fontes_map.keys())[:10]}")
             continue
-            
-        fonte_info = fontes_map[family_lower]
+
+        fonte_info = fontes_map[chave]
         url = fonte_info.get("arquivo_url")
         if not url:
             continue
