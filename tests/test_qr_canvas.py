@@ -27,6 +27,12 @@ import pytest
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODULO = os.path.join(RAIZ, "frontend", "qr-canvas.js")
 
+# A biblioteca VERSIONADA, que e a que o navegador carrega. Antes daqui este
+# arquivo pedia `require('qrcode-generator')` do npm, que nao esta instalado —
+# entao o teste mais importante dele, o que confere se o QR desenhado e legivel,
+# pulava em silencio desde que foi escrito. Teste que so pula nao prende nada.
+BIBLIOTECA = os.path.join(RAIZ, "frontend", "qrcode-generator.min.js")
+
 
 def _ler(caminho):
     with open(os.path.join(RAIZ, caminho), encoding="utf-8") as f:
@@ -107,6 +113,7 @@ def test_o_QR_desenhado_e_legivel_de_verdade():
       globalThis.window = globalThis;
       const qrlib = require(%s);
       globalThis.qrcode = qrlib.qrcode || qrlib;
+      globalThis.Image = function () { return { complete: false, naturalWidth: 0 }; };
       require(%s);
 
       const N = 200;
@@ -129,7 +136,10 @@ def test_o_QR_desenhado_e_legivel_de_verdade():
       // A matriz que a biblioteca produz para o mesmo texto
       const qr = qrcode(0, 'L'); qr.addData(TEXTO); qr.make();
       const n = qr.getModuleCount();
-      const margem = 2, total = n + margem * 2, cell = 180 / total;
+      // Margem ZERO desde 17/08/2026: o papel nunca teve quiet zone dentro da
+      // caixa, e a tela punha 2 modulos — o QR aparecia menor do que o impresso.
+      // Ver tests/test_qr_do_tamanho_do_papel.py.
+      const margem = 0, total = n + margem * 2, cell = 180 / total;
 
       let iguais = 0, diferentes = 0;
       for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
@@ -139,11 +149,9 @@ def test_o_QR_desenhado_e_legivel_de_verdade():
         if (pintado === qr.isDark(r, c)) iguais++; else diferentes++;
       }
       console.log(JSON.stringify({ modulos: n * n, iguais, diferentes }));
-    """ % (json.dumps("qrcode-generator"), json.dumps(MODULO))
+    """ % (json.dumps(BIBLIOTECA), json.dumps(MODULO))
 
     r = subprocess.run(["node", "-e", script], capture_output=True, text=True, cwd=RAIZ)
-    if r.returncode != 0 and "Cannot find module" in r.stderr:
-        pytest.skip("qrcode-generator nao instalado neste ambiente")
     assert r.returncode == 0, r.stderr[:400]
     d = json.loads(r.stdout.strip())
     assert d["diferentes"] == 0, f"o desenho divergiu da biblioteca: {d}"

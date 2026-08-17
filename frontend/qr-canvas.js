@@ -44,12 +44,29 @@
     }
 
     /**
-     * Um QR de verdade, centrado em (x, y), com a quiet zone incluída.
+     * Um QR de verdade, centrado em (x, y), ocupando a caixa INTEIRA.
      *
-     * A margem de 2 módulos não é enfeite: sem ela o leitor não separa o código
-     * do fundo, e o ingresso é recusado na portaria. Os `+ 0.35` no tamanho da
-     * célula fecham a fresta que o arredondamento do canvas deixa entre
-     * módulos vizinhos — sem eles o QR sai com listras brancas finas.
+     * ## Por que a margem é zero
+     *
+     * Porque é zero no papel. O `_generate_qr` do `engine.py` gera o PNG com
+     * `border=0` e o encaixa num retângulo do tamanho do elemento — conferido no
+     * PNG que ele produz: há módulo escuro encostando na borda de cima e na da
+     * esquerda.
+     *
+     * Até 17/08/2026 esta função punha 2 módulos de quiet zone DENTRO da caixa,
+     * e num QR de 21 módulos isso deixava para o código 21/25 = 84% do lado: um
+     * elemento de 15 mm aparecia com 12,6 mm de código e uma faixa branca em
+     * volta, enquanto o papel saía com os 15 mm cheios. Duas réguas para a mesma
+     * medida, e quem decide é o papel.
+     *
+     * A margem que o leitor precisa continua existindo: é o próprio ingresso em
+     * volta do elemento, que é branco, e é o que já cumpre esse papel em toda
+     * tiragem impressa até hoje. Se um dia um QR for posto sobre fundo colorido,
+     * a folga tem de vir do LAYOUT — porque no papel ela nunca esteve aqui.
+     *
+     * Os `+ 0.35` no tamanho da célula fecham a fresta que o arredondamento do
+     * canvas deixa entre módulos vizinhos — sem eles o QR sai com listras
+     * brancas finas.
      */
     function renderQRCodeOnCtx(ctx, text, x, y, sz, color, bgColor) {
         try {
@@ -62,7 +79,7 @@
             qr.make();
 
             var moduleCount = qr.getModuleCount();
-            var margin = 2;
+            var margin = 0;
             var totalCount = moduleCount + margin * 2;
             var cellSize = sz / totalCount;
             var hsz = sz / 2;
