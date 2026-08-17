@@ -20,6 +20,12 @@
  * que uma faixa DESBLOQUEADA pelo dono some. Mesclar faixa a faixa deixaria o
  * lote suspenso para sempre.
  *
+ * A outra excecao e o zeramento. Quando o dono recomeca a contagem de um evento
+ * de teste, a rota manda `entradas_zeradas_em`; se essa marca for mais nova que
+ * a guardada, o aparelho esvazia as entradas e os totais ANTES de mesclar --
+ * so as entradas e os totais, nunca as credenciais. E a unica coisa aqui que
+ * tira em vez de acrescentar, e o resto do arquivo continua valendo.
+ *
  * PURO de proposito, como o portaria-validacao.js: nada de rede, DOM ou
  * IndexedDB aqui. Quem vai ao servidor entra por injecao em `ligar`, e quem
  * grava e o chamador -- e por isso os testes rodam em milissegundos em vez de
@@ -84,6 +90,18 @@
     }
 
     /**
+     * O dono zerou as entradas no painel depois da marca que o aparelho guarda?
+     *
+     * Sem marca guardada, qualquer marca do servidor e novidade -- e o primeiro
+     * zeramento da vida do evento.
+     */
+    function precisaEsquecer(base, novidade) {
+        if (!novidade.entradas_zeradas_em) return false;
+        if (!base.entradas_zeradas_em) return true;
+        return maisAntigo(base.entradas_zeradas_em, novidade.entradas_zeradas_em);
+    }
+
+    /**
      * A carga nova. Nao mexe na que recebeu: ela e a que esta guardada no
      * IndexedDB do celular, e suja-la deixaria o aparelho com um estado que
      * ninguem gravou.
@@ -92,6 +110,28 @@
         var base = carga || {};
         var nova = copiaRasa(base);
         novidade = novidade || {};
+
+        // Esquecer vem ANTES de mesclar, e e a unica coisa neste arquivo que
+        // TIRA em vez de acrescentar.
+        //
+        // Apagar as entradas no servidor nao zera nada no portao: cada aparelho
+        // ja tem as entradas baixadas e o sincronismo so acrescenta. Sem
+        // comparar a marca, o contador continuaria mostrando o publico do teste
+        // e a regra `ja_entrou` continuaria barrando quem entrou nele.
+        //
+        // Compara-la e o que impede o remedio de virar doenca: a MESMA marca
+        // chega em todo sincronismo, e esvaziar por ela de novo apagaria as
+        // entradas dos cinco minutos anteriores -- o contador nunca sairia do
+        // zero, e a noite inteira passaria despercebida.
+        //
+        // As credenciais NAO saem junto: zerar e sobre a contagem, os ingressos
+        // continuam valendo, e leva-las embora faria o portao recusar todo
+        // mundo como "desconhecido".
+        if (precisaEsquecer(base, novidade)) {
+            nova.entradas = {};
+            nova.totais = {};
+            nova.entradas_zeradas_em = novidade.entradas_zeradas_em;
+        }
 
         if (novidade.evento) nova.evento = mesclar(base.evento, novidade.evento);
 
@@ -102,11 +142,13 @@
         // Lista inteira, sempre. Ver o cabecalho.
         if (novidade.bloqueios) nova.bloqueios = novidade.bloqueios.slice();
 
+        // Daqui para baixo a base e `nova`, e nao `base`: o que vem no MESMO
+        // sincronismo do zeramento e POSTERIOR a ele e tem de sobreviver.
         if (novidade.entradas && novidade.entradas.length) {
-            nova.entradas = mesclarEntradas(base.entradas, novidade.entradas);
+            nova.entradas = mesclarEntradas(nova.entradas, novidade.entradas);
         }
 
-        if (novidade.totais) nova.totais = mesclar(base.totais, novidade.totais);
+        if (novidade.totais) nova.totais = mesclar(nova.totais, novidade.totais);
 
         return nova;
     }

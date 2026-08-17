@@ -163,13 +163,28 @@ export async function aplicarEvento(eventoId: string, corpo: any): Promise<any> 
     mudanca.local_evento = texto(corpo.local_evento, "local", 0, 200) || null;
   }
   if ("data_evento" in corpo) mudanca.data_evento = corpo.data_evento || null;
-  // `excluido` NAO entra, e a coluna aceita. Apagar evento nao e o que a
-  // engrenagem oferece, e um valor a mais aqui e a diferenca entre "o dono
-  // desligou o evento" e "o evento sumiu da conta dele" -- sem volta.
+  // Os TRES estados que a tela oferece, e o que cada um significa para quem
+  // esta no portao:
+  //
+  //   ativo       -- os portoes leem.
+  //   encerrado   -- pausa: sai de cartaz, os portoes param, continua em
+  //                  "Meus Eventos" para o dono religar num toque.
+  //   finalizado  -- arquivo: o evento acabou, vai para a lista de finalizados
+  //                  e os portoes param. Da para reabrir.
+  //
+  // A portaria nao precisou mudar por causa do `finalizado`: a carga manda
+  // `ativo: status === "ativo"`, entao qualquer estado que nao seja `ativo` ja
+  // fecha a porta.
+  //
+  // `excluido` continua FORA, e a coluna aceita -- e por isso que a conferencia
+  // existe. Apagar evento nao e o que a engrenagem oferece: um evento acontece
+  // e termina, ele nao deixa de ter existido. Um valor a mais aqui seria a
+  // diferenca entre "o dono arquivou o evento" e "o evento sumiu da conta
+  // dele", sem volta e sem nada na tela que explicasse.
   if ("status" in corpo) {
     const s = String(corpo.status ?? "").trim();
-    if (s !== "ativo" && s !== "encerrado") {
-      throw new Recusa(422, "status do evento: ativo ou encerrado");
+    if (s !== "ativo" && s !== "encerrado" && s !== "finalizado") {
+      throw new Recusa(422, "status do evento: ativo, encerrado ou finalizado");
     }
     mudanca.status = s;
   }

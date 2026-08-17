@@ -190,6 +190,134 @@ def test_total_de_um_setor_nao_zera_o_do_outro():
     assert nova["totais"] == {PISTA: 11, VIP: 20}
 
 
+# ── zerar: o aparelho esquece as entradas ───────────────────────────────────
+#
+# Apagar as entradas no servidor nao zera nada no portao: o celular ja tem as
+# entradas baixadas e o sincronismo so ACRESCENTA. A marca `entradas_zeradas_em`
+# e o que faz o aparelho saber que precisa esquecer o que tem.
+
+ZERADO = "2026-08-21T10:00:00Z"
+ZERADO_DEPOIS = "2026-08-21T14:30:00Z"
+
+
+def test_zerar_no_servidor_esvazia_as_entradas_locais():
+    """Sem isso o dono zeraria no painel e nada mudaria na porta: a regra
+    `ja_entrou` continuaria barrando quem tinha entrado no teste."""
+    c = carga()
+    c["entradas"] = {"c-pista-1": "2026-08-20T20:00:00Z",
+                     "c-vip-9": "2026-08-20T21:00:00Z"}
+    nova = aplicar(c, {"entradas_zeradas_em": ZERADO})
+    assert nova["entradas"] == {}
+
+
+def test_zerar_esvazia_tambem_os_totais():
+    """O contador e o que o dono olha para saber se zerou. Deixar os totais
+    faria a tela continuar mostrando o publico antigo."""
+    c = carga()
+    c["totais"] = {PISTA: 123, VIP: 45}
+    nova = aplicar(c, {"entradas_zeradas_em": ZERADO})
+    assert nova["totais"] == {}
+
+
+def test_a_marca_de_zerado_fica_guardada_na_carga():
+    """E ela que o proximo sincronismo compara. Sem guardar, o aparelho zeraria
+    de novo a cada cinco minutos."""
+    nova = aplicar(carga(), {"entradas_zeradas_em": ZERADO})
+    assert nova["entradas_zeradas_em"] == ZERADO
+
+
+def test_zerar_NAO_apaga_as_credenciais():
+    """Zerar e sobre a contagem. Os ingressos continuam valendo -- apagar as
+    credenciais faria o portao recusar todo mundo como `desconhecido`."""
+    nova = aplicar(carga(), {"entradas_zeradas_em": ZERADO})
+    assert len(nova["credenciais"]) == 2
+    assert nova["credenciais"] == carga()["credenciais"]
+
+
+def test_zerar_NAO_leva_o_evento_nem_os_setores_junto():
+    """Sem o sal nao se calcula hash nenhum, e sem a quantidade contratada o
+    contador fica sem denominador."""
+    nova = aplicar(carga(), {"entradas_zeradas_em": ZERADO})
+    assert nova["evento"]["sal"] == "aa" * 32
+    assert nova["setores"] == carga()["setores"]
+    assert nova["sais"] == carga()["sais"]
+    assert nova["aparelho"] == carga()["aparelho"]
+
+
+def test_a_MESMA_marca_nao_zera_de_novo():
+    """Senao cada sincronismo apagaria as entradas registradas nos cinco
+    minutos anteriores, e o contador nunca sairia do zero."""
+    c = carga(entradas_zeradas_em=ZERADO)
+    c["entradas"] = {"c-pista-1": "2026-08-21T11:00:00Z"}
+    c["totais"] = {PISTA: 1}
+    nova = aplicar(c, {"entradas_zeradas_em": ZERADO})
+    assert nova["entradas"] == {"c-pista-1": "2026-08-21T11:00:00Z"}
+    assert nova["totais"] == {PISTA: 1}
+
+
+def test_uma_marca_MAIS_NOVA_zera_outra_vez():
+    """O dono pode testar de novo. O segundo zeramento tem de valer como o
+    primeiro."""
+    c = carga(entradas_zeradas_em=ZERADO)
+    c["entradas"] = {"c-pista-1": "2026-08-21T11:00:00Z"}
+    nova = aplicar(c, {"entradas_zeradas_em": ZERADO_DEPOIS})
+    assert nova["entradas"] == {}
+    assert nova["entradas_zeradas_em"] == ZERADO_DEPOIS
+
+
+def test_marca_ANTIGA_do_servidor_nao_zera_e_nao_volta_no_tempo():
+    """Resposta atrasada em rede de portao chega fora de ordem. Aceita-la
+    apagaria entradas ja registradas depois do zeramento de verdade."""
+    c = carga(entradas_zeradas_em=ZERADO_DEPOIS)
+    c["entradas"] = {"c-pista-1": "2026-08-21T15:00:00Z"}
+    nova = aplicar(c, {"entradas_zeradas_em": ZERADO})
+    assert nova["entradas"] == {"c-pista-1": "2026-08-21T15:00:00Z"}
+    assert nova["entradas_zeradas_em"] == ZERADO_DEPOIS
+
+
+def test_sincronismo_SEM_marca_nenhuma_nao_esquece_nada():
+    """Evento que nunca foi zerado nao manda o campo -- e nulo nao pode valer
+    por zeramento."""
+    c = carga()
+    c["entradas"] = {"c-pista-1": "2026-08-20T20:00:00Z"}
+    c["totais"] = {PISTA: 7}
+    nova = aplicar(c, {"entradas": [{"credencial_id": "c-vip-9",
+                                     "momento": "2026-08-20T22:10:00Z"}]})
+    assert nova["entradas"]["c-pista-1"] == "2026-08-20T20:00:00Z"
+    assert nova["totais"] == {PISTA: 7}
+    assert "entradas_zeradas_em" not in nova
+
+
+def test_entradas_novas_do_mesmo_sincronismo_SOBREVIVEM_ao_zerar():
+    """A ordem importa: esvazia primeiro, mescla depois."""
+    c = carga()
+    c["entradas"] = {"c-pista-1": "2026-08-20T20:00:00Z"}
+    nova = aplicar(c, {"entradas_zeradas_em": ZERADO,
+                       "entradas": [{"credencial_id": "c-vip-9",
+                                     "momento": "2026-08-21T12:00:00Z"}]})
+    assert nova["entradas"] == {"c-vip-9": "2026-08-21T12:00:00Z"}
+
+
+def test_totais_novos_do_mesmo_sincronismo_TAMBEM_sobrevivem():
+    """Mesma ordem, mesmo motivo: o total que veio junto ja e o de depois do
+    zeramento."""
+    c = carga()
+    c["totais"] = {PISTA: 500, VIP: 400}
+    nova = aplicar(c, {"entradas_zeradas_em": ZERADO, "totais": {PISTA: 3}})
+    assert nova["totais"] == {PISTA: 3}
+
+
+def test_zerar_NAO_remexe_na_carga_que_recebeu():
+    """Vale para o esquecimento como vale para o resto: a carga que chegou e a
+    que esta gravada no IndexedDB do celular."""
+    c = carga()
+    c["entradas"] = {"c-pista-1": "2026-08-20T20:00:00Z"}
+    c["totais"] = {PISTA: 9}
+    esperada = json.loads(json.dumps(c))
+    r = chamar("aplicar", c, {"entradas_zeradas_em": ZERADO})
+    assert r["argumentos"][0] == esperada
+
+
 def test_novidade_vazia_nao_muda_nada():
     assert aplicar(carga(), {}) == carga()
 

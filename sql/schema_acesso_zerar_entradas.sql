@@ -1,0 +1,66 @@
+-- ══════════════════════════════════════════════════════════════════════════════
+-- IDEAL CONTROL — a marca de quando as entradas foram zeradas
+-- Prefixo: producao_acesso_
+-- Banco: vwbtitjlpelrcnsytzqw.supabase.co
+-- Data: 2026-08-16
+-- Spec: docs/superpowers/specs/2026-08-16-ideal-control-fluxo-pwa-design.md
+-- Plano: docs/superpowers/plans/2026-08-16-finalizar-e-zerar.md
+-- ══════════════════════════════════════════════════════════════════════════════
+--
+-- O QUE ESTE ARQUIVO FAZ
+--
+--   Acrescenta UMA coluna a uma tabela que ja existe. Nao cria tabela, nao
+--   apaga nada, nao mexe em linha nenhuma. Pode ser rodado mais de uma vez.
+--
+--   Supabase -> SQL Editor -> cole tudo -> Run. Leva menos de um segundo.
+--
+-- COMO RODAR
+--
+--   .\ferramentas\rodar_sql.ps1 sql\schema_acesso_zerar_entradas.sql
+--
+--   Ou pelo painel: Supabase -> SQL Editor -> New query -> cole -> Run.
+--
+-- POR QUE ELE EXISTE, E POR QUE NAO E DETALHE
+--
+--   O dono precisa recomecar a contagem de um evento que ele usou para testar:
+--   entrou com o proprio ingresso tres vezes para conferir o portao, e agora
+--   quer o contador em zero antes do publico chegar.
+--
+--   Apagar as entradas no SERVIDOR nao zera nada no PORTAO. Cada celular ja tem
+--   as entradas baixadas no IndexedDB, e o sincronismo de cinco minutos so
+--   ACRESCENTA -- ele nunca remove. Sem uma marca de tempo que o aparelho
+--   compare com a que ele guardou, o contador da portaria continuaria mostrando
+--   o publico do teste e a regra `ja_entrou` continuaria barrando quem entrou
+--   naquelas tres vezes. O dono zeraria no painel e nada mudaria na porta.
+--
+--   Esta coluna e o unico jeito de a ordem "esqueca o que voce tem" viajar do
+--   painel ate o celular do porteiro.
+--
+-- POR QUE SEM DEFAULT
+--
+--   Nulo quer dizer "este evento nunca foi zerado", que e a verdade de todos os
+--   eventos que existem hoje. Um DEFAULT now() carimbaria a migracao inteira
+--   com o instante em que este arquivo rodou, e no sincronismo seguinte TODO
+--   portao em campo acharia que acabara de receber uma ordem de zerar -- as
+--   entradas de um evento que esta acontecendo agora sumiriam do celular.
+--
+-- ══════════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE producao_acesso_eventos
+    -- Sem NOT NULL e sem DEFAULT, pela razao acima: a ausencia de valor E a
+    -- informacao de que nunca se zerou nada neste evento.
+    ADD COLUMN IF NOT EXISTS entradas_zeradas_em TIMESTAMPTZ;
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- COMO DESFAZER
+-- ══════════════════════════════════════════════════════════════════════════════
+--
+--   ALTER TABLE producao_acesso_eventos
+--       DROP COLUMN IF EXISTS entradas_zeradas_em;
+--
+--   Desfazer nao devolve entrada nenhuma: quem apaga as entradas e a rota
+--   `POST /eventos/{id}/zerar-entradas`, e isso e definitivo. Esta coluna so
+--   registra QUANDO aconteceu.
+--
+-- ══════════════════════════════════════════════════════════════════════════════
