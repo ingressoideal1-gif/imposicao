@@ -1,5 +1,5 @@
 /**
- * O Ideal Control da grafica: as 12 rotas de `/api/acesso/interno/*`.
+ * O Ideal Control da grafica: as 15 rotas de `/api/acesso/interno/*`.
  *
  * Porte de `acesso_interno.py`. Enquanto o Render existir, os dois respondem a
  * mesma coisa -- `tests/test_acesso_interno_paridade.py` e quem prova isso.
@@ -41,6 +41,7 @@ import {
   aplicarNovoCodigo,
   aplicarSetor,
 } from "../_compartilhado/configuracao.ts";
+import { contasDoCliente, liberarAcesso, novaSenhaProvisoria } from "../_compartilhado/contas.ts";
 import {
   horaCheia,
   MOTIVOS,
@@ -50,6 +51,7 @@ import {
   situacao,
   tamanhoDaPagina,
   termoSeguro,
+  URL_DE_INSTALACAO,
 } from "./puro.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
@@ -241,6 +243,7 @@ async function painelDoPedido(pedidoIdInt: number): Promise<any> {
 
   return {
     pedido: pedidoIdInt,
+    cliente: await clienteDoPedido(pedidoIdInt),
     modelos,
     publicacao: {
       existe: Boolean(publicacao),
@@ -259,6 +262,30 @@ async function painelDoPedido(pedidoIdInt: number): Promise<any> {
     // leituras. A tela pede em separado, quando o atendente toca em "Ver o
     // painel de publico" -- e ate la a abertura do pedido nao paga por ele.
     tem_dashboard: Boolean(eventoId),
+  };
+}
+
+/**
+ * O cliente do pedido e as contas ligadas a ele. E o que o bloco "Acesso do
+ * cliente" do painel desenha. Sem proposta (pedido de teste sem ERP) devolve
+ * nulo, e o painel esconde o bloco.
+ */
+async function clienteDoPedido(pedidoIdInt: number): Promise<any> {
+  const proposta = ((await banco(
+    "GET",
+    `propostas?id_int=eq.${pedidoIdInt}&select=id_cliente`,
+  )) ?? [])[0];
+  const idCliente = Number(proposta?.id_cliente);
+  if (!idCliente) return null;
+  const c = ((await banco(
+    "GET",
+    `clientes?id_cliente=eq.${idCliente}&select=id_cliente,nome,email,email_contato`,
+  )) ?? [])[0];
+  return {
+    id_cliente: idCliente,
+    nome: c?.nome ?? "",
+    email: String(c?.email || c?.email_contato || "").trim().toLowerCase(),
+    contas: await contasDoCliente(idCliente),
   };
 }
 
@@ -582,6 +609,16 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   }
   if (metodo === "GET" && p.length === 2 && p[0] === "pedidos") {
     return ok(await painelDoPedido(inteiro(p[1], "path", "pedido")));
+  }
+  if (metodo === "GET" && p.length === 1 && p[0] === "instalacao") {
+    return ok({ url: URL_DE_INSTALACAO });
+  }
+  if (metodo === "POST" && p.length === 3 && p[0] === "clientes" && p[2] === "contas") {
+    const c = await corpo();
+    return ok(await liberarAcesso(inteiro(p[1], "path", "cliente"), String(c?.email ?? ""), quem.id));
+  }
+  if (metodo === "POST" && p.length === 3 && p[0] === "contas" && p[2] === "nova-senha") {
+    return ok(await novaSenhaProvisoria(uuid(p[1], "conta")));
   }
   if (metodo === "GET" && p.length === 3 && p[0] === "pedidos" && p[2] === "dashboard") {
     const pedido = inteiro(p[1], "path", "pedido");

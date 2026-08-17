@@ -123,6 +123,14 @@ export function termoSeguro(busca: string): string {
   return String(busca).replace(/[*,&]/g, "").slice(0, 64);
 }
 
+/**
+ * O QR de instalacao aponta para ca. Um so, generico, sem nada dentro: quem o
+ * le instala o aplicativo e entra com a conta que a grafica liberou. E o
+ * dominio publico e nao o da estacao, porque o painel da grafica roda nos
+ * dois e o QR vai para o celular do cliente.
+ */
+export const URL_DE_INSTALACAO = "https://ideal-imposition.vercel.app/ic/";
+
 /** Os motivos que a portaria grava numa recusa, com o nome que o atendente
  * entende. Um dashboard que dissesse "setor_nao_autorizado" obrigaria quem esta
  * lendo a saber o vocabulario do banco. */

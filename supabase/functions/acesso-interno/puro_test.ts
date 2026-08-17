@@ -17,6 +17,7 @@ import {
   situacao,
   tamanhoDaPagina,
   termoSeguro,
+  URL_DE_INSTALACAO,
 } from "./puro.ts";
 
 Deno.test("hora cheia: bate com o Python caso a caso", () => {
@@ -123,4 +124,8 @@ Deno.test("modelo: lixo na lista nao derruba a leitura", () => {
     numeracaoDoModelo([null, "texto", 7, { type: "QR", prefix: "X", pad: "4" }])?.pad,
     4,
   );
+});
+
+Deno.test("a URL de instalacao e a casa do aplicativo, no dominio publico, com barra no fim", () => {
+  assertEquals(URL_DE_INSTALACAO, "https://ideal-imposition.vercel.app/ic/");
 });
