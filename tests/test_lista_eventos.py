@@ -219,3 +219,104 @@ def test_a_pagina_carrega_todo_modulo_que_os_scripts_dela_usam(pagina):
     assert not faltando, (
         pagina + " usa modulo que ela nao carrega: " + ", ".join(faltando)
     )
+
+
+# ── A luz vermelha e o fim da fila (usuario, 17/08/2026) ────────────────────
+
+
+def test_evento_inativo_vai_para_o_FIM_da_lista():
+    """Decisao do usuario em 17/08/2026: "inativados luz vermelha e final da
+    fila".
+
+    Um evento desligado no meio da lista rouba a posicao do que esta
+    acontecendo agora, e quem procura com pressa -- de pe, no portao -- toca no
+    errado."""
+    ordem = [e["id"] for e in unir([], [
+        {"id": "a", "nome_evento": "AAA", "status": "encerrado"},
+        {"id": "z", "nome_evento": "ZZZ", "status": "ativo"},
+    ])]
+    assert ordem == ["z", "a"], "o inativo passou na frente de um evento ativo"
+
+
+def test_o_inativo_vai_para_o_fim_mesmo_sendo_portao_deste_aparelho():
+    """A luz verde nao segura um evento desligado no topo: portao de evento
+    inativo nao le nada, entao a posicao de honra e um convite ao engano."""
+    ordem = [e["id"] for e in unir([P], [
+        {"id": "e-1", "nome_evento": "Click", "status": "encerrado"},
+        {"id": "z", "nome_evento": "ZZZ", "status": "ativo"},
+    ])]
+    assert ordem == ["z", "e-1"]
+
+
+def test_entre_ativos_o_portao_deste_aparelho_continua_em_cima():
+    """A regra de 16/08/2026 nao morreu -- ela so passou a valer DENTRO dos
+    ativos."""
+    ordem = [e["id"] for e in unir([P], [
+        {"id": "a", "nome_evento": "AAA", "status": "ativo"},
+        {"id": "e-1", "nome_evento": "Click", "status": "ativo"},
+    ])]
+    assert ordem == ["e-1", "a"], "o portao deste aparelho perdeu o topo"
+
+
+def test_a_luz_do_evento_inativo_e_vermelha_e_vence_o_verde():
+    js = _ler("frontend/lista-eventos.js")
+    trecho = js[js.index("var luz = document.createElement"):][:600]
+    assert "inativa" in trecho
+    # A ordem importa: se `acesa` fosse testado primeiro, um portao de evento
+    # desligado sairia VERDE.
+    assert trecho.index("inativa") < trecho.index("acesa")
+
+
+def test_a_palavra_inativo_continua_ao_lado_do_nome():
+    """Cor sozinha nao e rotulo. Quem nao distingue vermelho de verde ficaria
+    sem a informacao, e ela e a que decide se vale a pena ir ao portao."""
+    js = _ler("frontend/lista-eventos.js")
+    assert "marca-inativo" in js
+    assert "'inativo'" in js
+
+
+def test_quem_usa_leitor_de_tela_tambem_ouve_que_o_evento_esta_inativo():
+    """O `aria-label` SUBSTITUI o conteudo da barra: sem repetir a palavra
+    aqui, a marca ao lado do nome existe so para quem enxerga."""
+    js = _ler("frontend/lista-eventos.js")
+    trecho = js[js.index("barra.setAttribute('aria-label'"):][:400]
+    assert "inativo" in trecho
+
+
+# ── O menu geral, atras do olho ─────────────────────────────────────────────
+
+
+def test_os_finalizados_sairam_da_tela_inicial_e_foram_para_o_menu():
+    """Decisao do usuario, 17/08/2026. Eles ocupavam o fim da tela inicial e
+    empurravam para baixo a unica coisa que o porteiro precisa achar com
+    pressa: a barra do evento que ele vai ler."""
+    html = _ler("frontend/controle.html")
+    # O `#menu-geral` abre DEPOIS de o `#lista` fechar, entao tudo que estiver
+    # depois dele esta fora da tela inicial. E o que se quer provar.
+    assert html.index('id="lista"') < html.index('id="menu-geral"')
+    assert html.index('id="bloco-finalizados"') > html.index('id="menu-geral"'), (
+        "os eventos finalizados continuam dentro da tela inicial"
+    )
+
+
+def test_a_tela_tem_o_olho_e_o_caminho_de_volta():
+    """Só a existência dos dois controles. O que eles FAZEM é exercitado num
+    navegador de verdade, em `test_controle_tela.py` — ler o fonte para provar
+    comportamento dá um teste que reprova quando a função só muda de forma, e
+    foi o que aconteceu com a versão anterior deste."""
+    html = _ler("frontend/controle.html")
+    assert 'id="btn-menu-geral"' in html
+    assert 'id="btn-voltar-menu"' in html
+    assert 'aria-label="Menu"' in html, "o olho é mudo para leitor de tela"
+
+
+def test_o_menu_vazio_diz_que_esta_vazio_em_vez_de_ficar_em_branco():
+    """Na tela inicial o bloco inteiro sumia, e fazia sentido: titulo sobre o
+    vazio faria o dono procurar o que ele nunca finalizou. Dentro do menu a
+    conta se inverte -- quem tocou no olho PROCURANDO os finalizados encontraria
+    um painel em branco, sem saber se nao ha nenhum ou se a tela quebrou."""
+    html = _ler("frontend/controle.html")
+    assert 'id="sem-finalizados"' in html
+    js = _ler("frontend/lista-eventos.js")
+    trecho = js[js.index("function desenharFinalizados"):][:800]
+    assert "sem-finalizados" in trecho

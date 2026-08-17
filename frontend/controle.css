@@ -442,11 +442,33 @@ button.perigo {
     border: 2px solid var(--dim); background: transparent; flex: none;
 }
 .luz.acesa { background: #16a34a; border-color: #16a34a; }
+/* Evento desligado (usuário, 17/08/2026). Vence o verde: portão de evento
+   inativo não lê nada. */
+.luz.inativa { background: #dc2626; border-color: #dc2626; }
 
+/* A palavra continua ao lado do nome, com luz vermelha e tudo: cor sozinha não
+   é rótulo, e quem não distingue as duas ficaria sem a informação. */
 .marca-inativo {
     font-size: .78rem; font-weight: 600; color: var(--dim);
     border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px;
 }
+
+/* O olho do cabeçalho: os menus da TELA, à direita e encostado na borda.
+   `margin-left: auto` o empurra para lá sem precisar de coluna nova. */
+.botao-olho {
+    margin-left: auto;
+    flex: none;
+    width: 46px; height: 46px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+}
+.botao-olho svg { width: 24px; height: 24px; }
+
+#menu-geral #btn-voltar-menu { width: auto; padding: 10px 18px; }
 
 .botao-engrenagem {
     width: 52px; height: 52px; flex: none; border-radius: 50%;

@@ -67,6 +67,13 @@ def test_a_tela_nunca_explica_como_o_codigo_do_QR_e_gerado():
 # palavra a vista em outro lugar.
 BOTOES_SEM_TEXTO_COM_MOTIVO = {
     "btn-ler-qr-mais": 'a barra "Novo Evento" esta na mesma linha, ao lado',
+    # O olho dos menus gerais, pedido pelo usuario em 17/08/2026. Mora na
+    # coluna da direita do cabecalho, encostado na borda -- exatamente onde a
+    # engrenagem de cada evento mora --, e um rotulo em texto ali comeria a
+    # largura do titulo "Ideal Control". A tela que ele abre se anuncia com
+    # titulo em texto ("Eventos finalizados"), que e onde a regra do projeto
+    # realmente se cumpre: o dono nao precisa adivinhar depois de tocar.
+    "btn-menu-geral": "mora na coluna da direita do cabecalho, ao lado do titulo",
 }
 
 
@@ -2799,3 +2806,69 @@ def test_a_frase_da_fila_presa_nunca_manda_so_esperar():
     )
     # Cada motivo tem de dizer o que FAZER, e os dois verbos sao os dos botoes.
     assert "Enviar agora" in trecho and "descartá-las" in trecho
+
+
+# ── O menu geral, atras do olho do cabecalho ────────────────────────────────
+
+
+def test_o_olho_abre_o_menu_e_tira_a_tela_inicial_INTEIRA_do_caminho():
+    """"Novo Evento" fica FORA do `#lista` de propósito -- o porteiro não tem
+    conta, e a barra precisa aparecer acima do login. Sem escondê-lo junto, ele
+    sobrava em cima dos eventos finalizados, oferecendo ler um QR numa tela que
+    não é a de ler QR."""
+    saida = _no_navegador("""
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 120));
+        const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
+        return {
+            menuAberto: !sumiu('menu-geral'),
+            listaSumiu: sumiu('lista'),
+            novoEventoSumiu: sumiu('bloco-novo-evento'),
+        };
+    """)
+    assert saida["menuAberto"] is True
+    assert saida["listaSumiu"] is True
+    assert saida["novoEventoSumiu"] is True, (
+        'a barra "Novo Evento" sobrou por cima do menu'
+    )
+
+
+def test_o_olho_ALTERNA_e_o_voltar_tambem_traz_a_tela_inicial_de_volta():
+    """Quem entrou pelo ícone tenta sair por ele. O "← Voltar" continua
+    existindo porque é o rótulo em TEXTO, e nem todo mundo percebe que um ícone
+    é um interruptor."""
+    saida = _no_navegador("""
+        const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 80));
+        const peloOlho = { menu: sumiu('menu-geral'), lista: sumiu('lista'),
+                           novo: sumiu('bloco-novo-evento') };
+
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-voltar-menu').click();
+        await new Promise(r => setTimeout(r, 80));
+        const peloVoltar = { menu: sumiu('menu-geral'), lista: sumiu('lista'),
+                             novo: sumiu('bloco-novo-evento') };
+        return { peloOlho, peloVoltar };
+    """)
+    for caminho in ("peloOlho", "peloVoltar"):
+        assert saida[caminho]["menu"] is True, f"{caminho}: o menu ficou aberto"
+        assert saida[caminho]["lista"] is False, f"{caminho}: a lista nao voltou"
+        assert saida[caminho]["novo"] is False, f"{caminho}: o Novo Evento nao voltou"
+
+
+def test_abrir_o_menu_DESLIGA_a_camera_do_QR():
+    """Sair da tela sem desligá-la deixa o aparelho filmando e gastando bateria
+    num painel onde não há o que ler."""
+    saida = _no_navegador("""
+        let desligou = 0;
+        const antes = window.lerQR.fechar;
+        window.lerQR.fechar = function () { desligou++; return antes.apply(this, arguments); };
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 120));
+        return { desligou };
+    """)
+    assert saida["desligou"] == 1

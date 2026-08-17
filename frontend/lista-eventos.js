@@ -69,9 +69,17 @@
         });
 
         var linhas = Object.keys(porId).map(function (k) { return porId[k]; });
-        // Os verdes primeiro: quem esta no portao procura o evento que ESTE
-        // aparelho le, e nao os outros da conta.
+        // A ordem, do que mais serve ao que menos serve a quem esta no portao:
+        //
+        //   1. os ATIVOS em que este aparelho ja e portao   (luz verde)
+        //   2. os outros ativos da conta                    (luz cinza)
+        //   3. os INATIVOS                                  (luz vermelha)
+        //
+        // Inativo no fim e decisao do usuario, 17/08/2026. Um evento desligado
+        // no meio da lista rouba a posicao do que esta acontecendo agora, e
+        // quem procura com pressa toca no errado.
         linhas.sort(function (a, b) {
+            if (a.ativo !== b.ativo) { return a.ativo ? -1 : 1; }
             if (a.ehPortao !== b.ehPortao) { return a.ehPortao ? -1 : 1; }
             return a.nome.localeCompare(b.nome, 'pt-BR');
         });
@@ -172,7 +180,15 @@
         barra.id = 'evento-' + ev.id;
 
         var luz = document.createElement('span');
-        luz.className = 'luz' + (ev.ehPortao ? ' acesa' : '');
+        // Tres estados, e o vermelho VENCE o verde: portao de evento desligado
+        // nao le nada, entao anunciar "este aparelho e portao" ali seria a
+        // informacao certa na hora errada.
+        //
+        //   verde    -- este aparelho ja e portao deste evento
+        //   cinza    -- evento ativo, este aparelho nao e portao dele
+        //   vermelho -- evento inativo (usuario, 17/08/2026)
+        luz.className = 'luz' + (!ev.ativo ? ' inativa'
+                                           : (ev.ehPortao ? ' acesa' : ''));
         // A luz e cor, e cor sozinha nao e rotulo. Quem usa leitor de tela --
         // ou quem nao distingue as duas -- precisa da palavra, e ela esta no
         // `aria-label` da barra inteira, logo abaixo.
@@ -199,10 +215,14 @@
         icone.appendChild(iconeCelularQR());
         barra.appendChild(icone);
 
+        // O `aria-label` SUBSTITUI o conteúdo da barra para quem usa leitor de
+        // tela, então a palavra "inativo" tem de ser repetida aqui — senão ela
+        // existe só para quem enxerga a marca ao lado do nome.
         barra.setAttribute('aria-label',
-            ev.ehPortao
+            (ev.ehPortao
                 ? ('Ler ingressos de ' + ev.nome)
-                : ('Usar este aparelho no portão de ' + ev.nome));
+                : ('Usar este aparelho no portão de ' + ev.nome))
+            + (ev.ativo ? '' : ' — evento inativo'));
         barra.addEventListener('click', function () {
             window.virarPortao.abrir(ev.id, ev.nome);
         });
@@ -237,6 +257,18 @@
      *  com nome e contagem -- uma data inventada seria pior que nenhuma. */
     function dataCurta(iso) {
         if (!iso) { return ''; }
+
+        // DATA SEM HORA vira texto direto, sem passar pelo `new Date`.
+        // "2026-07-12" e lido pelo JavaScript como meia-noite em UTC, e no
+        // Brasil isso volta como 11/07 -- um dia a menos, em silencio. A coluna
+        // e TIMESTAMPTZ e normalmente traz hora, entao o caminho de baixo esta
+        // certo; mas quem escreve nela e o sistema do parceiro, e um dia a menos
+        // na data do evento e o tipo de erro que ninguem confere.
+        var so_data = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso).trim());
+        if (so_data) {
+            return so_data[3] + '/' + so_data[2] + '/' + so_data[1];
+        }
+
         var d = new Date(iso);
         if (isNaN(d.getTime())) { return ''; }
         return d.toLocaleDateString('pt-BR');
@@ -277,7 +309,10 @@
         var data = dataCurta(ev.data);
         if (data) { partes.push(data); }
         partes.push(quantosEntraram(ev.entradas));
-        detalhe.textContent = ' · ' + partes.join(' · ');
+        // SEM separador na frente. Ele existia de quando o nome e o detalhe
+        // ficavam na mesma linha; hoje o detalhe tem linha propria, e o "·"
+        // solto no comeco fica pendurado sem nada a separar.
+        detalhe.textContent = partes.join(' · ');
         dados.appendChild(detalhe);
         linha.appendChild(dados);
 
@@ -322,18 +357,25 @@
     }
 
     /**
-     * Desenha a lista dos finalizados — e some inteira quando nao ha nenhum.
+     * Desenha a lista dos finalizados, dentro do menu geral.
      *
-     * O titulo "Eventos finalizados" sobre o vazio faria o dono procurar o que
-     * ele nunca finalizou.
+     * Sem nenhum, a lista some e entra uma FRASE no lugar. Antes de 17/08/2026
+     * o bloco inteiro sumia, titulo junto -- fazia sentido na tela inicial, onde
+     * um titulo sobre o vazio faria o dono procurar o que ele nunca finalizou.
+     * Aqui dentro do menu a conta se inverte: quem tocou no olho procurando os
+     * finalizados encontraria um painel em branco, sem uma palavra dizendo se
+     * nao ha nenhum ou se a tela quebrou.
      */
     function desenharFinalizados(linhas) {
         var caixa = $('finalizados');
         if (!caixa) { return; }
         caixa.innerHTML = '';
         linhas.forEach(function (ev) { caixa.appendChild(linhaFinalizada(ev)); });
+        var vazio = linhas.length === 0;
         var bloco = $('bloco-finalizados');
-        if (bloco) { bloco.classList.toggle('sumindo', linhas.length === 0); }
+        if (bloco) { bloco.classList.toggle('sumindo', vazio); }
+        var frase = $('sem-finalizados');
+        if (frase) { frase.classList.toggle('sumindo', !vazio); }
     }
 
     /**
