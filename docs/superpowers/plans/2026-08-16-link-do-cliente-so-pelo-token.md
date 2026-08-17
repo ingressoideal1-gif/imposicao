@@ -1,7 +1,8 @@
 # O link do cliente passa a valer só pelo token
 
 **Data:** 16/08/2026
-**Estado:** Tarefas 1 e 2 feitas. Tarefas 3 e 4 escritas, não iniciadas.
+**Estado:** Tarefas 1 e 2 feitas. Tarefa 4 escrita e **esperando a publicação**.
+Tarefa 3 adiada por decisão, com o motivo abaixo.
 
 ---
 
@@ -96,6 +97,24 @@ AUTO-STATUS, que só roda no contexto interno (`isInternal`) e ali é cópia mor
 porque a página do cliente sempre define o container dela. Ele pertence à Tarefa
 3. O `tests/test_link_do_cliente_pelo_token.py` prende o número em **um**: uma
 escrita direta nova derruba o teste antes de a Tarefa 4 fechar a porta.
+
+### A decisão de 16/08/2026: a Tarefa 4 passa na frente da 3
+
+A Tarefa 3 existia porque eu não sabia se a estação dependia desta tabela — e se
+dependesse, fechar para `anon` derrubaria a Fila de Arte lá. Perguntado, o
+usuário respondeu: **"estação da gráfica só tem acesso local e login não vê a
+fila de arte"**.
+
+Ou seja: a estação é `anon` para o banco (entra pelo código local, sem sessão),
+mas **não consome esta tabela**. Conferido no código também — nenhum arquivo
+Python a toca, e a única leitura do painel (`carregarLinksExistentes`) já engole
+o erro num try/catch próprio, então um 401 lá vira uma linha de console.
+
+Com isso a Tarefa 4 pode ser feita **agora**, logo depois da publicação, e a
+Tarefa 3 vira melhoria de fundo em vez de pré-requisito. O que se perde ao adiá-la
+está escrito no arquivo da Tarefa 4 e vale repetir: `authenticated` inclui todo
+cliente do ERP parceiro, porque a conta é a mesma. Fechar para `anon` tira o
+vazamento da internet aberta; só a Tarefa 3 tira dele quem tem conta.
 
 ### Tarefa 3 — O painel para de escrever direto na tabela
 
