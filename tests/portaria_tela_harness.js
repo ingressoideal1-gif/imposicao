@@ -233,7 +233,13 @@ async function rodar(caso) {
     // sobreviveu.
     function contarFilaCrua() {
         return page.evaluate(() => new Promise((ok) => {
-            const r = indexedDB.open('ideal-portaria', 1);
+            // SEM numero de versao, de proposito. Fixado em `1`, este `open`
+            // passou a dar `VersionError` no dia em que o deposito subiu para a
+            // versao 2 (a loja `totais`, de 16/08/2026) -- e o `onerror`
+            // devolvia -1, que o teste lia como "a fila sumiu". A fila estava
+            // la; quem estava errado era o arnes. Sem o numero, ele abre a
+            // versao que existir e fica imune ao proximo aumento tambem.
+            const r = indexedDB.open('ideal-portaria');
             r.onsuccess = () => {
                 const c = r.result.transaction('fila', 'readonly')
                     .objectStore('fila').count();

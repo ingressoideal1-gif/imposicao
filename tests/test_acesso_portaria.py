@@ -521,3 +521,102 @@ def test_a_carga_traz_o_bloqueio_de_setor():
     texto = _ler("supabase/functions/portaria/index.ts")
     assert "bloqueado" in texto
     assert "bloqueado_motivo" in texto
+
+
+# ── A porta dupla, e a rota leve de cinco em cinco minutos ──────────────────
+#
+# Cinco minutos e tempo de a mesma pessoa entrar por dois portoes. Fechar isso
+# exige duas rotas novas, e as duas moram na Edge Function -- que este pytest
+# nao executa. Por isso os testes abaixo leem o fonte, como os dois acima.
+
+
+def test_existe_a_rota_que_decide_a_corrida():
+    texto = _ler("supabase/functions/portaria/index.ts")
+    assert '"entrada"' in texto
+    assert "producao_acesso_entradas_unicas" in texto
+
+
+def test_a_corrida_e_decidida_pelo_BANCO_e_nao_por_duas_consultas():
+    """Perguntar "ja existe?" e so entao gravar deixa dois portoes entrarem
+    quando as duas leituras caem no mesmo instante."""
+    texto = _ler("supabase/functions/portaria/index.ts")
+    assert "ignore-duplicates" in texto or "on_conflict" in texto
+
+
+def test_reentrada_nao_entra_na_corrida():
+    """Setor que permite sair e voltar nao tem "primeira entrada"."""
+    texto = _ler("supabase/functions/portaria/index.ts")
+    assert "reentrada" in texto
+
+
+def test_a_entrada_nunca_confia_no_dispositivo_id_que_o_corpo_mandar():
+    """Mesma regra do `/leituras`, e aqui ela pesa mais: e o `dispositivo_id`
+    da linha que decide QUEM ganhou a corrida. Aceitar o id do corpo deixaria
+    um aparelho reivindicar a entrada no nome de outro portao."""
+    texto = _ler("supabase/functions/portaria/index.ts")
+    inicio = texto.index("async function entrada(")
+    trecho = texto[inicio:texto.index("async function sincronizar(")]
+    assert "dispositivo_id: aparelho.id" in trecho
+    assert "corpo.dispositivo_id" not in trecho
+
+
+def test_a_leitura_sobe_mesmo_quando_o_aparelho_PERDE_a_corrida():
+    """E contagem que o cliente pagou para ter: o relatorio precisa mostrar que
+    aquele ingresso foi apresentado numa segunda porta, e nao um silencio. O que
+    muda ao perder e o `resultado`/`motivo` gravado, nao a existencia da linha."""
+    texto = _ler("supabase/functions/portaria/index.ts")
+    inicio = texto.index("async function entrada(")
+    trecho = texto[inicio:texto.index("async function sincronizar(")]
+    assert "producao_acesso_leituras" in trecho
+    assert 'motivo = "ja_entrou"' in trecho
+
+
+def _corpo_da_funcao(nome):
+    """O corpo de UMA funcao do `index.ts`, do cabecalho ate a proxima.
+
+    Antes, os dois testes abaixo cortavam 3000 caracteres a partir da primeira
+    ocorrencia da PALAVRA `sincronizar` no arquivo -- inclusive num comentario
+    la em cima. Quem escrevesse essa palavra num comentario deslocaria a janela
+    para um trecho que nao e a funcao, e o teste passaria a medir outra coisa
+    sem reclamar. Um teste que se desarma sozinho e pior que teste nenhum.
+    """
+    texto = _ler("supabase/functions/portaria/index.ts")
+    inicio = texto.index("async function " + nome)
+    resto = texto[inicio + 1:]
+    # A proxima funcao de topo, ou o `Deno.serve` que fecha o arquivo.
+    fins = [p for p in (resto.find("\nasync function "), resto.find("\nfunction "),
+                        resto.find("\nDeno.serve")) if p != -1]
+    return resto[:min(fins)] if fins else resto
+
+
+def test_a_rota_leve_NAO_desce_credenciais():
+    """E a razao de ela existir: em 4G de portao, a lista de ingressos e a
+    diferenca entre alguns kB e varias paginas, a cada cinco minutos."""
+    assert "producao_acesso_credenciais" not in _corpo_da_funcao("sincronizar")
+
+
+def test_a_rota_leve_traz_as_entradas_de_todos_os_aparelhos():
+    trecho = _corpo_da_funcao("sincronizar")
+    assert "entradas" in trecho and "totais" in trecho
+
+
+def test_a_rota_leve_pagina_as_entradas():
+    """O PostgREST corta toda resposta em 1000 linhas, e esse teto vence o
+    `limit` pedido. No primeiro sincronismo depois de um boot, no meio de um
+    evento grande, ha muito mais de mil entradas: sem paginar, as que sobraram
+    nunca chegariam ao portao -- que voltaria a deixar entrar quem ja entrou.
+
+    E o mesmo teto que ja mordeu o `/faixa` em producao, na quarta porta."""
+    texto = _ler("supabase/functions/portaria/index.ts")
+    assert "ENTRADAS_POR_VEZ" in texto
+    assert "proxima_desde" in texto
+
+
+def test_o_desde_da_rota_leve_e_opcional():
+    """Sem ele a rota devolve as entradas todas -- e o primeiro sincronismo
+    depois de um boot, quando o aparelho nao tem de onde partir."""
+    texto = _ler("supabase/functions/portaria/index.ts")
+    inicio = texto.index("async function sincronizar(")
+    trecho = texto[inicio:]
+    assert "desdeBruto: string | null" in trecho
+    assert "? `&momento=gte." in trecho or 'filtro = desde' in trecho

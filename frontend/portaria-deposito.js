@@ -11,13 +11,22 @@
  *   entradas -- quem ja entrou, por credencial. Separada da fila DE PROPOSITO:
  *               a fila esvazia quando a rede volta, e a regra `ja_entrou` tem de
  *               continuar valendo depois disso. A pessoa entrou as 21h, a fila
- *               subiu as 21h05, e as 22h ela tenta de novo.
+ *               subiu as 21h05, e as 22h ela tenta de novo. Guarda tambem o que
+ *               os OUTROS portoes leram, que chega pelo sincronismo.
+ *   totais   -- quantos ja entraram em cada setor, o numero do contador. Vem do
+ *               servidor, que e quem enxerga todos os portoes. Fica gravado
+ *               porque o contador nao pode nascer zerado no meio do evento: o
+ *               porteiro nao tem como desconfiar de um numero errado na tela.
  */
 (function () {
     'use strict';
 
     var NOME = 'ideal-portaria';
-    var VERSAO = 1;
+    // Subiu de 1 para 2 quando a loja `totais` entrou. Loja nova SO nasce dentro
+    // de um `onupgradeneeded`, e ele so roda se a versao pedida for maior que a
+    // gravada -- sem subir o numero, o celular que ja tem o banco antigo abriria
+    // sem `totais` e quebraria no portao, e nao aqui.
+    var VERSAO = 2;
     var bd = null;
 
     function abrir() {
@@ -25,12 +34,19 @@
         return new Promise(function (ok, erro) {
             var req = indexedDB.open(NOME, VERSAO);
             req.onupgradeneeded = function () {
+                // Cada loja e criada SO se faltar, e nenhuma e apagada ou
+                // recriada. E o que faz a migracao do banco antigo preservar a
+                // fila: leitura que ainda nao subiu e contagem que o cliente
+                // pagou para ter, e um `createObjectStore` por cima (ou um
+                // `deleteObjectStore` "para comecar limpo") a jogaria fora sem
+                // ninguem perceber -- so no meio do evento, no portao.
                 var b = req.result;
                 if (!b.objectStoreNames.contains('carga')) b.createObjectStore('carga');
                 if (!b.objectStoreNames.contains('fila')) {
                     b.createObjectStore('fila', { keyPath: 'id_local' });
                 }
                 if (!b.objectStoreNames.contains('entradas')) b.createObjectStore('entradas');
+                if (!b.objectStoreNames.contains('totais')) b.createObjectStore('totais');
             };
             req.onsuccess = function () { bd = req.result; ok(bd); };
             req.onerror = function () { erro(req.error); };
@@ -140,6 +156,57 @@
         });
     }
 
+    function gravarEntradas(mapa) {
+        // As entradas que o sincronismo trouxe -- inclusive as dos OUTROS
+        // portoes. JUNTA, nunca substitui: a fila deste aparelho pode ter
+        // leituras que ainda nao subiram, e o servidor nao sabe delas. Trocar o
+        // mapa inteiro pelo dele apagaria justamente essas, e a mesma credencial
+        // passaria de novo por aqui como se nunca tivesse entrado.
+        return comLoja('entradas', 'readwrite', function (loja) {
+            Object.keys(mapa || {}).forEach(function (credencial) {
+                var deFora = mapa[credencial];
+                if (!deFora) return;
+                var atual = loja.get(credencial);
+                atual.onsuccess = function () {
+                    // Empate de credencial: vence o momento MAIS ANTIGO. Quem
+                    // entrou primeiro entrou primeiro, e e esse horario que a
+                    // faixa vermelha mostra quando o porteiro pergunta "ja
+                    // entrou quando?". Relogio de servidor nao reescreve o que
+                    // este aparelho registrou antes, nem o contrario.
+                    var aqui = atual.result;
+                    if (aqui === undefined ||
+                        String(deFora).localeCompare(String(aqui)) < 0) {
+                        loja.put(deFora, credencial);
+                    }
+                };
+            });
+        });
+    }
+
+    function gravarTotais(mapa) {
+        // Quantos ja entraram em cada setor, somando todos os portoes -- so o
+        // servidor enxerga isso. JUNTA por setor: o sincronismo manda o que
+        // mudou, e zerar na tela o setor que ficou parado seria inventar uma
+        // queda de publico que nao houve.
+        return comLoja('totais', 'readwrite', function (loja) {
+            Object.keys(mapa || {}).forEach(function (setor) {
+                loja.put(mapa[setor], setor);
+            });
+        });
+    }
+
+    function lerTotais() {
+        return comLoja('totais', 'readonly', function (loja, devolver) {
+            var chaves = loja.getAllKeys();
+            var valores = loja.getAll();
+            valores.onsuccess = function () {
+                var mapa = {};
+                (chaves.result || []).forEach(function (k, i) { mapa[k] = valores.result[i]; });
+                devolver(mapa);
+            };
+        });
+    }
+
     function esquecerFila() {
         // Existe para UM caso, e nao deve ser usada fora dele: o aparelho
         // trocou de EVENTO. A fila e gravada no servidor com o evento do token
@@ -155,7 +222,9 @@
     }
 
     function limpar() {
-        return Promise.all(['carga', 'fila', 'entradas'].map(function (nome) {
+        // Despareou: nada do evento anterior pode ficar. Os totais entram aqui
+        // porque contador de um cliente na tela do outro e numero errado.
+        return Promise.all(['carga', 'fila', 'entradas', 'totais'].map(function (nome) {
             return comLoja(nome, 'readwrite', function (loja) { loja.clear(); });
         })).then(function () { });
     }
@@ -164,7 +233,8 @@
         gravarCarga: gravarCarga, lerCarga: lerCarga,
         enfileirar: enfileirar, lerFila: lerFila,
         removerDaFila: removerDaFila, contarFila: contarFila,
-        entradasPermitidas: entradasPermitidas,
+        entradasPermitidas: entradasPermitidas, gravarEntradas: gravarEntradas,
+        gravarTotais: gravarTotais, lerTotais: lerTotais,
         esquecerFila: esquecerFila, limpar: limpar,
     };
 })();
