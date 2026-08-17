@@ -278,6 +278,18 @@ body.somente-leitura .so-com-senha { opacity: .55; }
 .pareamento a { display: block; word-break: break-all; font-size: 0.82rem; margin: 6px 0 10px; }
 .pareamento canvas { background: #fff; border-radius: 8px; padding: 8px; }
 
+/* A faixa de atualização. Discreta de propósito: ela não pode competir com o
+   "Novo Evento" nem com as barras dos eventos, que é o que o dono veio fazer.
+   Mesma aparência da faixa da portaria, para as duas telas do aplicativo
+   dizerem a mesma coisa do mesmo jeito. */
+#faixa-atualizacao {
+    margin: 0 0 12px; padding: 10px; min-height: 0;
+    font-size: .85rem; font-weight: 600; width: 100%;
+    background: rgba(20,184,166,.14); color: #14b8a6;
+    border: 1px solid rgba(20,184,166,.4); border-radius: 8px;
+    font-family: inherit; cursor: pointer;
+}
+
 /* ── A tela inicial ──────────────────────────────────────────────────────── */
 
 .cabecalho { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }

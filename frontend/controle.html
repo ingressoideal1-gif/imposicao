@@ -31,6 +31,20 @@
         </div>
     </header>
 
+    <!-- A faixa de atualização, que só aparece quando existe versão nova
+         instalada esperando a vez.
+
+         Ela FALTAVA aqui, e a falta custou caro: o `sw-registro.js` trata a
+         faixa como opcional, o `portaria.html` a declarava e esta página não.
+         Instalado na tela de início, o aplicativo não tem barra de endereço —
+         então não havia gesto nenhum que dissesse ao dono que chegou versão
+         nova. Ele ficava na do dia da instalação, e cada conserto publicado
+         parecia não ter funcionado. Foi exatamente isso que aconteceu em
+         16/08/2026, com o conserto da senha da configuração. -->
+    <button id="faixa-atualizacao" class="sumindo" type="button">
+        Atualização disponível — toque para aplicar
+    </button>
+
     <!-- Fora de qualquer bloco de estado, de propósito: se o arranque falhar
          antes de decidir qual bloco mostrar (sem conta verificada, sem
          evento carregado), esta é a única coisa que aparece na tela. -->

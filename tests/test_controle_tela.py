@@ -2141,3 +2141,48 @@ def test_o_toque_na_barra_do_evento_nao_falha_calado():
     assert ".catch(" in trecho[:600], (
         "o toque na barra não trata a falha da senha"
     )
+
+
+# ── A casa precisa dizer que chegou versão nova ─────────────────────────────
+#
+# Nasceu de um relato do usuário em 16/08/2026: depois de eu publicar o
+# conserto da senha, ele continuou vendo o defeito consertado. O código no ar
+# estava certo — provado dirigindo a produção num Chrome limpo. O aparelho DELE
+# é que seguia numa versão anterior.
+#
+# A causa é uma assimetria que passou despercebida: o `sw-registro.js` só avisa
+# de atualização se a página declarar `id="faixa-atualizacao"`, e ele documenta
+# isso como opcional. O `portaria.html` declarava. O `controle.html` — a CASA do
+# aplicativo, a primeira tela de todo mundo — não.
+#
+# Instalado na tela de início, o aplicativo não tem barra de endereço: sem esse
+# aviso, não existe gesto nenhum que o usuário possa fazer para saber que há
+# versão nova. Ele fica na do dia da instalação, e cada conserto publicado
+# parece não ter funcionado.
+
+
+def test_a_casa_avisa_quando_chega_versao_nova():
+    """Sem a faixa, o aplicativo instalado nunca conta que se atualizou."""
+    assert 'id="faixa-atualizacao"' in _ler("frontend/controle.html")
+
+
+def test_a_casa_se_recarrega_quando_o_service_worker_novo_assume():
+    """A casa pode fazer o que a portaria NÃO pode.
+
+    Na portaria, recarregar sozinho é proibido: a câmera pode estar aberta e a
+    fila andando, então lá a faixa avisa e a hora é do porteiro. Aqui não há
+    leitura em curso nem fila — o pior que a recarga interrompe é uma senha
+    sendo digitada, e por isso ela espera a caixa de senha estar fechada.
+    """
+    js = _ler("frontend/controle.js") + _ler("frontend/lista-eventos.js")
+    assert "controllerchange" in js, (
+        "a casa não percebe quando o service worker novo assume"
+    )
+
+
+def test_a_recarga_automatica_NAO_atropela_quem_esta_digitando_a_senha():
+    js = _ler("frontend/controle.js") + _ler("frontend/lista-eventos.js")
+    trecho = js[js.index("controllerchange"):][:900]
+    assert "caixa-entrar-config" in trecho, (
+        "a recarga automática não confere se há senha sendo digitada"
+    )

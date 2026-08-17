@@ -1455,7 +1455,44 @@
 
     function acesso_minutos() { return 15; }
 
+    /**
+     * A casa se recarrega quando o service worker novo assume.
+     *
+     * Aqui isso pode; na portaria, não. Lá a câmera pode estar aberta e a fila
+     * andando, então a faixa avisa e a hora é do porteiro. Aqui não há leitura
+     * em curso nem fila — o pior que a recarga interromperia é uma senha sendo
+     * digitada, e por isso ela espera a `caixa-entrar-config` estar fechada.
+     *
+     * Sem isto, o aplicativo INSTALADO pode ficar na versão do dia da
+     * instalação para sempre: ele não tem barra de endereço, e quem só o traz
+     * de volta do multitarefa nunca navega de novo. Foi o que aconteceu em
+     * 16/08/2026 — o conserto da senha estava publicado e o dono continuava
+     * vendo o defeito, porque o celular dele nunca soube.
+     */
+    function recarregarQuandoTrocarDeVersao() {
+        if (!('serviceWorker' in navigator)) { return; }
+        var jaRecarregou = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+            // O `controllerchange` pode disparar mais de uma vez; recarregar
+            // duas vezes seguidas viraria um laço na cara do dono.
+            if (jaRecarregou) { return; }
+            var caixa = $('caixa-entrar-config');
+            if (caixa && !caixa.classList.contains('sumindo')) {
+                // Digitando a senha: a faixa de atualização continua na tela e
+                // ele aplica quando quiser. Atropelar aqui apagaria o que ele
+                // acabou de escrever.
+                return;
+            }
+            jaRecarregou = true;
+            location.reload();
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        // Fora do `if` abaixo, de propósito: a atualização precisa chegar mesmo
+        // nas páginas que não têm a engrenagem.
+        recarregarQuandoTrocarDeVersao();
+
         // A engrenagem pode não estar nesta página (o arquivo é carregado só
         // pelo `controle.html`, mas o teste de outra tela o serve junto).
         if (!$('engrenagem')) { return; }
