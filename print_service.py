@@ -506,6 +506,67 @@ def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title, cor_cfg=Non
                 pass
 
 
+PONTOS_POR_POLEGADA = 72.0
+
+
+def retangulo_da_folha(largura_pt, altura_pt, dpi_x, dpi_y,
+                       area_w, area_h, papel_w=0, papel_h=0,
+                       offset_x=0, offset_y=0):
+    """Onde a folha imposta e desenhada no papel, em pixels do dispositivo.
+
+    ESCALA 100%, SEMPRE. O tamanho sai do PDF e do DPI da impressora, e de
+    mais nada -- a area imprimivel nao entra na conta do TAMANHO, so na de
+    saber se a folha coube.
+
+    Ate 17/08/2026 este calculo era um "ajustar para caber": a pagina era
+    esticada sobre `HORZRES` x `VERTRES`, que e a AREA IMPRIMIVEL do driver.
+    Toda impressora tem margem morta, entao a area e sempre menor que o papel
+    -- e a folha saia encolhida pela razao da margem, tipicamente de 3% a 6%,
+    mesmo com o papel certo escolhido.
+
+    Numa grafica isso nao e detalhe de acabamento. A imposicao carrega marca de
+    corte, sangria e registro, e a guilhotina corta pela medida nominal: uma
+    folha 4% menor faz o corte pegar arte, e a tiragem inteira vira refugo.
+    Vale aqui a mesma regra que ja governa os elementos de numeracao -- tamanho
+    original, escala 100%, sem distorcao.
+
+    O deslocamento tambem importa. A origem do GDI e o canto da AREA
+    imprimivel, e nao o do papel; centralizar sem descontar `PHYSICALOFFSET`
+    joga a folha para um lado e a tira de esquadro com a borda pela qual ela
+    vai ser cortada.
+
+    @returns (dx, dy, largura_px, altura_px, coube)
+
+    `coube` compara com o PAPEL, e nao com a area imprimivel. A diferenca nao e
+    detalhe: uma folha imposta tem o tamanho da folha de papel, e area
+    imprimivel nenhuma chega na borda -- entao contra a area NADA cabe, e o
+    aviso dispararia em todo trabalho. Aviso que sempre aparece ninguem le.
+    Perder a margem morta e o normal da grafica, que imprime em papel maior e
+    refila depois; passar do PAPEL e que e erro de escolha de bandeja.
+
+    Ainda assim a folha e desenhada em 100% nos dois casos. Encolher resolveria
+    a tela e estragaria a tiragem em silencio; o corte, o operador ve.
+    """
+    largura_px = int(round(largura_pt / PONTOS_POR_POLEGADA * dpi_x))
+    altura_px = int(round(altura_pt / PONTOS_POR_POLEGADA * dpi_y))
+
+    if papel_w > 0 and papel_h > 0:
+        # Centralizada no PAPEL, descontando de onde a area imprimivel comeca.
+        dx = (papel_w - largura_px) // 2 - offset_x
+        dy = (papel_h - altura_px) // 2 - offset_y
+    else:
+        # Driver antigo nao informa o papel fisico. Centraliza no que se sabe --
+        # ainda em 100%, que e o que nao pode mudar.
+        dx = (area_w - largura_px) // 2
+        dy = (area_h - altura_px) // 2
+
+    if papel_w > 0 and papel_h > 0:
+        coube = largura_px <= papel_w and altura_px <= papel_h
+    else:
+        coube = largura_px <= area_w and altura_px <= area_h
+    return dx, dy, largura_px, altura_px, coube
+
+
 def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
     """
     Fallback: Envia PDF via GDI/PIL rasterizando para imagem.
@@ -537,6 +598,15 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
                 dpi_x   = dc.GetDeviceCaps(win32con.LOGPIXELSX)
                 dpi_y   = dc.GetDeviceCaps(win32con.LOGPIXELSY)
                 render_dpi = max(dpi_x, dpi_y, 300)
+                # O PAPEL inteiro e de onde a area imprimivel comeca dentro
+                # dele. Sao estes quatro numeros que permitem desenhar em 100%
+                # no lugar certo em vez de esticar sobre a area. Driver que nao
+                # os informa devolve 0, e o `retangulo_da_folha` trata.
+                papel_w = dc.GetDeviceCaps(win32con.PHYSICALWIDTH)
+                papel_h = dc.GetDeviceCaps(win32con.PHYSICALHEIGHT)
+                off_x   = dc.GetDeviceCaps(win32con.PHYSICALOFFSETX)
+                off_y   = dc.GetDeviceCaps(win32con.PHYSICALOFFSETY)
+                nao_coube = []
 
                 # Transformacao de cor criada UMA vez por trabalho e usada em
                 # todas as folhas; falha vira aviso e o job segue sem cor
@@ -576,23 +646,21 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
                         if img.mode != "RGB":
                             img = img.convert("RGB")
                         img = _cms.applyTransform(img, transform_cor)
-                    img_w, img_h = img.size
-
-                    ratio_img   = img_w / img_h
-                    ratio_print = print_w / print_h
-                    if ratio_img > ratio_print:
-                        draw_w = print_w
-                        draw_h = int(print_w / ratio_img)
-                        dx, dy = 0, (print_h - draw_h) // 2
-                    else:
-                        draw_h = print_h
-                        draw_w = int(print_h * ratio_img)
-                        dx, dy = (print_w - draw_w) // 2, 0
+                    # ESCALA 100%: o tamanho vem do PDF e do DPI, e nao da area
+                    # imprimivel. Ver `retangulo_da_folha` para por que
+                    # "ajustar para caber" arruinava a tiragem.
+                    dx, dy, draw_w, draw_h, coube = retangulo_da_folha(
+                        page.rect.width, page.rect.height, dpi_x, dpi_y,
+                        print_w, print_h, papel_w, papel_h, off_x, off_y)
+                    if not coube:
+                        nao_coube.append(page_num + 1)
 
                     dib = ImageWin.Dib(img)
                     dib.draw(hdc, (dx, dy, dx + draw_w, dy + draw_h))
                     dc.EndPage()
-                    print(f"[print][GDI] pagina {page_num + 1}/{total_pages} enviada")
+                    print(f"[print][GDI] pagina {page_num + 1}/{total_pages} "
+                          f"enviada em 100% ({draw_w}x{draw_h} px @ {dpi_x}x{dpi_y} dpi)"
+                          + ("" if coube else "  ATENCAO: maior que a area imprimivel"))
 
                 dc.EndDoc()
                 doc.close()
@@ -602,7 +670,18 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
         finally:
             win32print.ClosePrinter(hPrinter)
 
-        return True, f"PDF enviado via GDI (raster) para '{printer_name}'.{_rotulo_cor(cor_cfg)}"
+        # O aviso SOBE para a tela, e nao fica so no log. A folha saiu em 100% e
+        # a impressora cortou o que passou da area imprimivel: o operador precisa
+        # saber ANTES de mandar a tiragem toda, e o log do agente ele nao le.
+        recado = ""
+        if nao_coube:
+            quais = ", ".join(str(n) for n in nao_coube[:8])
+            recado = (f" ATENCAO: a folha e maior que a area imprimivel desta "
+                      f"impressora (pagina(s) {quais}) e saiu CORTADA. Ela foi "
+                      f"impressa em tamanho real, sem reducao — confira o papel "
+                      f"e a bandeja escolhidos.")
+        return True, (f"PDF enviado via GDI (raster) para '{printer_name}'."
+                      f"{_rotulo_cor(cor_cfg)}{recado}")
     except Exception as e:
         import traceback
         err = f"Erro na impressao GDI: {e}\n{traceback.format_exc()}"
@@ -613,7 +692,20 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
 def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao.pdf"):
     """
     Pipeline de impressão com suporte a múltiplas estratégias.
-    Padrão: PDF RAW direto (preserva fontes embutidas, sem conversão).
+
+    O PADRÃO é "gdi", e não "pdf_raw" — a linha abaixo é a autoridade, e este
+    texto já disse o contrário por um tempo. O GDI virou padrão de propósito
+    (commit 1ee3c06): impressora desktop sem interpretador PostScript, como a
+    Epson L3210 da gráfica, cospe o código PS em texto quando recebe RAW.
+
+    Vale saber que o Painel de Produção NÃO manda `print_mode` nenhum — ele
+    envia só papel, bandeja, duplex, cor, cópias e orientação. Ou seja: toda
+    impressão do painel passa pelo GDI, e é por isso que o "ajustar para caber"
+    que morava lá dentro afetava a gráfica inteira.
+
+    Cuidado com o nome: este `print_mode` é o DRIVER, e não tem relação com o
+    `print_mode` de "front"/"duplex" que o `engine.py` e o `db.py` usam para
+    frente e verso. São dois campos homônimos com significados diferentes.
 
     O usuário pode selecionar o modo via options["print_mode"]:
       - "pdf_raw" (padrão) → envia PDF direto ao spooler (requer impressora com interpretador PDF)
