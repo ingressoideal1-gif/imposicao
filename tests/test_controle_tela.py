@@ -263,9 +263,13 @@ def _no_navegador(script_extra, aceitar_dialogo=False):
     pior modo de falhar num teste. Por isso o driver intercepta cada pedido e
     responde com o arquivo lido de `frontend/`.
 
-    `aceitar_dialogo=True` faz o `window.confirm`/`window.prompt` responder OK
-    em vez de Cancelar -- é o único jeito de exercitar o caminho em que o dono
-    ACEITA a confirmação de "Revogar", e não só o caminho em que recusa.
+    `aceitar_dialogo=True` faz um `window.confirm`/`window.prompt` responder OK
+    em vez de Cancelar. Desde 17/08/2026 NENHUM teste desta tela precisa disso:
+    as caixas nativas saíram porque não respondem no aplicativo instalado, e as
+    perguntas agora são DOM — o teste toca em `#btn-confirmar-sim` como o dono
+    tocaria. O parâmetro fica como rede: uma página de terceiro (o SDK do
+    Supabase, um `beforeunload`) ainda pode abrir diálogo, e sem tratar o evento
+    o CDP prende a página esperando alguém decidir.
     """
     driver = f"""
 const fs = require('fs');
@@ -733,10 +737,14 @@ def test_cancelar_o_pedido_de_senha_avisa_e_nao_perde_o_que_foi_digitado():
     nem que ficar sem rede -- os outros dois ja tem frase propria, essa era a
     que faltava. Sem aviso, o dono guarda o celular achando que gravou.
 
-    Nao substitui `_pedirSenhaParaTeste`: o driver descarta o `window.prompt`
-    de verdade (equivale a tocar em "Cancelar"), para exercitar o caminho
-    real de `abrirCaixaDeSenha()`, e nao uma simulacao dele.
-    """
+    Nao substitui `_pedirSenhaParaTeste`: o teste toca no "Cancelar" da caixa
+    DE VERDADE, para exercitar o caminho real de `abrirCaixaDeSenha()` e nao
+    uma simulacao dele.
+
+    Ate 17/08/2026 quem cancelava era o driver, descartando um `window.prompt`.
+    A caixa nativa saiu porque no aplicativo instalado ela nao responde -- e a
+    elevacao vence no meio de uma gravacao justamente quando o dono esta no
+    portao, que e onde ele usa o aplicativo instalado."""
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -750,16 +758,26 @@ def test_cancelar_o_pedido_de_senha_avisa_e_nao_perde_o_que_foi_digitado():
             throw e;
         };
 
+        // A gravacao NAO e esperada aqui: ela fica pendurada na caixa de senha
+        // ate alguem responder. Esperar por ela antes de tocar em "Cancelar"
+        // seria esperar para sempre.
         let erro = null;
-        try {
-            await Controle.gravar('/eventos/ev-1', { nome_evento: 'x' }, 'PATCH');
-        } catch (e) { erro = e.message; }
+        const gravando = Controle.gravar('/eventos/ev-1', { nome_evento: 'x' }, 'PATCH')
+            .catch((e) => { erro = e.message; });
+
+        await new Promise(r => setTimeout(r, 120));
+        const pediu = !document.getElementById('caixa-entrar-config')
+                            .classList.contains('sumindo');
+        document.getElementById('btn-cancelar-entrar-config').click();
+        await gravando;
+
         return {
-            erro,
+            erro, pediu,
             aviso: document.getElementById('aviso-gravacao').textContent,
             digitado: document.getElementById('campo-nome-evento').value,
         };
     """)
+    assert saida["pediu"] is True, "a senha nao foi pedida na propria pagina"
     assert saida["erro"] == "cancelado"
     assert len(saida["aviso"]) > 10
     assert "cancel" in saida["aviso"].lower()
@@ -862,15 +880,16 @@ def test_a_tela_nao_fala_mais_em_senha_do_dono():
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
         await Controle.carregarPainel();
-        let perguntado = null;
-        window.prompt = (texto) => { perguntado = texto; return null; };
         document.getElementById('btn-elevar').click();
-        return { perguntado,
+        await new Promise(r => setTimeout(r, 120));
+        return { perguntado: document.getElementById('caixa-entrar-config').textContent,
                  aviso: document.getElementById('aviso-leitura').textContent };
     """)
+    # Ate 17/08/2026 a frase era lida de dentro de um `window.prompt`. A caixa
+    # nativa saiu porque nao responde no aplicativo instalado; a frase que o
+    # dono le e a mesma, e agora ela e DOM que da para inspecionar.
     assert "senha do dono" not in saida["perguntado"]
-    assert "senha cadastrada" in saida["perguntado"].lower()
-    assert "mesma com que você entrou" in saida["perguntado"]
+    assert "mesma conta do Vibe" in saida["perguntado"]
     assert "senha do dono" not in saida["aviso"]
     assert "Senha Cadastrada" in saida["aviso"]
 
@@ -1011,9 +1030,13 @@ def test_os_controles_do_aparelho_existem_com_rotulo_e_entram_na_trava():
 
 
 def test_revogar_pelo_botao_pede_confirmacao_antes_de_desligar():
-    """O `dialog` do Chrome e sempre descartado pelo arnes (equivale a tocar
-    em Cancelar). Se o clique chamasse `revogarAparelho` sem passar por um
-    `confirm()`, a chamada aconteceria mesmo assim -- aqui ela nao pode."""
+    """Revogar DESLIGA o aparelho na hora, no meio do evento. O toque no botao
+    nao pode desligar nada sozinho.
+
+    O teste toca em "Cancelar" na caixa de verdade, e confere que a caixa
+    APARECEU antes disso. Sem essa segunda asercao ele passaria por vazio no dia
+    em que a confirmacao sumisse de tela: "ninguem confirmou, logo nada foi
+    enviado" e verdade tanto quando a pergunta existe quanto quando ela some."""
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -1023,9 +1046,15 @@ def test_revogar_pelo_botao_pede_confirmacao_antes_de_desligar():
         let chamou = false;
         Controle._pedirParaTeste = async () => { chamou = true; return { ok: true }; };
         document.getElementById('aparelho-revogar-a1').click();
-        await new Promise(r => setTimeout(r, 50));
-        return { chamou };
+        await new Promise(r => setTimeout(r, 80));
+        const pergunta = document.getElementById('texto-confirmar');
+        const texto = pergunta ? pergunta.textContent : null;
+        if (pergunta) { document.getElementById('btn-confirmar-nao').click(); }
+        await new Promise(r => setTimeout(r, 120));
+        return { chamou, texto };
     """)
+    assert saida["texto"], "a confirmacao nao apareceu na propria pagina"
+    assert "DESLIGA o aparelho agora" in saida["texto"]
     assert saida["chamou"] is False
 
 
@@ -1164,9 +1193,11 @@ def test_revogar_aceito_manda_status_revogado_pelo_botao():
             return { ok: true };
         };
         document.getElementById('aparelho-revogar-a1').click();
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-sim').click();
+        await new Promise(r => setTimeout(r, 150));
         return { enviado };
-    """, aceitar_dialogo=True)
+    """)
     assert saida["enviado"] is not None
     assert saida["enviado"]["caminho"] == "/aparelhos/a1"
     assert saida["enviado"]["corpo"]["status"] == "revogado"
@@ -1789,9 +1820,11 @@ def test_liberar_pede_confirmacao_e_manda_DELETE():
         };
         document.getElementById('setor-configurar-s2').click();
         document.getElementById('bloq-liberar-b1').click();
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-sim').click();
         await new Promise(r => setTimeout(r, 150));
         return { chamadas };
-    """, aceitar_dialogo=True)
+    """)
     assert saida["chamadas"] == ["/setores/s2/bloqueios/b1"]
 
 
@@ -1948,52 +1981,126 @@ def test_o_setor_bloqueado_mostra_o_motivo_e_o_botao_de_liberar():
     assert saida["chamadas"][0]["corpo"] == {"bloqueado": False}
 
 
+# O preparo comum de "estou na engrenagem, com a senha ja dada".
+_NA_ENGRENAGEM = """
+    Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+    Controle.estado.evento_id = 'ev-1';
+    await Controle.carregarPainel();
+    Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+    Controle.estado.painel.evento.status = 'ativo';
+    Controle.desenhar();
+    const chamadas = [];
+    Controle._pedirParaTeste = async (caminho, opcoes) => {
+        if (opcoes && opcoes.body) {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+        }
+        return { ok: true };
+    };
+"""
+
+
 def test_inativar_o_evento_pede_confirmacao_e_manda_encerrado():
     """Desligar o evento para TODOS os portoes de uma vez nao pode acontecer
-    com um toque solto no meio da tela."""
-    recusou = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle.estado.painel.evento.status = 'ativo';
-        Controle.desenhar();
-        const chamadas = [];
-        Controle._pedirParaTeste = async (caminho, opcoes) => {
-            if (opcoes && opcoes.body) {
-                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
-            }
-            return { ok: true };
-        };
+    com um toque solto no meio da tela.
+
+    A confirmacao e a caixa DESENHADA NA PAGINA, e o teste toca nos botoes dela
+    -- e nao num dialogo do navegador. Ate 17/08/2026 era `window.confirm`, e
+    este teste passava assim mesmo, porque no Chrome de teste o dialogo
+    responde. Ele provava a logica; o que falhava no celular do dono era o
+    mecanismo."""
+    recusou = _no_navegador(_NA_ENGRENAGEM + """
         const botao = document.getElementById('btn-ativar-evento');
         const rotulo = botao.textContent;
         botao.click();
         await new Promise(r => setTimeout(r, 80));
-        return { chamadas, rotulo };
+        const pergunta = document.getElementById('texto-confirmar');
+        const texto = pergunta ? pergunta.textContent : null;
+        document.getElementById('btn-confirmar-nao').click();
+        await new Promise(r => setTimeout(r, 80));
+        return { chamadas, rotulo, texto,
+                 sobrou: !!document.getElementById('fundo-confirmar') };
     """)
     assert recusou["rotulo"] == "Inativar este evento"
-    assert recusou["chamadas"] == []
+    assert recusou["texto"], "a confirmacao nao apareceu na propria pagina"
+    assert "Inativar" in recusou["texto"]
+    assert recusou["chamadas"] == [], "cancelar mandou a gravacao assim mesmo"
+    assert recusou["sobrou"] is False, "a caixa ficou na tela depois de fechada"
 
-    aceitou = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle.estado.painel.evento.status = 'ativo';
-        Controle.desenhar();
-        const chamadas = [];
-        Controle._pedirParaTeste = async (caminho, opcoes) => {
-            if (opcoes && opcoes.body) {
-                chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
-            }
-            return { ok: true };
-        };
+    aceitou = _no_navegador(_NA_ENGRENAGEM + """
         document.getElementById('btn-ativar-evento').click();
-        await new Promise(r => setTimeout(r, 120));
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-sim').click();
+        await new Promise(r => setTimeout(r, 150));
         return { chamadas };
-    """, aceitar_dialogo=True)
+    """)
     assert aceitou["chamadas"][0]["caminho"] == "/eventos/ev-1"
     assert aceitou["chamadas"][0]["corpo"] == {"status": "encerrado"}
+
+
+def test_finalizar_o_evento_confirma_NA_PAGINA_e_manda_finalizado():
+    """O defeito que o dono relatou em 17/08/2026: "Finalizar Evento e Inativar
+    Evento nao funcionam".
+
+    As duas comecavam com `window.confirm`, que no aplicativo INSTALADO nao
+    responde -- e confirmacao que nao responde vale por "cancelar": a funcao
+    devolvia na primeira linha e nada acontecia, sem nenhum aviso, porque
+    cancelar nao E um erro.
+
+    A prova de que era o mecanismo, e nao a logica: "ATIVAR este evento"
+    funcionava na MESMA linha de codigo, porque ligar nao pede confirmacao."""
+    saida = _no_navegador(_NA_ENGRENAGEM + """
+        document.getElementById('btn-finalizar-evento').click();
+        await new Promise(r => setTimeout(r, 80));
+        const texto = document.getElementById('texto-confirmar').textContent;
+        const rotuloSim = document.getElementById('btn-confirmar-sim').textContent;
+        document.getElementById('btn-confirmar-sim').click();
+        await new Promise(r => setTimeout(r, 150));
+        return { chamadas, texto, rotuloSim };
+    """)
+    assert "Eventos finalizados" in saida["texto"]
+    assert saida["rotuloSim"] == "Finalizar"
+    assert saida["chamadas"][0]["caminho"] == "/eventos/ev-1"
+    assert saida["chamadas"][0]["corpo"] == {"status": "finalizado"}
+
+
+def test_cancelar_a_finalizacao_nao_grava_nada():
+    saida = _no_navegador(_NA_ENGRENAGEM + """
+        document.getElementById('btn-finalizar-evento').click();
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-nao').click();
+        await new Promise(r => setTimeout(r, 150));
+        return { chamadas };
+    """)
+    assert saida["chamadas"] == []
+
+
+def test_a_confirmacao_nasce_com_o_foco_em_cancelar():
+    """Quem confirma por engano perde dado; quem cancela por engano toca de
+    novo. Um "Enter" solto no teclado do celular nao pode finalizar evento."""
+    saida = _no_navegador(_NA_ENGRENAGEM + """
+        document.getElementById('btn-finalizar-evento').click();
+        await new Promise(r => setTimeout(r, 80));
+        return { focado: document.activeElement.id };
+    """)
+    assert saida["focado"] == "btn-confirmar-nao"
+
+
+def test_a_tela_do_Ideal_Control_NAO_usa_caixa_nativa_do_navegador():
+    """A trava que impede o defeito de voltar.
+
+    `window.confirm`, `window.prompt` e `window.alert` nao respondem no
+    aplicativo instalado. Ja custaram dois defeitos: a senha muda da engrenagem
+    em 16/08/2026 e o "Finalizar/Inativar" em 17/08. Toda pergunta desta tela
+    tem de ser DOM da propria pagina."""
+    for arquivo in ("frontend/controle.js", "frontend/virar-portao.js",
+                    "frontend/lista-eventos.js", "frontend/fila-presa.js",
+                    "frontend/portaria.js"):
+        js = _ler(arquivo)
+        for proibida in ("window.confirm(", "window.prompt(", "window.alert("):
+            assert proibida not in js, (
+                arquivo + " voltou a usar " + proibida + " -- no aplicativo "
+                "instalado essa caixa nao responde"
+            )
 
 
 def test_reativar_o_evento_NAO_pede_confirmacao():
@@ -2349,10 +2456,12 @@ def test_zerar_pede_a_senha_DE_NOVO_mesmo_com_os_15_minutos_ja_liberados():
             return { zerado_em: '2026-08-16T12:00:00Z' };
         };
         document.getElementById('btn-zerar-entradas').click();
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-sim').click();
+        await new Promise(r => setTimeout(r, 250));
         return { estavaElevado, pediuSenha, chamadas,
                  aviso: document.getElementById('aviso-gravacao').textContent };
-    """, aceitar_dialogo=True)
+    """)
     assert saida["estavaElevado"] is True, "o teste precisa começar JÁ elevado"
     assert saida["pediuSenha"] == 1, "zerou sem pedir a senha de novo"
     assert saida["chamadas"] == [{"caminho": "/eventos/ev-1/zerar-entradas",
@@ -2361,51 +2470,35 @@ def test_zerar_pede_a_senha_DE_NOVO_mesmo_com_os_15_minutos_ja_liberados():
     assert "zero" in saida["aviso"].lower()
 
 
-def test_finalizar_pede_confirmacao_e_manda_status_finalizado():
-    recusou = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle.desenhar();
-        const chamadas = [];
-        Controle._pedirParaTeste = async (caminho, opcoes) => {
-            chamadas.push(caminho); return { ok: true };
-        };
+def test_finalizar_fecha_a_engrenagem_e_devolve_a_lista():
+    """O que acontece DEPOIS da gravacao.
+
+    A confirmacao em si e o corpo do PATCH estao em
+    `test_finalizar_o_evento_confirma_NA_PAGINA_e_manda_finalizado`; aqui o que
+    se prova e que a engrenagem se fecha sozinha. Ela e a configuracao de um
+    evento que acabou de sair da lista, e deixa-la aberta convidaria o dono a
+    continuar mexendo no que ele arquivou.
+
+    O rotulo do botao vem junto porque e por ele que o dono acha a acao."""
+    saida = _no_navegador(_NA_ENGRENAGEM + """
+        document.getElementById('engrenagem').classList.remove('sumindo');
         const rotulo = document.getElementById('btn-finalizar-evento').textContent;
         document.getElementById('btn-finalizar-evento').click();
-        await new Promise(r => setTimeout(r, 120));
-        return { chamadas, rotulo };
-    """)
-    assert recusou["rotulo"] == "Finalizar evento"
-    assert recusou["chamadas"] == []
-
-    aceitou = _no_navegador("""
-        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
-        Controle.estado.evento_id = 'ev-1';
-        await Controle.carregarPainel();
-        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
-        Controle.desenhar();
-        document.getElementById('engrenagem').classList.remove('sumindo');
-        const chamadas = [];
-        Controle._pedirParaTeste = async (caminho, opcoes) => {
-            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
-            return { ok: true };
-        };
-        document.getElementById('btn-finalizar-evento').click();
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-sim').click();
         await new Promise(r => setTimeout(r, 250));
         return {
-            chamadas,
+            chamadas, rotulo,
             engrenagemFechou: document.getElementById('engrenagem')
                 .classList.contains('sumindo'),
             listaNaTela: !document.getElementById('lista').classList.contains('sumindo'),
         };
-    """, aceitar_dialogo=True)
-    assert aceitou["chamadas"][0]["caminho"] == "/eventos/ev-1"
-    assert aceitou["chamadas"][0]["corpo"] == {"status": "finalizado"}
+    """)
+    assert saida["rotulo"] == "Finalizar evento"
+    assert saida["chamadas"][0]["corpo"] == {"status": "finalizado"}
     # A configuração de um evento que acabou de sair da lista não fica aberta.
-    assert aceitou["engrenagemFechou"] is True
-    assert aceitou["listaNaTela"] is True
+    assert saida["engrenagemFechou"] is True
+    assert saida["listaNaTela"] is True
 
 
 def test_as_duas_acoes_da_zona_de_risco_entram_na_trava_de_senha():
@@ -2682,13 +2775,15 @@ def test_descartar_a_fila_exige_a_senha_do_dono():
         localStorage.removeItem('ideal_portaria_token');
         await virarPortao.abrir('ev-1', 'Baile do Hawaii', false);
         document.getElementById('btn-descartar-fila').click();
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-sim').click();
         await new Promise(r => setTimeout(r, 300));
         return {
             pediuSenha: !document.getElementById('caixa-entrar-config')
                             .classList.contains('sumindo'),
             filaDepois: await portariaDeposito.contarFila(),
         };
-    """, aceitar_dialogo=True)
+    """)
     assert saida["pediuSenha"] is True
     assert saida["filaDepois"] == 1, "a fila foi descartada sem a senha do dono"
 

@@ -233,16 +233,24 @@
         var inativo = (estado.painel.evento || {}).status !== 'ativo';
         botao.textContent = inativo ? 'Ativar este evento' : 'Inativar este evento';
         botao.onclick = function () {
-            if (!inativo && !window.confirm(
+            // Ligar não pergunta; desligar sim. Repare que era exatamente essa
+            // assimetria que denunciava o defeito de 17/08/2026: "Ativar"
+            // funcionava e "Inativar" não, na MESMA linha de código — porque só
+            // o caminho com confirmação morria. Ver `caixa-confirmar.js`.
+            var perguntar = inativo ? Promise.resolve(true)
+                : window.caixaConfirmar.perguntar(
                     'Inativar "' + estado.painel.evento.nome_evento + '"? Todos '
                     + 'os portões param de aceitar ingresso. Portão sem internet '
-                    + 'só recebe a mudança quando voltar a ter sinal.')) {
-                return;
-            }
-            gravar('/eventos/' + estado.evento_id,
-                   { status: inativo ? 'ativo' : 'encerrado' }, 'PATCH')
-                .then(carregarPainel)
-                .catch(function () { /* `gravar()` já avisou na tela */ });
+                    + 'só recebe a mudança quando voltar a ter sinal.',
+                    { rotulo: 'Inativar', perigo: true });
+
+            return perguntar.then(function (sim) {
+                if (!sim) { return; }
+                return gravar('/eventos/' + estado.evento_id,
+                              { status: inativo ? 'ativo' : 'encerrado' }, 'PATCH')
+                    .then(carregarPainel)
+                    .catch(function () { /* `gravar()` já avisou na tela */ });
+            });
         };
     }
 
@@ -281,22 +289,24 @@
      */
     function zerarEntradas() {
         var nome = (estado.painel.evento || {}).nome_evento || 'este evento';
-        if (!window.confirm(
-                'Zerar as entradas de "' + nome + '"? A contagem volta a zero em '
-                + 'todos os portões, e quem já entrou passa a poder entrar de '
-                + 'novo. Os ingressos, os setores e os portões continuam '
-                + 'valendo. Isto não tem volta.')) {
-            return Promise.resolve();
-        }
-        return Promise.resolve(_pedirSenha()).then(function () {
-            return gravar('/eventos/' + estado.evento_id + '/zerar-entradas', {}, 'POST');
-        }).then(function () {
-            avisar('A contagem deste evento recomeçou do zero. Cada portão '
-                 + 'acerta o contador dele no próximo sincronismo — portão sem '
-                 + 'internet, quando voltar a ter sinal.', 'ok');
-            return carregarPainel();
-        }).catch(function () {
-            // `abrirCaixaDeSenha()` e `gravar()` já escreveram o motivo na tela.
+        return window.caixaConfirmar.perguntar(
+            'Zerar as entradas de "' + nome + '"? A contagem volta a zero em '
+            + 'todos os portões, e quem já entrou passa a poder entrar de '
+            + 'novo. Os ingressos, os setores e os portões continuam '
+            + 'valendo. Isto não tem volta.',
+            { rotulo: 'Zerar as entradas', perigo: true }
+        ).then(function (sim) {
+            if (!sim) { return; }
+            return Promise.resolve(_pedirSenha()).then(function () {
+                return gravar('/eventos/' + estado.evento_id + '/zerar-entradas', {}, 'POST');
+            }).then(function () {
+                avisar('A contagem deste evento recomeçou do zero. Cada portão '
+                     + 'acerta o contador dele no próximo sincronismo — portão '
+                     + 'sem internet, quando voltar a ter sinal.', 'ok');
+                return carregarPainel();
+            }).catch(function () {
+                // `abrirCaixaDeSenha()` e `gravar()` já escreveram o motivo.
+            });
         });
     }
 
@@ -311,13 +321,14 @@
      */
     function finalizarEvento() {
         var nome = (estado.painel.evento || {}).nome_evento || 'este evento';
-        if (!window.confirm(
-                'Finalizar "' + nome + '"? Ele sai de "Meus Eventos" e passa a '
-                + 'aparecer em "Eventos finalizados". Todos os portões param de '
-                + 'aceitar ingresso. Você pode reabri-lo depois.')) {
-            return Promise.resolve();
-        }
-        return gravar('/eventos/' + estado.evento_id, { status: 'finalizado' }, 'PATCH')
+        return window.caixaConfirmar.perguntar(
+            'Finalizar "' + nome + '"? Ele sai de "Meus Eventos" e passa a '
+            + 'aparecer em "Eventos finalizados". Todos os portões param de '
+            + 'aceitar ingresso. Você pode reabri-lo depois.',
+            { rotulo: 'Finalizar', perigo: true }
+        ).then(function (sim) {
+            if (!sim) { return; }
+            return gravar('/eventos/' + estado.evento_id, { status: 'finalizado' }, 'PATCH')
             .then(function () {
                 // A engrenagem se fecha sozinha: ela é a configuração de um
                 // evento que acabou de sair da lista, e deixá-la aberta
@@ -328,6 +339,7 @@
                 if (window.listaEventos) { return window.listaEventos.recarregar(); }
             })
             .catch(function () { /* `gravar()` já avisou na tela */ });
+        });
     }
 
     /**
@@ -852,11 +864,16 @@
             liberar.id = 'bloq-liberar-' + b.id;
             liberar.textContent = 'Liberar';
             liberar.addEventListener('click', function () {
-                if (!window.confirm('Liberar os ingressos ' + b.de + ' a ' + b.ate
-                        + '? Eles voltam a entrar na portaria.')) { return; }
-                gravar('/setores/' + s.id + '/bloqueios/' + b.id, {}, 'DELETE')
-                    .then(carregarPainel)
-                    .catch(function () { /* `gravar()` já avisou na tela */ });
+                window.caixaConfirmar.perguntar(
+                    'Liberar os ingressos ' + b.de + ' a ' + b.ate
+                    + '? Eles voltam a entrar na portaria.',
+                    { rotulo: 'Liberar' }
+                ).then(function (sim) {
+                    if (!sim) { return; }
+                    return gravar('/setores/' + s.id + '/bloqueios/' + b.id, {}, 'DELETE')
+                        .then(carregarPainel)
+                        .catch(function () { /* `gravar()` já avisou na tela */ });
+                });
             });
             linha.appendChild(liberar);
             lista.appendChild(linha);
@@ -1081,14 +1098,16 @@
                 // Confirmação, não senha de novo: a elevação já cobre isso. O
                 // que falta avisar é o tamanho do estrago — revogar desconecta
                 // o aparelho na hora, no meio do evento.
-                var confirmou = window.confirm(
+                window.caixaConfirmar.perguntar(
                     'Revogar "' + a.nome + '"? Isso DESLIGA o aparelho agora — ele para '
                     + 'de validar QR na portaria imediatamente. Nesta versão não há como '
                     + 'reativar um portão revogado — para voltar a usar, será preciso '
-                    + 'abrir o evento de novo naquele celular.'
-                );
-                if (!confirmou) { return; }
-                revogarAparelho(a.id).catch(function () { /* já avisado */ });
+                    + 'abrir o evento de novo naquele celular.',
+                    { rotulo: 'Revogar', perigo: true }
+                ).then(function (sim) {
+                    if (!sim) { return; }
+                    return revogarAparelho(a.id).catch(function () { /* já avisado */ });
+                });
             });
             el.appendChild(btnRevogar);
         }
@@ -1371,23 +1390,26 @@
     }
 
     function esquecerEstePortao() {
-        if (!window.confirm('Sair deste portão? Este aparelho deixa de ler os '
-                + 'ingressos deste evento. Para voltar a ler, o dono precisa '
-                + 'entrar de novo e tocar na barra do evento.')) {
-            return Promise.resolve();
-        }
-        window.chaveiro.esquecer(estado.evento_id);
-        try {
-            if (localStorage.getItem('ideal_portaria_evento') === estado.evento_id) {
-                localStorage.removeItem('ideal_portaria_token');
-                localStorage.removeItem('ideal_portaria_evento');
-            }
-        } catch (e) { /* aba anônima */ }
-        return Promise.resolve(fecharEngrenagem()).then(function () {
-            // Recarregar, e não redesenhar: a lista é montada pelo
-            // `lista-eventos.js` no arranque, e recarregar é o único caminho que
-            // não põe dois arquivos decidindo quem manda na mesma tela.
-            location.reload();
+        return window.caixaConfirmar.perguntar(
+            'Sair deste portão? Este aparelho deixa de ler os ingressos deste '
+            + 'evento. Para voltar a ler, o dono precisa entrar de novo e tocar '
+            + 'na barra do evento.',
+            { rotulo: 'Sair deste portão', perigo: true }
+        ).then(function (sim) {
+            if (!sim) { return; }
+            window.chaveiro.esquecer(estado.evento_id);
+            try {
+                if (localStorage.getItem('ideal_portaria_evento') === estado.evento_id) {
+                    localStorage.removeItem('ideal_portaria_token');
+                    localStorage.removeItem('ideal_portaria_evento');
+                }
+            } catch (e) { /* aba anônima */ }
+            return Promise.resolve(fecharEngrenagem()).then(function () {
+                // Recarregar, e não redesenhar: a lista é montada pelo
+                // `lista-eventos.js` no arranque, e recarregar é o único caminho
+                // que não põe dois arquivos decidindo quem manda na mesma tela.
+                location.reload();
+            });
         });
     }
 
@@ -1530,29 +1552,31 @@
      * Pede a senha do dono. Devolve uma promessa que resolve quando a elevação
      * chega — é o que permite ao `gravar()` repetir a mesma gravação depois.
      *
-     * `prompt` de propósito: é a única caixa de texto que o navegador não guarda
-     * em preenchimento automático, e a senha do dono não pode ficar num campo
-     * que o celular do porteiro memorize.
+     * Usa a MESMA caixa de `sessaoOuLogin`, e não uma segunda. Até 17/08/2026
+     * esta era pedida por `window.prompt`, o último sobrevivente das caixas
+     * nativas nesta tela — e no aplicativo instalado elas não respondem. Foi
+     * assim que a configuração ficou muda em 16/08 (o `prompt` da engrenagem) e
+     * assim que "Finalizar" e "Inativar" morreram em 17/08 (os `window.confirm`).
+     * Deixar este de pé era guardar o mesmo defeito para o dia em que uma
+     * elevação vencesse no meio de uma gravação.
+     *
+     * O comentário que estava aqui defendia o `prompt` por ele não ser guardado
+     * no preenchimento automático do navegador. A `#caixa-entrar-config` resolve
+     * isso de outro jeito: ela não é um `<form>` e o campo é `autocomplete="off"`,
+     * então o navegador também não oferece guardar a senha.
      */
     function abrirCaixaDeSenha() {
-        // "A mesma com que você entrou nesta tela", e não "a senha do dono":
-        // o dono lia aquilo como uma segunda senha, especial, que ele nunca
-        // recebeu — e desistia de configurar achando que faltava algo.
-        var senha = window.prompt(
-            'Digite a sua senha cadastrada — a mesma com que você entrou nesta '
-            + 'tela — para liberar as alterações por ' + acesso_minutos() + ' minutos.'
-        );
-        if (!senha) {
+        return sessaoOuLogin(estado.evento_id).then(function (r) {
+            return r.elevacao;
+        }).catch(function (e) {
             // Cancelar não é o mesmo caso que errar a senha nem que ficar sem
-            // rede — cada um já tem a própria frase. Sem esta, o dono toca em
-            // "Cancelar" no meio de uma gravação e a tela fica muda: ele guarda
-            // o celular achando que gravou.
-            avisar('Você cancelou o pedido de senha. Não gravei nada — o que '
-                 + 'você digitou continua na tela.', 'erro');
-            return Promise.reject(new Error('cancelado'));
-        }
-        return elevar(senha).catch(function (e) {
-            avisar(e.message, 'erro');
+            // rede — a caixa já mostra o motivo dos dois últimos. Sem esta
+            // frase, o dono toca em "Cancelar" no meio de uma gravação e a tela
+            // fica muda: ele guarda o celular achando que gravou.
+            if (e && e.message === 'cancelado') {
+                avisar('Você cancelou o pedido de senha. Não gravei nada — o que '
+                     + 'você digitou continua na tela.', 'erro');
+            }
             throw e;
         });
     }

@@ -124,6 +124,38 @@ button.secundario { background: transparent; color: var(--dim); border: 1px soli
 .aviso.erro { border-left-color: var(--red); background: rgba(239, 68, 68, 0.09); }
 .aviso.ok { border-left-color: var(--teal); background: rgba(20, 184, 166, 0.09); }
 
+/* A confirmação "tem certeza?", desenhada NA PÁGINA.
+   `window.confirm` não responde no aplicativo instalado, e foi assim que
+   "Finalizar" e "Inativar" morreram em 17/08/2026. Ver `caixa-confirmar.js`. */
+.fundo-confirmar {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;               /* acima da faixa sticky e da engrenagem */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(2, 6, 23, .72);
+}
+.caixa-confirmar {
+    width: 100%;
+    max-width: 420px;
+    background: var(--card, #111a2e);
+    border: 1px solid var(--border, #1e293b);
+    border-radius: 12px;
+    padding: 20px;
+    /* Folga embaixo para o gesto de início do iPhone não cobrir os botões. */
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
+}
+.caixa-confirmar p {
+    margin: 0 0 18px;
+    font-size: .92rem;
+    line-height: 1.5;
+}
+.acoes-confirmar { display: flex; gap: 10px; }
+.acoes-confirmar button { flex: 1 1 0; min-height: 46px; }
+
 /* As saídas de um aviso que trava o dono. Um aviso que só explica o problema e
    não oferece o que fazer é um beco sem saída — foi o que prendeu o dono na
    fila pendente em 17/08/2026. */

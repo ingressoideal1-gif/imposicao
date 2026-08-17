@@ -107,21 +107,27 @@
      */
     function descartarComSenha(n, evento_id) {
         var quantas = n === 1 ? '1 leitura' : n + ' leituras';
-        if (!window.confirm('Descartar ' + quantas + ' que não subiram? '
-                + 'Elas somem para sempre, e quem entrou por elas não será '
-                + 'contado. Esta ação não tem volta.')) {
-            return;
-        }
-        return window.Controle.comSenha(evento_id, function () {
-            return window.filaPresa.descartar();
-        }).then(function () {
-            var aviso = document.getElementById('erro-arranque');
-            if (aviso) { aviso.classList.add('sumindo'); }
-            return abrir(evento_id);
-        }).catch(function (e) {
-            if (e && e.message === 'cancelado') { return; }
-            avisar('Não consegui descartar a fila agora. Tente de novo em '
-                 + 'instantes.');
+        // Caixa desenhada na pagina, e nao `window.confirm`: no aplicativo
+        // instalado a nativa nao responde, e uma confirmacao que nao responde
+        // vale por "cancelar" -- o botao simplesmente nao faria nada. Ver o
+        // cabecalho do `caixa-confirmar.js`.
+        return window.caixaConfirmar.perguntar(
+            'Descartar ' + quantas + ' que não subiram? Elas somem para sempre, '
+            + 'e quem entrou por elas não será contado. Esta ação não tem volta.',
+            { rotulo: 'Descartar', perigo: true }
+        ).then(function (sim) {
+            if (!sim) { return; }
+            return window.Controle.comSenha(evento_id, function () {
+                return window.filaPresa.descartar();
+            }).then(function () {
+                var aviso = document.getElementById('erro-arranque');
+                if (aviso) { aviso.classList.add('sumindo'); }
+                return abrir(evento_id);
+            }).catch(function (e) {
+                if (e && e.message === 'cancelado') { return; }
+                avisar('Não consegui descartar a fila agora. Tente de novo em '
+                     + 'instantes.');
+            });
         });
     }
 

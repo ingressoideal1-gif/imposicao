@@ -51,6 +51,7 @@ const ARQUIVOS = [
     'lista-eventos.js?v=' + VERSAO,
     'virar-portao.js?v=' + VERSAO,
     'fila-presa.js?v=' + VERSAO,
+    'caixa-confirmar.js?v=' + VERSAO,
     'parede-pwa.js?v=' + VERSAO,
     'ler-qr.js?v=' + VERSAO,
     'qr-canvas.js?v=' + VERSAO,
