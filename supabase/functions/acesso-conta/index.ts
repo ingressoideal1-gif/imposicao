@@ -1,5 +1,5 @@
 /**
- * A tela do cliente: as 14 rotas de `/api/acesso/*` que o dono do evento usa.
+ * A tela do cliente: as 16 rotas de `/api/acesso/*` que o dono do evento usa.
  *
  * Porte de `acesso_config.py` mais `/evento`, `/meus-eventos` e `/reivindicar`
  * de `acesso_api.py`.
