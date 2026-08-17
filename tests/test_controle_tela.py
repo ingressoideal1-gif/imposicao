@@ -2872,3 +2872,95 @@ def test_abrir_o_menu_DESLIGA_a_camera_do_QR():
         return { desligou };
     """)
     assert saida["desligou"] == 1
+
+
+# ── O que muda na engrenagem tem de aparecer na home ───────────────────────
+
+
+def test_inativar_o_evento_APAGA_o_verde_na_home_ao_voltar():
+    """O defeito relatado em 17/08/2026: "inativado ainda nao sinaliza inativado
+    na home, e segue verde".
+
+    A engrenagem gravava certo e o painel dela se atualizava; a LISTA nao. Ela e
+    montada no arranque da pagina, e `fecharEngrenagem()` apenas voltava a
+    mostra-la -- com os dados de quando a tela abriu. O `finalizarEvento`
+    recarregava por conta propria, e o "Inativar" nao."""
+    saida = _no_navegador("""
+        // A conta responde o que o SERVIDOR sabe agora. O `status` muda quando
+        // a gravacao acontece, como aconteceria de verdade.
+        // Este aparelho E portao do evento -- e por isso que a barra esta
+        // VERDE, e e a situacao em que o dono relatou o defeito.
+        localStorage.setItem('ideal_control_portoes', JSON.stringify([{
+            evento_id: 'ev-1', nome_evento: 'Click', aparelho_id: 'a1',
+            nome_portao: 'Portão 1', token: 't-1'
+        }]));
+        let status = 'ativo';
+        const painelFalso = () => ({
+            evento: { id: 'ev-1', nome_evento: 'Click', status },
+            setores: [], aparelhos: [],
+        });
+        AcessoConta.pedir = async (caminho) => {
+            if (caminho === '/meus-eventos') {
+                return { eventos: [{ id: 'ev-1', nome_evento: 'Click', status }] };
+            }
+            return painelFalso();
+        };
+        await listaEventos.recarregar();
+        const antes = document.querySelector('#evento-ev-1 .luz').className;
+
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        await Controle.carregarPainel();
+        Controle.estado.painel.evento.status = 'ativo';
+        Controle.desenhar();
+
+        Controle._pedirParaTeste = async () => { status = 'encerrado'; return { ok: true }; };
+        document.getElementById('btn-ativar-evento').click();
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-sim').click();
+        await new Promise(r => setTimeout(r, 200));
+
+        await Controle.fecharEngrenagem();
+        await new Promise(r => setTimeout(r, 200));
+        const linha = document.querySelector('#evento-ev-1');
+        return {
+            antes,
+            depois: linha.querySelector('.luz').className,
+            texto: linha.textContent,
+        };
+    """)
+    assert "acesa" in saida["antes"], "o cenario precisa comecar VERDE"
+    assert "inativa" in saida["depois"], "a barra continuou verde depois de inativar"
+    assert "acesa" not in saida["depois"]
+    assert "inativo" in saida["texto"]
+
+
+def test_a_lista_se_refaz_ANTES_de_a_sessao_sair():
+    """A ordem e o ponto. Recarregar depois do `signOut` traria a lista sem
+    conta -- e sem conta ela so enxerga o chaveiro deste aparelho, que nao
+    guarda situacao e assume ativo. O evento voltaria VERDE, que e exatamente o
+    sintoma que o conserto elimina."""
+    saida = _no_navegador("""
+        const ordem = [];
+        window.supabaseClient = { auth: {
+            getSession: async () => ({ data: { session: { access_token: 'jwt' } } }),
+            signOut: async () => { ordem.push('signOut'); return {}; },
+        } };
+        AcessoConta.pedir = async (caminho) => {
+            if (caminho === '/meus-eventos') {
+                ordem.push('meus-eventos');
+                return { eventos: [] };
+            }
+            return {};
+        };
+        // A bandeira que faz o fechamento derrubar a sessao -- o celular do
+        // porteiro, onde a conta chegou so para configurar.
+        Controle.estado.sessaoDaEngrenagem = true;
+        await Controle.fecharEngrenagem();
+        await new Promise(r => setTimeout(r, 200));
+        return { ordem };
+    """)
+    assert saida["ordem"] == ["meus-eventos", "signOut"], (
+        "a lista se refez sem conta, ou nem se refez"
+    )

@@ -333,10 +333,13 @@
                 // A engrenagem se fecha sozinha: ela é a configuração de um
                 // evento que acabou de sair da lista, e deixá-la aberta
                 // convidaria o dono a continuar mexendo no que ele arquivou.
+                //
+                // Quem refaz a lista é o próprio `fecharEngrenagem`, e nao mais
+                // uma chamada daqui. A daqui rodava DEPOIS do `signOut` e, no
+                // celular do porteiro, redesenhava a lista sem conta — o evento
+                // finalizado reaparecia em "Meus Eventos", porque sem servidor
+                // a lista só enxerga o chaveiro deste aparelho.
                 return Promise.resolve(fecharEngrenagem());
-            })
-            .then(function () {
-                if (window.listaEventos) { return window.listaEventos.recarregar(); }
             })
             .catch(function () { /* `gravar()` já avisou na tela */ });
         });
@@ -1330,14 +1333,38 @@
         guardarElevacao(null);
         $('engrenagem').classList.add('sumindo');
         $('lista').classList.remove('sumindo');
-        if (!estado.sessaoDaEngrenagem) { return Promise.resolve(); }
-        estado.sessaoDaEngrenagem = false;
-        estado.sessao = null;
-        try {
-            return supabaseClient.auth.signOut().catch(function () { });
-        } catch (e) {
-            return Promise.resolve();   // sem SDK: não há sessão para encerrar
-        }
+
+        // A LISTA SE REFAZ AO SAIR DA ENGRENAGEM — e ANTES de a sessão sair.
+        //
+        // Sem isto, o que o dono acabou de mudar aqui dentro não aparecia lá
+        // fora: ele inativava o evento, voltava, e a barra continuava verde,
+        // com os dados de quando a tela abriu. Foi o defeito relatado em
+        // 17/08/2026 ("inativado ainda não sinaliza inativado na home, e segue
+        // verde"). O `finalizarEvento` recarregava a lista por conta própria,
+        // e o "Inativar" não — mas o lugar certo é aqui, porque TODO caminho
+        // de saída da engrenagem passa por esta função, e assim vale também
+        // para o nome, a data e os setores.
+        //
+        // A ORDEM É O PONTO. Recarregar depois do `signOut` traria a lista sem
+        // conta nenhuma — e sem conta a lista só enxerga o chaveiro deste
+        // aparelho, que não guarda situação e assume `ativo: true`. O evento
+        // voltaria VERDE, que é exatamente o sintoma que esta linha conserta.
+        var refeita = window.listaEventos
+            ? Promise.resolve()
+                .then(function () { return window.listaEventos.recarregar(); })
+                .catch(function () { /* a lista já avisa na tela quando falha */ })
+            : Promise.resolve();
+
+        return refeita.then(function () {
+            if (!estado.sessaoDaEngrenagem) { return; }
+            estado.sessaoDaEngrenagem = false;
+            estado.sessao = null;
+            try {
+                return supabaseClient.auth.signOut().catch(function () { });
+            } catch (e) {
+                return;                 // sem SDK: não há sessão para encerrar
+            }
+        });
     }
 
     /**
