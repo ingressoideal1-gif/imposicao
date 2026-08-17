@@ -68,12 +68,22 @@ function caderno(n) {
     ok(chile.every((r, i) => r.__id === 38 + i), 'a fatia preserva a ordem do banco');
 })();
 
-(function selecaoNulaLevaOBancoInteiro() {
+(function ausenteLevaOBancoInteiroVaziaNaoLevaNada() {
     const rows = caderno(10);
+
+    // Ausente = nunca distribuído. É o que mantém todo pedido anterior à v525
+    // funcionando sem migração de dado.
     ok(CsvEditor.fatiaDoModelo(rows, null).length === 10,
-        'sem seleção, o modelo leva o banco inteiro (pedidos anteriores à v525)');
-    ok(CsvEditor.fatiaDoModelo(rows, { tipo: 'linhas', ids: [] }).length === 10,
-        'seleção vazia também leva o banco inteiro');
+        'sem seleção, o modelo leva o banco inteiro');
+    ok(CsvEditor.fatiaDoModelo(rows, undefined).length === 10,
+        'seleção indefinida também leva o banco inteiro');
+    ok(CsvEditor.fatiaDoModelo(rows, { tipo: 'linhas' }).length === 10,
+        'seleção sem a lista de ids leva o banco inteiro');
+
+    // Lista vazia = houve distribuição e este modelo não ficou com nenhuma linha.
+    // Ler isso como "o banco inteiro" fazia o modelo esquecido imprimir tudo.
+    ok(CsvEditor.fatiaDoModelo(rows, { tipo: 'linhas', ids: [] }).length === 0,
+        'lista de ids vazia significa ZERO linhas, não o banco inteiro');
 })();
 
 (function linhaDesmarcadaNaoEntra() {
@@ -96,6 +106,71 @@ function caderno(n) {
     });
     ok(soma === 238, 'as oito fatias somam o caderno inteiro', soma);
     ok(vistos.size === 238, 'nenhuma linha sai em dois modelos', vistos.size);
+})();
+
+// ─── A trava do modelo sem linhas ─────────────────────────────────────────────
+//
+// As funções são lidas do `script.js` e avaliadas aqui, com um `state` de
+// mentira. Testar a função de verdade, e não uma cópia, é o que faz este bloco
+// valer alguma coisa: uma cópia continuaria passando depois de o original mudar.
+
+function extrairFuncao(src, nome) {
+    const i = src.indexOf('\nfunction ' + nome + '(');
+    if (i < 0) throw new Error('nao achei a funcao ' + nome + ' no script.js');
+    const fim = src.indexOf('\n}', i);
+    if (fim < 0) throw new Error('nao achei o fim da funcao ' + nome);
+    return src.slice(i, fim + 2);
+}
+
+(function travaDoModeloSemLinhas() {
+    const script = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+
+    const nomes = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
+                   'rotuloDoModelo', 'modeloSemLinhasDoBanco', 'recadoDeFatiaVazia'];
+    const fonte = nomes.map(n => extrairFuncao(script, n)).join('\n');
+
+    const state = { numeracoes: [] };
+    const sandbox = new Function('state', 'window', fonte + '\nreturn { modeloSemLinhasDoBanco, recadoDeFatiaVazia };');
+    const api = sandbox(state, global.window);
+
+    const num = {
+        id: 'num-1',
+        csv_filename: 'caderno.csv',
+        csv_data: caderno(238)
+    };
+    state.numeracoes.push(num);
+
+    const modelo = (nome, selecao) => ({
+        id: 'm-' + nome, nome_modelo: nome, amostra_num_id: 'num-1', csv_selecao: selecao
+    });
+
+    const bulgaria = modelo('Bulgaria', { tipo: 'linhas', ids: ['1-37'] });
+    const esquecido = modelo('Esquecido', { tipo: 'linhas', ids: [] });
+    const semDistribuir = modelo('Sem distribuir', null);
+
+    ok(api.modeloSemLinhasDoBanco(bulgaria) === null,
+        'modelo com fatia passa pela trava');
+    ok(api.modeloSemLinhasDoBanco(semDistribuir) === null,
+        'modelo nunca distribuido passa pela trava (leva o banco inteiro)');
+    ok(api.modeloSemLinhasDoBanco(esquecido) === 'Esquecido',
+        'modelo com lista vazia e barrado', api.modeloSemLinhasDoBanco(esquecido));
+
+    ok(api.recadoDeFatiaVazia([bulgaria, semDistribuir]) === null,
+        'imposicao com todos os modelos servidos nao trava');
+
+    const recado = api.recadoDeFatiaVazia([bulgaria, esquecido]);
+    ok(typeof recado === 'string' && recado.includes('Esquecido'),
+        'a trava nomeia o modelo que esta sem linhas', recado);
+    ok(recado && /Linhas no card do modelo/.test(recado),
+        'a trava diz o que fazer para sair dela', recado);
+
+    // Numeracao sem banco nenhum: a lista vazia nao significa nada ali, e travar
+    // impediria de imprimir um modelo que nunca dependeu de CSV.
+    const semBanco = { id: 'num-2', csv_data: null };
+    state.numeracoes.push(semBanco);
+    const avulso = { id: 'm-x', nome_modelo: 'Avulso', amostra_num_id: 'num-2', csv_selecao: { tipo: 'linhas', ids: [] } };
+    ok(api.modeloSemLinhasDoBanco(avulso) === null,
+        'modelo cuja numeracao nao tem banco nao e barrado');
 })();
 
 // ─── As duas telas usam a mesma regra ─────────────────────────────────────────
@@ -131,6 +206,19 @@ function caderno(n) {
     // Sem `_itemId`/`_osId` na arte não há como achar o modelo dono da fatia.
     ok(/_itemId: s\.itemId/.test(pedido) && /_osId: s\.osId/.test(pedido),
         'a tela Pedido leva o modelo de cada arte adiante (_itemId/_osId)');
+
+    // A trava da fatia vazia: fatia zerada não pode virar folha impressa, porque
+    // o motor cai na numeração sequencial e sai número no lugar do nome.
+    ok(/recadoDeFatiaVazia\(itensDaImposicao\(isMultiSelected\)\)/.test(script),
+        'a tela Imposição trava quando o modelo está sem linhas');
+    ok(/recadoDeFatiaVazia\(itensDaImposicao\(isMultiSelected\)\)/.test(pedido),
+        'a tela Pedido trava quando o modelo está sem linhas');
+
+    // A trava precisa dizer a saída, e não só o problema.
+    const recado = script.match(/function recadoDeFatiaVazia\(itens\)[\s\S]{0,900}?\n\}/);
+    ok(!!recado, 'achei o recado da trava no script.js');
+    ok(recado && /Linhas no card do modelo/.test(recado[0]),
+        'o recado ensina como sair da trava', recado && recado[0].slice(-200));
 })();
 
 // ─── Fim ──────────────────────────────────────────────────────────────────────

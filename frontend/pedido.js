@@ -4339,7 +4339,15 @@ window.runPedImposition = async function (mode, isRefazer) {
 
     if (!saiId) return desistir('Selecione uma Saída.');
 
-    
+    // Antes de abrir qualquer coisa: modelo sem nenhuma linha do banco cairia na
+    // numeracao sequencial e sairia com numero no lugar do nome. A regra e a do
+    // script.js — ver modeloSemLinhasDoBanco() la.
+    if (typeof recadoDeFatiaVazia === 'function') {
+        const _semLinhas = recadoDeFatiaVazia(itensDaImposicao(isMultiSelected));
+        if (_semLinhas) return desistir(_semLinhas);
+    }
+
+
 
     if (schema === 'multi_artes' || isMultiSelected) {
 

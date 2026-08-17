@@ -43,6 +43,18 @@ apagar o `__id` da cópia**, senão nascem duas linhas com a mesma identidade e 
 fatia de um modelo passa a arrastar a linha do outro. A atribuição é exclusiva de
 propósito: é ela que impede o mesmo assento sair em dois modelos.
 
+Em `csv_selecao`, **ausente** e **lista vazia** não são a mesma coisa: ausente é
+"nunca distribuído" e leva o banco inteiro; lista vazia é "este modelo não ficou
+com nenhuma linha" e leva zero. Zero linhas não pode chegar ao motor — ele
+ignoraria o banco e cairia na numeração sequencial, imprimindo número no lugar do
+nome. `recadoDeFatiaVazia()` trava antes.
+
+**São duas telas de imposição, e as duas precisam de toda regra nova.**
+`frontend/pedido.js` é um clone do `script.js` com os ids `imp-*` renomeados para
+`ped-*`: `updateImpSummary`/`updatePedSummary`, `runImposition`/`runPedImposition`.
+A fatia por modelo nasceu só no `script.js` e o clone ficou dois meses imprimindo
+o banco inteiro (pedido 20495). Ao mexer numa regra de impressão, procure a gêmea.
+
 A fatia mora em `pedidos_modelos.csv_selecao` — **não** em `producao_os_itens`,
 que os arquivos de `sql/` descrevem mas o app abandonou. Nessa tabela a numeração
 é `amostra_num_id`, e `item.modelo` guarda o **id**, não o nome (o nome está em

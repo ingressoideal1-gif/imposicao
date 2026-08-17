@@ -2239,13 +2239,15 @@ function numeracaoIdDoItem(item) {
 /**
  * As linhas que ESTE modelo imprime, na ordem original — que e a ordem de
  * impressao. Modelo sem `csv_selecao` leva o banco inteiro, que e o
- * comportamento de todo pedido anterior a esta versao.
+ * comportamento de todo pedido anterior a esta versao. Lista de ids VAZIA e
+ * outra coisa: houve distribuicao e este modelo nao ficou com nenhuma linha,
+ * entao ele folheia zero ingressos. Espelha CsvEditor.fatiaDoModelo.
  */
 function fatiaCsvDoItem(item, num) {
     const rows = (num && num.csv_data) || [];
     const sel = item && item.csv_selecao;
     const mesmaNum = item && num && String(numeracaoIdDoItem(item)) === String(num.id);
-    if (!sel || !mesmaNum || !sel.ids || !sel.ids.length) return linhasAtivasCsv(rows);
+    if (!sel || !mesmaNum || !sel.ids) return linhasAtivasCsv(rows);
     const querido = new Set(expandirIdsCsv(sel.ids).map(Number));
     return linhasAtivasCsv(rows).filter(r => querido.has(Number(r.__id)));
 }

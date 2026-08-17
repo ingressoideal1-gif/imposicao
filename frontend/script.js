@@ -9626,6 +9626,12 @@ window.runImposition = async function (mode, returnBlob = false) {
     const formato = state.formatos.find(f => String(f.id) === String(fmtId));
     if (!formato) return toast('Formato não encontrado no sistema.', 'error');
 
+    // Antes de abrir qualquer coisa: modelo sem nenhuma linha do banco cairia na
+    // numeração sequencial e sairia com número no lugar do nome. Ver
+    // modeloSemLinhasDoBanco().
+    const _semLinhas = recadoDeFatiaVazia(itensDaImposicao(isMultiSelected));
+    if (_semLinhas) return toast(_semLinhas, 'error');
+
     if (isMultiSelected) {
         // Multi-seleção: schema e cut_stack_mode já foram definidos acima como hardcode
         // Apenas pegar saiId do formato se não existir
@@ -13288,6 +13294,72 @@ function atualizarBotoesCsvDaAmostra(idx, item, num, container) {
     bFatia.style.borderColor = minhas ? '' : 'var(--red, #ef4444)';
 
 }
+
+
+
+/**
+ * O modelo ficou sem nenhuma linha do banco? Devolve o que dizer, ou null.
+ *
+ * Só responde quando houve distribuição de verdade (`csv_selecao` presente) e a
+ * numeração tem banco: sem `csv_selecao` o modelo leva o banco inteiro, que é o
+ * comportamento de todo pedido anterior à v525.
+ *
+ * Existe porque uma fatia vazia não sai como folha em branco — sai pior. O motor
+ * recebe `csv_data` vazio, não entra no ramo do banco e cai na numeração
+ * SEQUENCIAL: a credencial sairia com um número no lugar do nome da pessoa, e o
+ * operador só descobriria com o material na mão.
+ */
+function modeloSemLinhasDoBanco(item) {
+
+    if (!item || !item.csv_selecao) return null;
+
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+
+    if (!num || !num.csv_data || !num.csv_data.length) return null;
+
+    if (fatiaCsvDoItem(item, num).length) return null;
+
+    return rotuloDoModelo(item, 0);
+
+}
+
+
+
+/**
+ * O recado que trava a imposição, ou null quando todos os modelos têm linhas.
+ * O recado diz a saída, e não só o problema: sem isso o operador fica com uma
+ * tela que recusa e não ensina.
+ */
+function recadoDeFatiaVazia(itens) {
+
+    const nomes = (itens || []).map(modeloSemLinhasDoBanco).filter(Boolean);
+
+    if (!nomes.length) return null;
+
+    return `Sem nenhuma linha do banco de dados: ${nomes.join(', ')}. `
+
+        + 'Modelo sem linha não imprime nada. Abra 🧩 Linhas no card do modelo, '
+
+        + 'escolha as linhas que ele imprime e imponha de novo.';
+
+}
+window.recadoDeFatiaVazia = recadoDeFatiaVazia;
+
+
+
+/** Os modelos que esta imposição vai gerar — um só, ou os da multi-seleção. */
+function itensDaImposicao(isMultiSelected) {
+
+    if (!isMultiSelected) return [itemAtivoDoPedido()].filter(Boolean);
+
+    return (state.selectedOSItems || [])
+
+        .map(s => (state.osItens[s.osId] || []).find(i => String(i.id) === String(s.itemId)))
+
+        .filter(Boolean);
+
+}
+window.itensDaImposicao = itensDaImposicao;
 
 
 

@@ -204,6 +204,12 @@ cópia**, senão nascem duas linhas com a mesma identidade.
 inteiro**, que é o comportamento de todo pedido anterior — por isso a migração
 não converteu dado nenhum.
 
+**Lista vazia não é a mesma coisa que nulo.** Nulo é "nunca distribuído"; lista
+vazia é "houve distribuição e este modelo não ficou com nenhuma linha". Até a
+v629 o código lia as duas do mesmo jeito, e o modelo esquecido na distribuição
+imprimia o banco inteiro — o oposto do que a tela dizia, e em silêncio. Desde a
+v630 lista vazia devolve zero linhas.
+
 ### Onde a fatia entra na impressão
 
 `updateImpSummary()` carrega a fatia do item ativo em vez do banco inteiro; e no
@@ -237,6 +243,22 @@ tela.
 lê os dois arquivos e exige que os dois passem pelo `fatiaCsvDoItem`, no ramo do
 banco embutido e no caminho multi-artes. **Ao mexer numa regra de impressão,
 procure a gêmea no outro arquivo.**
+
+#### Fatia vazia não pode virar folha impressa
+
+Zero linhas não sai como folha em branco — sai pior. O motor recebe `csv_data`
+vazio, o `if csv_data:` do construtor de `ImpositionConfig` não entra, e a
+imposição **cai no ramo sequencial**: a credencial sairia com um número no lugar
+do nome da pessoa, e o operador só descobriria com o material na mão.
+
+Por isso `recadoDeFatiaVazia()` trava as duas telas antes de qualquer coisa ser
+aberta, e o recado diz a saída, e não só o problema: *"Sem nenhuma linha do banco
+de dados: Bulgaria. Modelo sem linha não imprime nada. Abra 🧩 Linhas no card do
+modelo, escolha as linhas que ele imprime e imponha de novo."*
+
+A trava só vale quando houve distribuição de verdade — `csv_selecao` presente e a
+numeração com banco. Modelo nunca distribuído continua levando o banco inteiro, e
+modelo cuja numeração não tem CSV nunca é barrado.
 
 ### A visualização da amostra é paginada
 

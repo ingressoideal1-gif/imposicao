@@ -323,12 +323,18 @@
     /**
      * As linhas que um modelo imprime: a fatia dele, já sem as canceladas e na
      * ordem original do banco (que é a ordem de impressão).
-     * `selecao` nula ou vazia significa "o banco inteiro" — é o que mantém todo
+     *
+     * `selecao` **ausente** significa "o banco inteiro" — é o que mantém todo
      * pedido anterior a esta versão funcionando sem migração de dado.
+     *
+     * `selecao` com lista **vazia** é outra coisa, e desde a v630 devolve zero
+     * linhas: houve uma distribuição, e este modelo não ficou com nenhuma. Ler
+     * isso como "o banco inteiro" fazia o modelo esquecido imprimir tudo — o
+     * oposto do que a distribuição dizia, e em silêncio.
      */
     function fatiaDoModelo(rows, selecao) {
         const ativas = apenasAtivas(rows);
-        if (!selecao || !selecao.ids || !selecao.ids.length) return ativas;
+        if (!selecao || !selecao.ids) return ativas;
         const querido = new Set(expandirIds(selecao.ids));
         return ativas.filter(r => querido.has(Number(r[COL_ID])));
     }
