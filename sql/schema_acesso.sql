@@ -107,7 +107,19 @@ CREATE TABLE IF NOT EXISTS producao_acesso_eventos (
     -- Sal usado nos códigos que o CLIENTE fornece (staff, cortesia). Os códigos
     -- do QR Ideal usam o sal do pedido, não este.
     sal TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'ativo',   -- ativo | encerrado | excluido
+    -- ativo      = os portões leem
+    -- encerrado  = INATIVO: pausa. Os portões param e o evento continua em
+    --              "Meus Eventos", marcado, para o dono religar em segundos.
+    -- finalizado = ARQUIVO. Acabou: sai de "Meus Eventos" e vai para a lista
+    --              de finalizados, de onde dá para reabrir. Acrescentado em
+    --              16/08/2026; a coluna é TEXT sem CHECK, então o valor novo
+    --              não precisou de migração.
+    -- excluido   = existe no esquema e NÃO tem caminho na tela, de propósito.
+    --              No vocabulário do usuário um evento se FINALIZA, não se
+    --              exclui: ele acontece e termina, mas não deixa de ter
+    --              existido — e quem organizou a festa do ano passado quer
+    --              poder olhar a festa do ano passado.
+    status TEXT NOT NULL DEFAULT 'ativo',
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );

@@ -46,6 +46,15 @@
 
         (daConta || []).forEach(function (ev) {
             if (!ev || !ev.id) { return; }
+            if (ev.status === 'finalizado') {
+                // Finalizado sai de "Meus Eventos" — ele tem lista própria,
+                // logo abaixo. Sai INCLUSIVE quando este aparelho ainda tem a
+                // chave dele no chaveiro: o servidor é a origem da verdade, e
+                // uma barra verde de um evento que acabou mandaria o porteiro
+                // tentar ler ingresso num portão que a portaria já recusa.
+                delete porId[ev.id];
+                return;
+            }
             var ja = porId[ev.id];
             porId[ev.id] = {
                 id: ev.id,
@@ -64,6 +73,40 @@
         // aparelho le, e nao os outros da conta.
         linhas.sort(function (a, b) {
             if (a.ehPortao !== b.ehPortao) { return a.ehPortao ? -1 : 1; }
+            return a.nome.localeCompare(b.nome, 'pt-BR');
+        });
+        return linhas;
+    }
+
+    /**
+     * Os eventos que ja acabaram, do mais recente para o mais antigo.
+     *
+     * Um evento acontece e TERMINA -- ele nao deixa de ter existido. Por isso
+     * ele nao some da tela: vem para ca, com a data e com quanta gente entrou,
+     * que e o numero pelo qual o dono se lembra do evento.
+     *
+     * So a conta sabe disso: o chaveiro deste aparelho nao guarda situacao
+     * nenhuma, e chutar "finalizado" sem o servidor esconderia da lista um
+     * evento que esta acontecendo.
+     *
+     * @returns [{ id, nome, data, entradas }]
+     */
+    function finalizados(daConta) {
+        var linhas = (daConta || []).filter(function (ev) {
+            return ev && ev.id && ev.status === 'finalizado';
+        }).map(function (ev) {
+            return {
+                id: ev.id,
+                nome: ev.nome_evento || 'Evento',
+                data: ev.data_evento || null,
+                // `|| 0` e nao "sem numero": um evento finalizado sem nenhuma
+                // entrada e um caso real -- o teste que nunca virou festa.
+                entradas: typeof ev.entradas === 'number' ? ev.entradas : 0
+            };
+        });
+        linhas.sort(function (a, b) {
+            var da = a.data || '', db = b.data || '';
+            if (da !== db) { return da < db ? 1 : -1; }   // o mais recente em cima
             return a.nome.localeCompare(b.nome, 'pt-BR');
         });
         return linhas;
@@ -188,6 +231,111 @@
         $('sem-eventos').classList.toggle('sumindo', linhas.length > 0);
     }
 
+    // ── Os eventos finalizados ──────────────────────────────────────────────
+
+    /** "12/09/2026". Sem data cadastrada devolve texto vazio, e a linha fica
+     *  com nome e contagem -- uma data inventada seria pior que nenhuma. */
+    function dataCurta(iso) {
+        if (!iso) { return ''; }
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) { return ''; }
+        return d.toLocaleDateString('pt-BR');
+    }
+
+    /** "4.812 entraram" — em pt-BR, que e como o resto do sistema escreve
+     *  numero, e no singular quando foi uma pessoa so. */
+    function quantosEntraram(n) {
+        var quantos = n || 0;
+        return quantos === 1 ? '1 entrou'
+                             : quantos.toLocaleString('pt-BR') + ' entraram';
+    }
+
+    /**
+     * Uma linha de evento finalizado: nome · data · quantos entraram, e
+     * "Reabrir" ao lado.
+     *
+     * Sem luz e sem o icone de ler, ao contrario da barra de "Meus Eventos":
+     * evento finalizado nao e portao, e a barra inteira aqui NAO e botao --
+     * tocar nela nao pode levar a camera de leitura de um evento que acabou.
+     */
+    function linhaFinalizada(ev) {
+        var linha = document.createElement('div');
+        linha.className = 'linha-finalizada';
+        linha.id = 'finalizado-' + ev.id;
+
+        var dados = document.createElement('div');
+        dados.className = 'dados-finalizado';
+
+        var nome = document.createElement('span');
+        nome.className = 'nome-evento';
+        nome.textContent = ev.nome;          // digitado por pessoas: TEXTO
+        dados.appendChild(nome);
+
+        var detalhe = document.createElement('span');
+        detalhe.className = 'detalhe-finalizado';
+        var partes = [];
+        var data = dataCurta(ev.data);
+        if (data) { partes.push(data); }
+        partes.push(quantosEntraram(ev.entradas));
+        detalhe.textContent = ' · ' + partes.join(' · ');
+        dados.appendChild(detalhe);
+        linha.appendChild(dados);
+
+        var reabrir = document.createElement('button');
+        reabrir.type = 'button';
+        reabrir.className = 'secundario botao-reabrir';
+        reabrir.id = 'reabrir-' + ev.id;
+        reabrir.textContent = 'Reabrir';
+        reabrir.setAttribute('aria-label', 'Reabrir ' + ev.nome);
+        reabrir.addEventListener('click', function () { reabrir_(ev); });
+        linha.appendChild(reabrir);
+
+        return linha;
+    }
+
+    /**
+     * Reabrir devolve o evento a "Meus Eventos" INATIVO.
+     *
+     * Quem decide o status e o `Controle.reabrirEvento`, que tambem pede a
+     * senha -- e a mesma escrita de sempre, e nesta tela pode nem haver sessao
+     * aberta. Aqui so cuidamos do que a pessoa ve: a lista se refaz sozinha, e
+     * a falha vira texto no unico aviso que vive FORA dos blocos de estado.
+     */
+    function reabrir_(ev) {
+        var aviso = $('erro-arranque');
+        return Promise.resolve()
+            .then(function () { return window.Controle.reabrirEvento(ev.id); })
+            .then(function () {
+                if (aviso) { aviso.classList.add('sumindo'); }
+                return recarregar();
+            })
+            .catch(function (e) {
+                // Desistir da senha nao e erro: a caixa ja se fechou sozinha, e
+                // um aviso vermelho aqui acusaria o dono de um engano que ele
+                // nao cometeu.
+                if (e && e.message === 'cancelado') { return; }
+                if (!aviso) { return; }
+                aviso.textContent = 'Não consegui reabrir "' + ev.nome + '" agora. '
+                    + 'Confira a internet e tente de novo em instantes.';
+                aviso.classList.remove('sumindo');
+            });
+    }
+
+    /**
+     * Desenha a lista dos finalizados — e some inteira quando nao ha nenhum.
+     *
+     * O titulo "Eventos finalizados" sobre o vazio faria o dono procurar o que
+     * ele nunca finalizou.
+     */
+    function desenharFinalizados(linhas) {
+        var caixa = $('finalizados');
+        if (!caixa) { return; }
+        caixa.innerHTML = '';
+        linhas.forEach(function (ev) { caixa.appendChild(linhaFinalizada(ev)); });
+        var bloco = $('bloco-finalizados');
+        if (bloco) { bloco.classList.toggle('sumindo', linhas.length === 0); }
+    }
+
     /**
      * Junta as duas fontes e desenha.
      *
@@ -198,12 +346,17 @@
     function carregar(sessao) {
         var doChaveiro = window.chaveiro.listar();
         desenhar(unir(doChaveiro, []));      // a tela ja aparece, sem esperar
+        // Sem a conta nao ha finalizado nenhum a mostrar: quem sabe que um
+        // evento acabou e o servidor.
+        desenharFinalizados([]);
 
         if (!sessao) { return Promise.resolve(); }
         return window.AcessoConta.pedir('/meus-eventos', {
             headers: { Authorization: 'Bearer ' + sessao.access_token }
         }).then(function (d) {
-            desenhar(unir(doChaveiro, d.eventos || []));
+            var eventos = d.eventos || [];
+            desenhar(unir(doChaveiro, eventos));
+            desenharFinalizados(finalizados(eventos));
         }).catch(function () {
             // A lista do chaveiro ja esta na tela. Aqui so avisamos que o resto
             // nao veio -- silencio faria o dono achar que perdeu um evento.
@@ -219,7 +372,7 @@
      *
      * `migrar()` primeiro, e sem rede: todo celular que ja e portao hoje tem a
      * chave antiga e nenhum chaveiro, e sem a conversao ele acorda com o evento
-     * APAGADO na lista -- quem descobriria isso e o porteiro, no portao.
+     * FORA da lista -- quem descobriria isso e o porteiro, no portao.
      *
      * A sessao vem depois, e so acrescenta. `Promise.resolve().then(...)`
      * porque `AcessoConta.sessao()` LANCA de forma sincrona quando o
@@ -241,6 +394,17 @@
             mais.addEventListener('click', function () { window.lerQR.abrir(); });
         }
 
+        return recarregar();
+    }
+
+    /**
+     * A lista inteira, de novo, com a sessao que houver.
+     *
+     * Separada do `arrancar()` porque quem refaz a lista depois de finalizar ou
+     * de reabrir um evento nao pode reinstalar os ouvintes de clique junto: o
+     * segundo ouvinte no `+` abriria a camera duas vezes por toque.
+     */
+    function recarregar() {
         return Promise.resolve().then(function () {
             return window.AcessoConta.sessao();
         }).catch(function () {
@@ -251,7 +415,9 @@
     }
 
     window.listaEventos = {
-        unir: unir, desenhar: desenhar, carregar: carregar, arrancar: arrancar
+        unir: unir, finalizados: finalizados,
+        desenhar: desenhar, desenharFinalizados: desenharFinalizados,
+        carregar: carregar, recarregar: recarregar, arrancar: arrancar
     };
     document.addEventListener('DOMContentLoaded', arrancar);
 })();

@@ -24,6 +24,7 @@ import {
   momento,
   sortearCodigo,
   texto,
+  zerarEntradas,
 } from "./configuracao.ts";
 import { Recusa } from "./sessao.ts";
 
@@ -179,17 +180,23 @@ async function comBancoDeMesa<T>(tarefa: () => Promise<T>): Promise<T> {
 /** O setor ja lido do banco, que e o que `aplicarSetor` recebe. */
 const SETOR = { id: "s1", evento_id: "e1", abre_em: null, fecha_em: null };
 
-Deno.test("evento: status aceita ativo e encerrado", async () => {
-  for (const valor of ["ativo", "encerrado"]) {
+Deno.test("evento: status aceita ativo, encerrado e finalizado", async () => {
+  // Sao os TRES estados da tela: lendo, pausado e arquivado. `finalizado` e o
+  // que o dono escolhe quando o evento acabou -- e por isso ele tem de voltar
+  // para `ativo` ou `encerrado` depois, no reabrir.
+  for (const valor of ["ativo", "encerrado", "finalizado"]) {
     const r = await comBancoDeMesa(() => aplicarEvento("e1", { status: valor }));
     assertEquals(r.gravado, ["status"], `recusou o status ${valor}`);
   }
 });
 
-Deno.test("evento: status `excluido` NAO passa", async () => {
-  // A coluna aceita, e e por isso que o teste existe. Apagar evento nao e o que
-  // a engrenagem oferece, e um valor a mais aqui e a diferenca entre "o dono
-  // desligou o evento" e "o evento sumiu da conta dele" -- sem volta.
+Deno.test("evento: status `excluido` NAO passa, nem depois do finalizado", async () => {
+  // A coluna aceita, e e por isso que o teste existe -- agora com um motivo a
+  // mais: `finalizado` e a palavra parecida que ACABOU de entrar, e quem
+  // encostar nesta validacao de novo pode achar que "ja que finalizado passa,
+  // excluido tambem". Nao passa. Um evento acontece e termina; ele nao deixa de
+  // ter existido. A diferenca entre os dois e "o dono arquivou o evento" e "o
+  // evento sumiu da conta dele" -- sem volta e sem nada na tela que explicasse.
   await assertRejects(
     () => comBancoDeMesa(() => aplicarEvento("e1", { status: "excluido" })),
     Recusa,
@@ -230,6 +237,141 @@ Deno.test("setor: desbloquear apaga o motivo junto", async () => {
   // falando de um bloqueio que ja acabou.
   const r = await comBancoDeMesa(() => aplicarSetor(SETOR, { bloqueado: false }));
   assertEquals(r.gravado, ["bloqueado", "bloqueado_motivo"]);
+});
+
+// ── Zerar as entradas ───────────────────────────────────────────────────────
+//
+// `zerarEntradas` e a unica funcao deste modulo que DESTROI dado, e o que ela
+// NAO toca importa tanto quanto o que ela apaga. Isso nao da para conferir pelo
+// valor de retorno -- so olhando as idas ao banco.
+
+const MARCA = "2026-08-16T23:10:00+00:00";
+
+/** Uma ida ao banco, como o dublê a viu. */
+interface Ida {
+  metodo: string;
+  caminho: string;
+  corpo: string;
+}
+
+/**
+ * O mesmo dublê de `comBancoDeMesa`, mas ANOTANDO cada ida.
+ *
+ * E o unico jeito de provar uma ausencia: que as credenciais, os setores e os
+ * aparelhos continuam onde estao depois de zerar. Um teste sobre o valor de
+ * retorno nunca reprovaria um DELETE a mais.
+ */
+async function anotandoAsIdasAoBanco<T>(
+  tarefa: () => Promise<T>,
+): Promise<{ resultado: T; idas: Ida[] }> {
+  const idas: Ida[] = [];
+  Deno.env.set("SUPABASE_URL", "https://banco.de.mesa");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "chave-de-mesa");
+  globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
+    const metodo = init?.method ?? "GET";
+    idas.push({
+      metodo,
+      caminho: String(url).replace("https://banco.de.mesa/rest/v1/", ""),
+      corpo: String(init?.body ?? ""),
+    });
+    // O PATCH volta com a linha, como o `return=representation` de verdade: e
+    // dela que sai o `zerado_em` da resposta. Um 204 aqui esconderia que a
+    // funcao depende da representacao para ter o que responder.
+    if (metodo === "PATCH") {
+      return Promise.resolve(
+        new Response(JSON.stringify([{ entradas_zeradas_em: MARCA }]), {
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response(null, { status: 204 }));
+  }) as typeof fetch;
+  try {
+    return { resultado: await tarefa(), idas };
+  } finally {
+    globalThis.fetch = fetchDeVerdade;
+  }
+}
+
+Deno.test("zerar: apaga as entradas unicas E as leituras", async () => {
+  // As duas, e nao uma. `entradas_unicas` e o que decide a corrida entre dois
+  // portoes; `leituras` e de onde sai o numero na tela. Apagar so a primeira
+  // deixaria o contador cheio; so a segunda deixaria `ja_entrou` barrando quem
+  // entrou no teste.
+  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
+  const apagados = idas.filter((i) => i.metodo === "DELETE").map((i) => i.caminho);
+  assertEquals(
+    apagados.some((c) => c.startsWith("producao_acesso_entradas_unicas?evento_id=eq.e1")),
+    true,
+    `nao apagou as entradas unicas: ${JSON.stringify(apagados)}`,
+  );
+  assertEquals(
+    apagados.some((c) => c.startsWith("producao_acesso_leituras?evento_id=eq.e1")),
+    true,
+    `nao apagou as leituras: ${JSON.stringify(apagados)}`,
+  );
+});
+
+Deno.test("zerar: NAO apaga credenciais, setores nem aparelhos", async () => {
+  // E a escolha do usuario, e cada uma tem um custo proprio se for quebrada:
+  // sem as credenciais o portao recusa TODO MUNDO como `desconhecido`; sem os
+  // setores nao ha onde a leitura cair; sem os aparelhos o dono pareia os
+  // celulares de novo, um a um, com o evento prestes a comecar.
+  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
+  for (const tabela of [
+    "producao_acesso_credenciais",
+    "producao_acesso_setores",
+    "producao_acesso_dispositivos",
+    "producao_acesso_dispositivo_setores",
+    "producao_acesso_bloqueios",
+    "producao_acesso_pedidos",
+  ]) {
+    assertEquals(
+      idas.some((i) => i.metodo === "DELETE" && i.caminho.startsWith(tabela)),
+      false,
+      `zerar apagou ${tabela}, e nao devia`,
+    );
+  }
+});
+
+Deno.test("zerar: nunca apaga sem dizer de QUAL evento", async () => {
+  // Um DELETE sem filtro no PostgREST apaga a tabela inteira -- as entradas de
+  // todos os clientes da grafica, de todos os eventos, com um clique so.
+  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
+  for (const i of idas.filter((x) => x.metodo === "DELETE")) {
+    assertEquals(
+      i.caminho.includes("evento_id=eq.e1"),
+      true,
+      `DELETE sem o evento no filtro: ${i.caminho}`,
+    );
+  }
+});
+
+Deno.test("zerar: carimba a marca DEPOIS de apagar, e nao antes", async () => {
+  // A marca e o que manda os portoes esquecerem o que baixaram. Carimbada
+  // antes, o celular esvaziaria a lista local e o sincronismo seguinte a
+  // encheria de novo com as MESMAS entradas -- o dono veria o contador voltar
+  // sozinho e nao teria como entender por que.
+  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
+  const ultimoDelete = idas.map((i) => i.metodo).lastIndexOf("DELETE");
+  const carimbo = idas.findIndex(
+    (i) => i.metodo === "PATCH" && i.caminho.startsWith("producao_acesso_eventos"),
+  );
+  assertEquals(carimbo > ultimoDelete, true, "a marca foi gravada antes de apagar");
+});
+
+Deno.test("zerar: a marca e o relogio do BANCO", async () => {
+  // `now()` e nao um instante calculado aqui: o aparelho COMPARA esta marca com
+  // a que guardou, e um relogio diferente do que carimba as linhas poderia cair
+  // antes de entradas que ela deveria apagar.
+  const { idas } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
+  const patch = idas.find((i) => i.metodo === "PATCH");
+  assertEquals(JSON.parse(patch!.corpo), { entradas_zeradas_em: "now()" });
+});
+
+Deno.test("zerar: devolve o instante, para a tela nao ter de perguntar de novo", async () => {
+  const { resultado } = await anotandoAsIdasAoBanco(() => zerarEntradas("e1"));
+  assertEquals(resultado.zerado_em, MARCA);
 });
 
 Deno.test("setor: `bloqueado` que nao e booleano nao passa", async () => {

@@ -620,3 +620,123 @@ def test_o_desde_da_rota_leve_e_opcional():
     trecho = texto[inicio:]
     assert "desdeBruto: string | null" in trecho
     assert "? `&momento=gte." in trecho or 'filtro = desde' in trecho
+
+
+# ── Zerar as entradas: a marca que viaja do painel ate o portao ─────────────
+#
+# Os testes daqui para baixo olham DOIS arquivos: a rota que apaga
+# (`acesso-conta`) e a rota que avisa o portao (`portaria`). Eles moram juntos de
+# proposito, e nao cada um no teste da sua funcao: as duas metades so significam
+# alguma coisa em par. Uma sem a outra e um dono zerando no painel enquanto o
+# portao continua barrando quem entrou no teste -- e separados, um dos lados
+# poderia sumir numa refatoracao com a suite inteira verde.
+
+
+def test_a_rota_leve_traz_a_marca_de_quando_o_dono_zerou():
+    """Sem este campo, zerar no painel nao chega ao portao.
+
+    As entradas ja estao no IndexedDB do celular, e o sincronismo so
+    ACRESCENTA -- ele nunca remove. A marca e o unico jeito de a ordem "esqueca
+    o que voce tem" viajar ate la.
+    """
+    trecho = _corpo_da_funcao("sincronizar")
+    assert "entradas_zeradas_em" in trecho, (
+        "o sincronismo nao devolve a marca; o portao nunca saberia que foi zerado"
+    )
+    assert "select=id,status,entradas_zeradas_em" in trecho, (
+        "a coluna nao foi pedida ao banco -- o campo sairia sempre indefinido"
+    )
+
+
+def test_a_marca_vem_no_TOPO_da_resposta_e_nao_dentro_do_evento():
+    """`portaria-sincronismo.js` le `novidade.entradas_zeradas_em` e decide
+    esvaziar as entradas locais ANTES de mesclar o resto. Escondida dentro de
+    `evento`, a regra simplesmente nunca dispararia -- e o sintoma seria o dono
+    zerando e nada mudando na porta, que e exatamente o defeito que esta marca
+    existe para evitar."""
+    trecho = _corpo_da_funcao("sincronizar")
+    retorno = trecho[trecho.index("return ok({"):]
+    assert "entradas_zeradas_em:" in retorno
+
+    dentro_do_evento = retorno[retorno.index("evento: {"):]
+    dentro_do_evento = dentro_do_evento[:dentro_do_evento.index("},")]
+    assert "entradas_zeradas_em" not in dentro_do_evento, (
+        "a marca ficou dentro de `evento`, onde quem sincroniza nao a procura"
+    )
+
+
+def test_a_rota_de_zerar_existe_e_exige_a_senha_do_dono():
+    """E a UNICA rota da tela do cliente que destroi dado, e o celular da
+    portaria fica na mao do porteiro, logado com a conta do cliente. Sem
+    elevacao, quem pegasse aquele aparelho apagaria a noite inteira de
+    leituras."""
+    texto = _ler("supabase/functions/acesso-conta/index.ts")
+    assert '"zerar-entradas"' in texto, "a rota de zerar nao existe"
+
+    inicio = texto.index('p[2] === "zerar-entradas"')
+    trecho = texto[inicio:texto.index("}", texto.index("zerarEntradas(", inicio))]
+    assert "eventoDoDono(" in trecho, "a rota nao confere se o evento e desta conta"
+    assert "exigirElevacao(" in trecho, "a rota de zerar nao exige elevacao"
+
+
+def test_zerar_apaga_as_entradas_unicas_E_as_leituras():
+    """As duas, e nao uma. `entradas_unicas` decide a corrida entre dois
+    portoes; `leituras` e de onde sai o numero na tela. Apagar so a primeira
+    deixaria o contador cheio; so a segunda deixaria `ja_entrou` barrando quem
+    entrou no teste."""
+    texto = _ler("supabase/functions/_compartilhado/configuracao.ts")
+    inicio = texto.index("export async function zerarEntradas(")
+    trecho = texto[inicio:texto.index("\nexport ", inicio + 1)]
+    assert "producao_acesso_entradas_unicas?evento_id=eq." in trecho
+    assert "producao_acesso_leituras?evento_id=eq." in trecho
+
+
+def test_zerar_PRESERVA_os_ingressos_os_setores_e_os_portoes():
+    """Escolha do usuario, e cada uma tem um custo proprio se for quebrada: sem
+    as credenciais o portao recusa TODO MUNDO como `desconhecido`; sem os
+    setores nao ha onde a leitura cair; sem os aparelhos o dono pareia os
+    celulares de novo, um a um, com o evento prestes a comecar."""
+    texto = _ler("supabase/functions/_compartilhado/configuracao.ts")
+    inicio = texto.index("export async function zerarEntradas(")
+    trecho = texto[inicio:texto.index("\nexport ", inicio + 1)]
+    for tabela in ("producao_acesso_credenciais", "producao_acesso_setores",
+                   "producao_acesso_dispositivos"):
+        assert tabela not in trecho, f"zerar encosta em {tabela}, e nao devia"
+
+
+def test_finalizar_e_aceito_e_excluir_continua_recusado():
+    """Um evento acontece e termina; ele nao deixa de ter existido. `finalizado`
+    e o arquivo, e da para reabrir. `excluido` a coluna aceita, e e por isso que
+    a conferencia existe -- so que apagar nao e o que esta tela oferece."""
+    texto = _ler("supabase/functions/_compartilhado/configuracao.ts")
+    inicio = texto.index("export async function aplicarEvento(")
+    trecho = texto[inicio:texto.index("\nexport ", inicio + 1)]
+    assert 's !== "finalizado"' in trecho, "o status `finalizado` nao e aceito"
+    # Aspas duplas de proposito: o comentario logo acima cita `excluido` entre
+    # crases para explicar POR QUE ele fica de fora, e o teste nao pode acusar a
+    # explicacao. So o codigo escreve o valor entre aspas.
+    assert '"excluido"' not in trecho, (
+        "`excluido` virou um status aceito -- e a diferenca entre o dono "
+        "arquivar o evento e o evento sumir da conta dele, sem volta"
+    )
+
+
+def test_a_lista_de_eventos_diz_quanta_gente_entrou():
+    """A lista de finalizados mostra "4.812 entraram" em cada linha. Sem o
+    numero vindo junto, a tela inicial dispararia uma chamada por linha no 4G de
+    quem acabou de abrir o aplicativo.
+
+    Da mesma fonte dos `totais` do `/sincronizar` -- as leituras permitidas --,
+    porque o numero na lista e o numero que o dono viu no portao a noite
+    inteira, e duas contas para a mesma pergunta viram uma discussao que ninguem
+    resolve depois.
+    """
+    texto = _ler("supabase/functions/acesso-conta/index.ts")
+    inicio = texto.index("async function meusEventos(")
+    trecho = texto[inicio:texto.index("\nasync function ", inicio + 1)]
+    assert "entradas" in trecho
+    assert "resultado=eq.permitido" in trecho
+    assert "contar(" in trecho, (
+        "contou pelo tamanho de uma lista -- o teto de 1000 linhas do PostgREST "
+        "faria todo evento grande aparecer com 1.000 entradas para sempre"
+    )

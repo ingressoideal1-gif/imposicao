@@ -156,6 +156,55 @@ def test_da_para_inativar_o_evento_e_a_tela_avisa_o_limite():
     assert "sem internet" in texto or "sem rede" in texto
 
 
+# ── O vocabulário: um evento TERMINA, ele não deixa de ter existido ─────────
+#
+# Decisão do usuário em 16/08/2026, corrigindo o meu termo: não é "excluir", é
+# "finalizar". Apagar de verdade não existe como função desta tela — nem o
+# `excluido` que o esquema conhece tem caminho aqui, de propósito.
+#
+# Isto é teste, e não convenção de comentário, porque a palavra errada não
+# quebra nada: ela só ensina ao dono que o botão faz algo que ele não faz, e
+# quem descobre a diferença é ele, depois de tocar.
+
+TRES_PALAVRAS = ("excluir", "apagar", "remover")
+TELAS_DO_CONTROLE = ("frontend/controle.html", "frontend/controle.js",
+                     "frontend/lista-eventos.js")
+
+
+def test_nenhuma_das_tres_telas_fala_em_excluir_apagar_nem_remover():
+    for arquivo in TELAS_DO_CONTROLE:
+        texto = _ler(arquivo)
+        for palavra in TRES_PALAVRAS:
+            achado = re.search(r"\b" + palavra + r"\b", texto, re.IGNORECASE)
+            assert not achado, (
+                f"{arquivo} fala em '{palavra}': " + repr(
+                    texto[max(0, achado.start() - 60):achado.end() + 60])
+            )
+
+
+def test_o_codigo_das_telas_nao_guarda_nem_a_familia_da_palavra():
+    """Mais apertado que o teste acima, e de propósito: "apagaria", "exclusão"
+    e "apagado" ensinam a mesma coisa errada a quem for mexer aqui depois.
+
+    "remov" fica de fora desta versão porque `classList.remove` e
+    `localStorage.removeItem` são nomes do navegador, não palavras da nossa
+    interface — a forma em português, "remover", já é proibida acima.
+    """
+    for arquivo in ("frontend/controle.js", "frontend/lista-eventos.js"):
+        texto = _ler(arquivo).lower()
+        for familia in ("apag", "exclu"):
+            assert familia not in texto, f"{arquivo} tem a família '{familia}'"
+
+
+def test_o_texto_que_o_dono_LE_na_tela_nao_tem_nenhuma_das_tres():
+    """Lido do HTML sem as tags e sem os comentários: o que sobra é o que
+    aparece na tela do celular."""
+    html = re.sub(r"<!--.*?-->", " ", _ler("frontend/controle.html"), flags=re.S)
+    visivel = re.sub(r"<[^>]+>", " ", html).lower()
+    for familia in ("apag", "exclu", "remov"):
+        assert familia not in visivel, f"a tela escreve '{familia}'"
+
+
 def test_da_para_bloquear_o_setor_inteiro_com_motivo():
     texto = _ler("frontend/controle.js")
     assert "bloqueado_motivo" in texto
@@ -2186,3 +2235,260 @@ def test_a_recarga_automatica_NAO_atropela_quem_esta_digitando_a_senha():
     assert "caixa-entrar-config" in trecho, (
         "a recarga automática não confere se há senha sendo digitada"
     )
+
+
+# ── A zona de risco, e a lista dos eventos que acabaram ─────────────────────
+#
+# Decisão do usuário, 16/08/2026: o dono precisava de duas ações que faltavam —
+# recomeçar a contagem de um evento de teste, e arquivar um evento que acabou.
+# Nenhuma das duas é "excluir": zerar mexe SÓ nas entradas, e finalizar apenas
+# tira o evento de "Meus Eventos".
+
+
+def test_a_zona_de_risco_fica_no_FIM_da_engrenagem_e_separada():
+    """Depois de "Este aparelho", e não no meio da configuração: a distância até
+    ela é parte da proteção. O dono não pode esbarrar em "Zerar as entradas"
+    enquanto rola a página procurando um setor."""
+    html = _ler("frontend/controle.html")
+    assert html.index('id="bloco-este-aparelho"') < html.index('id="bloco-zona-de-risco"')
+    assert 'id="btn-zerar-entradas"' in html
+    assert 'id="btn-finalizar-evento"' in html
+    # Vermelha, e é a única parte vermelha da configuração.
+    css = _ler("frontend/controle.css")
+    assert ".zona-de-risco" in css
+    assert "var(--red)" in css[css.index(".zona-de-risco"):]
+
+
+def test_zerar_diz_o_que_recomeca_E_o_que_continua_valendo():
+    """Sem a segunda metade, o dono lê "zerar" e entende que perde os ingressos
+    impressos — e não toca no botão, ou toca achando que vai perder tudo."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        return { texto: document.getElementById('cartao-zerar-entradas')
+                          .textContent.replace(/\\s+/g, ' ') };
+    """)
+    texto = saida["texto"].lower()
+    # O que recomeça.
+    assert "contagem" in texto and "zero" in texto
+    # E o que fica de pé, dito com todas as letras.
+    assert "ingressos" in texto
+    assert "setores" in texto
+    assert "portões" in texto
+    # E o aviso de que a senha vem de novo.
+    assert "senha" in texto
+
+
+def test_finalizar_diz_que_sai_da_lista_que_os_portoes_param_e_que_da_para_voltar():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        return { texto: document.getElementById('cartao-finalizar-evento')
+                          .textContent.replace(/\\s+/g, ' ') };
+    """)
+    texto = saida["texto"].lower()
+    assert "meus eventos" in texto
+    assert "portões param" in texto or "param de aceitar" in texto
+    assert "reabrir" in texto
+    assert "inativo" in texto        # volta desligado, e isso precisa estar dito
+    assert "sem internet" in texto   # o portão sem rede só sabe quando sincroniza
+
+
+def test_zerar_recusado_na_confirmacao_nao_pede_senha_nem_manda_nada():
+    """A ordem importa: confirma primeiro, senha depois. Pedir a senha a quem
+    ainda vai desistir ensina o dono a digitá-la sem ler."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        let pediuSenha = 0;
+        Controle._pedirSenhaParaTeste = async () => { pediuSenha++; };
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push(caminho); return { ok: true };
+        };
+        document.getElementById('btn-zerar-entradas').click();
+        await new Promise(r => setTimeout(r, 120));
+        return { pediuSenha, chamadas };
+    """)
+    assert saida["pediuSenha"] == 0
+    assert saida["chamadas"] == []
+
+
+def test_zerar_pede_a_senha_DE_NOVO_mesmo_com_os_15_minutos_ja_liberados():
+    """A única ação desta tela que desfaz dado que o cliente pagou para ter.
+
+    A elevação que o dono comprou meia hora antes para renomear um setor não
+    pode servir de autorização para isto — o celular pode estar na mão do
+    porteiro desde então.
+    """
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const estavaElevado = Controle.elevado();
+        let pediuSenha = 0;
+        Controle._pedirSenhaParaTeste = async () => { pediuSenha++; };
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, metodo: opcoes.method });
+            return { zerado_em: '2026-08-16T12:00:00Z' };
+        };
+        document.getElementById('btn-zerar-entradas').click();
+        await new Promise(r => setTimeout(r, 200));
+        return { estavaElevado, pediuSenha, chamadas,
+                 aviso: document.getElementById('aviso-gravacao').textContent };
+    """, aceitar_dialogo=True)
+    assert saida["estavaElevado"] is True, "o teste precisa começar JÁ elevado"
+    assert saida["pediuSenha"] == 1, "zerou sem pedir a senha de novo"
+    assert saida["chamadas"] == [{"caminho": "/eventos/ev-1/zerar-entradas",
+                                  "metodo": "POST"}]
+    # Regra do projeto: o que o sistema faz sozinho se anuncia.
+    assert "zero" in saida["aviso"].lower()
+
+
+def test_finalizar_pede_confirmacao_e_manda_status_finalizado():
+    recusou = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push(caminho); return { ok: true };
+        };
+        const rotulo = document.getElementById('btn-finalizar-evento').textContent;
+        document.getElementById('btn-finalizar-evento').click();
+        await new Promise(r => setTimeout(r, 120));
+        return { chamadas, rotulo };
+    """)
+    assert recusou["rotulo"] == "Finalizar evento"
+    assert recusou["chamadas"] == []
+
+    aceitou = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        document.getElementById('engrenagem').classList.remove('sumindo');
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        document.getElementById('btn-finalizar-evento').click();
+        await new Promise(r => setTimeout(r, 250));
+        return {
+            chamadas,
+            engrenagemFechou: document.getElementById('engrenagem')
+                .classList.contains('sumindo'),
+            listaNaTela: !document.getElementById('lista').classList.contains('sumindo'),
+        };
+    """, aceitar_dialogo=True)
+    assert aceitou["chamadas"][0]["caminho"] == "/eventos/ev-1"
+    assert aceitou["chamadas"][0]["corpo"] == {"status": "finalizado"}
+    # A configuração de um evento que acabou de sair da lista não fica aberta.
+    assert aceitou["engrenagemFechou"] is True
+    assert aceitou["listaNaTela"] is True
+
+
+def test_as_duas_acoes_da_zona_de_risco_entram_na_trava_de_senha():
+    """São as escritas mais pesadas da tela: uma recomeça a contagem, a outra
+    para todos os portões de uma vez."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const semSenha = {
+            zerar: document.getElementById('btn-zerar-entradas').disabled,
+            finalizar: document.getElementById('btn-finalizar-evento').disabled,
+        };
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const comSenha = {
+            zerar: document.getElementById('btn-zerar-entradas').disabled,
+            finalizar: document.getElementById('btn-finalizar-evento').disabled,
+        };
+        return { semSenha, comSenha };
+    """)
+    assert saida["semSenha"] == {"zerar": True, "finalizar": True}
+    assert saida["comSenha"] == {"zerar": False, "finalizar": False}
+
+
+def test_a_lista_de_finalizados_so_aparece_quando_ha_evento_finalizado():
+    """Um título "Eventos finalizados" sobre o vazio faria o dono procurar o que
+    ele nunca finalizou.
+
+    A linha diz nome, data e quanta gente entrou -- e NÃO tem luz nem o ícone de
+    ler: evento finalizado não é portão, e tocar nele não pode abrir a câmera.
+    """
+    saida = _no_navegador("""
+        const bloco = document.getElementById('bloco-finalizados');
+        window.listaEventos.desenharFinalizados([]);
+        const vazio = getComputedStyle(bloco).display;
+
+        window.listaEventos.desenharFinalizados([
+            { id: 'ev-9', nome: 'Baile do Hawaii',
+              data: '2026-08-01T23:00:00Z', entradas: 4812 }
+        ]);
+        const linha = document.getElementById('finalizado-ev-9');
+        return {
+            vazio,
+            comUm: getComputedStyle(bloco).display,
+            texto: linha.textContent.replace(/\\s+/g, ' ').trim(),
+            etiqueta: linha.tagName,
+            temLuz: !!linha.querySelector('.luz'),
+            temIconeDeLer: !!linha.querySelector('.icone-ler'),
+            temReabrir: !!document.getElementById('reabrir-ev-9'),
+            rotuloDoReabrir: document.getElementById('reabrir-ev-9').textContent,
+        };
+    """)
+    assert saida["vazio"] == "none"
+    assert saida["comUm"] != "none"
+    assert "Baile do Hawaii" in saida["texto"]
+    assert "4.812 entraram" in saida["texto"]
+    assert re.search(r"\d{2}/\d{2}/\d{4}", saida["texto"]), saida["texto"]
+    # A linha não é botão: tocar no nome de um evento que acabou não leva a lugar
+    # nenhum.
+    assert saida["etiqueta"] != "BUTTON"
+    assert saida["temLuz"] is False
+    assert saida["temIconeDeLer"] is False
+    assert saida["temReabrir"] is True
+    assert saida["rotuloDoReabrir"] == "Reabrir"
+
+
+def test_reabrir_devolve_o_evento_como_INATIVO_e_nao_como_ativo():
+    """Decisão do usuário: reabrir quase sempre é para corrigir ou consultar.
+    Religar os portões de um evento que já acabou é uma segunda decisão, que ele
+    toma no "Ativar este evento" — reabrir e ativar juntos abririam a portaria
+    de um evento encerrado sem ninguém ter pedido."""
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'ev-9'
+        }));
+        window.listaEventos.desenharFinalizados([
+            { id: 'ev-9', nome: 'Baile do Hawaii',
+              data: '2026-08-01T23:00:00Z', entradas: 4812 }
+        ]);
+        const chamadas = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            chamadas.push({ caminho, metodo: opcoes.method,
+                            corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        document.getElementById('reabrir-ev-9').click();
+        await new Promise(r => setTimeout(r, 300));
+        return { chamadas };
+    """)
+    assert len(saida["chamadas"]) == 1, saida["chamadas"]
+    assert saida["chamadas"][0]["caminho"] == "/eventos/ev-9"
+    assert saida["chamadas"][0]["metodo"] == "PATCH"
+    assert saida["chamadas"][0]["corpo"] == {"status": "encerrado"}

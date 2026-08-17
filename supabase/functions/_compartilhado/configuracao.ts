@@ -196,6 +196,64 @@ export async function aplicarEvento(eventoId: string, corpo: any): Promise<any> 
 }
 
 /**
+ * Recomecar a contagem de um evento: as entradas somem, os ingressos ficam.
+ *
+ * ## Para que serve
+ *
+ * O dono testa o portao antes do publico chegar -- le o proprio ingresso tres
+ * vezes para ver a tela verde -- e depois quer o contador em zero. Sem isto, o
+ * jeito de limpar um teste era nao testar.
+ *
+ * ## O que sai e o que FICA
+ *
+ * Saem as entradas unicas (a linha que decide a corrida entre dois portoes) e
+ * as leituras (de onde sai o numero na tela). Ficam as credenciais, os setores
+ * e os aparelhos, e essa escolha e do usuario: apagar as credenciais faria o
+ * portao recusar todo mundo como `desconhecido`, e apagar os aparelhos exigiria
+ * parear os celulares de novo, um a um, com o evento prestes a comecar.
+ *
+ * ## Por que a ordem importa
+ *
+ * Apaga primeiro, carimba por ultimo. O carimbo e o que manda os portoes
+ * esquecerem o que ja baixaram; se ele existisse antes de as linhas sairem, o
+ * celular esvaziaria a lista local e o sincronismo seguinte a encheria de novo
+ * com as mesmas entradas -- o dono veria o contador voltar sozinho. Falhando no
+ * meio, nada foi carimbado e apertar de novo termina o servico: os tres passos
+ * sao repetiveis.
+ */
+export async function zerarEntradas(eventoId: string): Promise<any> {
+  await banco(
+    "DELETE",
+    `producao_acesso_entradas_unicas?evento_id=eq.${eventoId}`,
+    undefined,
+    "return=minimal",
+  );
+  await banco(
+    "DELETE",
+    `producao_acesso_leituras?evento_id=eq.${eventoId}`,
+    undefined,
+    "return=minimal",
+  );
+
+  // `now()` e o relogio do BANCO, e nao o desta funcao, de proposito -- o mesmo
+  // motivo do `momento` da tabela de falhas de pareamento. O aparelho compara
+  // esta marca com a que guardou, e uma marca vinda de um relogio diferente do
+  // que carimba as linhas poderia cair antes de entradas que ela deveria
+  // apagar.
+  //
+  // `return=representation` (o padrao do `banco()` para PATCH) e o que devolve o
+  // instante escolhido pelo banco. Sem ele nao haveria o que responder, e a tela
+  // teria de perguntar de novo so para saber a hora.
+  const linha = ((await banco(
+    "PATCH",
+    `producao_acesso_eventos?id=eq.${eventoId}&select=entradas_zeradas_em`,
+    { entradas_zeradas_em: "now()" },
+  )) ?? [])[0];
+
+  return { ok: true, zerado_em: linha?.entradas_zeradas_em ?? null };
+}
+
+/**
  * `setor` e a linha JA LIDA do banco -- quem chama e que decide como encontra-la
  * e se pode toca-la.
  *

@@ -181,7 +181,7 @@ h3 { font-size: 1rem; margin: 0 0 4px; }
 
 /* A tranca, quando o evento está só para olhar. GRUDADA no topo pela mesma
    razão que a faixa âmbar: o dono rola até a seção de aparelhos — uma tela e
-   meia abaixo, no desktop —, toca num botão apagado e não acontece nada. Se a
+   meia abaixo, no desktop —, toca num botão esmaecido e não acontece nada. Se a
    explicação ficou lá em cima, fora de vista, a tela não explicou nada. */
 #tranca {
     position: sticky; top: 0; z-index: 5;
@@ -264,6 +264,49 @@ body.somente-leitura .so-com-senha { opacity: .55; }
    escuro do cartão. */
 .setor-botao[aria-pressed="true"] {
     background: var(--teal); color: #06231f; border-color: var(--teal);
+}
+
+/* ── A zona de risco ──────────────────────────────────────────────────────
+ *
+ * Fica no fim da engrenagem e é a ÚNICA parte vermelha da configuração. A
+ * linha de cima e o respiro grande não são enfeite: eles são o que impede o
+ * dono de esbarrar em "Zerar as entradas" enquanto rola a página procurando
+ * um setor. O vermelho aqui significa "isto muda o evento inteiro", e por
+ * isso ele não pode aparecer em mais nenhum lugar desta tela. */
+.zona-de-risco {
+    margin-top: 36px; padding-top: 18px;
+    border-top: 1px solid rgba(239, 68, 68, .45);
+}
+.zona-de-risco > h2 { color: var(--red); }
+.zona-de-risco .cartao { border-color: rgba(239, 68, 68, .5); }
+.zona-de-risco h3 { color: #fca5a5; }
+
+/* Contornado, e não preenchido: um botão vermelho cheio puxaria o olho para
+   si assim que a seção entrasse na tela — e o que o dono precisa fazer antes
+   de tocar aqui é LER os dois parágrafos acima dele. */
+button.perigo {
+    background: transparent; color: #fca5a5;
+    border: 1px solid var(--red);
+}
+
+/* ── Os eventos que já acabaram ───────────────────────────────────────────
+ *
+ * Uma linha por evento, e ela NÃO é botão: tocar no nome de um evento
+ * finalizado não pode levar à leitura de ingresso. Sem luz e sem o
+ * celular-com-QR, pelo mesmo motivo — evento finalizado não é portão. */
+.linha-finalizada {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; margin-bottom: 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+}
+.linha-finalizada .dados-finalizado {
+    flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px;
+}
+.linha-finalizada .nome-evento { font-size: 1.05rem; font-weight: 700; }
+.linha-finalizada .detalhe-finalizado { color: var(--dim); font-size: .84rem; }
+.linha-finalizada button {
+    width: auto; margin: 0; flex: 0 0 auto;
+    padding: 8px 14px; min-height: 40px; font-size: .86rem;
 }
 
 .codigo-gerado {

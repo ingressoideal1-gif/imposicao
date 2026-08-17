@@ -144,7 +144,7 @@
 
         // Mesma ideia dos cartões de aparelho, um degrau abaixo: cada cartão
         // de setor é reconstruído a cada painel, e sem capturar o que já
-        // estava em tela ANTES de apagar, o dono perderia o que tinha acabado
+        // estava em tela ANTES de substituir, o dono perderia o que tinha acabado
         // de escolher — e o painel de configuração se fecharia sozinho — se
         // qualquer outro cartão desta tela disparar um redesenho por baixo
         // dele. Gravar uma opção JÁ é um desses redesenhos: `gravarSetor`
@@ -166,14 +166,14 @@
                 fecha_em: valor('setor-fecha_em'),
                 // O formulário de bloqueio conta MAIS do que os outros campos:
                 // o dono digita três coisas seguidas, e um redesenho disparado
-                // por outro cartão no meio disso apagaria os três — sem ele ter
+                // por outro cartão no meio disso levaria os três embora — sem ele ter
                 // tocado neste formulário.
                 bloq_de: valor('bloq-de'),
                 bloq_ate: valor('bloq-ate'),
                 bloq_motivo: valor('bloq-motivo'),
                 // O motivo de bloquear o SETOR INTEIRO, pela mesma razão: o
                 // dono escreve a frase que o porteiro vai ler em voz alta, e um
-                // redesenho no meio da digitação a apagaria.
+                // redesenho no meio da digitação a levaria embora.
                 setor_bloq_motivo: valor('setor-bloq-motivo'),
                 // Pelo mesmo motivo, e com mais razão ainda: a lista de
                 // códigos de staff é colada de uma planilha e pode ter
@@ -210,6 +210,7 @@
         });
 
         desenharAtivacao();
+        desenharZonaDeRisco();
 
         // Depois dos cartões de setor existirem no DOM: são eles que trazem os
         // campos de uso e de bloqueio que a trava também precisa desligar.
@@ -243,6 +244,109 @@
                 .then(carregarPainel)
                 .catch(function () { /* `gravar()` já avisou na tela */ });
         };
+    }
+
+    // ── A ZONA DE RISCO ─────────────────────────────────────────────────────
+    //
+    // Duas ações, no fim de tudo, separadas do resto: zerar a contagem e
+    // finalizar o evento. Nenhuma das duas faz o evento deixar de existir —
+    // não há esse caminho nesta tela, por decisão do usuário. Um evento
+    // acontece e TERMINA.
+
+    function desenharZonaDeRisco() {
+        var zerar = $('btn-zerar-entradas');
+        if (!zerar) { return; }              // outra página serve o arquivo
+        zerar.onclick = function () { zerarEntradas(); };
+
+        var finalizar = $('btn-finalizar-evento');
+        // Um evento que JÁ está finalizado só chega a esta tela por reabertura,
+        // e oferecer "Finalizar" a ele seria oferecer o que ele já é.
+        var jaFinalizado = (estado.painel.evento || {}).status === 'finalizado';
+        $('cartao-finalizar-evento').classList.toggle('sumindo', jaFinalizado);
+        finalizar.onclick = function () { finalizarEvento(); };
+    }
+
+    /**
+     * Zerar as entradas: a contagem recomeça, e SÓ a contagem.
+     *
+     * Confirmação E senha de novo, mesmo dentro dos 15 minutos já liberados.
+     * É a única ação desta tela que desfaz dado que o cliente pagou para ter,
+     * e o celular pode estar na mão do porteiro — a elevação que ele herdou de
+     * uma configuração feita meia hora antes não pode servir de autorização
+     * para isto.
+     *
+     * A senha é pedida por `_pedirSenha()`, que é o MESMO caminho que o
+     * `gravar()` usa quando a elevação vence: um segundo jeito de pedir senha
+     * nesta tela seria um segundo lugar para errar.
+     */
+    function zerarEntradas() {
+        var nome = (estado.painel.evento || {}).nome_evento || 'este evento';
+        if (!window.confirm(
+                'Zerar as entradas de "' + nome + '"? A contagem volta a zero em '
+                + 'todos os portões, e quem já entrou passa a poder entrar de '
+                + 'novo. Os ingressos, os setores e os portões continuam '
+                + 'valendo. Isto não tem volta.')) {
+            return Promise.resolve();
+        }
+        return Promise.resolve(_pedirSenha()).then(function () {
+            return gravar('/eventos/' + estado.evento_id + '/zerar-entradas', {}, 'POST');
+        }).then(function () {
+            avisar('A contagem deste evento recomeçou do zero. Cada portão '
+                 + 'acerta o contador dele no próximo sincronismo — portão sem '
+                 + 'internet, quando voltar a ter sinal.', 'ok');
+            return carregarPainel();
+        }).catch(function () {
+            // `abrirCaixaDeSenha()` e `gravar()` já escreveram o motivo na tela.
+        });
+    }
+
+    /**
+     * Finalizar: o evento sai de "Meus Eventos" e vai para a lista dos que
+     * acabaram. Os portões param, porque a portaria só aceita evento `ativo`.
+     *
+     * Sem pedir a senha de novo — a elevação basta: finalizar não desfaz nada,
+     * e o próprio "Reabrir" da tela inicial o traz de volta. Cobrar senha por
+     * uma ação reversível ensinaria o dono a digitá-la sem ler, e a próxima
+     * caixa de senha é a de zerar.
+     */
+    function finalizarEvento() {
+        var nome = (estado.painel.evento || {}).nome_evento || 'este evento';
+        if (!window.confirm(
+                'Finalizar "' + nome + '"? Ele sai de "Meus Eventos" e passa a '
+                + 'aparecer em "Eventos finalizados". Todos os portões param de '
+                + 'aceitar ingresso. Você pode reabri-lo depois.')) {
+            return Promise.resolve();
+        }
+        return gravar('/eventos/' + estado.evento_id, { status: 'finalizado' }, 'PATCH')
+            .then(function () {
+                // A engrenagem se fecha sozinha: ela é a configuração de um
+                // evento que acabou de sair da lista, e deixá-la aberta
+                // convidaria o dono a continuar mexendo no que ele arquivou.
+                return Promise.resolve(fecharEngrenagem());
+            })
+            .then(function () {
+                if (window.listaEventos) { return window.listaEventos.recarregar(); }
+            })
+            .catch(function () { /* `gravar()` já avisou na tela */ });
+    }
+
+    /**
+     * Reabrir um evento finalizado — chamado pela lista da tela inicial.
+     *
+     * Volta como `encerrado`, e não como `ativo`: reabrir quase sempre é para
+     * corrigir um dado ou consultar quem entrou, e religar os portões de um
+     * evento que já acabou é decisão separada, que o dono toma no "Ativar este
+     * evento".
+     *
+     * Passa pelo `comSenha` porque é uma escrita como qualquer outra, e na tela
+     * inicial pode não haver nem sessão — é o celular do porteiro.
+     */
+    function reabrirEvento(evento_id) {
+        estado.evento_id = evento_id;
+        restaurarElevacao();
+        return comSenha(evento_id, function () {
+            return gravar('/eventos/' + evento_id, { status: 'encerrado' }, 'PATCH');
+        });
     }
 
     /**
@@ -443,8 +547,8 @@
         texto.style.fontFamily = 'inherit';
         texto.style.fontSize = '1rem';
         // Preservado no redesenho como todo o resto do painel: o dono cola uma
-        // lista longa, e uma gravação de outro cartão por baixo dele apagaria
-        // tudo antes de ele chegar ao botão.
+        // lista longa, e uma gravação de outro cartão por baixo dele levaria
+        // tudo embora antes de ele chegar ao botão.
         texto.value = edicaoAnterior ? (edicaoAnterior.codigos || '') : '';
         caixa.appendChild(texto);
 
@@ -1220,7 +1324,7 @@
     /**
      * "Sair deste portão": este aparelho deixa de ler os ingressos deste evento.
      *
-     * NÃO apaga a fila — a mesma regra do `desparear()` da portaria: o que a
+     * NÃO descarta a fila — a mesma regra do `desparear()` da portaria: o que a
      * fila guarda é contagem que o cliente pagou para ter, e ela sobe sozinha
      * quando a internet voltar.
      *
@@ -1230,7 +1334,7 @@
     function sairDoPortao() {
         // A FILA VEM PRIMEIRO, e este é o único lugar que pode perdê-la.
         //
-        // O token é o que autoriza mandar a fila ao servidor. Apagá-lo com
+        // O token é o que autoriza mandar a fila ao servidor. Descartá-lo com
         // leitura pendente não "guarda para depois": não existe depois — aquelas
         // entradas nunca mais sobem, e é contagem que o cliente pagou para ter.
         //
@@ -1251,7 +1355,7 @@
                     + 'acesso deste aparelho, elas não sobem mais.', 'erro');
                 return;
             }
-            return apagarEstePortao();
+            return esquecerEstePortao();
         });
     }
 
@@ -1266,7 +1370,7 @@
         return window.portariaDeposito.contarFila().catch(function () { return 0; });
     }
 
-    function apagarEstePortao() {
+    function esquecerEstePortao() {
         if (!window.confirm('Sair deste portão? Este aparelho deixa de ler os '
                 + 'ingressos deste evento. Para voltar a ler, o dono precisa '
                 + 'entrar de novo e tocar na barra do evento.')) {
@@ -1317,7 +1421,7 @@
         try { e = JSON.parse(bruto); } catch (err) { return; }
         if (!e || e.evento_id !== estado.evento_id) {
             // Token de outro evento nesta mesma aba: não é deste evento, e
-            // não é o caso de apagar o que pode servir a OUTRA aba/evento.
+            // não é o caso de descartar o que pode servir a OUTRA aba/evento.
             return;
         }
         if (!(e.expira_em * 1000 > Date.now())) {
@@ -1479,7 +1583,7 @@
             var caixa = $('caixa-entrar-config');
             if (caixa && !caixa.classList.contains('sumindo')) {
                 // Digitando a senha: a faixa de atualização continua na tela e
-                // ele aplica quando quiser. Atropelar aqui apagaria o que ele
+                // ele aplica quando quiser. Atropelar aqui levaria embora o que ele
                 // acabou de escrever.
                 return;
             }
@@ -1590,6 +1694,11 @@
         fecharEngrenagem: fecharEngrenagem,
         comSenha: comSenha,
         sairDoPortao: sairDoPortao,
+        // As duas ações da zona de risco, e o caminho de volta que a lista da
+        // tela inicial chama.
+        zerarEntradas: zerarEntradas,
+        finalizarEvento: finalizarEvento,
+        reabrirEvento: reabrirEvento,
         renomearAparelho: renomearAparelho,
         trocarSetoresDoAparelho: trocarSetoresDoAparelho,
         revogarAparelho: revogarAparelho,

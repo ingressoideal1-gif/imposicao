@@ -498,9 +498,9 @@ async function entrada(cabecalho: string | null, corpo: any): Promise<Response> 
 }
 
 /**
- * `sincronizar`: so o que MUDOU -- evento, setores, bloqueios, `entradas` e
- * `totais`. Sem a lista de ingressos, e essa ausencia e a razao inteira de esta
- * rota existir.
+ * `sincronizar`: so o que MUDOU -- evento, setores, bloqueios, `entradas`,
+ * `totais` e a marca de quando o dono zerou a contagem. Sem a lista de
+ * ingressos, e essa ausencia e a razao inteira de esta rota existir.
  *
  * O portao volta aqui a cada cinco minutos. Descer as credenciais junto seria
  * repetir ate 30.000 objetos numa rede de portao, doze vezes por hora, para
@@ -520,7 +520,7 @@ async function sincronizar(
 
   const evento = ((await banco(
     "GET",
-    `producao_acesso_eventos?id=eq.${eventoId}&select=id,status`,
+    `producao_acesso_eventos?id=eq.${eventoId}&select=id,status,entradas_zeradas_em`,
   )) ?? [])[0];
   if (!evento) return erro(409, "evento nao existe mais");
 
@@ -584,6 +584,19 @@ async function sincronizar(
     bloqueios,
     entradas,
     totais,
+    // A ordem "esqueca o que voce tem", e o unico caminho que ela tem ate aqui.
+    //
+    // O dono zera as entradas no painel e isso apaga as linhas do SERVIDOR. No
+    // celular do porteiro nada acontece: as entradas ja estao no IndexedDB, e
+    // este sincronismo so ACRESCENTA -- ele nunca remove. Sem esta marca, o
+    // contador continuaria mostrando o publico do teste e a regra `ja_entrou`
+    // continuaria barrando quem entrou naquele teste.
+    //
+    // Vai no topo, e nao dentro de `evento`, porque quem a le
+    // (`portaria-sincronismo.js`) compara com a marca que guardou e decide
+    // esvaziar ANTES de mesclar o resto desta resposta. Nulo quer dizer que este
+    // evento nunca foi zerado, que e o caso da esmagadora maioria.
+    entradas_zeradas_em: evento.entradas_zeradas_em ?? null,
     // Onde continuar quando a pagina veio cheia. Vai como `momento` e o proximo
     // pedido usa `gte`, e nao `gt`: repetir a ultima entrada nao custa nada
     // (quem recebe junta por `credencial_id`), e PULAR uma entrada que dividia o

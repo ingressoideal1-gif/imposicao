@@ -1,5 +1,5 @@
 /**
- * A tela do cliente: as 13 rotas de `/api/acesso/*` que o dono do evento usa.
+ * A tela do cliente: as 14 rotas de `/api/acesso/*` que o dono do evento usa.
  *
  * Porte de `acesso_config.py` mais `/evento`, `/meus-eventos` e `/reivindicar`
  * de `acesso_api.py`.
@@ -49,6 +49,7 @@ import {
   aplicarLiberacao,
   aplicarNovoCodigo,
   aplicarSetor,
+  zerarEntradas,
 } from "../_compartilhado/configuracao.ts";
 import { nomeDoEvento, pedacosDaRota, recusaHumana } from "./puro.ts";
 
@@ -200,6 +201,55 @@ async function exigirElevacao(
       },
     });
   }
+}
+
+// ── A lista da tela inicial ─────────────────────────────────────────────────
+
+/**
+ * Os eventos do dono, com quanta gente entrou em cada um.
+ *
+ * Sem `status=eq.ativo`. Com o filtro, inativar o evento o fazia sumir da lista
+ * do proprio dono -- e nao sobrava tela nenhuma de onde reativar. A lista MOSTRA
+ * o inativo e o finalizado, e por isso o `status` vem junto: e ele que separa
+ * "Meus Eventos" da lista de finalizados, e que vira a palavra `inativo` ao lado
+ * do nome.
+ *
+ * `excluido` continua de fora, e continua sem nenhum caminho na tela que o
+ * produza -- de proposito.
+ *
+ * ## Por que a contagem vem daqui, e nao de uma segunda chamada
+ *
+ * A lista de finalizados mostra "4.812 entraram" em cada linha. Pedir isso
+ * evento por evento significaria a tela inicial disparando uma chamada por
+ * linha, no 4G de quem abriu o aplicativo -- e nenhuma delas serve para outra
+ * coisa.
+ *
+ * ## Por que das LEITURAS permitidas, e nao das entradas unicas
+ *
+ * E a mesma fonte dos `totais` do `/sincronizar`, e tem de ser: o numero na
+ * lista de finalizados e o numero que o dono viu no portao a noite inteira, e
+ * duas contas diferentes para a mesma pergunta viram uma discussao que ninguem
+ * consegue resolver depois. Alem disso, setor de reentrada nao tem linha nenhuma
+ * em `entradas_unicas` -- um evento so de reentrada apareceria com zero.
+ *
+ * `contar` e nao o tamanho de uma lista, pelo teto de 1000 linhas do PostgREST:
+ * qualquer evento maior que isso apareceria eternamente com "1.000 entraram".
+ * Uma consulta por evento e o que ha: agregacao esta desligada neste PostgREST.
+ */
+async function meusEventos(donoId: string): Promise<any> {
+  const eventos = (await banco(
+    "GET",
+    `producao_acesso_eventos?dono_auth_id=eq.${donoId}` +
+      "&status=neq.excluido&select=id,nome_evento,data_evento,status" +
+      "&order=created_at.desc",
+  )) ?? [];
+
+  for (const e of eventos) {
+    e.entradas = await contar(
+      `producao_acesso_leituras?evento_id=eq.${e.id}&resultado=eq.permitido`,
+    );
+  }
+  return { eventos };
 }
 
 // ── O painel do evento ──────────────────────────────────────────────────────
@@ -459,18 +509,7 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   const usuario = usuarioDoJwt(req.headers.get("authorization"));
 
   if (metodo === "GET" && p.length === 1 && p[0] === "meus-eventos") {
-    return ok({
-      // Sem `status=eq.ativo`. Com o filtro, inativar o evento o fazia sumir da
-      // lista do proprio dono -- e nao sobrava tela nenhuma de onde reativar.
-      // A lista MOSTRA o inativo, e por isso o `status` vem junto: e ele que
-      // vira a palavra `inativo` ao lado do nome.
-      eventos: (await banco(
-        "GET",
-        `producao_acesso_eventos?dono_auth_id=eq.${usuario.id}` +
-          "&status=neq.excluido&select=id,nome_evento,data_evento,status" +
-          "&order=created_at.desc",
-      )) ?? [],
-    });
+    return ok(await meusEventos(usuario.id));
   }
   if (metodo === "POST" && p.length === 1 && p[0] === "reivindicar") {
     const c = await corpo();
@@ -499,6 +538,20 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     const evento = await eventoDoDono(p[1], usuario);
     await exigirElevacao(evento.id, usuario, req);
     return ok(await aplicarEvento(evento.id, await corpo()));
+  }
+  // Recomecar a contagem. E a UNICA rota desta funcao que destroi dado, e por
+  // isso ela e a que mais depende da elevacao: o celular da portaria fica na mao
+  // do porteiro, logado com a conta do cliente, e sem a senha recente qualquer
+  // um que pegasse aquele aparelho apagaria a noite inteira de leituras.
+  //
+  // Ingressos, setores e portoes NAO saem -- ver `zerarEntradas`.
+  if (
+    metodo === "POST" && p.length === 3 && p[0] === "eventos" &&
+    p[2] === "zerar-entradas"
+  ) {
+    const evento = await eventoDoDono(p[1], usuario);
+    await exigirElevacao(evento.id, usuario, req);
+    return ok(await zerarEntradas(evento.id));
   }
   if (metodo === "PATCH" && p.length === 2 && p[0] === "setores") {
     const setor = await setorDoDono(p[1], usuario);

@@ -22,14 +22,22 @@ def _ler(caminho):
         return f.read()
 
 
-def unir(do_chaveiro, da_conta):
+def _chamar(chamada, argumentos):
     r = subprocess.run(
         ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
-        input=json.dumps({"chamada": "unir", "argumentos": [do_chaveiro, da_conta]}),
+        input=json.dumps({"chamada": chamada, "argumentos": argumentos}),
     )
     if r.returncode != 0:
         pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
     return json.loads(r.stdout)["resultado"]
+
+
+def unir(do_chaveiro, da_conta):
+    return _chamar("unir", [do_chaveiro, da_conta])
+
+
+def finalizados(da_conta):
+    return _chamar("finalizados", [da_conta])
 
 
 P = {"evento_id": "e-1", "nome_evento": "Click", "aparelho_id": "d-1",
@@ -77,6 +85,57 @@ def test_o_nome_da_conta_vence_o_do_chaveiro():
 def test_evento_inativo_e_marcado_em_texto():
     linhas = unir([], [dict(E2, status="encerrado")])
     assert linhas[0]["ativo"] is False
+
+
+# ── Os eventos que ja acabaram ──────────────────────────────────────────────
+#
+# Decisao do usuario, 16/08/2026: nao e "excluir", e FINALIZAR. Um evento
+# acontece e termina; ele nao deixa de ter existido. Por isso ele sai de "Meus
+# Eventos" e vai para uma lista propria, com quanta gente entrou.
+
+F1 = {"id": "e-9", "nome_evento": "Baile do Hawaii", "status": "finalizado",
+      "data_evento": "2026-08-01T23:00:00Z", "entradas": 4812}
+
+
+def test_evento_finalizado_SAI_de_meus_eventos():
+    linhas = unir([], [E1, F1])
+    assert [l["id"] for l in linhas] == ["e-1"]
+
+
+def test_evento_finalizado_sai_ATE_quando_este_aparelho_e_o_portao_dele():
+    """O caso que a lista erraria calada: o celular continua com a chave do
+    evento no chaveiro, e sem esta regra a barra verde ficaria na tela de "Meus
+    Eventos" convidando o porteiro a ler ingresso de um evento que a portaria ja
+    recusa. Dado do parceiro manda sempre."""
+    chave = dict(P, evento_id="e-9", nome_evento="Baile do Hawaii")
+    linhas = unir([chave], [F1])
+    assert linhas == []
+
+
+def test_a_lista_de_finalizados_traz_nome_data_e_quantos_entraram():
+    linhas = finalizados([E1, F1])
+    assert len(linhas) == 1
+    assert linhas[0]["id"] == "e-9"
+    assert linhas[0]["nome"] == "Baile do Hawaii"
+    assert linhas[0]["data"] == "2026-08-01T23:00:00Z"
+    assert linhas[0]["entradas"] == 4812
+
+
+def test_finalizado_sem_ninguem_que_entrou_conta_zero():
+    """O evento de teste que nunca virou festa e um caso real. Sem o zero, a
+    linha ficaria sem numero nenhum e pareceria dado faltando."""
+    assert finalizados([dict(F1, entradas=None)])[0]["entradas"] == 0
+
+
+def test_a_lista_de_finalizados_vem_do_mais_recente_para_o_mais_antigo():
+    velho = {"id": "e-8", "nome_evento": "Fenachamp 2025", "status": "finalizado",
+             "data_evento": "2025-03-10T23:00:00Z", "entradas": 10}
+    linhas = finalizados([velho, F1])
+    assert [l["id"] for l in linhas] == ["e-9", "e-8"]
+
+
+def test_evento_ativo_nao_entra_na_lista_de_finalizados():
+    assert finalizados([E1, dict(E2, status="encerrado")]) == []
 
 
 # ── A tela ──────────────────────────────────────────────────────────────────

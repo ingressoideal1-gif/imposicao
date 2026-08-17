@@ -82,6 +82,24 @@
             Nenhum evento aqui ainda. Toque em <strong>Novo Evento</strong> e leia o
             QR que a gráfica enviou.
         </p>
+
+        <!-- OS EVENTOS QUE JÁ ACABARAM.
+
+             Um evento acontece e TERMINA — ele não deixa de ter existido. Por
+             isso ele sai de "Meus Eventos" e vem parar aqui, com quanta gente
+             entrou, em vez de sumir da tela.
+
+             O bloco inteiro nasce escondido e só aparece quando existe pelo
+             menos um finalizado: um título "Eventos finalizados" sobre o vazio
+             faria o dono procurar o que ele nunca finalizou. Quem o mostra é o
+             `desenharFinalizados()` do `lista-eventos.js`.
+
+             Sem luz e sem o ícone de ler, de propósito: evento finalizado não é
+             portão, e a única coisa que se faz com ele aqui é reabrir. -->
+        <div id="bloco-finalizados" class="sumindo">
+            <h1 class="rotulo-secao">Eventos finalizados</h1>
+            <div id="finalizados"></div>
+        </div>
     </div>
 
     <!-- O formulário de login não muda: mesmos ids e mesmas frases. Ele
@@ -162,7 +180,7 @@
         <!-- A tranca fica GRUDADA no topo enquanto o evento está só para
              olhar. Antes ela morava aqui e rolava para fora da tela: no
              desktop, a seção de portões está a uma tela e meia daqui, e o
-             dono chegava lá, tocava num botão apagado e não acontecia nada —
+             dono chegava lá, tocava num botão esmaecido e não acontecia nada —
              sem nenhuma palavra à vista dizendo o porquê. -->
         <div id="tranca" class="sumindo">
             <div id="aviso-leitura" class="aviso"></div>
@@ -211,10 +229,61 @@
         <div class="secao" id="bloco-este-aparelho">
             <h2>Este aparelho</h2>
             <p class="config-ajuda">
-                Sair não apaga as leituras que ainda não subiram: elas continuam
-                guardadas aqui e sobem quando a internet voltar.
+                Sair não descarta as leituras que ainda não subiram: elas
+                continuam guardadas aqui e sobem quando a internet voltar.
             </p>
             <button id="btn-sair-do-portao" class="secundario">Sair deste portão</button>
+        </div>
+
+        <!-- A ZONA DE RISCO, no fim de tudo e separada por uma linha vermelha.
+
+             As duas ações desta seção mudam o evento inteiro, e uma delas
+             desfaz contagem que o cliente pagou para ter. Elas ficam por último
+             porque o dono não pode esbarrar nelas enquanto configura setor —
+             a distância até aqui É parte da proteção.
+
+             O que NÃO existe nesta tela, de propósito: nenhum caminho para o
+             evento deixar de existir. Um evento acontece e termina. -->
+        <div class="secao zona-de-risco" id="bloco-zona-de-risco">
+            <h2>Zona de risco</h2>
+
+            <div class="cartao" id="cartao-zerar-entradas">
+                <h3>Zerar as entradas deste evento</h3>
+                <p class="config-ajuda">
+                    A contagem recomeça do zero: quem já entrou some da lista de
+                    quem entrou, o contador de cada portão volta a zero, e essas
+                    pessoas podem entrar de novo. É o que transforma um evento
+                    de teste no evento de verdade.
+                </p>
+                <p class="config-ajuda">
+                    <strong>Continuam valendo:</strong> os ingressos, os setores
+                    e os portões. Nada do que a gráfica imprimiu deixa de servir,
+                    e nenhum celular precisa ser configurado outra vez.
+                </p>
+                <p class="config-ajuda">
+                    Peço a sua senha de novo, mesmo dentro dos 15 minutos já
+                    liberados: esta é a única coisa desta tela que não tem
+                    volta, e o celular pode estar na mão do porteiro.
+                </p>
+                <button id="btn-zerar-entradas" class="so-com-senha perigo">Zerar as entradas deste evento</button>
+            </div>
+
+            <div class="cartao" id="cartao-finalizar-evento">
+                <h3>Finalizar evento</h3>
+                <p class="config-ajuda">
+                    O evento sai de <strong>Meus Eventos</strong> e passa a
+                    aparecer em <strong>Eventos finalizados</strong>, com quanta
+                    gente entrou. Todos os portões param de aceitar ingresso.
+                    Portão sem internet só recebe a mudança quando voltar a ter
+                    sinal.
+                </p>
+                <p class="config-ajuda">
+                    Dá para reabrir depois, e ele volta <strong>inativo</strong>:
+                    religar os portões é uma segunda decisão sua, no
+                    <em>Ativar este evento</em>.
+                </p>
+                <button id="btn-finalizar-evento" class="so-com-senha perigo">Finalizar evento</button>
+            </div>
         </div>
     </div>
 
