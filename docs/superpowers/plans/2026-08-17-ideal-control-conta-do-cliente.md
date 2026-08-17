@@ -3039,7 +3039,29 @@ git commit -m "acabamento: visual das telas novas da casa, e a doc do caminho da
 
 ---
 
-### Task 14: Publicação (só quando o usuário mandar)
+### Task 14: O Render sai de vez
+
+**Contexto:** em 17/08/2026, no meio desta obra, o usuário reforçou: *"Aplicação não
+tem mais nenhuma ligação com o Render, tudo pelo Supabase"*. Os testes de paridade com
+`imposicao.onrender.com` já saíram (commit `f959712`). Esta tarefa tira o resto que
+ainda trata o Render como parte viva.
+
+**Files:**
+- Modify: `frontend/supabase-config.js` (`API_NUVEM`, o `API_BASE_URL` que cai em `imposicao.onrender.com` fora do localhost, comentários), `vercel.json` (o rewrite `/api/:path*` → onrender), `security_config.py` (`ALLOWED_ORIGINS` e a docstring), `publicar.ps1` (todo texto que diz que o push publica "o motor no Render"), `frontend/acesso-conta.js`, `frontend/ideal-control.js`, `frontend/portaria.js`, `frontend/pedido.js`, `frontend/script.js` (comentários que descrevem o Render no presente; `API_BASE_URL` continua existindo para a estação local `http://localhost:9000`)
+- Delete: `render.yaml`, `ferramentas/copiar_para_render.ps1`, `ferramentas/variavel_no_render.ps1`
+- Modify: `agent_config.json` / `agent_worker.py` (o `acesso_base` padrão passa a ser a Edge Function `acesso-estacao`; conferir `tests/test_heartbeat_versao.py:232-235`, que hoje espera onrender — atualizar a expectativa), `docs/controle_acesso.md`, `docs/README.md`, `docs/DOCUMENTACAO.md`, `docs/PUBLICAR.md`, `GUIA_AGENTE.md`
+- Test: `tests/test_sem_render.py` (novo): nenhum arquivo em `frontend/*.js`, `frontend/*.html`, `vercel.json`, `security_config.py`, `agent_config.json`, `publicar.ps1` contém `onrender`; `render.yaml` não existe.
+
+**Antes de remover o rewrite `/api/`:** `grep -n "API_BASE_URL" frontend/script.js` — toda chamada `${API_BASE_URL}/api/...` do painel é para a estação local; na Vercel, `API_BASE_URL` sem valor de nuvem faz essas chamadas irem para `/api/...` da própria Vercel, que sem o rewrite responde 404 — o mesmo efeito prático de hoje (o Render está desligado). O que garante que o painel funciona é a regra já registrada: abrir por `http://localhost:9000`.
+
+- [ ] Escrever `tests/test_sem_render.py`, ver falhar (lista os arquivos culpados).
+- [ ] Limpar arquivo por arquivo; testes que citavam onrender como expectativa (`test_heartbeat_versao.py`, `test_sessao_vai_junto_no_fetch.py`, `test_escrita_anonima_na_nuvem.py`, `test_estacao_bloqueada_pelo_navegador.py`, `test_perfil_de_cor_fala_com_a_estacao.py`) passam a usar a Edge Function ou perdem a asserção que só fazia sentido com o Render — sem afrouxar o que protege a estação local.
+- [ ] `venv/Scripts/python.exe -m pytest tests -q -x`.
+- [ ] Commit: "o Render sai de vez: sem fallback de nuvem no frontend, sem rewrite, sem render.yaml, sem ferramentas do Render; o agente publica na Edge Function".
+
+---
+
+### Task 15: Publicação (só quando o usuário mandar)
 
 **Ordem obrigatória:**
 
