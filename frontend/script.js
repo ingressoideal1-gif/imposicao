@@ -4629,21 +4629,7 @@ window.alignSelectedElement = function (alignment) {
 
 
 
-        // Sincronizar com os inputs do card correspondente
-
-        const card = document.getElementById(`elcard-${el.id}`);
-
-        if (card) {
-
-            const fx = card.querySelector('.el-x');
-
-            const fy = card.querySelector('.el-y');
-
-            if (fx) fx.value = el.x_mm.toFixed(1);
-
-            if (fy && el.type !== 'PICOTE') fy.value = el.y_mm.toFixed(1);
-
-        }
+        sincronizarCamposDePosicao(el);
     });
 
     if (pulados > 0 && !mutated) avisarElementoTravado(null, true);
@@ -5956,6 +5942,67 @@ function renderElementsList() {
 }
 
 
+/**
+ * Põe os campos de posição das DUAS janelas no valor atual do elemento.
+ *
+ * O mesmo X e o mesmo Y aparecem em dois lugares: no cartão do elemento, na
+ * lista, e — desde a v621, para PDF e SVG — na linha do arquivo, na box
+ * "Adicionar Pdf e Svg". Quem arrasta no canvas mexe nos dois, e quem digita
+ * num deles precisa ver o outro acompanhar; senão um dos campos passa a mentir
+ * sobre onde o elemento está, que é o defeito que este projeto mais evita.
+ *
+ * Escreve nos inputs em vez de re-renderizar a lista: re-renderizar tira o foco
+ * do campo no meio da digitação, e o operador perde o resto do número.
+ */
+function sincronizarCamposDePosicao(el) {
+    if (!el) return;
+
+    const card = document.getElementById(`elcard-${el.id}`);
+    if (card) {
+        const fx = card.querySelector('.el-x');
+        const fy = card.querySelector('.el-y');
+        if (fx) fx.value = el.x_mm.toFixed(1);
+        // O picote é uma linha vertical: ele tem X e não tem Y.
+        if (fy && el.type !== 'PICOTE') fy.value = el.y_mm.toFixed(1);
+    }
+
+    const linha = document.getElementById(`arqpos-${el.id}`);
+    if (linha) {
+        const ax = linha.querySelector('.arq-x');
+        const ay = linha.querySelector('.arq-y');
+        if (ax) ax.value = el.x_mm.toFixed(1);
+        if (ay) ay.value = el.y_mm.toFixed(1);
+    }
+}
+window.sincronizarCamposDePosicao = sincronizarCamposDePosicao;
+
+/**
+ * Move um elemento PDF ou SVG pelos campos da box "Adicionar Pdf e Svg".
+ *
+ * Passo de 0,1 mm porque é ajuste FINO: o arrasto no canvas resolve o grosso, e
+ * aqui se resolve o décimo — que é o que o operador não consegue com o mouse.
+ *
+ * Não passa pelo `updateEl` comum porque este caminho também arredonda para uma
+ * casa (a mesma que o arrasto usa) e espelha o valor no cartão do elemento.
+ *
+ * Elemento travado continua aceitando: a trava existe contra arrastar e excluir
+ * por engano — digitar um número é ato deliberado, e é a mesma regra que já vale
+ * para os campos do cartão.
+ */
+window.moverArquivo = function (id, campo, valor) {
+    const el = state.numElements.find(e => e.id === id);
+    if (!el) return;
+
+    const v = Number(valor);
+    if (!isFinite(v)) return;
+
+    el[campo] = Math.round(v * 10) / 10;
+
+    saveNumHistory();
+    drawCanvas();
+    sincronizarCamposDePosicao(el);
+};
+
 /** Nome de exibição do arquivo de um elemento PDF/SVG. */
 function nomeDoArquivoDoElemento(el) {
     const explicito = el.type === 'PDF' ? el.pdf_filename : el.svg_filename;
@@ -6005,6 +6052,20 @@ window.renderBoxArquivos = function () {
             ${el.locked ? `<span style="font-size:0.68rem;color:var(--amber, #f59e0b);" title="Travado: não é arrastado nem excluído">🔒</span>` : ''}
             <span class="num-arquivo-dim">${w} × ${h} mm</span>
             <button class="btn btn-sm btn-ghost btn-danger" style="padding:2px 6px;${el.locked ? 'opacity:.45;' : ''}" onclick="event.stopPropagation(); removeEl('${el.id}')" title="${el.locked ? 'Travado: destrave no cartão para poder excluir' : 'Remover este elemento'}">✕</button>
+
+            <div class="num-arquivo-pos" id="arqpos-${el.id}" onclick="event.stopPropagation()"
+                 title="Ajuste fino da posição, de 0,1 em 0,1 mm. São os mesmos X e Y do cartão do elemento.">
+                <span>Posição</span>
+                <label for="arqx-${el.id}">X</label>
+                <input class="form-control arq-x" id="arqx-${el.id}" type="number" step="0.1"
+                       value="${(Number(el.x_mm) || 0).toFixed(1)}"
+                       onchange="moverArquivo('${el.id}','x_mm', this.value)">
+                <label for="arqy-${el.id}">Y</label>
+                <input class="form-control arq-y" id="arqy-${el.id}" type="number" step="0.1"
+                       value="${(Number(el.y_mm) || 0).toFixed(1)}"
+                       onchange="moverArquivo('${el.id}','y_mm', this.value)">
+                <span>mm</span>
+            </div>
         </div>`;
     }).join('');
 };

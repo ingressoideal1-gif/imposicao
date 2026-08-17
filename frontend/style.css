@@ -2486,6 +2486,9 @@ input[type=number] {
 .num-arquivo-item {
     display: flex;
     align-items: center;
+    /* A segunda linha e o ajuste fino de X e Y: ela ocupa a largura toda logo
+       abaixo do nome do arquivo, em vez de espremer tudo numa linha so. */
+    flex-wrap: wrap;
     gap: 8px;
     padding: 5px 8px;
     border: 1px solid var(--border);
@@ -2493,6 +2496,27 @@ input[type=number] {
     background: rgba(255, 255, 255, 0.03);
     font-size: 0.78rem;
     cursor: pointer;
+}
+
+/* Ajuste fino de posicao, na propria linha do arquivo. Existe porque o cartao
+   do elemento — que tem os mesmos X e Y — fica no fim de uma lista que numa
+   numeracao cheia tem dezenas de cartoes, e o operador estava com o arquivo na
+   mao aqui. */
+.num-arquivo-item .num-arquivo-pos {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+    cursor: default;
+}
+.num-arquivo-item .num-arquivo-pos input {
+    width: 74px;
+    height: 24px;
+    padding: 2px 6px;
+    font-size: 0.78rem;
+    background: rgba(0, 0, 0, 0.4);
+    font-variant-numeric: tabular-nums;
 }
 .num-arquivo-item:hover { border-color: var(--border-glow); }
 .num-arquivo-item.selected { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue-glow); }
