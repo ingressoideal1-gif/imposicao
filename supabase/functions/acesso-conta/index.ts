@@ -51,7 +51,8 @@ import {
   aplicarSetor,
   zerarEntradas,
 } from "../_compartilhado/configuracao.ts";
-import { nomeDoEvento, pedacosDaRota, pertenceAConta, recusaHumana } from "./puro.ts";
+import { montarMeusPedidos, nomeDoEvento, pedacosDaRota, pertenceAConta, recusaHumana } from "./puro.ts";
+import { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
 import {
   clientesDaConta, contaPrecisaTrocarSenha, marcarSenhaTrocada,
 } from "../_compartilhado/contas.ts";
@@ -278,6 +279,89 @@ async function minhaConta(usuario: { id: string }): Promise<any> {
     )) ?? []).map((c: any) => ({ id_cliente: Number(c.id_cliente), nome: c.nome ?? "" }));
   }
   return { clientes, precisa_trocar_senha: await contaPrecisaTrocarSenha(usuario.id) };
+}
+
+const MAXIMO_PROPOSTAS = 100;
+
+/**
+ * Consultas por LOTE, nunca uma por pedido. A unica que se repete e a
+ * contagem de credenciais por (pedido, modelo), porque a agregacao esta
+ * desligada no PostgREST deste projeto e trazer as credenciais em si esbarra
+ * no teto de 1.000 linhas.
+ */
+async function meusPedidos(usuario: { id: string }): Promise<any> {
+  const clientes = await clientesDaConta(usuario.id);
+  if (!clientes.length) return { pedidos: [], sem_cliente: true };
+
+  const propostas = (await banco(
+    "GET",
+    `propostas?id_cliente=in.(${clientes.join(",")})` +
+      "&select=id_int,id_cliente,created_at,status_interno" +
+      `&order=created_at.desc&limit=${MAXIMO_PROPOSTAS}`,
+  )) ?? [];
+  const ids = [...new Set(propostas.map((p: any) => Number(p.id_int)).filter(Boolean))];
+  if (!ids.length) return { pedidos: [], sem_cliente: false };
+  const lista = ids.join(",");
+
+  const modelos = (await banco(
+    "GET",
+    `pedidos_modelos?id_int=in.(${lista})` +
+      "&select=id,id_int,nome_modelo,quantidade,amostra_num_id&order=ordem.asc",
+  )) ?? [];
+  const numIds = [...new Set(
+    modelos.filter((m: any) => m.amostra_num_id).map((m: any) => String(m.amostra_num_id)),
+  )].sort();
+  const numeracoes: Record<string, unknown> = {};
+  if (numIds.length) {
+    const l = numIds.map((i) => `"${i}"`).join(",");
+    for (const n of (await banco("GET", `producao_numeracoes?id=in.(${l})&select=id,elements`)) ?? []) {
+      numeracoes[String(n.id)] = n.elements;
+    }
+  }
+  const legiveisPorPedido: Record<string, any[]> = {};
+  for (const m of modelos) {
+    if (!numeracaoDoModelo(numeracoes[String(m.amostra_num_id)])) continue;
+    (legiveisPorPedido[String(m.id_int)] ??= []).push({
+      modelo_id: Number(m.id),
+      nome: (m.nome_modelo ? String(m.nome_modelo) : `Setor ${m.id}`).trim(),
+      quantidade: Number(m.quantidade ?? 0),
+    });
+  }
+
+  const acesso = (await banco(
+    "GET",
+    `producao_acesso_pedidos?pedido_id_int=in.(${lista})&select=pedido_id_int,evento_id`,
+  )) ?? [];
+  const carregados = acesso.filter((a: any) => a.evento_id).map((a: any) => Number(a.pedido_id_int));
+  const comLinha = new Set(acesso.map((a: any) => Number(a.pedido_id_int)));
+
+  const credenciaisPorPedidoModelo: Record<string, number> = {};
+  for (const [pedido, legiveis] of Object.entries(legiveisPorPedido)) {
+    // Sem linha em producao_acesso_pedidos nunca houve impressao: pula a contagem.
+    if (!comLinha.has(Number(pedido)) || carregados.includes(Number(pedido))) continue;
+    for (const m of legiveis) {
+      credenciaisPorPedidoModelo[`${pedido}:${m.modelo_id}`] = await contar(
+        `producao_acesso_credenciais?pedido_id_int=eq.${pedido}&modelo_id=eq.${m.modelo_id}&status=eq.ativo`,
+      );
+    }
+  }
+
+  const fichasPorPedido: Record<string, any> = {};
+  for (const f of (await banco(
+    "GET",
+    `pedidos_artes?id_int=in.(${lista})&select=id_int,nome_evento,data_evento,local_evento&order=created_at.asc`,
+  )) ?? []) {
+    // A primeira ficha com nome vence; sem nome, qualquer uma serve de data/local.
+    const chave = String(f.id_int);
+    if (!fichasPorPedido[chave] || (!fichasPorPedido[chave].nome_evento && f.nome_evento)) {
+      fichasPorPedido[chave] = f;
+    }
+  }
+
+  return {
+    pedidos: montarMeusPedidos({ propostas, legiveisPorPedido, credenciaisPorPedidoModelo, fichasPorPedido, carregados }),
+    sem_cliente: false,
+  };
 }
 
 /**
@@ -568,6 +652,9 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   }
   if (metodo === "GET" && p.length === 1 && p[0] === "minha-conta") {
     return ok(await minhaConta(usuario));
+  }
+  if (metodo === "GET" && p.length === 1 && p[0] === "meus-pedidos") {
+    return ok(await meusPedidos(usuario));
   }
   if (metodo === "POST" && p.length === 2 && p[0] === "minha-conta" && p[1] === "senha") {
     return ok(await trocarMinhaSenha(usuario, await corpo()));

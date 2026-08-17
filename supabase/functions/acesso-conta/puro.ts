@@ -69,3 +69,58 @@ export function pertenceAConta(
   const c = Number(evento?.id_cliente);
   return Boolean(c) && clientes.includes(c);
 }
+
+export function nomeDaFicha(ficha: any, pedido: number): string {
+  const nome = String(ficha?.nome_evento ?? "").trim();
+  return nome || `Pedido ${pedido}`;
+}
+
+/**
+ * O que entra em "Meus Pedidos". Decisao do usuario: SO os ja impressos.
+ *
+ *   1. nao cancelado no ERP (`status_interno`, o unico estado que importa la);
+ *   2. com pelo menos um modelo legivel (QR Ideal, QR, barras);
+ *   3. com pelo menos uma credencial publicada -- a grafica imprimiu. E a
+ *      contagem de credenciais, NAO `publicado_em`: gerar QR e reimprimir a
+ *      zeram, e ela esta nula em todos os pedidos de hoje;
+ *   4. ainda nao carregado (sem `evento_id`).
+ *
+ * Puro: quem busca as cinco listas e o `meusPedidos` do index.ts.
+ */
+export function montarMeusPedidos(entrada: {
+  propostas: any[];
+  legiveisPorPedido: Record<string, any[]>;
+  credenciaisPorPedidoModelo: Record<string, number>;
+  fichasPorPedido: Record<string, any>;
+  carregados: number[];
+}): any[] {
+  const carregados = new Set((entrada.carregados ?? []).map(Number));
+  const saida: any[] = [];
+  for (const p of entrada.propostas ?? []) {
+    const pedido = Number(p.id_int);
+    if (!pedido || carregados.has(pedido)) continue;
+    if (String(p.status_interno ?? "").trim().toUpperCase() === "CANCELADO") continue;
+    const legiveis = entrada.legiveisPorPedido?.[String(pedido)] ?? [];
+    if (!legiveis.length) continue;
+    const setores = legiveis.map((m: any) => ({
+      modelo_id: Number(m.modelo_id),
+      nome: m.nome,
+      quantidade: Number(m.quantidade ?? 0),
+      impresso: Number(entrada.credenciaisPorPedidoModelo?.[`${pedido}:${m.modelo_id}`] ?? 0) > 0,
+    }));
+    if (!setores.some((s: any) => s.impresso)) continue;
+    const ficha = entrada.fichasPorPedido?.[String(pedido)] ?? null;
+    saida.push({
+      pedido,
+      id_cliente: Number(p.id_cliente),
+      data: String(p.created_at ?? "").slice(0, 10),
+      criado_em: String(p.created_at ?? ""),
+      nome_evento: nomeDaFicha(ficha, pedido),
+      data_evento: ficha?.data_evento ?? null,
+      local_evento: String(ficha?.local_evento ?? "").trim() || null,
+      setores,
+    });
+  }
+  saida.sort((a, b) => (a.criado_em < b.criado_em ? 1 : a.criado_em > b.criado_em ? -1 : 0));
+  return saida.map(({ criado_em: _c, ...resto }) => resto);
+}
