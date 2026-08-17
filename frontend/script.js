@@ -5515,7 +5515,7 @@ function renderElementsList() {
 
                 <div class="element-card-fields" style="grid-template-columns: 1fr 1fr;">
 
-                    <div class="form-group"><label>X (mm)</label><input class="form-control el-x" type="number" value="${el.x_mm.toFixed(1)}" step="0.5" onchange="updateEl('${el.id}','x_mm',+this.value)"></div>
+                    <div class="form-group"><label>X (mm)</label><input class="form-control el-x" type="number" value="${el.x_mm.toFixed(1)}" step="0.1" onchange="moverElemento('${el.id}','x_mm',this.value)"></div>
 
                     <div class="form-group"><label>Cor</label><input class="form-control" type="color" value="${el.color || '#ef4444'}" onchange="updateEl('${el.id}','color',this.value)"></div>
 
@@ -5843,9 +5843,9 @@ function renderElementsList() {
 
             <div class="element-card-fields">
 
-                <div class="form-group"><label>X (mm)</label><input class="form-control el-x" type="number" value="${el.x_mm.toFixed(1)}" step="0.5" onchange="updateEl('${el.id}','x_mm',+this.value)"></div>
+                <div class="form-group"><label>X (mm)</label><input class="form-control el-x" type="number" value="${el.x_mm.toFixed(1)}" step="0.1" onchange="moverElemento('${el.id}','x_mm',this.value)"></div>
 
-                <div class="form-group"><label>Y (mm)</label><input class="form-control el-y" type="number" value="${el.y_mm.toFixed(1)}" step="0.5" onchange="updateEl('${el.id}','y_mm',+this.value)"></div>
+                <div class="form-group"><label>Y (mm)</label><input class="form-control el-y" type="number" value="${el.y_mm.toFixed(1)}" step="0.1" onchange="moverElemento('${el.id}','y_mm',this.value)"></div>
 
                 <div class="form-group"><label>Rotação (°)</label>
 
@@ -5977,19 +5977,24 @@ function sincronizarCamposDePosicao(el) {
 window.sincronizarCamposDePosicao = sincronizarCamposDePosicao;
 
 /**
- * Move um elemento PDF ou SVG pelos campos da box "Adicionar Pdf e Svg".
+ * Move um elemento por coordenada — o caminho dos campos X e Y das duas janelas.
  *
- * Passo de 0,1 mm porque é ajuste FINO: o arrasto no canvas resolve o grosso, e
- * aqui se resolve o décimo — que é o que o operador não consegue com o mouse.
+ * Passo de 0,1 mm nos dois lugares porque é ajuste FINO: o arrasto no canvas
+ * resolve o grosso, e o campo resolve o décimo, que é o que o mouse não acerta.
  *
- * Não passa pelo `updateEl` comum porque este caminho também arredonda para uma
- * casa (a mesma que o arrasto usa) e espelha o valor no cartão do elemento.
+ * Não passa pelo `updateEl` comum por duas razões, e a primeira é a que importa:
+ *
+ * 1. **Arredonda para uma casa**, a mesma que o arrasto usa. Sem isso, digitar
+ *    12,34 guardaria 12,34 e o campo — que se desenha com `toFixed(1)` — passaria
+ *    a exibir 12,3 na reabertura. Campo que mente sobre o modelo é o defeito que
+ *    este editor menos pode ter.
+ * 2. Espelha o valor na outra janela, porque o mesmo X e o mesmo Y aparecem no
+ *    cartão do elemento e na linha do arquivo.
  *
  * Elemento travado continua aceitando: a trava existe contra arrastar e excluir
- * por engano — digitar um número é ato deliberado, e é a mesma regra que já vale
- * para os campos do cartão.
+ * por engano — digitar um número é ato deliberado.
  */
-window.moverArquivo = function (id, campo, valor) {
+window.moverElemento = function (id, campo, valor) {
     const el = state.numElements.find(e => e.id === id);
     if (!el) return;
 
@@ -6059,11 +6064,11 @@ window.renderBoxArquivos = function () {
                 <label for="arqx-${el.id}">X</label>
                 <input class="form-control arq-x" id="arqx-${el.id}" type="number" step="0.1"
                        value="${(Number(el.x_mm) || 0).toFixed(1)}"
-                       onchange="moverArquivo('${el.id}','x_mm', this.value)">
+                       onchange="moverElemento('${el.id}','x_mm', this.value)">
                 <label for="arqy-${el.id}">Y</label>
                 <input class="form-control arq-y" id="arqy-${el.id}" type="number" step="0.1"
                        value="${(Number(el.y_mm) || 0).toFixed(1)}"
-                       onchange="moverArquivo('${el.id}','y_mm', this.value)">
+                       onchange="moverElemento('${el.id}','y_mm', this.value)">
                 <span>mm</span>
             </div>
         </div>`;

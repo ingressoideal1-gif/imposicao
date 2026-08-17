@@ -44,7 +44,7 @@ def _box_arquivos():
 def test_a_box_tem_os_campos_de_posicao():
     corpo = _box_arquivos()
     assert "arq-x" in corpo and "arq-y" in corpo
-    assert "moverArquivo(" in corpo
+    assert "moverElemento(" in corpo
 
 
 def test_o_passo_e_de_um_decimo_de_milimetro():
@@ -54,6 +54,20 @@ def test_o_passo_e_de_um_decimo_de_milimetro():
     for campo in ("arq-x", "arq-y"):
         trecho = corpo[corpo.index(campo):corpo.index(campo) + 400]
         assert 'step="0.1"' in trecho, campo
+
+
+def test_o_cartao_do_elemento_tambem_anda_de_um_decimo():
+    """As duas janelas com o mesmo passo. Um campo de 0,5 e outro de 0,1 para a
+    MESMA coordenada dariam resultados diferentes para a mesma seta do teclado."""
+    texto = _ler("frontend/script.js")
+    campos = re.findall(r'class="form-control el-[xy]"[^>]*', texto)
+    assert len(campos) == 3, f"esperava 3 campos de posicao no cartao, achei {len(campos)}"
+    for campo in campos:
+        assert 'step="0.1"' in campo, campo
+        assert "moverElemento(" in campo, (
+            "o campo do cartao ficou fora do arredondamento: digitar 12,34 "
+            "guardaria 12,34 e o campo exibiria 12,3 na reabertura"
+        )
 
 
 def test_os_campos_nao_selecionam_o_elemento_ao_serem_clicados():
@@ -87,7 +101,7 @@ def test_arrastar_no_canvas_atualiza_as_DUAS_janelas():
 
 def test_digitar_na_box_tambem_atualiza_o_cartao():
     texto = _ler("frontend/script.js")
-    corpo = texto[texto.index("window.moverArquivo ="):]
+    corpo = texto[texto.index("window.moverElemento ="):]
     corpo = corpo[:corpo.index("\n};")]
     assert "sincronizarCamposDePosicao(el)" in corpo
     assert "drawCanvas()" in corpo, "o canvas tem de mostrar o elemento no lugar novo"
@@ -99,7 +113,7 @@ def test_o_valor_e_arredondado_como_no_arrasto():
     12,3 e o papel usar outro numero — o tipo de divergencia que este projeto
     passou o dia inteiro consertando."""
     texto = _ler("frontend/script.js")
-    corpo = texto[texto.index("window.moverArquivo ="):]
+    corpo = texto[texto.index("window.moverElemento ="):]
     corpo = corpo[:corpo.index("\n};")]
     assert re.search(r"Math\.round\(\s*v\s*\*\s*10\s*\)\s*/\s*10", corpo)
 
