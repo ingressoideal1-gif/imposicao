@@ -215,6 +215,29 @@ de pedidos que já estão em produção.
 Como o `csv_data` viaja pronto no payload, **o `engine.py` não muda por causa
 disso** e o agente não precisa ser republicado.
 
+#### São duas telas, e as duas precisam do corte
+
+`frontend/pedido.js` é um **clone** do `script.js` (a primeira linha do arquivo
+diz isso), com os ids `imp-*` renomeados para `ped-*`. A aba **Pedido** e a aba
+**Imposição** impõem por códigos diferentes, e o corte precisa existir nos dois:
+
+| | Imposição | Pedido |
+|---|---|---|
+| resumo / total | `updateImpSummary` | `updatePedSummary` |
+| gerar / imprimir | `runImposition` | `runPedImposition` |
+
+A fatia nasceu só no `script.js`, e o `pedido.js` ficou dois meses imprimindo o
+banco inteiro. Apareceu no **pedido 20495** em 17/08/2026: um caderno de
+credenciais de 238 linhas repartido entre oito países, imposto pela aba Pedido,
+saiu com as 238 células na folha da Bulgária em vez das 37 dela. O sintoma
+enganava porque a regra estava certa, testada e documentada — só que na outra
+tela.
+
+`tests/csv_fatia_do_modelo_harness.js` guarda isso: além de testar a regra, ele
+lê os dois arquivos e exige que os dois passem pelo `fatiaCsvDoItem`, no ramo do
+banco embutido e no caminho multi-artes. **Ao mexer numa regra de impressão,
+procure a gêmea no outro arquivo.**
+
 ### A visualização da amostra é paginada
 
 Numeração com elemento de CSV não tem "uma" amostra: tem uma por linha de dado.

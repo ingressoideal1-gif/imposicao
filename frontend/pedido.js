@@ -2912,7 +2912,14 @@ function updatePedSummary() {
 
     } else if (num && num.csv_data && num.csv_data.length) {
 
-        state.csvData = num.csv_data;
+        // A fatia do modelo, nao o banco inteiro: varios modelos do mesmo pedido
+        // costumam dividir o mesmo CSV. Espelha updateImpSummary no script.js —
+        // esta tela e um clone dele e ficou para tras quando a fatia nasceu, o
+        // que fazia o pedido 20495 impor as 238 linhas do caderno em cada um dos
+        // oito paises.
+        state.csvData = (typeof fatiaCsvDoItem === 'function')
+            ? fatiaCsvDoItem(itemAtivoDoPedido(), num)
+            : num.csv_data;
 
         state.csvFile = null; // Banco embutido
 
@@ -2934,7 +2941,7 @@ function updatePedSummary() {
 
         if (impEnd) {
 
-            impEnd.value = num.csv_data.length;
+            impEnd.value = state.csvData.length;   // ja e a fatia, ja sem canceladas
 
             impEnd.setAttribute('disabled', 'true');
 
@@ -3034,7 +3041,9 @@ function updatePedSummary() {
 
     } else if (state.csvData) {
 
-        total = state.csvData.length;
+        total = (typeof linhasAtivasCsv === 'function')
+            ? linhasAtivasCsv(state.csvData).length
+            : state.csvData.length;
 
     } else {
 
@@ -4302,6 +4311,10 @@ window.runPedImposition = async function (mode, isRefazer) {
             return {
                 qtd: qt,
                 nome: sItem ? sItem.modelo : '',
+                // Por onde a fatia do CSV chega ao payload. Ver o bloco que monta
+                // `payloadMultiArtes`, mais abaixo.
+                _itemId: s.itemId,
+                _osId: s.osId,
                 num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
                 start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
                 has_raw_file: false,
@@ -4451,9 +4464,37 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         payloadMultiArtes = artesList.map(arte => {
 
+            // Cada arte e um modelo do pedido, e cada modelo imprime a sua fatia
+            // do banco. Sem isto, os oito modelos receberiam as mesmas linhas.
+            // Espelha runImposition no script.js.
+            let numArte = state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null;
+
+            let qtdArte = arte.qtd;
+
+            if (numArte && numArte.csv_data && numArte.csv_data.length && arte._itemId
+                && typeof fatiaCsvDoItem === 'function') {
+
+                const itArte = (state.osItens[arte._osId] || [])
+
+                    .find(i => String(i.id) === String(arte._itemId));
+
+                if (itArte && itArte.csv_selecao) {
+
+                    numArte = JSON.parse(JSON.stringify(numArte));
+
+                    numArte.csv_data = fatiaCsvDoItem(itArte, numArte);
+
+                    // So mexe na quantidade quando ha fatia: para o modelo movido
+                    // a CSV, quantos itens saem E quantas linhas ele leva.
+                    qtdArte = numArte.csv_data.length;
+
+                }
+
+            }
+
             return {
 
-                qtd: arte.qtd,
+                qtd: qtdArte,
 
                 pdf_url: arte.pdf_url,
 
@@ -4471,7 +4512,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 
                 start: arte.start,
 
-                numeracao: state.numeracoes.find(n => String(n.id) === String(arte.num1_id)) || null,
+                numeracao: numArte,
 
                 numeracao_2: state.numeracoes.find(n => String(n.id) === String(arte.num2_id)) || null,
 
@@ -4680,7 +4721,9 @@ window.runPedImposition = async function (mode, isRefazer) {
 
     } else if (state.csvData) {
 
-        total = state.csvData.length;
+        total = (typeof linhasAtivasCsv === 'function')
+            ? linhasAtivasCsv(state.csvData).length
+            : state.csvData.length;
 
     } else {
 
