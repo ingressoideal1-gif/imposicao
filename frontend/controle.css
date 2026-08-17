@@ -124,6 +124,28 @@ button.secundario { background: transparent; color: var(--dim); border: 1px soli
 .aviso.erro { border-left-color: var(--red); background: rgba(239, 68, 68, 0.09); }
 .aviso.ok { border-left-color: var(--teal); background: rgba(20, 184, 166, 0.09); }
 
+/* As saídas de um aviso que trava o dono. Um aviso que só explica o problema e
+   não oferece o que fazer é um beco sem saída — foi o que prendeu o dono na
+   fila pendente em 17/08/2026. */
+.acoes-aviso {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.acoes-aviso button {
+    flex: 1 1 auto;
+    min-height: 44px;              /* alvo de toque: dedo, de pé, no portão */
+    font-size: 0.82rem;
+    padding: 10px 14px;
+}
+/* Descartar PERDE leitura. Ele nunca pode parecer o caminho natural. */
+#btn-descartar-fila {
+    background: transparent;
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, .5);
+}
+
 /* `!important` de propósito, e é a única ocorrência do arquivo.
    `sumindo` é o "não está na tela" desta página, e nada pode ganhar dele. Sem
    isto ele perde de qualquer regra mais específica sem avisar: `#faixa-elevacao

@@ -133,6 +133,7 @@ PAINEL_ARQUIVOS = [
     "chaveiro.js",
     "lista-eventos.js",
     "virar-portao.js",
+    "fila-presa.js",
     "parede-pwa.js",
     # O deposito entra JUNTO com eles, embora seja da portaria: antes de trocar
     # de evento, o "virar portao" pergunta a ele quantas leituras ainda nao

@@ -340,6 +340,14 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
       return req.respond({{ status: 200, contentType: TIPOS[path.extname(nome)],
                            body: fs.readFileSync(arquivo, 'utf8') }});
     }}
+    // NADA sai daqui para a producao. O `req.continue()` abaixo cobre os
+    // `file://` desta pagina; um endereco http que chegue ate aqui e um pedido
+    // que ninguem simulou, e deixa-lo passar mandaria o teste falar com o
+    // servidor de verdade. O `POST /portaria/leituras` desta tela e o caso
+    // concreto: um 401 de la ja apagou fila no meio de uma execucao antes.
+    if (url.indexOf('http') === 0) {{
+      return req.abort();
+    }}
     req.continue();
   }});
 
@@ -2582,3 +2590,117 @@ def test_a_volta_por_falta_de_token_vira_frase_na_tela_inicial():
     assert saida["marcaDepois"] is None, (
         "a marca ficou pendurada e vai acusar a proxima abertura do aplicativo"
     )
+
+
+# ── A fila que trava o dono, e as saidas dela ───────────────────────────────
+#
+# A trava esta certa: leitura enfileirada sob o token do evento A, enviada
+# depois de o aparelho virar portao do B, sobe contada no B. O que estava errado
+# era nao haver SAIDA. Quem envia a fila e o `sincronizar()` da tela de leitura,
+# e a trava impede de chegar la -- o dono ficou preso num circulo, com uma
+# leitura pendente e nada para tocar. Ver o cabecalho do `fila-presa.js`.
+
+
+_SEMEAR_FILA = """
+    localStorage.setItem('ideal_control_portoes', JSON.stringify([{
+        evento_id: 'ev-1', nome_evento: 'Baile do Hawaii',
+        aparelho_id: 'a1', nome_portao: 'Portão 1', token: 't-1'
+    }]));
+    await portariaDeposito.esquecerFila();
+    await portariaDeposito.enfileirar({
+        id_local: 'L1', momento: '2026-08-17T08:00:00Z',
+        credencial_id: 'c-1', resultado: 'permitido'
+    });
+"""
+
+
+def test_a_fila_presa_sobe_sozinha_antes_de_travar_o_dono():
+    """Na maioria das vezes a fila esta parada so porque nada a cutucou: quem
+    envia e a tela de leitura, e o dono nem chegou la. Tentar o envio antes de
+    mostrar a trava resolve o caso comum sem o dono precisar entender nada."""
+    saida = _no_navegador(_SEMEAR_FILA + """
+        localStorage.setItem('ideal_portaria_token', 't-9');
+        localStorage.setItem('ideal_portaria_evento', 'ev-outro');
+        let postou = null;
+        window.fetch = async (url, opcoes) => {
+            postou = { url: String(url), corpo: JSON.parse(opcoes.body) };
+            return { ok: true, status: 200, json: async () => ({ gravadas: 1 }) };
+        };
+        // O evento pedido NAO e o carregado: e a troca que a trava vigia.
+        await virarPortao.abrir('ev-1', 'Baile do Hawaii', false);
+        return {
+            postou,
+            filaDepois: await portariaDeposito.contarFila(),
+        };
+    """)
+    assert saida["postou"]["url"].endswith("/portaria/leituras")
+    assert saida["postou"]["corpo"]["leituras"][0]["id_local"] == "L1"
+    assert saida["filaDepois"] == 0, "a fila subiu mas nao saiu do aparelho"
+
+
+def test_a_fila_so_sai_do_aparelho_depois_de_o_servidor_confirmar():
+    """Remover antes perderia leitura toda vez que a resposta se perdesse no
+    caminho — que no portao, com 4G, e o caso comum. A contagem que o cliente
+    pagou para ter nao pode depender de a rede ser boa."""
+    saida = _no_navegador(_SEMEAR_FILA + """
+        localStorage.setItem('ideal_portaria_token', 't-9');
+        window.fetch = async () => ({ ok: false, status: 500,
+                                      json: async () => ({}) });
+        await virarPortao.abrir('ev-1', 'Baile do Hawaii', false);
+        return { filaDepois: await portariaDeposito.contarFila() };
+    """)
+    assert saida["filaDepois"] == 1, "o servidor recusou e a leitura sumiu"
+
+
+def test_sem_token_a_tela_NAO_oferece_enviar_de_novo():
+    """Sem token a fila nao sobe NUNCA — o dono revogou este aparelho, e o
+    sistema apaga o token de proposito para nao perder as leituras. Oferecer
+    "Enviar agora" ali seria mandar o dono repetir um gesto que nao tem como dar
+    certo, que e o circulo em que ele ficou preso."""
+    saida = _no_navegador(_SEMEAR_FILA + """
+        localStorage.removeItem('ideal_portaria_token');
+        await virarPortao.abrir('ev-1', 'Baile do Hawaii', false);
+        const aviso = document.getElementById('erro-arranque');
+        return {
+            visivel: !aviso.classList.contains('sumindo'),
+            texto: aviso.textContent,
+            temEnviar: !!document.getElementById('btn-enviar-fila'),
+            temDescartar: !!document.getElementById('btn-descartar-fila'),
+        };
+    """)
+    assert saida["visivel"] is True
+    assert saida["temEnviar"] is False
+    assert saida["temDescartar"] is True, "o dono ficou sem saida nenhuma"
+    assert "desligado deste portão" in saida["texto"]
+
+
+def test_descartar_a_fila_exige_a_senha_do_dono():
+    """Descartar PERDE leitura, para sempre. O porteiro esta com este celular na
+    mao; sem a senha, um toque errado apagaria a contagem que o cliente pagou
+    para ter. Aqui a confirmacao e aceita e a senha NAO — a fila tem de ficar."""
+    saida = _no_navegador(_SEMEAR_FILA + """
+        localStorage.removeItem('ideal_portaria_token');
+        await virarPortao.abrir('ev-1', 'Baile do Hawaii', false);
+        document.getElementById('btn-descartar-fila').click();
+        await new Promise(r => setTimeout(r, 300));
+        return {
+            pediuSenha: !document.getElementById('caixa-entrar-config')
+                            .classList.contains('sumindo'),
+            filaDepois: await portariaDeposito.contarFila(),
+        };
+    """, aceitar_dialogo=True)
+    assert saida["pediuSenha"] is True
+    assert saida["filaDepois"] == 1, "a fila foi descartada sem a senha do dono"
+
+
+def test_a_frase_da_fila_presa_nunca_manda_so_esperar():
+    """A frase antiga dizia "espere a fila zerar antes de trocar de evento" — e
+    esperar era exatamente o que NAO resolvia, porque nada na tela inicial
+    enviava a fila. Foi essa frase que prendeu o dono em 17/08/2026."""
+    js = _ler("frontend/fila-presa.js")
+    trecho = js[js.index("function frase"):js.index("function semVolta")]
+    assert "espere" not in trecho.lower(), (
+        "a frase voltou a mandar o dono esperar por algo que nao acontece"
+    )
+    # Cada motivo tem de dizer o que FAZER, e os dois verbos sao os dos botoes.
+    assert "Enviar agora" in trecho and "descartá-las" in trecho

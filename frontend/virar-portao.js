@@ -42,13 +42,87 @@
         aviso.classList.remove('sumindo');
     }
 
-    function avisarFilaCheia(n) {
-        avisar((n === 1
-            ? 'Há 1 leitura que ainda não subiu'
-            : 'Há ' + n + ' leituras que ainda não subiram')
-            + ' para o servidor. Conecte este aparelho à internet e espere a '
-            + 'fila zerar antes de trocar de evento: o que ficou para trás '
-            + 'seria contado no evento errado.');
+    /** Um botão dentro do aviso, na linha de ações. */
+    function acao(rotulo, id, aoTocar) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.id = id;
+        b.textContent = rotulo;
+        b.addEventListener('click', aoTocar);
+        return b;
+    }
+
+    /**
+     * A fila travou o toque — e agora a tela oferece o que fazer a respeito.
+     *
+     * Ate 17/08/2026 esta funcao escrevia a frase e parava por ali, e a frase
+     * mandava "espere a fila zerar". So que a fila SO sobe pela tela de leitura,
+     * que esta trava impede de abrir: o dono ficou preso num circulo, com uma
+     * leitura pendente e nada para tocar. Ver o cabecalho do `fila-presa.js`.
+     *
+     * @param n         quantas leituras estao presas
+     * @param evento_id o evento que o dono quer abrir — e de quem se cobra a
+     *                  senha para descartar
+     * @param motivo    por que o envio automatico falhou ('' se nem tentou)
+     */
+    function avisarFilaCheia(n, evento_id, motivo) {
+        var aviso = document.getElementById('erro-arranque');
+        if (!aviso) { return; }
+        aviso.textContent = window.filaPresa.frase(motivo, n);
+        aviso.classList.remove('sumindo');
+
+        var acoes = document.createElement('div');
+        acoes.className = 'acoes-aviso';
+
+        // Sem volta (aparelho revogado, ou sem token): "Tentar de novo" seria
+        // mandar o dono repetir um gesto que nao tem como dar certo.
+        if (!window.filaPresa.semVolta(motivo)) {
+            acoes.appendChild(acao('Enviar agora', 'btn-enviar-fila', function () {
+                aviso.textContent = 'Enviando…';
+                aviso.classList.remove('sumindo');
+                window.filaPresa.enviar().then(function () {
+                    aviso.classList.add('sumindo');
+                    return abrir(evento_id);      // a fila zerou: segue o toque
+                }).catch(function (e) {
+                    avisarFilaCheia(n, evento_id, (e && e.message) || 'servidor');
+                });
+            }));
+        }
+
+        acoes.appendChild(acao(
+            n === 1 ? 'Descartar 1 leitura' : 'Descartar ' + n + ' leituras',
+            'btn-descartar-fila',
+            function () { descartarComSenha(n, evento_id); }
+        ));
+
+        aviso.appendChild(acoes);
+    }
+
+    /**
+     * Descartar PERDE leitura, para sempre. Por isso custa a senha do dono.
+     *
+     * O porteiro esta com este celular na mao; sem a senha, um toque errado
+     * apagaria a contagem que o cliente pagou para ter. A confirmacao diz o
+     * numero exato, e nao "algumas": e o numero que some.
+     */
+    function descartarComSenha(n, evento_id) {
+        var quantas = n === 1 ? '1 leitura' : n + ' leituras';
+        if (!window.confirm('Descartar ' + quantas + ' que não subiram? '
+                + 'Elas somem para sempre, e quem entrou por elas não será '
+                + 'contado. Esta ação não tem volta.')) {
+            return;
+        }
+        return window.Controle.comSenha(evento_id, function () {
+            return window.filaPresa.descartar();
+        }).then(function () {
+            var aviso = document.getElementById('erro-arranque');
+            if (aviso) { aviso.classList.add('sumindo'); }
+            return abrir(evento_id);
+        }).catch(function (e) {
+            if (e && e.message === 'cancelado') { return; }
+            avisar('Não consegui descartar a fila agora. Tente de novo em '
+                 + 'instantes.');
+        });
     }
 
     /** Todos os setores do evento, para o portao nascer lendo. */
@@ -108,7 +182,7 @@
      * O toque na barra. `criar` exige senha; os outros dois nao — o aparelho
      * ja provou que e portao daquele evento quando o token foi guardado.
      */
-    function abrir(evento_id, nome) {
+    function abrir(evento_id, nome, jaTentouEsvaziar) {
         // O deposito TEM de estar carregado. Antes esta linha era
         // `window.portariaDeposito.contarFila()` direto, e a pagina que
         // esquecesse o `<script>` dele lancava aqui -- o toque na barra do
@@ -137,7 +211,28 @@
             });
 
             if (caminho === 'ler') { return irLer(); }
-            if (caminho === 'fila-cheia') { return avisarFilaCheia(naFila); }
+            if (caminho === 'fila-cheia') {
+                // TENTA ESVAZIAR PRIMEIRO, sem o dono pedir. Na maioria das
+                // vezes a fila esta parada so porque nada a cutucou: quem envia
+                // e o `sincronizar()` da tela de leitura, e o dono nem chegou
+                // la. Um POST resolve, e o evento abre na sequencia.
+                //
+                // `jaTentouEsvaziar` fecha o ciclo: se por algum motivo o envio
+                // disser que deu certo e a fila continuar cheia, a tela mostra o
+                // aviso em vez de tentar para sempre.
+                if (jaTentouEsvaziar) {
+                    return avisarFilaCheia(naFila, evento_id, 'servidor');
+                }
+                var impede = window.filaPresa.impedimento();
+                if (impede) {
+                    return avisarFilaCheia(naFila, evento_id, impede);
+                }
+                return window.filaPresa.enviar().then(function () {
+                    return abrir(evento_id, nome, true);
+                }).catch(function (e) {
+                    avisarFilaCheia(naFila, evento_id, (e && e.message) || 'servidor');
+                });
+            }
             if (caminho === 'trocar') {
                 window.chaveiro.carregar(evento_id);
                 // A carga do evento anterior sai junto: ela e do OUTRO evento,
