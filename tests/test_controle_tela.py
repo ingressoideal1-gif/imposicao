@@ -56,7 +56,7 @@ def test_a_tela_nunca_explica_como_o_codigo_do_QR_e_gerado():
 #
 # O `+` redondo da tela inicial nao tem palavra dentro dele, e mesmo assim nao
 # obriga o dono a adivinhar coisa nenhuma: ele e o segundo alvo de toque de uma
-# acao cujo rotulo, "Novo Evento", esta escrito na MESMA linha, doze pixels a
+# acao cujo rotulo, "Meus Pedidos", esta escrito na MESMA linha, doze pixels a
 # esquerda. Ele existe para fechar a coluna da direita, onde cada linha de
 # evento tem a sua engrenagem -- e sai da imagem que o usuario mandou.
 #
@@ -66,7 +66,7 @@ def test_a_tela_nunca_explica_como_o_codigo_do_QR_e_gerado():
 # aqui obriga quem for faze-lo a escrever por que aquele caso tambem tem a
 # palavra a vista em outro lugar.
 BOTOES_SEM_TEXTO_COM_MOTIVO = {
-    "btn-ler-qr-mais": 'a barra "Novo Evento" esta na mesma linha, ao lado',
+    "btn-meus-pedidos-mais": 'a barra "Meus Pedidos" esta na mesma linha, ao lado',
     # O olho dos menus gerais, pedido pelo usuario em 17/08/2026. Mora na
     # coluna da direita do cabecalho, encostado na borda -- exatamente onde a
     # engrenagem de cada evento mora --, e um rotulo em texto ali comeria a
@@ -2852,10 +2852,10 @@ def test_a_frase_da_fila_presa_nunca_manda_so_esperar():
 
 
 def test_o_olho_abre_o_menu_e_tira_a_tela_inicial_INTEIRA_do_caminho():
-    """"Novo Evento" fica FORA do `#lista` de propósito -- o porteiro não tem
-    conta, e a barra precisa aparecer acima do login. Sem escondê-lo junto, ele
-    sobrava em cima dos eventos finalizados, oferecendo ler um QR numa tela que
-    não é a de ler QR."""
+    """A barra do topo fica FORA do `#lista` de propósito -- o porteiro não tem
+    conta, e ela precisa aparecer acima do login. Sem escondê-la junto, ela
+    sobrava em cima dos eventos finalizados, oferecendo "Meus Pedidos" numa tela
+    que não é a dos pedidos."""
     saida = _no_navegador("""
         // A casa abre na tela de entrar quando nao ha aparelho nem sessao, e o
         // olho e mudo ali de proposito. O menu se exercita a partir da tela
@@ -2873,7 +2873,7 @@ def test_o_olho_abre_o_menu_e_tira_a_tela_inicial_INTEIRA_do_caminho():
     assert saida["menuAberto"] is True
     assert saida["listaSumiu"] is True
     assert saida["novoEventoSumiu"] is True, (
-        'a barra "Novo Evento" sobrou por cima do menu'
+        'a barra "Meus Pedidos" sobrou por cima do menu'
     )
 
 
@@ -2905,25 +2905,30 @@ def test_o_olho_ALTERNA_e_o_voltar_tambem_traz_a_tela_inicial_de_volta():
     for caminho in ("peloOlho", "peloVoltar"):
         assert saida[caminho]["menu"] is True, f"{caminho}: o menu ficou aberto"
         assert saida[caminho]["lista"] is False, f"{caminho}: a lista nao voltou"
-        assert saida[caminho]["novo"] is False, f"{caminho}: o Novo Evento nao voltou"
+        assert saida[caminho]["novo"] is False, f"{caminho}: a barra do topo nao voltou"
 
 
-def test_abrir_o_menu_DESLIGA_a_camera_do_QR():
-    """Sair da tela sem desligá-la deixa o aparelho filmando e gastando bateria
-    num painel onde não há o que ler."""
+def test_abrir_o_menu_TIRA_MEUS_PEDIDOS_do_caminho():
+    """Este teste era "abrir o menu desliga a camera do QR", que existia para o
+    aparelho não ficar filmando num painel onde não há o que ler. A câmera saiu
+    da casa em 17/08/2026, e o que ficou atrás da mesma barra é "Meus Pedidos" —
+    a mesma regra, outro morador: o olho é tocável de dentro dos pedidos, e sem
+    isto o menu nasceria por cima deles, com as duas telas empilhadas."""
     saida = _no_navegador("""
         // A casa abre na tela de entrar quando nao ha aparelho nem sessao, e o
         // olho e mudo ali de proposito. O menu se exercita a partir da tela
         // inicial, que e onde ele existe.
         window.conta.esconderEntrar();
-        let desligou = 0;
-        const antes = window.lerQR.fechar;
-        window.lerQR.fechar = function () { desligou++; return antes.apply(this, arguments); };
+        document.getElementById('meus-pedidos').classList.remove('sumindo');
         document.getElementById('btn-menu-geral').click();
         await new Promise(r => setTimeout(r, 120));
-        return { desligou };
+        const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
+        return { menuAberto: !sumiu('menu-geral'), pedidosSumiram: sumiu('meus-pedidos') };
     """)
-    assert saida["desligou"] == 1
+    assert saida["menuAberto"] is True
+    assert saida["pedidosSumiram"] is True, (
+        "o menu abriu por cima de Meus Pedidos, com as duas telas empilhadas"
+    )
 
 
 # ── O que muda na engrenagem tem de aparecer na home ───────────────────────

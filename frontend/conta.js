@@ -11,10 +11,11 @@
  *
  * ## Quem manda no que aparece na tela
  *
- * Esta pagina tem CINCO estados de topo, e eles nunca convivem: a tela inicial
+ * Esta pagina tem SEIS estados de topo, e eles nunca convivem: a tela inicial
  * (`#lista` + `#bloco-novo-evento`), o menu do olho (`#menu-geral`), a
- * configuracao de um evento (`#engrenagem`), a tela de entrar
- * (`#bloco-entrar`) e a troca de senha (`#trocar-senha`).
+ * configuracao de um evento (`#engrenagem`), "Meus Pedidos"
+ * (`#meus-pedidos`), a tela de entrar (`#bloco-entrar`) e a troca de senha
+ * (`#trocar-senha`).
  *
  * Ate a primeira revisao desta tarefa havia DOIS donos sem contrato entre si:
  * o `menu-geral.js`, que escondia a tela inicial atras do olho, e este arquivo,
@@ -46,13 +47,20 @@
         return temAparelho ? 'lista' : 'entrar';
     }
 
-    // A tela inicial, e os outros dois estados de topo que NAO sao deste
-    // arquivo. Os dois ultimos so aparecem na lista de esconder: devolve-los e
-    // de quem os abriu.
+    // A tela inicial, e os outros estados de topo que NAO sao deste arquivo.
+    // Estes ultimos so aparecem na lista de esconder: devolve-los e de quem os
+    // abriu.
+    //
+    // `meus-pedidos` entrou em 17/08/2026, com a barra que era "Novo Evento".
+    // Ele precisa dos DOIS papeis: ser escondido quando uma tela de conta
+    // abre -- senao o login nasceria por cima da lista de pedidos --, e contar
+    // como "esta na frente" quando ela fecha, para o `esconderEntrar()` nao
+    // devolver a tela inicial POR BAIXO de Meus Pedidos. Estar aqui da os dois
+    // de uma vez, porque o `NA_FRENTE` abaixo e montado a partir desta lista.
     var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento'];
-    var DOS_OUTROS = ['menu-geral', 'engrenagem'];
-    // TUDO o que pode estar na frente da tela inicial -- os dois estados de
-    // fora e as DUAS telas deste arquivo.
+    var DOS_OUTROS = ['menu-geral', 'engrenagem', 'meus-pedidos'];
+    // TUDO o que pode estar na frente da tela inicial -- os estados de fora e
+    // as DUAS telas deste arquivo.
     //
     // As duas ultimas faltavam, e a falta era uma fuga do portao: o
     // `esconderEntrar()` roda a cada `carregar()` com sessao, entao um segundo
@@ -77,7 +85,7 @@
         }
         // Ha outro estado na frente: a tela inicial continua atras dele, e quem
         // a traz de volta e o dono daquele estado -- o "← Voltar" do menu, o
-        // "← Voltar aos meus eventos" da engrenagem. Devolvê-la aqui a
+        // "← Voltar aos meus eventos" da engrenagem e o de Meus Pedidos. Devolvê-la aqui a
         // desenharia POR BAIXO de uma tela aberta.
         if (NA_FRENTE.some(naTela)) { return; }
         DA_TELA_INICIAL.forEach(function (id) {

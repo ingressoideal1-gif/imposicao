@@ -153,6 +153,9 @@ PAINEL_ARQUIVOS = [
     "caixa-confirmar.js",
     "menu-geral.js",
     "parede-pwa.js",
+    # "Meus Pedidos" (17/08/2026): a barra que era "Novo Evento" deixou de
+    # abrir a camera e passou a listar os pedidos ja impressos do cliente.
+    "meus-pedidos.js",
     # O deposito entra JUNTO com eles, embora seja da portaria: antes de trocar
     # de evento, o "virar portao" pergunta a ele quantas leituras ainda nao
     # subiram, e sem essa conta a troca perderia contagem que o cliente pagou

@@ -82,9 +82,13 @@
         // fica travado nesse caso, mas a troca opcional nao trava, e de la o
         // "← Voltar" do menu devolvia a lista com a troca ainda aberta.
         if (naFrente('bloco-entrar') || naFrente('trocar-senha')) { return; }
-        // A camera pode estar aberta atras: sair da tela sem desliga-la deixa o
-        // aparelho filmando e gastando bateria num painel onde nao ha o que ler.
-        if (window.lerQR) { window.lerQR.fechar(); }
+        // MEUS PEDIDOS tambem sai do caminho. O olho continua tocavel de la --
+        // ele mora no cabecalho, que nao pertence a estado nenhum --, e sem
+        // isto o menu nasceria por cima da lista de pedidos, com as duas telas
+        // empilhadas. Quem volta para a tela inicial e o `fechar()` daqui:
+        // sair pelo menu devolve a casa, e nao o lugar de onde se veio.
+        var mp = $('meus-pedidos');
+        if (mp) { mp.classList.add('sumindo'); }
         $('menu-geral').classList.remove('sumindo');
         mostrarInicial(false);
     }

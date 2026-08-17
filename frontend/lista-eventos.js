@@ -471,15 +471,10 @@
         window.chaveiro.migrar();
         explicarVoltaDaPortaria();
 
-        // O `+` e a barra "Novo Evento" fazem a MESMA coisa: abrem a camera do
-        // `ler-qr.js`. Dois alvos para uma acao so porque a barra e o rotulo em
-        // texto e o `+` fecha a coluna da direita, onde cada linha de evento tem
-        // a sua engrenagem.
-        var mais = $('btn-ler-qr-mais');
-        if (mais) {
-            mais.addEventListener('click', function () { window.lerQR.abrir(); });
-        }
-
+        // A barra do topo e o `+` ao lado dela sao de quem os desenha: desde
+        // 17/08/2026 os dois abrem "Meus Pedidos", e quem os liga e o
+        // `meus-pedidos.js`. Ligá-los aqui TAMBEM poria dois ouvintes no mesmo
+        // botao, e um toque valeria por dois.
         return recarregar();
     }
 
@@ -487,8 +482,8 @@
      * A lista inteira, de novo, com a sessao que houver.
      *
      * Separada do `arrancar()` porque quem refaz a lista depois de finalizar ou
-     * de reabrir um evento nao pode reinstalar os ouvintes de clique junto: o
-     * segundo ouvinte no `+` abriria a camera duas vezes por toque.
+     * de reabrir um evento nao pode reinstalar os ouvintes de clique junto: um
+     * segundo ouvinte no mesmo botao faria um toque valer por dois.
      */
     function recarregar() {
         return Promise.resolve().then(function () {

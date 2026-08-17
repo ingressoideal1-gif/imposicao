@@ -50,14 +50,17 @@ const ARQUIVOS = [
     'chaveiro.js?v=' + VERSAO,
     'lista-eventos.js?v=' + VERSAO,
     'conta.js?v=' + VERSAO,
+    'meus-pedidos.js?v=' + VERSAO,
     'virar-portao.js?v=' + VERSAO,
     'fila-presa.js?v=' + VERSAO,
     'caixa-confirmar.js?v=' + VERSAO,
     'menu-geral.js?v=' + VERSAO,
     'parede-pwa.js?v=' + VERSAO,
-    'ler-qr.js?v=' + VERSAO,
-    'qr-canvas.js?v=' + VERSAO,
-    'qrcode-generator.min.js?v=' + VERSAO,
+    // Sairam em 17/08/2026, com a camera da casa: o `ler-qr.js` lia o QR do
+    // Pedido, e o `qr-canvas.js` + `qrcode-generator.min.js` desenhavam o QR de
+    // pareamento, que ja nao existe. Guardar arquivo que tela nenhuma pede so
+    // ocupa espaco no aparelho -- e o `install` falha inteiro se UM deles
+    // deixar de existir. O `instalar.js` FICA: o `evento.html` ainda o carrega.
     'aparelho.js?v=' + VERSAO,
 
     'evento.html',

@@ -60,27 +60,20 @@
          evento carregado), esta é a única coisa que aparece na tela. -->
     <div id="erro-arranque" class="aviso erro sumindo" role="alert"></div>
 
-    <!-- Duas portas para a MESMA ação: a barra é o rótulo em texto (regra do
-         projeto: nada só com ícone) e o `+` fecha a coluna da direita, onde
-         cada linha de evento tem a sua engrenagem.
+    <!-- A barra "Novo Evento" virou "Meus Pedidos" em 17/08/2026: nao ha mais
+         QR do Pedido para ler. Um evento nasce de um pedido impresso, e os
+         pedidos vem da conta do cliente. Duas portas para a mesma acao: a barra
+         e o rotulo em texto, o `+` fecha a coluna da direita.
 
-         Fica ACIMA do login, e fora dele, de propósito: o porteiro não tem
-         conta, e pedir login a ele seria travar o portão numa credencial que
-         ninguém lhe deu. -->
+         Continua ACIMA do login, e fora dele: o porteiro nao tem conta, e a
+         tela inteira -- barra inclusive -- precisa aparecer acima dele. -->
     <div class="linha-evento" id="bloco-novo-evento">
-        <button id="btn-ler-qr" class="barra-evento destaque">
-            <span class="nome-evento">Novo Evento</span>
+        <button id="btn-meus-pedidos" class="barra-evento destaque">
+            <span class="nome-evento">Meus Pedidos</span>
         </button>
-        <button id="btn-ler-qr-mais" class="botao-engrenagem"
-                aria-label="Novo Evento" title="Novo Evento">+</button>
+        <button id="btn-meus-pedidos-mais" class="botao-engrenagem"
+                aria-label="Meus Pedidos" title="Meus Pedidos">+</button>
     </div>
-
-    <div id="caixa-qr" class="sumindo">
-        <video id="cam" playsinline muted class="cam-qr"></video>
-        <button id="btn-lanterna-qr" class="secundario sumindo" type="button">Lanterna</button>
-        <button id="btn-fechar-qr" class="secundario">Cancelar</button>
-    </div>
-    <div id="erro-qr" class="aviso erro sumindo" role="alert"></div>
 
     <!-- Envolve a lista inteira para a engrenagem poder escondê-la de uma vez.
          `#engrenagem` e `#lista` são os dois estados desta página, e nunca
@@ -89,10 +82,21 @@
         <h1 class="rotulo-secao">Meus Eventos</h1>
         <div id="eventos"></div>
         <p id="sem-eventos" class="aviso sumindo">
-            Nenhum evento aqui ainda. Toque em <strong>Novo Evento</strong> e leia o
-            QR que a gráfica enviou.
+            Nenhum evento aqui ainda. Toque em <strong>Meus Pedidos</strong> e
+            carregue um pedido que a gráfica já imprimiu.
         </p>
 
+    </div>
+
+    <!-- MEUS PEDIDOS: os pedidos já impressos deste cliente, cada um com o
+         Carregar que o transforma em evento. Sexto estado desta página, ao
+         lado de #lista, #menu-geral, #engrenagem e as duas telas de conta. -->
+    <div id="meus-pedidos" class="sumindo">
+        <button id="btn-voltar-pedidos" class="secundario" type="button">← Voltar aos meus eventos</button>
+        <h1 class="rotulo-secao">Meus Pedidos</h1>
+        <p class="config-ajuda">Os pedidos que a gráfica já imprimiu para você. Carregar um pedido cria o evento dele em <strong>Meus Eventos</strong>.</p>
+        <div id="pedidos"></div>
+        <p id="sem-pedidos" class="aviso sumindo"></p>
     </div>
 
     <!-- O MENU GERAL, atrás do olho do cabeçalho.
@@ -387,19 +391,11 @@
 <script src="supabase-config.js?v=630"></script>
 <script src="acesso-conta.js?v=630"></script>
 
-<!-- O QR do endereço de pareamento. Mesma biblioteca do cliente.html e do
-     index.html; o `qr-canvas.js` traz o `renderQRCodeOnCtx`, que é a função de
-     "desenhar um QR num canvas" deste projeto. -->
-<script src="qrcode-generator.min.js?v=630"></script>
-<script src="qr-canvas.js?v=630"></script>
-
-<!-- A câmera do "Novo Evento" é a MESMA da portaria: dois leitores (o
-     `BarcodeDetector` nativo e o `jsQR` de reserva no iPhone), já resolvidos
-     lá. Um segundo leitor herdaria os defeitos que o primeiro já corrigiu. -->
-<script src="jsqr.min.js?v=630"></script>
-<script src="portaria-camera.js?v=630"></script>
-<script src="ler-qr.js?v=630"></script>
-<script src="instalar.js?v=630"></script>
+<!-- NAO ha mais camera nesta tela. Ela lia o QR do Pedido, e desde 17/08/2026
+     um evento nasce de um pedido que a conta do cliente ja traz -- entao o
+     leitor, o gerador de QR e o convite de instalar (que aqui nunca teve caixa
+     onde caber) sairam daqui junto com ela. A camera continua existindo na
+     portaria, que e onde se le ingresso. -->
 <!-- O momento em que este celular vira um portão: guardar o token, encerrar a
      sessão da conta, ir para a leitura. Arquivo próprio porque a ORDEM dessas
      três coisas é o que impede o aparelho de ficar sem conta e sem token. -->
@@ -426,6 +422,10 @@
      tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
      ouvintes do login para cá. -->
 <script src="conta.js?v=630"></script>
+<!-- "Meus Pedidos": a lista dos pedidos já impressos e o Carregar. Depois do
+     `conta.js` porque ele chama `meusPedidos.abrir()` quando a conta ainda não
+     tem evento nenhum. -->
+<script src="meus-pedidos.js?v=630"></script>
 <script src="caixa-confirmar.js?v=630"></script>
 <script src="menu-geral.js?v=630"></script>
 <script src="fila-presa.js?v=630"></script>

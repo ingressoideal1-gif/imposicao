@@ -184,9 +184,9 @@ def test_o_qr_de_fora_e_recusado():
     assert "não é do Ideal Control" in js
 
 
-def test_ler_um_QR_nao_exige_conta():
+def test_a_barra_do_topo_nao_exige_conta_para_estar_na_tela():
     """Pedir login ao porteiro seria travar o portao numa credencial que
-    ninguem lhe deu. O botao mora FORA do bloco de login, e ACIMA dele.
+    ninguem lhe deu. A barra mora FORA do bloco de login, e ACIMA dele.
 
     Desde 16/08/2026 o wrapper da lista chama-se `#lista` (era
     `#lista-eventos`), e `#bloco-entrar` desceu para depois dela: quem abre o
@@ -194,19 +194,25 @@ def test_ler_um_QR_nao_exige_conta():
     ultimo recurso de quem nao tem nenhum. Por isso o teste compara posicoes em
     vez de procurar o botao dentro de uma faixa -- a faixa mudou de lugar, a
     regra nao.
+
+    Em 17/08/2026 a barra deixou de ser "Novo Evento" (a camera do QR) e virou
+    "Meus Pedidos". O que ela abre agora PEDE conta -- e por isso a tela de
+    entrar aparece por cima quando nao ha sessao --, mas o LUGAR dela na pagina
+    nao muda: a tela inicial inteira continua acima do login, porque o porteiro
+    precisa chegar na lista dos eventos deste aparelho sem passar por ele.
     """
     html = _ler("frontend/controle.html")
-    assert 'id="btn-ler-qr"' in html
+    assert 'id="btn-meus-pedidos"' in html
     assert 'id="lista"' in html, "o wrapper da lista sumiu da tela"
 
-    botao = html.index('id="btn-ler-qr"')
+    botao = html.index('id="btn-meus-pedidos"')
     login = html.index('id="bloco-entrar"')
     fim_login = html.index("</div>", login)
     assert not (login < botao < fim_login), (
-        "o botao de ler QR esta dentro do bloco de login"
+        "a barra do topo esta dentro do bloco de login"
     )
     assert botao < login, (
-        "o botao de ler QR esta abaixo do login -- o porteiro rolaria a tela "
+        "a barra do topo esta abaixo do login -- o porteiro rolaria a tela "
         "passando por um formulario que nao e para ele"
     )
 
@@ -226,7 +232,9 @@ def test_a_camera_entrega_a_leitura_a_quem_a_ligou():
 
 
 def test_quem_liga_a_camera_diz_o_que_fazer_com_a_leitura():
-    for arquivo in ("frontend/portaria.js", "frontend/ler-qr.js"):
+    # So a portaria liga a camera desde 17/08/2026: a casa perdeu a dela junto
+    # com o QR do Pedido. O `ler-qr.js` sai do disco na proxima tarefa.
+    for arquivo in ("frontend/portaria.js",):
         js = _ler(arquivo)
         assert re.search(r"portariaCamera\.ligar\(\s*\w|portariaCamera\.ligar\(function", js), (
             arquivo + " liga a camera sem dizer o que fazer com a leitura"
@@ -268,7 +276,7 @@ def test_o_pre_cache_cobre_as_tres_telas():
     DELA. Agora sao tres telas no mesmo aplicativo."""
     sw = _ler("frontend/sw.js")
     for arquivo in ("controle.html", "evento.html", "portaria.html",
-                    "supabase-js.min.js", "ler-qr.js"):
+                    "supabase-js.min.js", "meus-pedidos.js"):
         assert arquivo in sw, arquivo + " ficou fora do pre-cache"
 
 

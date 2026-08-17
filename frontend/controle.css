@@ -486,3 +486,17 @@ button.perigo {
 /* A tela de entrar e a de trocar senha: um cartao, centrado, com folga no topo. */
 #bloco-entrar h1, #trocar-senha h1 { font-size: 1.35rem; margin: 0 0 6px; }
 #bloco-entrar .config-ajuda, #trocar-senha .config-ajuda { margin-bottom: 14px; }
+
+/* Meus Pedidos: um cartao por pedido, o Carregar a direita. */
+#meus-pedidos #btn-voltar-pedidos { width: auto; padding: 10px 18px; }
+.cartao-pedido { display: grid; gap: 8px; }
+.pedido-topo { display: flex; justify-content: space-between; align-items: baseline; }
+.pedido-data { color: var(--dim); font-size: .85rem; }
+.pedido-nome { font-size: 1.15rem; font-weight: 700; }
+.pedido-setores { display: grid; gap: 4px; }
+.pedido-setor { display: flex; justify-content: space-between; align-items: center; font-size: .95rem; }
+.selo-impressao { font-size: .74rem; padding: 2px 8px; border-radius: 999px; border: 1px solid; }
+.selo-impressao.sim { color: #16a34a; border-color: rgba(22,163,74,.5); }
+.selo-impressao.nao { color: var(--dim); border-color: rgba(148,163,184,.4); }
+.pedido-acoes { display: flex; justify-content: flex-end; margin-top: 4px; }
+.pedido-acoes button { width: auto; min-width: 140px; }

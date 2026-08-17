@@ -140,10 +140,12 @@ def test_evento_ativo_nao_entra_na_lista_de_finalizados():
 
 # ── A tela ──────────────────────────────────────────────────────────────────
 
-def test_a_barra_de_novo_evento_e_o_mais_fazem_a_mesma_coisa():
+def test_a_barra_de_meus_pedidos_e_o_mais_fazem_a_mesma_coisa():
+    """A barra do topo virou "Meus Pedidos" em 17/08/2026. As duas portas
+    continuam: a barra e o rotulo em texto, o `+` fecha a coluna da direita."""
     texto = _ler("frontend/controle.html")
-    assert 'id="btn-ler-qr"' in texto
-    assert 'id="btn-ler-qr-mais"' in texto
+    assert 'id="btn-meus-pedidos"' in texto
+    assert 'id="btn-meus-pedidos-mais"' in texto
 
 
 def test_a_engrenagem_fica_FORA_da_barra_do_evento():
@@ -192,7 +194,7 @@ MODULOS_GLOBAIS = {
     "virarPortao": "virar-portao.js",
     "aparelhoAqui": "aparelho.js",
     "AcessoConta": "acesso-conta.js",
-    "lerQR": "ler-qr.js",
+    "meusPedidos": "meus-pedidos.js",
     "portariaCamera": "portaria-camera.js",
     "Controle": "controle.js",
     "paredePwa": "parede-pwa.js",
