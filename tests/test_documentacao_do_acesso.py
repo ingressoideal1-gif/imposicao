@@ -91,7 +91,13 @@ def test_a_contagem_de_tabelas_bate_com_o_schema():
     assert tabelas, "nao achei create table nenhum nos arquivos de esquema do acesso"
 
     doc = _texto(ACESSO)
-    numero = {7: "sete", 8: "oito", 9: "nove", 10: "dez"}.get(len(tabelas))
+    # O mapa acaba, e quando acaba o teste falha pedindo a palavra que falta —
+    # de proposito. Um `str(len)` aqui deixaria a doc dizer "11 tabelas" e o
+    # teste concordar, quando o texto do documento e escrito por extenso.
+    numero = {
+        7: "sete", 8: "oito", 9: "nove", 10: "dez",
+        11: "onze", 12: "doze", 13: "treze", 14: "quatorze", 15: "quinze",
+    }.get(len(tabelas))
     assert numero, f"schema tem {len(tabelas)} tabelas e este teste nao sabe soletrar"
     assert f"{numero} tabelas" in doc, (
         f"o schema cria {len(tabelas)} tabelas e a documentacao anuncia outro numero"

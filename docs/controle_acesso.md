@@ -35,7 +35,7 @@ Agente (tem o pool)  ──hash──►  Render (service_role)  ──►  Supa
                               evento.html (página no celular)
 ```
 
-**Nenhuma chave de banco chega ao celular nem ao navegador.** As dez tabelas
+**Nenhuma chave de banco chega ao celular nem ao navegador.** As onze tabelas
 `producao_acesso_*` nasceram com RLS ligado e **zero políticas**: com a chave anônima —
 que é pública e qualquer um lê no código-fonte do painel — não se lê nem se escreve uma
 linha. Conferido contra o banco em 13/08/2026 para as sete primeiras (a `_bloqueios` veio
@@ -500,7 +500,7 @@ só mostra qual serviço achou, sem gravar.
 > assinatura) e põe na área de transferência **sem mostrar na tela**. Com `-Conferir`, só
 > confere.
 
-## As dez tabelas
+## As onze tabelas
 
 Nasceram em [sql/schema_acesso.sql](../sql/schema_acesso.sql), pronto para colar, mais as
 migrações que vieram depois.
@@ -516,6 +516,7 @@ migrações que vieram depois.
 | `schema_acesso_freio_pareamento.sql` | a **nona** tabela, `_falhas_pareamento`: o freio de forca bruta do pareamento, que ate 16/08/2026 vivia na memoria do processo | sim |
 | `schema_acesso_setor_bloqueado.sql` | `bloqueado`/`bloqueado_motivo` nos setores: desligar o setor INTEIRO, e nao so uma faixa de numeros | sim |
 | `schema_acesso_entradas_unicas.sql` | a **decima** tabela, `_entradas_unicas`: e ela que decide, no banco, qual de dois portoes registrou a entrada primeiro | sim |
+| `schema_acesso_contas.sql` | a **decima primeira** tabela, `_contas`: liga a conta do cliente ao `id_cliente` do ERP. Cria tambem `acesso_usuario_por_email()`, o unico caminho ate `auth.users` | sim |
 
 **Por que os dois primeiros não devem ser recolados:** os dois contêm
 `CREATE UNIQUE INDEX IF NOT EXISTS uq_acesso_credencial_hash_simples … (codigo_hash)` — a
@@ -536,6 +537,7 @@ ingressos do 20508.
 | `_dispositivos` | os aparelhos da portaria (parte 3a — já em uso pela tela do dono) |
 | `_dispositivo_setores` | em quais setores cada aparelho valida (parte 3a — já em uso) |
 | `_leituras` | toda leitura, inclusive negada (parte 3b — ainda vazia) |
+| `_contas` | qual conta do Supabase pertence a qual cliente do ERP. Chave composta `(auth_user_id, id_cliente)`, porque a conta de teste da grafica serve a mais de um cliente e um cliente pode ter mais de uma pessoa. `criada_aqui` separa a conta que a grafica criou — so dessa ela redefine a senha; `senha_provisoria_em` preenchida prende o aplicativo na tela "Escolha a sua senha" |
 
 Duas decisões do modelo que valem lembrar:
 
