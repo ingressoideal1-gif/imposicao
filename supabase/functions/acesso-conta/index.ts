@@ -51,7 +51,11 @@ import {
   aplicarSetor,
   zerarEntradas,
 } from "../_compartilhado/configuracao.ts";
-import { nomeDoEvento, pedacosDaRota, recusaHumana } from "./puro.ts";
+import { nomeDoEvento, pedacosDaRota, pertenceAConta, recusaHumana } from "./puro.ts";
+import {
+  clientesDaConta, contaPrecisaTrocarSenha, marcarSenhaTrocada,
+} from "../_compartilhado/contas.ts";
+import { trocarSenhaDoUsuario } from "../_compartilhado/auth_admin.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -103,9 +107,14 @@ async function eventoDoDono(eventoId: string, usuario: { id: string }): Promise<
   const linha = ((await banco(
     "GET",
     `producao_acesso_eventos?id=eq.${uuid(eventoId)}` +
-      "&select=id,dono_auth_id,nome_evento,data_evento,local_evento,status",
+      "&select=id,dono_auth_id,id_cliente,nome_evento,data_evento,local_evento,status",
   )) ?? [])[0];
-  if (!linha || String(linha.dono_auth_id) !== String(usuario.id)) {
+  if (!linha) throw new Recusa(403, "evento nao encontrado nesta conta");
+  // A conta que criou passa sem ir ao banco de novo; as outras contas do
+  // mesmo cliente passam pela tabela de contas.
+  if (String(linha.dono_auth_id) === String(usuario.id)) return linha;
+  const clientes = await clientesDaConta(usuario.id);
+  if (!pertenceAConta(linha, usuario.id, clientes)) {
     throw new Recusa(403, "evento nao encontrado nesta conta");
   }
   return linha;
@@ -237,19 +246,65 @@ async function exigirElevacao(
  * Uma consulta por evento e o que ha: agregacao esta desligada neste PostgREST.
  */
 async function meusEventos(donoId: string): Promise<any> {
+  const clientes = await clientesDaConta(donoId);
+  // `or=` do PostgREST: os eventos que esta conta criou OU os de qualquer
+  // cliente ligado a ela. Sem cliente ligado, so o primeiro ramo.
+  const filtro = clientes.length
+    ? `or=(dono_auth_id.eq.${donoId},id_cliente.in.(${clientes.join(",")}))`
+    : `dono_auth_id=eq.${donoId}`;
   const eventos = (await banco(
     "GET",
-    `producao_acesso_eventos?dono_auth_id=eq.${donoId}` +
-      "&status=neq.excluido&select=id,nome_evento,data_evento,status" +
+    `producao_acesso_eventos?${filtro}` +
+      "&status=neq.excluido&select=id,nome_evento,data_evento,status,id_cliente" +
       "&order=created_at.desc",
   )) ?? [];
-
   for (const e of eventos) {
     e.entradas = await contar(
       `producao_acesso_leituras?evento_id=eq.${e.id}&resultado=eq.permitido`,
     );
   }
   return { eventos };
+}
+
+const SENHA_MINIMA = 8;
+
+async function minhaConta(usuario: { id: string }): Promise<any> {
+  const ids = await clientesDaConta(usuario.id);
+  let clientes: any[] = [];
+  if (ids.length) {
+    clientes = ((await banco(
+      "GET",
+      `clientes?id_cliente=in.(${ids.join(",")})&select=id_cliente,nome`,
+    )) ?? []).map((c: any) => ({ id_cliente: Number(c.id_cliente), nome: c.nome ?? "" }));
+  }
+  return { clientes, precisa_trocar_senha: await contaPrecisaTrocarSenha(usuario.id) };
+}
+
+/**
+ * Trocar a senha. Uma rota so, para a marca de provisoria ser apagada no
+ * MESMO ato em que a senha muda -- duas chamadas deixariam uma janela em que
+ * a senha e a nova e o app ainda exige a troca.
+ *
+ * A senha atual e conferida SALVO quando a conta esta com senha provisoria: o
+ * cliente acabou de entrar com ela, e pedir de novo so atrasa.
+ */
+async function trocarMinhaSenha(
+  usuario: { id: string; email: string },
+  corpo: any,
+): Promise<any> {
+  const nova = String(corpo?.senha_nova ?? "");
+  if (nova.length < SENHA_MINIMA) {
+    throw new Recusa(422, `a senha nova precisa ter pelo menos ${SENHA_MINIMA} caracteres`);
+  }
+  const provisoria = await contaPrecisaTrocarSenha(usuario.id);
+  if (!provisoria) {
+    if (!(await conferirSenha(usuario.email ?? "", String(corpo?.senha_atual ?? "")))) {
+      throw new Recusa(401, "a senha atual nao confere");
+    }
+  }
+  await trocarSenhaDoUsuario(usuario.id, nova);
+  await marcarSenhaTrocada(usuario.id);
+  return { ok: true };
 }
 
 // ── O painel do evento ──────────────────────────────────────────────────────
@@ -510,6 +565,12 @@ async function rotear(req: Request, url: URL): Promise<Response> {
 
   if (metodo === "GET" && p.length === 1 && p[0] === "meus-eventos") {
     return ok(await meusEventos(usuario.id));
+  }
+  if (metodo === "GET" && p.length === 1 && p[0] === "minha-conta") {
+    return ok(await minhaConta(usuario));
+  }
+  if (metodo === "POST" && p.length === 2 && p[0] === "minha-conta" && p[1] === "senha") {
+    return ok(await trocarMinhaSenha(usuario, await corpo()));
   }
   if (metodo === "POST" && p.length === 1 && p[0] === "reivindicar") {
     const c = await corpo();

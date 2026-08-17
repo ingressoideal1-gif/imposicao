@@ -51,3 +51,21 @@ export function recusaHumana(motivo: string): string {
 export function nomeDoEvento(nomePedido: string, pedido: number): string {
   return String(nomePedido ?? "").trim() || `Evento do pedido ${pedido}`;
 }
+
+/**
+ * De quem e o evento.
+ *
+ * Duas portas, e basta uma: a conta que o criou (`dono_auth_id`, o que valia
+ * ate 17/08/2026 e continua valendo para os eventos antigos) ou qualquer conta
+ * ligada ao mesmo cliente do ERP (`id_cliente`). Decisao do usuario: duas
+ * pessoas do mesmo cliente veem e configuram os mesmos eventos.
+ */
+export function pertenceAConta(
+  evento: { dono_auth_id?: string | null; id_cliente?: number | null },
+  userId: string,
+  clientes: number[],
+): boolean {
+  if (evento?.dono_auth_id && String(evento.dono_auth_id) === String(userId)) return true;
+  const c = Number(evento?.id_cliente);
+  return Boolean(c) && clientes.includes(c);
+}
