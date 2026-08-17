@@ -786,6 +786,38 @@ let clienteState = {
 };
 
 /**
+ * Grava o status da arte pelo par número+token, e não por `os_id`.
+ *
+ * ## Por que existe
+ *
+ * As três telas que mudam status daqui — aprovar, pedir alteração e o
+ * automático — escreviam direto em `pedidos_links_cliente` com a chave anônima,
+ * filtrando por `os_id`. Quer dizer: quem tivesse a chave (ela está no
+ * código-fonte de toda página) escrevia o status de QUALQUER pedido, sem token
+ * nenhum. E marcar uma arte como APROVADO é autorizar a impressão.
+ *
+ * A função do banco exige o par, aceita só os três valores que esta página
+ * escreve, e devolve `false` quando o par não confere.
+ *
+ * ## Por que a falha é silenciosa
+ *
+ * Do mesmo jeito que era antes: os três pontos de chamada já engoliam o erro de
+ * propósito, para que uma recusa do banco não trave o cliente no meio da
+ * aprovação. O que ele fez continua gravado nas outras tabelas; o status é
+ * espelho, e o painel o recalcula.
+ */
+async function gravarStatusDoLink(status) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return false;
+    const { data, error } = await supabaseClient.rpc('link_cliente_status', {
+        p_numero: clienteState.numero,
+        p_token: clienteState.token,
+        p_status: status
+    });
+    if (error) throw error;
+    return data === true;
+}
+
+/**
  * Inicializa a página do cliente com validação de token
  */
 async function initClientePage(numero, token) {
@@ -814,14 +846,24 @@ async function initClientePage(numero, token) {
     }
 
     try {
-        // Validar token
-        const { data: linkData, error: linkError } = await supabaseClient
-            .from('pedidos_links_cliente')
-            .select('*')
-            .eq('numero_pedido', numero)
-            .eq('token', token)
-            .eq('ativo', true)
-            .maybeSingle();
+        // Validar token — pela função do banco, e não pela tabela.
+        //
+        // Até 16/08/2026 esta consulta saía com a chave anônima, que está no
+        // código-fonte de toda página e qualquer um lê com Ctrl+U. Medido naquele
+        // dia: a mesma chave, sem filtro nenhum, LISTAVA os 42 links de aprovação
+        // com os tokens dentro. O token é a única coisa que separa a arte do
+        // cliente do resto da internet.
+        //
+        // `link_cliente_abrir` exige o par número+token, devolve uma linha só,
+        // não devolve o token de volta (o navegador já o tem na URL) e conta o
+        // acesso ela mesma — o UPDATE de `acessos` que ficava logo abaixo saiu
+        // junto, e com ele mais um motivo de a chave anônima precisar escrever
+        // nesta tabela.
+        const { data: linhasDoLink, error: linkError } = await supabaseClient
+            .rpc('link_cliente_abrir', { p_numero: numero, p_token: token });
+
+        // A função devolve TABLE, então o retorno é uma lista de zero ou uma.
+        const linkData = Array.isArray(linhasDoLink) ? linhasDoLink[0] : linhasDoLink;
 
         if (linkError || !linkData) {
             if (loadingEl) loadingEl.style.display = 'none';
@@ -831,12 +873,6 @@ async function initClientePage(numero, token) {
 
         clienteState.osId = linkData.os_id;
         clienteState.linkId = linkData.id;
-
-        // Incrementar acessos
-        await supabaseClient
-            .from('pedidos_links_cliente')
-            .update({ acessos: (linkData.acessos || 0) + 1, ultimo_acesso: new Date().toISOString() })
-            .eq('id', linkData.id);
 
         // Buscar dados da OS (tentar Vibecode primeiro)
         let osCliente = '';
@@ -1191,11 +1227,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             try {
                 if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                     if (osId.startsWith('vibe_')) {
-                        const { error } = await supabaseClient
-                            .from('pedidos_links_cliente')
-                            .update({ status_arte: 'Em Alteração' })
-                            .eq('os_id', osId);
-                        if (error) throw error;
+                        await gravarStatusDoLink('Em Alteração');
                     } else {
                         const { error } = await supabaseClient
                             .from('producao_ordens_servico')
@@ -1606,7 +1638,7 @@ window.finalizarConfirmacaoCliente = async function() {
         if (typeof supabaseClient !== 'undefined' && supabaseClient) {
             const osId = clienteState.osId;
             if (osId.startsWith('vibe_')) {
-                await supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'APROVADO' }).eq('os_id', osId);
+                await gravarStatusDoLink('APROVADO');
             } else {
                 await supabaseClient.from('producao_ordens_servico').update({ status: 'APROVADO' }).eq('id', osId);
             }
