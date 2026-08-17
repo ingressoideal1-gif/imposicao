@@ -3407,22 +3407,27 @@ window.togglePedItemSelection = function(itemId, osId) {
     if (idx !== -1) {
         state.selectedOSItems.splice(idx, 1);
     } else {
-        // Validação de mesma cor
+        // Dois modelos só saem na mesma folha se combinarem em cor, formato,
+        // saída, face e modo PDF. Até a v630 só a cor era conferida, e os
+        // outros quatro produzem folha impossível, não só diferente.
         if (state.selectedOSItems.length > 0) {
             const firstSelectedId = state.selectedOSItems[0].itemId;
             const firstSelectedItem = itens.find(i => String(i.id) === String(firstSelectedId));
-            const firstColor = firstSelectedItem ? (firstSelectedItem.cor || firstSelectedItem.padrao || '').toLowerCase().trim() : '';
-            const thisColor = (item.cor || item.padrao || '').toLowerCase().trim();
-            
-            if (firstColor !== thisColor) {
-                toast('Só é possível selecionar modelos que compartilhem da mesma COR.', 'warning');
+            const motivo = (firstSelectedItem && typeof porQueNaoCombina === 'function')
+                ? porQueNaoCombina(firstSelectedItem, item)
+                : null;
+            if (motivo) {
+                const jaMarcado = firstSelectedItem.nome_modelo || firstSelectedItem.produto || 'o modelo já marcado';
+                toast(`Este modelo não sai na mesma folha que ${jaMarcado}: ${motivo}. `
+                    + 'Desmarque os outros para imprimir este sozinho.', 'warning');
                 return;
             }
         }
         state.selectedOSItems.push({ itemId, osId });
     }
-    
+
     renderPedOSQueue();
+    if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
     drawPedPreview();
 };
 
@@ -3454,9 +3459,18 @@ window.pedQueueGerarPDFMulti = async function(isPrint = false) {
                 const hasBlocosFlag = sItem && sItem.blocos && sItem.blocos !== 'N' && sItem.blocos !== 'n';
                 return hasBlocoNum || hasBlocosFlag;
             });
-            // Sempre forçar cut_stack + strict_assembly para multi-seleção com modelos combinados
-            // pois é a regra padrão quando se combinam modelos
-            const forceStrictAssembly = anyHasBloco || state.selectedOSItems.length > 1;
+            // "Cada modelo em folha própria" (o padrão) força cut_stack +
+            // strict_assembly, que é como sempre foi. "Aproveitar a folha" pede
+            // o outro esquema: uma conta só, células preenchidas na ordem. Quem
+            // decide o esquema de verdade é o runImposition; aqui os campos da
+            // tela só precisam contar a mesma história.
+            const aproveitando = (typeof modoSomaFolha === 'function') && modoSomaFolha() === 'aproveitar';
+            if (aproveitando) {
+                const schemaSel = document.getElementById('ped-schema');
+                if (schemaSel) schemaSel.value = 'multi_artes';
+                console.log('[pedQueueGerarPDFMulti] Aproveitando a folha: schema=multi_artes');
+            }
+            const forceStrictAssembly = !aproveitando && (anyHasBloco || state.selectedOSItems.length > 1);
             if (forceStrictAssembly) {
                 const schemaSel = document.getElementById('ped-schema');
                 if (schemaSel) schemaSel.value = 'cut_stack';
@@ -3979,6 +3993,8 @@ function renderPedOSQueue() {
 
     wrapper.innerHTML = html;
     updatePedImprimirButtonsVisibility();
+    // Ver o comentário gêmeo em renderImpOSQueue: a barra é um nó fixo do HTML.
+    if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
 }
 
 function updatePedImprimirButtonsVisibility() {
@@ -4250,7 +4266,12 @@ window.runPedImposition = async function (mode, isRefazer) {
 
     if (state.selectedOSItems && state.selectedOSItems.length > 1) {
         isMultiSelected = true;
-        schema = 'multi_artes';
+        // A mesma regra do runImposition: o padrao da folhas proprias a cada
+        // modelo; aproveitar a folha enche a tiragem numa conta so. Esta tela
+        // mandava `multi_artes` sempre, o que discordava da outra.
+        schema = (typeof modoSomaFolha === 'function' && modoSomaFolha() === 'aproveitar')
+            ? 'multi_artes'
+            : 'cut_stack';
         tempMultiArtes = state.selectedOSItems.map(s => {
             const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
             const qt = sItem ? (parseInt(sItem.qtd !== undefined && sItem.qtd !== null ? sItem.qtd : (sItem.quantidade || 0))) : 0;
@@ -4308,6 +4329,12 @@ window.runPedImposition = async function (mode, isRefazer) {
                 });
             }
 
+            const filenameFromUrl = itemArteUrl && itemArteUrl.startsWith('http')
+                ? decodeURIComponent(itemArteUrl.split('/').pop().split('?')[0])
+                : null;
+            const itemPdfName = filenameFromUrl || (sItem ? sItem.nome_arquivo_arte : null)
+                || (corObj ? `${corObj.name}.pdf` : `Arte_${sItem ? sItem.modelo : 'Modelo'}.pdf`);
+
             return {
                 qtd: qt,
                 nome: sItem ? sItem.modelo : '',
@@ -4316,10 +4343,20 @@ window.runPedImposition = async function (mode, isRefazer) {
                 _itemId: s.itemId,
                 _osId: s.osId,
                 num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
+                num2_id: null,
                 start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
                 has_raw_file: false,
                 is_selected: true,
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
+                // O endereço da arte, que é o que o payload lê. Sem isto a folha
+                // saía com a numeração e SEM arte nenhuma: o objeto trazia só o
+                // `pdfDoc`, que serve à prévia e não ao motor. O gêmeo no
+                // script.js sempre teve os três.
+                pdf_url: itemArteUrl,
+                pdf_verso_url: itemArteVersoUrl,
+                pdf_name: itemPdfName,
+                rawFile: null,
+                nome_color: '#000000',
                 pdfDoc: pdfDoc,
                 pdfVersoDoc: pdfVersoDoc,
                 bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,

@@ -250,6 +250,36 @@ def _so_layout(el: dict) -> bool:
     return str(el.get("render_mode", "print")).strip().lower() == "layout"
 
 
+def _linha_do_banco(item_data: dict | None, indice: int, csv_data: list | None):
+    """A linha do banco de dados (CSV) que ESTE item imprime.
+
+    Numa folha com modelos somados cada arte traz o proprio banco, ja recortado
+    na fatia daquele modelo, e a linha viaja dentro do item em `csv_row`. Fora
+    desse caso vale o banco unico do trabalho, indexado pela posicao do item —
+    que e como sempre funcionou e continua funcionando.
+
+    Duas guardas que parecem detalhe e nao sao:
+
+    * **Arte com banco proprio nunca cai no banco do trabalho.** Se o item passou
+      do fim da fatia dele, a resposta e "nao ha linha" — nao a linha de outro
+      modelo. Sem isso, a credencial da Bulgaria sairia com o nome de alguem do
+      Chile, e so o cliente descobriria.
+    * **O indice e conferido.** Ate a v630 os tres pontos do laco principal
+      faziam `cfg.csv_data[item_index]` sem limite: somar modelos cuja tiragem
+      passasse do banco principal estourava `IndexError` no meio da geracao, com
+      o operador na frente da impressora.
+    """
+    if item_data:
+        linha = item_data.get("csv_row")
+        if linha is not None:
+            return linha
+        if item_data.get("csv_proprio"):
+            return None
+    if csv_data and 0 <= indice < len(csv_data):
+        return csv_data[indice]
+    return None
+
+
 def _foto_cache_path(origem: str) -> str | None:
     """Caminho do arquivo de cache em disco para uma foto baixada da nuvem.
 
@@ -937,22 +967,20 @@ class ImpositionEngine:
             return arte_data.get("local_idx", item_index), arte_data.get("l_cam"), arte_data.get("c_ini"), arte_data.get("start_base")
         return item_index, None, None, None
 
-    def _multi_map_qr(self):
-        """A lista de artes, quando a folha mistura modelos. None caso contrario."""
-        cfg = self.cfg
-        if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0):
-            return cfg.multi_artes
-        return None
-
-    def _modelo_do_item(self, item_index: int, multi_map: list = None):
+    def _modelo_do_item(self, item_index: int, item_map: list = None):
         """O modelo (id de 7 digitos) deste item.
 
-        Numa folha `multi_artes` cada arte e um modelo diferente — e como um
-        modelo e um setor do evento, cada arte usa uma coluna diferente do
-        pool. Fora desse caso, o modelo e o do trabalho inteiro.
+        Numa folha que soma modelos cada arte e um modelo diferente — e como um
+        modelo e um setor do evento, cada arte usa uma coluna diferente do pool.
+        Fora desse caso, o modelo e o do trabalho inteiro.
+
+        `item_map` e o `multi_map`, que tem UMA entrada por ITEM. Nao passe a
+        lista de artes: ela tem uma entrada por MODELO, e indexa-la pelo indice
+        do item devolve o modelo de outro — foi assim ate a v630, e o QR saia da
+        coluna errada do pool.
         """
-        if multi_map and item_index < len(multi_map):
-            m = multi_map[item_index].get("modelo")
+        if item_map and 0 <= item_index < len(item_map):
+            m = item_map[item_index].get("modelo")
             if m not in (None, ""):
                 return str(m).strip()
         return self.cfg.modelo
@@ -965,15 +993,30 @@ class ImpositionEngine:
         sair certa: refazer a celula 7 imprime o codigo do item 7, mesmo que
         ele caia na primeira pose da folha compactada.
 
-        O modelo chega por dois caminhos, porque os laços de imposicao
-        identificam o item de dois jeitos: uns tem o indice e o mapa de artes,
-        outros ja tem a arte na mao (`item_data`).
+        O modelo vem do proprio item (`item_data`), que e uma entrada do
+        `multi_map` e sabe de que arte saiu. Fora de uma folha com modelos
+        somados nao ha arte nenhuma, e vale o modelo do trabalho inteiro.
+
+        **Numa folha com modelos somados, item sem modelo levanta erro.** Ate a
+        v630 a busca caia em `_modelo_do_item(item_index, cfg.multi_artes)`, que
+        indexava a lista de ARTES pelo indice do ITEM: o item 40 de uma folha de
+        oito artes nao existia ali e recebia o modelo do trabalho, e o caminho de
+        montagem, que chama sem indice, dava a TODOS os itens o modelo da
+        primeira arte. Os QRs saiam da coluna errada do pool — o defeito que so
+        aparece na portaria, com a fila na porta. Falhar alto aqui e a regra.
         """
         cfg = self.cfg
         if item_data is not None and item_data.get("modelo") not in (None, ""):
             modelo = str(item_data["modelo"]).strip()
+        elif cfg.multi_artes:
+            raise ValueError(
+                "QR Ideal: esta folha soma modelos e um dos itens chegou sem "
+                "saber de qual modelo veio. O codigo sairia da coluna errada do "
+                "pool e o ingresso nao abriria a portaria. Refaca a selecao dos "
+                "modelos e imponha de novo."
+            )
         else:
-            modelo = self._modelo_do_item(item_index or 0, self._multi_map_qr())
+            modelo = self._modelo_do_item(item_index or 0, None)
         if not cfg.pedido or not modelo or cfg.pool_qr is None:
             return None
         return cfg.pool_qr.conteudo(cfg.pedido, modelo, val)
@@ -1789,7 +1832,15 @@ class ImpositionEngine:
         if cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0) or is_strict_assembly:
 
             if cfg.multi_artes and len(cfg.multi_artes) > 0:
-                sorted_artes = sorted(cfg.multi_artes, key=lambda a: int(a.get("qtd", 0)), reverse=True)
+                # Ordenar por quantidade so serve ao strict_assembly, que monta
+                # blocos completos e aproveita os modelos grandes primeiro. No
+                # modo somado a tiragem e uma sequencia continua, e embaralhar os
+                # modelos so atrapalha quem confere o material: a ordem do pedido
+                # e a que o operador ve na tela, e e ela que deve valer.
+                if is_strict_assembly:
+                    sorted_artes = sorted(cfg.multi_artes, key=lambda a: int(a.get("qtd", 0)), reverse=True)
+                else:
+                    sorted_artes = list(cfg.multi_artes)
             else:
                 sorted_artes = [{
                     "qtd": cfg.total_items,
@@ -1948,7 +1999,15 @@ class ImpositionEngine:
                 
                 n1 = int(num1_obj.get("start", 1)) if num1_obj else 1
                 n2 = int(num2_obj.get("start", 1)) if num2_obj else 1
-                
+
+                # O banco de dados (CSV) DESTA arte, ja recortado na fatia do
+                # modelo pelo frontend. Numa folha com modelos somados cada arte
+                # tem o seu; sem isto o motor lia o banco do trabalho inteiro e
+                # dava a linha do vizinho a quem nao era dela.
+                art_csv = (num1_obj or {}).get("csv_data") or None
+                if art_csv:
+                    art_csv = [r for r in art_csv if r.get("__ativo", True) is not False]
+
                 els1 = parse_elements(num1_obj, 1)
                 els2 = parse_elements(num2_obj, 2)
                 art_els = els1 + els2
@@ -1990,7 +2049,15 @@ class ImpositionEngine:
                         "l_cam": int(art.get("l_cam", cfg.l_cam if hasattr(cfg, "l_cam") else 1)),
                         "q_cam": int(art.get("q_cam", cfg.q_cam if hasattr(cfg, "q_cam") else 0)),
                         "num_tipo": art_num_tipo,
-                        "ticket_qtd": art_ticket_qtd
+                        "ticket_qtd": art_ticket_qtd,
+                        # A linha do banco deste item, e o aviso de que esta arte
+                        # tem banco proprio. Ver _linha_do_banco().
+                        "csv_proprio": bool(art_csv),
+                        "csv_row": (art_csv[i] if art_csv and i < len(art_csv) else None),
+                        # O modelo DESTA arte. O QR Ideal tira uma coluna do pool
+                        # por modelo, e sem isto aqui o item nao tinha como dizer
+                        # de que arte veio: ver _conteudo_qr_ideal().
+                        "modelo": art.get("modelo")
                     })
 
         if is_strict_assembly:
@@ -2388,7 +2455,7 @@ class ImpositionEngine:
                                 out_page_front.insert_textbox(
                                     fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1),
                                     err_msg, fontsize=8, color=(1,0,0))
-                        csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
+                        csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
                         for el in current_elements:
                             if el.get("face", "both") == "back":
                                 continue
@@ -2413,7 +2480,7 @@ class ImpositionEngine:
                             if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
                                 c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
                                 current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
-                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index)
+                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index, item_data=arte_data)
                             self._render_element(out_page_front, rotated_el, cell_x0, cell_y0, current_val, csv_row)
 
                     else:
@@ -2434,7 +2501,7 @@ class ImpositionEngine:
                                 err_msg = f"ERR: doc_base nulo! local_path={arte_data.get('local_path')} url={arte_data.get('pdf_url')}"
                                 temp_page.insert_textbox(rect_art_temp, err_msg, fontsize=8, color=(1,0,0))
 
-                        csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
+                        csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
 
                         for el in current_elements:
                             if el.get("face", "both") == "back":
@@ -2460,7 +2527,7 @@ class ImpositionEngine:
                             if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
                                 c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
                                 current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
-                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index)
+                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index, item_data=arte_data)
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
                         if arte_nome:
@@ -2618,7 +2685,7 @@ class ImpositionEngine:
                             # Inserir arte na página temporária
                             temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back, clip=page_base_v.rect)
 
-                        csv_row = cfg.csv_data[item_index] if cfg.csv_data else None
+                        csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
 
                         # Desenhar nome da arte no topo da célula, se houver
                         if arte_nome:
@@ -2665,7 +2732,7 @@ class ImpositionEngine:
                                 N = item_ticket_qtd
                                 current_val = item_start_base + (item_local_idx * N) + (pos - 1)
 
-                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index)
+                            self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index, item_data=arte_data)
                             self._render_element(temp_page, rotated_el, 0, 0, current_val, csv_row)
 
                         # 2. Impor a pagina temporaria de verso na folha final
@@ -2897,7 +2964,7 @@ class ImpositionEngine:
             base_h_frente = cfg.item_h
 
         global_idx = item_data.get("global_idx", 0)
-        csv_row = cfg.csv_data[global_idx] if (cfg.csv_data and global_idx < len(cfg.csv_data)) else None
+        csv_row = _linha_do_banco(item_data, global_idx, cfg.csv_data)
 
         if cell_rotation == 0 and not arte_nome:
             if current_doc_base:
@@ -3055,7 +3122,7 @@ class ImpositionEngine:
             base_h_verso = cfg.item_h
 
         global_idx = item_data.get("global_idx", 0)
-        csv_row = cfg.csv_data[global_idx] if (cfg.csv_data and global_idx < len(cfg.csv_data)) else None
+        csv_row = _linha_do_banco(item_data, global_idx, cfg.csv_data)
 
         if cell_rotation == 0 and not arte_nome:
             if page_idx_back is not None and current_doc_base:

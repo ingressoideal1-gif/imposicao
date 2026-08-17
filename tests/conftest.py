@@ -43,6 +43,7 @@ import pytest
 GRAVAM_NA_PASTA_DO_REPO = {
     "test_engine_csv_ativo.py",
     "test_engine_dual_vdp.py",
+    "test_engine_modelos_somados.py",
     "test_engine_qr_ideal.py",
     "test_engine_refazer.py",
     "test_engine_rotation.py",

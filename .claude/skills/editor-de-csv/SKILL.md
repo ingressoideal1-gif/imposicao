@@ -66,6 +66,12 @@ no `renderVazio()`, ele não pode virar um retângulo escuro sem saída. E aplic
 um banco sem nenhuma linha **limpa** o CSV da numeração em vez de gravar um array
 vazio, que a deixaria marcada como "tem CSV" para imprimir zero itens.
 
+**Numa folha que soma modelos, o banco NÃO é um só.** Cada arte leva o `csv_data`
+dela e cada item carrega a própria linha (`csv_row` no `multi_map`); quem resolve
+é `_linha_do_banco()` no `engine.py`. Arte com banco próprio nunca cai no banco do
+trabalho — devolver a linha do vizinho imprimiria o nome de outra pessoa. Ver
+`docs/modelos_somados.md`.
+
 **O filtro das linhas desmarcadas mora no `engine.py`**, no construtor de
 `ImpositionConfig`. O `engine.py` é embutido no `NewProd.exe`: qualquer mudança
 ali exige publicar o agente junto com o site, senão a estação mostra a tela nova

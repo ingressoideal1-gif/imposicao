@@ -9540,10 +9540,13 @@ window.runImposition = async function (mode, returnBlob = false) {
             // Ver o comentario em `runImposition`: a coluna do ERP e
             // `amostra_num_id`; `numeracao_id` so existe em memoria.
             numId = firstItem.numeracao_id || firstItem.amostra_num_id;
-            // Para multi-seleção de modelos combinados, SEMPRE usar cut_stack
-            schema = 'cut_stack';
+            // Modelos combinados: "aproveitar a folha" manda a tiragem se
+            // encher na ordem, numa conta só (multi_artes). "Cada modelo em
+            // folha própria" mantém o cut_stack + strict_assembly de sempre,
+            // que dá folhas próprias a cada modelo. O padrão é o de sempre.
+            schema = (modoSomaFolha() === 'aproveitar') ? 'multi_artes' : 'cut_stack';
         } else {
-            schema = 'cut_stack';
+            schema = (modoSomaFolha() === 'aproveitar') ? 'multi_artes' : 'cut_stack';
         }
 
         tempMultiArtes = state.selectedOSItems.map(s => {
@@ -9949,7 +9952,10 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         multi_artes: payloadMultiArtes,
 
-        cut_stack_mode: isMultiSelected ? 'strict_assembly' : ((state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent')),
+        // Ao aproveitar a folha o esquema é multi_artes, e o motor só liga o
+        // strict_assembly quando o esquema é cut_stack — mandar 'independent'
+        // aqui é dizer a verdade no payload, não mudar comportamento.
+        cut_stack_mode: isMultiSelected ? (modoSomaFolha() === 'aproveitar' ? 'independent' : 'strict_assembly') : ((state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent')),
 
         sheets_per_block: isMultiSelected ? (() => {
             const firstSel = state.selectedOSItems.find(sel => {
@@ -13360,6 +13366,229 @@ function itensDaImposicao(isMultiSelected) {
 
 }
 window.itensDaImposicao = itensDaImposicao;
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SOMAR MODELOS NUMA IMPOSIÇÃO SÓ
+//
+// Um pedido de credenciais tem um modelo por país, e impressos um a um cada um
+// deixa até (poses − 1) células vazias na última folha. Somados, a conta é uma
+// só: total de itens ÷ células do formato, empilhado, preenchendo na ordem.
+//
+// Desenho em docs/superpowers/specs/2026-08-17-somar-modelos-aproveitando-a-folha-design.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 'separado' (cada modelo em folha própria, o padrão) ou 'aproveitar'. */
+function modoSomaFolha() {
+
+    return state.modoSomaFolha === 'aproveitar' ? 'aproveitar' : 'separado';
+
+}
+window.modoSomaFolha = modoSomaFolha;
+
+
+
+window.setModoSomaFolha = function(valor) {
+
+    state.modoSomaFolha = (valor === 'aproveitar') ? 'aproveitar' : 'separado';
+
+    ['imp-modo-soma', 'ped-modo-soma'].forEach(id => {
+
+        const el = document.getElementById(id);
+
+        if (el && el.value !== state.modoSomaFolha) el.value = state.modoSomaFolha;
+
+    });
+
+    atualizarBarraDeSoma();
+
+    // Só o resumo da aba aberta: `updateImpSummary` lê os controles `imp-*` e
+    // grava `state.printMode` e `state.csvData`. Chamá-lo com a aba Pedido na
+    // frente sobrescreveria o que o operador escolheu ali.
+    const noPedido = document.getElementById('view-pedido')?.classList.contains('active');
+
+    if (noPedido) { if (typeof updatePedSummary === 'function') updatePedSummary(); }
+
+    else { if (typeof updateImpSummary === 'function') updateImpSummary(); }
+
+    if (typeof drawPreview === 'function' && !noPedido) drawPreview();
+
+    if (typeof drawPedPreview === 'function' && noPedido) drawPedPreview();
+
+};
+
+
+
+/**
+ * Quantos itens este modelo imprime. Com banco de dados é o tamanho da fatia
+ * dele — a mesma conta que o payload faz —, e não a quantidade digitada.
+ */
+function quantidadeDoModelo(item) {
+
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+
+    if (num && num.csv_data && num.csv_data.length) return fatiaCsvDoItem(item, num).length;
+
+    return parseInt(item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || 0)) || 0;
+
+}
+window.quantidadeDoModelo = quantidadeDoModelo;
+
+
+
+/**
+ * A conta que a barra mostra. `null` quando ainda não dá para calcular — sem
+ * formato não há células por folha, e um número inventado seria pior que nenhum.
+ */
+function contaDaSoma(itens) {
+
+    if (!itens || itens.length < 2) return null;
+
+    const fmt = (state.formatos || []).find(f => String(f.id) === String(itens[0].formato_id));
+
+    const poses = fmt ? (parseInt(fmt.cols) || 0) * (parseInt(fmt.rows) || 0) : 0;
+
+    if (!poses) return null;
+
+    let total = 0, separado = 0;
+
+    itens.forEach(it => {
+
+        const q = quantidadeDoModelo(it);
+
+        if (q <= 0) return;
+
+        total += q;
+
+        separado += Math.ceil(q / poses);
+
+    });
+
+    if (!total) return null;
+
+    const somado = Math.ceil(total / poses);
+
+    return {
+        modelos: itens.length, itens: total, poses,
+        separado, somado, economia: separado - somado
+    };
+
+}
+window.contaDaSoma = contaDaSoma;
+
+
+
+/**
+ * Os modelos cuja blocagem é de verdade — os que sozinhos já formam um bloco
+ * completo. Só esses perdem alguma coisa ao aproveitar a folha; um `bloco`
+ * preenchido no ERP mas grande demais para a tiragem não perde nada, e é
+ * exatamente o caso do pedido 20495.
+ */
+function modelosComBlocagemReal(itens) {
+
+    const spb = parseInt(document.getElementById('ped-sheets-per-block')?.value
+                      || document.getElementById('imp-sheets-per-block')?.value) || 50;
+
+    return (itens || [])
+
+        .filter(it => quantidadeDoModelo(it) >= spb)
+
+        .map((it, i) => rotuloDoModelo(it, i));
+
+}
+
+
+
+/** Mostra, esconde e preenche a barra de modelos combinados nas duas abas. */
+function atualizarBarraDeSoma() {
+
+    const varias = (state.selectedOSItems || []).length > 1;
+
+    const itens = varias ? itensDaImposicao(true) : [];
+
+    const conta = varias ? contaDaSoma(itens) : null;
+
+    const aproveitando = modoSomaFolha() === 'aproveitar';
+
+    const comBloco = (varias && aproveitando) ? modelosComBlocagemReal(itens) : [];
+
+    const texto = conta
+        ? `${conta.modelos} modelos · ${conta.itens.toLocaleString('pt-BR')} itens · `
+          + `${conta.poses} por folha · `
+          + (aproveitando
+              ? `${conta.somado.toLocaleString('pt-BR')} folhas`
+                + (conta.economia > 0 ? ` — economia de ${conta.economia} folha(s)` : '')
+              : `${conta.separado.toLocaleString('pt-BR')} folhas`
+                + (conta.economia > 0 ? ` — aproveitando a folha seriam ${conta.somado}` : ''))
+        : 'Escolha o formato dos modelos para ver a conta das folhas.';
+
+    const aviso = comBloco.length
+        ? `⚠️ Aproveitar a folha desfaz a montagem por bloco de: ${comBloco.join(', ')}. `
+          + 'Para manter os blocos, volte para "Cada modelo em folha própria".'
+        : '';
+
+    [['imp-soma-bar', 'imp-modo-soma', 'imp-soma-conta', 'imp-soma-aviso'],
+     ['ped-soma-bar', 'ped-modo-soma', 'ped-soma-conta', 'ped-soma-aviso']].forEach(ids => {
+
+        const bar = document.getElementById(ids[0]);
+
+        if (!bar) return;
+
+        bar.style.display = varias ? 'flex' : 'none';
+
+        if (!varias) return;
+
+        const sel = document.getElementById(ids[1]);
+
+        if (sel && sel.value !== modoSomaFolha()) sel.value = modoSomaFolha();
+
+        const elConta = document.getElementById(ids[2]);
+
+        if (elConta) elConta.textContent = texto;
+
+        const elAviso = document.getElementById(ids[3]);
+
+        if (elAviso) {
+
+            elAviso.textContent = aviso;
+
+            elAviso.style.display = aviso ? 'block' : 'none';
+
+        }
+
+    });
+
+}
+window.atualizarBarraDeSoma = atualizarBarraDeSoma;
+
+
+
+/**
+ * Por que dois modelos não podem sair na mesma folha, ou null quando podem.
+ * Cor já era conferida; formato, saída, face e modo PDF não eram — e cada um
+ * deles produz uma folha impossível, não só diferente.
+ */
+function porQueNaoCombina(a, b) {
+
+    const cor = x => String(x.cor || x.padrao || '').toLowerCase().trim();
+
+    const face = x => (x.verso_tipo && x.verso_tipo !== 'Frente' && x.verso_tipo !== 'SÓ FRENTE') ? 'verso' : 'frente';
+
+    if (cor(a) !== cor(b)) return 'a cor do material é outra';
+
+    if (String(a.formato_id || '') !== String(b.formato_id || '')) return 'o formato é outro';
+
+    if (String(a.saida_id || '') !== String(b.saida_id || '')) return 'a saída é outra';
+
+    if (face(a) !== face(b)) return 'um imprime frente e verso e o outro só frente';
+
+    if (!!a.modo_pdf !== !!b.modo_pdf) return 'um está em modo Pdf Paginado e o outro não';
+
+    return null;
+
+}
+window.porQueNaoCombina = porQueNaoCombina;
 
 
 
@@ -17254,6 +17483,9 @@ if (!state.ordens) state.ordens = [];
 if (!state.osItens) state.osItens = {};
 if (!state.osExpandedId) state.osExpandedId = null;
 if (!state.activeOSItem) state.activeOSItem = null;
+// Como somar modelos numa folha. Decisão de tiragem, não do pedido: vive aqui e
+// não vai ao banco. O padrão é o comportamento de sempre.
+if (!state.modoSomaFolha) state.modoSomaFolha = 'separado';
 
 // -------------------------------------------------------------------------------
 // STATUS ADIANTADO DESTA MÁQUINA (vibe_status_overrides)
@@ -21673,6 +21905,11 @@ function renderImpOSQueue() {
     }
 
     wrapper.innerHTML = html;
+
+    // A barra de modelos combinados vive fora da fila (é um nó fixo do HTML,
+    // para o seletor não perder o valor a cada redesenho), então quem redesenha
+    // a fila precisa avisá-la de que a seleção mudou.
+    if (typeof atualizarBarraDeSoma === 'function') atualizarBarraDeSoma();
 }
 
 

@@ -1049,6 +1049,19 @@
                                 </div>
                             </div>
 
+                                                        <!-- Modelos combinados: como aproveitar a folha.
+                                 So aparece com dois ou mais modelos marcados na fila.
+                                 Ver docs/superpowers/specs/2026-08-17-somar-modelos-aproveitando-a-folha-design.md -->
+                            <div id="imp-soma-bar" style="display: none; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.82rem; background: rgba(59,130,246,0.06); border: 1px solid var(--blue); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 14px 0;">
+                                <span style="font-weight: 600; color: var(--text);">&#129525; Modelos combinados:</span>
+                                <select class="form-control" id="imp-modo-soma" style="width: 250px; padding: 4px 8px; font-size: 0.82rem;" onchange="setModoSomaFolha(this.value)">
+                                    <option value="separado">Cada modelo em folha propria</option>
+                                    <option value="aproveitar">Aproveitar a folha (empilhado)</option>
+                                </select>
+                                <span id="imp-soma-conta" style="color: var(--text-dim);"></span>
+                                <div id="imp-soma-aviso" style="display: none; flex-basis: 100%; color: var(--amber, #f59e0b); font-size: 0.78rem;"></div>
+                            </div>
+
                             <!-- Status da OS Ativa -->
                             <div id="active-os-status" style="display: none; font-size: 0.82rem; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); margin: 0 0 16px 0; justify-content: space-between; align-items: center; gap: 10px;">
                                 <span>📋 OS Ativa: <strong id="active-os-name" style="color: var(--blue);">Nenhuma</strong></span>
@@ -1282,6 +1295,19 @@
                                         <option value="multi_artes">Multi-Artes (Colunas)</option>
                                     </select>
                                 </div>
+                            </div>
+
+                                                        <!-- Modelos combinados: como aproveitar a folha.
+                                 So aparece com dois ou mais modelos marcados na fila.
+                                 Ver docs/superpowers/specs/2026-08-17-somar-modelos-aproveitando-a-folha-design.md -->
+                            <div id="ped-soma-bar" style="display: none; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 0.82rem; background: rgba(59,130,246,0.06); border: 1px solid var(--blue); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 14px 0;">
+                                <span style="font-weight: 600; color: var(--text);">&#129525; Modelos combinados:</span>
+                                <select class="form-control" id="ped-modo-soma" style="width: 250px; padding: 4px 8px; font-size: 0.82rem;" onchange="setModoSomaFolha(this.value)">
+                                    <option value="separado">Cada modelo em folha propria</option>
+                                    <option value="aproveitar">Aproveitar a folha (empilhado)</option>
+                                </select>
+                                <span id="ped-soma-conta" style="color: var(--text-dim);"></span>
+                                <div id="ped-soma-aviso" style="display: none; flex-basis: 100%; color: var(--amber, #f59e0b); font-size: 0.78rem;"></div>
                             </div>
 
                             <!-- Status da OS Ativa -->
