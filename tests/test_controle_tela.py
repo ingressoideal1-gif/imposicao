@@ -150,7 +150,7 @@ def test_ao_fechar_a_engrenagem_a_conta_sai_do_aparelho():
 
 def test_a_engrenagem_tem_os_quatro_blocos():
     texto = _ler("frontend/controle.html")
-    for id_ in ("bloco-evento", "bloco-portoes", "bloco-setores", "bloco-este-aparelho"):
+    for id_ in ("bloco-evento", "bloco-aparelhos", "bloco-setores", "bloco-este-aparelho"):
         assert 'id="' + id_ + '"' in texto
 
 
@@ -2397,7 +2397,7 @@ def test_zerar_diz_o_que_recomeca_E_o_que_continua_valendo():
     # E o que fica de pé, dito com todas as letras.
     assert "ingressos" in texto
     assert "setores" in texto
-    assert "portões" in texto
+    assert "aparelhos" in texto
     # E o aviso de que a senha vem de novo.
     assert "senha" in texto
 
@@ -2686,7 +2686,7 @@ def test_a_volta_por_falta_de_token_vira_frase_na_tela_inicial():
         };
     """)
     assert saida["visivel"] is True
-    assert "não é portão" in saida["texto"]
+    assert "ainda não lê" in saida["texto"]
     assert saida["marcaDepois"] is None, (
         "a marca ficou pendurada e vai acusar a proxima abertura do aplicativo"
     )
@@ -2771,7 +2771,7 @@ def test_sem_token_a_tela_NAO_oferece_enviar_de_novo():
     assert saida["visivel"] is True
     assert saida["temEnviar"] is False
     assert saida["temDescartar"] is True, "o dono ficou sem saida nenhuma"
-    assert "desligado deste portão" in saida["texto"]
+    assert "desligado deste evento" in saida["texto"]
 
 
 def test_descartar_a_fila_exige_a_senha_do_dono():

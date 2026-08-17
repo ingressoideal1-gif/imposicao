@@ -39,8 +39,8 @@
                 // "inativo" chutado na barra seria pior que silencio: o dono
                 // desligaria um portao que esta trabalhando.
                 ativo: true,
-                ehPortao: true,
-                nomePortao: p.nome_portao || ''
+                ehAparelho: true,
+                nomeAparelho: p.nome_portao || ''
             };
         });
 
@@ -63,8 +63,8 @@
                 // nome guardado aqui envelhece assim que o dono o troca la.
                 nome: ev.nome_evento || (ja ? ja.nome : 'Evento'),
                 ativo: ev.status !== 'encerrado',
-                ehPortao: !!ja,
-                nomePortao: ja ? ja.nomePortao : ''
+                ehAparelho: !!ja,
+                nomeAparelho: ja ? ja.nomeAparelho : ''
             };
         });
 
@@ -80,7 +80,7 @@
         // quem procura com pressa toca no errado.
         linhas.sort(function (a, b) {
             if (a.ativo !== b.ativo) { return a.ativo ? -1 : 1; }
-            if (a.ehPortao !== b.ehPortao) { return a.ehPortao ? -1 : 1; }
+            if (a.ehAparelho !== b.ehAparelho) { return a.ehAparelho ? -1 : 1; }
             return a.nome.localeCompare(b.nome, 'pt-BR');
         });
         return linhas;
@@ -188,7 +188,7 @@
         //   cinza    -- evento ativo, este aparelho nao e portao dele
         //   vermelho -- evento inativo (usuario, 17/08/2026)
         luz.className = 'luz' + (!ev.ativo ? ' inativa'
-                                           : (ev.ehPortao ? ' acesa' : ''));
+                                           : (ev.ehAparelho ? ' acesa' : ''));
         // A luz e cor, e cor sozinha nao e rotulo. Quem usa leitor de tela --
         // ou quem nao distingue as duas -- precisa da palavra, e ela esta no
         // `aria-label` da barra inteira, logo abaixo.
@@ -219,9 +219,9 @@
         // tela, então a palavra "inativo" tem de ser repetida aqui — senão ela
         // existe só para quem enxerga a marca ao lado do nome.
         barra.setAttribute('aria-label',
-            (ev.ehPortao
+            (ev.ehAparelho
                 ? ('Ler ingressos de ' + ev.nome)
-                : ('Usar este aparelho no portão de ' + ev.nome))
+                : ('Usar este aparelho no evento ' + ev.nome))
             + (ev.ativo ? '' : ' — evento inativo'));
         barra.addEventListener('click', function () {
             window.virarPortao.abrir(ev.id, ev.nome);
@@ -444,9 +444,9 @@
 
         var aviso = $('erro-arranque');
         if (!aviso) { return; }
-        aviso.textContent = 'Este aparelho ainda não é portão de nenhum evento, '
+        aviso.textContent = 'Este aparelho ainda não lê nenhum evento, '
             + 'e por isso a leitura não abriu. Toque na barra do evento e entre '
-            + 'com a sua senha para ligar o portão aqui.';
+            + 'com a sua senha para ligar este aparelho aqui.';
         aviso.classList.remove('sumindo');
     }
 

@@ -49,19 +49,19 @@ E2 = {"id": "e-2", "nome_evento": "Fenachamp", "status": "ativo"}
 def test_evento_que_esta_nas_duas_fontes_aparece_uma_vez_e_verde():
     linhas = unir([P], [E1])
     assert len(linhas) == 1
-    assert linhas[0]["ehPortao"] is True
+    assert linhas[0]["ehAparelho"] is True
 
 
 def test_evento_so_da_conta_aparece_com_a_luz_apagada():
     linhas = unir([], [E2])
-    assert linhas[0]["ehPortao"] is False
+    assert linhas[0]["ehAparelho"] is False
 
 
 def test_evento_so_do_chaveiro_aparece_verde_SEM_a_conta():
     """O celular do porteiro: sem rede, sem sessao, e a lista tem de sair."""
     linhas = unir([P], [])
     assert len(linhas) == 1
-    assert linhas[0]["ehPortao"] is True
+    assert linhas[0]["ehAparelho"] is True
     assert linhas[0]["nome"] == "Click"
 
 

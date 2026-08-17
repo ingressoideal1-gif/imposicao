@@ -240,7 +240,7 @@
             var perguntar = inativo ? Promise.resolve(true)
                 : window.caixaConfirmar.perguntar(
                     'Inativar "' + estado.painel.evento.nome_evento + '"? Todos '
-                    + 'os portões param de aceitar ingresso. Portão sem internet '
+                    + 'os aparelhos param de aceitar ingresso. Aparelho sem internet '
                     + 'só recebe a mudança quando voltar a ter sinal.',
                     { rotulo: 'Inativar', perigo: true });
 
@@ -291,8 +291,8 @@
         var nome = (estado.painel.evento || {}).nome_evento || 'este evento';
         return window.caixaConfirmar.perguntar(
             'Zerar as entradas de "' + nome + '"? A contagem volta a zero em '
-            + 'todos os portões, e quem já entrou passa a poder entrar de '
-            + 'novo. Os ingressos, os setores e os portões continuam '
+            + 'todos os aparelhos, e quem já entrou passa a poder entrar de '
+            + 'novo. Os ingressos, os setores e os aparelhos continuam '
             + 'valendo. Isto não tem volta.',
             { rotulo: 'Zerar as entradas', perigo: true }
         ).then(function (sim) {
@@ -300,8 +300,8 @@
             return Promise.resolve(_pedirSenha()).then(function () {
                 return gravar('/eventos/' + estado.evento_id + '/zerar-entradas', {}, 'POST');
             }).then(function () {
-                avisar('A contagem deste evento recomeçou do zero. Cada portão '
-                     + 'acerta o contador dele no próximo sincronismo — portão '
+                avisar('A contagem deste evento recomeçou do zero. Cada aparelho '
+                     + 'acerta o contador dele no próximo sincronismo — aparelho '
                      + 'sem internet, quando voltar a ter sinal.', 'ok');
                 return carregarPainel();
             }).catch(function () {
@@ -323,7 +323,7 @@
         var nome = (estado.painel.evento || {}).nome_evento || 'este evento';
         return window.caixaConfirmar.perguntar(
             'Finalizar "' + nome + '"? Ele sai de "Meus Eventos" e passa a '
-            + 'aparecer em "Eventos finalizados". Todos os portões param de '
+            + 'aparecer em "Eventos finalizados". Todos os aparelhos param de '
             + 'aceitar ingresso. Você pode reabri-lo depois.',
             { rotulo: 'Finalizar', perigo: true }
         ).then(function (sim) {
@@ -465,7 +465,7 @@
         var ajuda = document.createElement('p');
         ajuda.className = 'config-ajuda';
         ajuda.textContent = 'A portaria para de aceitar TODOS os ingressos deste '
-            + 'setor e mostra o motivo que você escrever. Portão sem internet '
+            + 'setor e mostra o motivo que você escrever. Aparelho sem internet '
             + 'só recebe a mudança quando voltar a ter sinal.';
         caixa.appendChild(ajuda);
 
@@ -1020,7 +1020,7 @@
         if (meu && meu.aparelho_id === a.id) {
             var marca = document.createElement('p');
             marca.className = 'config-ajuda';
-            marca.textContent = '★ Este é o portão deste aparelho.';
+            marca.textContent = '★ Este é o aparelho em que você está.';
             el.appendChild(marca);
         }
 
@@ -1037,7 +1037,7 @@
         // ── Editar nome e setores ───────────────────────────────────────────
         var rotNome = document.createElement('label');
         rotNome.setAttribute('for', 'aparelho-nome-' + a.id);
-        rotNome.textContent = 'Nome do portão';
+        rotNome.textContent = 'Nome do aparelho';
         el.appendChild(rotNome);
 
         var campoNome = document.createElement('input');
@@ -1050,7 +1050,7 @@
         rotSetores.style.fontSize = '.82rem';
         rotSetores.style.color = 'var(--dim)';
         rotSetores.style.margin = '12px 0 4px';
-        rotSetores.textContent = 'Toque nos setores que este portão valida. '
+        rotSetores.textContent = 'Toque nos setores que este aparelho valida. '
             + 'O que estiver aceso vale na hora.';
         el.appendChild(rotSetores);
 
@@ -1104,7 +1104,7 @@
                 window.caixaConfirmar.perguntar(
                     'Revogar "' + a.nome + '"? Isso DESLIGA o aparelho agora — ele para '
                     + 'de validar QR na portaria imediatamente. Nesta versão não há como '
-                    + 'reativar um portão revogado — para voltar a usar, será preciso '
+                    + 'reativar um aparelho revogado — para voltar a usar, será preciso '
                     + 'abrir o evento de novo naquele celular.',
                     { rotulo: 'Revogar', perigo: true }
                 ).then(function (sim) {
@@ -1377,7 +1377,7 @@
      * As chaves antigas saem junto SÓ se apontarem para este evento. Deixá-las
      * seria dizer "saí do portão" e o celular continuar validando ingresso.
      */
-    function sairDoPortao() {
+    function sairDoAparelho() {
         // A FILA VEM PRIMEIRO, e este é o único lugar que pode perdê-la.
         //
         // O token é o que autoriza mandar a fila ao servidor. Descartá-lo com
@@ -1397,11 +1397,11 @@
                     ? 'Há 1 leitura que ainda não subiu'
                     : 'Há ' + naFila + ' leituras que ainda não subiram')
                     + ' para o servidor. Conecte este aparelho à internet e '
-                    + 'espere a fila zerar antes de sair do portão: sem o '
+                    + 'espere a fila zerar antes de sair do aparelho: sem o '
                     + 'acesso deste aparelho, elas não sobem mais.', 'erro');
                 return;
             }
-            return esquecerEstePortao();
+            return esquecerEsteAparelho();
         });
     }
 
@@ -1416,12 +1416,12 @@
         return window.portariaDeposito.contarFila().catch(function () { return 0; });
     }
 
-    function esquecerEstePortao() {
+    function esquecerEsteAparelho() {
         return window.caixaConfirmar.perguntar(
-            'Sair deste portão? Este aparelho deixa de ler os ingressos deste '
+            'Sair deste aparelho? Este aparelho deixa de ler os ingressos deste '
             + 'evento. Para voltar a ler, o dono precisa entrar de novo e tocar '
             + 'na barra do evento.',
-            { rotulo: 'Sair deste portão', perigo: true }
+            { rotulo: 'Sair deste aparelho', perigo: true }
         ).then(function (sim) {
             if (!sim) { return; }
             window.chaveiro.esquecer(estado.evento_id);
@@ -1739,8 +1739,8 @@
             abrirCaixaDeSenha().catch(function () { });
         });
 
-        $('btn-sair-do-portao').addEventListener('click', function () {
-            sairDoPortao();
+        $('btn-sair-do-aparelho').addEventListener('click', function () {
+            sairDoAparelho();
         });
 
         $('btn-gravar-evento').addEventListener('click', function () {
@@ -1812,7 +1812,7 @@
         abrirEngrenagem: abrirEngrenagem,
         fecharEngrenagem: fecharEngrenagem,
         comSenha: comSenha,
-        sairDoPortao: sairDoPortao,
+        sairDoAparelho: sairDoAparelho,
         // As duas ações da zona de risco, e o caminho de volta que a lista da
         // tela inicial chama.
         zerarEntradas: zerarEntradas,

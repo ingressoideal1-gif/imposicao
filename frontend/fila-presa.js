@@ -124,7 +124,7 @@
         }
         if (motivo === 'sem-token' || motivo === 'revogado') {
             return 'Há ' + quantas + ', e elas não têm mais como subir: este '
-                 + 'aparelho foi desligado deste portão. Para seguir, é preciso '
+                 + 'aparelho foi desligado deste evento. Para seguir, é preciso '
                  + 'descartá-las — e isso apaga essas leituras para sempre.';
         }
         return 'Não consegui enviar ' + quantas + ' agora. Confira a internet e '

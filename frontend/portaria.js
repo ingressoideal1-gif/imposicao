@@ -694,11 +694,16 @@
             // A fila leva o veredito do SERVIDOR, e nao o local: e ele que vale.
             leitura.resultado = 'negado';
             leitura.motivo = 'ja_entrou';
+            // O campo do endpoint /entrada ainda chama-se `portao` no contrato
+            // com a Edge Function (supabase/functions/portaria): e o mesmo
+            // conceito do `nome_portao` que o chaveiro guarda, so que vindo do
+            // aparelho que ganhou a corrida, nao deste.
+            var nome_portao = a.portao;
             return {
                 estado: 'negado', motivo: 'ja_entrou',
                 setor: v.setor, numero: v.numero,
                 credencial_id: v.credencial_id,
-                detalhe: { momentoAnterior: a.momento, portaoAnterior: a.portao },
+                detalhe: { momentoAnterior: a.momento, aparelhoAnterior: nome_portao },
             };
         });
     }
@@ -847,7 +852,7 @@
             // nome do portao ela vira "nao sei, o sistema nao deixou".
             $('resposta-detalhe').textContent =
                 setor.nome + ' · nº ' + v.numero + ' — entrou às ' + hora(d.momentoAnterior)
-                + (d.portaoAnterior ? (' no ' + d.portaoAnterior) : '');
+                + (d.aparelhoAnterior ? (' no ' + d.aparelhoAnterior) : '');
         } else if (v.motivo === 'erro_de_leitura') {
             $('resposta-detalhe').textContent = 'Erro ao ler — chame o organizador.';
         } else {

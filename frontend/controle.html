@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Configurar o evento — Ideal Control</title>
     <meta name="theme-color" content="#0a0f1e">
-    <meta name="description" content="Seus eventos e a leitura no portão. Funciona sem rede.">
+    <meta name="description" content="Seus eventos e a leitura no aparelho. Funciona sem rede.">
 
     <!-- Esta é a CASA do aplicativo (`/ic/` abre aqui), e por isso é daqui que
          o navegador oferece instalar. O manifesto precisa estar declarado na
@@ -225,7 +225,7 @@
                 <button id="btn-ativar-evento" class="so-com-senha">Inativar este evento</button>
                 <p class="config-ajuda">
                     Inativar desliga o evento para <strong>todos</strong> os
-                    portões. Portão sem internet só recebe a mudança quando
+                    aparelhos. Aparelho sem internet só recebe a mudança quando
                     voltar a ter sinal.
                 </p>
                 <label for="campo-nome-evento">Nome do evento</label>
@@ -238,11 +238,11 @@
             </div>
         </div>
 
-        <div class="secao" id="bloco-portoes">
-            <h2>Portões</h2>
+        <div class="secao" id="bloco-aparelhos">
+            <h2>Aparelhos</h2>
             <p class="config-ajuda">
-                Todos os portões deste evento, de todos os celulares. O deste
-                aparelho vem marcado com ★.
+                Todos os aparelhos deste evento, de todos os celulares. O
+                aparelho em que você está vem marcado com ★.
             </p>
             <div id="aparelhos"></div>
         </div>
@@ -258,7 +258,7 @@
                 Sair não descarta as leituras que ainda não subiram: elas
                 continuam guardadas aqui e sobem quando a internet voltar.
             </p>
-            <button id="btn-sair-do-portao" class="secundario">Sair deste portão</button>
+            <button id="btn-sair-do-aparelho" class="secundario">Sair deste aparelho</button>
         </div>
 
         <!-- A ZONA DE RISCO, no fim de tudo e separada por uma linha vermelha.
@@ -277,13 +277,13 @@
                 <h3>Zerar as entradas deste evento</h3>
                 <p class="config-ajuda">
                     A contagem recomeça do zero: quem já entrou some da lista de
-                    quem entrou, o contador de cada portão volta a zero, e essas
+                    quem entrou, o contador de cada aparelho volta a zero, e essas
                     pessoas podem entrar de novo. É o que transforma um evento
                     de teste no evento de verdade.
                 </p>
                 <p class="config-ajuda">
                     <strong>Continuam valendo:</strong> os ingressos, os setores
-                    e os portões. Nada do que a gráfica imprimiu deixa de servir,
+                    e os aparelhos. Nada do que a gráfica imprimiu deixa de servir,
                     e nenhum celular precisa ser configurado outra vez.
                 </p>
                 <p class="config-ajuda">
@@ -299,13 +299,13 @@
                 <p class="config-ajuda">
                     O evento sai de <strong>Meus Eventos</strong> e passa a
                     aparecer em <strong>Eventos finalizados</strong>, com quanta
-                    gente entrou. Todos os portões param de aceitar ingresso.
-                    Portão sem internet só recebe a mudança quando voltar a ter
+                    gente entrou. Todos os aparelhos param de aceitar ingresso.
+                    Aparelho sem internet só recebe a mudança quando voltar a ter
                     sinal.
                 </p>
                 <p class="config-ajuda">
                     Dá para reabrir depois, e ele volta <strong>inativo</strong>:
-                    religar os portões é uma segunda decisão sua, no
+                    religar os aparelhos é uma segunda decisão sua, no
                     <em>Ativar este evento</em>.
                 </p>
                 <button id="btn-finalizar-evento" class="so-com-senha perigo">Finalizar evento</button>

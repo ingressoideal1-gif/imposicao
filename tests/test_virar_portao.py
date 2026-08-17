@@ -72,7 +72,7 @@ def test_o_portao_nasce_com_TODOS_os_setores():
 def test_o_nome_automatico_conta_os_portoes_que_ja_existem():
     """Decisao do usuario: nasce nomeado e ja le; renomear e na engrenagem."""
     texto = _ler("frontend/virar-portao.js")
-    assert "'Portão '" in texto or '"Portão "' in texto
+    assert "'Aparelho '" in texto or '"Aparelho "' in texto
 
 
 def test_a_sessao_e_encerrada_pelo_aparelho_js():

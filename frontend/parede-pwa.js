@@ -75,7 +75,7 @@
 
         var frase = document.createElement('p');
         frase.setAttribute('style', 'font-size:.95rem;color:#94a3b8;margin:0;max-width:34ch;');
-        frase.textContent = 'No portão o aparelho trabalha sem internet, e para '
+        frase.textContent = 'O aparelho trabalha sem internet, e para '
             + 'isso ele precisa estar instalado neste celular. É rápido e não '
             + 'ocupa espaço.';
         parede.appendChild(frase);

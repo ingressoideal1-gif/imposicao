@@ -156,7 +156,7 @@
             // O numero conta os portoes que ja existem NO EVENTO, e nao neste
             // aparelho: o dono ve a lista inteira na engrenagem, e dois
             // "Portão 1" ali seriam indistinguiveis.
-            var nome = 'Portão ' + ((painel.aparelhos || []).length + 1);
+            var nome = 'Aparelho ' + ((painel.aparelhos || []).length + 1);
             return window.AcessoConta.pedir(
                 '/eventos/' + evento_id + '/aparelhos/aqui',
                 {
@@ -201,8 +201,8 @@
         // certa e recusar e dizer por que.
         if (!window.portariaDeposito) {
             avisar('Não consegui conferir se há leituras pendentes neste '
-                 + 'aparelho, e sem essa conferência não dá para abrir o '
-                 + 'portão com segurança. Recarregue a tela; se continuar, '
+                 + 'aparelho, e sem essa conferência não dá para ligar o '
+                 + 'aparelho com segurança. Recarregue a tela; se continuar, '
                  + 'avise a gráfica.');
             return Promise.resolve();
         }
@@ -261,7 +261,7 @@
                 // esta de volta na tela. Avisar ali seria acusar o proprio
                 // usuario de um erro que ele nao cometeu.
                 if (e && e.message === 'cancelado') { return; }
-                avisar('Não consegui abrir o portão deste evento. '
+                avisar('Não consegui ligar o aparelho a este evento. '
                      + ((e && e.message) || 'Tente de novo em instantes.'));
             });
         });

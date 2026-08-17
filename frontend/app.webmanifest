@@ -2,7 +2,7 @@
   "id": "/ic/",
   "name": "Ideal Control",
   "short_name": "Ideal Control",
-  "description": "Seus eventos e a leitura no portão. Funciona sem rede.",
+  "description": "Seus eventos e a leitura no aparelho. Funciona sem rede.",
   "lang": "pt-BR",
   "dir": "ltr",
   "start_url": "/ic/",
