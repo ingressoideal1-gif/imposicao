@@ -1370,7 +1370,7 @@ def _headers_servico():
     if not SUPABASE_SERVICE_KEY:
         raise BancoIndisponivel(
             "Esta operacao so acontece pela nuvem: a chave de servico do banco "
-            "nao vai para as estacoes. Use o painel em imposicao.vercel.app."
+            "nao vai para as estacoes. Use o painel em ideal-imposition.vercel.app."
         )
     return {
         "apikey": SUPABASE_SERVICE_KEY,

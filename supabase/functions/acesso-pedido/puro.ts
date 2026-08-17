@@ -39,8 +39,21 @@ export function pedacosDaRota(pathname: string): string[] {
  * razao que o Python o mantem versionado: vindo de fora, quem controlasse o
  * ambiente controlaria para onde o QR do cliente aponta -- e o QR viaja por
  * WhatsApp, longe de qualquer conferencia nossa.
+ *
+ * `ideal-imposition`, e nao `imposicao`, desde 17/08/2026. O site atende pelos
+ * DOIS enderecos, mas o aplicativo INSTALAVEL mora no primeiro: e dele que o
+ * cliente instala o Ideal Control, e e a origem onde ficam o chaveiro dos
+ * portoes e o service worker.
+ *
+ * Cunhado com `imposicao`, quem TOCAVA no link no WhatsApp -- em vez de le-lo
+ * pela camera do aplicativo -- caia no outro endereco numa aba de navegador:
+ * outra origem, outro `localStorage`, e o celular ainda oferecia instalar uma
+ * SEGUNDA copia do aplicativo, cada uma com os seus portoes.
+ *
+ * QR ja emitido continua valendo: o endereco antigo segue servindo o site, e o
+ * `ler-qr.js` aceita as duas origens.
  */
-export const PAINEL_PADRAO = "https://imposicao.vercel.app";
+export const PAINEL_PADRAO = "https://ideal-imposition.vercel.app";
 
 export function urlDoEvento(base: string | null | undefined, token: string): string {
   const raiz = (base || PAINEL_PADRAO).replace(/\/+$/, "");

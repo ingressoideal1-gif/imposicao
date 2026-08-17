@@ -1,10 +1,14 @@
 // Roda o `despachar()` do `ler-qr.js` num navegador de verdade, servindo a
 // pagina de uma ORIGEM escolhida pelo caso.
 //
-// A origem e o ponto: o QR que a grafica manda por WhatsApp e cunhado com
-// `https://imposicao.vercel.app`, e o aplicativo instalado do dono roda em
-// `https://ideal-imposition.vercel.app`. Sao dois enderecos do MESMO sistema, e
-// ate 17/08/2026 o leitor exigia origem identica e recusava o QR bom.
+// A origem e o ponto: o QR que a grafica mandou por WhatsApp ate 17/08/2026 era
+// cunhado com `https://imposicao.vercel.app`, e o aplicativo instalado do dono
+// roda em `https://ideal-imposition.vercel.app`. Sao dois enderecos do MESMO
+// sistema, e o leitor exigia origem identica -- recusava o QR bom.
+//
+// O `PAINEL_PADRAO` passou a cunhar com `ideal-imposition`, mas os QR antigos
+// continuam circulando impressos e no WhatsApp: e por isso que estes casos
+// continuam exercitando as DUAS origens.
 //
 // Recebe {origem, qr} pelo stdin. Devolve {destino, recusou, aviso}.
 

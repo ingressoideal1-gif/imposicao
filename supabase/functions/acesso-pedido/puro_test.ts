@@ -36,6 +36,17 @@ Deno.test("url do evento: o padrao e o painel versionado", () => {
   assertEquals(urlDoEvento("", "1.2.abc"), `${PAINEL_PADRAO}/ic/evento.html?t=1.2.abc`);
 });
 
+Deno.test("o QR aponta para a origem em que o aplicativo e INSTALADO", () => {
+  // O valor literal, e nao `PAINEL_PADRAO` comparado consigo mesmo -- os testes
+  // acima usam a constante e por isso passariam com qualquer dominio.
+  //
+  // O site atende por dois enderecos, mas o aplicativo instalavel mora so neste.
+  // Cunhar o QR com o outro fazia quem TOCAVA no link no WhatsApp cair numa aba
+  // de navegador: outra origem, outro `localStorage`, e a oferta de instalar uma
+  // SEGUNDA copia do aplicativo, cada uma com os seus portoes.
+  assertEquals(PAINEL_PADRAO, "https://ideal-imposition.vercel.app");
+});
+
 Deno.test("url do evento: a barra do fim nunca duplica", () => {
   // `rstrip('/')` do Python, e nao um `replace` de uma barra so: o valor pode
   // chegar com mais de uma.

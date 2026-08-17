@@ -28,16 +28,20 @@
      *
      * Copia da regra que o `security_config.ALLOWED_ORIGINS` e o
      * `_compartilhado/cors.ts` ja aplicam nos dois outros lados. O sistema
-     * atende por MAIS DE UM endereco, e isso nao e acidente: o QR do Pedido e
-     * cunhado com `https://imposicao.vercel.app` (o `PAINEL_PADRAO` do
-     * `acesso-pedido`), e o aplicativo instalado do dono abre em
-     * `https://ideal-imposition.vercel.app`.
+     * atende por MAIS DE UM endereco, e isso nao e acidente.
      *
-     * Ate 17/08/2026 esta tela exigia origem IDENTICA a da pagina, e por isso
-     * recusava o QR legitimo que a propria grafica acabara de mandar por
+     * Ate 17/08/2026 esta tela exigia origem IDENTICA a da pagina. O QR do
+     * Pedido era cunhado com `https://imposicao.vercel.app` e o aplicativo
+     * instalado do dono abre em `https://ideal-imposition.vercel.app`, entao a
+     * tela recusava o QR legitimo que a propria grafica acabara de mandar por
      * WhatsApp, com a frase "Este QR nao e do Ideal Control" -- acusando o dono
      * de ler o QR errado quando ele lera o certo. Nao havia como cadastrar
      * evento nenhum pelo aplicativo instalado.
+     *
+     * O `PAINEL_PADRAO` do `acesso-pedido` passou a cunhar com
+     * `ideal-imposition` no mesmo dia, mas isso NAO dispensa esta regra: todo QR
+     * emitido antes carrega o endereco antigo, esta impresso e ja foi enviado
+     * por WhatsApp. Aceitar as duas origens e o que os mantem validos.
      *
      * ANCORADA de proposito, pela licao que o `cors.ts` ja registra: sem o `^` e
      * o `$`, `https://ideal-imposition.vercel.app.exemplo.com` passaria -- um

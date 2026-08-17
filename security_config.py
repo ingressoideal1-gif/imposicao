@@ -65,7 +65,22 @@ def is_allowed_release_url(url: str) -> bool:
 #
 # Origem literal pelo mesmo motivo do manifesto: vinda de fora, quem controlasse
 # o ambiente controlaria o código que roda na estação.
-PAINEL_BASE_URL = "https://imposicao.vercel.app"
+#
+# `ideal-imposition`, e não `imposicao`, desde 17/08/2026. O site atende pelos
+# DOIS endereços (os dois estão em ALLOWED_ORIGINS logo acima), mas o aplicativo
+# instalável mora no primeiro — é dele que o cliente instala o Ideal Control, e é
+# a origem em que ficam o chaveiro dos portões e o service worker dele.
+#
+# Enquanto o QR do Pedido era cunhado com `imposicao`, quem TOCAVA no link no
+# WhatsApp — em vez de lê-lo pela câmera do aplicativo — caía no outro endereço,
+# numa aba de navegador: outra origem, outro `localStorage`, e o celular ainda
+# oferecia instalar uma SEGUNDA cópia do aplicativo. Duas cópias do mesmo sistema
+# no mesmo celular, cada uma com os seus portões.
+#
+# QR já emitido continua valendo: `imposicao.vercel.app` segue servindo o site, e
+# o `ler-qr.js` aceita as duas origens. O que muda é só o que se cunha daqui para
+# a frente.
+PAINEL_BASE_URL = "https://ideal-imposition.vercel.app"
 
 # Só o que a estação precisa. As fontes (fonts_local) ficam de fora: são ~140 MB
 # e já têm o próprio sincronismo, pelo Storage.
