@@ -29,6 +29,42 @@ MM2PT = 2.8346   # 1mm em pontos PDF
 # Cache para evitar log repetido de resolução de fontes do sistema
 _font_log_cache: set = set()
 
+
+def _nome_de_fonte_para_pdf(familia: str, chave_unica) -> str:
+    """O nome com que a fonte entra no PDF — que não é o nome da família.
+
+    ## Por que não dá para usar a família direto
+
+    O `insert_font` do PyMuPDF recusa espaço no nome:
+
+        Erro: bad fontname chars {' '}
+
+    Foi o que apareceu na impressão de 17/08/2026, assim que `Comic Sans MS`
+    passou a ser embutida de verdade. `Arial` sempre passou por não ter espaço.
+
+    ## Por que não basta tirar o espaço
+
+    O nome também é a CHAVE com que a página guarda o recurso. Dois arquivos
+    diferentes registrados com o mesmo nome não dão erro — o segundo é ignorado,
+    e o texto sai desenhado com a fonte do primeiro. A numeração do 19775 tem
+    `Comic Sans MS` e `Comic Sans MS|bold` na mesma página: sanitizar sem
+    distinguir trocaria um erro visível por um defeito calado.
+
+    Daí a `chave_unica`: os bytes da fonte, quando já se tem os bytes, ou o
+    caminho do arquivo, para o ramo que ainda vai baixá-lo. Igual dá igual — e
+    isso importa, porque é o que faz a mesma fonte repetida em cem células
+    reusar um recurso só em vez de inchar o PDF com cem cópias.
+    """
+    import hashlib
+    import re
+
+    base = re.sub(r"[^A-Za-z0-9]", "", familia or "")
+    if not base or base[0].isdigit():
+        base = "F" + base
+
+    dados = chave_unica if isinstance(chave_unica, bytes) else str(chave_unica).encode("utf-8")
+    return base + hashlib.md5(dados).hexdigest()[:8]
+
 # Fração do ascender por família de fonte (ascender / em-size).
 # Usado para converter ancoragem CENTRAL (canvas textBaseline='middle')
 # para a BASELINE exigida pelo PyMuPDF insert_text.
@@ -1109,7 +1145,9 @@ class ImpositionEngine:
                     tmp_font.write(font_bytes)
                     tmp_font.close()
                     font_file = tmp_font.name
-                    font_name = family  # Usar o nome real da fonte, não o fallback Base-14
+                    # Nome do RECURSO no PDF, e não o nome da família: o PyMuPDF
+                    # recusa espaço, e o nome precisa ser único por arquivo.
+                    font_name = _nome_de_fonte_para_pdf(family, font_bytes)
                 except Exception as ex:
                     print(f"[engine] Erro ao usar fonte embutida: {ex}")
 
@@ -1141,7 +1179,11 @@ class ImpositionEngine:
                                 with open(dest, "wb") as out:
                                     out.write(resp.read())
                         if os.path.exists(dest) and os.path.getsize(dest) > 100:
-                            font_name = family
+                            # Mesmo motivo do ramo da fonte embutida: o nome do
+                            # recurso não pode ter espaço nem se repetir entre
+                            # arquivos. Aqui a chave é o caminho, porque os bytes
+                            # ainda não foram lidos.
+                            font_name = _nome_de_fonte_para_pdf(family, dest)
                             font_file = dest
                     except Exception as _dl_err:
                         print(f"[engine] Aviso ao baixar fonte do catálogo: {_dl_err}")
