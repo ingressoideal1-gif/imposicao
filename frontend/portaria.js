@@ -38,6 +38,9 @@
     // Escrita pelo `aparelho.js` quando o dono configura este celular na tela
     // dele. Ver `recarregarDepoisDeConfigurar`.
     var CHAVE_RECONFIG = 'ideal_portaria_reconfigurado';
+    // O recado que esta tela deixa para a casa do aplicativo quando ela volta
+    // por falta de token. Ver o arranque.
+    var CHAVE_SEM_TOKEN = 'ideal_portaria_sem_token';
 
     // Quanto tempo o MESMO codigo fica em silencio depois de lido. Decisao do
     // usuario, 16/08/2026 (eu havia sugerido 3 segundos). Ver `silenciado`.
@@ -958,6 +961,17 @@
         // nasce ali. Nao ha mais codigo para digitar, e por isso nao ha mais
         // tela nenhuma a mostrar aqui.
         if (!estado.token) {
+            // A MARCA, antes de sair. Este desvio era MUDO: a tela ia embora e
+            // voltava para a lista sem uma palavra, e quem tocou na barra do
+            // evento via o aplicativo simplesmente nao reagir. Foi assim que o
+            // defeito de 16/08/2026 ficou invisivel por um dia inteiro, com o
+            // dono relatando tres vezes que nada acontecia.
+            //
+            // O conserto de raiz esta no `chaveiro.carregado()`, que agora exige
+            // o token; esta marca e a rede por baixo dele. Se algum caminho
+            // futuro trouxer um aparelho sem token para ca de novo, a volta vem
+            // com o motivo escrito em vez de silencio.
+            try { localStorage.setItem(CHAVE_SEM_TOKEN, '1'); } catch (e) { }
             window.location.replace('controle.html');
             return;
         }

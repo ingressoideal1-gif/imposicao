@@ -147,8 +147,30 @@ def test_migrar_sem_o_evento_guardado_nao_inventa_entrada():
 # ── Qual evento esta carregado ──────────────────────────────────────────────
 
 def test_carregado_le_a_chave_que_a_portaria_usa():
-    r = chamar("carregado", guardado={CHAVE_EVENTO: "e-1"})
+    r = chamar("carregado", guardado={CHAVE_EVENTO: "e-1", CHAVE_TOKEN: "t-1"})
     assert r["resultado"] == "e-1"
+
+
+def test_evento_sem_token_NAO_conta_como_carregado():
+    """O defeito de 16/08/2026, que custou tres relatos do dono.
+
+    `ideal_portaria_evento` sozinho nao prova nada: a portaria escreve essa
+    chave so como MEMORIA de qual evento era -- ao abrir `?e=<evento>` sem
+    nunca ter virado portao, e ao ser revogada pelo dono (`aparelhoRevogado`
+    apaga o token DE PROPOSITO e deixa o evento, para nao perder a fila).
+
+    Quando `carregado()` acreditava nessa chave sozinha, a tela inicial
+    decidia 'ler', mandava o aparelho para a `portaria.html`, e la o arranque
+    nao achava token e voltava com `location.replace('controle.html')`. O toque
+    na barra do evento nao fazia NADA -- sem erro, sem palavra, para sempre.
+    """
+    r = chamar("carregado", guardado={CHAVE_EVENTO: "e-1"})
+    assert r["resultado"] == ""
+
+
+def test_token_sem_evento_tambem_nao_conta():
+    r = chamar("carregado", guardado={CHAVE_TOKEN: "t-1"})
+    assert r["resultado"] == ""
 
 
 def test_carregar_aponta_as_chaves_da_portaria_para_o_portao_pedido():

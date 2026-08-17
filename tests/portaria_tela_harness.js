@@ -322,6 +322,11 @@ async function rodar(caso) {
             saiu: saiu,
             mensagem: saiu ? '' : await page.evaluate(() =>
                 document.getElementById('erro-configurar').textContent),
+            // O recado que a portaria deixa ao voltar por falta de token. Sem
+            // ele, o desvio e mudo -- e um desvio mudo ja escondeu um defeito
+            // por um dia inteiro.
+            marcaSemToken: await page.evaluate(
+                () => localStorage.getItem('ideal_portaria_sem_token')),
             filaDepois: await contarFilaCrua(),
         };
         await browser.close();

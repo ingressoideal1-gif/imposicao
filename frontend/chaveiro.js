@@ -81,10 +81,28 @@
         }));
     }
 
-    /** O evento cuja carga esta neste aparelho agora. */
+    /**
+     * O evento cuja carga esta neste aparelho agora.
+     *
+     * AS DUAS CHAVES, e nao so a do evento. `ideal_portaria_evento` sozinho nao
+     * prova portao nenhum: a `portaria.js` escreve essa chave como simples
+     * MEMORIA de qual evento se trata, em dois momentos em que nao ha token --
+     * ao abrir `portaria.html?e=<evento>` antes de o aparelho virar portao, e
+     * depois de o dono REVOGAR este aparelho (`aparelhoRevogado` apaga so o
+     * token, de proposito, para nao perder a fila de leituras).
+     *
+     * Acreditar na chave sozinha custou tres relatos do dono em 16/08/2026: a
+     * tela inicial via "este evento ja esta carregado", decidia `'ler'`, mandava
+     * o aparelho para a `portaria.html` -- e la o arranque nao achava token e
+     * voltava com `location.replace('controle.html')`. O toque na barra do
+     * evento nao fazia NADA. Sem erro, sem palavra, e sem fim: a barra que ele
+     * mais queria tocar era justamente a travada.
+     */
     function carregado() {
-        try { return localStorage.getItem(CHAVE_EVENTO) || ''; }
-        catch (e) { return ''; }
+        try {
+            if (!localStorage.getItem(CHAVE_TOKEN)) { return ''; }
+            return localStorage.getItem(CHAVE_EVENTO) || '';
+        } catch (e) { return ''; }
     }
 
     /**

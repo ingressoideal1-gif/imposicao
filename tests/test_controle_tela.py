@@ -2540,3 +2540,45 @@ def test_o_botao_de_atualizar_NAO_existe_na_portaria():
     """Lá a câmera pode estar aberta e a fila andando. A portaria tem a faixa
     de atualização, que avisa e deixa a hora com o porteiro."""
     assert "btn-forcar-atualizacao" not in _ler("frontend/portaria.html")
+
+
+# ── A volta muda da portaria ────────────────────────────────────────────────
+
+
+def test_a_barra_do_evento_NAO_confia_so_na_chave_do_evento():
+    """A raiz do defeito de 16/08/2026, que o dono relatou tres vezes.
+
+    `ideal_portaria_evento` sozinho nao prova portao nenhum -- a portaria
+    escreve essa chave como memoria de qual evento se trata, sem token, ao abrir
+    `portaria.html?e=<evento>` e depois de o dono revogar o aparelho. A tela
+    inicial lia isso como "ja esta carregado", decidia `'ler'`, e mandava o
+    celular para uma portaria que voltava na hora por falta de token.
+
+    O toque na barra do evento nao fazia NADA. Sem erro e sem palavra."""
+    js = _ler("frontend/chaveiro.js")
+    trecho = js[js.index("function carregado"):][:400]
+    assert "CHAVE_TOKEN" in trecho, (
+        "carregado() voltou a acreditar na chave do evento sozinha"
+    )
+
+
+def test_a_volta_por_falta_de_token_vira_frase_na_tela_inicial():
+    """A portaria sai de la com `location.replace`, que nao deixa rastro. Sem
+    esta frase, a tela pisca e o dono volta para a lista sem uma palavra --
+    exatamente a imagem que fez "o conserto nao funcionou" e "este aparelho nao
+    e portao deste evento" ficarem indistinguiveis por um dia."""
+    saida = _no_navegador("""
+        localStorage.setItem('ideal_portaria_sem_token', '1');
+        listaEventos.explicarVoltaDaPortaria();
+        const aviso = document.getElementById('erro-arranque');
+        return {
+            visivel: !aviso.classList.contains('sumindo'),
+            texto: aviso.textContent,
+            marcaDepois: localStorage.getItem('ideal_portaria_sem_token'),
+        };
+    """)
+    assert saida["visivel"] is True
+    assert "não é portão" in saida["texto"]
+    assert saida["marcaDepois"] is None, (
+        "a marca ficou pendurada e vai acusar a proxima abertura do aplicativo"
+    )

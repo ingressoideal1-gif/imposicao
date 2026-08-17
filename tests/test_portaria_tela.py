@@ -639,6 +639,20 @@ def test_aparelho_sem_token_vai_sozinho_para_a_lista_e_NAO_perde_a_fila():
     assert r["filaDepois"] == 2, "a saida apagou a fila do aparelho revogado"
 
 
+def test_a_volta_por_falta_de_token_deixa_o_motivo_escrito():
+    """Esta saida usa `location.replace`, que nao deixa rastro: a tela pisca e o
+    dono esta de volta na lista sem uma palavra.
+
+    Enquanto ela foi muda, "o conserto nao funcionou" e "este aparelho nao e
+    portao deste evento" desenhavam a MESMA imagem, e o dono relatou tres vezes
+    em 16/08/2026 que tocar na barra do evento nao fazia nada. A marca abaixo e
+    o que a casa do aplicativo le para explicar a volta."""
+    r = _configurar(token=None, online=False)
+    assert r["marcaSemToken"] == "1", (
+        "a portaria voltou para a lista sem dizer por que"
+    )
+
+
 # ── A carga do aparelho ANTERIOR nao pode ler ingresso ───────────────────────
 
 

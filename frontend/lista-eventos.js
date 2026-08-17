@@ -380,10 +380,39 @@
      * `supabase-config.js`) -- um throw solto aqui deixaria a lista do chaveiro
      * fora da tela, que e justamente a que nao pode faltar.
      */
+    /**
+     * O recado que a portaria deixa quando volta por falta de token.
+     *
+     * Ela sai de la com `location.replace`, e o `replace` nao deixa rastro: a
+     * tela pisca e o dono esta de volta na lista sem uma palavra. Enquanto esse
+     * desvio foi mudo, "o conserto nao funcionou" e "este aparelho nao e portao
+     * deste evento" eram a mesma imagem na tela -- e foi o que consumiu o dia
+     * 16/08/2026.
+     *
+     * A marca e consumida na leitura: ela explica UMA volta, e nao fica
+     * pendurada acusando a proxima abertura do aplicativo.
+     */
+    function explicarVoltaDaPortaria() {
+        var marca = null;
+        try { marca = localStorage.getItem('ideal_portaria_sem_token'); }
+        catch (e) { return; }
+        if (!marca) { return; }
+        try { localStorage.removeItem('ideal_portaria_sem_token'); }
+        catch (e) { /* aba anônima */ }
+
+        var aviso = $('erro-arranque');
+        if (!aviso) { return; }
+        aviso.textContent = 'Este aparelho ainda não é portão de nenhum evento, '
+            + 'e por isso a leitura não abriu. Toque na barra do evento e entre '
+            + 'com a sua senha para ligar o portão aqui.';
+        aviso.classList.remove('sumindo');
+    }
+
     function arrancar() {
         if (!$('eventos')) { return Promise.resolve(); }
 
         window.chaveiro.migrar();
+        explicarVoltaDaPortaria();
 
         // O `+` e a barra "Novo Evento" fazem a MESMA coisa: abrem a camera do
         // `ler-qr.js`. Dois alvos para uma acao so porque a barra e o rotulo em
@@ -417,7 +446,8 @@
     window.listaEventos = {
         unir: unir, finalizados: finalizados,
         desenhar: desenhar, desenharFinalizados: desenharFinalizados,
-        carregar: carregar, recarregar: recarregar, arrancar: arrancar
+        carregar: carregar, recarregar: recarregar, arrancar: arrancar,
+        explicarVoltaDaPortaria: explicarVoltaDaPortaria
     };
     document.addEventListener('DOMContentLoaded', arrancar);
 })();
