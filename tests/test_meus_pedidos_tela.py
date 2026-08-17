@@ -120,3 +120,25 @@ def test_voltar_refaz_a_lista_de_eventos():
         };
     """)
     assert saida == {"lista": True, "releu": True}
+
+
+def test_sem_supabase_o_toque_na_barra_nao_estoura():
+    """`AcessoConta.sessao()` LANCA de forma sincrona quando o `supabaseClient`
+    e nulo -- sem rede na primeira abertura, ou no modo offline deliberado do
+    `supabase-config.js`. Um throw solto no ouvinte do toque nao aparece na
+    tela: o dono toca na barra e nao acontece absolutamente nada.
+
+    O `_no_navegador` reprova qualquer erro de pagina, entao o proprio arnes e
+    metade deste teste; a outra metade e a tela de entrar aparecer, que e o que
+    esta barra faz quando nao ha sessao.
+    """
+    saida = _no_navegador(_desvio() + """
+        window.supabaseClient = null;
+        document.getElementById('btn-meus-pedidos').click();
+        await new Promise(r => setTimeout(r, 50));
+        return {
+            entrar: !document.getElementById('bloco-entrar').classList.contains('sumindo'),
+            pedidos: !document.getElementById('meus-pedidos').classList.contains('sumindo'),
+        };
+    """)
+    assert saida == {"entrar": True, "pedidos": False}

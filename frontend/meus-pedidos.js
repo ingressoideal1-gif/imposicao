@@ -97,7 +97,15 @@
     }
 
     function abrir() {
-        return window.AcessoConta.sessao().catch(function () { return null; }).then(function (s) {
+        // `Promise.resolve().then(...)` e nao a chamada direta: `AcessoConta.sessao()`
+        // LANCA de forma sincrona quando o `supabaseClient` e nulo -- sem rede na
+        // primeira abertura, ou no modo offline deliberado do `supabase-config.js`.
+        // Um throw solto aqui sairia do ouvinte do toque como erro nao tratado, e o
+        // dono tocaria na barra sem ver acontecer absolutamente nada. E a mesma
+        // protecao que o `lista-eventos.js` ja tem no arranque dele.
+        return Promise.resolve().then(function () {
+            return window.AcessoConta.sessao();
+        }).catch(function () { return null; }).then(function (s) {
             if (!s) {
                 // Um so `depois`: entrou, volta para ca. Sem sessao nao ha o
                 // que buscar, e mandar a pessoa para a lista depois do login
