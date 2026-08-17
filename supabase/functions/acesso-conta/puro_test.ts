@@ -49,8 +49,24 @@ Deno.test("meus pedidos: o cartao traz a ficha e a situacao de impressao por mod
 });
 
 Deno.test("meus pedidos: do mais recente ao mais antigo", () => {
-  const dois = montarMeusPedidos({ ...ENTRADA, carregados: [] });
-  assertEquals(dois.map((p: any) => p.pedido), [20320, 20272]);
+  // O mais novo (20100) tem o MENOR numero de pedido de proposito: uma
+  // regressao que ordenasse por id em vez de created_at ainda passaria se o
+  // mais recente tivesse o maior numero.
+  const entrada = {
+    ...ENTRADA,
+    propostas: [
+      ...ENTRADA.propostas,
+      { id_int: 20100, id_cliente: 14, created_at: "2026-08-18T10:00:00Z", status_interno: "NOVO" },
+    ],
+    legiveisPorPedido: {
+      ...ENTRADA.legiveisPorPedido,
+      20100: [{ modelo_id: 9, nome: "PISTA", quantidade: 5 }],
+    },
+    credenciaisPorPedidoModelo: { ...ENTRADA.credenciaisPorPedidoModelo, "20100:9": 5 },
+    carregados: [],
+  };
+  const tres = montarMeusPedidos(entrada);
+  assertEquals(tres.map((p: any) => p.pedido), [20100, 20320, 20272]);
 });
 
 Deno.test("nome da ficha: vazio vira 'Pedido N'", () => {

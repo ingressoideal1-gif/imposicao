@@ -347,13 +347,14 @@ async function meusPedidos(usuario: { id: string }): Promise<any> {
   }
 
   const fichasPorPedido: Record<string, any> = {};
+  const temNome = (f: any) => String(f?.nome_evento ?? "").trim() !== "";
   for (const f of (await banco(
     "GET",
     `pedidos_artes?id_int=in.(${lista})&select=id_int,nome_evento,data_evento,local_evento&order=created_at.asc`,
   )) ?? []) {
     // A primeira ficha com nome vence; sem nome, qualquer uma serve de data/local.
     const chave = String(f.id_int);
-    if (!fichasPorPedido[chave] || (!fichasPorPedido[chave].nome_evento && f.nome_evento)) {
+    if (!fichasPorPedido[chave] || (!temNome(fichasPorPedido[chave]) && temNome(f))) {
       fichasPorPedido[chave] = f;
     }
   }
