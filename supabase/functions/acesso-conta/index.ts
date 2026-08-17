@@ -1,5 +1,5 @@
 /**
- * A tela do cliente: as 17 rotas de `/api/acesso/*` que o dono do evento usa.
+ * A tela do cliente: as 18 rotas de `/api/acesso/*` que o dono do evento usa.
  *
  * Porte de `acesso_config.py` mais `/evento`, `/meus-eventos` e `/reivindicar`
  * de `acesso_api.py`.
@@ -29,7 +29,7 @@
 import { banco, contar } from "../_compartilhado/banco.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
-import { recusaDeRotaDesconhecida } from "../_compartilhado/validacao.ts";
+import { inteiro, recusaDeRotaDesconhecida } from "../_compartilhado/validacao.ts";
 import { segredo } from "../_compartilhado/segredos.ts";
 import { gerarSal, modelosLegiveis } from "../_compartilhado/pedidos.ts";
 import {
@@ -49,6 +49,8 @@ import {
   aplicarLiberacao,
   aplicarNovoCodigo,
   aplicarSetor,
+  momento,
+  texto,
   zerarEntradas,
 } from "../_compartilhado/configuracao.ts";
 import { montarMeusPedidos, nomeDoEvento, pedacosDaRota, pertenceAConta, recusaHumana } from "./puro.ts";
@@ -549,41 +551,32 @@ async function esqueleto(token: string): Promise<any> {
   };
 }
 
-async function reivindicar(
-  token: string,
+/**
+ * A segunda metade do reivindicar, sem QR: dado o esqueleto de um pedido
+ * (numero, cliente e setores legiveis), cria o evento ou junta a um que ja
+ * existe, um setor por modelo, carimba as credenciais que ja foram publicadas
+ * e liga o pedido ao evento. Quem chama ja conferiu que o pedido e desta conta.
+ */
+async function carregarPedido(
+  esq: { pedido: number; id_cliente: number | null; setores: any[] },
   usuario: { id: string },
   eventoIdPedido: string | null,
-  nomePedido: string,
+  nome: string,
+  clientes: number[],
+  extra: { data_evento?: unknown; local_evento?: unknown } = {},
 ): Promise<any> {
-  const esq = await esqueleto(token);
-  const pedido = esq.pedido;
   const dono = usuario.id;
   if (!dono) throw new Recusa(401, "sessao sem identificacao");
-
-  if (esq.ja_reivindicado) {
-    // Ja e deste dono? Entao nao e erro -- e a pessoa relendo o proprio QR.
-    const atual = ((await banco(
-      "GET",
-      `producao_acesso_eventos?id=eq.${esq.evento_id}&select=id,dono_auth_id,nome_evento`,
-    )) ?? [])[0];
-    if (atual && String(atual.dono_auth_id) === String(dono)) {
-      return { evento_id: atual.id, nome_evento: atual.nome_evento ?? null, novo: false };
-    }
-    throw new Recusa(
-      409,
-      "este pedido ja foi cadastrado por outra conta; peca um QR novo ao atendente",
-    );
-  }
-
   let alvo: any;
   let novo: boolean;
   if (eventoIdPedido) {
     alvo = ((await banco(
       "GET",
       `producao_acesso_eventos?id=eq.${uuid(eventoIdPedido)}` +
-        "&select=id,dono_auth_id,nome_evento",
+        "&select=id,dono_auth_id,id_cliente,nome_evento",
     )) ?? [])[0];
-    if (!alvo || String(alvo.dono_auth_id) !== String(dono)) {
+    // Juntar so a evento do MESMO cliente: o do dono, ou o de qualquer conta do cliente.
+    if (!alvo || !pertenceAConta(alvo, dono, clientes)) {
       throw new Recusa(403, "evento nao e desta conta");
     }
     novo = false;
@@ -591,44 +584,113 @@ async function reivindicar(
     alvo = (await banco("POST", "producao_acesso_eventos", {
       id_cliente: esq.id_cliente,
       dono_auth_id: dono,
-      nome_evento: nomeDoEvento(nomePedido, pedido),
+      nome_evento: nomeDoEvento(nome, esq.pedido),
+      data_evento: momento(extra.data_evento ?? null, "data_evento"),
+      local_evento: extra.local_evento ? texto(extra.local_evento, "local_evento", 1, 200) : null,
       // Sal do evento: serve aos codigos que o proprio cliente carregar (staff,
       // cortesia). Os do QR Ideal usam o sal do pedido.
       sal: gerarSal(),
     }))[0];
     novo = true;
   }
-
   const evento = alvo.id;
-
   // Um modelo = um setor. Nunca se fundem, mesmo com nome igual vindo de dois
-  // pedidos: quantidade e reimpressao sao por modelo.
+  // pedidos: quantidade e reimpressao sao por modelo. Inclui os modelos ainda
+  // NAO impressos: a credencial deles nasce ligada quando a grafica imprimir.
   for (const s of esq.setores) {
     const criado = await banco("POST", "producao_acesso_setores", {
       evento_id: evento,
-      pedido_id_int: pedido,
+      pedido_id_int: esq.pedido,
       modelo_id: s.modelo_id,
       nome: s.nome,
       quantidade: s.quantidade,
     });
-    // Carimba as credenciais que o agente publicou ANTES desta reivindicacao.
-    // As que vierem depois ja nascem ligadas. As duas metades juntas e que
-    // cobrem as duas ordens possiveis; sozinha, esta deixou 200 credenciais do
-    // pedido 18560 orfas por oito horas de diferenca entre reivindicar e
-    // imprimir.
     await banco(
       "PATCH",
-      `producao_acesso_credenciais?pedido_id_int=eq.${pedido}&modelo_id=eq.${s.modelo_id}`,
+      `producao_acesso_credenciais?pedido_id_int=eq.${esq.pedido}&modelo_id=eq.${s.modelo_id}`,
       { evento_id: evento, setor_id: criado[0].id },
       "return=minimal",
     );
   }
-
-  await banco("PATCH", `producao_acesso_pedidos?pedido_id_int=eq.${pedido}`, {
+  await banco("PATCH", `producao_acesso_pedidos?pedido_id_int=eq.${esq.pedido}`, {
     evento_id: evento,
   });
-
   return { evento_id: evento, nome_evento: alvo.nome_evento ?? null, novo };
+}
+
+/** O caminho do QR do Pedido. Fica um release, sem tela que o chame. */
+async function reivindicar(
+  token: string,
+  usuario: { id: string },
+  eventoIdPedido: string | null,
+  nomePedido: string,
+): Promise<any> {
+  const esq = await esqueleto(token);
+  if (esq.ja_reivindicado) {
+    const atual = ((await banco(
+      "GET",
+      `producao_acesso_eventos?id=eq.${esq.evento_id}&select=id,dono_auth_id,nome_evento`,
+    )) ?? [])[0];
+    if (atual && String(atual.dono_auth_id) === String(usuario.id)) {
+      return { evento_id: atual.id, nome_evento: atual.nome_evento ?? null, novo: false };
+    }
+    throw new Recusa(409, "este pedido ja foi cadastrado por outra conta; peca um QR novo ao atendente");
+  }
+  const clientes = await clientesDaConta(usuario.id);
+  return carregarPedido(
+    { pedido: esq.pedido, id_cliente: esq.id_cliente, setores: esq.setores },
+    usuario, eventoIdPedido, nomePedido, clientes,
+  );
+}
+
+/**
+ * Carregar um pedido: o que "Meus Pedidos" faz. A senha vai no corpo porque
+ * carregar e configuracao, e configuracao pede senha -- e e essa senha que
+ * deixa o passo seguinte (ligar este aparelho) acontecer sem pedir outra: a
+ * resposta traz a elevacao de 15 minutos do evento resultante.
+ */
+async function carregar(
+  pedido: number,
+  usuario: { id: string; email: string },
+  corpo: any,
+): Promise<any> {
+  const clientes = await clientesDaConta(usuario.id);
+  if (!clientes.length) throw new Recusa(403, "sua conta ainda nao esta ligada a um cliente; peca a grafica");
+  const proposta = ((await banco(
+    "GET",
+    `propostas?id_int=eq.${pedido}&select=id_int,id_cliente,status_interno`,
+  )) ?? [])[0];
+  if (!proposta || !clientes.includes(Number(proposta.id_cliente))) {
+    throw new Recusa(403, "este pedido nao e de um cliente desta conta");
+  }
+  if (String(proposta.status_interno ?? "").trim().toUpperCase() === "CANCELADO") {
+    throw new Recusa(409, "este pedido esta cancelado no ERP");
+  }
+  const setores = await modelosLegiveis(pedido);
+  if (!setores.length) throw new Recusa(409, "este pedido nao tem modelo com codigo legivel");
+  if ((await contar(`producao_acesso_credenciais?pedido_id_int=eq.${pedido}&status=eq.ativo`)) === 0) {
+    throw new Recusa(409, "este pedido ainda nao foi impresso");
+  }
+  const linha = ((await banco(
+    "GET",
+    `producao_acesso_pedidos?pedido_id_int=eq.${pedido}&select=evento_id`,
+  )) ?? [])[0];
+  if (linha?.evento_id) throw new Recusa(409, "este pedido ja esta num evento");
+
+  await exigirSegredo(SEGREDO_ELEVACAO);
+  if (!(await conferirSenha(usuario.email ?? "", String(corpo?.senha ?? "")))) {
+    throw new Recusa(401, "senha nao confere");
+  }
+  const r = await carregarPedido(
+    { pedido, id_cliente: Number(proposta.id_cliente), setores },
+    usuario,
+    corpo?.evento_id ? String(corpo.evento_id) : null,
+    String(corpo?.nome_evento ?? ""),
+    clientes,
+    { data_evento: corpo?.data_evento ?? null, local_evento: corpo?.local_evento ?? null },
+  );
+  const { token, expira } = await gerarElevacao(r.evento_id, usuario.id, String(corpo?.navegador ?? ""));
+  return { ...r, elevacao: { token, expira_em: expira, minutos: 15 } };
 }
 
 // ── Roteamento ──────────────────────────────────────────────────────────────
@@ -668,6 +730,10 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       c?.evento_id ?? null,
       c?.nome_evento ?? "",
     ));
+  }
+
+  if (metodo === "POST" && p.length === 3 && p[0] === "pedidos" && p[2] === "carregar") {
+    return ok(await carregar(inteiro(p[1], "path", "pedido"), usuario, await corpo()));
   }
 
   if (metodo === "GET" && p.length === 2 && p[0] === "eventos") {
