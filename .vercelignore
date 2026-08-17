@@ -5,3 +5,7 @@ build/
 dist/
 *.pdf
 *.exe
+
+# Mesma anotacao com credencial: fora do deploy do site, que serve frontend/ na raiz.
+user_senha_correios
+frontend/user_senha_correios

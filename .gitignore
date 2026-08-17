@@ -115,3 +115,9 @@ engine_backup.py
 # roteiro.js, gravar.js, montar.ps1 --, que regenera tudo isso quando a tela
 # mudar. Video em git incha o repositorio para sempre, e este e regeneravel.
 midia/
+
+# Anotacao com credencial deixada na pasta do frontend em 17/08/2026. Nao pode
+# ser commitada: o repositorio e publico. Ela tambem nao deveria MORAR ali — o
+# agent_tray.spec varre a pasta frontend/ inteira para dentro do NewProd.exe, e
+# .gitignore nao impede isso. O lugar certo e fora do repositorio.
+frontend/user_senha_correios
