@@ -65,6 +65,64 @@ def _nome_de_fonte_para_pdf(familia: str, chave_unica) -> str:
     dados = chave_unica if isinstance(chave_unica, bytes) else str(chave_unica).encode("utf-8")
     return base + hashlib.md5(dados).hexdigest()[:8]
 
+
+# `fitz.Font` por arquivo de fonte. Sao ~300 KB cada, e a medicao roda uma vez
+# por linha, em milhares de celulas: reler o arquivo a cada texto seria trocar
+# uma conta por um acesso a disco no caminho de quem espera na impressora.
+_MEDIDORES: dict = {}
+
+# Meia letra por caractere. Era o que este arquivo usava quando nao sabia medir,
+# e continua valendo como ultimo recurso — imposicao que nao sai e pior do que
+# texto fora do lugar.
+_LARGURA_POR_CARACTERE = 0.55
+
+
+def _largura_do_texto(texto: str, font_file, font_name: str, corpo: float) -> float:
+    """Quanto este texto ocupa na horizontal, em pontos.
+
+    ## Por que existe
+
+    O motor tinha duas réguas. Sem fonte embutida ele media de verdade, com
+    `fitz.get_text_length`; com fonte embutida ele **chutava** meia letra por
+    caractere, porque aquela função só conhece as Base-14.
+
+    Medido contra a Comic Sans real, corpo 12:
+
+        "12345"                          real  34,70 pt   chute  33,00 pt
+        "CAMAROTE PREMIUM - SETOR A"      real 195,23 pt   chute 171,60 pt
+        "Ingresso Inteira Pista Premium"  real 174,71 pt   chute 198,00 pt
+
+    Como a centralização é `x = cx - largura/2`, metade do erro vira
+    deslocamento: 0,3 mm num número curto — ninguém vê — e 4 mm num texto longo.
+    Texto longo é justamente onde se usa "Largura máxima (mm)", e foi assim que o
+    defeito apareceu, em 17/08/2026, parecendo exclusivo daquele recurso.
+
+    O mesmo chute decidia também o corpo no modo "shrink": um texto que o motor
+    julgava caber podia estourar a largura máxima no papel.
+
+    `fitz.Font(fontbuffer=...)` mede o arquivo de verdade, e é o que se usa aqui.
+    """
+    if not font_file:
+        return fitz.get_text_length(texto, fontname=font_name, fontsize=corpo)
+
+    medidor = _MEDIDORES.get(font_file)
+    if medidor is None:
+        try:
+            with open(font_file, "rb") as fh:
+                medidor = fitz.Font(fontbuffer=fh.read())
+        except Exception as e:
+            medidor = False
+            _aviso = f"medicao:{font_file}"
+            if _aviso not in _font_log_cache:
+                _font_log_cache.add(_aviso)
+                print(f"[engine] nao consegui medir com a fonte embutida ({e}); "
+                      f"usando a estimativa por caractere", flush=True)
+        _MEDIDORES[font_file] = medidor
+
+    if not medidor:
+        return corpo * _LARGURA_POR_CARACTERE * len(texto)
+    return medidor.text_length(texto, fontsize=corpo)
+
 # Fração do ascender por família de fonte (ascender / em-size).
 # Usado para converter ancoragem CENTRAL (canvas textBaseline='middle')
 # para a BASELINE exigida pelo PyMuPDF insert_text.
@@ -1231,11 +1289,10 @@ class ImpositionEngine:
             _align = None
             _escala_x = 1.0
             if _max_w_mm > 0:
-                if font_file:
-                    _medir = lambda s, fs: fs * 0.55 * len(s)
-                else:
-                    _medir = lambda s, fs: fitz.get_text_length(
-                        s, fontname=font_name, fontsize=fs)
+                # A MESMA regua que centraliza mais abaixo. Antes esta media
+                # chutava quando havia fonte embutida, entao o corpo escolhido no
+                # modo "shrink" saia errado junto com a posicao.
+                _medir = lambda s, fs: _largura_do_texto(s, font_file, font_name, fs)
                 _modo = el.get("overflow")
                 if _modo not in ("wrap", "condense"):
                     _modo = "shrink"
@@ -1246,12 +1303,7 @@ class ImpositionEngine:
                 _align = el.get("text_align")
 
             # Medir largura real do texto para centralizar horizontalmente
-            if font_file:
-                # Fontes de sistema: get_text_length nao suporta fontfile,
-                # usamos estimativa baseada no tamanho medio de um caractere
-                text_width = font_size * 0.55 * len(val_str)
-            else:
-                text_width = fitz.get_text_length(val_str, fontname=font_name, fontsize=font_size)
+            text_width = _largura_do_texto(val_str, font_file, font_name, font_size)
 
             # Ancoragem central: cx, cy = centro visual do texto (replica textBaseline='middle' do canvas)
             # PyMuPDF insert_text usa a BASELINE como ponto de inserção — NÃO o centro visual.
@@ -1288,10 +1340,7 @@ class ImpositionEngine:
             block_top = cy - total_height / 2.0
 
             for i, line_str in enumerate(lines_to_draw):
-                if font_file:
-                    text_width = font_size * 0.55 * len(line_str)
-                else:
-                    text_width = fitz.get_text_length(line_str, fontname=font_name, fontsize=font_size)
+                text_width = _largura_do_texto(line_str, font_file, font_name, font_size)
 
                 # No modo "condense" a linha sai espremida na horizontal, entao
                 # o que conta para alinhar e a largura JA comprimida.
