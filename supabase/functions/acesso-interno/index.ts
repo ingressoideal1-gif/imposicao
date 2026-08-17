@@ -267,8 +267,9 @@ async function painelDoPedido(pedidoIdInt: number): Promise<any> {
 
 /**
  * O cliente do pedido e as contas ligadas a ele. E o que o bloco "Acesso do
- * cliente" do painel desenha. Sem proposta (pedido de teste sem ERP) devolve
- * nulo, e o painel esconde o bloco.
+ * cliente" do painel desenha. Sem proposta, ou sem cliente cadastrado para
+ * ela, devolve nulo e o painel esconde o bloco -- sem e-mail nao ha o que
+ * liberar.
  */
 async function clienteDoPedido(pedidoIdInt: number): Promise<any> {
   const proposta = ((await banco(
@@ -281,6 +282,7 @@ async function clienteDoPedido(pedidoIdInt: number): Promise<any> {
     "GET",
     `clientes?id_cliente=eq.${idCliente}&select=id_cliente,nome,email,email_contato`,
   )) ?? [])[0];
+  if (!c) return null;
   return {
     id_cliente: idCliente,
     nome: c?.nome ?? "",

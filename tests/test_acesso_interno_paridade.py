@@ -114,7 +114,11 @@ def test_o_limite_da_lista_e_respeitado_igual(jwt):
 
 def test_o_painel_do_pedido_e_identico(jwt, um_pedido):
     a, b = _dos_dois(f"pedidos/{um_pedido['pedido_id_int']}", jwt)
-    assert sorted(a) == sorted(b), "os dois não devolvem os mesmos campos"
+    # `cliente` nasceu só do lado Edge em 17/08/2026, quando o Python já estava
+    # fora do caminho de produção (decisão do usuário de 16/08/2026). Não é
+    # divergência: é uma chave que o Render nunca vai ganhar.
+    b_sem_cliente = {k: v for k, v in b.items() if k != "cliente"}
+    assert sorted(a) == sorted(b_sem_cliente), "os dois não devolvem os mesmos campos"
     for campo in ("pedido", "modelos", "publicacao", "evento", "setores",
                   "aparelhos", "tem_dashboard"):
         assert a.get(campo) == b.get(campo), f"o campo {campo} diverge"
