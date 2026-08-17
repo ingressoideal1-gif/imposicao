@@ -392,6 +392,14 @@
         // evento acabou e o servidor.
         desenharFinalizados([]);
 
+        // A casa abre na tela de entrar quando nao ha nada que sirva de casa:
+        // sem aparelho no chaveiro e sem sessao. Com aparelho, a lista basta.
+        if (window.conta) {
+            var abertura = window.conta.decidirAbertura(sessao, doChaveiro.length > 0);
+            if (abertura === 'entrar') { window.conta.mostrarEntrar(); }
+            else { window.conta.esconderEntrar(); }
+        }
+
         if (!sessao) { return Promise.resolve(); }
         return window.AcessoConta.pedir('/meus-eventos', {
             headers: { Authorization: 'Bearer ' + sessao.access_token }

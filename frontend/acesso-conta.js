@@ -77,8 +77,8 @@
                     // A mensagem do Supabase vem em inglês e fala de "credentials".
                     // Quem lê é o cliente, no celular, e o que ele precisa saber é
                     // QUAL conta tentar.
-                    throw new Error('E-mail ou senha não conferem. Use a mesma conta do Vibe, '
-                        + 'onde você acompanha os seus pedidos.');
+                    throw new Error('E-mail ou senha não conferem. Use o acesso que a '
+                        + 'gráfica liberou para você.');
                 }
                 if (!r.data.session) {
                     throw new Error('Não consegui abrir a sessão. Tente de novo em instantes.');
@@ -118,17 +118,19 @@
     }
 
     /**
-     * Recuperar age sobre a conta que JÁ existe. É a saída certa para quem
-     * esqueceu a senha — criar outra conta "resolveria" o login e quebraria o
-     * vínculo com o cadastro do cliente.
+     * Recuperar age sobre a conta que JÁ existe — criar outra "resolveria" o
+     * login e quebraria o vínculo com o cadastro do cliente.
+     *
+     * Quem recupera é a GRÁFICA, e não um e-mail automático. O projeto não tem
+     * SMTP configurado: o link do Supabase simplesmente não chegava, e a frase
+     * antiga ("enviamos o link") mandava o cliente esperar por uma mensagem que
+     * nunca sairia — pior que não oferecer saída nenhuma.
      */
-    function esqueciSenha(email) {
-        return supabaseClient.auth.resetPasswordForEmail((email || '').trim())
-            .then(function () {
-                // Sempre a mesma resposta, tenha o e-mail conta ou não: responder
-                // diferente diria a um estranho quais e-mails têm cadastro.
-                return 'Se este e-mail tiver conta, enviamos o link para trocar a senha.';
-            });
+    // Sem SMTP no projeto, e-mail nao chega. Quem recupera e a grafica, com
+    // uma senha provisoria nova -- a anterior deixa de valer no mesmo ato.
+    function esqueciSenha() {
+        return Promise.resolve('Peça à gráfica uma nova senha provisória. Ela deixa '
+            + 'a anterior sem valor, e você escolhe a sua no primeiro acesso.');
     }
 
     // Memorizado aqui, e não só no `localStorage`: quando o `setItem` falha
@@ -169,6 +171,43 @@
         return id;
     }
 
+    // ── A conta de quem já entrou ───────────────────────────────────────────
+    //
+    // As três coisas que o cliente faz com a própria conta depois do login: ver
+    // de quem ela é (`/minha-conta` devolve os clientes do ERP ligados a ela, e
+    // se a senha ainda é a provisória que a gráfica passou), trocar a senha, e
+    // sair. Ficam aqui, e não no `conta.js`, porque este é o arquivo que
+    // conhece o endereço do backend e o formato do erro.
+
+    function comSessao(sessao) {
+        return { Authorization: 'Bearer ' + sessao.access_token,
+                 'Content-Type': 'application/json' };
+    }
+
+    // `window.AcessoConta.pedir`, e não o `pedir` daqui de dentro: é a mesma
+    // função, mas pela referência EXPORTADA — que é o único ponto por onde o
+    // teste de navegador desvia o backend (o `controle.js` já faz isto no
+    // `_pedir` dele, pelo mesmo motivo). Chamando a de dentro, um desvio de
+    // teste não pegaria estas duas rotas e elas iriam à rede de verdade.
+    function _pedir(caminho, opcoes) {
+        return window.AcessoConta.pedir(caminho, opcoes);
+    }
+
+    function minhaConta(sessao) {
+        return _pedir('/minha-conta', { headers: comSessao(sessao) });
+    }
+    function trocarSenha(sessao, atual, nova) {
+        return _pedir('/minha-conta/senha', {
+            method: 'POST', headers: comSessao(sessao),
+            body: JSON.stringify({ senha_atual: atual || '', senha_nova: nova || '' })
+        });
+    }
+    function sair() {
+        return Promise.resolve().then(function () {
+            return supabaseClient.auth.signOut();
+        }).catch(function () { /* sem rede: a sessao local ja foi apagada */ });
+    }
+
     window.AcessoConta = {
         API: BASE,
         endereco: endereco,
@@ -177,6 +216,9 @@
         entrar: entrar,
         entrarEElevar: entrarEElevar,
         esqueciSenha: esqueciSenha,
+        minhaConta: minhaConta,
+        trocarSenha: trocarSenha,
+        sair: sair,
         navegadorId: navegadorId
     };
 })();

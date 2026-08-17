@@ -73,15 +73,33 @@ def test_o_painel_da_grafica_tambem_nao_cria_conta():
 def test_a_tela_diz_de_que_conta_esta_falando():
     """Sem isso o cliente tenta uma conta que ele nao tem e culpa o sistema.
 
-    Ele nao sabe o que e "Supabase" nem que os dois sistemas compartilham
-    login: para ele, o Vibe e o lugar onde ele acompanha os pedidos dele.
+    A conta continua sendo a MESMA do ERP — o que mudou em 17/08/2026 foi de
+    quem o cliente a recebe. Ele nao cria acesso em lugar nenhum: quem libera o
+    e-mail dele e passa a senha provisoria e a grafica. Dizer "Vibe" na tela
+    mandava-o procurar uma senha que ele talvez nunca tenha escolhido; dizer
+    "a grafica liberou" nomeia quem ele pode chamar no telefone.
+
+    A tela lida e a `controle.html`, a casa do aplicativo. O `evento.html`
+    tinha esta frase antes e sai do projeto.
     """
-    html = _ler("evento.html")
-    assert re.search(r"\bVibe\b", html), (
-        "evento.html nao diz ao cliente que a conta e a mesma do Vibe"
+    html = _ler("controle.html")
+    assert re.search(r"a gráfica liberou", html), (
+        "controle.html nao diz ao cliente de onde vem o acesso dele"
     )
 
 
 def test_quem_esqueceu_a_senha_tem_saida_sem_criar_outra_conta():
-    """A recuperacao age sobre a conta que existe; criar outra e o erro."""
-    assert "resetPasswordForEmail" in _login_do_cliente()
+    """A recuperacao age sobre a conta que existe; criar outra e o erro.
+
+    Ate 17/08/2026 a saida era o `resetPasswordForEmail` do Supabase. Ela saiu
+    porque o projeto nao tem SMTP: o link nunca chegava, e a tela prometia um
+    e-mail que nao existia — pior do que nao oferecer saida nenhuma. A saida
+    agora e a grafica passar uma senha provisoria NOVA, que derruba a anterior.
+    O que este teste guarda continua sendo o mesmo: ha uma saida, e ela nao
+    passa por criar outra conta.
+    """
+    login = _login_do_cliente()
+    assert "esqueciSenha" in login
+    assert "gráfica" in _ler("acesso-conta.js"), (
+        "a saida de quem esqueceu a senha nao diz a quem pedir"
+    )

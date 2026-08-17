@@ -147,6 +147,7 @@ PAINEL_ARQUIVOS = [
     # tem.
     "chaveiro.js",
     "lista-eventos.js",
+    "conta.js",
     "virar-portao.js",
     "fila-presa.js",
     "caixa-confirmar.js",

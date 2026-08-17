@@ -49,6 +49,7 @@ const ARQUIVOS = [
     // antes de comecar a ler, entao ela e justamente a que nao pode faltar.
     'chaveiro.js?v=' + VERSAO,
     'lista-eventos.js?v=' + VERSAO,
+    'conta.js?v=' + VERSAO,
     'virar-portao.js?v=' + VERSAO,
     'fila-presa.js?v=' + VERSAO,
     'caixa-confirmar.js?v=' + VERSAO,

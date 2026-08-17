@@ -482,3 +482,7 @@ button.perigo {
 }
 
 .cam-qr { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4/3; margin-top: 12px; }
+
+/* A tela de entrar e a de trocar senha: um cartao, centrado, com folga no topo. */
+#bloco-entrar h1, #trocar-senha h1 { font-size: 1.35rem; margin: 0 0 6px; }
+#bloco-entrar .config-ajuda, #trocar-senha .config-ajuda { margin-bottom: 14px; }

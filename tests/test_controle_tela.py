@@ -901,10 +901,15 @@ def test_a_tela_nao_fala_mais_em_senha_do_dono():
     assert "Senha Cadastrada" in saida["aviso"]
 
 
-def test_esqueci_minha_senha_usa_o_email_de_quem_ja_entrou():
-    """Sem campo de e-mail: quem esta nesta tela ja entrou. Pedir para digitar
-    de novo o e-mail com que acabou de entrar e uma chance de errar sem
-    nenhum ganho."""
+def test_o_esqueci_da_tranca_manda_falar_com_a_grafica():
+    """A saida de quem nao lembra a senha, dentro da engrenagem.
+
+    Ate 17/08/2026 ela pedia um `resetPasswordForEmail` ao Supabase e prometia
+    um link por e-mail. A promessa era falsa: o projeto nao tem SMTP, e o link
+    nunca saia -- o dono esperava por uma mensagem que nao existia, que e pior
+    do que nao oferecer saida nenhuma. Quem recupera e a GRAFICA, com uma senha
+    provisoria nova que derruba a anterior.
+    """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste',
                                    user: { email: 'dono@exemplo.com' } };
@@ -921,8 +926,9 @@ def test_esqueci_minha_senha_usa_o_email_de_quem_ja_entrou():
         return { pedido,
                  aviso: document.getElementById('aviso-gravacao').textContent };
     """)
-    assert saida["pedido"] == "dono@exemplo.com"
-    assert "link" in saida["aviso"].lower()
+    assert saida["pedido"] is None, "a tela ainda promete um e-mail que nao chega"
+    assert "gráfica" in saida["aviso"]
+    assert "link" not in saida["aviso"].lower()
 
 
 def test_importar_codigos_quebra_o_texto_colado_em_linhas():
@@ -1582,9 +1588,14 @@ def test_senha_que_nao_confere_APARECE_na_tela():
     )
 
 
-def test_a_caixa_da_senha_oferece_o_esqueci_e_ele_usa_o_email_digitado():
+def test_a_caixa_da_senha_oferece_o_esqueci_e_ele_manda_falar_com_a_grafica():
     """A saida que faltava, e o motivo de o `window.prompt` ter de sair: nao ha
-    onde caber um terceiro botao num prompt do navegador."""
+    onde caber um terceiro botao num prompt do navegador.
+
+    O que ela FAZ mudou em 17/08/2026 (ver `test_o_esqueci_da_tranca_...`): nao
+    ha e-mail a mandar, entao nem o campo dela e lido. A resposta aparece no
+    mesmo lugar do erro, que e onde o dono esta olhando.
+    """
     saida = _no_navegador("""
         window.supabaseClient.auth.getSession = async () => ({
             data: { session: null }
@@ -1607,9 +1618,9 @@ def test_a_caixa_da_senha_oferece_o_esqueci_e_ele_usa_o_email_digitado():
         try { await indo; } catch (e) { /* cancelado, e o esperado */ }
         return saida;
     """)
-    assert saida["pedido"] == "dono@exemplo.com"
+    assert saida["pedido"] is None, "a caixa ainda promete um e-mail que nao chega"
     assert saida["respostaVisivel"] is True
-    assert "e-mail" in saida["resposta"].lower()
+    assert "gráfica" in saida["resposta"]
 
 
 def test_desenhar_de_novo_nao_apaga_os_dados_do_evento_sendo_digitados():

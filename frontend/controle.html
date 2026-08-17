@@ -116,6 +116,16 @@
 
              Sem luz e sem o ícone de ler, de propósito: evento finalizado não é
              portão, e a única coisa que se faz com ele aqui é reabrir. -->
+        <!-- A CONTA, atrás do mesmo olho. É o que é da PESSOA, e não de um
+             evento: a senha com que ela entra e a saída da conta. Fica acima
+             dos finalizados porque é o que ela procura sem saber onde está —
+             os eventos finalizados ela sabe que estão aqui. -->
+        <h1 class="rotulo-secao">Minha conta</h1>
+        <div class="cartao">
+            <button id="btn-trocar-minha-senha" class="secundario">Trocar minha senha</button>
+            <button id="btn-sair-conta" class="secundario">Sair da conta</button>
+        </div>
+
         <h1 class="rotulo-secao">Eventos finalizados</h1>
         <div id="bloco-finalizados" class="sumindo">
             <div id="finalizados"></div>
@@ -128,22 +138,49 @@
         </p>
     </div>
 
-    <!-- O formulário de login não muda: mesmos ids e mesmas frases. Ele
-         continua sendo a porta de quem abre o aplicativo sem nenhum portão
-         guardado. -->
+    <!-- A TELA DE ENTRAR. Aparece DIRETO quando o celular nao e aparelho de
+         nenhum evento e nao ha sessao -- o cliente que acabou de instalar pelo
+         QR. Com aparelho no chaveiro (o porteiro) ela nao aparece: a lista
+         basta. Quem decide e `conta.decidirAbertura`. -->
     <div id="bloco-entrar" class="cartao sumindo">
-        <h1>Entre com a sua conta do Vibe</h1>
-        <p style="font-size:.84rem;color:var(--dim);margin:0;">
-            <strong>É o mesmo e-mail e a mesma senha</strong> que você usa para
-            acompanhar os seus pedidos. Não existe cadastro separado aqui.
+        <h1>Entrar</h1>
+        <p class="config-ajuda">
+            Use o <strong>e-mail e a senha que a gráfica liberou</strong> para
+            você. Se ainda não tem acesso, peça à gráfica.
         </p>
         <label for="email">E-mail</label>
-        <input id="email" type="email" autocomplete="email" inputmode="email">
+        <input id="email" type="email" autocomplete="username" inputmode="email">
         <label for="senha">Senha</label>
         <input id="senha" type="password" autocomplete="current-password">
         <button id="btn-entrar">Entrar</button>
         <button id="btn-esqueci" class="secundario">Esqueci minha senha</button>
-        <div id="erro-login" class="aviso erro sumindo" style="margin-top:14px;"></div>
+        <div id="erro-login" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
+        <p class="config-ajuda" style="margin-top:14px;">
+            Ainda não tem acesso? <strong>Peça à gráfica</strong>: ela libera o
+            seu e-mail e te passa uma senha provisória.
+        </p>
+    </div>
+
+    <!-- TROCAR A SENHA. Obrigatoria no primeiro acesso (senha provisoria) e
+         disponivel depois pelo menu do olho. Com senha provisoria a "senha
+         atual" nao e pedida: o cliente acabou de entrar com ela. -->
+    <div id="trocar-senha" class="cartao sumindo">
+        <h1 id="trocar-senha-titulo">Escolha a sua senha</h1>
+        <p id="trocar-senha-ajuda" class="config-ajuda">
+            A senha que a gráfica te passou era provisória. Escolha agora a
+            sua: pelo menos 8 caracteres.
+        </p>
+        <div id="bloco-senha-atual">
+            <label for="campo-senha-atual">Senha atual</label>
+            <input id="campo-senha-atual" type="password" autocomplete="current-password">
+        </div>
+        <label for="campo-senha-nova">Senha nova</label>
+        <input id="campo-senha-nova" type="password" autocomplete="new-password">
+        <label for="campo-senha-confirma">Repita a senha nova</label>
+        <input id="campo-senha-confirma" type="password" autocomplete="new-password">
+        <button id="btn-trocar-senha">Salvar a senha</button>
+        <button id="btn-cancelar-trocar-senha" class="secundario">Cancelar</button>
+        <div id="erro-trocar-senha" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
     </div>
 
     <!-- A PORTA DA CONFIGURAÇÃO. Fica FORA da engrenagem de propósito: é aqui
@@ -378,6 +415,11 @@
      navegador de verdade. -->
 <script src="portaria-deposito.js?v=630"></script>
 <script src="lista-eventos.js?v=630"></script>
+<!-- A conta do cliente na casa: entrar, trocar a senha provisória, sair. Vem
+     DEPOIS da lista porque é ela quem decide, no arranque, se a casa abre na
+     tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
+     ouvintes do login para cá. -->
+<script src="conta.js?v=630"></script>
 <script src="caixa-confirmar.js?v=630"></script>
 <script src="menu-geral.js?v=630"></script>
 <script src="fila-presa.js?v=630"></script>

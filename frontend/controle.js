@@ -1269,13 +1269,10 @@
                     });
             };
 
+            // Sem pedir o e-mail: não há link a mandar. Quem recupera é a
+            // gráfica, com uma senha provisória nova.
             $('btn-esqueci-entrar-config').onclick = function () {
-                var email = (campoEmail.value || '').trim();
-                if (!email) {
-                    return mostrarErro('Escreva o seu e-mail acima e toque de '
-                        + 'novo — é para lá que o link vai.');
-                }
-                AcessoConta.esqueciSenha(email).then(function (frase) {
+                AcessoConta.esqueciSenha().then(function (frase) {
                     // No mesmo lugar do erro, e não num alerta: é a resposta ao
                     // toque que ele acabou de dar, e tem de aparecer onde ele
                     // está olhando.
@@ -1756,44 +1753,16 @@
             }, 'PATCH').then(carregarPainel).catch(function () { /* já avisado */ });
         });
 
-        // O formulário de login continua sendo a porta de quem abre o
-        // aplicativo com a conta e sem nenhum portão guardado. Ao entrar, quem
-        // redesenha a casa é o `lista-eventos.js` — ele é o dono da lista.
-        $('btn-entrar').addEventListener('click', function () {
-            var erro = $('erro-login');
-            erro.classList.add('sumindo');
-            AcessoConta.entrar($('email').value, $('senha').value)
-                .then(function () {
-                    $('bloco-entrar').classList.add('sumindo');
-                    return window.listaEventos.arrancar();
-                })
-                .catch(function (e) {
-                    erro.textContent = e.message;
-                    erro.classList.remove('sumindo');
-                });
-        });
-        $('senha').addEventListener('keydown', function (ev) {
-            if (ev.key === 'Enter') { $('btn-entrar').click(); }
-        });
-        $('btn-esqueci').addEventListener('click', function () {
-            AcessoConta.esqueciSenha($('email').value).then(function (frase) {
-                var erro = $('erro-login');
-                erro.textContent = frase;
-                erro.classList.remove('sumindo');
-            });
-        });
+        // O FORMULÁRIO DE LOGIN saiu daqui em 17/08/2026. Ele é do `conta.js`
+        // agora, junto com a troca de senha e a saída da conta — as três coisas
+        // que a pessoa faz com a PRÓPRIA conta, num arquivo só. Aqui ficou o
+        // que é da configuração de um evento, que é outro assunto e outra
+        // senha (a elevação de 15 minutos).
 
-        // O e-mail vem da sessão, e não de um campo: quem está aqui já entrou.
-        // Pedir para digitar de novo o e-mail com que ele acabou de entrar
-        // seria uma chance de errar sem nenhum ganho.
+        // Não pede mais o e-mail: não há link a mandar para lugar nenhum. A
+        // recuperação passou a ser a gráfica passar uma senha provisória nova.
         $('btn-esqueci-config').addEventListener('click', function () {
-            var email = ((estado.sessao || {}).user || {}).email || emailLembrado();
-            if (!email) {
-                avisar('Não consegui identificar a sua conta agora. Recarregue a '
-                     + 'página e tente de novo.', 'erro');
-                return;
-            }
-            AcessoConta.esqueciSenha(email).then(function (frase) {
+            AcessoConta.esqueciSenha().then(function (frase) {
                 avisar(frase, 'ok');
             });
         });
@@ -1812,6 +1781,14 @@
         abrirEngrenagem: abrirEngrenagem,
         fecharEngrenagem: fecharEngrenagem,
         comSenha: comSenha,
+        // Quem elevou de FORA desta tela — o "carregar pedido" do Meus Pedidos
+        // entra e eleva numa digitação só — entrega o bilhete aqui. Sem isto,
+        // a engrenagem aberta em seguida pediria a senha de novo, dentro dos 15
+        // minutos que a pessoa acabou de comprar.
+        receberElevacao: function (evento_id, elevacao) {
+            guardarElevacao({ token: elevacao.token, expira_em: elevacao.expira_em,
+                              evento_id: evento_id });
+        },
         sairDoAparelho: sairDoAparelho,
         // As duas ações da zona de risco, e o caminho de volta que a lista da
         // tela inicial chama.
