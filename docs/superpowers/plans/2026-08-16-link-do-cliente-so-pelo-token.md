@@ -1,8 +1,21 @@
 # O link do cliente passa a valer só pelo token
 
 **Data:** 16/08/2026
-**Estado:** Tarefas 1 e 2 feitas. Tarefa 4 escrita e **esperando a publicação**.
-Tarefa 3 adiada por decisão, com o motivo abaixo.
+**Estado:** Tarefas 1, 2 e 4 **concluídas** em 17/08/2026. Tarefa 3 adiada por
+decisão, com o motivo abaixo.
+
+Conferido de fora depois de fechar, com a chave pública:
+
+```
+GET /rest/v1/pedidos_links_cliente?select=*
+  -> HTTP 401  permission denied for table pedidos_links_cliente
+
+POST /rest/v1/rpc/link_cliente_abrir  (número + token de um link real)
+  -> 200, a linha daquele pedido, SEM o token no retorno
+
+privilégios: anon (nenhum) | authenticated INSERT,SELECT,UPDATE | service_role tudo
+RLS ligado, 1 política
+```
 
 ---
 
