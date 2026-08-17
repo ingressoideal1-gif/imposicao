@@ -64,6 +64,48 @@ def como_numero(versao: str):
         return ()
 
 
+# Maquinas onde o NewProd foi instalado so para conferir se a instalacao roda.
+# Nao sao postos de trabalho: ninguem imprime nelas.
+#
+# Estao nomeadas aqui porque continuam mandando heartbeat todo dia, e sem isto a
+# conferencia abre todo dia com o mesmo ALERTA de painel destrancado — que o
+# usuario ja respondeu em 16/08/2026: "nao devemos nos preocupar com estas 2
+# estacoes, foram apenas teste de instalacao, nao sao estacoes da grafica".
+#
+# Alerta que se repete e que ninguem vai atender e pior do que alerta nenhum:
+# ensina a passar o olho pela lista inteira, e ai o alerta que importa passa
+# junto. Elas continuam APARECENDO na listagem, marcadas com "(teste)" — esconder
+# maquina seria trocar um ruido por uma mentira.
+#
+# O criterio e o nome porque e o que o heartbeat manda. Se uma destas virar posto
+# de trabalho de verdade, tire-a daqui: o alerta volta sozinho.
+INSTALACOES_DE_TESTE = ("PRD-ACABAMENTO", "CESAR-CPD")
+
+
+def e_instalacao_de_teste(nome: str) -> bool:
+    """Esta maquina e bancada de teste? Pura, para o teste nao tocar na rede."""
+    return (nome or "").strip().upper() in INSTALACOES_DE_TESTE
+
+
+def classificar(estacoes_vivas: list, repo: str):
+    """(mudas, atrasadas) — quem merece alerta, entre as que deram sinal.
+
+    Separada de `main` para poder ser testada sem banco. `estacoes_vivas` sao
+    dicionarios com `nome` e `versao`; quem nao deu sinal recente nao chega aqui,
+    porque estacao sumida e outro assunto que o `main` ja resolveu.
+    """
+    mudas, atrasadas = [], []
+    for e in estacoes_vivas:
+        nome, versao = e.get("nome") or "", e.get("versao") or ""
+        if e_instalacao_de_teste(nome):
+            continue
+        if not versao:
+            mudas.append(nome)
+        elif repo and como_numero(versao) < como_numero(repo):
+            atrasadas.append(f"{nome} em {versao}")
+    return mudas, atrasadas
+
+
 def _pedir(url: str, chave: str, colunas: str):
     alvo = f"{url}/rest/v1/print_agents?select={colunas}&order=last_seen.desc"
     req = urllib.request.Request(alvo, headers={"apikey": chave,
@@ -125,7 +167,7 @@ def main():
 
     repo = versao_do_repositorio(raiz)
     agora = datetime.datetime.now(datetime.timezone.utc)
-    atrasadas, mudas, vivas = [], [], 0
+    vivas_detalhe, vivas = [], 0
     por_base = {}
 
     for l in linhas:
@@ -142,6 +184,8 @@ def main():
 
         quanto = "hoje" if dias == 0 else f"ha {dias}d"
         marca = " (sem sinal)" if sumida else ""
+        if e_instalacao_de_teste(nome):
+            marca += " (teste)"
         # `--` e nao vazio: coluna em branco parece defeito da conferencia, e o
         # que se quer dizer aqui e "esta estacao nao informa".
         print(f"     {nome[:22]:<22} {(versao or '--'):>8}  painel {(painel or '--'):>5}  "
@@ -152,10 +196,9 @@ def main():
         vivas += 1
         if base:
             por_base[base] = por_base.get(base, 0) + 1
-        if not versao:
-            mudas.append(nome)
-        elif repo and como_numero(versao) < como_numero(repo):
-            atrasadas.append(f"{nome} em {versao}")
+        vivas_detalhe.append({"nome": nome, "versao": versao})
+
+    mudas, atrasadas = classificar(vivas_detalhe, repo)
 
     print(f"     {len(linhas)} estacao(oes) registradas, {vivas} com sinal recente")
 
