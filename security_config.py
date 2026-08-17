@@ -129,10 +129,11 @@ PAINEL_ARQUIVOS = [
     # pagina abriria quebrada SO na maquina da grafica.
     "supabase-js.min.js",
     "qrcode-generator.min.js",
-    # A camera do "+ Novo Evento" da casa do Ideal Control. Ela e a MESMA da
-    # portaria -- um segundo leitor herdaria os defeitos que o primeiro ja
-    # corrigiu -- e por isso `jsqr.min.js` e `portaria-camera.js` entram aqui
-    # mesmo a estacao nao servindo a tela do portao.
+    # A camera entrou aqui pelo "+ Novo Evento" da casa do Ideal Control, que
+    # em 17/08/2026 virou "Meus Pedidos" e deixou de ler QR. O `instalar.js`
+    # fica porque o `evento.html` ainda o carrega; os tres de cima ficam ate a
+    # limpeza que apaga o `ler-qr.js` do disco -- tirar da lista antes do
+    # arquivo sair deixaria a estacao sem um arquivo que ela ainda tem.
     "jsqr.min.js",
     "portaria-camera.js",
     "ler-qr.js",

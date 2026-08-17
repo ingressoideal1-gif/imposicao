@@ -85,8 +85,8 @@
         }
         // Ha outro estado na frente: a tela inicial continua atras dele, e quem
         // a traz de volta e o dono daquele estado -- o "← Voltar" do menu, o
-        // "← Voltar aos meus eventos" da engrenagem e o de Meus Pedidos. Devolvê-la aqui a
-        // desenharia POR BAIXO de uma tela aberta.
+        // "← Voltar aos meus eventos" da engrenagem e o de Meus Pedidos.
+        // Devolvê-la aqui a desenharia POR BAIXO de uma tela aberta.
         if (NA_FRENTE.some(naTela)) { return; }
         DA_TELA_INICIAL.forEach(function (id) {
             var el = $(id);
