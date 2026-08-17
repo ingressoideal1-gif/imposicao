@@ -19,7 +19,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Ideal Control">
 
-    <link rel="stylesheet" href="controle.css?v=617">
+    <link rel="stylesheet" href="controle.css?v=618">
 </head>
 <body>
 <div class="folha">
@@ -297,46 +297,46 @@
      terceiro significa que quem controlar aquele endereco controla o portao.
      O arquivo e o mesmo build UMD que o CDN servia (supabase-js 2.112.3), com
      uma diferenca: a versao agora esta congelada aqui, em vez de flutuar. -->
-<script src="supabase-js.min.js?v=617"></script>
-<script src="supabase-config.js?v=617"></script>
-<script src="acesso-conta.js?v=617"></script>
+<script src="supabase-js.min.js?v=618"></script>
+<script src="supabase-config.js?v=618"></script>
+<script src="acesso-conta.js?v=618"></script>
 
 <!-- O QR do endereço de pareamento. Mesma biblioteca do cliente.html e do
      index.html; o `qr-canvas.js` traz o `renderQRCodeOnCtx`, que é a função de
      "desenhar um QR num canvas" deste projeto. -->
-<script src="qrcode-generator.min.js?v=617"></script>
-<script src="qr-canvas.js?v=617"></script>
+<script src="qrcode-generator.min.js?v=618"></script>
+<script src="qr-canvas.js?v=618"></script>
 
 <!-- A câmera do "Novo Evento" é a MESMA da portaria: dois leitores (o
      `BarcodeDetector` nativo e o `jsQR` de reserva no iPhone), já resolvidos
      lá. Um segundo leitor herdaria os defeitos que o primeiro já corrigiu. -->
-<script src="jsqr.min.js?v=617"></script>
-<script src="portaria-camera.js?v=617"></script>
-<script src="ler-qr.js?v=617"></script>
-<script src="instalar.js?v=617"></script>
+<script src="jsqr.min.js?v=618"></script>
+<script src="portaria-camera.js?v=618"></script>
+<script src="ler-qr.js?v=618"></script>
+<script src="instalar.js?v=618"></script>
 <!-- O momento em que este celular vira um portão: guardar o token, encerrar a
      sessão da conta, ir para a leitura. Arquivo próprio porque a ORDEM dessas
      três coisas é o que impede o aparelho de ficar sem conta e sem token. -->
-<script src="aparelho.js?v=617"></script>
+<script src="aparelho.js?v=618"></script>
 <!-- Esta é a casa (`/ic/` abre aqui), e o Chrome só oferece "Instalar
      aplicativo" numa página que tenha service worker registrado. Sem isto, o
      botão de instalar nunca apareceria — que é o ponto do aplicativo. -->
-<script src="sw-registro.js?v=617"></script>
+<script src="sw-registro.js?v=618"></script>
 
 <!-- A ordem importa. `chaveiro.js` é puro e vem antes de quem o usa; a lista e
      o "virar portão" vêm depois; `controle.js` (a engrenagem) por último entre
      eles; e a parede do PWA no fim, para não competir com o arranque da tela. -->
-<script src="chaveiro.js?v=617"></script>
+<script src="chaveiro.js?v=618"></script>
 <!-- O depósito da portaria mora AQUI também, e não só no portaria.html: antes
      de trocar de evento, o "virar portão" precisa saber quantas leituras ainda
      não subiram. Sem este arquivo, aquela conta lança e o toque na barra do
      evento não faz absolutamente nada — sem erro na tela, sem uma palavra. Foi
      assim que este defeito passou por toda a suíte de testes e só apareceu no
      navegador de verdade. -->
-<script src="portaria-deposito.js?v=617"></script>
-<script src="lista-eventos.js?v=617"></script>
-<script src="virar-portao.js?v=617"></script>
-<script src="controle.js?v=617"></script>
-<script src="parede-pwa.js?v=617"></script>
+<script src="portaria-deposito.js?v=618"></script>
+<script src="lista-eventos.js?v=618"></script>
+<script src="virar-portao.js?v=618"></script>
+<script src="controle.js?v=618"></script>
+<script src="parede-pwa.js?v=618"></script>
 </body>
 </html>
