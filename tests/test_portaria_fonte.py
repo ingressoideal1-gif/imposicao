@@ -40,8 +40,14 @@ def test_a_recusa_nao_oferece_escape():
     realmente mora (achado em revisao de codigo, 15/08/2026 -- a guarda
     original nao lia esse arquivo)."""
     junto = _texto("portaria.html") + _texto("portaria.js") + _texto("portaria-validacao.js")
+    junto = junto.lower()
+    # `avisoSonoro.liberar()` destrava o AUDIO no primeiro toque da tela -- nada
+    # a ver com deixar entrar. Ele entrou em 16/08/2026 e colidiu com esta
+    # guarda, que so olha palavras. Sai da conta pelo nome INTEIRO da chamada, e
+    # so por ele: qualquer outro "liberar" continua sendo escape.
+    junto = junto.replace("avisosonoro.liberar()", "")
     for frase in ("mesmo assim", "liberar", "forcar", "forçar"):
-        assert frase not in junto.lower(), (
+        assert frase not in junto, (
             f"a tela da portaria oferece escape na recusa ({frase!r})"
         )
 

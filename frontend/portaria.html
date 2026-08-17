@@ -33,7 +33,12 @@
     <!--
         A tela do porteiro. Uma mao, no escuro, com sol de refletor na cara e a
         fila andando. Por isso: alvos de toque grandes, cor ocupando a tela
-        inteira na resposta, e nenhuma decisao escondida atras de menu.
+        inteira na RECUSA, e nenhuma decisao escondida atras de menu.
+
+        Desde 16/08/2026 o ingresso BOM nao ocupa mais a tela: a camera fica
+        ligada, a faixa verde troca de conteudo e a proxima pessoa passa sem
+        ninguem tocar em nada. Numa noite de dois mil ingressos, a tela antiga
+        pedia dois mil toques em "Ler o proximo" -- com uma mao, no escuro.
 
         Auto-contida como o evento.html, e por um motivo a mais: esta pagina
         precisa ABRIR SEM REDE. Todo arquivo que ela usa e local -- nao ha CDN
@@ -44,6 +49,9 @@
             --bg: #0a0f1e; --card: #1e293b; --border: rgba(148,163,184,0.25);
             --text: #e2e8f0; --dim: #94a3b8;
             --verde: #16a34a; --vermelho: #b91c1c; --laranja: #c2410c; --teal: #14b8a6;
+            /* O verde do fundo escuro nao serve para TEXTO: #16a34a sobre
+               #0a0f1e fica ilegivel de longe, que e como o porteiro le. */
+            --verde-claro: #4ade80;
         }
         * { box-sizing: border-box; }
         body {
@@ -54,10 +62,13 @@
         }
         .folha { max-width: 520px; margin: 0 auto; padding: 14px; }
         .topo {
-            display: flex; justify-content: space-between; align-items: baseline;
+            display: flex; align-items: center;
             gap: 10px; font-size: 0.82rem; color: var(--dim); margin-bottom: 12px;
         }
-        .topo strong { color: var(--text); font-size: 0.95rem; }
+        .topo strong { color: var(--text); font-size: 1.05rem; }
+        /* Os setores que este aparelho valida, em verde: e a resposta muda para
+           "esta pessoa esta na fila certa?", que o porteiro faz o tempo todo. */
+        #topo-setores { color: var(--verde-claro); font-size: 0.8rem; }
         h1 { font-size: 1.25rem; margin: 0 0 6px; }
         .sumindo { display: none !important; }
 
@@ -76,7 +87,16 @@
         button.discreto { background: transparent; color: var(--dim); border: 1px solid var(--border); }
         button:disabled { opacity: 0.5; }
 
-        /* A resposta ocupa a tela: o porteiro le de longe, com o celular na mao
+        /* O retorno para a lista de eventos. Alvo de toque grande, mas sem cor
+           de acao: ele nao compete com nada nesta tela. */
+        #btn-voltar {
+            width: auto; margin: 0; padding: 6px 14px; min-height: 44px;
+            font-size: 1.3rem; line-height: 1;
+            background: transparent; color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        /* A RECUSA ocupa a tela: o porteiro le de longe, com o celular na mao
            esticada e a pessoa esperando. */
         .resposta { border-radius: 14px; padding: 28px 20px; text-align: center; }
         .resposta.ok       { background: var(--verde); }
@@ -100,7 +120,77 @@
             background: rgba(245,158,11,0.12); border-left: 3px solid #f59e0b;
             color: var(--dim); margin-top: 12px;
         }
-        .cam { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4/3; }
+        .cam { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4/3; display: block; }
+
+        /* ── A faixa da ultima leitura ─────────────────────────────────────
+           Ela TROCA de conteudo a cada ingresso bom, e e o unico retorno visual
+           do caminho feliz. A hora vai junto: numa fila rapida, sem ela o
+           porteiro nao distingue "este verde e de quem acabou de passar" de
+           "este verde e de trinta segundos atras e a camera nao leu nada
+           desde entao". */
+        .rotulo {
+            text-align: center; color: var(--dim); font-size: 0.75rem;
+            letter-spacing: 0.1em; text-transform: uppercase; margin: 12px 0 6px;
+        }
+        .faixa {
+            border-radius: 12px; padding: 16px 12px; text-align: center;
+            background: var(--verde); color: #fff;
+            font-size: 1.3rem; font-weight: 800; min-height: 60px;
+            word-break: break-word;
+        }
+        /* Antes da primeira leitura nao ha verde nenhum: verde vazio na tela e
+           um "pode entrar" sem ingresso nenhum atras. */
+        .faixa.vazia {
+            background: rgba(148,163,184,0.14); color: var(--dim);
+            font-size: 0.95rem; font-weight: 600;
+        }
+
+        /* ── O contador ────────────────────────────────────────────────────
+           Destacado, sempre a vista, acima do "Digitar o numero". Soma TODOS os
+           setores deste portao -- decisao do usuario, contra um seletor de
+           setor: um controle a mais para tocar por engano, no escuro, com a
+           fila andando. */
+        .contador {
+            margin-top: 12px; padding: 14px 10px; text-align: center;
+            border-radius: 12px; background: rgba(20,184,166,0.12);
+            border: 1px solid rgba(20,184,166,0.4); color: var(--teal);
+            font-size: 1.5rem; font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+        /* As leituras que ainda nao subiram andam JUNTO do contador, e nao numa
+           marca separada -- decisao do usuario. Somem quando zeram. */
+        .contador .pendentes { font-size: 0.85rem; font-weight: 600; color: var(--dim); }
+
+        /* ── O rodape ──────────────────────────────────────────────────────
+           A lanterna virou icone ao lado do "Digitar o numero". Ela continua
+           sumindo onde a lanterna nao existe de verdade. */
+        .rodape { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+        .rodape button { margin-top: 0; }
+        #btn-lanterna {
+            width: 64px; flex: 0 0 64px; padding: 0; font-size: 1.6rem;
+            background: transparent; border: 1px solid var(--border);
+        }
+        #btn-lanterna.acesa { background: rgba(245,158,11,0.25); border-color: #f59e0b; }
+        #btn-digitar { flex: 1 1 auto; }
+
+        /* ── O toque que destrava o som ────────────────────────────────────
+           Navegador nenhum toca audio antes de a pessoa encostar na tela, e ler
+           QR nao conta como encostar. Ele cobre a area de trabalho porque nao ha
+           nada a fazer antes dele: a camera abre no mesmo toque.
+
+           Cobre a area de trabalho, e NAO a tela inteira: o `←` do topo fica
+           fora dele de proposito. Um porteiro que abriu o aparelho por engano
+           precisa poder voltar sem antes tocar em "comecar a ler". */
+        #tela-lendo { position: relative; }
+        #btn-toque {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            /* Sem canto arredondado: o canto deixaria aparecer a borda do
+               "Digitar o numero" por baixo, e meio botao espiando de tras de
+               uma capa parece tela quebrada. */
+            width: 100%; margin: 0; border-radius: 0; z-index: 20;
+            background: var(--bg); color: var(--text);
+            font-size: 1.5rem; font-weight: 800;
+        }
 
         /* A faixa de atualizacao NAO e um botao de acao: menor e discreta, de
            proposito. Ela nao pode competir com o alvo de toque que o porteiro
@@ -121,8 +211,17 @@
     </button>
 
     <div class="topo">
+        <!--
+            O retorno para a lista de eventos. Ele NAO exige fila zerada: aquela
+            trava existe para quando o aparelho troca de IDENTIDADE (vira portão
+            de outro evento, com token novo), e ir e voltar da lista não troca o
+            token — a fila sobe igual depois. A trava fica onde importa, no
+            "Sair deste portão" da engrenagem.
+        -->
+        <button id="btn-voltar" class="sumindo" type="button"
+                title="Voltar para a lista de eventos"
+                aria-label="Voltar para a lista de eventos">←</button>
         <span><strong id="topo-aparelho">Portaria</strong><br><span id="topo-setores"></span></span>
-        <span id="topo-fila"></span>
     </div>
 
     <!--
@@ -154,20 +253,48 @@
 
     <div id="tela-lendo" class="sumindo">
         <video id="cam" class="cam" playsinline muted></video>
-        <!-- So aparece onde a lanterna existe de verdade (Chrome no Android).
-             Botao morto no escuro faz o porteiro achar que o aparelho travou. -->
-        <button id="btn-lanterna" class="discreto sumindo" type="button">Lanterna</button>
-        <button id="btn-digitar" class="discreto">Digitar o número</button>
+
+        <div class="rotulo">Última leitura</div>
+        <div id="faixa-ultima" class="faixa vazia">Nenhum ingresso lido ainda</div>
+
+        <!-- `entraram / contratado · N não enviadas`. O denominador é a
+             quantidade CONTRATADA no ERP, que é a regra do projeto para
+             lotação. -->
+        <div class="contador">
+            <span id="contador-numeros">…</span><span id="contador-pendentes" class="pendentes"></span>
+        </div>
+
+        <div class="rodape">
+            <!-- Só aparece onde a lanterna existe de verdade (Chrome no
+                 Android). Botão morto no escuro faz o porteiro achar que o
+                 aparelho travou. -->
+            <button id="btn-lanterna" class="sumindo" type="button"
+                    title="Lanterna" aria-label="Acender a lanterna">🔦</button>
+            <button id="btn-digitar" class="discreto">Digitar o número</button>
+        </div>
+
         <div id="caixa-digitar" class="sumindo">
             <input id="campo-numero" inputmode="numeric" placeholder="000001">
             <button id="btn-conferir">Conferir</button>
         </div>
-        <!-- Sem isto, um bloqueio criado pelo dono DEPOIS do pareamento nunca
-             chega a este aparelho -- a regra 4 inteira so valeria para quem
-             pareou depois do bloqueio existir. -->
-        <button id="btn-atualizar-evento" class="discreto">Atualizar o evento</button>
+
+        <!--
+            O toque que destrava o som. Cobre a tela ao entrar na leitura e sai
+            no primeiro toque, que é o mesmo que abre a câmera.
+
+            A alternativa — tentar apitar sem permissão — falha EM SILÊNCIO, que
+            é o modo de errar que esta tela inteira existe para evitar.
+        -->
+        <button id="btn-toque" class="sumindo" type="button">
+            Toque para começar a ler
+        </button>
     </div>
 
+    <!--
+        A recusa continua ocupando a tela e continua exigindo um toque: é a
+        única forma de garantir que o porteiro viu. O ingresso BOM não passa
+        mais por aqui.
+    -->
     <div id="tela-resposta" class="sumindo">
         <div class="resposta" id="resposta-caixa">
             <div class="marca" id="resposta-marca"></div>
@@ -188,27 +315,24 @@
     </div>
 
     <!--
-        A saída do portão. Fica FORA das telas porque não pertence a nenhuma:
-        o `mostrar()` a acende só onde este aparelho ficaria preso sem ela.
+        A recusa de sair do portão com leitura ainda na fila.
 
-        Ela existe porque, com token guardado, a casa do aplicativo devolve
-        este celular para a leitura — não há "voltar". Do outro lado está a
-        lista de eventos, e a engrenagem de cada um pede a senha do dono:
-        reconfigurar e apagar continuam passando por ela, que é a trava
-        inteira.
+        Fica FORA das telas porque não pertence a nenhuma. O botão que a
+        disparava saiu da tela de trabalho em 16/08/2026: o retorno do topo leva
+        à mesma lista, e trocar a identidade deste celular passa pela engrenagem
+        do evento, que pede a senha do dono.
     -->
-    <button id="btn-configurar-aparelho" class="discreto sumindo" type="button">
-        Configurar este aparelho
-    </button>
     <div id="erro-configurar" class="aviso sumindo" role="alert"></div>
 </div>
 
-<script src="jsqr.min.js?v=614"></script>
-<script src="qr-ideal-hash.js?v=614"></script>
-<script src="portaria-validacao.js?v=614"></script>
-<script src="portaria-deposito.js?v=614"></script>
-<script src="portaria-camera.js?v=614"></script>
-<script src="portaria.js?v=614"></script>
-<script src="sw-registro.js?v=614"></script>
+<script src="jsqr.min.js?v=615"></script>
+<script src="qr-ideal-hash.js?v=615"></script>
+<script src="portaria-validacao.js?v=615"></script>
+<script src="portaria-deposito.js?v=615"></script>
+<script src="portaria-camera.js?v=615"></script>
+<script src="aviso-sonoro.js?v=615"></script>
+<script src="portaria-sincronismo.js?v=615"></script>
+<script src="portaria.js?v=615"></script>
+<script src="sw-registro.js?v=615"></script>
 </body>
 </html>

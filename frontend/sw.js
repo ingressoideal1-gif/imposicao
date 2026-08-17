@@ -63,6 +63,12 @@ const ARQUIVOS = [
     'qr-ideal-hash.js?v=' + VERSAO,
     'portaria-validacao.js?v=' + VERSAO,
     'portaria-deposito.js?v=' + VERSAO,
+    // O aviso sonoro e o relogio de cinco minutos (v615). Os dois trabalham
+    // JUSTAMENTE quando nao ha rede -- o bipe e gerado no aparelho, e o
+    // sincronismo precisa existir para saber que falhou e tentar de novo. Ficar
+    // de fora daqui seria deixa-los faltar exatamente no portao.
+    'aviso-sonoro.js?v=' + VERSAO,
+    'portaria-sincronismo.js?v=' + VERSAO,
     'portaria.js?v=' + VERSAO,
 
     // Compartilhados pelas tres telas.

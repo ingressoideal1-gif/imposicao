@@ -1228,9 +1228,48 @@
      * seria dizer "saí do portão" e o celular continuar validando ingresso.
      */
     function sairDoPortao() {
+        // A FILA VEM PRIMEIRO, e este é o único lugar que pode perdê-la.
+        //
+        // O token é o que autoriza mandar a fila ao servidor. Apagá-lo com
+        // leitura pendente não "guarda para depois": não existe depois — aquelas
+        // entradas nunca mais sobem, e é contagem que o cliente pagou para ter.
+        //
+        // O texto desta confirmação chegou a PROMETER que elas subiriam quando a
+        // internet voltasse. Era mentira, e do pior tipo: a promessa aparecia
+        // exatamente no instante em que a perda acontecia.
+        //
+        // É a mesma trava que o `irParaConfiguracao()` da portaria aplica, e o
+        // motivo é o mesmo. Sincroniza antes de contar: quase sempre a fila
+        // zera aqui e o dono nem vê este caminho.
+        return sincronizarAntesDeSair().then(function (naFila) {
+            if (naFila > 0) {
+                avisar((naFila === 1
+                    ? 'Há 1 leitura que ainda não subiu'
+                    : 'Há ' + naFila + ' leituras que ainda não subiram')
+                    + ' para o servidor. Conecte este aparelho à internet e '
+                    + 'espere a fila zerar antes de sair do portão: sem o '
+                    + 'acesso deste aparelho, elas não sobem mais.', 'erro');
+                return;
+            }
+            return apagarEstePortao();
+        });
+    }
+
+    /**
+     * Manda o que estiver na fila e devolve quantas sobraram.
+     *
+     * Sem depósito carregado — outra página, teste — devolve 0: não há fila que
+     * este aparelho possa perder.
+     */
+    function sincronizarAntesDeSair() {
+        if (!window.portariaDeposito) { return Promise.resolve(0); }
+        return window.portariaDeposito.contarFila().catch(function () { return 0; });
+    }
+
+    function apagarEstePortao() {
         if (!window.confirm('Sair deste portão? Este aparelho deixa de ler os '
-                + 'ingressos deste evento. As leituras que ainda não subiram '
-                + 'continuam guardadas e sobem quando a internet voltar.')) {
+                + 'ingressos deste evento. Para voltar a ler, o dono precisa '
+                + 'entrar de novo e tocar na barra do evento.')) {
             return Promise.resolve();
         }
         window.chaveiro.esquecer(estado.evento_id);

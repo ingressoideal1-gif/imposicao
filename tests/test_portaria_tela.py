@@ -1,15 +1,24 @@
 # -*- coding: utf-8 -*-
-"""O que a tela PINTA, que e a parte desta camada que falha em silencio.
+"""O que a tela FAZ a cada leitura, que e a parte desta camada que falha em
+silencio.
 
 As regras ja sao testadas em tests/test_portaria_validacao.py. O que nada mais
-cobre e a traducao do veredito em cor e frase -- e a spec diz que confundir
-`setor_nao_autorizado` (ingresso bom, porta errada) com `desconhecido` (ingresso
-estranho ao evento) faz o porteiro devolver ingresso legitimo achando que e
-falso. Sao cores diferentes de proposito, e e isto que garante que continuem.
+cobre e a traducao do veredito em cor, frase, som e -- desde 16/08/2026 -- em
+NAO INTERROMPER NINGUEM. A spec diz que confundir `setor_nao_autorizado`
+(ingresso bom, porta errada) com `desconhecido` (ingresso estranho ao evento)
+faz o porteiro devolver ingresso legitimo achando que e falso. Sao cores
+diferentes de proposito, e e isto que garante que continuem.
+
+A tela mudou de forma em 16/08/2026: o ingresso BOM deixou de ocupar o aparelho
+-- a camera segue ligada, a faixa verde troca e a fila anda sem ninguem tocar em
+nada. A recusa continua travando. Os testes abaixo estao organizados nessa
+ordem: primeiro o caminho feliz que nao interrompe, depois o silencio por codigo
+que substituiu o desligar-a-camera, depois a recusa, o contador e as saidas.
 """
 
 import json
 import os
+import re
 import subprocess
 
 import pytest
@@ -53,22 +62,116 @@ def carga(**mudancas):
     return base
 
 
-def pintar(texto, c=None, escolhido=None):
+def _harness(caso):
+    # `encoding="utf-8"` explicito: sem ele o Python assume a pagina de codigo do
+    # Windows (cp1252) para ler o stdout do Node, e a primeira resposta com
+    # acento -- "JA ENTROU" com A maiusculo acentuado, o "não enviadas" do
+    # contador -- rebenta o teste com UnicodeDecodeError, longe da causa.
     r = subprocess.run(
         ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
-        input=json.dumps({"texto": texto, "carga": c or carga(),
-                          "setorEscolhido": escolhido}),
+        encoding="utf-8", input=json.dumps(caso),
     )
     if r.returncode != 0:
         pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
     return json.loads(r.stdout)
 
 
-def test_permitido_pinta_verde_e_diz_o_setor_e_o_numero():
+def ler(c=None, **caso):
+    """Uma leitura (ou varias) na tela de verdade, com a carga semeada."""
+    base = {"carga": c or carga()}
+    base.update(caso)
+    return _harness(base)
+
+
+def pintar(texto, c=None, escolhido=None):
+    return ler(c, texto=texto, setorEscolhido=escolhido)
+
+
+# ── O ingresso bom nao interrompe ninguem ────────────────────────────────────
+
+
+def test_ingresso_bom_NAO_desliga_a_camera():
+    """O caso comum e o ingresso bom, e ele nao deveria pedir nada de ninguem.
+    Dois mil ingressos eram dois mil toques em "Ler o proximo" -- com uma mao,
+    no escuro, com a fila esperando.
+
+    Ate 16/08/2026 `achou()` desligava a camera antes de cada validacao e a
+    resposta ocupava a tela. Agora a camera segue ligada e a tela continua sendo
+    a de leitura: quem prova isso e este teste.
+    """
     r = pintar("000001")
-    assert "ok" in r["classe"]
-    assert r["titulo"] == "PODE ENTRAR"
-    assert r["detalhe"] == "PISTA"
+    assert r["desligouACamera"] is False, "a camera parou num ingresso BOM"
+    assert r["telaLendo"] is True
+    assert r["telaResposta"] is False, "o ingresso bom voltou a ocupar a tela"
+
+
+def test_a_faixa_verde_mostra_setor_numero_e_hora():
+    """A hora foi pedida pelo usuario: numa fila rapida, sem ela o porteiro nao
+    distingue "acabou de passar" de "isto e de trinta segundos atras e a camera
+    nao leu nada desde entao"."""
+    r = pintar("000001")
+    assert r["faixaVazia"] is False, "a faixa continua com a cara de 'nada lido'"
+    assert "PISTA" in r["faixa"]
+    assert "1" in r["faixa"]
+    assert re.search(r"\d{1,2}:\d{2}", r["faixa"]), (
+        f"a faixa nao mostra a hora: {r['faixa']!r}"
+    )
+
+
+def test_o_ingresso_bom_apita_diferente_do_barrado():
+    """O porteiro segura o aparelho mas nem sempre olha para ele. Dois avisos
+    iguais valem tanto quanto aviso nenhum."""
+    assert ler(texto="000001")["avisos"] == ["liberado"]
+    assert ler(texto="999999")["avisos"] == ["barrado"]
+
+
+# ── O silencio por codigo ────────────────────────────────────────────────────
+#
+# Desligar a camera a cada leitura era, tambem, a protecao contra ler o mesmo QR
+# duas vezes. Ela le o mesmo codigo cerca de vinte vezes por segundo enquanto o
+# papel estiver na frente da lente.
+
+
+def test_o_mesmo_codigo_e_ignorado_por_2_segundos():
+    """A camera le o mesmo QR ~20x por segundo enquanto o papel estiver na
+    frente da lente. Sem isto, o segundo disparo cai em `ja_entrou` e pinta a
+    tela de VERMELHO para um ingresso BOM, um piscar depois do verde -- e o
+    porteiro devolve quem tinha direito de entrar."""
+    r = ler(textos=["000001", "000001"])
+    assert r["fila"] == 1, "a mesma leitura entrou duas vezes na fila"
+    assert r["telaResposta"] is False, "o ingresso bom piscou vermelho"
+
+
+def test_outro_codigo_passa_na_hora():
+    """O silencio e por CODIGO, nao por tempo de tela: a proxima pessoa da fila
+    nao pode esperar dois segundos porque a anterior acabou de passar."""
+    r = ler(textos=["000001", "999999"])
+    assert r["fila"] == 2
+    assert r["telaResposta"] is True, "o segundo codigo nao foi decidido"
+
+
+def test_o_mesmo_codigo_volta_a_valer_depois_de_2_segundos():
+    """O silencio e uma pausa, e nao um esquecimento. Passados os dois segundos,
+    o mesmo ingresso apresentado de novo vira `ja_entrou` -- que e o certo: ele
+    ja entrou mesmo."""
+    r = ler(textos=["000001", "000001"], pausa=2400)
+    assert r["fila"] == 2
+    assert r["titulo"] == "JÁ ENTROU"
+
+
+# ── A recusa continua travando ───────────────────────────────────────────────
+
+
+def test_ingresso_barrado_TRAVA_e_oferece_ler_o_proximo():
+    """Recusa e a unica coisa que exige que o porteiro tenha visto. A cor ocupa
+    a tela, o aparelho apita longo, a camera para -- e so um toque em "Ler o
+    proximo" faz a fila andar."""
+    r = pintar("999999")
+    assert r["telaResposta"] is True
+    assert r["telaLendo"] is False
+    assert r["desligouACamera"] is True, "a camera continuou lendo por tras da recusa"
+    assert r["avisos"] == ["barrado"]
+    assert "Ler o próximo" in _ler("frontend/portaria.html")
 
 
 def test_porta_errada_pinta_LARANJA_e_nao_vermelho():
@@ -109,9 +212,12 @@ def test_o_motivo_do_bloqueio_aparece_no_campo_de_corpo_grande():
     assert r["motivo"] == "lote extraviado na entrega"
 
 
-def test_ambiguidade_abre_a_tela_de_escolha_e_NAO_registra_leitura():
+def test_ambiguidade_TRAVA_a_tela_e_NAO_registra_leitura():
     """Perguntar nao e decidir: enquanto o porteiro nao tocar num setor, nada
-    pode ir para a fila -- senao a lotacao contaria uma entrada que nao houve."""
+    pode ir para a fila -- senao a lotacao contaria uma entrada que nao houve.
+
+    A pergunta ocupa o aparelho como uma recusa ocupa: a camera para, senao ela
+    seguiria lendo por tras da pergunta e responderia outra coisa por cima."""
     c = carga()
     c["aparelho"]["setores"] = [PISTA, VIP]
     c["credenciais"] = [
@@ -122,6 +228,7 @@ def test_ambiguidade_abre_a_tela_de_escolha_e_NAO_registra_leitura():
     assert r["telaAmbiguo"] is True
     assert r["telaResposta"] is False
     assert r["fila"] == 0
+    assert r["desligouACamera"] is True
 
 
 def test_toda_leitura_decidida_entra_na_fila_inclusive_a_negada():
@@ -130,71 +237,214 @@ def test_toda_leitura_decidida_entra_na_fila_inclusive_a_negada():
     assert pintar("999999")["fila"] == 1
 
 
+# ── A conferencia on-line, com teto de 800 ms ────────────────────────────────
+#
+# Cinco minutos de sincronismo e tempo de sobra para a mesma pessoa entrar por
+# dois portoes. Com sinal isso fecha -- e quem decide a corrida e o servidor,
+# numa operacao so. Mas o portao NUNCA espera rede.
+
+ENTRADA = "/functions/v1/portaria/entrada"
+
+
+def test_quem_perde_a_corrida_entre_dois_portoes_e_barrado_aqui():
+    """O servidor respondeu que esta credencial ja entrou em outro portao. A
+    decisao local dizia "pode entrar" -- e a do servidor vence, porque so ele
+    enxerga os dois portoes."""
+    r = ler(texto="000001", online=True,
+            mock={"method": "POST", "pathname": ENTRADA, "status": 200,
+                  "body": {"primeira": False, "resultado": "negado",
+                           "motivo": "ja_entrou",
+                           "anterior": {"momento": "2026-08-20T22:10:00Z",
+                                        "portao": "Portao B"}}})
+    assert r["telaResposta"] is True
+    assert r["titulo"] == "JÁ ENTROU"
+    assert "Portao B" in r["detalhe"], (
+        "a recusa nao diz em QUAL portao a pessoa entrou -- sem isso ela vira "
+        "'nao sei, o sistema nao deixou'"
+    )
+    assert r["filaResultados"] == ["negado"], (
+        "a fila subiu o veredito LOCAL; o do servidor e que vale"
+    )
+
+
+def test_servidor_lento_NAO_trava_a_leitura():
+    """O teto de 800 ms. Um servidor que demora nao pode segurar a fila do
+    portao: o aparelho decide com o que tem e a leitura vai para a fila como
+    sempre."""
+    r = ler(texto="000001", online=True,
+            mock={"method": "POST", "pathname": ENTRADA, "status": 200,
+                  "demora": 3000, "body": {"primeira": False}})
+    assert r["ms"] < 2500, f"a leitura esperou {r['ms']} ms pela rede"
+    assert r["telaResposta"] is False, "a demora do servidor barrou ingresso bom"
+    assert r["fila"] == 1
+
+
+# ── O contador ───────────────────────────────────────────────────────────────
+
+
+def _contador(c, totais=None, fila=None):
+    return _harness({"modo": "contador", "carga": c, "token": "token-de-teste",
+                     "totais": totais or {}, "fila": fila or [], "online": False})
+
+
+def _negadas(n):
+    return [{"id_local": "n-%d" % i, "momento": "2026-08-20T21:%02d:00Z" % i,
+             "credencial_id": None, "setor_id": None,
+             "resultado": "negado", "motivo": "desconhecido"} for i in range(n)]
+
+
+def test_o_contador_soma_todos_os_setores_deste_portao_sobre_o_contratado():
+    """Decisao do usuario: um numero so, sem seletor de setor para tocar por
+    engano no escuro. O denominador e a quantidade CONTRATADA no ERP, que e a
+    regra do projeto para lotacao."""
+    c = carga()
+    c["aparelho"]["setores"] = [PISTA, VIP]
+    c["setores"][0]["quantidade"] = 3000
+    c["setores"][1]["quantidade"] = 2000
+    r = _contador(c, totais={PISTA: 1000, VIP: 234})
+    assert r["numeros"] == "1.234 / 5.000"
+
+
+def test_o_contador_ignora_setor_que_este_portao_nao_valida():
+    """Ele soma os setores DESTE portao. Somar o evento inteiro mostraria ao
+    porteiro do camarote a lotacao da pista."""
+    r = _contador(carga(), totais={PISTA: 10, VIP: 500})
+    assert r["numeros"] == "10 / 600"
+
+
+def test_o_contador_nao_nasce_zerado_ao_abrir_o_aplicativo():
+    """Os totais ficam gravados no celular de proposito: no meio do evento, um
+    contador zerado e um numero errado na tela do porteiro, e ele nao tem como
+    desconfiar."""
+    r = _contador(carga(), totais={PISTA: 812})
+    assert r["numeros"].startswith("812")
+
+
+def test_o_contador_diz_quantas_leituras_ainda_nao_subiram():
+    """Junto do contador, e nao numa marca separada -- decisao do usuario. Fila
+    que cresce e o sinal de que a rede caiu, e o porteiro precisa ver isso sem
+    procurar."""
+    r = _contador(carga(), totais={PISTA: 100}, fila=_negadas(12))
+    assert "12 não enviadas" in r["pendentes"]
+
+
+def test_a_marca_de_nao_enviadas_some_quando_a_fila_zera():
+    """"0 não enviadas" fixo na tela e ruido no unico numero que o porteiro
+    olha."""
+    assert _contador(carga(), totais={PISTA: 100})["pendentes"] == ""
+
+
+# ── O que saiu da tela ───────────────────────────────────────────────────────
+
+
+def test_saiu_o_botao_de_atualizar_o_evento():
+    """Ele existia porque nao havia sincronismo automatico: o porteiro tinha de
+    LEMBRAR de tocar para receber um bloqueio que o dono criou. O relogio de
+    cinco minutos faz isso sozinho agora -- ver `puxarNovidades`."""
+    html = _ler("frontend/portaria.html")
+    assert "btn-atualizar-evento" not in html
+    assert "Atualizar o evento" not in html
+    assert "portariaSincronismo" in _ler("frontend/portaria.js"), (
+        "o botao saiu e nada tomou o lugar dele: o bloqueio criado pelo dono "
+        "nunca chegaria a este aparelho"
+    )
+
+
+def test_saiu_o_configurar_este_aparelho_da_tela_de_trabalho():
+    """Decisao do usuario, 16/08/2026. A tela de trabalho e para ler ingresso;
+    trocar a identidade deste celular passa pela engrenagem do evento, que pede
+    a senha do dono. O `←` do topo ja leva a mesma lista."""
+    html = _ler("frontend/portaria.html")
+    assert "btn-configurar-aparelho" not in html
+    assert "Configurar este aparelho" not in html
+
+
+def test_a_lanterna_e_o_digitar_ficam_no_rodape():
+    """Os dois alvos de toque do rodape, lado a lado: a lanterna virou icone e o
+    "Digitar o numero" ficou ao lado dela. E a lanterna continua sumindo onde
+    ela nao existe de verdade -- botao morto no escuro faz o porteiro achar que
+    o aparelho travou."""
+    html = _ler("frontend/portaria.html")
+    rodape = html[html.index('class="rodape"'):]
+    rodape = rodape[:rodape.index("</div>")]
+    assert 'id="btn-lanterna"' in rodape
+    assert 'id="btn-digitar"' in rodape
+    assert "sumindo" in rodape[:rodape.index('id="btn-digitar"')], (
+        "a lanterna nasce visivel; ela so pode aparecer onde existe de verdade"
+    )
+    assert "temLanterna" in _ler("frontend/portaria.js")
+
+
+# ── O toque que destrava o som ───────────────────────────────────────────────
+
+
+def test_a_leitura_comeca_com_um_toque_que_destrava_o_som():
+    """Navegador nenhum toca audio antes de a pessoa encostar na tela, e ler QR
+    nao conta como encostar. A alternativa -- tentar apitar sem permissao --
+    falha EM SILENCIO, que e o modo de errar que esta tela inteira existe para
+    evitar."""
+    r = _harness({"modo": "toque", "carga": carga(), "token": "token-de-teste",
+                  "fila": [], "online": False})
+    assert r["capaAntes"] is True, "a leitura abriu sem pedir o toque"
+    assert r["capaDepois"] is False, "a capa nao saiu depois do toque"
+    assert r["destravou"] == 1, "o toque nao destravou o som"
+
+
+# ── O retorno para a lista ───────────────────────────────────────────────────
+
+FILA_DE_TESTE = [
+    {"id_local": "negada-1", "momento": "2026-08-20T21:00:00Z", "credencial_id": None,
+     "setor_id": None, "resultado": "negado", "motivo": "desconhecido"},
+    {"id_local": "entrada-1", "momento": "2026-08-20T21:01:00Z",
+     "credencial_id": "c-p1", "setor_id": PISTA, "resultado": "permitido", "motivo": None},
+]
+
+
+def test_ha_um_retorno_no_topo_e_ele_NAO_exige_fila_zerada():
+    """A trava da fila existe para quando o aparelho troca de IDENTIDADE -- vira
+    portao de outro evento, com token novo, e leitura enfileirada sob o token
+    velho nao sobe mais. Ir e voltar da lista nao troca o token, e a fila sobe
+    igual depois: prender o porteiro aqui seria uma trava que nao protege nada e
+    atrapalha o tempo todo."""
+    r = _harness({"modo": "voltar", "carga": carga(), "token": "token-de-teste",
+                  "fila": FILA_DE_TESTE, "online": False})
+    assert r["botaoVisivel"] is True, "nao ha retorno na tela de leitura"
+    assert r["saiu"] is True, "o retorno ficou preso por causa da fila"
+    assert r["url"] == "/controle.html"
+    assert r["filaDepois"] == 2, "sair da tela apagou a fila"
+
+
 # ── A fila so sai depois que o servidor confirmou ────────────────────────────
 #
-# Nenhum dos testes acima toca isto: eles desligam `navigator.onLine` de
-# proposito (nenhuma rede deve sair enquanto so estamos testando pintura), e
-# por isso `sincronizar()` sai no primeiro guard sem executar o corpo -- onde
-# mora a regra "so remove da fila depois que o POST /leituras confirmou".
-# Achado em revisao de codigo, 15/08/2026: sem este teste, inverter a ordem
-# (remover da fila antes do fetch) passaria pela suite inteira sem aviso.
+# Os testes de leitura acima desligam `navigator.onLine` de proposito (nenhuma
+# rede deve sair enquanto so estamos medindo a tela), e por isso `sincronizar()`
+# sai no primeiro guard sem executar o corpo -- onde mora a regra "so remove da
+# fila depois que o POST /leituras confirmou". Achado em revisao de codigo,
+# 15/08/2026: sem este teste, inverter a ordem (remover da fila antes do fetch)
+# passaria pela suite inteira sem aviso.
+
 
 def _conferir(texto, c=None):
-    r = subprocess.run(
-        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
-        input=json.dumps({"modo": "conferir", "texto": texto, "carga": c or carga()}),
-    )
-    if r.returncode != 0:
-        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
-    return json.loads(r.stdout)
+    return _harness({"modo": "conferir", "texto": texto, "carga": c or carga()})
 
 
 def test_digitar_o_numero_desliga_a_camera_antes_de_validar():
-    """Achado em revisao de codigo, 15/08/2026. `achou()` (camera) ja desliga
-    antes de validar; `btn-conferir` ('Digitar o numero') tinha ficado de
-    fora. Sem isto, a camera continua lendo QR enquanto o porteiro digita um
-    numero -- e meio segundo depois ela pode pegar outro ingresso e pintar a
-    tela com a resposta ERRADA por cima da certa, sem que nada avise qual
-    ingresso a tela esta respondendo."""
-    assert _conferir("000001")["desligarChamado"] is True
+    """Achado em revisao de codigo, 15/08/2026, e mais importante ainda desde
+    16/08/2026: a camera nao para mais sozinha ao achar um codigo, entao ela
+    esta lendo DE VERDADE enquanto o porteiro digita. Um QR que entre no quadro
+    no meio da digitacao responderia por cima do numero digitado, sem que nada
+    avise a qual ingresso a tela esta respondendo.
 
-
-def _atualizar(mock, c=None):
-    r = subprocess.run(
-        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
-        input=json.dumps({"modo": "atualizar", "carga": c or carga(), "mock": mock}),
-    )
-    if r.returncode != 0:
-        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
-    return json.loads(r.stdout)
-
-
-def test_atualizar_o_evento_troca_a_carga_sem_tocar_fila_ou_entradas():
-    """Achado em revisao de codigo, 15/08/2026 (I5). Antes desta correcao nao
-    havia como refazer a carga depois de parear: um bloqueio criado as 21h
-    pelo dono nunca chegava ao aparelho que pareou as 20h. O botao 'Atualizar
-    o evento' chama `baixarCarga()`, que SUBSTITUI a carga -- mas fila e
-    entradas sao do porteiro, nao do evento, e uma atualizacao nao pode
-    mexer nelas."""
-    nova = carga()
-    nova["evento"]["nome"] = "Festa Atualizada"
-    nova["proxima"] = None
-    r = _atualizar({"method": "GET", "pathname": "/functions/v1/portaria/faixa",
-                    "status": 200, "body": nova})
-    assert r["filaAntes"] == 2
-    assert r["filaDepois"] == 2, "atualizar o evento apagou leituras da fila"
-    assert r["entradasAntes"] == r["entradasDepois"], "atualizar o evento apagou entradas"
-    assert r["nomeEventoDepois"] == "Festa Atualizada", "a carga nova nao chegou a gravar"
+    A parada agora acontece ja ao ABRIR a caixa -- antes era so no "Conferir",
+    e entre um e outro passa o tempo inteiro da digitacao."""
+    r = _conferir("000001")
+    assert r["desligarAoAbrir"] is True, "a camera segue lendo enquanto ele digita"
+    assert r["desligarChamado"] is True
+    assert r["fila"] == 1, "o numero digitado nao foi decidido"
 
 
 def _sincronizar(mock):
-    r = subprocess.run(
-        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
-        input=json.dumps({"modo": "sincronizar", "carga": carga(), "mock": mock}),
-    )
-    if r.returncode != 0:
-        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
-    return json.loads(r.stdout)
+    return _harness({"modo": "sincronizar", "carga": carga(), "mock": mock})
 
 
 def test_sincronizar_remove_da_fila_so_depois_da_confirmacao_do_servidor():
@@ -231,6 +481,70 @@ def test_401_na_sincronizacao_preserva_a_fila_em_vez_de_apagar():
     assert r["mensagem"], "o porteiro tem de saber por que o aparelho parou de ler"
 
 
+# ── O sincronismo de cinco minutos ───────────────────────────────────────────
+#
+# Ele tomou o lugar do botao "Atualizar o evento", e herdou a regra que aquele
+# botao tinha de respeitar: a carga muda, fila e entradas NAO. O que ele faz de
+# diferente e nao substituir a carga inteira -- a rota leve nao manda as
+# credenciais, e trocar a carga pelo que veio esvaziaria o evento e faria o
+# portao recusar todo mundo como "desconhecido".
+
+
+def _novidades(corpo, c=None):
+    return _harness({
+        "modo": "novidades", "carga": c or carga(), "setor": PISTA,
+        "mock": {"method": "GET", "pathname": "/functions/v1/portaria/sincronizar",
+                 "status": 200, "body": corpo},
+    })
+
+
+CORPO_DA_ROTA_LEVE = {
+    "evento": {"ativo": False},
+    "setores": [{"id": PISTA, "bloqueado": True, "bloqueado_motivo": "Interditado"}],
+    "bloqueios": [],
+    "entradas": [{"credencial_id": "c-de-outro-portao", "momento": "2026-08-20T22:10:00Z"}],
+    "totais": {PISTA: 137},
+    "proxima_desde": None,
+}
+
+
+def test_o_sincronismo_troca_a_carga_sem_tocar_fila_ou_entradas():
+    """Antes de 16/08/2026 quem fazia isto era o botao "Atualizar o evento", e
+    a regra e a mesma: fila e entradas sao do PORTEIRO, nao do evento. Uma
+    atualizacao nao pode mexer nelas."""
+    r = _novidades(CORPO_DA_ROTA_LEVE)
+    assert r["filaAntes"] == 2
+    assert r["filaDepois"] == 2, "o sincronismo apagou leituras da fila"
+    assert r["eventoAtivoDepois"] is False, "a novidade nao chegou a gravar"
+    assert r["setorBloqueadoDepois"] is True
+
+
+def test_o_sincronismo_NAO_apaga_as_credenciais():
+    """A rota leve nao as manda. Substituir a carga pelo que veio esvaziaria o
+    evento inteiro e o portao recusaria todo mundo como "desconhecido"."""
+    assert _novidades(CORPO_DA_ROTA_LEVE)["credenciaisDepois"] == 2
+
+
+def test_o_sincronismo_NAO_perde_a_quantidade_contratada_do_setor():
+    """Ela e o denominador do contador. A rota leve manda so o que muda no
+    setor; substituir o setor inteiro levaria a quantidade junto."""
+    assert _novidades(CORPO_DA_ROTA_LEVE)["quantidadeDepois"] == 600
+
+
+def test_o_sincronismo_junta_as_entradas_dos_outros_portoes():
+    """E a razao de a rota devolver `entradas`: cinco minutos e tempo de a mesma
+    pessoa tentar entrar por duas portas."""
+    r = _novidades(CORPO_DA_ROTA_LEVE)
+    assert "c-de-outro-portao" in r["entradasDepois"]
+    assert "c-antiga" in r["entradasDepois"], (
+        "as entradas do servidor apagaram as locais que ainda nao subiram"
+    )
+
+
+def test_o_sincronismo_guarda_os_totais_do_contador():
+    assert _novidades(CORPO_DA_ROTA_LEVE)["totaisDepois"][PISTA] == 137
+
+
 # ── O codigo de seis caracteres saiu da tela ─────────────────────────────────
 #
 # Decisao do usuario, 16/08/2026: retirar TODAS as opcoes de codigo. Quem poe um
@@ -253,35 +567,22 @@ def test_o_botao_de_configurar_leva_a_lista_e_nao_ao_login():
     assert "controle.html?configurar=1" not in texto
 
 
-def test_a_trava_da_fila_continua_valendo_ao_sair_do_portao():
-    """Ela protege a contagem que o cliente pagou para ter. Sair sem ela faz o
-    que ficou para tras nunca subir."""
+def test_a_trava_da_fila_continua_valendo_ao_trocar_de_identidade():
+    """Ela protege a contagem que o cliente pagou para ter. Trocar o token sem
+    ela faz o que ficou para tras nunca subir."""
     assert "ainda não subiram" in _ler("frontend/portaria.js")
 
 
-# ── A trava: sair do portao passa pela senha ─────────────────────────────────
+# ── A trava: trocar a identidade deste celular espera a fila ─────────────────
 #
 # Decisao do usuario, 16/08/2026: o aparelho "nao deixa editar mais, somente
 # com a senha". A tela da portaria nao tem senha nenhuma -- o que ela tem e a
 # SAIDA para a tela que pede. Estes testes recarregam a pagina de proposito: o
 # que se prova mora no arranque, e semear a tela na mao pularia a decisao.
-
-FILA_DE_TESTE = [
-    {"id_local": "negada-1", "momento": "2026-08-20T21:00:00Z", "credencial_id": None,
-     "setor_id": None, "resultado": "negado", "motivo": "desconhecido"},
-    {"id_local": "entrada-1", "momento": "2026-08-20T21:01:00Z",
-     "credencial_id": "c-p1", "setor_id": PISTA, "resultado": "permitido", "motivo": None},
-]
-
-
-def _harness(caso):
-    r = subprocess.run(
-        ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True, text=True,
-        input=json.dumps(caso),
-    )
-    if r.returncode != 0:
-        pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
-    return json.loads(r.stdout)
+#
+# O BOTAO que chamava esta saida saiu da tela de trabalho na mesma leva (ver
+# `test_saiu_o_configurar_este_aparelho_da_tela_de_trabalho`); a trava que ele
+# guardava nao saiu, e continua sendo exercitada aqui pela porta exportada.
 
 
 def _configurar(**caso):
@@ -291,21 +592,19 @@ def _configurar(**caso):
     return _harness(base)
 
 
-def test_configurar_este_aparelho_leva_a_lista_de_eventos():
+def test_trocar_a_identidade_leva_a_lista_de_eventos():
     """A saida do portao. Sem ela o celular fica preso: com token guardado, a
-    casa do aplicativo devolve este aparelho para a leitura, e da leitura nao
-    havia como voltar.
+    casa do aplicativo devolve este aparelho para a leitura.
 
     O destino e a lista, sem `?configurar=1`: a senha agora e pedida pela
     engrenagem de cada evento, e nao por uma tela de login separada.
     """
     r = _configurar()
-    assert r["botaoVisivel"] is True, "o botao nao aparece na tela de leitura"
     assert r["saiu"] is True
     assert r["url"] == "/controle.html"
 
 
-def test_configurar_recusa_enquanto_ha_leitura_por_subir():
+def test_trocar_a_identidade_recusa_enquanto_ha_leitura_por_subir():
     """Configurar cunha um token NOVO para este celular, e leitura enfileirada
     sob o token velho nao sobe mais depois -- some a contagem que o cliente
     pagou para ter. Sem sinal, a saida espera."""
@@ -315,7 +614,7 @@ def test_configurar_recusa_enquanto_ha_leitura_por_subir():
     assert r["filaDepois"] == 2, "a recusa apagou a fila que estava protegendo"
 
 
-def test_configurar_manda_a_fila_antes_de_sair():
+def test_trocar_a_identidade_manda_a_fila_antes_de_sair():
     """Com sinal, a fila sobe e o caminho segue -- a espera acima nao pode
     virar uma porta que nunca abre."""
     r = _configurar(fila=FILA_DE_TESTE, online=True,

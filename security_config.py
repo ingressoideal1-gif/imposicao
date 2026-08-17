@@ -139,6 +139,12 @@ PAINEL_ARQUIVOS = [
     # subiram, e sem essa conta a troca perderia contagem que o cliente pagou
     # para ter. A tela inicial passou a carrega-lo por isso.
     "portaria-deposito.js",
+    # A tela de leitura nova (v615). O aviso sonoro e o relogio de cinco
+    # minutos moram em arquivos proprios porque sao responsabilidades
+    # inteiramente separadas do resto da portaria -- e as duas trabalham
+    # justamente quando nao ha rede.
+    "aviso-sonoro.js",
+    "portaria-sincronismo.js",
     "style.css",
 ]
 

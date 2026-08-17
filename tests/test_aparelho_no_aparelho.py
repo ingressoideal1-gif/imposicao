@@ -197,8 +197,18 @@ def test_a_saida_do_portao_leva_a_lista_onde_a_senha_e_pedida():
 def test_ha_saida_para_reconfigurar_o_aparelho():
     """Sem ela o celular fica preso no portao: com token guardado, a casa do
     aplicativo devolve este aparelho para a leitura, e da leitura nao havia
-    como voltar."""
-    assert 'id="btn-configurar-aparelho"' in _ler("frontend/portaria.html")
+    como voltar.
+
+    QUAL botao faz isso mudou em 16/08/2026. Era o "Configurar este aparelho",
+    no meio da tela de trabalho; passou a ser o `←` do topo, que leva a MESMA
+    lista de eventos -- e de la a engrenagem do evento pede a senha do dono para
+    reconfigurar. O que este teste protege continua sendo o mesmo: que exista
+    uma saida, e que ela va para a lista.
+    """
+    html = _ler("frontend/portaria.html")
+    assert 'id="btn-voltar"' in html
+    assert "controle.html" in _corpo(_ler("frontend/portaria.js"),
+                                     "function voltarParaALista")
 
 
 def test_a_fila_sobe_antes_de_o_aparelho_trocar_de_identidade():

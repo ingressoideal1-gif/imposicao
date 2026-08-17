@@ -10,8 +10,22 @@
  * que e puro e testado com dados de mesa. Este arquivo orquestra: pega o texto
  * lido, calcula os hashes, pergunta ao validador, pinta a tela e enfileira.
  *
- * REGRA QUE GOVERNA ESTA TELA: recusa e recusa. Nao existe "deixar entrar mesmo
- * assim" -- decisao do usuario em 15/08/2026. Quem for recusado procura o dono
+ * ## A tela nova, de 16/08/2026
+ *
+ * O caso comum e o ingresso BOM, e ele deixou de pedir alguma coisa de alguem.
+ * A camera fica ligada, a faixa verde troca de conteudo, o aparelho apita e
+ * vibra curto, e a proxima pessoa passa. Antes, cada leitura desligava a camera
+ * e ocupava a tela: numa noite de dois mil ingressos, dois mil toques em "Ler o
+ * proximo", com uma mao, no escuro.
+ *
+ * Desligar a camera a cada leitura era tambem, sem querer, a protecao contra
+ * ler o mesmo QR duas vezes -- ela le o mesmo codigo cerca de vinte vezes por
+ * segundo enquanto o papel estiver na frente da lente. No lugar dela ficou o
+ * SILENCIO POR CODIGO: ver `silenciado`, que e a peca mais importante deste
+ * arquivo.
+ *
+ * REGRA QUE GOVERNA ESTA TELA: recusa e recusa. Nao existe "deixar entrar assim
+ * mesmo" -- decisao do usuario em 15/08/2026. Quem for recusado procura o dono
  * do evento.
  */
 (function () {
@@ -25,7 +39,29 @@
     // dele. Ver `recarregarDepoisDeConfigurar`.
     var CHAVE_RECONFIG = 'ideal_portaria_reconfigurado';
 
-    var estado = { carga: null, token: null, pendente: null };
+    // Quanto tempo o MESMO codigo fica em silencio depois de lido. Decisao do
+    // usuario, 16/08/2026 (eu havia sugerido 3 segundos). Ver `silenciado`.
+    var SILENCIO_MS = 2000;
+
+    // O teto da conferencia on-line. Estourou, decide-se local e a leitura vai
+    // para a fila como sempre. O portao NUNCA espera rede -- e a mesma regra que
+    // governa o resto desta aplicacao.
+    var TETO_DA_REDE_MS = 800;
+
+    // Quantas paginas de entradas o sincronismo busca de uma vez. Sem isto, um
+    // evento com milhares de entradas andaria uma pagina a cada cinco minutos --
+    // e enquanto ele nao alcancasse, quem ja entrou por outro portao passaria de
+    // novo aqui, calado.
+    var MAXIMO_DE_PAGINAS = 10;
+
+    var estado = {
+        carga: null, token: null, pendente: null,
+        // Quantas entradas ESTE aparelho contou desde o ultimo sincronismo. O
+        // contador da tela soma isto ao total do servidor: entre um sincronismo
+        // e outro, o numero tem de subir a cada pessoa que passa, senao ele fica
+        // cinco minutos parado e o porteiro deixa de acreditar nele.
+        entradasDesdeOSincronismo: 0,
+    };
 
     function $(id) { return document.getElementById(id); }
     function mostrar(qual) {
@@ -35,12 +71,12 @@
         ['aviso', 'carregando', 'lendo', 'resposta', 'ambiguo'].forEach(function (t) {
             $('tela-' + t).classList.toggle('sumindo', t !== qual);
         });
-        // A saida para a configuracao aparece so nas duas telas em que o
-        // aparelho ficaria PRESO sem ela: a de leitura e a de aviso. Nas
-        // outras ela atrapalha -- em `resposta` a tela inteira e a decisao,
-        // lida de longe, e nada pode competir com o "Ler o proximo"; em
-        // `carregando` ainda nao ha o que configurar.
-        $('btn-configurar-aparelho').classList.toggle('sumindo',
+        // O retorno para a lista aparece so nas duas telas em que o aparelho
+        // ficaria PRESO sem ele: a de leitura e a de aviso. Nas outras ele
+        // atrapalha -- em `resposta` a tela inteira e a decisao, lida de longe,
+        // e nada pode competir com o "Ler o proximo"; em `carregando` ainda nao
+        // ha o que abandonar.
+        $('btn-voltar').classList.toggle('sumindo',
             qual !== 'lendo' && qual !== 'aviso');
         $('erro-configurar').classList.add('sumindo');
         // A trava vale nas telas de trabalho -- ler o codigo e mostrar a
@@ -127,6 +163,7 @@
 
     /** A tela de recado, com a frase que explica por que este celular parou. */
     function avisar(frase) {
+        pararDeSincronizar();
         mostrar('aviso');
         $('erro-aviso').textContent = frase;
         $('erro-aviso').classList.remove('sumindo');
@@ -154,7 +191,27 @@
     }
 
     /**
-     * A saida do portao: leva para a lista de eventos.
+     * O retorno para a lista de eventos, no `←` do topo.
+     *
+     * Ele NAO exige fila zerada, e isso e de proposito: a trava que espera a
+     * fila existe para quando o aparelho troca de IDENTIDADE -- vira portao de
+     * outro evento, com token novo, e leitura enfileirada sob o token velho nao
+     * sobe mais. Ir e voltar da lista nao troca token nenhum: a fila continua no
+     * celular e sobe igual quando ele voltar a ler. Prender o porteiro aqui
+     * seria uma trava que nao protege nada e atrapalha o tempo todo.
+     */
+    function voltarParaALista() {
+        if (window.portariaCamera) window.portariaCamera.desligar();
+        pararDeSincronizar();
+        // Sem esperar: a fila sobe quando der, e o que ficar para tras continua
+        // guardado. Segurar a navegacao ate o servidor responder seria fazer o
+        // porteiro esperar rede para trocar de tela.
+        sincronizar();
+        window.location.href = 'controle.html';
+    }
+
+    /**
+     * A saida que TROCA A IDENTIDADE deste celular.
      *
      * Nada e apagado aqui, e nao pode ser -- e essa e a trava inteira. Quem
      * apaga e o dono, do outro lado, depois da senha.
@@ -165,9 +222,16 @@
      * caminho recusa e diz por que -- configurar exige rede de qualquer jeito
      * (e login e gravacao no servidor), entao esperar o sinal nao custa nada
      * que ja nao fosse necessario.
+     *
+     * O BOTAO que a chamava saiu da tela de trabalho em 16/08/2026, junto com o
+     * "Atualizar o evento": o `←` do topo ja leva a mesma lista, e o caminho de
+     * trocar a identidade passa pela engrenagem do evento, que pede a senha do
+     * dono. A funcao fica -- e a unica que sabe conferir a fila antes de o token
+     * mudar, e essa conferencia nao pode se perder.
      */
     function irParaConfiguracao() {
         if (window.portariaCamera) window.portariaCamera.desligar();
+        pararDeSincronizar();
         $('erro-configurar').classList.add('sumindo');
         return sincronizar().then(function () {
             return D.contarFila();
@@ -256,8 +320,8 @@
         // So esquece o token. Carga, fila e entradas continuam no celular.
         localStorage.removeItem(CHAVE_TOKEN);
         estado.token = null;
-        avisar('Este aparelho foi desligado pelo organizador. Use "Configurar '
-            + 'este aparelho" para ligá-lo de novo.');
+        avisar('Este aparelho foi desligado pelo organizador. Peça ao dono do '
+            + 'evento para ligá-lo de novo na tela dele.');
         return Promise.resolve();
     }
 
@@ -282,46 +346,240 @@
         return pagina(0);
     }
 
+    function marcarLanterna(acesa) {
+        var b = $('btn-lanterna');
+        b.classList.toggle('acesa', !!acesa);
+        // O icone nao diz sozinho se a luz esta acesa. O rotulo de acessibilidade
+        // diz -- e e ele que o leitor de tela e o toque longo mostram.
+        b.setAttribute('aria-label', acesa ? 'Apagar a lanterna' : 'Acender a lanterna');
+    }
+
     function ligarCamera() {
         if (!window.portariaCamera) return;
-        // O rotulo volta ao repouso a cada abertura: o `desligar` apaga a
-        // lanterna depois de cada leitura, e um botao dizendo "acesa" com a luz
-        // apagada e pior do que botao nenhum.
-        $('btn-lanterna').textContent = 'Lanterna';
+        // O rotulo volta ao repouso a cada abertura: a lanterna se apaga junto
+        // com a camera, e um botao dizendo "acesa" com a luz apagada e pior do
+        // que botao nenhum.
+        marcarLanterna(false);
+        // `pararAoAchar: false` e o coracao da tela nova: a camera SEGUE ligada
+        // depois de achar um codigo. Quem para a camera agora e esta tela, e so
+        // quando algo ocupa o aparelho -- recusa, escolha de setor, digitacao.
+        //
         // A funcao vai junto: a camera nao conhece mais esta tela pelo nome --
         // ela e usada tambem pela casa do aplicativo, que faz outra coisa com o
-        // texto lido.
-        window.portariaCamera.ligar(validarTexto).then(function () {
-            // So AGORA da para perguntar: antes de o getUserMedia resolver nao
-            // ha trilha de video, e a resposta seria sempre "nao tem".
-            $('btn-lanterna').classList.toggle('sumindo', !window.portariaCamera.temLanterna());
-        });
+        // texto lido, e que continua querendo a camera parada ao achar.
+        window.portariaCamera.ligar(validarTexto, { pararAoAchar: false })
+            .then(function () {
+                // So AGORA da para perguntar: antes de o getUserMedia resolver
+                // nao ha trilha de video, e a resposta seria sempre "nao tem".
+                $('btn-lanterna').classList.toggle(
+                    'sumindo', !window.portariaCamera.temLanterna());
+            });
+    }
+
+    // O porteiro ja tocou na tela nesta abertura da pagina? E o que destrava o
+    // audio -- e o que decide se a capa "Toque para comecar a ler" aparece.
+    var somDestravado = false;
+
+    /**
+     * Abre a leitura de verdade.
+     *
+     * Navegador nenhum toca audio antes de a pessoa encostar na tela, e ler QR
+     * nao conta como encostar. Por isso a capa: um toque, e o aviso sonoro passa
+     * a valer para a noite inteira. Ela reaparece se o porteiro sair da leitura
+     * e voltar, porque sair da pagina leva o `AudioContext` junto.
+     *
+     * A capa NAO volta entre uma recusa e a proxima leitura: o "Ler o proximo"
+     * ja e o toque, e pedir outro seria dois toques para o mesmo gesto.
+     */
+    function comecarALer() {
+        if (!somDestravado) {
+            $('btn-toque').classList.remove('sumindo');
+            return;   // a camera abre no toque, junto com o som
+        }
+        $('btn-toque').classList.add('sumindo');
+        ligarCamera();
     }
 
     function entrarEmLeitura() {
         var c = estado.carga;
         $('topo-aparelho').textContent = c.aparelho.nome;
         $('topo-setores').textContent = c.aparelho.setores.map(function (id) {
-            var s = c.setores.filter(function (x) { return x.id === id; })[0];
+            var s = setorPorId(c, id);
             return s ? s.nome : id;
         }).join(' · ');
-        atualizarFila();
+        atualizarContador();
         mostrar('lendo');
-        ligarCamera();
+        ligarSincronismo();
+        comecarALer();
     }
 
-    function atualizarFila() {
-        return D.contarFila().then(function (n) {
-            // Fila que cresce e o sinal de que a rede caiu. O porteiro precisa
-            // ver isso sem procurar.
-            $('topo-fila').textContent = n ? (n + ' na fila') : '';
+    function setorPorId(carga, id) {
+        return ((carga && carga.setores) || []).filter(function (s) {
+            return s.id === id;
+        })[0] || null;
+    }
+
+    // ── O contador ──────────────────────────────────────────────────────────
+
+    function emPortugues(n) {
+        return Number(n || 0).toLocaleString('pt-BR');
+    }
+
+    /**
+     * `1.234 / 5.000 · 12 nao enviadas`.
+     *
+     * O numerador soma TODOS os setores deste portao -- decisao do usuario,
+     * contra um seletor de setor na tela: um controle a mais para tocar por
+     * engano, no escuro, com a fila andando. Ele conta o que os OUTROS portoes
+     * leram tambem, porque os totais vem do servidor, que e quem enxerga todos.
+     *
+     * O denominador e a quantidade CONTRATADA no ERP, que e a regra do projeto
+     * para lotacao -- nunca um numero digitado por alguem.
+     */
+    function atualizarContador() {
+        return Promise.all([D.contarFila(), D.lerTotais()]).then(function (r) {
+            var naFila = r[0] || 0;
+            var totais = r[1] || {};
+            var c = estado.carga || {};
+            var meus = (c.aparelho && c.aparelho.setores) || [];
+            var entraram = estado.entradasDesdeOSincronismo;
+            var contratado = 0;
+            meus.forEach(function (id) {
+                entraram += Number(totais[id] || 0);
+                var s = setorPorId(c, id);
+                contratado += (s && Number(s.quantidade)) || 0;
+            });
+            $('contador-numeros').textContent =
+                emPortugues(entraram) + ' / ' + emPortugues(contratado);
+            // Some quando zera -- decisao do usuario. Uma marca fixa dizendo
+            // "0 nao enviadas" e ruido no unico numero que o porteiro olha.
+            $('contador-pendentes').textContent = naFila
+                ? (' · ' + emPortugues(naFila)
+                    + (naFila === 1 ? ' não enviada' : ' não enviadas'))
+                : '';
+        }).catch(function () {
+            // IndexedDB fora do ar. O contador some, e a leitura segue: numero
+            // errado na tela e pior que numero nenhum.
+        });
+    }
+
+    // ── O sincronismo de cinco minutos ──────────────────────────────────────
+
+    /**
+     * A rota leve, paginada.
+     *
+     * Ela desce so o que muda -- evento, setores, bloqueios, as entradas de
+     * QUALQUER aparelho e os totais do contador. A lista de ingressos, que e a
+     * parte pesada, continua vindo so pelo `/faixa`.
+     */
+    function pedirNovidades(desde) {
+        if (!estado.token || !navigator.onLine) return Promise.resolve(null);
+        var entradas = [];
+        function pagina(daqui, quantas) {
+            var caminho = '/sincronizar'
+                + (daqui ? '?desde=' + encodeURIComponent(daqui) : '');
+            return api(caminho).then(function (p) {
+                entradas = entradas.concat(p.entradas || []);
+                if (p.proxima_desde && quantas < MAXIMO_DE_PAGINAS) {
+                    return pagina(p.proxima_desde, quantas + 1);
+                }
+                p.entradas = entradas;
+                // Onde o PROXIMO tique comeca. Vem do relogio do SERVIDOR, e nao
+                // deste celular: um aparelho adiantado pularia as entradas
+                // registradas no intervalo, e a mesma pessoa entraria duas
+                // vezes, calada, por dois portoes. Sem entrada nenhuma, fica
+                // nulo e o proximo pedido baixa tudo de novo -- sao poucos kB, e
+                // baixar demais e sempre melhor que baixar de menos aqui.
+                p.momento = entradas.length
+                    ? entradas[entradas.length - 1].momento : null;
+                return p;
+            });
+        }
+        return pagina(desde, 1);
+    }
+
+    /** Guarda o que a rota leve trouxe, sem perder nada do que ja havia. */
+    function aplicarNovidades(novidade) {
+        var S = window.portariaSincronismo;
+        if (!S || !novidade) return Promise.resolve();
+        var nova = S.aplicar(estado.carga, novidade);
+        estado.carga = nova;
+        var deFora = {};
+        (novidade.entradas || []).forEach(function (e) {
+            if (e && e.credencial_id && e.momento) deFora[e.credencial_id] = e.momento;
+        });
+        return D.gravarCarga(nova).then(function () {
+            return D.gravarEntradas(deFora);
+        }).then(function () {
+            return D.gravarTotais(novidade.totais || {});
+        }).then(function () {
+            // O servidor ja enxerga o que este aparelho vinha somando a mao:
+            // continuar somando contaria as mesmas pessoas duas vezes. Leitura
+            // feita sem sinal entra na conta assim que a fila subir e o
+            // sincronismo seguinte a contar.
+            estado.entradasDesdeOSincronismo = 0;
+            return atualizarContador();
+        });
+    }
+
+    function ligarSincronismo() {
+        if (window.portariaSincronismo) {
+            window.portariaSincronismo.ligar(pedirNovidades, aplicarNovidades);
+        }
+    }
+
+    function pararDeSincronizar() {
+        if (window.portariaSincronismo) window.portariaSincronismo.desligar();
+    }
+
+    /** Um tique agora, fora do relogio. E o caminho que os testes exercitam. */
+    function puxarNovidades() {
+        return pedirNovidades(null).then(aplicarNovidades).catch(function () {
+            // Sincronismo que falha nao interrompe nada e nao muda a tela: o
+            // portao segue lendo com o que tem e tenta de novo em cinco minutos.
         });
     }
 
     // ── A leitura ───────────────────────────────────────────────────────────
 
+    // Quando cada codigo apareceu pela ultima vez na frente da lente.
+    var vistos = {};
+
+    /**
+     * O mesmo codigo e ignorado por 2 segundos. E a peca que substituiu o
+     * desligar-a-camera-a-cada-leitura.
+     *
+     * A camera le o mesmo QR cerca de vinte vezes por segundo enquanto o papel
+     * estiver na frente da lente. Sem este silencio, o segundo disparo cairia na
+     * regra `ja_entrou` e pintaria a tela de VERMELHO para um ingresso BOM, um
+     * piscar depois do verde -- e o porteiro devolveria quem tinha direito de
+     * entrar. E o pior resultado possivel desta tela.
+     *
+     * O silencio e POR CODIGO, e nao por tempo de tela: outro ingresso,
+     * diferente, passa na hora. E a contagem recomeca a cada aparicao, e nao so
+     * na que valeu -- o papel fica na frente da lente por segundos e a camera
+     * insiste; com a contagem parada na primeira leitura, a insistencia venceria
+     * o silencio e o vermelho apareceria assim mesmo.
+     */
+    function silenciado(texto) {
+        var agora = Date.now();
+        var visto = vistos[texto];
+        // Limpeza: sem ela o mapa guardaria um item por ingresso lido a noite
+        // inteira. So sobrevive quem apareceu nos ultimos dois segundos.
+        Object.keys(vistos).forEach(function (k) {
+            if (agora - vistos[k] >= SILENCIO_MS) delete vistos[k];
+        });
+        vistos[texto] = agora;
+        return visto !== undefined && (agora - visto) < SILENCIO_MS;
+    }
+
     function validarTexto(texto, setorEscolhido) {
         var carga = estado.carga;
+        // A escolha de setor passa por fora do silencio, de proposito: o texto e
+        // exatamente o que a camera acabou de ler, e o porteiro acabou de tocar
+        // no botao. Sem esta saida, a propria escolha dele cairia no silencio e
+        // a tela nao responderia nada.
+        if (!setorEscolhido && silenciado(texto)) return Promise.resolve();
         // TUDO dentro da cadeia de promise, inclusive o primeiro calculo --
         // sem isto um erro SINCRONO (ex.: `saisParaTentar` recebendo carga
         // incompleta) escapava do .catch la embaixo e a tela nao mudava:
@@ -345,7 +603,12 @@
                     estado.pendente = { texto: texto };
                     return perguntarSetor(v.candidatos);
                 }
-                return registrar(v).then(function () { return pintar(v); });
+                var leitura = leituraDe(v);
+                return conferirNaRede(v, leitura).then(function (decidido) {
+                    return registrar(leitura).then(function () {
+                        return anunciar(decidido);
+                    });
+                });
             })
             .catch(function (e) {
                 // Qualquer excecao daqui para cima -- IndexedDB sem espaco,
@@ -353,23 +616,30 @@
                 // MESMO sintoma: porteiro le o QR, tela nao muda. Um erro
                 // visivel e infinitamente melhor que um silencio.
                 console.error('erro ao validar leitura da portaria:', e);
-                pintar({ estado: 'negado', motivo: 'erro_de_leitura', setor: null, detalhe: {} });
+                anunciar({ estado: 'negado', motivo: 'erro_de_leitura', setor: null, detalhe: {} });
             });
     }
 
     function perguntarSetor(candidatos) {
+        // Escolher ocupa o aparelho: a camera para, como em qualquer recusa.
+        // Sem isto ela seguiria lendo por tras da pergunta e responderia outra
+        // coisa por cima.
+        if (window.portariaCamera) window.portariaCamera.desligar();
         var caixa = $('escolha-setores');
         caixa.innerHTML = '';
         candidatos.forEach(function (c) {
             var b = document.createElement('button');
+            // textContent, sempre: o nome do setor e escrito pelo dono do evento.
             b.textContent = c.setor.nome;
             b.onclick = function () {
                 mostrar('lendo');
+                comecarALer();
                 validarTexto(estado.pendente.texto, c.setor.id);
             };
             caixa.appendChild(b);
         });
         mostrar('ambiguo');
+        avisarBarrado();
     }
 
     function uuid() {
@@ -382,15 +652,83 @@
         }).join('');
     }
 
-    function registrar(v) {
-        return D.enfileirar({
+    function leituraDe(v) {
+        return {
             id_local: uuid(),
             momento: new Date().toISOString(),
             credencial_id: v.credencial_id || null,
             setor_id: (v.setor && v.setor.id) || null,
             resultado: v.estado === 'permitido' ? 'permitido' : 'negado',
             motivo: v.motivo || null,
-        }).then(atualizarFila).then(function () { sincronizar(); });
+        };
+    }
+
+    /**
+     * A conferencia on-line, com teto de 800 ms.
+     *
+     * Cinco minutos de sincronismo e tempo de sobra para a mesma pessoa entrar
+     * por dois portoes. Com sinal isso fecha: o servidor registra a entrada SO
+     * se ainda nao houver uma, numa operacao so, e responde qual das duas coisas
+     * aconteceu. Quem perde a corrida ouve `ja_entrou`, com a hora e o nome do
+     * portao que ganhou.
+     *
+     * Se o servidor nao responder em 800 ms, o aparelho decide sozinho com o que
+     * tem e a leitura segue para a fila como sempre. O portao NUNCA espera rede.
+     *
+     * So o caminho PERMITIDO passa por aqui. Recusa ja travou a tela, e nao ha
+     * entrada nenhuma a reivindicar -- mandar a leitura negada pela fila, como
+     * sempre foi, custa menos ao porteiro que uma espera na frente do vermelho.
+     */
+    function conferirNaRede(v, leitura) {
+        if (v.estado !== 'permitido' || !estado.token || !navigator.onLine) {
+            return Promise.resolve(v);
+        }
+        return comTeto(api('/entrada', {
+            method: 'POST', body: JSON.stringify(leitura),
+        })).then(function (r) {
+            if (!r || r.primeira !== false) return v;
+            var a = r.anterior || {};
+            // A fila leva o veredito do SERVIDOR, e nao o local: e ele que vale.
+            leitura.resultado = 'negado';
+            leitura.motivo = 'ja_entrou';
+            return {
+                estado: 'negado', motivo: 'ja_entrou',
+                setor: v.setor, numero: v.numero,
+                credencial_id: v.credencial_id,
+                detalhe: { momentoAnterior: a.momento, portaoAnterior: a.portao },
+            };
+        });
+    }
+
+    /** A promessa, ou `null` quando o tempo estourou. Nunca lanca. */
+    function comTeto(promessa) {
+        return new Promise(function (ok) {
+            var decidido = false;
+            var relogio = setTimeout(function () {
+                if (decidido) return;
+                decidido = true;
+                ok(null);
+            }, TETO_DA_REDE_MS);
+            promessa.then(function (r) {
+                if (decidido) return;
+                decidido = true;
+                clearTimeout(relogio);
+                ok(r);
+            }).catch(function () {
+                if (decidido) return;
+                decidido = true;
+                clearTimeout(relogio);
+                ok(null);
+            });
+        });
+    }
+
+    function registrar(leitura) {
+        // Somada aqui, e nao ao pintar: e a leitura GRAVADA que conta. Zerada a
+        // cada sincronismo, quando o numero do servidor passa a incluir esta.
+        if (leitura.resultado === 'permitido') estado.entradasDesdeOSincronismo += 1;
+        return D.enfileirar(leitura).then(atualizarContador)
+            .then(function () { sincronizar(); });
     }
 
     var TITULOS = {
@@ -409,6 +747,51 @@
         catch (e) { return iso; }
     }
 
+    function avisarPassagem() {
+        // Enfeite, e enfeite nao pode derrubar a leitura: o modulo inteiro do
+        // aviso trabalha em try/catch, e aqui basta ele existir.
+        if (window.avisoSonoro) window.avisoSonoro.liberado();
+    }
+
+    function avisarBarrado() {
+        if (window.avisoSonoro) window.avisoSonoro.barrado();
+    }
+
+    function anunciar(v) {
+        if (v.estado === 'permitido') return anunciarPassagem(v);
+        return anunciarRecusa(v);
+    }
+
+    /**
+     * O caminho feliz: a faixa verde troca, o aparelho apita curto, e a camera
+     * SEGUE ligada. Ninguem toca em nada.
+     */
+    function anunciarPassagem(v) {
+        var setor = v.setor || {};
+        var faixa = $('faixa-ultima');
+        faixa.classList.remove('vazia');
+        // textContent, sempre: o nome do setor e escrito pelo dono do evento.
+        // A hora entra por decisao do usuario -- numa fila rapida, sem ela o
+        // porteiro nao distingue "acabou de passar" de "isto e de trinta
+        // segundos atras".
+        faixa.textContent = (setor.nome || 'Ingresso') + ' · ' + v.numero
+            + ' · ' + hora(new Date().toISOString());
+        avisarPassagem();
+    }
+
+    /**
+     * A recusa: a cor ocupa a tela, o motivo aparece grande, o aparelho apita
+     * longo e vibra duas vezes, e o porteiro toca em "Ler o proximo". E a unica
+     * forma de garantir que ele viu.
+     */
+    function anunciarRecusa(v) {
+        // A camera para: a tela inteira e a decisao, e ler por tras dela
+        // responderia outro ingresso por cima deste.
+        if (window.portariaCamera) window.portariaCamera.desligar();
+        pintar(v);
+        avisarBarrado();
+    }
+
     function pintar(v) {
         var caixa = $('resposta-caixa');
         var d = v.detalhe || {};
@@ -423,19 +806,17 @@
         // "ingresso bom, porta errada -- mande a pessoa para a outra fila".
         // `evento_inativo` e `setor_bloqueado` sao vermelhos porque, neles, o
         // ingresso nao entra em porta nenhuma.
+        //
+        // Nao ha mais ramo verde aqui: o ingresso bom nao ocupa a tela desde
+        // 16/08/2026 -- ele troca a faixa em `anunciarPassagem` e a camera segue.
         caixa.className = 'resposta ' + (
-            v.estado === 'permitido' ? 'ok' :
             v.motivo === 'setor_nao_autorizado' ? 'porta' : 'recusa');
-        $('resposta-marca').textContent = v.estado === 'permitido' ? '✓' : '✕';
-        $('resposta-titulo').textContent = v.estado === 'permitido'
-            ? 'PODE ENTRAR' : TITULOS[v.motivo] || 'RECUSADO';
+        $('resposta-marca').textContent = '✕';
+        $('resposta-titulo').textContent = TITULOS[v.motivo] || 'RECUSADO';
         $('resposta-grande').textContent = '';
         $('resposta-motivo').textContent = '';
 
-        if (v.estado === 'permitido') {
-            $('resposta-detalhe').textContent = setor.nome;
-            $('resposta-grande').textContent = 'nº ' + v.numero;
-        } else if (v.motivo === 'evento_inativo') {
+        if (v.motivo === 'evento_inativo') {
             // Nao ha setor nem numero a mostrar: a recusa e do evento inteiro,
             // e vem antes de o aparelho saber de que ingresso se trata.
             $('resposta-detalhe').textContent =
@@ -458,8 +839,12 @@
             $('resposta-detalhe').textContent = setor.nome + ' · nº ' + v.numero;
             $('resposta-motivo').textContent = d.motivoBloqueio;
         } else if (v.motivo === 'ja_entrou') {
+            // O portao anterior so existe quando quem decidiu foi o SERVIDOR --
+            // e a recusa mais dificil de explicar na frente da pessoa, e sem o
+            // nome do portao ela vira "nao sei, o sistema nao deixou".
             $('resposta-detalhe').textContent =
-                setor.nome + ' · nº ' + v.numero + ' — entrou às ' + hora(d.momentoAnterior);
+                setor.nome + ' · nº ' + v.numero + ' — entrou às ' + hora(d.momentoAnterior)
+                + (d.portaoAnterior ? (' no ' + d.portaoAnterior) : '');
         } else if (v.motivo === 'erro_de_leitura') {
             $('resposta-detalhe').textContent = 'Erro ao ler — chame o organizador.';
         } else {
@@ -483,7 +868,7 @@
                 // So AGORA sai da fila. Remover antes seria perder leitura
                 // quando a resposta se perde no caminho.
                 return D.removerDaFila(lote.map(function (l) { return l.id_local; }));
-            }).then(atualizarFila);
+            }).then(atualizarContador);
         }).catch(function (e) {
             if (e.status === 401) return aparelhoRevogado();
         }).then(function () { sincronizando = false; });
@@ -494,61 +879,63 @@
 
     // ── Amarração da tela ───────────────────────────────────────────────────
 
-    $('btn-proximo').onclick = function () {
-        mostrar('lendo');
+    $('btn-toque').onclick = function () {
+        // O gesto que o navegador exige para o audio existir. Ele vale para a
+        // pagina inteira, e nao so para este toque.
+        if (window.avisoSonoro) window.avisoSonoro.liberar();
+        somDestravado = true;
+        $('btn-toque').classList.add('sumindo');
         ligarCamera();
     };
 
+    $('btn-voltar').onclick = voltarParaALista;
+
+    $('btn-proximo').onclick = function () {
+        mostrar('lendo');
+        comecarALer();
+    };
+
     $('btn-lanterna').onclick = function () {
-        window.portariaCamera.alternarLanterna().then(function (acesa) {
-            // O rotulo diz o ESTADO, nao a acao: no escuro, com a fila andando,
-            // "Lanterna acesa" se le mais rapido que "Apagar".
-            $('btn-lanterna').textContent = acesa ? 'Lanterna acesa' : 'Lanterna';
-        });
+        window.portariaCamera.alternarLanterna().then(marcarLanterna);
     };
 
     $('btn-digitar').onclick = function () {
-        $('caixa-digitar').classList.toggle('sumindo');
-        $('campo-numero').focus();
+        var caixa = $('caixa-digitar');
+        var abrindo = caixa.classList.contains('sumindo');
+        caixa.classList.toggle('sumindo');
+        if (abrindo) {
+            // A camera para enquanto a caixa esta aberta. Ela continua lendo com
+            // o <video> na tela, e um QR que entre no quadro no meio da
+            // digitacao responderia por cima do numero digitado -- sem que nada
+            // avise a qual ingresso a tela esta respondendo.
+            if (window.portariaCamera) window.portariaCamera.desligar();
+            $('campo-numero').focus();
+        } else {
+            comecarALer();
+        }
     };
 
     $('btn-conferir').onclick = function () {
         var t = ($('campo-numero').value || '').trim();
         if (!t) return;
         $('campo-numero').value = '';
-        // A camera continua ligada enquanto o <video> fica escondido -- sem
-        // desligar aqui, ela pode pegar outro QR no meio da digitacao e
-        // pintar a tela com a resposta ERRADA por cima da certa, meio
-        // segundo depois. achou() (camera) ja desliga antes de validar;
-        // aqui tem de ser igual. Achado em revisao de codigo, 15/08/2026.
+        // Desligar aqui tambem, e nao so ao abrir a caixa: e a ultima linha
+        // antes de validar, e e a que garante que a camera nao responde por cima
+        // desta leitura. Achado em revisao de codigo, 15/08/2026.
         if (window.portariaCamera) window.portariaCamera.desligar();
+        $('caixa-digitar').classList.add('sumindo');
         // Passa pelas MESMAS seis regras. Digitar nao e atalho -- e outra forma
         // de entrada, para o ingresso rasgado e para o codigo de barras que o
         // navegador do iPhone nao le.
-        validarTexto(t);
-    };
-
-    $('btn-atualizar-evento').onclick = function () {
-        // Sem este botao, um bloqueio criado pelo dono DEPOIS do pareamento
-        // nunca chegava a este aparelho -- a regra 4 so valia para quem
-        // pareou depois do bloqueio existir. Achado em revisao de codigo,
-        // 15/08/2026.
-        if (window.portariaCamera) window.portariaCamera.desligar();
-        baixarCarga().catch(function () {
-            // Uma atualizacao que falha NAO pode jogar o porteiro para a
-            // tela de recado -- o aparelho ja e portao e esta
-            // funcionando, so a atualizacao e que nao completou. Volta para
-            // a leitura com a carga que ja tinha (baixarCarga so grava a
-            // carga NOVA depois que TODAS as paginas chegam; uma pagina que
-            // falha no meio nao troca nada no que ja estava salvo).
-            entrarEmLeitura();
+        //
+        // Fora do silencio de 2 segundos, de proposito: quem digitou quer uma
+        // resposta, mesmo que seja o mesmo numero de novo.
+        delete vistos[t];
+        validarTexto(t).then(function () {
+            // A camera volta quando a tela continua sendo a de leitura. Depois
+            // de uma recusa quem a religa e o "Ler o proximo".
+            if (!$('tela-lendo').classList.contains('sumindo')) comecarALer();
         });
-    };
-
-    $('btn-configurar-aparelho').onclick = function () {
-        var botao = $('btn-configurar-aparelho');
-        botao.disabled = true;
-        irParaConfiguracao().then(function () { botao.disabled = false; });
     };
 
     // ── Partida ─────────────────────────────────────────────────────────────
@@ -592,6 +979,7 @@
     window.portaria = {
         estado: estado, validarTexto: validarTexto,
         sincronizar: sincronizar, desparear: desparear,
+        puxarNovidades: puxarNovidades,
     };
 
     // Depois do `window.portaria`, de proposito: o arranque pode navegar para

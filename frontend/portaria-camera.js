@@ -16,6 +16,12 @@
 
     var video = null, canvas = null, ctx = null, detector = null;
     var rodando = false, ultimo = '', ultimoEm = 0;
+    // A camera para sozinha ao achar um codigo? A casa do aplicativo quer que
+    // sim -- ela le UM QR e vai embora. A portaria, desde 16/08/2026, quer que
+    // nao: a camera fica ligada e a fila anda sem ninguem tocar em nada. O
+    // padrao e o comportamento antigo, para que quem nao pedir nada continue
+    // recebendo o que sempre recebeu.
+    var pararAoAchar = true;
     // O fluxo em variavel propria, e nao so em `video.srcObject`: o `desligar`
     // precisa apagar a lanterna DEPOIS de soltar o video da tela e ANTES de
     // parar a trilha, e nesse meio o `srcObject` ja foi a nulo.
@@ -26,9 +32,10 @@
     // nome daqui fazia deste arquivo o leitor de UMA tela so.
     var aoLerAtual = null;
 
-    function ligar(aoLer) {
+    function ligar(aoLer, opcoes) {
         if (rodando) return Promise.resolve();
         aoLerAtual = aoLer || null;
+        pararAoAchar = !opcoes || opcoes.pararAoAchar !== false;
         rodando = true;
         video = document.getElementById('cam');
         canvas = canvas || document.createElement('canvas');
@@ -105,9 +112,17 @@
         // O mesmo ingresso fica na frente da camera por segundos. Sem esta
         // trava a tela dispararia dezenas de leituras iguais e a fila encheria
         // de lixo.
-        if (texto === ultimo && agora - ultimoEm < 3000) return;
+        //
+        // A contagem recomeca a CADA aparicao, e nao so na que valeu. Com ela
+        // parada na primeira leitura, o papel deixado na frente da lente
+        // disparava de novo tres segundos depois -- e, com a camera agora ligada
+        // o tempo todo, esse disparo cairia em `ja_entrou` e pintaria a tela de
+        // VERMELHO para um ingresso BOM. Assim, o codigo so volta a valer tres
+        // segundos depois de SAIR do quadro.
+        var repetido = texto === ultimo && agora - ultimoEm < 3000;
         ultimo = texto; ultimoEm = agora;
-        desligar();
+        if (repetido) return;
+        if (pararAoAchar) { desligar(); }
         if (aoLerAtual) { aoLerAtual(texto); }
     }
 

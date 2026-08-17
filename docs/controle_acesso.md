@@ -35,7 +35,7 @@ Agente (tem o pool)  ──hash──►  Render (service_role)  ──►  Supa
                               evento.html (página no celular)
 ```
 
-**Nenhuma chave de banco chega ao celular nem ao navegador.** As nove tabelas
+**Nenhuma chave de banco chega ao celular nem ao navegador.** As dez tabelas
 `producao_acesso_*` nasceram com RLS ligado e **zero políticas**: com a chave anônima —
 que é pública e qualquer um lê no código-fonte do painel — não se lê nem se escreve uma
 linha. Conferido contra o banco em 13/08/2026 para as sete primeiras (a `_bloqueios` veio
@@ -500,7 +500,7 @@ só mostra qual serviço achou, sem gravar.
 > assinatura) e põe na área de transferência **sem mostrar na tela**. Com `-Conferir`, só
 > confere.
 
-## As nove tabelas
+## As dez tabelas
 
 Nasceram em [sql/schema_acesso.sql](../sql/schema_acesso.sql), pronto para colar, mais as
 migrações que vieram depois.
@@ -514,6 +514,8 @@ migrações que vieram depois.
 | `reparo_acesso_credenciais_orfas.sql` | conserto pontual das credenciais sem evento/setor | sim |
 | `reparo_acesso_total_publicado.sql` | recalcula `total_credenciais` de cada pedido a partir do que existe | sim |
 | `schema_acesso_freio_pareamento.sql` | a **nona** tabela, `_falhas_pareamento`: o freio de forca bruta do pareamento, que ate 16/08/2026 vivia na memoria do processo | sim |
+| `schema_acesso_setor_bloqueado.sql` | `bloqueado`/`bloqueado_motivo` nos setores: desligar o setor INTEIRO, e nao so uma faixa de numeros | sim |
+| `schema_acesso_entradas_unicas.sql` | a **decima** tabela, `_entradas_unicas`: e ela que decide, no banco, qual de dois portoes registrou a entrada primeiro | sim |
 
 **Por que os dois primeiros não devem ser recolados:** os dois contêm
 `CREATE UNIQUE INDEX IF NOT EXISTS uq_acesso_credencial_hash_simples … (codigo_hash)` — a
@@ -528,6 +530,7 @@ ingressos do 20508.
 | `_pedidos` | sal, token do QR e estado da publicação. Nasce **antes** do evento |
 | `_setores` | um por modelo; a lotação É a `quantidade` do ERP. Existe uma coluna `lotacao`, herdada do desenho de 13/08, **nula em todas as linhas e ignorada pela API e pela tela** — não use. `abre_em`/`fecha_em` = janela em que o setor vale; nulo = sempre |
 | `_bloqueios` | faixas de ingresso recusadas na porta: `de`, `ate`, `motivo`. A faixa é um intervalo de `credenciais.numero`, e o motivo é o que a portaria lê em voz alta |
+| `_entradas_unicas` | uma linha por credencial que JA ENTROU, so para setor de entrada unica. A chave primaria e o mecanismo: `ON CONFLICT DO NOTHING` decide a corrida entre dois portoes numa operacao so. Perguntar "ja existe?" e so entao gravar sao duas consultas que podem se cruzar, e os dois entram. Setor de reentrada nao tem linha aqui, por desenho |
 | `_falhas_pareamento` | uma linha por tentativa errada de pareamento, com `evento_id` e `momento`. Dez em cinco minutos fecham o pareamento daquele evento. Mora no banco, e não na memória do processo, porque a Edge Function é stateless — e porque enquanto as duas versões conviverem elas precisam contar no mesmo lugar |
 | `_credenciais` | `codigo_hash` sempre; `codigo_visivel` só quando `origem='cliente'`; `evento_id`/`setor_id` quando o pedido já foi reivindicado. **`origem` só separa agente de cliente**: o agente grava `qr_ideal` em toda credencial, inclusive nas de QR e barras comuns — o tipo de código se lê pela numeração do modelo, não por aqui |
 | `_dispositivos` | os aparelhos da portaria (parte 3a — já em uso pela tela do dono) |
