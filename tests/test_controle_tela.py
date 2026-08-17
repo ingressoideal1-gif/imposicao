@@ -2964,3 +2964,70 @@ def test_a_lista_se_refaz_ANTES_de_a_sessao_sair():
     assert saida["ordem"] == ["meus-eventos", "signOut"], (
         "a lista se refez sem conta, ou nem se refez"
     )
+
+
+def test_inativar_um_evento_NAO_encosta_no_outro():
+    """O dono relatou em 17/08/2026 que ativar ou inativar mexia em TODOS.
+
+    O banco desmentiu (os eventos dele tinham status diferentes entre si), mas
+    "nao reproduzi" nao e prova. Este teste e a prova: com dois eventos na
+    lista, inativar um tem de mandar UMA gravacao, para UM id, e a barra do
+    outro tem de continuar como estava."""
+    saida = _no_navegador("""
+        localStorage.setItem('ideal_control_portoes', JSON.stringify([
+            { evento_id: 'ev-1', nome_evento: 'Click', aparelho_id: 'a1',
+              nome_portao: 'Portão 1', token: 't-1' },
+            { evento_id: 'ev-2', nome_evento: 'Teste 2', aparelho_id: 'a2',
+              nome_portao: 'Portão 1', token: 't-2' },
+        ]));
+        const status = { 'ev-1': 'ativo', 'ev-2': 'ativo' };
+        AcessoConta.pedir = async (caminho) => {
+            if (caminho === '/meus-eventos') {
+                return { eventos: [
+                    { id: 'ev-1', nome_evento: 'Click', status: status['ev-1'] },
+                    { id: 'ev-2', nome_evento: 'Teste 2', status: status['ev-2'] },
+                ] };
+            }
+            return { evento: { id: 'ev-1', nome_evento: 'Click', status: status['ev-1'] },
+                     setores: [], aparelhos: [] };
+        };
+        await listaEventos.recarregar();
+        const antes2 = document.querySelector('#evento-ev-2 .luz').className;
+
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        await Controle.carregarPainel();
+        Controle.estado.painel.evento.status = 'ativo';
+        Controle.desenhar();
+
+        const gravacoes = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            gravacoes.push({ caminho, corpo: JSON.parse(opcoes.body) });
+            // O servidor muda SO o evento pedido -- e o que a Edge Function faz.
+            const id = caminho.split('/').pop();
+            status[id] = JSON.parse(opcoes.body).status;
+            return { ok: true };
+        };
+        document.getElementById('btn-ativar-evento').click();
+        await new Promise(r => setTimeout(r, 80));
+        document.getElementById('btn-confirmar-sim').click();
+        await new Promise(r => setTimeout(r, 200));
+        await Controle.fecharEngrenagem();
+        await new Promise(r => setTimeout(r, 250));
+
+        return {
+            gravacoes, antes2,
+            luz1: document.querySelector('#evento-ev-1 .luz').className,
+            luz2: document.querySelector('#evento-ev-2 .luz').className,
+            texto2: document.querySelector('#evento-ev-2').textContent,
+        };
+    """)
+    assert len(saida["gravacoes"]) == 1, (
+        "mandou mais de uma gravacao: " + str(saida["gravacoes"])
+    )
+    assert saida["gravacoes"][0]["caminho"] == "/eventos/ev-1"
+    assert saida["gravacoes"][0]["corpo"] == {"status": "encerrado"}
+    assert "inativa" in saida["luz1"], "o evento inativado nao ficou vermelho"
+    assert saida["luz2"] == saida["antes2"], "a barra do OUTRO evento mudou"
+    assert "inativo" not in saida["texto2"], "o outro evento foi marcado inativo"
