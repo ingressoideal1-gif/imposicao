@@ -647,7 +647,8 @@ async function reivindicar(
  * Carregar um pedido: o que "Meus Pedidos" faz. A senha vai no corpo porque
  * carregar e configuracao, e configuracao pede senha -- e e essa senha que
  * deixa o passo seguinte (ligar este aparelho) acontecer sem pedir outra: a
- * resposta traz a elevacao de 15 minutos do evento resultante.
+ * resposta traz a elevacao de 15 minutos do evento resultante, ou `null` se a
+ * elevacao falhar depois que o evento ja foi criado (ver comentario abaixo).
  */
 async function carregar(
   pedido: number,
@@ -677,6 +678,15 @@ async function carregar(
   )) ?? [])[0];
   if (linha?.evento_id) throw new Recusa(409, "este pedido ja esta num evento");
 
+  // Confere o navegador ANTES de qualquer escrita, e nao so quando
+  // `gerarElevacao` o exigir la na frente: o mesmo formato de
+  // `conferirIdentificadores` (assinatura.ts), so que aqui vira 422 e nao um
+  // 500 generico depois que o evento ja existe -- ver o try/catch no fim.
+  const navegador = String(corpo?.navegador ?? "");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(navegador)) {
+    throw new Recusa(422, "navegador invalido");
+  }
+
   await exigirSegredo(SEGREDO_ELEVACAO);
   if (!(await conferirSenha(usuario.email ?? "", String(corpo?.senha ?? "")))) {
     throw new Recusa(401, "senha nao confere");
@@ -689,8 +699,18 @@ async function carregar(
     clientes,
     { data_evento: corpo?.data_evento ?? null, local_evento: corpo?.local_evento ?? null },
   );
-  const { token, expira } = await gerarElevacao(r.evento_id, usuario.id, String(corpo?.navegador ?? ""));
-  return { ...r, elevacao: { token, expira_em: expira, minutos: 15 } };
+  // O evento (e os setores, e o vinculo do pedido) ja estao gravados neste
+  // ponto. Se a elevacao falhar daqui pra frente, o pedido NAO pode voltar a
+  // parecer "nao carregado" -- isso e o que faria o proximo retry esbarrar
+  // para sempre no 409 "ja esta num evento", sem saber qual evento e esse.
+  // Perder so a elevacao e recuperavel: a tela pode pedir a senha de novo em
+  // `POST /eventos/{id}/elevar`.
+  try {
+    const { token, expira } = await gerarElevacao(r.evento_id, usuario.id, navegador);
+    return { ...r, elevacao: { token, expira_em: expira, minutos: 15 } };
+  } catch {
+    return { ...r, elevacao: null };
+  }
 }
 
 // ── Roteamento ──────────────────────────────────────────────────────────────
