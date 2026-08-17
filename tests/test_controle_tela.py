@@ -2857,6 +2857,10 @@ def test_o_olho_abre_o_menu_e_tira_a_tela_inicial_INTEIRA_do_caminho():
     sobrava em cima dos eventos finalizados, oferecendo ler um QR numa tela que
     não é a de ler QR."""
     saida = _no_navegador("""
+        // A casa abre na tela de entrar quando nao ha aparelho nem sessao, e o
+        // olho e mudo ali de proposito. O menu se exercita a partir da tela
+        // inicial, que e onde ele existe.
+        window.conta.esconderEntrar();
         document.getElementById('btn-menu-geral').click();
         await new Promise(r => setTimeout(r, 120));
         const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
@@ -2878,6 +2882,10 @@ def test_o_olho_ALTERNA_e_o_voltar_tambem_traz_a_tela_inicial_de_volta():
     existindo porque é o rótulo em TEXTO, e nem todo mundo percebe que um ícone
     é um interruptor."""
     saida = _no_navegador("""
+        // A casa abre na tela de entrar quando nao ha aparelho nem sessao, e o
+        // olho e mudo ali de proposito. O menu se exercita a partir da tela
+        // inicial, que e onde ele existe.
+        window.conta.esconderEntrar();
         const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
         document.getElementById('btn-menu-geral').click();
         await new Promise(r => setTimeout(r, 80));
@@ -2904,6 +2912,10 @@ def test_abrir_o_menu_DESLIGA_a_camera_do_QR():
     """Sair da tela sem desligá-la deixa o aparelho filmando e gastando bateria
     num painel onde não há o que ler."""
     saida = _no_navegador("""
+        // A casa abre na tela de entrar quando nao ha aparelho nem sessao, e o
+        // olho e mudo ali de proposito. O menu se exercita a partir da tela
+        // inicial, que e onde ele existe.
+        window.conta.esconderEntrar();
         let desligou = 0;
         const antes = window.lerQR.fechar;
         window.lerQR.fechar = function () { desligou++; return antes.apply(this, arguments); };

@@ -286,3 +286,56 @@ def test_sair_da_conta_com_aparelho_no_chaveiro_deixa_a_lista():
     assert saida["saiu"] is True
     assert saida["entrarVisivel"] is False
     assert saida["listaVisivel"] is True
+
+
+def test_a_lista_nao_reaparece_atras_da_troca_obrigatoria():
+    """A fuga que sobrou da primeira rodada, e ela nao precisava de nenhum
+    toque: o `esconderEntrar()` roda a cada `carregar()` com sessao, entao o
+    SEGUNDO `recarregar()` devolvia `#lista` e `#bloco-novo-evento` atras do
+    portao -- em fluxo normal, tocaveis. A pessoa nem via que estava escapando.
+    """
+    saida = _no_navegador(DESVIO + """
+        window.__minhaConta.precisa_trocar_senha = true;
+        await window.listaEventos.recarregar();
+        await new Promise(r => setTimeout(r, 60));
+        await window.listaEventos.recarregar();
+        await new Promise(r => setTimeout(r, 60));
+        const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
+        return { lista: sumiu('lista'), novoEvento: sumiu('bloco-novo-evento'),
+                 portaoNaFrente: !sumiu('trocar-senha') };
+    """)
+    assert saida["portaoNaFrente"] is True
+    assert saida["lista"] is True, "a lista reapareceu atras do portao"
+    assert saida["novoEvento"] is True, '"Novo Evento" reapareceu atras do portao'
+
+
+def test_o_olho_nao_abre_o_menu_por_baixo_da_tela_de_entrar():
+    """O menu nascia ATRAS do cartao de login: o painel abria, a tela inicial
+    sumia junto, e a pessoa tocava no vazio."""
+    saida = _no_navegador(DESVIO + """
+        localStorage.clear();
+        window.supabaseClient = { auth: { getSession: async () => ({ data: { session: null } }) } };
+        await window.listaEventos.recarregar();
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 80));
+        const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
+        return { entrarNaFrente: !sumiu('bloco-entrar'), menuAberto: !sumiu('menu-geral') };
+    """)
+    assert saida["entrarNaFrente"] is True
+    assert saida["menuAberto"] is False, "o menu abriu por baixo da tela de entrar"
+
+
+def test_o_olho_nao_abre_o_menu_por_baixo_da_troca_de_senha():
+    """Vale tambem para a troca OPCIONAL, que nao trava o olho: de la o
+    "← Voltar" do menu devolvia a lista com a troca ainda aberta."""
+    saida = _no_navegador(DESVIO + """
+        window.conta.mostrarTrocarSenha({ obrigatoria: false });
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 80));
+        const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
+        return { trocaNaFrente: !sumiu('trocar-senha'), menuAberto: !sumiu('menu-geral'),
+                 olhoTravado: document.getElementById('btn-menu-geral').disabled };
+    """)
+    assert saida["trocaNaFrente"] is True
+    assert saida["olhoTravado"] is False, "a troca opcional nao trava o olho"
+    assert saida["menuAberto"] is False, "o menu abriu por baixo da troca de senha"

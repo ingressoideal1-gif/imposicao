@@ -37,6 +37,7 @@
     var SENHA_MINIMA = 8;
     var depoisDeEntrarCb = null;
     var trocaEmAndamento = null;
+    var resolverTroca = null;
     var jaConferiuAConta = false;
 
     /** Puro. 'entrar' so quando nao ha nada que sirva de casa. */
@@ -50,6 +51,16 @@
     // de quem os abriu.
     var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento'];
     var DOS_OUTROS = ['menu-geral', 'engrenagem'];
+    // TUDO o que pode estar na frente da tela inicial -- os dois estados de
+    // fora e as DUAS telas deste arquivo.
+    //
+    // As duas ultimas faltavam, e a falta era uma fuga do portao: o
+    // `esconderEntrar()` roda a cada `carregar()` com sessao, entao um segundo
+    // `recarregar()` com a troca obrigatoria aberta devolvia `#lista` e
+    // `#bloco-novo-evento` ATRAS dela -- em fluxo normal, tocaveis. Incluir as
+    // duas aqui nao atrapalha o fechamento legitimo: os dois caminhos de fechar
+    // marcam `sumindo` em si mesmos ANTES de pedir a tela inicial de volta.
+    var NA_FRENTE = DOS_OUTROS.concat(['bloco-entrar', 'trocar-senha']);
 
     function naTela(id) {
         var el = $(id);
@@ -68,7 +79,7 @@
         // a traz de volta e o dono daquele estado -- o "← Voltar" do menu, o
         // "← Voltar aos meus eventos" da engrenagem. Devolvê-la aqui a
         // desenharia POR BAIXO de uma tela aberta.
-        if (DOS_OUTROS.some(naTela)) { return; }
+        if (NA_FRENTE.some(naTela)) { return; }
         DA_TELA_INICIAL.forEach(function (id) {
             var el = $(id);
             if (el) { el.classList.remove('sumindo'); }
@@ -198,6 +209,29 @@
     }
 
     /**
+     * O UNICO jeito de a troca sair da tela.
+     *
+     * Mora no modulo, e nao dentro do `mostrarTrocarSenha`, porque ha um
+     * caminho de fora: o `sair`. Sair da conta com a troca aberta deixaria o
+     * olho travado e o portao pendurado sobre a tela de entrar da proxima
+     * pessoa -- um aparelho sem saida nenhuma.
+     */
+    function fecharTroca(resultado) {
+        var tela = $('trocar-senha');
+        if (tela) { tela.classList.add('sumindo'); }
+        ['campo-senha-atual', 'campo-senha-nova', 'campo-senha-confirma'].forEach(function (id) {
+            var el = $(id);
+            if (el) { el.value = ''; }
+        });
+        travarOlho(false);
+        trocaEmAndamento = null;
+        var resolver = resolverTroca;
+        resolverTroca = null;
+        if (resolver) { resolver(resultado); }
+        esconderTelaInicial(false);
+    }
+
+    /**
      * A troca de senha. Resolve quando trocou; com `obrigatoria`, nao ha
      * Cancelar -- a tela so sai depois de trocar.
      */
@@ -233,14 +267,8 @@
             e.textContent = texto;
             e.classList.remove('sumindo');
         }
-        function fechar() {
-            tela.classList.add('sumindo');
-            ['campo-senha-atual', 'campo-senha-nova', 'campo-senha-confirma'].forEach(function (id) { $(id).value = ''; });
-            travarOlho(false);
-            trocaEmAndamento = null;
-            esconderTelaInicial(false);
-        }
         trocaEmAndamento = new Promise(function (resolver) {
+            resolverTroca = resolver;
             $('btn-trocar-senha').onclick = function () {
                 var atual = $('campo-senha-atual').value || '';
                 var nova = $('campo-senha-nova').value || '';
@@ -255,16 +283,14 @@
                     if (!s) { throw new Error('Sua sessão caiu. Entre de novo.'); }
                     return window.AcessoConta.trocarSenha(s, obrigatoria ? '' : atual, nova);
                 }).then(function () {
-                    fechar();
-                    resolver(true);
+                    fecharTroca(true);
                 }).catch(function (e) {
                     erro(fraseDoErro(e));
                 });
             };
             $('btn-cancelar-trocar-senha').onclick = function () {
                 if (obrigatoria) { return; }
-                fechar();
-                resolver(false);
+                fecharTroca(false);
             };
         });
         return trocaEmAndamento;
@@ -275,6 +301,12 @@
             // A conta pode ser outra na proxima entrada, e a resposta de
             // `/minha-conta` era daquela que saiu.
             jaConferiuAConta = false;
+            // Defensivo. Hoje ninguem chega aqui com a troca aberta -- o botao
+            // de sair mora no menu, e o menu nao abre por baixo dela --, e e
+            // justamente por isso que a limpeza precisa ser explicita: no dia
+            // em que um caminho novo chegar, o aparelho ficaria com o olho
+            // travado e o portao de uma conta que ja saiu.
+            fecharTroca(false);
             if (window.menuGeral) { window.menuGeral.fechar(); }
             return window.listaEventos.recarregar();
         });

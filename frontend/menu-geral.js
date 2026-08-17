@@ -67,8 +67,21 @@
         });
     }
 
+    /** Um estado de topo esta na tela? */
+    function naFrente(id) {
+        var el = $(id);
+        return !!el && !el.classList.contains('sumindo');
+    }
+
     function abrir() {
         if (!$('menu-geral')) { return; }
+        // AS TELAS DE CONTA VENCEM O MENU. `#bloco-entrar` e `#trocar-senha`
+        // (do `conta.js`) ficam na frente da tela inicial, e o menu nascia por
+        // BAIXO delas: o painel abria escondido atras do cartao de login, e a
+        // pessoa tocava no vazio. Com a troca obrigatoria era pior -- o olho ja
+        // fica travado nesse caso, mas a troca opcional nao trava, e de la o
+        // "← Voltar" do menu devolvia a lista com a troca ainda aberta.
+        if (naFrente('bloco-entrar') || naFrente('trocar-senha')) { return; }
         // A camera pode estar aberta atras: sair da tela sem desliga-la deixa o
         // aparelho filmando e gastando bateria num painel onde nao ha o que ler.
         if (window.lerQR) { window.lerQR.fechar(); }
