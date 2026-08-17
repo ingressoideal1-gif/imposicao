@@ -2478,12 +2478,13 @@ class ImpositionEngine:
                             _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
                             _font_name_calc = "Impact" if _impact_file else "hebo"
                             _font_file_calc = _impact_file
-                            try:
-                                text_width = fitz.get_text_length(nome_str, fontname=_font_name_calc,
-                                                                  fontsize=nome_font_size,
-                                                                  fontfile=_font_file_calc)
-                            except Exception:
-                                text_width = len(nome_str) * nome_font_size * 0.6
+                            # A mesma régua do resto do motor. Até 17/08/2026
+                            # isto era `get_text_length(..., fontfile=...)`, que
+                            # levanta TypeError — a função não aceita esse
+                            # argumento. O `except` logo abaixo engolia, então a
+                            # largura era SEMPRE o chute, com Impact ou sem ela.
+                            text_width = _largura_do_texto(nome_str, _font_file_calc,
+                                                           _font_name_calc, nome_font_size)
                             nome_y = (cfg.item_h + text_width) / 2
                             origin = fitz.Point(nome_x, nome_y)
                             pivot  = fitz.Point(nome_x, nome_y)
@@ -2989,10 +2990,11 @@ class ImpositionEngine:
                 _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
                 _font_name_calc = "Impact" if _impact_file else "hebo"
                 _font_file_calc = _impact_file
-                try:
-                    text_width = fitz.get_text_length(nome_str, fontname=_font_name_calc, fontsize=nome_font_size, fontfile=_font_file_calc)
-                except Exception:
-                    text_width = len(nome_str) * nome_font_size * 0.6
+                # A mesma régua do resto do motor — ver o comentário no outro
+                # ponto que desenha este nome: o `fontfile=` levantava TypeError
+                # e a largura era sempre o chute.
+                text_width = _largura_do_texto(nome_str, _font_file_calc,
+                                               _font_name_calc, nome_font_size)
                 nome_y = (cfg.item_h + text_width) / 2
                 pivot = fitz.Point(nome_x, nome_y)
                 _nome_insert_kwargs = dict(
@@ -3146,10 +3148,11 @@ class ImpositionEngine:
                 _impact_file = next((_p for _p in _impact_candidates if _os.path.exists(_p)), None)
                 _font_name_calc = "Impact" if _impact_file else "hebo"
                 _font_file_calc = _impact_file
-                try:
-                    text_width = fitz.get_text_length(nome_str, fontname=_font_name_calc, fontsize=nome_font_size, fontfile=_font_file_calc)
-                except Exception:
-                    text_width = len(nome_str) * nome_font_size * 0.6
+                # A mesma régua do resto do motor — ver o comentário no outro
+                # ponto que desenha este nome: o `fontfile=` levantava TypeError
+                # e a largura era sempre o chute.
+                text_width = _largura_do_texto(nome_str, _font_file_calc,
+                                               _font_name_calc, nome_font_size)
                 nome_y = (cfg.item_h + text_width) / 2
                 pivot = fitz.Point(nome_x, nome_y)
                 _nome_insert_kwargs = dict(
