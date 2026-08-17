@@ -398,6 +398,13 @@
             var abertura = window.conta.decidirAbertura(sessao, doChaveiro.length > 0);
             if (abertura === 'entrar') { window.conta.mostrarEntrar(); }
             else { window.conta.esconderEntrar(); }
+
+            // A senha provisoria barra tambem quem NAO acabou de entrar. Ela
+            // era conferida so no caminho do login, e sessao no celular dura
+            // dias: na segunda abertura o cliente ia direto para a lista com a
+            // senha da grafica ainda valendo. Sem `return`: a lista nao espera
+            // pela pergunta, e a pergunta nao espera a pessoa escolher a senha.
+            if (sessao) { window.conta.conferirSenhaProvisoria(sessao); }
         }
 
         if (!sessao) { return Promise.resolve(); }

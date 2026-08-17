@@ -896,7 +896,13 @@ def test_a_tela_nao_fala_mais_em_senha_do_dono():
     # nativa saiu porque nao responde no aplicativo instalado; a frase que o
     # dono le e a mesma, e agora ela e DOM que da para inspecionar.
     assert "senha do dono" not in saida["perguntado"]
-    assert "mesma conta do Vibe" in saida["perguntado"]
+    # Ate 17/08/2026 a caixa dizia "a mesma conta do Vibe". A conta continua
+    # sendo a mesma; o que mudou e de quem o cliente a recebe -- ele nao cria
+    # acesso em lugar nenhum, e quem libera o e-mail dele e passa a senha
+    # provisoria e a grafica. "Vibe" mandava-o procurar uma senha que talvez
+    # nunca tenha escolhido; "a grafica liberou" nomeia quem ele pode chamar.
+    assert "a gráfica liberou" in saida["perguntado"]
+    assert "Vibe" not in saida["perguntado"]
     assert "senha do dono" not in saida["aviso"]
     assert "Senha Cadastrada" in saida["aviso"]
 
@@ -1455,6 +1461,29 @@ def test_elevacao_ainda_viva_dispensa_a_senha_ao_reabrir_a_engrenagem():
     assert saida["somenteLeitura"] is False
     assert saida["engrenagemAberta"] is True
     assert saida["listaEscondida"] is True
+
+
+def test_elevacao_de_um_evento_nao_libera_a_engrenagem_de_outro():
+    """O bilhete de 15 minutos e assinado para UM evento -- o servidor recusa o
+    do evento A numa escrita do evento B.
+
+    Ate 17/08/2026 o `elevado()` olhava so o prazo, e isso bastava enquanto a
+    unica forma de haver elevacao era o `abrirEngrenagem` grava-la para o evento
+    que acabou de abrir. O `receberElevacao`, que aceita elevacao vinda de FORA
+    desta tela, abriu a porta: a engrenagem do evento B abriria sem pedir senha
+    nenhuma por causa de um bilhete comprado para o evento A -- e a pessoa so
+    descobriria ao gravar, quando o servidor recusasse.
+    """
+    saida = _no_navegador("""
+        Controle.receberElevacao('outro-evento', {
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900
+        });
+        const doOutro = Controle.elevado();
+        Controle.estado.evento_id = 'outro-evento';
+        return { doOutro, doMesmo: Controle.elevado() };
+    """)
+    assert saida["doOutro"] is False, "o bilhete de outro evento liberou esta tela"
+    assert saida["doMesmo"] is True, "o bilhete do proprio evento parou de valer"
 
 
 def test_elevacao_de_outro_evento_no_storage_nao_e_restaurada():

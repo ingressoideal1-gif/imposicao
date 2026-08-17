@@ -127,4 +127,162 @@ def test_esqueci_minha_senha_manda_falar_com_a_grafica_e_nao_promete_email():
         return { frase };
     """)
     assert "gráfica" in saida["frase"]
-    assert "e-mail" not in saida["frase"].lower() or "link" not in saida["frase"].lower()
+    # `and`, e nao `or`: com `or` entre dois negativos bastava a frase nao ter
+    # UMA das duas palavras para o teste passar -- ele aprovaria "enviamos o
+    # link" desde que a palavra "e-mail" nao aparecesse junto.
+    assert "e-mail" not in saida["frase"].lower() and "link" not in saida["frase"].lower(), (
+        "a frase volta a prometer uma mensagem que o projeto nao envia"
+    )
+
+
+# ── As telas nao se empilham (revisao de 17/08/2026) ────────────────────────
+#
+# A tela inicial tinha DOIS donos sem contrato entre si: o `menu-geral.js`, que
+# a escondia atras do olho, e o `conta.js`, que a escondia atras das telas de
+# conta. Nenhum sabia dos blocos do outro, e o portao que nao se escapa tinha
+# uma saida pelo olho.
+
+
+def test_com_a_troca_obrigatoria_aberta_o_olho_nao_tem_saida():
+    """O portao da senha provisoria nao se escapa.
+
+    Tocar no olho abria o menu por cima da troca obrigatoria, e o "← Voltar" de
+    la devolvia a lista com o portao ainda aberto -- ou seja, a tela que existe
+    para nao ser pulada era pulada em dois toques.
+    """
+    saida = _no_navegador(DESVIO + """
+        window.__minhaConta.precisa_trocar_senha = true;
+        await window.conta.depoisDeEntrar({ access_token: 'jwt' });
+        document.getElementById('btn-menu-geral').click();
+        await new Promise(r => setTimeout(r, 80));
+        const sumiu = (id) => document.getElementById(id).classList.contains('sumindo');
+        return {
+            olhoTravado: document.getElementById('btn-menu-geral').disabled,
+            menuAberto: !sumiu('menu-geral'),
+            listaVisivel: !sumiu('lista'),
+            portaoNaFrente: !sumiu('trocar-senha'),
+        };
+    """)
+    assert saida["olhoTravado"] is True
+    assert saida["menuAberto"] is False, "o olho abriu o menu por cima do portao"
+    assert saida["listaVisivel"] is False, "a lista voltou com o portao aberto"
+    assert saida["portaoNaFrente"] is True
+
+
+def test_o_menu_nao_consegue_transformar_a_troca_obrigatoria_em_opcional():
+    """Com o portao aberto, "Trocar minha senha" redesenhava a MESMA tela com o
+    Cancelar a vista -- e de quebra orfanava a promessa da primeira, que era
+    quem levaria a pessoa para a casa depois de trocar."""
+    saida = _no_navegador(DESVIO + """
+        window.__minhaConta.precisa_trocar_senha = true;
+        await window.conta.depoisDeEntrar({ access_token: 'jwt' });
+        const primeira = window.conta.mostrarTrocarSenha({ obrigatoria: false });
+        await new Promise(r => setTimeout(r, 30));
+        return {
+            cancelarEscondido: document.getElementById('btn-cancelar-trocar-senha')
+                .classList.contains('sumindo'),
+            titulo: document.getElementById('trocar-senha-titulo').textContent,
+            atualEscondida: document.getElementById('bloco-senha-atual')
+                .classList.contains('sumindo'),
+        };
+    """)
+    assert saida["cancelarEscondido"] is True, "o portao virou opcional pelo menu"
+    assert saida["titulo"] == "Escolha a sua senha"
+    assert saida["atualEscondida"] is True
+
+
+def test_o_entrar_chamado_pelo_menu_tem_Cancelar_e_ele_devolve_a_lista():
+    """Sem Cancelar, o "Trocar minha senha" de um celular que ja e aparelho e
+    nao tem sessao era uma sala sem porta: a lista ficava escondida atras e
+    nenhum gesto a trazia de volta.
+
+    Na abertura FORCADA o botao nao aparece -- ali nao ha para onde cancelar.
+    """
+    saida = _no_navegador(DESVIO + """
+        const cancelar = document.getElementById('btn-cancelar-entrar');
+        window.conta.mostrarEntrar({ depois: function () { return null; } });
+        const comDepois = !cancelar.classList.contains('sumindo');
+        cancelar.click();
+        await new Promise(r => setTimeout(r, 30));
+        const voltou = {
+            entrar: document.getElementById('bloco-entrar').classList.contains('sumindo'),
+            lista: !document.getElementById('lista').classList.contains('sumindo'),
+        };
+        window.conta.mostrarEntrar();
+        return { comDepois, voltou, rotulo: cancelar.textContent,
+                 semDepois: !cancelar.classList.contains('sumindo') };
+    """)
+    assert saida["comDepois"] is True
+    assert "Cancelar" in saida["rotulo"]
+    assert saida["voltou"] == {"entrar": True, "lista": True}
+    assert saida["semDepois"] is False, "a abertura forcada nao tem para onde cancelar"
+
+
+def test_a_sessao_restaurada_tambem_passa_pela_troca_obrigatoria():
+    """O portao vivia so no caminho do login, e sessao no celular dura dias: na
+    segunda abertura o cliente entrava direto na lista com a senha que a
+    grafica passou ainda valendo.
+
+    E UMA pergunta por abertura, nao uma por redesenho da lista.
+    """
+    saida = _no_navegador(DESVIO + """
+        window.__minhaConta.precisa_trocar_senha = true;
+        await window.listaEventos.recarregar();
+        await new Promise(r => setTimeout(r, 60));
+        await window.listaEventos.recarregar();
+        await new Promise(r => setTimeout(r, 60));
+        return {
+            visivel: !document.getElementById('trocar-senha').classList.contains('sumindo'),
+            cancelarEscondido: document.getElementById('btn-cancelar-trocar-senha')
+                .classList.contains('sumindo'),
+            perguntou: window.__chamadas.filter(c => c.caminho === '/minha-conta').length,
+        };
+    """)
+    assert saida["visivel"] is True
+    assert saida["cancelarEscondido"] is True
+    assert saida["perguntou"] == 1, "a conferencia e uma so por abertura do aplicativo"
+
+
+# ── Sair da conta ───────────────────────────────────────────────────────────
+
+
+def _sair_com_chaveiro(semear):
+    return _no_navegador(DESVIO + """
+        localStorage.clear();
+        """ + semear + """
+        let saiu = false;
+        window.supabaseClient = { auth: {
+            getSession: async () => ({ data: { session: null } }),
+            signOut: async () => { saiu = true; return {}; },
+        } };
+        await window.conta.sair();
+        await new Promise(r => setTimeout(r, 30));
+        return { saiu,
+                 entrarVisivel: !document.getElementById('bloco-entrar')
+                     .classList.contains('sumindo'),
+                 listaVisivel: !document.getElementById('lista')
+                     .classList.contains('sumindo') };
+    """)
+
+
+def test_sair_da_conta_sem_aparelho_devolve_a_tela_de_entrar():
+    """Sem conta e sem aparelho nao sobra casa nenhuma: a tela de entrar e o
+    unico lugar util."""
+    saida = _sair_com_chaveiro("")
+    assert saida["saiu"] is True
+    assert saida["entrarVisivel"] is True
+    assert saida["listaVisivel"] is False
+
+
+def test_sair_da_conta_com_aparelho_no_chaveiro_deixa_a_lista():
+    """O celular do porteiro nao pode cair numa tela de login ao sair da conta
+    do dono: ele nao tem conta nenhuma, e o evento que ele le continua no
+    chaveiro."""
+    saida = _sair_com_chaveiro("""
+        window.chaveiro.guardar({ evento_id: 'ev-1', nome_evento: 'Click',
+                                  aparelho_id: 'a1', nome_portao: 'Aparelho 1',
+                                  token: 't' });
+    """)
+    assert saida["saiu"] is True
+    assert saida["entrarVisivel"] is False
+    assert saida["listaVisivel"] is True

@@ -154,6 +154,12 @@
         <input id="senha" type="password" autocomplete="current-password">
         <button id="btn-entrar">Entrar</button>
         <button id="btn-esqueci" class="secundario">Esqueci minha senha</button>
+        <!-- SO aparece quando a pessoa escolheu vir para ca (o "Trocar minha
+             senha" do menu, num celular que ja e aparelho e nao tem sessao).
+             Na abertura forcada ele fica escondido: nao ha para onde cancelar,
+             porque atras desta tela nao ha nada. Quem o mostra e o
+             `conta.mostrarEntrar`. -->
+        <button id="btn-cancelar-entrar" class="secundario sumindo">Cancelar</button>
         <div id="erro-login" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
         <p class="config-ajuda" style="margin-top:14px;">
             Ainda não tem acesso? <strong>Peça à gráfica</strong>: ela libera o
@@ -201,9 +207,9 @@
     <div id="caixa-entrar-config" class="cartao sumindo">
         <h1 id="entrar-config-titulo">Configurar o evento</h1>
         <p class="config-ajuda">
-            Entre com a <strong>mesma conta do Vibe</strong> com que você
-            acompanha os seus pedidos. Ela libera as alterações por 15 minutos e
-            sai deste aparelho quando você fechar a configuração.
+            Entre com o <strong>e-mail e a senha que a gráfica liberou</strong>
+            para você. Ela libera as alterações por 15 minutos e sai deste
+            aparelho quando você fechar a configuração.
         </p>
         <label for="entrar-config-email">E-mail</label>
         <input id="entrar-config-email" type="email" autocomplete="off" inputmode="email">

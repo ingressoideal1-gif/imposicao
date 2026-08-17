@@ -79,8 +79,28 @@
             });
     }
 
+    /**
+     * Ha bilhete valido PARA ESTE EVENTO?
+     *
+     * O evento faz parte da pergunta, e nao fazia ate 17/08/2026. A elevacao
+     * sempre foi assinada para um evento so -- o servidor recusa o token do
+     * evento A numa escrita do evento B --, mas esta funcao olhava apenas o
+     * prazo. Enquanto o unico jeito de haver elevacao era o `abrirEngrenagem`
+     * grava-la para o evento que acabou de abrir, os dois nunca divergiam.
+     *
+     * O `receberElevacao` abriu essa porta: agora chega elevacao de FORA desta
+     * tela, para um evento que pode nao ser o que esta aberto. Sem esta
+     * conferencia, a engrenagem do evento B abriria sem pedir senha nenhuma por
+     * causa de um bilhete comprado para o evento A -- e a pessoa so descobriria
+     * ao gravar, quando o servidor recusasse.
+     */
     function elevado() {
-        return !!(estado.elevacao && estado.elevacao.expira_em * 1000 > Date.now());
+        if (!estado.elevacao) { return false; }
+        if (estado.elevacao.evento_id
+                && estado.elevacao.evento_id !== estado.evento_id) {
+            return false;
+        }
+        return estado.elevacao.expira_em * 1000 > Date.now();
     }
 
     /**
@@ -1467,7 +1487,14 @@
         try { e = JSON.parse(bruto); } catch (err) { return; }
         if (!e || e.evento_id !== estado.evento_id) {
             // Token de outro evento nesta mesma aba: não é deste evento, e
-            // não é o caso de descartar o que pode servir a OUTRA aba/evento.
+            // não é o caso de descartar o que pode servir a OUTRA aba/evento —
+            // por isso o `sessionStorage` fica como está.
+            //
+            // A MEMÓRIA, porém, tem de ser limpa. Sem esta linha, a elevação
+            // do evento anterior continuava em `estado.elevacao` depois de a
+            // engrenagem trocar de evento: o token guardado era ignorado, mas
+            // o que já estava na memória seguia valendo.
+            estado.elevacao = null;
             return;
         }
         if (!(e.expira_em * 1000 > Date.now())) {

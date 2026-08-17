@@ -104,7 +104,7 @@
      */
     function entrarEElevar(email, senha, eventoId) {
         return entrar(email, senha).then(function (sessao) {
-            return pedir('/eventos/' + eventoId + '/elevar', {
+            return _pedir('/eventos/' + eventoId + '/elevar', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
