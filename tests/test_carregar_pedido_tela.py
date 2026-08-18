@@ -533,3 +533,52 @@ def test_sem_bilhete_a_caixa_continua_pedindo_a_senha():
         };
     """)
     assert saida == {"campoNaTela": True, "rotuloNaTela": True, "avisoEscondido": True}
+
+
+def test_o_401_devolve_o_campo_mesmo_quando_a_senha_veio_do_NAVEGADOR():
+    """O caso que a variavel `bilhete` nao enxerga.
+
+    `autocomplete="off"` e ignorado em campo de senha por quase todo navegador:
+    o gerenciador de senhas pode preencher o `#carregar-senha` ESCONDIDO com uma
+    senha velha. Ai o `confirmar` toma o ramo da senha -- nao ha bilhete --, o
+    servidor recusa, e uma conferencia feita sobre `bilhete` deixaria o motivo
+    na tela com o campo invisivel: uma trava sem saida, que e o que a regra do
+    projeto proibe.
+    """
+    saida = _no_navegador(DESVIO + BILHETE + """
+        // O corpo e anotado AQUI: a chamada morre antes de chegar ao
+        // `__chamadas` do DESVIO, que so registra o que passa por ele.
+        window.__enviado = null;
+        const base = AcessoConta.pedir;
+        AcessoConta.pedir = async (c, o) => {
+            if (c === '/pedidos/20272/carregar') {
+                window.__enviado = JSON.parse(o.body);
+                const e = new Error('senha nao confere'); e.status = 401; throw e;
+            }
+            return base(c, o);
+        };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        const escondidoAntes = """ + _escondido("carregar-senha") + """;
+        // O navegador preenche o campo escondido, por fora de qualquer digitacao.
+        document.getElementById('carregar-senha').value = 'senha-velha-do-navegador';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 120));
+        return {
+            escondidoAntes,
+            foiPelaSenha: !!(window.__enviado && window.__enviado.senha),
+            campoDeVolta: !(""" + _escondido("carregar-senha") + """),
+            erro: document.getElementById('erro-carregar').textContent,
+            valor: document.getElementById('carregar-senha').value,
+            avisoSumiu: document.getElementById('carregar-sem-senha')
+                .classList.contains('sumindo'),
+        };
+    """)
+    assert saida["escondidoAntes"] is True
+    assert saida["foiPelaSenha"] is True, "o teste nao exercitou o ramo da senha"
+    assert saida["campoDeVolta"] is True, "o motivo apareceu com o campo invisivel"
+    assert saida["avisoSumiu"] is True
+    assert "liberação venceu" in saida["erro"]
+    assert saida["valor"] == "", (
+        "a senha recusada ficou no campo -- a primeira tecla do dono seria "
+        "digitada no fim dela"
+    )

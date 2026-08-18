@@ -1596,6 +1596,93 @@ def test_a_engrenagem_aberta_pelo_bilhete_de_conta_NAO_desloga_o_dono_ao_fechar(
     assert saida["listaNaTela"] is True
 
 
+def test_o_segundo_toque_na_engrenagem_nao_dispara_uma_segunda_troca():
+    """A janela em que a tela NAO muda.
+
+    Desde 18/08/2026 o primeiro passo da engrenagem e uma ida ao servidor que
+    acontece antes de um pixel se mexer, e o botao da lista e um icone sem
+    estado de espera. Num 4G ruim o dono toca de novo -- e sem a guarda o
+    segundo toque dispararia um segundo `/elevar` e um segundo `carregarPainel`.
+    """
+    saida = _no_navegador(_BILHETE_DA_CONTA + """
+        // O botao que o `lista-eventos.js` desenha, com o id que ele usa.
+        const botao = document.createElement('button');
+        botao.id = 'config-ev-1';
+        document.body.appendChild(botao);
+
+        window.__elevares = 0;
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (caminho.endsWith('/elevar')) {
+                window.__elevares++;
+                await new Promise(r => setTimeout(r, 300));
+                return { token: 'bilhete-do-evento', minutos: 15,
+                         expira_em: Math.floor(Date.now() / 1000) + 900 };
+            }
+            return _real(caminho, opcoes);
+        };
+        const primeira = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 60));
+        const ocupado = { disabled: botao.disabled, busy: botao.getAttribute('aria-busy') };
+        // O segundo toque, no meio da espera.
+        Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await primeira;
+        await new Promise(r => setTimeout(r, 60));
+        return { elevares: window.__elevares, ocupado,
+                 liberadoDepois: !botao.disabled,
+                 busyDepois: botao.getAttribute('aria-busy'),
+                 engrenagemAberta: !document.getElementById('engrenagem')
+                     .classList.contains('sumindo') };
+    """)
+    assert saida["elevares"] == 1, "o segundo toque comprou um segundo bilhete"
+    assert saida["ocupado"]["disabled"] is True, (
+        "o botao ficou tocavel enquanto a tela nao mudava"
+    )
+    assert saida["ocupado"]["busy"] == "true"
+    assert saida["engrenagemAberta"] is True
+    assert saida["liberadoDepois"] is True, "a engrenagem daquele evento ficou morta"
+    assert saida["busyDepois"] is None
+
+
+def test_a_engrenagem_volta_a_ser_tocavel_quando_o_dono_cancela_a_senha():
+    """A guarda nao pode sobreviver a abertura que a criou: um `aberturaEmCurso`
+    pendurado deixaria aquele evento sem configuracao ate a pagina recarregar."""
+    saida = _no_navegador("""
+        const botao = document.createElement('button');
+        botao.id = 'config-ev-1';
+        document.body.appendChild(botao);
+        var indo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 120));
+        document.getElementById('btn-cancelar-entrar-config').click();
+        await indo;
+        // Medido AQUI: entre o cancelamento e o proximo toque. Depois do
+        // segundo toque o botao volta a ficar ocupado, e com razao.
+        var liberado = !botao.disabled;
+        var caixaFechou = document.getElementById('caixa-entrar-config')
+            .classList.contains('sumindo');
+        // O segundo toque, agora, tem de reabrir a caixa.
+        var deNovo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 120));
+        var medido = { liberado: liberado, caixaFechou: caixaFechou,
+                       caixaDeNovo: !document.getElementById('caixa-entrar-config')
+                           .classList.contains('sumindo') };
+        document.getElementById('btn-cancelar-entrar-config').click();
+        await deNovo;
+        return medido;
+    """)
+    assert saida["caixaFechou"] is True
+    assert saida["liberado"] is True, "o botao ficou travado depois do cancelamento"
+    assert saida["caixaDeNovo"] is True, "a engrenagem ficou presa depois do cancelamento"
+
+
+def test_o_id_do_botao_da_engrenagem_e_o_mesmo_nos_dois_arquivos():
+    """O `controle.js` procura `config-<evento_id>` para travar o botao enquanto
+    a troca do bilhete roda, e quem desenha esse botao e o `lista-eventos.js`.
+    Renomear de um lado so nao quebra nada visivelmente -- volta a tela morta
+    que a guarda existe para consertar."""
+    assert "'config-' + ev.id" in _ler("frontend/lista-eventos.js")
+    assert "'config-' + evento_id" in _ler("frontend/controle.js")
+
+
 def test_elevacao_de_um_evento_nao_libera_a_engrenagem_de_outro():
     """O bilhete de 15 minutos e assinado para UM evento -- o servidor recusa o
     do evento A numa escrita do evento B.

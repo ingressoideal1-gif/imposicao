@@ -1351,7 +1351,47 @@
      * pedir a senha deixaria o nome do evento, os setores e a lista de portões
      * à vista de quem estiver com o celular do porteiro na mão.
      */
+    /**
+     * A abertura em curso, se houver: `{ evento_id, promessa }`.
+     *
+     * Existe por causa da janela em que a tela NÃO muda. Desde 18/08/2026 o
+     * primeiro passo da engrenagem é uma ida ao servidor (a troca do bilhete de
+     * conta pelo do evento) que acontece antes de um pixel se mexer — e o botão
+     * da lista é um ícone sem estado de espera. Num 4G ruim, o dono toca de
+     * novo, e sem esta guarda o segundo toque dispararia um segundo `/elevar` e
+     * um segundo `carregarPainel`.
+     */
+    var aberturaEmCurso = null;
+
+    /**
+     * O botão de engrenagem daquele evento, na lista. O id vem do
+     * `lista-eventos.js` (`config-<evento_id>`); pode não existir quando a
+     * engrenagem é aberta por outro caminho que não o toque na lista.
+     */
+    function botaoDaEngrenagem(evento_id) {
+        return document.getElementById('config-' + evento_id);
+    }
+
+    /**
+     * `disabled` + `aria-busy`, e NÃO o `botaoEspera`: ele troca o texto do
+     * botão, e este não tem texto nenhum — é só o ícone. Trocar o conteúdo
+     * levaria o `<svg>` embora e deixaria um botão vazio na lista.
+     */
+    function engrenagemOcupada(evento_id, ocupada) {
+        var botao = botaoDaEngrenagem(evento_id);
+        if (!botao) { return; }
+        botao.disabled = !!ocupada;
+        if (ocupada) { botao.setAttribute('aria-busy', 'true'); }
+        else { botao.removeAttribute('aria-busy'); }
+    }
+
     function abrirEngrenagem(evento_id, nome) {
+        // O segundo toque no MESMO evento devolve a mesma promessa em vez de
+        // recomeçar. Em outro evento passa: é uma escolha diferente, e a
+        // primeira já terá trocado `estado.evento_id` de qualquer forma.
+        if (aberturaEmCurso && aberturaEmCurso.evento_id === evento_id) {
+            return aberturaEmCurso.promessa;
+        }
         estado.evento_id = evento_id;
         // Evento novo, campos novos: sem isto, abrir a engrenagem de um segundo
         // evento na mesma sessão da página manteria o nome e a data do primeiro
@@ -1359,11 +1399,12 @@
         // redesenhos. Ver o comentário daquela bandeira.
         jaDesenhouEvento = false;
         restaurarElevacao();
+        engrenagemOcupada(evento_id, true);
         // ANTES do `comSenha`, pelo mesmo motivo do `restaurarElevacao` acima:
         // ele só pede a senha quando não encontra elevação deste evento, e a
         // troca do bilhete de conta pelo bilhete do evento é justamente o que
         // faz não haver nada a pedir.
-        return trocarPeloBilheteDaConta(evento_id).then(function () {
+        var promessa = trocarPeloBilheteDaConta(evento_id).then(function () {
             return comSenha(evento_id, function () {
                 $('engrenagem').classList.remove('sumindo');
                 // A BARRA DO TOPO SAI JUNTO com a lista. Ela vive FORA do
@@ -1383,7 +1424,18 @@
             // Cancelou a senha, ou ela não conferiu: a lista continua na tela,
             // que é onde ele já estava. Quem explica o erro é o `avisar()` de
             // dentro de `abrirCaixaDeSenha`.
+        }).then(function () {
+            // Nos DOIS desfechos: a lista volta a ser tocável quando o dono
+            // cancela, e a guarda não pode sobreviver à abertura que a criou —
+            // um `aberturaEmCurso` pendurado deixaria a engrenagem daquele
+            // evento morta para sempre.
+            engrenagemOcupada(evento_id, false);
+            if (aberturaEmCurso && aberturaEmCurso.evento_id === evento_id) {
+                aberturaEmCurso = null;
+            }
         });
+        aberturaEmCurso = { evento_id: evento_id, promessa: promessa };
+        return promessa;
     }
 
     /**

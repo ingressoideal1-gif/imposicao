@@ -279,6 +279,12 @@ async function elevar(
 ): Promise<any> {
   await eventoDoDono(eventoId, usuario);
   await exigirSegredo(SEGREDO_ELEVACAO);
+  // ANTES de conferir a senha, e nao la no fim: sem isto um navegador mal
+  // formado com a senha CERTA passava pela conferencia e so estourava dentro de
+  // `gerarElevacao`, virando 500 -- um erro de servidor para um defeito de quem
+  // chamou, e uma tela que so pode dizer "tente de novo" para algo que tentar
+  // de novo nao conserta. Mesma trava de `carregar` e de `elevarConta`.
+  exigirNavegador(navegador);
   // `eventoDoDono` acima continua sendo a porta que importa: o bilhete de conta
   // diz QUEM esta pedindo, nunca de quem e o evento.
   if (precisaDeSenha(senha, await temElevacaoDeConta(usuario, req, navegador))) {

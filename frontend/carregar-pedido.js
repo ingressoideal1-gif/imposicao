@@ -88,15 +88,28 @@
      * que explica a ausencia. Um campo que some sem explicacao faz a pessoa
      * procurar o que ela deveria digitar.
      */
-    function mostrarCampoSenha(mostrar) {
+    function envoltorioDaSenha() {
         var campo = $('carregar-senha');
         var pai = campo.parentNode;
-        var alvo = (pai && pai.classList && pai.classList.contains('campo-senha'))
+        return (pai && pai.classList && pai.classList.contains('campo-senha'))
             ? pai : campo;
-        alvo.classList.toggle('sumindo', !mostrar);
+    }
+
+    function mostrarCampoSenha(mostrar) {
+        envoltorioDaSenha().classList.toggle('sumindo', !mostrar);
         var rotulo = document.querySelector('label[for="carregar-senha"]');
         if (rotulo) { rotulo.classList.toggle('sumindo', !mostrar); }
         $('carregar-sem-senha').classList.toggle('sumindo', !!mostrar);
+    }
+
+    /**
+     * O campo esta fora da tela AGORA?
+     *
+     * Perguntado ao DOM, e nao deduzido de haver bilhete, porque as duas coisas
+     * podem discordar -- ver o tratamento do 401 no fim deste arquivo.
+     */
+    function campoDaSenhaEscondido() {
+        return envoltorioDaSenha().classList.contains('sumindo');
     }
 
     function opcao(select, valor, rotulo) {
@@ -356,6 +369,11 @@
     function voltarAPedirASenha(texto) {
         window.AcessoConta.esquecerElevacaoConta();
         mostrarCampoSenha(true);
+        // O que estava no campo escondido nao serve: ou nao havia nada, ou era
+        // o que o gerenciador de senhas do navegador colou e o servidor acabou
+        // de recusar. Deixa-lo ali faria a primeira tecla do dono ser digitada
+        // NO FIM de uma senha errada.
+        $('carregar-senha').value = '';
         $('carregar-senha').focus();
         return erro(texto);
     }
@@ -374,7 +392,7 @@
             // liberacao venceu com a caixa aberta, e o campo precisa voltar
             // junto com o motivo. Ver a regra do projeto: toda trava diz na
             // propria tela como sair dela.
-            var venceuAgora = !$('carregar-sem-senha').classList.contains('sumindo');
+            var venceuAgora = campoDaSenhaEscondido();
             return voltarAPedirASenha(venceuAgora
                 ? LIBERACAO_VENCEU
                 : 'Digite a sua senha para carregar o pedido.');
@@ -437,11 +455,17 @@
                 });
             });
         }, function (e) {
-            // 401 no caminho do bilhete e sempre a mesma historia: ele nao vale
-            // mais (venceu no caminho, ou a aba foi restaurada com um token
-            // velho). Nao ha o que tentar de novo sozinho -- o que resolve e a
-            // senha, e ela e uma saida que o dono TEM em maos.
-            if (bilhete && e && e.status === 401) {
+            // 401 COM O CAMPO ESCONDIDO e sempre um beco sem saida: a tela
+            // recusa e nao oferece onde digitar. A pergunta e feita ao DOM, e
+            // nao a variavel `bilhete`, porque as duas discordam num caso real:
+            // `autocomplete="off"` e ignorado em campo de senha por quase todo
+            // navegador, entao o gerenciador de senhas pode ter preenchido o
+            // `#carregar-senha` escondido com uma senha VELHA. Ai `confirmar`
+            // toma o ramo da senha (`bilhete` nulo), o servidor recusa, e sem
+            // esta conferencia o motivo apareceria com o campo invisivel --
+            // uma trava sem saida na propria tela, que e o que a regra do
+            // projeto proibe.
+            if (e && e.status === 401 && campoDaSenhaEscondido()) {
                 return voltarAPedirASenha(LIBERACAO_VENCEU);
             }
             erro(fraseDoErro(e));
