@@ -18,6 +18,7 @@ import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import casos from "./momento_casos.json" with { type: "json" };
 import {
   aplicarAparelho,
+  aplicarAparelhoAqui,
   aplicarEvento,
   aplicarSetor,
   conferirJanela,
@@ -451,4 +452,138 @@ Deno.test("excluir aparelho: apaga os vinculos e a linha, e NAO toca nas leitura
   // null` das leituras -- e este teste garante que ninguem resolva o mesmo
   // problema apagando-as por aqui.
   assertEquals(idas.some((i) => i.url.includes("leituras")), false);
+});
+
+
+// ── O nome e do DISPOSITIVO ─────────────────────────────────────────────────
+//
+// 18/08/2026: "o nome do aparelho e o mesmo para todos os eventos, o nome
+// 'Aparelho' e o nome do dispositivo". A coluna `navegador_id` e o que liga as
+// linhas do mesmo celular; renomear uma renomeia as outras do mesmo cliente.
+
+/**
+ * O banco de mesa que RESPONDE, e nao so anota.
+ *
+ * `espalharONome` faz tres leituras antes de gravar, e um dublê que devolve
+ * 204 para tudo a faria desistir na primeira -- o teste passaria sem exercitar
+ * nada.
+ */
+async function comBancoQueResponde<T>(
+  respostas: Array<{ contem: string; corpo: unknown }>,
+  tarefa: () => Promise<T>,
+): Promise<{ r: T; idas: Array<{ metodo: string; url: string; corpo: any }> }> {
+  Deno.env.set("SUPABASE_URL", "https://banco.de.mesa");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "chave-de-mesa");
+  const idas: Array<{ metodo: string; url: string; corpo: any }> = [];
+  globalThis.fetch = ((url: string, opcoes: RequestInit) => {
+    const metodo = String(opcoes?.method ?? "GET");
+    idas.push({
+      metodo,
+      url: String(url),
+      corpo: opcoes?.body ? JSON.parse(String(opcoes.body)) : null,
+    });
+    // Casa por metodo TAMBEM quando a regra pede: o POST que cria o aparelho
+    // devolve a linha criada, e um 204 ali faria o codigo real quebrar no
+    // `[0]` -- que nao e o que este teste quer medir.
+    const casada = respostas.find((r) => String(url).includes(r.contem));
+    if (casada) {
+      return Promise.resolve(
+        new Response(JSON.stringify(casada.corpo), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response(null, { status: 204 }));
+  }) as unknown as typeof fetch;
+  try {
+    return { r: await tarefa(), idas };
+  } finally {
+    globalThis.fetch = fetchDeVerdade;
+  }
+}
+
+Deno.test("aparelho aqui: guarda QUEM e este celular", async () => {
+  const { idas } = await comBancoQueResponde(
+    [
+      { contem: "producao_acesso_setores", corpo: [] },
+      { contem: "producao_acesso_eventos", corpo: [{ sal: "sal" }] },
+      { contem: "producao_acesso_dispositivos", corpo: [{ id: "a9" }] },
+    ],
+    () =>
+      aplicarAparelhoAqui("e1", {
+        nome: "Portao A",
+        setores: [],
+        navegador: "nav-abc_123",
+      }),
+  );
+  const criacao = idas.find((i) =>
+    i.metodo === "POST" && i.url.includes("producao_acesso_dispositivos")
+  );
+  assertEquals(criacao?.corpo.navegador_id, "nav-abc_123");
+});
+
+Deno.test("aparelho aqui: identificador fora do formato vira nulo, e nao recusa", async () => {
+  // Ele entra concatenado numa URL do PostgREST. Recusar a criacao seria pior:
+  // deixaria o dono sem portao nenhum no meio do evento.
+  const { idas } = await comBancoQueResponde(
+    [
+      { contem: "producao_acesso_setores", corpo: [] },
+      { contem: "producao_acesso_eventos", corpo: [{ sal: "sal" }] },
+      { contem: "producao_acesso_dispositivos", corpo: [{ id: "a9" }] },
+    ],
+    () =>
+      aplicarAparelhoAqui("e1", {
+        nome: "Portao A",
+        setores: [],
+        navegador: "nav com espaco & or=1",
+      }),
+  );
+  const criacao = idas.find((i) =>
+    i.metodo === "POST" && i.url.includes("producao_acesso_dispositivos")
+  );
+  assertEquals(criacao?.corpo.navegador_id, null);
+});
+
+Deno.test("renomear: o nome vai para as linhas do MESMO celular", async () => {
+  const { idas } = await comBancoQueResponde(
+    [
+      { contem: "select=navegador_id", corpo: [{ navegador_id: "nav-1" }] },
+      { contem: "id=eq.e1&select=id_cliente", corpo: [{ id_cliente: 14 }] },
+      { contem: "id_cliente=eq.14", corpo: [{ id: "e1" }, { id: "e2" }] },
+    ],
+    () => aplicarAparelho(APARELHO, { nome: "Celular da Portaria" }),
+  );
+  const espalhou = idas.find((i) =>
+    i.metodo === "PATCH" && i.url.includes("navegador_id=eq.nav-1")
+  );
+  assertEquals(espalhou?.corpo.nome, "Celular da Portaria");
+  // Limitado aos eventos do MESMO cliente: um celular emprestado que tenha sido
+  // portao na operacao de outro cliente nao e renomeado por aqui.
+  assertEquals(espalhou?.url.includes("evento_id=in.(e1,e2)"), true);
+});
+
+Deno.test("renomear: sem identificador do celular, nada se espalha", async () => {
+  // Toda linha criada antes de 18/08/2026 esta assim, e o portao criado pela
+  // grafica tambem. O PATCH da propria linha continua acontecendo.
+  const { idas } = await comBancoQueResponde(
+    [{ contem: "select=navegador_id", corpo: [{ navegador_id: null }] }],
+    () => aplicarAparelho(APARELHO, { nome: "So esta linha" }),
+  );
+  const patches = idas.filter((i) => i.metodo === "PATCH");
+  assertEquals(patches.length, 1);
+  assertEquals(patches[0].url.includes("id=eq.a1"), true);
+});
+
+Deno.test("trocar so os setores nao mexe em nome nenhum", async () => {
+  // `espalharONome` custa tres leituras; disparar isso a cada toque num botao
+  // de setor seria pagar por nada.
+  const { idas } = await comBancoQueResponde(
+    [
+      { contem: "producao_acesso_setores", corpo: [] },
+      { contem: "select=navegador_id", corpo: [{ navegador_id: "nav-1" }] },
+    ],
+    () => aplicarAparelho(APARELHO, { setores: [] }),
+  );
+  assertEquals(idas.some((i) => i.url.includes("navegador_id=eq.")), false);
 });

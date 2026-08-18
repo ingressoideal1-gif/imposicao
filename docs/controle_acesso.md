@@ -695,8 +695,20 @@ porteiro abre o endereço que a tela do dono mostra — `portaria.html?e=<evento
 como QR — e digita o código daquele aparelho. O servidor troca o código por um token próprio.
 
 Nos dois casos o token é guardado como `sha256` na coluna `token_hash`, que existe desde
-13/08. **Revogar o aparelho é o único jeito de derrubá-lo**: gerar um código novo não
-desconecta ninguém, porque quem já pareou não usa mais o código.
+13/08. **Pausar ou excluir o aparelho é o único jeito de derrubá-lo**: gerar um código novo
+não desconecta ninguém, porque quem já pareou não usa mais o código.
+
+A portaria só aceita `status = 'ativo'` — é isso que faz *Pausar* valer do outro lado sem
+nenhum código a mais. *Excluir* apaga a linha: os vínculos de setor vão junto
+(`on delete cascade`) e as leituras ficam, sem dono (`on delete set null`), porque o
+histórico da noite não pode depender de o aparelho continuar existindo. Ver
+`sql/schema_acesso_excluir_aparelho.sql`.
+
+**O nome é do dispositivo, não do evento** (usuário, 18/08/2026). A coluna `navegador_id`,
+gravada quando o celular vira portão, liga as linhas do mesmo aparelho em eventos
+diferentes; renomear um portão renomeia os outros do mesmo cliente. O celular também guarda
+o próprio nome em `localStorage`, e é essa cópia — que responde sem rede — que já vem
+escrita na pergunta "usar este aparelho?". Ver `sql/schema_acesso_nome_do_dispositivo.sql`.
 
 **A trava** (v612). Salvo o aparelho, ele abre direto na leitura, e a única saída é o botão
 *"Configurar este aparelho"*, que leva ao login. Reeditar **e apagar** passam pela senha — o

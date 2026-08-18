@@ -941,7 +941,14 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       && p[2] === "aparelhos" && p[3] === "aqui") {
     const evento = await eventoDoDono(p[1], usuario);
     await exigirElevacao(evento.id, usuario, req);
-    return ok(await aplicarAparelhoAqui(evento.id, await corpo()));
+    // O `X-Navegador` vem do CABECALHO, e nao do corpo: e o mesmo valor que a
+    // elevacao acabou de conferir logo acima, e aceita-lo pelo corpo deixaria
+    // um aparelho gravar-se com o identificador de outro -- e herdar o nome
+    // dele nos eventos seguintes.
+    return ok(await aplicarAparelhoAqui(evento.id, {
+      ...(await corpo()),
+      navegador: req.headers.get("X-Navegador"),
+    }));
   }
   if (metodo === "PATCH" && p.length === 2 && p[0] === "aparelhos") {
     const ap = await aparelhoDoDono(p[1], usuario);

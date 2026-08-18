@@ -145,10 +145,18 @@
         });
     }
 
-    /** "Aparelho N", com N = quantos portoes o evento ja tem + 1. O dono ve a
-     * lista inteira na engrenagem, e dois "Aparelho 1" ali seriam
-     * indistinguiveis -- por isso conta os do EVENTO, nao os deste aparelho. */
+    /**
+     * O nome que a pergunta ja traz escrito.
+     *
+     * PRIMEIRO o nome deste celular, se ele ja tem um: o nome e do dispositivo
+     * e vale em todos os eventos (usuario, 18/08/2026). So quando este aparelho
+     * nunca foi portao de nada e que se sugere "Aparelho N", com N = quantos
+     * portoes o EVENTO ja tem + 1 -- assim dois celulares estreando no mesmo
+     * evento nao nascem com o mesmo nome.
+     */
     function sugestaoDeNome(painel) {
+        var meu = window.chaveiro.nomeDoAparelho();
+        if (meu) { return meu; }
         return 'Aparelho ' + (((painel && painel.aparelhos) || []).length + 1);
     }
 
@@ -184,6 +192,11 @@
             // o servidor aceita `nome` de 1 a 60 caracteres, e um nome maior
             // que isso voltaria 422.
             var nome = (digitado || sugestaoDeNome(painel)).slice(0, 60);
+            // O nome passa a ser o DESTE CELULAR, e nao o deste evento: o
+            // proximo evento ja pergunta com ele escrito, e o servidor o
+            // espalha para as outras linhas do mesmo aparelho pelo
+            // `navegador_id`.
+            window.chaveiro.guardarNomeDoAparelho(nome);
             return window.AcessoConta.pedir(
                 '/eventos/' + evento_id + '/aparelhos/aqui',
                 {
@@ -233,7 +246,7 @@
                         rotulo: 'Sim, usar este aparelho',
                         campo: {
                             id: 'campo-nome-aparelho',
-                            rotulo: 'Nome deste aparelho (opcional)',
+                            rotulo: 'Nome deste aparelho (vale para todos os eventos)',
                             valor: sugestaoDeNome(painel),
                             maxlength: 60
                         }
@@ -337,5 +350,10 @@
         });
     }
 
-    window.virarPortao = { decidirTroca: decidirTroca, abrir: abrir, criar: criar };
+    window.virarPortao = {
+        decidirTroca: decidirTroca, abrir: abrir, criar: criar,
+        // Exportada pelo mesmo motivo que a `decidirTroca`: e uma regra pura,
+        // e a regra ("o nome e do dispositivo") e do usuario, nao minha.
+        sugestaoDeNome: sugestaoDeNome
+    };
 })();

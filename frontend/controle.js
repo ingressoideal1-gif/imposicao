@@ -1380,6 +1380,13 @@
             var novoNome = campoNome.value;
             // Nenhum PATCH vazio se o dono só olhou o campo e não mexeu.
             if (novoNome === a.nome) { return; }
+            // Se o portão que está sendo renomeado é ESTE celular, a cópia
+            // local acompanha: é ela que preenche a pergunta do próximo evento,
+            // e ela responde sem rede. O servidor cuida das outras linhas do
+            // mesmo aparelho, pelo `navegador_id`.
+            if (meu && meu.aparelho_id === a.id) {
+                window.chaveiro.guardarNomeDoAparelho(novoNome);
+            }
             window.botaoEspera.comecar(btnSalvar, 'Salvando…');
             renomearAparelho(a.id, novoNome).then(function () {
                 // No sucesso, `carregarPainel()` já reconstruiu este cartão

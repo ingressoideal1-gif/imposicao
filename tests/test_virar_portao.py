@@ -119,3 +119,69 @@ def test_o_cancelar_da_pergunta_do_nome_chama_o_encerrar():
     assert "encerrarSessaoRelampago" in texto[i:i + 200], (
         "cancelar a pergunta do nome nao desfaz o login relampago"
     )
+
+
+# ── O nome e do DISPOSITIVO, e vale em todos os eventos ─────────────────────
+#
+# Decisao do usuario em 18/08/2026: "o nome do aparelho e o mesmo para todos os
+# eventos, o nome 'Aparelho' e o nome do dispositivo". Antes cada evento
+# sugeria "Aparelho N" contando os portoes DAQUELE evento, e o mesmo celular
+# aparecia como "Aparelho 1" num evento e "Aparelho 3" no outro.
+
+
+def test_o_celular_que_ja_tem_nome_o_leva_para_o_proximo_evento():
+    from test_controle_tela import _no_navegador
+    saida = _no_navegador("""
+        localStorage.setItem('ideal_control_nome_do_aparelho', 'Celular da Portaria');
+        return {
+            // Um evento que ja tem dois portoes: o antigo sugeriria "Aparelho 3".
+            sugerido: window.virarPortao.sugestaoDeNome({ aparelhos: [{}, {}] }),
+            guardado: window.chaveiro.nomeDoAparelho(),
+        };
+    """)
+    assert saida["sugerido"] == "Celular da Portaria"
+    assert saida["guardado"] == "Celular da Portaria"
+
+
+def test_o_celular_que_nunca_foi_portao_estreia_com_Aparelho_N():
+    """N conta os portoes do EVENTO: dois celulares estreando no mesmo evento
+    nao podem nascer com o mesmo nome."""
+    from test_controle_tela import _no_navegador
+    saida = _no_navegador("""
+        localStorage.removeItem('ideal_control_nome_do_aparelho');
+        return {
+            vazio: window.virarPortao.sugestaoDeNome({ aparelhos: [] }),
+            comDois: window.virarPortao.sugestaoDeNome({ aparelhos: [{}, {}] }),
+            semPainel: window.virarPortao.sugestaoDeNome(null),
+        };
+    """)
+    assert saida["vazio"] == "Aparelho 1"
+    assert saida["comDois"] == "Aparelho 3"
+    assert saida["semPainel"] == "Aparelho 1"
+
+
+def test_o_nome_guardado_e_aparado_e_cabe_no_que_o_servidor_aceita():
+    """O servidor aceita `nome` de 1 a 60 caracteres. Guardar mais aqui faria a
+    proxima criacao de portao voltar 422 -- num celular que ja esta na mao do
+    porteiro."""
+    from test_controle_tela import _no_navegador
+    saida = _no_navegador("""
+        localStorage.removeItem('ideal_control_nome_do_aparelho');
+        const vazio = window.chaveiro.guardarNomeDoAparelho('   ');
+        const depoisDoVazio = window.chaveiro.nomeDoAparelho();
+        const aparado = window.chaveiro.guardarNomeDoAparelho('  Portao A  ');
+        const longo = window.chaveiro.guardarNomeDoAparelho('N'.repeat(80));
+        return { vazio, depoisDoVazio, aparado, tamanhoLongo: longo.length };
+    """)
+    # Nome vazio nao apaga o que ja havia -- e nao grava nada.
+    assert saida["vazio"] == ""
+    assert saida["depoisDoVazio"] == ""
+    assert saida["aparado"] == "Portao A"
+    assert saida["tamanhoLongo"] == 60
+
+
+def test_a_pergunta_diz_que_o_nome_vale_para_todos_os_eventos():
+    """Regra do projeto: o que o sistema faz sozinho precisa se anunciar. Quem
+    digita um nome ali esta nomeando o CELULAR, nao o portao daquela noite."""
+    for arquivo in ("frontend/virar-portao.js", "frontend/carregar-pedido.js"):
+        assert "vale para todos os eventos" in _ler(arquivo), arquivo

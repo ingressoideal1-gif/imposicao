@@ -327,8 +327,12 @@
         });
     }
 
-    /** "Aparelho N", com N = quantos o evento ja tem + 1. */
+    /** O nome deste celular, que vale em todos os eventos (usuario,
+     * 18/08/2026); so quem nunca foi portao de nada estreia com "Aparelho N",
+     * N = quantos o evento ja tem + 1. Mesma regra do `virar-portao.js`. */
     function sugestaoDeNome(painel) {
+        var meu = window.chaveiro.nomeDoAparelho();
+        if (meu) { return meu; }
         return 'Aparelho ' + (((painel && painel.aparelhos) || []).length + 1);
     }
 
@@ -385,7 +389,7 @@
                             rotulo: 'Sim, usar este aparelho',
                             campo: {
                                 id: 'campo-nome-aparelho',
-                                rotulo: 'Nome deste aparelho (opcional)',
+                                rotulo: 'Nome deste aparelho (vale para todos os eventos)',
                                 valor: sugestaoDeNome(painel),
                                 maxlength: 60
                             }

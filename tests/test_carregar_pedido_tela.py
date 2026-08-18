@@ -119,10 +119,12 @@ def test_sim_liga_este_aparelho_sem_pedir_a_senha_de_novo():
 
 
 def test_o_Sim_leva_o_campo_de_nome_com_a_sugestao_do_painel():
-    """Task 6, 18/08/2026: "nome do aparelho na hora". O painel busca ANTES de
-    perguntar so para a sugestao saber o N certo -- aqui o evento ainda nao
-    tem nenhum aparelho, entao a sugestao e "Aparelho 1"."""
+    """Task 6, 18/08/2026: "nome do aparelho na hora". Este celular nunca foi
+    portao de nada, entao estreia com "Aparelho N" -- e o painel busca ANTES de
+    perguntar so para o N sair certo. Aqui o evento ainda nao tem nenhum
+    aparelho, entao a sugestao e "Aparelho 1"."""
     saida = _no_navegador(DESVIO + """
+        localStorage.removeItem('ideal_control_nome_do_aparelho');
         window.__opcoes = null;
         window.caixaConfirmar.perguntar = async (texto, opcoes) => { window.__opcoes = opcoes; return false; };
         await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
@@ -133,10 +135,26 @@ def test_o_Sim_leva_o_campo_de_nome_com_a_sugestao_do_painel():
     """)
     assert saida["campo"] == {
         "id": "campo-nome-aparelho",
-        "rotulo": "Nome deste aparelho (opcional)",
+        "rotulo": "Nome deste aparelho (vale para todos os eventos)",
         "valor": "Aparelho 1",
         "maxlength": 60,
     }
+
+
+def test_o_celular_que_JA_TEM_NOME_o_traz_escrito_em_vez_de_Aparelho_N():
+    """O nome e do dispositivo (usuario, 18/08/2026): o segundo evento nao
+    renomeia o celular do porteiro."""
+    saida = _no_navegador(DESVIO + """
+        localStorage.setItem('ideal_control_nome_do_aparelho', 'Celular da Portaria');
+        window.__opcoes = null;
+        window.caixaConfirmar.perguntar = async (texto, opcoes) => { window.__opcoes = opcoes; return false; };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 150));
+        return window.__opcoes;
+    """)
+    assert saida["campo"]["valor"] == "Celular da Portaria"
 
 
 def test_o_nome_digitado_na_pergunta_vai_no_POST_no_lugar_do_automatico():

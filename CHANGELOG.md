@@ -8,7 +8,31 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v637 — 2026-08-18] *(a publicar)* — A casa vazia diz onde estão os eventos
+## [v637 — 2026-08-18] *(a publicar)* — O aparelho: quatro opções, o nome é dele, e a casa vazia mostra a saída
+
+**"Revogar" saiu.** Ele desligava o aparelho e deixava o cartão na lista para sempre — que não
+é nenhuma das duas coisas que se quer fazer com um portão. No lugar dele, as quatro opções que
+o usuário pediu, em botões do mesmo tamanho, um abaixo do outro: **Renomear**, **Selecionar os
+Setores**, **Pausar** e **Excluir**.
+
+- **Excluir apaga mesmo** (`DELETE /aparelhos/{id}`): o aparelho some da lista. Os vínculos de
+  setor vão junto; as leituras ficam, sem dono, porque o histórico da noite não pode depender
+  de o aparelho continuar existindo. Ver `sql/schema_acesso_excluir_aparelho.sql`.
+- **Pausar tem volta** (`status = pausado`, e *Retomar*). A portaria já exigia
+  `status = ativo`, então pausar derruba o aparelho do outro lado sem nenhum código a mais.
+- Renomear e Selecionar os Setores abrem o painel delas, **uma de cada vez**, e a abertura
+  sobrevive ao redesenho do painel — marcar um setor grava sozinho e recarrega.
+- **Os setores também empilhados**, todos da mesma largura.
+
+**O nome é do dispositivo, não do evento.** O mesmo celular era "Aparelho 1" num evento e
+"Aparelho 3" no outro, porque a sugestão contava os portões daquele evento. Agora o celular
+guarda o próprio nome (responde sem rede, e já vem escrito na pergunta "usar este aparelho?"),
+e o servidor liga as linhas do mesmo aparelho pela coluna nova `navegador_id`: renomear um
+portão renomeia os outros do mesmo cliente. Ver `sql/schema_acesso_nome_do_dispositivo.sql`.
+
+Os dois arquivos SQL já foram rodados no banco.
+
+### A casa vazia diz onde estão os eventos
 
 Um cliente entrou pela primeira vez e leu **"Nenhum evento aqui ainda"** — com quatro
 eventos na conta dele, todos finalizados, a um toque dali no menu do olho. A frase era

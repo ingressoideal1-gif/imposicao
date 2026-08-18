@@ -30,6 +30,9 @@
     var CHAVE = 'ideal_control_portoes';
     var CHAVE_TOKEN = 'ideal_portaria_token';
     var CHAVE_EVENTO = 'ideal_portaria_evento';
+    // O nome DESTE celular, um so, fora da lista de portoes -- ver
+    // `nomeDoAparelho`, mais abaixo.
+    var CHAVE_NOME = 'ideal_control_nome_do_aparelho';
 
     /**
      * Ler do `localStorage` sem nunca lancar.
@@ -73,6 +76,34 @@
         });
         lista.push(entrada);
         return escrever(lista);
+    }
+
+    /**
+     * O nome deste celular.
+     *
+     * Decisao do usuario em 18/08/2026: "o nome do aparelho e o mesmo para
+     * todos os eventos, o nome 'Aparelho' e o nome do dispositivo". Antes cada
+     * evento sugeria "Aparelho N" contando os portoes DAQUELE evento, e o mesmo
+     * celular aparecia como "Aparelho 1" num evento e "Aparelho 3" no outro --
+     * o dono nao tinha como saber que era o mesmo aparelho.
+     *
+     * Mora aqui, e nao na lista de portoes, porque nao pertence a evento
+     * nenhum: e propriedade do aparelho, como o token e o chaveiro. O servidor
+     * tambem guarda (a coluna `navegador_id` liga as linhas do mesmo celular),
+     * e este e o lado que responde SEM REDE -- que e o que a pergunta "usar
+     * este aparelho?" precisa para ja vir preenchida.
+     */
+    function nomeDoAparelho() {
+        try { return localStorage.getItem(CHAVE_NOME) || ''; }
+        catch (e) { return ''; }
+    }
+
+    function guardarNomeDoAparelho(nome) {
+        var limpo = String(nome || '').trim().slice(0, 60);
+        if (!limpo) { return ''; }
+        try { localStorage.setItem(CHAVE_NOME, limpo); }
+        catch (e) { /* aba anonima: vale so nesta sessao */ }
+        return limpo;
     }
 
     function esquecer(evento_id) {
@@ -160,6 +191,7 @@
     window.chaveiro = {
         listar: listar, procurar: procurar, guardar: guardar,
         esquecer: esquecer, carregado: carregado, carregar: carregar,
-        migrar: migrar
+        migrar: migrar,
+        nomeDoAparelho: nomeDoAparelho, guardarNomeDoAparelho: guardarNomeDoAparelho
     };
 })();

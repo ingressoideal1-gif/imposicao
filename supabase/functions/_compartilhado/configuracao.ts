@@ -509,10 +509,74 @@ export async function aplicarAparelhoAqui(eventoId: string, corpo: any): Promise
     codigo_hash: null,
     token_hash: await hashDoToken(token),
     ultimo_visto: "now()",
+    // Quem e este celular, para o nome dele valer nos outros eventos. Ver
+    // `espalharONome` e `sql/schema_acesso_nome_do_dispositivo.sql`.
+    navegador_id: navegador(corpo?.navegador),
   }))[0];
   await trocarSetores(criado.id, setores);
 
   return { id: criado.id, nome, setores, token };
+}
+
+/**
+ * O identificador do navegador, se vier em forma utilizavel.
+ *
+ * O MESMO formato que a elevacao exige (`assinatura.ts`), e pelo mesmo motivo
+ * que la: ele entra concatenado numa URL do PostgREST, sem escape -- e o
+ * `banco()` avisa no cabecalho dele que qualquer valor que va num filtro
+ * precisa ser seguro em query string.
+ *
+ * Ausente ou fora do formato vira `null`, e nao recusa: um portao sem
+ * identificador continua sendo um portao que funciona, so nao acompanha o nome
+ * dos outros. Recusar a criacao por causa disso deixaria o dono sem portao
+ * nenhum no meio do evento.
+ */
+function navegador(valor: unknown): string | null {
+  const v = String(valor ?? "").trim();
+  return /^[A-Za-z0-9_-]{1,64}$/.test(v) ? v : null;
+}
+
+/**
+ * O nome e do DISPOSITIVO, e vale em todos os eventos.
+ *
+ * Decisao do usuario em 18/08/2026. Renomear um portao renomeia as outras
+ * linhas do MESMO celular -- as que compartilham o `navegador_id`.
+ *
+ * O limite e o CLIENTE, e nao o banco inteiro: um celular emprestado que tenha
+ * sido portao na operacao de outro cliente nao pode ser renomeado por aqui. O
+ * nome e do aparelho, mas cada cliente so manda no que e da operacao dele.
+ *
+ * Sem `navegador_id` (portao criado pela grafica, ou anterior a 18/08/2026)
+ * nao ha o que espalhar, e a funcao sai sem tocar em nada.
+ */
+async function espalharONome(aparelho: any, nome: string): Promise<void> {
+  const linha = ((await banco(
+    "GET",
+    `producao_acesso_dispositivos?id=eq.${aparelho.id}&select=navegador_id`,
+  )) ?? [])[0];
+  const chave = navegador(linha?.navegador_id);
+  if (!chave) return;
+
+  const evento = ((await banco(
+    "GET",
+    `producao_acesso_eventos?id=eq.${aparelho.evento_id}&select=id_cliente`,
+  )) ?? [])[0];
+  const cliente = Number(evento?.id_cliente);
+  if (!cliente) return;
+
+  const eventos = ((await banco(
+    "GET",
+    `producao_acesso_eventos?id_cliente=eq.${cliente}&select=id`,
+  )) ?? []).map((e: any) => String(e.id));
+  if (!eventos.length) return;
+
+  await banco(
+    "PATCH",
+    `producao_acesso_dispositivos?navegador_id=eq.${chave}` +
+      `&evento_id=in.(${eventos.join(",")})`,
+    { nome },
+    "return=minimal",
+  );
 }
 
 export async function aplicarAparelho(aparelho: any, corpo: any): Promise<any> {
@@ -539,6 +603,11 @@ export async function aplicarAparelho(aparelho: any, corpo: any): Promise<any> {
       mudanca,
       "return=minimal",
     );
+  }
+  // Depois de gravar, e nao no lugar: o PATCH acima e o que atende a linha sem
+  // `navegador_id`, que e toda linha criada antes de 18/08/2026.
+  if (typeof mudanca.nome === "string") {
+    await espalharONome(aparelho, mudanca.nome);
   }
 
   if ("setores" in corpo) {

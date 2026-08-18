@@ -89,10 +89,14 @@ Spec: [docs/superpowers/specs/2026-08-13-controle-acesso-parte2-design.md](super
 ### ✅ Parte 3a — o dono configura o evento (**no ar desde a v570**)
 
 O dono do evento configura tudo em [frontend/controle.html](../frontend/controle.html): dados
-do evento, tipo de uso de cada setor, aparelhos da portaria — inclusive renomear e
-revogar cada um, com a lista de setores de cada aparelho — e os códigos próprios de staff e
-cortesia. Gerar um código novo para um aparelho **não desconecta** o aparelho que já está
-trabalhando.
+do evento, tipo de uso de cada setor, aparelhos da portaria e os códigos próprios de staff e
+cortesia.
+
+Cada aparelho tem **quatro opções**, decisão do usuário em 18/08/2026: *Renomear*,
+*Selecionar os Setores*, *Pausar* e *Excluir*. Excluir apaga a linha mesmo — o aparelho some
+da lista, e as leituras que ele já fez continuam contadas no evento. Pausar tem volta. O
+**nome é do dispositivo**, não do evento: o mesmo celular se chama a mesma coisa em todos os
+eventos daquele cliente, e renomeá-lo num deles renomeia nos outros.
 
 Toda escrita — sem exceção — exige uma elevação de 15 minutos obtida com a senha do dono,
 assinada com `ACESSO_ELEVACAO_SEGREDO` e presa ao navegador. Sem ela os campos ficam
@@ -126,10 +130,13 @@ no topo deste documento. A
 
 **Falta o teste com um dono de verdade.** O caminho foi provado por fora, endpoint por
 endpoint, mas nenhum cliente ainda entrou, digitou a senha, mudou o uso de um setor e cadastrou um
-aparelho. Um detalhe conhecido e ainda em aberto: **não há como reativar um aparelho
-revogado.** Revogar é o botão de pânico da portaria, e botão de pânico é apertado por
-engano; hoje o conserto é criar outro aparelho e digitar um código novo no celular. O
-backend já aceitaria a reativação — falta a decisão do usuário e o botão.
+aparelho.
+
+O buraco que existia aqui — "não há como reativar um aparelho revogado", o botão de pânico
+apertado por engano sem conserto — **fechou em 18/08/2026**: *Revogar* deixou de existir, e
+no lugar dele ficaram *Pausar* (que tem volta, pelo *Retomar*) e *Excluir* (que apaga a
+linha). O estado do meio, desligado para sempre e ocupando a lista, era justamente o que não
+resolvia nem uma coisa nem outra.
 
 ### ✅ Parte 3b — a portaria (**no ar na v585**)
 
