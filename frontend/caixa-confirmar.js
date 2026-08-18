@@ -118,7 +118,17 @@
                 // so `null` deixa a duvida fora do caminho de quem chama.
                 if (!resposta) { resolver(null); return; }
                 var digitado = campo.value.trim();
-                resolver(digitado || opcoes.campo.valor);
+                var final = digitado || opcoes.campo.valor;
+                // O `maxlength` do HTML so trava a DIGITACAO: um autofill ou
+                // uma extensao do navegador escreve em `campo.value` por
+                // fora do teclado, e esse texto passa reto por cima do
+                // atributo. Sem este corte aqui, ele ia inteiro ao servidor
+                // e voltava 422 -- o limite tem de valer no dado, nao so na
+                // tela.
+                if (opcoes.campo.maxlength) {
+                    final = final.slice(0, opcoes.campo.maxlength);
+                }
+                resolver(final);
             }
 
             function naTecla(ev) {

@@ -179,7 +179,11 @@
             : buscarPainel(evento_id, sessao);
         return pronto.then(function (painel) {
             var digitado = typeof nomeEscolhido === 'string' ? nomeEscolhido.trim() : '';
-            var nome = digitado || sugestaoDeNome(painel);
+            // Cinto e suspensório: a caixa (`caixa-confirmar.js`) já corta em
+            // `maxlength`, mas `criar` pode ser chamado sem passar por ela —
+            // o servidor aceita `nome` de 1 a 60 caracteres, e um nome maior
+            // que isso voltaria 422.
+            var nome = (digitado || sugestaoDeNome(painel)).slice(0, 60);
             return window.AcessoConta.pedir(
                 '/eventos/' + evento_id + '/aparelhos/aqui',
                 {

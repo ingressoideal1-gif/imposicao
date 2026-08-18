@@ -3805,3 +3805,18 @@ def test_cancelar_a_pergunta_do_nome_nao_cria_nenhum_aparelho():
         return window.__chamadas.some(c => c.caminho === '/eventos/ev-9/aparelhos/aqui');
     """)
     assert saida is False
+
+
+def test_criar_corta_em_60_MESMO_recebendo_um_nome_maior_da_pergunta():
+    """Cinto e suspensório: a caixa (`caixa-confirmar.js`) ja corta no
+    `maxlength`, mas `virarPortao.criar` pode receber `nomeEscolhido` sem
+    passar por ela -- o servidor aceita `nome` de 1 a 60 caracteres, e
+    mandar mais que isso voltaria 422."""
+    saida = _no_navegador(_SETUP_CRIAR_AVULSO + """
+        window.caixaConfirmar.perguntar = async () => 'Y'.repeat(80);
+        await window.virarPortao.abrir('ev-9', 'Feira X', false);
+        const aqui = window.__chamadas.find(c => c.caminho === '/eventos/ev-9/aparelhos/aqui');
+        return aqui.corpo.nome;
+    """)
+    assert len(saida) == 60
+    assert saida == "Y" * 60

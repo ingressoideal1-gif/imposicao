@@ -74,6 +74,24 @@ def test_confirmar_com_campo_resolve_o_texto_digitado_e_aparado():
     assert saida == "Leitor da entrada"
 
 
+def test_o_maxlength_corta_mesmo_com_texto_escrito_POR_FORA_do_teclado():
+    """O atributo `maxlength` do HTML so trava a DIGITACAO -- autofill e
+    extensao do navegador escrevem em `campo.value` por fora dele, e esse
+    texto passa reto por cima do atributo. Sem o corte no `resolver`, um
+    nome assim chegaria inteiro ao servidor e voltaria 422 (o `nome` do
+    aparelho aceita de 1 a 60 caracteres)."""
+    saida = _no_navegador("""
+        const p = window.caixaConfirmar.perguntar('Usar este aparelho?', { """ + CAMPO + """ });
+        // 80 caracteres, escritos direto na propriedade -- nao via teclado,
+        // que e exatamente o que o `maxlength` do HTML nao alcança.
+        document.getElementById('campo-nome-aparelho').value = 'X'.repeat(80);
+        document.getElementById('btn-confirmar-sim').click();
+        return await p;
+    """)
+    assert len(saida) == 60
+    assert saida == "X" * 60
+
+
 def test_confirmar_com_campo_VAZIO_resolve_a_sugestao():
     """Vazio não é "sem nome": vira o `valor` que já estava sugerido no campo."""
     saida = _no_navegador("""
