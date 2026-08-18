@@ -159,6 +159,53 @@ def test_btn_entrar_volta_ao_normal_mesmo_quando_a_resposta_e_erro():
     assert saida["erro"], "a senha errada nao disse nada na tela"
 
 
+# ── `travarCampos()` nao pode reabilitar um botao em espera ────────────────
+#
+# Achado de revisao de codigo, 18/08/2026: `travarCampos()` roda a cada
+# `desenhar()` E a cada 20s pelo `setInterval` da faixa (`controle.js`), e faz
+# `el.disabled = leitura` em todo `.so-com-senha` -- inclusive num botao que
+# `botaoEspera.comecar()` acabou de desabilitar. Com elevacao valida
+# (`leitura = false`) isso REABILITAVA "Gravando..."/"Salvando..."/
+# "Carregando..." no meio da propria espera: o dono via o botao solto de
+# novo, tocava outra vez, e mandava um SEGUNDO PATCH -- o defeito exato que a
+# espera existe para evitar, e rede fraca no portao passa facil dos 20s entre
+# redesenhos.
+
+
+def test_travar_campos_nao_reabilita_um_botao_em_espera():
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+
+        const botao = document.getElementById('btn-gravar-evento');
+        window.botaoEspera.comecar(botao, 'Gravando…');
+        // `desenhar()` chama `travarCampos()` por dentro -- e o `setInterval`
+        // da faixa chama exatamente a mesma funcao, entao exercitar `desenhar()`
+        // aqui prova os dois caminhos de uma vez.
+        Controle.desenhar();
+        const durante = { texto: botao.textContent, disabled: botao.disabled };
+
+        window.botaoEspera.terminar(botao);
+        Controle.desenhar();
+        const depoisComElevacao = botao.disabled;
+
+        Controle.estado.elevacao = null;
+        Controle.desenhar();
+        const depoisSemElevacao = botao.disabled;
+
+        return { durante, depoisComElevacao, depoisSemElevacao };
+    """)
+    assert saida["durante"] == {"texto": "Gravando…", "disabled": True}, (
+        "travarCampos() reabilitou um botao que ainda esperava resposta de rede"
+    )
+    # `terminar` devolveu o botao ao normal, e dali em diante quem governa
+    # `disabled` volta a ser a trava de elevacao -- nos dois sentidos.
+    assert saida["depoisComElevacao"] is False, "desenhar() nao voltou a governar o botao apos terminar"
+    assert saida["depoisSemElevacao"] is True
+
+
 # ── Registro ─────────────────────────────────────────────────────────────
 
 

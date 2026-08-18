@@ -132,10 +132,22 @@
         // acima, já está dizendo.
         $('tranca').classList.toggle('sumindo', !leitura);
 
+        // `aria-busy` e a marca que o `botaoEspera.comecar()` poe enquanto um
+        // PATCH esta em voo (achado da revisao de codigo, 18/08/2026): sem
+        // esta guarda, esta funcao — chamada tambem pelo `setInterval` de
+        // 20s da faixa — REABILITAVA "Gravando…"/"Salvando…"/"Carregando…"
+        // no meio da propria espera, com elevacao valida. O dono via o botao
+        // solto de novo e tocava outra vez, mandando um SEGUNDO PATCH — o
+        // defeito exato que a espera existe para evitar, e rede fraca no
+        // portao passa fácil dos 20s entre redesenhos.
         document.querySelectorAll('#engrenagem input, #engrenagem select, #engrenagem textarea')
-            .forEach(function (el) { el.disabled = leitura; });
+            .forEach(function (el) {
+                if (el.getAttribute('aria-busy') !== 'true') { el.disabled = leitura; }
+            });
         document.querySelectorAll('#engrenagem button.so-com-senha, #engrenagem .so-com-senha button')
-            .forEach(function (el) { el.disabled = leitura; });
+            .forEach(function (el) {
+                if (el.getAttribute('aria-busy') !== 'true') { el.disabled = leitura; }
+            });
     }
 
     function desenhar() {
