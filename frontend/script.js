@@ -20931,7 +20931,8 @@ function updateFiltroPrazoBotoes() {
     // Alerta apenas nesta condição: vendo "Para Hoje" e havendo atrasados fora da lista
     const alertarAtrasados = (atual === 'hoje') && !!state.temPedidosAtrasados;
 
-    document.querySelectorAll('#filtro-prazo-grupo button[data-prazo]').forEach(btn => {
+    // Sem prender ao #filtro-prazo-grupo: o "Impresso" fica fora dele, no cabeçalho.
+    document.querySelectorAll('button[data-prazo]').forEach(btn => {
         const ativo = btn.dataset.prazo === atual;
         btn.classList.toggle('active', ativo);
 

@@ -236,6 +236,27 @@ body {
 
 .view-section.active { display: block; }
 
+/* ─── Tamanho fixo de cada tela ──────────────────────────────────────────────
+   O operador ajustava o zoom do navegador à mão a cada troca de tela: 100% no
+   Painel de Produção, 80% no Pedido (que só cabe inteiro reduzido). O ajuste
+   manual não sobrevive à troca de tela nem ao F5, e depende de configuração do
+   navegador — que aqui muda de estação para estação.
+
+   Com o zoom preso na própria tela, cada uma abre no tamanho certo sozinha, e
+   voltar ao Painel devolve os 100% sem ninguém tocar em nada. Mudar o número
+   abaixo é a única coisa necessária para mudar o tamanho de abertura. */
+#view-lista-impressao { zoom: 1; }
+#view-pedido          { zoom: 0.8; }
+
+/* O "Impresso" sai do fluxo do flex de propósito: os três filtros de prazo
+   continuam centralizados exatamente como sempre estiveram, e ele fica
+   destacado à esquerda, separado — não é mais um recorte da fila de trabalho,
+   é o que já saiu dela. Mora aqui, e não no style inline do botão, porque
+   updateFiltroPrazoBotoes() reescreve o cssText destes botões a cada render. */
+#filtro-impresso {
+    margin-left: 2rem;   /* respiro depois do título */
+}
+
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
