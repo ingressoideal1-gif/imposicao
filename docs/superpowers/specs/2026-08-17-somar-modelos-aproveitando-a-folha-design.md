@@ -3,6 +3,12 @@
 Desenho fechado em 17/08/2026, a partir do pedido **20495** — um caderno de
 credenciais PVC com nove modelos, um por país.
 
+> **Este documento é o registro daquele dia, e não descreve mais a tela de
+> hoje.** Em 18/08/2026 os botões "PDF Sel." e "Imp. Sel." foram **removidos**
+> (imprimiam só o primeiro modelo), e o modelo passou a guardar duas opções
+> próprias — imprimir o número, e Sequencial ou Blocado. O que vale agora está em
+> `docs/modelos_somados.md`.
+
 ## O problema
 
 O formato **Credencial 90×140** põe 4 células por folha A4. Impressos um a um, os

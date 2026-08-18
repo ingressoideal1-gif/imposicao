@@ -9541,13 +9541,13 @@ window.runImposition = async function (mode, returnBlob = false) {
             // Ver o comentario em `runImposition`: a coluna do ERP e
             // `amostra_num_id`; `numeracao_id` so existe em memoria.
             numId = firstItem.numeracao_id || firstItem.amostra_num_id;
-            // Modelos combinados: "aproveitar a folha" manda a tiragem se
-            // encher na ordem, numa conta só (multi_artes). "Cada modelo em
-            // folha própria" mantém o cut_stack + strict_assembly de sempre,
-            // que dá folhas próprias a cada modelo. O padrão é o de sempre.
-            schema = (modoSomaFolha() === 'aproveitar') ? 'multi_artes' : 'cut_stack';
+            // Modelos combinados: o modo salvo nos modelos decide primeiro
+            // (Sequencial enche a folha na ordem), e dentro de Blocado a barra
+            // escolhe entre folha própria e aproveitar a folha. Ver
+            // esquemaDaSelecaoCombinada(). Nada disso vale para um modelo só.
+            schema = esquemaDaSelecaoCombinada();
         } else {
-            schema = (modoSomaFolha() === 'aproveitar') ? 'multi_artes' : 'cut_stack';
+            schema = esquemaDaSelecaoCombinada();
         }
 
         tempMultiArtes = state.selectedOSItems.map(s => {
@@ -9575,6 +9575,10 @@ window.runImposition = async function (mode, returnBlob = false) {
             return {
                 qtd: qt,
                 nome: sItem ? sItem.modelo : '',
+                // Se este número chega ao papel ou não. Fica separado de `nome`
+                // porque `nome` também alimenta as mensagens da tela ("o modelo
+                // X não possui arte"), e essas continuam precisando do número.
+                _imprimirNumero: imprimeNumeroDoModelo(sItem),
                 _itemId: s.itemId,
                 _osId: s.osId,
                 num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
@@ -9719,11 +9723,9 @@ window.runImposition = async function (mode, returnBlob = false) {
     // Obter o código do modelo para usar no nome do arquivo
     let modeloNum = '';
     if (isMultiSelected && state.selectedOSItems && state.selectedOSItems.length > 0) {
-        const firstSel = state.selectedOSItems[0];
-        const firstItem = state.osItens[firstSel.osId]?.find(i => String(i.id) === String(firstSel.itemId));
-        if (firstItem && firstItem.modelo) {
-            modeloNum = firstItem.modelo;
-        }
+        // Todos os modelos da folha, não só o primeiro: o arquivo tem o material
+        // de vários, e quem o encontra na pasta precisa saber disso sem abrir.
+        modeloNum = nomeDosModelosCombinados(itensDaImposicao(true));
     } else if (state.activeOSItem) {
         const itens = state.osItens[state.activeOSItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(state.activeOSItem.itemId));
@@ -9818,12 +9820,17 @@ window.runImposition = async function (mode, returnBlob = false) {
                 qtd: qtdArte,
 
                 pdf_url: arte.pdf_url,
-                
+
                 pdf_verso_url: arte.pdf_verso_url || null,
 
                 pdf_name: arte.pdf_name,
 
-                nome: arte.nome || '',
+                // O motor imprime este texto deitado na borda de cada item, e é
+                // o único campo que decide se ele sai. Ao combinar modelos do
+                // pedido quem manda é a opção do modelo, desmarcada por padrão.
+                // Na Lista de Imposição (não é multi-seleção) o nome é digitado
+                // à mão e continua valendo como sempre.
+                nome: (isMultiSelected && !arte._imprimirNumero) ? '' : (arte.nome || ''),
 
                 nome_color: arte.nome_color || '#000000',
 
@@ -9959,22 +9966,13 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         multi_artes: payloadMultiArtes,
 
-        // Ao aproveitar a folha o esquema é multi_artes, e o motor só liga o
-        // strict_assembly quando o esquema é cut_stack — mandar 'independent'
-        // aqui é dizer a verdade no payload, não mudar comportamento.
-        cut_stack_mode: isMultiSelected ? (modoSomaFolha() === 'aproveitar' ? 'independent' : 'strict_assembly') : ((state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent')),
+        // Fora do cut_stack o motor ignora este campo — mandar 'independent'
+        // aqui é dizer a verdade no payload, não mudar comportamento. Dentro
+        // dele vale a blocagem salva no modelo, que sem nada gravado devolve o
+        // mesmo 'strict_assembly' de sempre. Ver modoCutStackDaSelecao().
+        cut_stack_mode: isMultiSelected ? modoCutStackDaSelecao() : ((state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent')),
 
-        sheets_per_block: isMultiSelected ? (() => {
-            const firstSel = state.selectedOSItems.find(sel => {
-                const si = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
-                return si && si.bloco && parseInt(si.bloco) > 0;
-            });
-            if (firstSel) {
-                const si = state.osItens[firstSel.osId]?.find(i => String(i.id) === String(firstSel.itemId));
-                return parseInt(si.bloco);
-            }
-            return parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50;
-        })() : ((state.activeOSItem && state.osItens[state.activeOSItem.osId] && state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.bloco) ? parseInt(state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId)).bloco) : ((state.activeOSItem) ? (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) : (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50))),
+        sheets_per_block: isMultiSelected ? blocagemDaSelecao().folhas : ((state.activeOSItem && state.osItens[state.activeOSItem.osId] && state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.bloco) ? parseInt(state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId)).bloco) : ((state.activeOSItem) ? (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) : (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 50))),
 
         block_depth: (isMultiSelected || state.activeOSItem) ? (parseInt(document.getElementById('ped-block-depth')?.value) || 1) : (parseInt(document.getElementById('imp-block-depth')?.value) || 1),
 
@@ -10535,9 +10533,11 @@ window.runImposition = async function (mode, returnBlob = false) {
         // Modo impressao direta: abrir modal em vez de download
         if (mode === 'print' && _printerAgentActive) {
             // O status só vira IMPRESSO depois que o operador confirmar, no popup
-            // exibido ao final do envio para a impressora
-            if (typeof marcarConfirmacaoPendente === 'function' && state.activeOSItem && state.activeOSItem.itemId) {
-                marcarConfirmacaoPendente([{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]);
+            // exibido ao final do envio para a impressora. Com vários modelos na
+            // folha são todos: marcar só o aberto deixava o outro em Aguardando.
+            const _alvos = alvosDaImpressao(isMultiSelected);
+            if (typeof marcarConfirmacaoPendente === 'function' && _alvos.length) {
+                marcarConfirmacaoPendente(_alvos);
             }
             openPrintModal(blob);
             toast('PDF gerado! Selecione a impressora.', 'success');
@@ -13521,21 +13521,32 @@ function atualizarBarraDeSoma() {
 
     const conta = varias ? contaDaSoma(itens) : null;
 
-    const aproveitando = modoSomaFolha() === 'aproveitar';
+    // Sequencial enche a folha na ordem e não corta pilha nenhuma, então não
+    // existe "folha própria por modelo" nesse modo: a escolha da barra deixa de
+    // ter o que decidir, e um seletor que não decide nada engana quem o lê.
+    const sequencial = varias && modoDeImpressaoDaSelecao() === 'sequencial';
+
+    const aproveitando = !sequencial && modoSomaFolha() === 'aproveitar';
 
     const comBloco = (varias && aproveitando) ? modelosComBlocagemReal(itens) : [];
 
     const texto = conta
         ? `${conta.modelos} modelos · ${conta.itens.toLocaleString('pt-BR')} itens · `
           + `${conta.poses} por folha · `
-          + (aproveitando
+          + (sequencial
+              ? `${conta.somado.toLocaleString('pt-BR')} folhas — Sequencial enche a folha na ordem`
+              : aproveitando
               ? `${conta.somado.toLocaleString('pt-BR')} folhas`
                 + (conta.economia > 0 ? ` — economia de ${conta.economia} folha(s)` : '')
               : `${conta.separado.toLocaleString('pt-BR')} folhas`
                 + (conta.economia > 0 ? ` — aproveitando a folha seriam ${conta.somado}` : ''))
         : 'Escolha o formato dos modelos para ver a conta das folhas.';
 
-    const aviso = comBloco.length
+    const aviso = sequencial
+        ? 'Sequencial não corta pilha, então não há folha própria por modelo — um começa na folha '
+          + 'onde o outro terminou. Para dar folha própria a cada modelo, mude o modo para Blocado '
+          + 'em "Opções do modelo".'
+        : comBloco.length
         ? `⚠️ Aproveitar a folha desfaz a montagem por bloco de: ${comBloco.join(', ')}. `
           + 'Para manter os blocos, volte para "Cada modelo em folha própria".'
         : '';
@@ -13555,6 +13566,14 @@ function atualizarBarraDeSoma() {
 
         if (sel && sel.value !== modoSomaFolha()) sel.value = modoSomaFolha();
 
+        if (sel) {
+
+            sel.disabled = sequencial;
+
+            sel.style.opacity = sequencial ? '0.5' : '';
+
+        }
+
         const elConta = document.getElementById(ids[2]);
 
         if (elConta) elConta.textContent = texto;
@@ -13571,8 +13590,339 @@ function atualizarBarraDeSoma() {
 
     });
 
+    // O bloco de opções pertence ao modelo aberto, e as duas telas que desenham
+    // a fila terminam aqui — é o ponto onde ele já se atualiza sozinho.
+    atualizarOpcoesDoModelo();
+
 }
 window.atualizarBarraDeSoma = atualizarBarraDeSoma;
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AS OPÇÕES QUE O MODELO GUARDA PARA QUANDO ENTRA NUMA FOLHA COMBINADA
+//
+// Duas escolhas do operador não tinham onde morar e se perdiam a cada troca de
+// modelo: se o número do modelo sai impresso em cada item, e se a tiragem é
+// sequencial ou blocada. Agora ficam em `pedidos_modelos` e voltam do jeito que
+// ficaram.
+//
+// A FRONTEIRA, e é ela que importa aqui: tudo deste bloco é lido SOMENTE quando
+// há dois ou mais modelos marcados. Imprimir um modelo sozinho continua decidido
+// pela Regra de Paginação da tela, pelo padrão do Formato e pelo `blocos` do ERP
+// — caminho já validado na gráfica, que não muda por causa deste recurso. Foi
+// condição do usuário em 18/08/2026. Ver docs/modelos_somados.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Este modelo imprime o próprio número em cada item? Só vale ao combinar. */
+function imprimeNumeroDoModelo(item) {
+
+    return !!(item && item.imprimir_numero_modelo);
+
+}
+window.imprimeNumeroDoModelo = imprimeNumeroDoModelo;
+
+
+
+/**
+ * Com que modo este modelo entra numa folha combinada: 'sequencial' ou
+ * 'blocado'. O que o operador salvou vence; sem nada salvo vale o `blocos` do
+ * ERP e, na falta dele, o padrão do Formato — que é quem decidia antes de a
+ * escolha existir, e por isso modelo nunca tocado se comporta como sempre.
+ */
+function modoDeImpressaoDoModelo(item) {
+
+    if (!item) return 'sequencial';
+
+    const salvo = String(item.modo_impressao || '').toLowerCase();
+
+    if (salvo === 'sequencial' || salvo === 'blocado') return salvo;
+
+    if (item.blocos && String(item.blocos).toUpperCase() !== 'N') return 'blocado';
+
+    const fmt = (state.formatos || []).find(f => String(f.id) === String(item.formato_id));
+
+    return (fmt && fmt.default_schema === 'cut_stack') ? 'blocado' : 'sequencial';
+
+}
+window.modoDeImpressaoDoModelo = modoDeImpressaoDoModelo;
+
+
+
+/**
+ * O modo de blocos e as folhas por bloco de um modelo. Sem nada salvo devolve
+ * exatamente o que a v634 já mandava ao combinar — montagem estrita com as
+ * folhas do `bloco` do ERP —, para que ligar este recurso não mude nenhuma
+ * tiragem que já estava saindo certa.
+ */
+function blocagemDoModelo(item) {
+
+    return {
+        modo: (item && item.cutstack_modo) || 'strict_assembly',
+        folhas: parseInt(item && item.cutstack_folhas) || parseInt(item && item.bloco) || 50
+    };
+
+}
+window.blocagemDoModelo = blocagemDoModelo;
+
+
+
+/**
+ * O modo da folha combinada. A seleção só combina modelos do mesmo modo — ver
+ * porQueNaoCombina() —, então o do primeiro vale para a folha inteira.
+ */
+function modoDeImpressaoDaSelecao() {
+
+    const itens = itensDaImposicao(true);
+
+    return itens.length ? modoDeImpressaoDoModelo(itens[0]) : 'blocado';
+
+}
+window.modoDeImpressaoDaSelecao = modoDeImpressaoDaSelecao;
+
+
+
+/**
+ * A blocagem da folha combinada. Vale o primeiro modelo que tem folhas
+ * definidas, e não simplesmente o primeiro da lista: é a mesma regra que a tela
+ * já usava para preencher "Folhas por Bloco" a partir do `bloco` do ERP.
+ */
+function blocagemDaSelecao() {
+
+    const itens = itensDaImposicao(true);
+
+    const comFolhas = itens.find(it => (parseInt(it.cutstack_folhas) || parseInt(it.bloco) || 0) > 0);
+
+    return blocagemDoModelo(comFolhas || itens[0] || null);
+
+}
+window.blocagemDaSelecao = blocagemDaSelecao;
+
+
+
+/**
+ * O esquema que o motor recebe para uma folha combinada.
+ *
+ * 'sequencial' enche a folha na ordem de leitura, folha a folha. O motor já sabe
+ * fazer isso com modelos combinados — o índice é `(folha × poses) + posição` e
+ * cada item puxa a arte do próprio modelo. Como não há pilha para cortar, nesse
+ * modo não existe "folha própria": os modelos entram em sequência e um começa
+ * onde o outro terminou.
+ *
+ * 'blocado' mantém o que existe desde a v631: a barra de modelos combinados
+ * decide entre folha própria (cut_stack) e aproveitar a folha (multi_artes).
+ */
+function esquemaDaSelecaoCombinada() {
+
+    if (modoDeImpressaoDaSelecao() === 'sequencial') return 'sequential';
+
+    return (modoSomaFolha() === 'aproveitar') ? 'multi_artes' : 'cut_stack';
+
+}
+window.esquemaDaSelecaoCombinada = esquemaDaSelecaoCombinada;
+
+
+
+/** O cut_stack_mode que acompanha o esquema acima. */
+function modoCutStackDaSelecao() {
+
+    // Fora do cut_stack o motor ignora este campo; mandar 'independent' é dizer
+    // a verdade no payload, não mudar comportamento.
+    if (esquemaDaSelecaoCombinada() !== 'cut_stack') return 'independent';
+
+    return blocagemDaSelecao().modo;
+
+}
+window.modoCutStackDaSelecao = modoCutStackDaSelecao;
+
+
+
+/**
+ * O nome do arquivo de uma imposição com vários modelos: todos eles, porque o
+ * operador precisa saber o que tem dentro sem abrir. Acima de oito encurta para
+ * o primeiro, o último e a contagem — o caminho no Windows para em 260
+ * caracteres, e o motor ainda deriva daqui os nomes `_setN_02_miolo`.
+ */
+function nomeDosModelosCombinados(itens) {
+
+    const nomes = (itens || []).map(it => String((it && it.modelo) || '').trim()).filter(Boolean);
+
+    if (!nomes.length) return '';
+
+    if (nomes.length <= 8) return nomes.join('_');
+
+    return nomes[0] + '_a_' + nomes[nomes.length - 1] + '_' + nomes.length + 'modelos';
+
+}
+window.nomeDosModelosCombinados = nomeDosModelosCombinados;
+
+
+
+/**
+ * Os modelos que esta impressão deve marcar como impressos. Com vários marcados
+ * são todos: imprimir dois e marcar um deixava o outro em Aguardando, e o
+ * operador só descobria pela fila, depois.
+ */
+function alvosDaImpressao(isMultiSelected) {
+
+    if (isMultiSelected) {
+
+        return (state.selectedOSItems || [])
+
+            .filter(s => s && s.itemId)
+
+            .map(s => ({ itemId: s.itemId, osId: s.osId }));
+
+    }
+
+    return (state.activeOSItem && state.activeOSItem.itemId)
+        ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
+        : [];
+
+}
+window.alvosDaImpressao = alvosDaImpressao;
+
+
+
+/**
+ * Grava a opção do número do modelo e redesenha o que depende dela — inclusive
+ * a prévia, que tem de mostrar o que sai no papel.
+ */
+window.setImprimirNumeroDoModelo = async function(marcado) {
+
+    const item = itemAtivoDoPedido();
+
+    if (!item || !state.activeOSItem) return;
+
+    item.imprimir_numero_modelo = !!marcado;
+
+    await autoSaveOSItemField(item.id, state.activeOSItem.osId, 'imprimir_numero_modelo', !!marcado);
+
+    atualizarOpcoesDoModelo();
+
+    if (typeof drawPedPreview === 'function') drawPedPreview();
+
+};
+
+
+
+/**
+ * Grava o modo de impressão do modelo. Escolher "Blocado" num modelo que nunca
+ * teve escolha grava também o modo de blocos e as folhas, herdados do Formato e
+ * do `bloco` do ERP: o que vale fica escrito no modelo, em vez de depender de um
+ * padrão que pode mudar depois, sem ninguém notar.
+ */
+window.setModoImpressaoDoModelo = async function(modo) {
+
+    const item = itemAtivoDoPedido();
+
+    if (!item || !state.activeOSItem) return;
+
+    const osId = state.activeOSItem.osId;
+
+    const valor = (modo === 'blocado') ? 'blocado' : 'sequencial';
+
+    item.modo_impressao = valor;
+
+    await autoSaveOSItemField(item.id, osId, 'modo_impressao', valor);
+
+    if (valor === 'blocado' && !item.cutstack_modo) {
+
+        const fmt = (state.formatos || []).find(f => String(f.id) === String(item.formato_id));
+
+        const modoBloco = (fmt && fmt.default_cut_stack_mode) || 'strict_assembly';
+
+        item.cutstack_modo = modoBloco;
+
+        await autoSaveOSItemField(item.id, osId, 'cutstack_modo', modoBloco);
+
+    }
+
+    if (valor === 'blocado' && !item.cutstack_folhas) {
+
+        const folhas = parseInt(item.bloco) || 50;
+
+        item.cutstack_folhas = folhas;
+
+        await autoSaveOSItemField(item.id, osId, 'cutstack_folhas', folhas);
+
+    }
+
+    atualizarOpcoesDoModelo();
+
+    atualizarBarraDeSoma();
+
+    if (typeof drawPedPreview === 'function') drawPedPreview();
+
+};
+
+
+
+/**
+ * Pinta o bloco "Opções do modelo" nas duas abas com o que está salvo no modelo
+ * aberto. Sem modelo aberto o bloco some — opção precisa dizer de quem é.
+ */
+function atualizarOpcoesDoModelo() {
+
+    const item = itemAtivoDoPedido();
+
+    const modo = item ? modoDeImpressaoDoModelo(item) : 'sequencial';
+
+    const travadoPorPdf = !!(item && item.modo_pdf);
+
+    const titulo = item ? ((item.modelo ? item.modelo + ' — ' : '') + rotuloDoModelo(item, 0)) : '';
+
+    [['imp-opcoes-modelo', 'imp-opcoes-modelo-nome', 'imp-modo-seq', 'imp-modo-bloc', 'imp-imprimir-numero', 'imp-opcoes-modelo-nota'],
+     ['ped-opcoes-modelo', 'ped-opcoes-modelo-nome', 'ped-modo-seq', 'ped-modo-bloc', 'ped-imprimir-numero', 'ped-opcoes-modelo-nota']].forEach(ids => {
+
+        const bloco = document.getElementById(ids[0]);
+
+        if (!bloco) return;
+
+        bloco.style.display = item ? 'block' : 'none';
+
+        if (!item) return;
+
+        const elNome = document.getElementById(ids[1]);
+
+        if (elNome) elNome.textContent = titulo;
+
+        [[ids[2], 'sequencial'], [ids[3], 'blocado']].forEach(par => {
+
+            const btn = document.getElementById(par[0]);
+
+            if (!btn) return;
+
+            const ativo = (modo === par[1]);
+
+            btn.classList.toggle('ativo', ativo);
+
+            btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+
+            btn.disabled = travadoPorPdf;
+
+        });
+
+        const chk = document.getElementById(ids[4]);
+
+        if (chk) chk.checked = imprimeNumeroDoModelo(item);
+
+        const nota = document.getElementById(ids[5]);
+
+        if (nota) {
+
+            nota.textContent = travadoPorPdf
+                ? '🔒 Modo PDF: cada página do arquivo é um ingresso, e a regra é imposta. Para mudar, desligue o Modo PDF na tela de arte do modelo.'
+                : '';
+
+            nota.style.display = travadoPorPdf ? 'block' : 'none';
+
+        }
+
+    });
+
+}
+window.atualizarOpcoesDoModelo = atualizarOpcoesDoModelo;
 
 
 
@@ -13580,6 +13930,11 @@ window.atualizarBarraDeSoma = atualizarBarraDeSoma;
  * Por que dois modelos não podem sair na mesma folha, ou null quando podem.
  * Cor já era conferida; formato, saída, face e modo PDF não eram — e cada um
  * deles produz uma folha impossível, não só diferente.
+ *
+ * O modo de impressão entrou em 18/08/2026: uma folha não pode ser sequencial
+ * para um modelo e blocada para o outro, porque a ordem das células da folha é
+ * uma só. Modelo sem escolha salva não empata a conta — o modo efetivo dele vem
+ * do `blocos` do ERP ou do Formato, e é esse que se compara.
  */
 function porQueNaoCombina(a, b) {
 
@@ -13596,6 +13951,12 @@ function porQueNaoCombina(a, b) {
     if (face(a) !== face(b)) return 'um imprime frente e verso e o outro só frente';
 
     if (!!a.modo_pdf !== !!b.modo_pdf) return 'um está em modo Pdf Paginado e o outro não';
+
+    if (modoDeImpressaoDoModelo(a) !== modoDeImpressaoDoModelo(b)) {
+
+        return 'um imprime Sequencial e o outro Blocado — mude o modo de um deles em "Opções do modelo"';
+
+    }
 
     return null;
 

@@ -531,7 +531,14 @@ function drawPedPreview() {
 
             return {
                 qtd: qt,
-                nome: sItem ? sItem.produto : '',
+                // O que a prévia desenha deitado na borda da célula tem de ser o
+                // que sai no papel: o NÚMERO do modelo, e só quando a opção do
+                // modelo está marcada. Até 18/08/2026 vinha `sItem.produto` e
+                // aparecia sempre — a tela mostrava um texto que a impressão não
+                // tinha, e escondia a decisão de imprimir o número.
+                nome: (sItem && typeof imprimeNumeroDoModelo === 'function' && imprimeNumeroDoModelo(sItem))
+                    ? String(sItem.modelo || '')
+                    : '',
                 num1_id: sItem ? (sItem.numeracao_id || sItem.amostra_num_id || numId) : numId,
                 start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
                 has_raw_file: false,
@@ -3448,176 +3455,6 @@ window.togglePedItemSelection = function(itemId, osId) {
     drawPedPreview();
 };
 
-window.pedQueueGerarPDFMulti = async function(isPrint = false) {
-    if (!state.selectedOSItems || state.selectedOSItems.length === 0) {
-        return toast('Selecione pelo menos um modelo.', 'warning');
-    }
-    
-    const overlay = document.getElementById('loading-overlay');
-    const sub = document.getElementById('loading-sub');
-    if (overlay) overlay.classList.add('active');
-    if (sub) sub.textContent = `Gerando ${state.selectedOSItems.length} modelos selecionados...`;
-
-    const originalActive = state.activeOSItem;
-    const blobs = [];
-    // Quando é impressão, o status só muda depois da confirmação do operador
-    const alvosImpressao = state.selectedOSItems.map(s => ({ itemId: s.itemId, osId: s.osId }));
-
-    try {
-        if (state.selectedOSItems.length > 1) {
-            if (sub) sub.textContent = `Processando modelos combinados...`;
-            
-            // Verificar se algum item tem blocagem definida e configurar os dropdowns antes de chamar runImposition
-            // item.blocos = flag 'S'/'N', item.bloco = valor numérico do tamanho do bloco
-            const anyHasBloco = state.selectedOSItems.some(sel => {
-                const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
-                console.log('[pedQueueGerarPDFMulti] Item check:', sItem?.modelo, 'bloco=', sItem?.bloco, 'blocos=', sItem?.blocos, 'qtd=', sItem?.qtd);
-                const hasBlocoNum = sItem && sItem.bloco && parseInt(sItem.bloco) > 0;
-                const hasBlocosFlag = sItem && sItem.blocos && sItem.blocos !== 'N' && sItem.blocos !== 'n';
-                return hasBlocoNum || hasBlocosFlag;
-            });
-            // "Cada modelo em folha própria" (o padrão) força cut_stack +
-            // strict_assembly, que é como sempre foi. "Aproveitar a folha" pede
-            // o outro esquema: uma conta só, células preenchidas na ordem. Quem
-            // decide o esquema de verdade é o runImposition; aqui os campos da
-            // tela só precisam contar a mesma história.
-            const aproveitando = (typeof modoSomaFolha === 'function') && modoSomaFolha() === 'aproveitar';
-            if (aproveitando) {
-                const schemaSel = document.getElementById('ped-schema');
-                if (schemaSel) schemaSel.value = 'multi_artes';
-                console.log('[pedQueueGerarPDFMulti] Aproveitando a folha: schema=multi_artes');
-            }
-            const forceStrictAssembly = !aproveitando && (anyHasBloco || state.selectedOSItems.length > 1);
-            if (forceStrictAssembly) {
-                const schemaSel = document.getElementById('ped-schema');
-                if (schemaSel) schemaSel.value = 'cut_stack';
-                const modeSel = document.getElementById('ped-cutstack-mode');
-                if (modeSel) modeSel.value = 'strict_assembly';
-                // Aplicar bloco do primeiro item selecionado que tem bloco
-                const firstWithBloco = state.selectedOSItems.find(sel => {
-                    const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
-                    return sItem && ((sItem.bloco && parseInt(sItem.bloco) > 0) || (sItem.blocos && sItem.blocos !== 'N'));
-                });
-                if (firstWithBloco) {
-                    const blocItem = state.osItens[firstWithBloco.osId]?.find(i => String(i.id) === String(firstWithBloco.itemId));
-                    const sheetsInp = document.getElementById('ped-sheets-per-block');
-                    if (sheetsInp && blocItem?.bloco) sheetsInp.value = parseInt(blocItem.bloco);
-                }
-                console.log('[pedQueueGerarPDFMulti] Forçando schema=cut_stack, mode=strict_assembly, anyHasBloco=', anyHasBloco);
-            }
-            
-            const blob = await runImposition('', true);
-            // O status não muda aqui: gerar PDF não altera status e imprimir
-            // só altera depois da confirmação do operador
-            if (blob) blobs.push(blob);
-        } else {
-            const sel = state.selectedOSItems[0];
-            state.activeOSItem = { osId: sel.osId, itemId: sel.itemId };
-            if (sub) sub.textContent = `Processando modelo 1 de 1...`;
-            const blob = await runImposition('', true);
-            if (blob) blobs.push(blob);
-        }
-        
-        state.activeOSItem = originalActive;
-        
-        if (blobs.length > 0) {
-            if (sub) sub.textContent = `Mesclando ${blobs.length} PDFs...`;
-            
-            let finalBlob = blobs[0];
-            
-            if (blobs.length > 1 && typeof PDFLib !== 'undefined') {
-                const { PDFDocument } = PDFLib;
-                const mergedPdf = await PDFDocument.create();
-                
-                for (const blob of blobs) {
-                    try {
-                        const arrayBuffer = await blob.arrayBuffer();
-                        const pdf = await PDFDocument.load(arrayBuffer);
-                        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-                        copiedPages.forEach((page) => mergedPdf.addPage(page));
-                    } catch(mergeErr) {
-                        console.error("Erro mesclando parte do PDF", mergeErr);
-                    }
-                }
-                const mergedPdfBytes = await mergedPdf.save();
-                finalBlob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
-            }
-
-            if (isPrint) {
-                if (sub) sub.textContent = "Enviando para impressão...";
-                // Abrir o modal de impressão com o blob final
-                if (typeof openPrintModal === 'function') {
-                    if (overlay) overlay.classList.remove('active');
-                    // O popup de confirmação aparece após o envio no modal
-                    if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvosImpressao);
-                    openPrintModal(finalBlob);
-                    toast('PDFs gerados! Configure e envie para a impressora.', 'success');
-                } else {
-                    // Fallback: enviar para API local diretamente
-                    const { printerName, options } = typeof getPedPrintOptions === 'function' ? getPedPrintOptions() : { printerName: (document.getElementById('ped-print-printer')?.value || ''), options: { print_mode: 'gdi' } };
-                    const formData = new FormData();
-                    formData.append('file', finalBlob, nomeParaSpool(1, 'impressao_multipla.pdf'));
-                    formData.append('printer_name', printerName || document.getElementById('ped-print-printer')?.value || '');
-                    formData.append('options', JSON.stringify(options || { print_mode: 'gdi' }));
-                    try {
-                        const res = await fetch(`/api/print/submit`, {
-                            method: "POST",
-                            body: formData
-                        });
-                        if (res.ok) {
-                            toast('Enviado para a impressora local!', 'success');
-                            if (typeof confirmarImpressaoModelos === 'function') {
-                                await confirmarImpressaoModelos(alvosImpressao);
-                            }
-                        } else {
-                            throw new Error('Falha na API local');
-                        }
-                    } catch (err) {
-                        toast('Erro na impressão local. Verifique se o NewProd Agent está rodando.', 'error');
-                    }
-                }
-            } else {
-                let fileHandle = null;
-                if (window.showSaveFilePicker) {
-                    const options = {
-                        suggestedName: `Selecionados_OS_${state.selectedOSItems[0].osId}.pdf`,
-                        types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
-                    };
-                    fileHandle = await window.showSaveFilePicker(options).catch(()=>null);
-                }
-                
-                if (fileHandle) {
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(finalBlob);
-                    await writable.close();
-                    toast('PDFs selecionados mesclados e salvos!', 'success');
-                } else {
-                    const url = window.URL.createObjectURL(finalBlob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `Selecionados_OS_${state.selectedOSItems[0].osId}.pdf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(url);
-                    toast('PDFs selecionados mesclados com sucesso!', 'success');
-                }
-            }
-        }
-    } catch (e) {
-        console.error("Erro no processo de PDF múltiplo:", e);
-        toast("Erro ao gerar PDFs múltiplos: " + e.message, 'error');
-    } finally {
-        if (overlay) overlay.classList.remove('active');
-        state.activeOSItem = originalActive;
-        if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
-    }
-};
-
-window.pedQueueImprimirMulti = async function() {
-    return window.pedQueueGerarPDFMulti(true);
-};
-
 function renderPedOSQueue() {
     const container = document.getElementById( 'ped-os-queue' );
     const wrapper = document.getElementById( 'ped-os-queue-body' );
@@ -3655,7 +3492,6 @@ function renderPedOSQueue() {
     const inputStyle = 'background:#030a00; border:1px solid #334155; border-radius:4px; color:#ffffff; padding:8px 10px; font-size:1.2rem; width:100%;';
     const selectStyle = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: #030a00; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; color: #ffffff; padding: 8px 12px; font-size: 1.15rem; width: 100%; max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; cursor: pointer; text-align: center; text-align-last: center; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.3); transition: all 0.2s ease;';
     const selectStyleDisabled = 'appearance: none; -webkit-appearance: none; -moz-appearance: none; background: #030a00; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: rgba(255, 255, 255, 0.5); padding: 8px 12px; font-size: 1.15rem; width: 100%; cursor: not-allowed; text-align: center; text-align-last: center; font-weight: 600; opacity: 0.6;';
-    const btnStyle = 'border:none; border-radius:6px; padding:10px 18px; font-size:1.05rem; cursor:pointer; font-weight:700; transition:all 0.2s ease; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);';
 
     const selectHeaderStyle = 'background:#1e293b; border:1px solid #918f8c; border-radius:4px; color:#f1f5f9; padding:4px 8px; font-size:0.85rem; cursor:pointer;';
     const selectHeaderStyleDisabled = 'background:#0f172a; border:1px solid #334155; border-radius:4px; color:#94a3b8; padding:4px 8px; font-size:0.85rem; cursor:not-allowed;';
@@ -3719,19 +3555,21 @@ function renderPedOSQueue() {
             return `<option value="${s.id}" ${sel}>${s.name}</option>`;
         }).join('');
 
-        const allGroupImpresso = groupItens.length > 0 && groupItens.every(i => String(i.status_impressao || i.impressao || '').toUpperCase().includes('IMPRESSO'));
-        const btnImpSelDisplay = allGroupImpresso ? 'display:none;' : 'display:inline-flex;';
-
+        // Os botões "📄 PDF Sel." e "🖨️ Imp. Sel." moravam aqui e saíram em
+        // 18/08/2026. Eles chamavam `runImposition` — a função da ABA IMPOSIÇÃO —
+        // e pediam de volta um PDF que ela nunca devolve: o `returnBlob` só pula
+        // a janela de "onde salvar". A lista de arquivos ficava vazia, o modal de
+        // impressão nunca abria por ali, e quem tratava a resposta do motor era a
+        // outra função, salvando os arquivos um a um. Com "cada modelo em folha
+        // própria" o motor devolve VÁRIOS arquivos, e só o primeiro chegava ao
+        // operador: marcar dois modelos imprimia um.
+        //
+        // Não foi consertado, foi removido: as mesmas duas ações já existem no
+        // painel, em "Gerar PDF" e "Imprimir", pelo caminho que a gráfica usa
+        // todo dia. Dois caminhos para a mesma coisa foi o que produziu o
+        // defeito, e o segundo não tinha nada a mais.
         const headerDropdowns = `
             <div style="display:flex; gap:10px; align-items:center;" onclick="event.stopPropagation()">
-                <button style="${btnStyle} background: linear-gradient(135deg, #a78bfa, #7c3aed); color:#fff; padding:6px 12px; font-size:0.9rem;" title="Gerar PDF dos modelos selecionados"
-                    onclick="pedQueueGerarPDFMulti()">
-                    📄 PDF Sel.
-                </button>
-                <button style="${btnStyle} background: linear-gradient(135deg, #34d399, #059669); color:#fff; padding:6px 12px; font-size:0.9rem; ${btnImpSelDisplay}" title="Imprimir modelos selecionados"
-                    onclick="pedQueueImprimirMulti()">
-                    🖨️  Imp. Sel.
-                </button>
                 <select style="${fmtHeaderStyle}" ${dropdownFmtDisabled} onchange="updateBoxFormato('${osId}', '${prodId}', this.value)" title="Formato Padrão do Produto">
                     <option value="">— Formato —</option>
                     ${formatosOptions}
@@ -4283,11 +4121,13 @@ window.runPedImposition = async function (mode, isRefazer) {
 
     if (state.selectedOSItems && state.selectedOSItems.length > 1) {
         isMultiSelected = true;
-        // A mesma regra do runImposition: o padrao da folhas proprias a cada
-        // modelo; aproveitar a folha enche a tiragem numa conta so. Esta tela
-        // mandava `multi_artes` sempre, o que discordava da outra.
-        schema = (typeof modoSomaFolha === 'function' && modoSomaFolha() === 'aproveitar')
-            ? 'multi_artes'
+        // A mesma regra do runImposition, e a regra mora la: o modo salvo nos
+        // modelos decide primeiro (Sequencial enche a folha na ordem), e dentro
+        // de Blocado a barra escolhe entre folha propria e aproveitar a folha.
+        // Ler daqui, e nao repetir a conta, e o que impede as duas telas de
+        // divergirem de novo.
+        schema = (typeof esquemaDaSelecaoCombinada === 'function')
+            ? esquemaDaSelecaoCombinada()
             : 'cut_stack';
         tempMultiArtes = state.selectedOSItems.map(s => {
             const sItem = state.osItens[s.osId]?.find(i => String(i.id) === String(s.itemId));
@@ -4355,6 +4195,12 @@ window.runPedImposition = async function (mode, isRefazer) {
             return {
                 qtd: qt,
                 nome: sItem ? sItem.modelo : '',
+                // Se este número chega ao papel ou não. Fica separado de `nome`
+                // porque `nome` também alimenta as mensagens da tela ("o modelo
+                // X não possui arte"), e essas continuam precisando do número.
+                _imprimirNumero: (typeof imprimeNumeroDoModelo === 'function')
+                    ? imprimeNumeroDoModelo(sItem)
+                    : false,
                 // Por onde a fatia do CSV chega ao payload. Ver o bloco que monta
                 // `payloadMultiArtes`, mais abaixo.
                 _itemId: s.itemId,
@@ -4460,11 +4306,11 @@ window.runPedImposition = async function (mode, isRefazer) {
     // Obter o código do modelo para usar no nome do arquivo
     let modeloNum = '';
     if (isMultiSelected && state.selectedOSItems && state.selectedOSItems.length > 0) {
-        const firstSel = state.selectedOSItems[0];
-        const firstItem = state.osItens[firstSel.osId]?.find(i => String(i.id) === String(firstSel.itemId));
-        if (firstItem && firstItem.modelo) {
-            modeloNum = firstItem.modelo;
-        }
+        // Todos os modelos da folha, não só o primeiro: o arquivo tem o material
+        // de vários, e quem o encontra na pasta precisa saber disso sem abrir.
+        modeloNum = (typeof nomeDosModelosCombinados === 'function')
+            ? nomeDosModelosCombinados(itensDaImposicao(true))
+            : '';
     } else if (state.activeOSItem) {
         const itens = state.osItens[state.activeOSItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(state.activeOSItem.itemId));
@@ -4570,7 +4416,12 @@ window.runPedImposition = async function (mode, isRefazer) {
 
                 pdf_name: arte.pdf_name,
 
-                nome: arte.nome || '',
+                // O motor imprime este texto deitado na borda de cada item, e é
+                // o único campo que decide se ele sai. Ao combinar modelos do
+                // pedido quem manda é a opção do modelo, desmarcada por padrão.
+                // Na Lista de Imposição (não é multi-seleção) o nome é digitado
+                // à mão e continua valendo como sempre.
+                nome: (isMultiSelected && !arte._imprimirNumero) ? '' : (arte.nome || ''),
 
                 nome_color: arte.nome_color || '#000000',
 
@@ -4681,9 +4532,17 @@ window.runPedImposition = async function (mode, isRefazer) {
 
         multi_artes: payloadMultiArtes,
 
-        cut_stack_mode: document.getElementById('ped-cutstack-mode') ? document.getElementById('ped-cutstack-mode').value : 'independent',
+        // Com vários modelos vale a blocagem salva neles — que, sem nada gravado,
+        // devolve o mesmo 'strict_assembly' com as folhas do `bloco` do ERP que
+        // esta tela já mandava. Com um modelo só nada muda: continuam os campos
+        // da tela, exatamente como antes.
+        cut_stack_mode: isMultiSelected && typeof modoCutStackDaSelecao === 'function'
+            ? modoCutStackDaSelecao()
+            : (document.getElementById('ped-cutstack-mode') ? document.getElementById('ped-cutstack-mode').value : 'independent'),
 
-        sheets_per_block: document.getElementById('ped-sheets-per-block') ? parseInt(document.getElementById('ped-sheets-per-block').value) || 50 : 50,
+        sheets_per_block: isMultiSelected && typeof blocagemDaSelecao === 'function'
+            ? blocagemDaSelecao().folhas
+            : (document.getElementById('ped-sheets-per-block') ? parseInt(document.getElementById('ped-sheets-per-block').value) || 50 : 50),
 
         block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1,
 
@@ -5118,9 +4977,9 @@ window.runPedImposition = async function (mode, isRefazer) {
                 // Refazer é reimpressão de uma parte: o modelo já estava impresso
                 // (ou continua não estando). Perguntar "marcar como impresso?"
                 // depois de refazer três folhas confunde e leva a status errado.
-                const alvoImpressao = (!isRefazer && state.activeOSItem && state.activeOSItem.itemId)
-                    ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
-                    : [];
+                // Com vários modelos na folha, os alvos são todos os marcados —
+                // ver alvosDaImpressao().
+                const alvoImpressao = isRefazer ? [] : alvosDaImpressao(isMultiSelected);
                 if (typeof sendPrintJobDirect === 'function') {
                     const ok = await sendPrintJobDirect(printBlobQueue);
                     // Não marca sozinho: pergunta ao operador antes de mudar o status
@@ -5155,9 +5014,7 @@ window.runPedImposition = async function (mode, isRefazer) {
                     if (overlay) overlay.classList.remove('active');
                     toast(`Imposição concluída. Enviando ${multiBlobs.length} arquivo(s) para a impressora...`, 'info');
                     // Mesma razão do caminho por stream: refazer não muda status.
-                    const alvoImpressao = (!isRefazer && state.activeOSItem && state.activeOSItem.itemId)
-                        ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
-                        : [];
+                    const alvoImpressao = isRefazer ? [] : alvosDaImpressao(isMultiSelected);
                     if (typeof sendPrintJobDirect === 'function') {
                         const ok = await sendPrintJobDirect(multiBlobs);
                         // Não marca sozinho: pergunta ao operador antes de mudar o status
@@ -5203,9 +5060,7 @@ window.runPedImposition = async function (mode, isRefazer) {
         // Modo impressão direta: usar painel lateral sem abrir modal
         if (mode === 'print') {
             if (overlay) overlay.classList.remove('active');
-            const alvoImpressao = (state.activeOSItem && state.activeOSItem.itemId)
-                ? [{ itemId: state.activeOSItem.itemId, osId: state.activeOSItem.osId }]
-                : [];
+            const alvoImpressao = alvosDaImpressao(isMultiSelected);
             if (typeof sendPrintJobDirect === 'function') {
                 const queue = [{ name: defaultFilename, blob }];
                 const ok = await sendPrintJobDirect(queue);

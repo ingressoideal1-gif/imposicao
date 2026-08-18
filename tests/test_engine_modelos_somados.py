@@ -318,3 +318,74 @@ def test_pose_girada_com_verso_tambem_sai(tmp_path):
     assert saidas, "a montagem com verso nao gravou PDF nenhum"
     todos = {n for c in saidas for folha in _nomes_por_folha(c) for n in folha}
     assert {"A1", "B5"} <= todos, todos
+
+
+# ── O numero do modelo no papel: opcao, e desligada por padrao ────────────────
+#
+# O motor imprime `arte["nome"]` deitado na borda esquerda de cada item, e esse
+# campo e o UNICO que decide se ele sai. Ate 18/08/2026 o painel o preenchia
+# sempre com o numero do modelo, entao combinar modelos punha uma marca nova no
+# papel sem ninguem ter pedido. O usuario mandou que virasse opcao, desmarcada
+# por padrao; o painel passou a mandar vazio quando ela esta desmarcada.
+#
+# Os dois testes abaixo prendem as duas metades no motor. Se algum dia alguem
+# voltar a imprimir o nome sem olhar para o campo, o primeiro falha.
+
+_NUMERO_MODELO = re.compile(r"^\d{6,}$")
+
+
+def _numeros_de_modelo(caminho):
+    doc = fitz.open(caminho)
+    try:
+        return {t for p in doc for t in p.get_text().split() if _NUMERO_MODELO.match(t)}
+    finally:
+        doc.close()
+
+
+def test_arte_sem_nome_nao_imprime_numero_de_modelo(tmp_path):
+    """Opcao desmarcada: o painel manda `nome` vazio e nada extra vai ao papel."""
+    _, caminho = _impor(tmp_path, [_arte("A", 4), _arte("B", 4)])
+    assert _numeros_de_modelo(caminho) == set()
+
+
+def test_arte_com_nome_imprime_o_numero_em_cada_item(tmp_path):
+    """Opcao marcada: cada item leva o numero do SEU modelo, nao o do primeiro."""
+    a, b = _arte("A", 4), _arte("B", 4)
+    a["nome"], b["nome"] = "1000277", "1000278"
+    _, caminho = _impor(tmp_path, [a, b])
+    assert {"1000277", "1000278"} <= _numeros_de_modelo(caminho)
+
+
+# ── Sequencial com modelos combinados ────────────────────────────────────────
+
+def test_sequencial_combinado_enche_a_folha_na_ordem(tmp_path):
+    """Modo Sequencial: a folha enche na ordem de leitura, folha a folha.
+
+    E o que o par "Sequencial / Blocado" pede ao motor quando os modelos estao
+    em Sequencial. O motor ja sabia fazer — o indice e `(folha x poses) + pose` e
+    cada item continua puxando a arte e a linha do banco do PROPRIO modelo —, mas
+    nenhum caminho do painel chegava aqui com `multi_artes` preenchido.
+
+    Com A1..A5 e B1..B5 em folhas de 4, o resultado prova as duas coisas de uma
+    vez: os modelos sao trechos contiguos da tiragem, e um comeca na folha onde o
+    outro terminou (a folha 2 tem o fim de A e o comeco de B).
+    """
+    out = tmp_path / "sequencial.pdf"
+    cfg = ImpositionConfig(
+        base_file="base_ticket.pdf",
+        out_pdf=str(out),
+        formato=FORMATO,
+        numeracao={"tipo": "SEQUENCIAL", "elements": [ELEMENTO_NOME]},
+        saida=SAIDA,
+        layout_schema="sequential",
+        multi_artes=[_arte("A", 5), _arte("B", 5)],
+    )
+    ImpositionEngine(cfg).process()
+
+    assert cfg.total_items == 10
+    folhas = _nomes_por_folha(str(out))
+    assert [f for f in folhas] == [
+        ["A1", "A2", "A3", "A4"],
+        ["A5", "B1", "B2", "B3"],
+        ["B4", "B5"],
+    ], folhas

@@ -1049,6 +1049,32 @@
                                 </div>
                             </div>
 
+                            <!-- Opcoes que o modelo GUARDA para quando entra numa folha combinada.
+                                 Valem SO com dois ou mais modelos marcados: imprimir um modelo
+                                 sozinho continua decidido pela Regra de Paginacao acima, pelo
+                                 padrao do Formato e pelo campo `blocos` do ERP. Ver
+                                 docs/modelos_somados.md -->
+                            <div id="imp-opcoes-modelo" style="display: none; font-size: 0.82rem; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 14px 0;">
+                                <div style="font-weight: 600; color: var(--text); margin-bottom: 8px;">
+                                    &#129534; Opcoes do modelo <span id="imp-opcoes-modelo-nome" style="color: var(--blue);"></span>
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px;">
+                                    <span style="color: var(--text-dim);">Modo de impressao:</span>
+                                    <div style="display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+                                        <button type="button" class="modo-btn" id="imp-modo-seq" aria-pressed="false" onclick="setModoImpressaoDoModelo('sequencial')" title="A folha enche na ordem, folha a folha. Nao ha pilha para cortar.">Sequencial</button>
+                                        <button type="button" class="modo-btn" id="imp-modo-bloc" aria-pressed="false" onclick="setModoImpressaoDoModelo('blocado')" title="Cut &amp; Stack: corta e empilha, com o tamanho de bloco do modelo.">Blocado</button>
+                                    </div>
+                                    <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text);">
+                                        <input type="checkbox" id="imp-imprimir-numero" onchange="setImprimirNumeroDoModelo(this.checked)">
+                                        Imprimir o numero do modelo em cada item
+                                    </label>
+                                </div>
+                                <div style="color: var(--text-dim); font-size: 0.76rem; margin-top: 8px;">
+                                    Valem ao imprimir este modelo junto com outros na mesma folha. Sozinho, ele segue a Regra de Paginacao acima.
+                                </div>
+                                <div id="imp-opcoes-modelo-nota" style="display: none; color: var(--amber, #f59e0b); font-size: 0.78rem; margin-top: 6px;"></div>
+                            </div>
+
                                                         <!-- Modelos combinados: como aproveitar a folha.
                                  So aparece com dois ou mais modelos marcados na fila.
                                  Ver docs/superpowers/specs/2026-08-17-somar-modelos-aproveitando-a-folha-design.md -->
@@ -1295,6 +1321,32 @@
                                         <option value="multi_artes">Multi-Artes (Colunas)</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            <!-- Opcoes que o modelo GUARDA para quando entra numa folha combinada.
+                                 Valem SO com dois ou mais modelos marcados: imprimir um modelo
+                                 sozinho continua decidido pela Regra de Paginacao acima, pelo
+                                 padrao do Formato e pelo campo `blocos` do ERP. Ver
+                                 docs/modelos_somados.md -->
+                            <div id="ped-opcoes-modelo" style="display: none; font-size: 0.82rem; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 14px 0;">
+                                <div style="font-weight: 600; color: var(--text); margin-bottom: 8px;">
+                                    &#129534; Opcoes do modelo <span id="ped-opcoes-modelo-nome" style="color: var(--blue);"></span>
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px;">
+                                    <span style="color: var(--text-dim);">Modo de impressao:</span>
+                                    <div style="display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+                                        <button type="button" class="modo-btn" id="ped-modo-seq" aria-pressed="false" onclick="setModoImpressaoDoModelo('sequencial')" title="A folha enche na ordem, folha a folha. Nao ha pilha para cortar.">Sequencial</button>
+                                        <button type="button" class="modo-btn" id="ped-modo-bloc" aria-pressed="false" onclick="setModoImpressaoDoModelo('blocado')" title="Cut &amp; Stack: corta e empilha, com o tamanho de bloco do modelo.">Blocado</button>
+                                    </div>
+                                    <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text);">
+                                        <input type="checkbox" id="ped-imprimir-numero" onchange="setImprimirNumeroDoModelo(this.checked)">
+                                        Imprimir o numero do modelo em cada item
+                                    </label>
+                                </div>
+                                <div style="color: var(--text-dim); font-size: 0.76rem; margin-top: 8px;">
+                                    Valem ao imprimir este modelo junto com outros na mesma folha. Sozinho, ele segue a Regra de Paginacao acima.
+                                </div>
+                                <div id="ped-opcoes-modelo-nota" style="display: none; color: var(--amber, #f59e0b); font-size: 0.78rem; margin-top: 6px;"></div>
                             </div>
 
                                                         <!-- Modelos combinados: como aproveitar a folha.

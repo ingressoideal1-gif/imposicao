@@ -2875,3 +2875,28 @@ input[type=number] {
 .ic-busca-linha .btn { margin-top: 0; flex-shrink: 0; }
 /* Os tres botoes de acao do cartao de aparelho ficavam encostados. */
 .ic-aparelho .btn { margin-right: 8px; }
+
+/* ---------------------------------------------------------------------------
+   Opcoes do modelo: o par Sequencial / Blocado.
+   Sao dois botoes e nao um select porque a escolha tem so dois valores e
+   precisa mostrar qual esta valendo sem o operador abrir nada. O estado ligado
+   e a classe .ativo, posta por atualizarOpcoesDoModelo().
+--------------------------------------------------------------------------- */
+.modo-btn {
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 6px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.modo-btn:last-child { border-right: none; }
+.modo-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+.modo-btn.ativo {
+    background: var(--blue);
+    color: #ffffff;
+}
+.modo-btn:disabled { opacity: 0.45; cursor: not-allowed; }

@@ -3,9 +3,11 @@
 Vários modelos do mesmo pedido saem numa tiragem única, e a folha se enche na
 ordem em vez de cada modelo reservar folhas próprias. Introduzido na v631.
 
-Arquivos: `frontend/index.html` (a barra), `frontend/script.js` (a regra e a
-conta), `frontend/pedido.js` (o clone da tela Pedido), `engine.py` (o banco por
-arte e a ordem). Desenho e o porquê de cada decisão em
+Arquivos: `frontend/index.html` (a barra e as opções do modelo),
+`frontend/script.js` (a regra e a conta), `frontend/pedido.js` (o clone da tela
+Pedido), `engine.py` (o banco por arte e a ordem),
+`sql/alter_pedidos_modelos_opcoes_impressao.sql` (as opções que o modelo
+guarda). Desenho e o porquê de cada decisão em
 `docs/superpowers/specs/2026-08-17-somar-modelos-aproveitando-a-folha-design.md`.
 
 ## A regra
@@ -20,6 +22,74 @@ No pedido 20495 (nove modelos de credencial PVC, 4 células por folha A4):
 |---|---|---|
 | Cada modelo em folha própria | 66 | 14 |
 | Aproveitando a folha | 63 | 2 |
+
+## As duas opções que o modelo guarda
+
+Um bloco no painel, acima da barra, com as escolhas do **modelo aberto**:
+
+```
+🧾 Opções do modelo 1000277 — Tchequia
+   Modo de impressão: [ Sequencial ] [ Blocado ]   ☐ Imprimir o número do modelo em cada item
+   Valem ao imprimir este modelo junto com outros na mesma folha.
+   Sozinho, ele segue a Regra de Paginação acima.
+```
+
+Elas moram em `pedidos_modelos` — `imprimir_numero_modelo`, `modo_impressao`,
+`cutstack_modo`, `cutstack_folhas` (migração
+`sql/alter_pedidos_modelos_opcoes_impressao.sql`) — e voltam do jeito que
+ficaram. Antes disto, o campo da tela ficava com o que sobrou do modelo
+anterior.
+
+**A fronteira, e ela é o mais importante deste bloco:** as quatro colunas são
+lidas **somente com dois ou mais modelos marcados**. Imprimir um modelo sozinho
+continua decidido pela Regra de Paginação da tela, pelo padrão do Formato e pelo
+`blocos` do ERP — foi condição do usuário em 18/08/2026, porque esse caminho já
+está validado e rodando na gráfica. Por isso o par de botões **não escreve** no
+campo Regra de Paginação: escrever ali mudaria a impressão de um modelo só por
+via indireta, sem aparecer como mudança de comportamento.
+
+O harness `modelos_somados_harness.js` cobra essa fronteira: toda chamada a
+`esquemaDaSelecaoCombinada`, `modoCutStackDaSelecao`, `blocagemDaSelecao` ou
+`nomeDosModelosCombinados` fora do bloco de definições precisa estar perto de um
+`isMultiSelected`.
+
+### O número do modelo
+
+O motor imprime `arte["nome"]` deitado na borda esquerda de cada item, e esse
+campo é o **único** que decide se ele sai. O painel mandava o número sempre, e a
+marca aparecia no papel sem ninguém ter pedido. Agora o painel manda vazio
+enquanto a caixa estiver desmarcada — que é como ela nasce.
+
+A **Lista de Imposição** da aba Imposição não muda: lá o nome é digitado e a cor
+escolhida por coluna, e continua saindo como sempre. A prévia do Pedido passou a
+desenhar o mesmo que o papel: até 18/08/2026 ela mostrava `sItem.produto`,
+sempre, um texto que a impressão nunca teve.
+
+### Sequencial e Blocado
+
+| Modo do modelo | Esquema que o motor recebe |
+|---|---|
+| Sequencial | `sequential` — a folha enche na ordem de leitura, folha a folha |
+| Blocado | a barra decide: `cut_stack` (folha própria) ou `multi_artes` (aproveitar) |
+
+O motor já sabia fazer `sequential` com modelos combinados — o índice é
+`(folha × poses) + pose` e cada item continua puxando a arte e a linha do banco
+do próprio modelo —, mas nenhum caminho do painel chegava ali com `multi_artes`
+preenchido. Nada de Python mudou.
+
+**Sequencial sempre aproveita a folha**, e não por economia: não há pilha para
+cortar, então "folha própria por modelo" não existe nesse modo. A barra fica
+desabilitada, com o motivo e a saída escritos ("mude o modo para Blocado").
+
+Sem nada salvo, o modo efetivo vem do `blocos` do ERP e, na falta dele, do
+padrão do Formato — quem decidia antes de a escolha existir. E a blocagem sem
+nada salvo devolve o mesmo `strict_assembly` com as folhas do `bloco` do ERP que
+a v634 já mandava: ligar o recurso não muda nenhuma tiragem que já saía certa.
+
+**Modelos de modos diferentes não combinam.** A ordem das células da folha é uma
+só. Isto tem um custo declarado: um modelo com `blocos = S` e outro com
+`blocos = N` combinavam até a v634 e não combinam mais. O aviso diz o motivo e
+onde mudar.
 
 ## Como o operador liga
 
@@ -68,9 +138,10 @@ uma faixa contínua da tiragem, então o buraco cai no fim da **última pilha**.
 
 ## Quem pode dividir a folha
 
-`porQueNaoCombina(a, b)` recusa cinco desencontros, e cada um produz uma folha
+`porQueNaoCombina(a, b)` recusa seis desencontros, e cada um produz uma folha
 impossível, não só diferente: **cor**, **formato**, **saída**, **face** (frente e
-verso contra só frente) e **modo PDF**. Até a v630 só a cor era conferida.
+verso contra só frente), **modo PDF** e **modo de impressão** (Sequencial contra
+Blocado). Até a v630 só a cor era conferida.
 
 `"SÓ FRENTE"` e `"Frente"` são a mesma coisa — as duas grafias convivem no banco,
 e o pedido 20495 tem as duas.
@@ -145,3 +216,39 @@ A validação de compatibilidade também dependia disso: ela procurava o primeir
 modelo marcado dentro dos itens do pedido **do modelo sendo marcado**. Com a
 seleção cruzando pedidos, a busca não achava nada e a conferência passava em
 silêncio. Com os forasteiros fora, ela volta a valer.
+
+## Os botões "PDF Sel." e "Imp. Sel." não existem mais
+
+Ficavam no cabeçalho de cada produto na fila e saíram em 18/08/2026, quando o
+operador relatou que **Imprimir funcionava com dois modelos e Imp. Sel. imprimia
+só o primeiro**.
+
+Três coisas, na mesma função:
+
+- **Chamavam a função da outra tela.** `pedQueueGerarPDFMulti` estava no
+  `pedido.js` e chamava `runImposition` — a da aba Imposição.
+- **Pediam de volta um PDF que ela nunca devolve.** O `returnBlob` só pula a
+  janela de "onde salvar"; não existe `return blob` em lugar nenhum de
+  `runImposition`. A lista de arquivos ficava vazia e o modal de impressão nunca
+  abria por ali.
+- **Quem tratava a resposta do motor era a outra função**, salvando os arquivos
+  um a um. Com "cada modelo em folha própria" o motor devolve **vários**
+  arquivos — a `runPedImposition` os junta em `openPrintModalQueue`, a outra não.
+  Daí sair só o primeiro.
+
+Não foram consertados, foram removidos: as mesmas duas ações já existem no
+painel, em **Gerar PDF** e **Imprimir**, pelo caminho que a gráfica usa todo dia.
+Dois caminhos para a mesma coisa foi o que produziu o defeito, e o segundo não
+tinha nada a mais.
+
+## Impressão de vários modelos: status e nome do arquivo
+
+**O status vale para todos os marcados.** `alvosDaImpressao(isMultiSelected)`
+devolve a seleção inteira quando há vários, e o modelo aberto quando há um só —
+o popup de confirmação já sabia listar vários ("A impressão dos 2 modelos foi
+concluída?"). Antes, imprimir dois modelos marcava um e deixava o outro em
+Aguardando, e o operador só descobria pela fila, depois.
+
+**O nome do arquivo traz todos os modelos**: `1000277_1000278.pdf`. Acima de
+oito encurta para `1000270_a_1000278_9modelos.pdf` — o caminho no Windows para
+em 260 caracteres, e o motor ainda deriva daqui os nomes `_setN_02_miolo`.
