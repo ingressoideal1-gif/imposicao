@@ -119,3 +119,29 @@ montar blocos. No modo somado embaralhava a tiragem sem ganho nenhum.
 Combinar modelos de **pedidos diferentes** foi decidido como fora de escopo em
 17/08/2026: abre perguntas de status, cancelamento e de a quem pertence a folha
 que ainda não têm resposta.
+
+## A seleção pertence a um pedido só
+
+Em 18/08/2026 o operador marcou os modelos **1000277** e **1000278** e só o
+1000277 saiu. Os dois são de pedidos diferentes — Tchéquia é do 20495, VIP é do
+20508 —, e a seleção do pedido anterior tinha atravessado a troca.
+
+Três coisas se somavam, e nenhuma avisava:
+
+- **`state.selectedOSItems` só era zerado em `abrirImposicaoDoPedido`**, do
+  `script.js`. Abrir um pedido pela aba Pedido não limpava nada.
+- **A fila só desenha o pedido aberto**, então o modelo do outro pedido ficava
+  invisível: o operador não via e não tinha como desmarcar.
+- **`sItem` virava `undefined`** ao montar as artes, porque `state.osItens` não
+  tinha aquele pedido carregado — e a arte entrava no trabalho com `qtd: 0`,
+  sumindo da folha sem uma linha de aviso.
+
+Agora, `limparSelecaoDeOutroPedido(osId)` derruba os forasteiros ao abrir um
+pedido e ao marcar um modelo, dizendo quantos foram; e `problemaNaSelecao()`
+trava a imposição, nas duas telas, quando a seleção cruza pedidos ou contém
+modelo que não está mais carregado. As duas mensagens dizem a saída.
+
+A validação de compatibilidade também dependia disso: ela procurava o primeiro
+modelo marcado dentro dos itens do pedido **do modelo sendo marcado**. Com a
+seleção cruzando pedidos, a busca não achava nada e a conferência passava em
+silêncio. Com os forasteiros fora, ela volta a valer.

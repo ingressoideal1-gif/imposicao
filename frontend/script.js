@@ -9633,6 +9633,12 @@ window.runImposition = async function (mode, returnBlob = false) {
     // Antes de abrir qualquer coisa: modelo sem nenhuma linha do banco cairia na
     // numeração sequencial e sairia com número no lugar do nome. Ver
     // modeloSemLinhasDoBanco().
+    // A selecao precisa ser de um pedido so, e todos os modelos dela precisam
+    // estar carregados. Ver problemaNaSelecao(): sem esta guarda, o modelo de
+    // outro pedido entra com `qtd: 0` e some da folha em silencio.
+    const _selRuim = problemaNaSelecao();
+    if (_selRuim) return toast(_selRuim, 'error');
+
     const _semLinhas = recadoDeFatiaVazia(itensDaImposicao(isMultiSelected));
     if (_semLinhas) return toast(_semLinhas, 'error');
 
@@ -13595,6 +13601,79 @@ function porQueNaoCombina(a, b) {
 
 }
 window.porQueNaoCombina = porQueNaoCombina;
+
+
+
+/**
+ * A selecao multipla vale para UM pedido so. Devolve o recado quando ela esta
+ * inconsistente, ou null quando da para impor.
+ *
+ * Existe por causa do relato de 18/08/2026: marcar 1000277 e 1000278 imprimia
+ * so o 1000277. Os dois eram de pedidos DIFERENTES -- Tchequia do 20495 e VIP
+ * do 20508 --, e a selecao do pedido anterior tinha sobrevivido a troca.
+ *
+ * O que torna isso pior do que um erro comum: a fila so desenha o pedido
+ * aberto, entao um modelo marcado em outro pedido e INVISIVEL. O operador nao
+ * ve e nao consegue desmarcar. E, mais abaixo, `state.osItens[s.osId]` nao tem
+ * aquele item, o `sItem` vira undefined, e a arte entra no trabalho com
+ * `qtd: 0` -- some da folha sem uma linha de aviso.
+ */
+function problemaNaSelecao() {
+
+    const sel = state.selectedOSItems || [];
+
+    if (sel.length < 2) return null;
+
+    const pedidos = Array.from(new Set(sel.map(s => String(s.osId))));
+
+    if (pedidos.length > 1) {
+
+        return 'A selecao tem modelos de mais de um pedido, e a fila so mostra o pedido aberto — '
+
+            + 'os de fora dele nao aparecem na tela e sairiam com zero itens. '
+
+            + 'Desmarque tudo e escolha de novo, so dentro deste pedido.';
+
+    }
+
+    const perdidos = sel.filter(s => !(state.osItens[s.osId] || [])
+
+        .find(i => String(i.id) === String(s.itemId)));
+
+    if (perdidos.length) {
+
+        return `${perdidos.length} modelo(s) marcado(s) nao estao mais carregados e sairiam com `
+
+            + 'zero itens, em silencio. Desmarque tudo, reabra o pedido e escolha de novo.';
+
+    }
+
+    return null;
+
+}
+window.problemaNaSelecao = problemaNaSelecao;
+
+
+
+/**
+ * Tira da selecao os modelos de outros pedidos e diz quantos foram. Chamado ao
+ * abrir um pedido e ao marcar um modelo: a selecao e do pedido que esta na
+ * tela, e o que nao esta na tela nao pode decidir o que sai no papel.
+ */
+function limparSelecaoDeOutroPedido(osId) {
+
+    const sel = state.selectedOSItems || [];
+
+    const forasteiros = sel.filter(s => String(s.osId) !== String(osId));
+
+    if (!forasteiros.length) return 0;
+
+    state.selectedOSItems = sel.filter(s => String(s.osId) === String(osId));
+
+    return forasteiros.length;
+
+}
+window.limparSelecaoDeOutroPedido = limparSelecaoDeOutroPedido;
 
 
 
@@ -21009,6 +21088,11 @@ async function enviarParaImposicao(itemId, osId, switchTab = true) {
 
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId, osId };
+
+    // Trocou de pedido? A selecao do anterior nao pode atravessar: ela some da
+    // fila, que so desenha o pedido aberto, e continuaria decidindo o que entra
+    // na folha combinada. Ver problemaNaSelecao().
+    if (typeof limparSelecaoDeOutroPedido === 'function') limparSelecaoDeOutroPedido(osId);
 
     const impPreview = document.getElementById('imp-preview-card-container');
     if (impPreview) impPreview.style.display = 'block';

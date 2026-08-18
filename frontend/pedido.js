@@ -3155,6 +3155,11 @@ async function enviarParaPedido(itemId, osId) {
     // Guardar referência ao item ativo para atualização automática pós-imposição
     state.activeOSItem = { itemId: item.id, osId };
 
+    // Trocou de pedido? A selecao do anterior nao pode atravessar: ela some da
+    // fila, que so desenha o pedido aberto, e continuaria decidindo o que entra
+    // na folha combinada. Ver problemaNaSelecao().
+    if (typeof limparSelecaoDeOutroPedido === 'function') limparSelecaoDeOutroPedido(osId);
+
     // Atualizar o título do cabeçalho da página de Pedido
     const activeOS = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId) : null);
     let nomeEvento = '';
@@ -3401,6 +3406,18 @@ window.togglePedItemSelection = function(itemId, osId) {
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;
+
+    // A fila so desenha o pedido aberto. Um modelo marcado em OUTRO pedido fica
+    // invisivel: o operador nao ve e nao consegue desmarcar, e na hora de impor
+    // ele entra com `qtd: 0` e some da folha. Foi o que aconteceu ao marcar
+    // 1000277 (pedido 20495) com 1000278 (pedido 20508) ainda marcado.
+    if (typeof limparSelecaoDeOutroPedido === 'function') {
+        const largados = limparSelecaoDeOutroPedido(osId);
+        if (largados) {
+            toast(`${largados} modelo(s) de outro pedido foram desmarcados: `
+                + 'a folha combinada vale para um pedido so.', 'info');
+        }
+    }
 
     const idx = state.selectedOSItems.findIndex(s => String(s.itemId) === String(itemId));
     
@@ -4379,6 +4396,12 @@ window.runPedImposition = async function (mode, isRefazer) {
     // Antes de abrir qualquer coisa: modelo sem nenhuma linha do banco cairia na
     // numeracao sequencial e sairia com numero no lugar do nome. A regra e a do
     // script.js — ver modeloSemLinhasDoBanco() la.
+    // A mesma guarda do script.js: selecao de um pedido so, e todos carregados.
+    if (typeof problemaNaSelecao === 'function') {
+        const _selRuim = problemaNaSelecao();
+        if (_selRuim) return desistir(_selRuim);
+    }
+
     if (typeof recadoDeFatiaVazia === 'function') {
         const _semLinhas = recadoDeFatiaVazia(itensDaImposicao(isMultiSelected));
         if (_semLinhas) return desistir(_semLinhas);

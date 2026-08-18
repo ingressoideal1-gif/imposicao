@@ -178,7 +178,81 @@ const PAISES = [
     ok(/pdf_name: itemPdfName/.test(PEDIDO), 'e o nome do arquivo');
 })();
 
+// ─── A seleção pertence a UM pedido só ───────────────────────────────────────
+//
+// Relatado em 18/08/2026: marcar 1000277 e 1000278 imprimia só o 1000277. Os
+// dois são de pedidos DIFERENTES — Tchéquia é do 20495 e VIP é do 20508.
+//
+// A fila só desenha o pedido aberto, então uma seleção de outro pedido é
+// invisível: o operador não vê e não consegue desmarcar. E o
+// `state.selectedOSItems` só era limpo em `abrirImposicaoDoPedido`, do
+// script.js; abrir um pedido pela aba Pedido não limpava nada.
+
+const apiSel = new Function('state', 'window',
+    extrairFuncao(SCRIPT, 'problemaNaSelecao') + '\nreturn { problemaNaSelecao };');
+
+(function selecaoQueCruzaPedidos() {
+    const st = {
+        osItens: {
+            'os-20495': [{ id: '1000277', nome_modelo: 'Tchequia' }],
+            'os-20508': [{ id: '1000278', nome_modelo: 'VIP' }],
+        },
+        selectedOSItems: [],
+    };
+    const api = apiSel(st, global.window);
+
+    st.selectedOSItems = [{ itemId: '1000277', osId: 'os-20495' }];
+    ok(api.problemaNaSelecao() === null, 'um modelo so nunca e problema');
+
+    st.selectedOSItems = [
+        { itemId: '1000277', osId: 'os-20495' },
+        { itemId: '1000278', osId: 'os-20508' },
+    ];
+    const recado = api.problemaNaSelecao();
+    ok(typeof recado === 'string' && /pedido/i.test(recado),
+        'modelos de pedidos diferentes sao recusados', recado);
+    ok(recado && /desmarqu|desmarc|reabra/i.test(recado),
+        'o recado diz como sair da trava', recado);
+})();
+
+(function selecaoComItemQueSumiu() {
+    // O caso que produzia o sintoma exato: o item continua na selecao, mas o
+    // pedido dele nao esta mais carregado. O `sItem` vira undefined, a arte sai
+    // com `qtd: 0` e o modelo simplesmente nao imprime -- em silencio.
+    const st = {
+        osItens: { 'os-20495': [{ id: '1000277' }, { id: '1000272' }] },
+        selectedOSItems: [
+            { itemId: '1000277', osId: 'os-20495' },
+            { itemId: '1000278', osId: 'os-20508' },   // pedido nao carregado
+        ],
+    };
+    const api = apiSel(st, global.window);
+    const recado = api.problemaNaSelecao();
+    ok(typeof recado === 'string', 'item de pedido nao carregado e recusado', recado);
+})();
+
+(function selecaoBoaPassa() {
+    const st = {
+        osItens: { 'os-20495': [{ id: '1000277' }, { id: '1000272' }] },
+        selectedOSItems: [
+            { itemId: '1000277', osId: 'os-20495' },
+            { itemId: '1000272', osId: 'os-20495' },
+        ],
+    };
+    ok(apiSel(st, global.window).problemaNaSelecao() === null,
+        'dois modelos do mesmo pedido, ambos carregados, passam');
+})();
+
+(function asDuasTelasConferemASelecao() {
+    ok(/problemaNaSelecao\(\)/.test(SCRIPT), 'a tela Imposicao confere a selecao antes de impor');
+    ok(/problemaNaSelecao\(\)/.test(PEDIDO), 'a tela Pedido confere a selecao antes de impor');
+    // E abrir um pedido tem de zerar a selecao do anterior, nas duas telas.
+    ok(/selectedOSItems = \[\]/.test(PEDIDO),
+        'abrir um pedido pela aba Pedido limpa a selecao do pedido anterior');
+})();
+
 // ─── Fim ──────────────────────────────────────────────────────────────────────
+
 
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');
