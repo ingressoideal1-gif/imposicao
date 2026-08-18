@@ -37,7 +37,7 @@ Folhas Estimadas   8 folha(s)
 Células vazias     3 (75% de uma folha)
 ```
 
-**No selo acima dos botões**, que é onde mora a ação:
+**No selo, logo abaixo de "Opções do modelo"** — que é onde mora a ação:
 
 ```
 📄 8 folha(s) · 29 itens · sobram 3 célula(s) (75% de uma folha)   [ Ver aproveitamento ]
@@ -45,6 +45,24 @@ Células vazias     3 (75% de uma folha)
 
 O selo mostra a conta sempre; o **botão** só aparece quando a sobra passa do
 limiar daquele produto.
+
+**Por que o selo fica ali em cima, e não junto dos botões de imposição.** A aba
+Pedido tem um `<div style="display: none !important">` que engole toda a parte de
+baixo do cartão de configuração — mapa de teatro, camarote, o Sumário, o upload
+da arte e os botões Gerar PDF/Imprimir. O operador usa os botões do cabeçalho da
+Pré-visualização. Em 18/08/2026 o selo nasceu lá dentro: existia, era preenchido,
+e não podia aparecer — e os testes, que olhavam o `style.display` do próprio
+elemento e nunca os ancestrais, passaram todos.
+
+Por isso o `aproveitamento_harness.js` mede a faixa desse bloco contando
+profundidade de `<div>` e reprova qualquer um destes que caia dentro dela:
+`ped-sobra-selo`, `ped-sobra-texto`, `ped-sobra-btn`, `ped-opcoes-modelo`,
+`ped-soma-bar` e os gêmeos `imp-*`.
+
+Consequência: na aba Pedido a linha "Células vazias" do Sumário nunca aparece,
+porque o Sumário inteiro está nesse bloco. Quem carrega a informação ali é o
+selo, e por isso ele traz folhas, itens e a sobra na mesma frase. Na aba
+Imposição o Sumário aparece, e a linha vale.
 
 ### A conta é a do Sumário, e isso não é detalhe
 

@@ -1364,6 +1364,18 @@
                                 <div id="ped-opcoes-modelo-nota" style="display: none; color: var(--amber, #f59e0b); font-size: 0.78rem; margin-top: 6px;"></div>
                             </div>
 
+                            <!-- Quanto papel esta impressao vai deixar vazio.
+                                 FICA AQUI, e nao junto dos botoes de imposicao: na aba Pedido
+                                 aquele trecho inteiro vive dentro de um `display: none !important`
+                                 (a linha do "Upload Arte"), e o operador usa os botoes do
+                                 cabecalho da Pre-visualizacao. Um selo la dentro existe e nunca
+                                 aparece — foi o que aconteceu em 18/08/2026.
+                                 Ver docs/aproveitamento_de_folha.md -->
+                            <div id="ped-sobra-selo" style="display:none; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.82rem; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px; margin:0 0 14px 0;">
+                                <span id="ped-sobra-texto" style="color:var(--text-dim);"></span>
+                                <button type="button" id="ped-sobra-btn" class="btn btn-sm" style="display:none; margin-left:auto; padding:4px 12px; font-size:0.8rem; background:rgba(59,130,246,0.15); color:var(--blue); border:1px solid var(--blue);" onclick="verAproveitamento()">Ver aproveitamento</button>
+                            </div>
+
                                                         <!-- Modelos combinados: como aproveitar a folha.
                                  So aparece com dois ou mais modelos marcados na fila.
                                  Ver docs/superpowers/specs/2026-08-17-somar-modelos-aproveitando-a-folha-design.md -->
@@ -1563,14 +1575,6 @@
                             <p id="ped-file-info"
                                 style="text-align:center;color:var(--blue);font-size:0.88rem;margin-top:10px;display:none;">
                             </p>
-
-                            <!-- Quanto papel esta impressao vai deixar vazio. So informa;
-                                 o botao aparece quando a sobra passa do limiar do ADM.
-                                 Ver docs/superpowers/specs/2026-08-18-aproveitamento-de-folha-entre-pedidos-design.md -->
-                            <div id="ped-sobra-selo" style="display:none; margin-top:20px; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.82rem; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px;">
-                                <span id="ped-sobra-texto" style="color:var(--text-dim);"></span>
-                                <button type="button" id="ped-sobra-btn" class="btn btn-sm" style="display:none; margin-left:auto; padding:4px 12px; font-size:0.8rem; background:rgba(59,130,246,0.15); color:var(--blue); border:1px solid var(--blue);" onclick="verAproveitamento()">Ver aproveitamento</button>
-                            </div>
 
                             <div style="margin-top:24px;display:flex;gap:8px;">
                                 <button class="btn btn-primary" id="ped-btn-impose" onclick="runPedImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">

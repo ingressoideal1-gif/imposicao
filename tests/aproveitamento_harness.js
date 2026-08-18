@@ -163,6 +163,51 @@ function estado(itensOs1, selecionados, extra) {
     ok(/'sum-vazias', 'ped-sum-vazias'/.test(SCRIPT), 'e alguem as preenche');
 })();
 
+(function oSeloNaoPodeMorarNumBlocoEscondido() {
+    // O defeito de 18/08/2026: a aba Pedido tem um `<div style="display: none
+    // !important">` que engole toda a parte de baixo do cartao de configuracao
+    // — mapa de teatro, camarote, Sumario, upload da arte e os botoes Gerar
+    // PDF/Imprimir. O operador usa os botoes do cabecalho da Pre-visualizacao.
+    //
+    // O selo foi posto la dentro. Ele EXISTIA, era preenchido, e nao podia
+    // aparecer. Os testes olhavam o `style.display` do proprio elemento e nunca
+    // os ancestrais, entao passaram todos.
+    const html = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
+
+    // A faixa de cada bloco escondido por `display: none !important`, contando
+    // profundidade de <div> ate ele fechar.
+    const faixas = [];
+    const abre = /<div[^>]*style="[^"]*display:\s*none\s*!important[^"]*"[^>]*>/gi;
+    let m;
+    while ((m = abre.exec(html)) !== null) {
+        const inicio = m.index;
+        let profundidade = 0, i = inicio;
+        const tags = /<div\b|<\/div>/gi;
+        tags.lastIndex = inicio;
+        let t;
+        while ((t = tags.exec(html)) !== null) {
+            profundidade += (t[0].toLowerCase() === '</div>') ? -1 : 1;
+            if (profundidade === 0) { i = tags.lastIndex; break; }
+        }
+        faixas.push([inicio, i]);
+    }
+    ok(faixas.length > 0, 'o bloco escondido da aba Pedido continua existindo (o teste tem o que vigiar)');
+
+    const dentroDeAlgumEscondido = (id) => {
+        const pos = html.indexOf('id="' + id + '"');
+        if (pos < 0) return 'nao existe';
+        return faixas.some(f => pos > f[0] && pos < f[1]);
+    };
+
+    // Estes tem de estar VISIVEIS: sao o que o operador precisa ver e clicar.
+    ['ped-sobra-selo', 'ped-sobra-texto', 'ped-sobra-btn',
+     'ped-opcoes-modelo', 'ped-soma-bar',
+     'imp-sobra-selo', 'imp-opcoes-modelo', 'imp-soma-bar'].forEach(id => {
+        ok(dentroDeAlgumEscondido(id) === false,
+            id + ' nao pode ficar dentro de um bloco display:none !important', dentroDeAlgumEscondido(id));
+    });
+})();
+
 // ─── O limiar ────────────────────────────────────────────────────────────────
 
 (function oLimiarEFracaoDeFolha() {
