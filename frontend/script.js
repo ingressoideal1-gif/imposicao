@@ -27055,18 +27055,22 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 const pdf = await loadingTask.promise;
                 const page = await pdf.getPage(1);
 
-                const vp = page.getViewport({ scale: 1.0 });
-                const artRatio = vp.width / vp.height;
-                const canvasRatio = finalWidth / finalHeight;
-                
-                let pdfScale;
-                if (artRatio > canvasRatio) {
-                    pdfScale = finalWidth / vp.width;
-                } else {
-                    pdfScale = finalHeight / vp.height;
-                }
-
-                const scaledViewport = page.getViewport({ scale: pdfScale });
+                // A arte em PDF entra no TAMANHO REAL dela, centrada na peca, e o
+                // que passar da peca fica de fora. E o que a impressora faz:
+                // engine.py abre a arte em PDF e a coloca na celula com o rect
+                // do tamanho da PROPRIA PAGINA (`base_w`/`base_h`), nunca
+                // reduzida para caber. Encolher aqui fazia a tela mostrar a arte
+                // menor do que ela sai no papel, com uma faixa branca em volta
+                // que o papel nao tem -- foi o que o usuario viu em 18/08/2026
+                // comparando a janela com a impressao.
+                //
+                // A pagina do PDF vem em PONTOS (2,8346 pt = 1 mm) e o canvas
+                // tem S pixels por milimetro: a escala do tamanho real e
+                // S / 2,8346. Arte em IMAGEM continua encaixando proporcional-
+                // mente (ramo abaixo), porque e isso que o motor faz com ela em
+                // `_load_base_as_pdf`.
+                const escalaTamanhoReal = S / 2.8346;
+                const scaledViewport = page.getViewport({ scale: escalaTamanhoReal });
 
                 const offCanvas = document.createElement('canvas');
                 offCanvas.width = Math.round(scaledViewport.width);
