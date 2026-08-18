@@ -46,6 +46,27 @@ Células vazias     3 (75% de uma folha)
 O selo mostra a conta sempre; o **botão** só aparece quando a sobra passa do
 limiar daquele produto.
 
+### A cor diz o estado antes de a frase ser lida
+
+O selo nasceu em 0,82rem e cinza sobre cinza, e o operador simplesmente não o
+via. Em 18/08/2026 o usuário pediu **fonte maior e amarelo, com mais destaque** —
+e o selo passou a 1,05rem em negrito, com três estados de cor:
+
+| Estado | Classe | Cor | Quando |
+|---|---|---|---|
+| Folha fecha certo | `.fecha-certo` | verde (`--green`) | `vazias === 0` |
+| Sobrou célula | `.tem-sobra` | amarelo (`--amber`) | `vazias > 0` |
+| Passou do limiar | `+ .merece-aviso` | amarelo com brilho | `sobraMereceAviso()` — é também quando o botão aparece |
+
+**O amarelo é reservado à sobra.** Pintar "a folha fecha certo" de amarelo
+também faria o amarelo deixar de significar atenção, e o operador voltaria a não
+enxergar o aviso — de novo, só que colorido.
+
+O estilo mora em `frontend/style.css` (bloco `.selo-sobra`), e não em `style=`
+inline: foi o inline discreto que dissolveu o destaque da primeira vez. Quem
+alterna as classes é o `atualizarSeloDeSobra()`, e o `aproveitamento_harness.js`
+cobra tamanho, negrito e as três cores.
+
 **Por que o selo fica ali em cima, e não junto dos botões de imposição.** A aba
 Pedido tem um `<div style="display: none !important">` que engole toda a parte de
 baixo do cartão de configuração — mapa de teatro, camarote, o Sumário, o upload

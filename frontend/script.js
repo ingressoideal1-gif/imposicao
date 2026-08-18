@@ -14206,6 +14206,14 @@ function atualizarSeloDeSobra() {
 
         if (!s) return;
 
+        // A cor diz o estado antes de o operador ler a frase. O amarelo é
+        // reservado à sobra: se "a folha fecha certo" também fosse amarelo, o
+        // amarelo deixaria de significar atenção. Acima do limiar do produto
+        // ele ainda ganha brilho (.merece-aviso), que é quando o botão aparece.
+        selo.classList.toggle('tem-sobra',    s.vazias > 0);
+        selo.classList.toggle('fecha-certo',  s.vazias === 0);
+        selo.classList.toggle('merece-aviso', oferecer);
+
         const elTexto = document.getElementById(ids[1]);
 
         if (elTexto) elTexto.textContent = texto;

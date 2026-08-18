@@ -2913,3 +2913,70 @@ input[type=number] {
     color: #ffffff;
 }
 .modo-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+
+/* ---------------------------------------------------------------------------
+   O SELO DA SOBRA DE FOLHA
+
+   Ele avisa desperdicio de papel, que numa grafica e custo direto. Nasceu
+   discreto (0,82rem, cinza sobre cinza) e o operador simplesmente nao o via;
+   em 18/08/2026 o usuario pediu fonte maior e amarelo, com mais destaque.
+
+   O amarelo e reservado a SOBRA. Quando a folha fecha certo o selo fica verde:
+   pintar os dois de amarelo faria o amarelo deixar de significar atencao, e o
+   operador voltaria a nao enxergar o aviso — de novo, so que colorido.
+
+   As classes de estado (.tem-sobra / .fecha-certo / .merece-aviso) sao postas
+   por atualizarSeloDeSobra(), no script.js.
+--------------------------------------------------------------------------- */
+.selo-sobra {
+    display: none;                    /* quem mostra e o atualizarSeloDeSobra() */
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: 0.2px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-dim);
+    padding: 13px 16px;
+    transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+
+.selo-sobra-texto { flex: 1 1 auto; }
+
+/* Sobrou celula vazia: amarelo. */
+.selo-sobra.tem-sobra {
+    color: var(--amber);
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.45);
+}
+
+/* Passou do limiar do produto: deixa de ser detalhe e ganha brilho. */
+.selo-sobra.merece-aviso {
+    background: rgba(245, 158, 11, 0.20);
+    border-color: rgba(245, 158, 11, 0.75);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.20);
+}
+
+/* A folha fecha certo: verde, calmo, sem roubar a atencao do amarelo. */
+.selo-sobra.fecha-certo {
+    color: var(--green);
+    background: rgba(34, 197, 94, 0.10);
+    border-color: rgba(34, 197, 94, 0.35);
+}
+
+/* O botao so aparece com .merece-aviso, entao ele acompanha o amarelo. */
+.selo-sobra-btn {
+    margin-left: auto;
+    padding: 8px 18px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    background: rgba(245, 158, 11, 0.18);
+    color: var(--amber);
+    border: 1px solid rgba(245, 158, 11, 0.65);
+}
+.selo-sobra-btn:hover { background: rgba(245, 158, 11, 0.32); color: var(--amber); }

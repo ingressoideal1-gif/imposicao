@@ -1257,9 +1257,9 @@
                             <!-- Quanto papel esta impressao vai deixar vazio. So informa;
                                  o botao aparece quando a sobra passa do limiar do ADM.
                                  Ver docs/superpowers/specs/2026-08-18-aproveitamento-de-folha-entre-pedidos-design.md -->
-                            <div id="imp-sobra-selo" style="display:none; margin-top:20px; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.82rem; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px;">
-                                <span id="imp-sobra-texto" style="color:var(--text-dim);"></span>
-                                <button type="button" id="imp-sobra-btn" class="btn btn-sm" style="display:none; margin-left:auto; padding:4px 12px; font-size:0.8rem; background:rgba(59,130,246,0.15); color:var(--blue); border:1px solid var(--blue);" onclick="verAproveitamento()">Ver aproveitamento</button>
+                            <div id="imp-sobra-selo" class="selo-sobra" style="margin-top:20px;">
+                                <span id="imp-sobra-texto" class="selo-sobra-texto"></span>
+                                <button type="button" id="imp-sobra-btn" class="btn btn-sm selo-sobra-btn" style="display:none;" onclick="verAproveitamento()">Ver aproveitamento</button>
                             </div>
 
                             <div style="margin-top:24px;display:flex;gap:8px;">
@@ -1371,9 +1371,9 @@
                                  cabecalho da Pre-visualizacao. Um selo la dentro existe e nunca
                                  aparece — foi o que aconteceu em 18/08/2026.
                                  Ver docs/aproveitamento_de_folha.md -->
-                            <div id="ped-sobra-selo" style="display:none; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.82rem; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px; margin:0 0 14px 0;">
-                                <span id="ped-sobra-texto" style="color:var(--text-dim);"></span>
-                                <button type="button" id="ped-sobra-btn" class="btn btn-sm" style="display:none; margin-left:auto; padding:4px 12px; font-size:0.8rem; background:rgba(59,130,246,0.15); color:var(--blue); border:1px solid var(--blue);" onclick="verAproveitamento()">Ver aproveitamento</button>
+                            <div id="ped-sobra-selo" class="selo-sobra" style="margin:0 0 14px 0;">
+                                <span id="ped-sobra-texto" class="selo-sobra-texto"></span>
+                                <button type="button" id="ped-sobra-btn" class="btn btn-sm selo-sobra-btn" style="display:none;" onclick="verAproveitamento()">Ver aproveitamento</button>
                             </div>
 
                                                         <!-- Modelos combinados: como aproveitar a folha.

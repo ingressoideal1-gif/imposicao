@@ -488,6 +488,41 @@ function candidatos(pares) {
     ok(/atualizarSeloDeSobra\(\)/.test(SCRIPT), 'e alguem pinta o selo');
 })();
 
+(function oSeloTemDestaqueEEmAmarelo() {
+    // O selo nasceu em 0,82rem e cinza sobre cinza, e o operador nao o via.
+    // Em 18/08/2026 o usuario pediu fonte maior e amarelo. Este teste existe
+    // para que o destaque nao volte a se dissolver num estilo inline discreto.
+    const html = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
+    const css  = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
+
+    ['imp-sobra-selo', 'ped-sobra-selo'].forEach(id => {
+        const tag = html.slice(html.indexOf('id="' + id + '"') - 200,
+                               html.indexOf('id="' + id + '"') + 200);
+        ok(/class="[^"]*\bselo-sobra\b/.test(tag), id + ' usa a classe selo-sobra', tag);
+    });
+
+    const bloco = (seletor) => {
+        const i = css.indexOf(seletor + ' {');
+        return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
+    };
+
+    const base = bloco('.selo-sobra');
+    const tam = /font-size:\s*([\d.]+)rem/.exec(base);
+    ok(tam && parseFloat(tam[1]) >= 1, 'a fonte do selo e maior que a do corpo', tam && tam[1]);
+    ok(/font-weight:\s*(700|bold)/.test(base), 'e vem em negrito', base);
+
+    ok(/var\(--amber\)/.test(bloco('.selo-sobra.tem-sobra')), 'com sobra o selo fica amarelo');
+    ok(/var\(--green\)/.test(bloco('.selo-sobra.fecha-certo')),
+        'e verde quando a folha fecha certo — senao o amarelo perde o sentido de atencao');
+    ok(/box-shadow/.test(bloco('.selo-sobra.merece-aviso')), 'acima do limiar ele ainda ganha brilho');
+
+    // E quem poe as classes e a funcao que ja pinta o selo.
+    const pinta = extrairFuncao(SCRIPT, 'atualizarSeloDeSobra');
+    ok(/classList\.toggle\('tem-sobra',\s*s\.vazias > 0\)/.test(pinta), 'o amarelo segue a sobra', );
+    ok(/classList\.toggle\('fecha-certo',\s*s\.vazias === 0\)/.test(pinta), 'o verde segue a folha fechada');
+    ok(/classList\.toggle\('merece-aviso',\s*oferecer\)/.test(pinta), 'e o brilho segue o limiar');
+})();
+
 (function oPedidoDeCadaArteVaiNoPayload() {
     // Sem isto, uma folha com dois pedidos manda todos os QRs com o pedido
     // errado — coluna errada do pool e prefixo errado. So aparece na portaria.
