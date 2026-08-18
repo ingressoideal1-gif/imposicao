@@ -1247,6 +1247,14 @@
                                 style="text-align:center;color:var(--blue);font-size:0.88rem;margin-top:10px;display:none;">
                             </p>
 
+                            <!-- Quanto papel esta impressao vai deixar vazio. So informa;
+                                 o botao aparece quando a sobra passa do limiar do ADM.
+                                 Ver docs/superpowers/specs/2026-08-18-aproveitamento-de-folha-entre-pedidos-design.md -->
+                            <div id="imp-sobra-selo" style="display:none; margin-top:20px; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.82rem; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px;">
+                                <span id="imp-sobra-texto" style="color:var(--text-dim);"></span>
+                                <button type="button" id="imp-sobra-btn" class="btn btn-sm" style="display:none; margin-left:auto; padding:4px 12px; font-size:0.8rem; background:rgba(59,130,246,0.15); color:var(--blue); border:1px solid var(--blue);" onclick="verAproveitamento()">Ver aproveitamento</button>
+                            </div>
+
                             <div style="margin-top:24px;display:flex;gap:8px;">
                                 <button class="btn btn-primary" id="btn-impose" onclick="runImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
                                     🚀 Gerar PDF
@@ -1541,6 +1549,14 @@
                             <p id="ped-file-info"
                                 style="text-align:center;color:var(--blue);font-size:0.88rem;margin-top:10px;display:none;">
                             </p>
+
+                            <!-- Quanto papel esta impressao vai deixar vazio. So informa;
+                                 o botao aparece quando a sobra passa do limiar do ADM.
+                                 Ver docs/superpowers/specs/2026-08-18-aproveitamento-de-folha-entre-pedidos-design.md -->
+                            <div id="ped-sobra-selo" style="display:none; margin-top:20px; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.82rem; background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px;">
+                                <span id="ped-sobra-texto" style="color:var(--text-dim);"></span>
+                                <button type="button" id="ped-sobra-btn" class="btn btn-sm" style="display:none; margin-left:auto; padding:4px 12px; font-size:0.8rem; background:rgba(59,130,246,0.15); color:var(--blue); border:1px solid var(--blue);" onclick="verAproveitamento()">Ver aproveitamento</button>
+                            </div>
 
                             <div style="margin-top:24px;display:flex;gap:8px;">
                                 <button class="btn btn-primary" id="ped-btn-impose" onclick="runPedImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
@@ -2808,7 +2824,52 @@
                         margin-bottom: -2px; border-radius: 6px 6px 0 0;
                         transition: all .2s;
                     ">🖼️ Imagens</button>
+                    <button class="adm-tab-btn" data-adm-tab="aproveitamento" onclick="switchAdmTab('aproveitamento')" style="
+                        background: none; border: none; cursor: pointer;
+                        padding: 10px 22px; font-size: 0.92rem; font-weight: 600;
+                        color: var(--text-dim); border-bottom: 2.5px solid transparent;
+                        margin-bottom: -2px; border-radius: 6px 6px 0 0;
+                        transition: all .2s;
+                    ">🧩 Aproveitamento</button>
                     <!-- Futuras abas serão adicionadas aqui -->
+                </div>
+
+                <!-- ── ABA: APROVEITAMENTO DE FOLHA ────────────────────────── -->
+                <div id="adm-tab-aproveitamento" class="adm-tab-content" style="display:none;">
+
+                    <div class="card" style="margin-bottom: 24px;">
+                        <div class="card-header"><span class="card-title">📐 Quando avisar</span></div>
+                        <div style="padding: 18px 20px;">
+                            <p style="color: var(--text-dim); font-size: 0.88rem; margin: 0 0 14px 0;">
+                                Toda tiragem que nao fecha a folha deixa celulas vazias. O aviso aparece
+                                na tela de imposicao quando a sobra passa da fracao escolhida aqui.
+                                E fracao de folha, e nao numero de celulas, porque num formato de
+                                4 celulas sobrar 3 e grave e num de 20 e ruido.
+                            </p>
+                            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                                <label for="adm-limiar-sobra" style="font-weight:600;">Avisar quando a sobra passar de</label>
+                                <input type="number" id="adm-limiar-sobra" class="form-control" style="width:110px;"
+                                       min="1" max="100" step="1" value="50" onchange="salvarLimiarDeSobra(this.value)">
+                                <span style="color: var(--text-dim);">% de uma folha</span>
+                            </div>
+                            <p id="adm-limiar-exemplo" style="color: var(--text-dim); font-size: 0.82rem; margin: 12px 0 0 0;"></p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><span class="card-title">🧩 Produtos que podem dividir folha entre pedidos</span></div>
+                        <div style="padding: 18px 20px;">
+                            <p style="color: var(--text-dim); font-size: 0.88rem; margin: 0 0 14px 0;">
+                                Marcado, o produto pode entrar numa folha junto com modelos de
+                                <strong>outro pedido</strong> para aproveitar as celulas que sobrariam.
+                                Desmarcado, o aproveitamento dele so procura dentro do proprio pedido.
+                                Isto e uma permissao: se cor, formato, saida, face ou modo de impressao
+                                nao baterem, a imposicao recusa de qualquer jeito.
+                            </p>
+                            <div id="adm-aproveitamento-lista" style="display:flex; flex-direction:column; gap:6px;"></div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- ── ABA: IMAGENS ────────────────────────────────────────── -->

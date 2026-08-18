@@ -911,6 +911,15 @@ async function loadAll() {
             console.log(`[loadAll] Setor preenchido em ${_reparados} item(ns) mapeado(s) antes dos produtos chegarem.`);
         }
 
+        // O limiar da sobra e a lista de produtos que podem dividir folha entre
+        // pedidos. Vai depois do catálogo e sem `await` no caminho crítico: se
+        // falhar, o selo cai no limiar padrão e a busca entre pedidos não acha
+        // ninguém — nenhuma das duas coisas impede imprimir.
+        if (typeof carregarConfigDeAproveitamento === 'function') {
+            carregarConfigDeAproveitamento().catch(e =>
+                console.warn('[loadAll] aproveitamento nao carregou:', e));
+        }
+
         renderAll();
         if (typeof renderPedOSQueue === 'function') {
             console.log('[loadAll] Re-renderizando fila de pedidos após carregar produtos...');
@@ -13597,9 +13606,12 @@ function atualizarBarraDeSoma() {
 
     });
 
-    // O bloco de opções pertence ao modelo aberto, e as duas telas que desenham
-    // a fila terminam aqui — é o ponto onde ele já se atualiza sozinho.
+    // O bloco de opções e o selo da sobra pertencem à imposição de agora, e as
+    // duas telas que desenham a fila terminam aqui — é o ponto onde os dois já
+    // se atualizam sozinhos, com um modelo ou com vários.
     atualizarOpcoesDoModelo();
+
+    atualizarSeloDeSobra();
 
 }
 window.atualizarBarraDeSoma = atualizarBarraDeSoma;
@@ -13953,6 +13965,794 @@ window.atualizarOpcoesDoModelo = atualizarOpcoesDoModelo;
 
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// APROVEITAMENTO DE FOLHA
+//
+// Toda tiragem que não é múltiplo das células do formato joga papel fora, e a
+// conta é fixa: `sobra = células − (total mod células)`. Imprimir 29 credenciais
+// num formato de 4 células gasta 8 folhas e deixa 3 células vazias — três
+// quartos de uma folha de PVC.
+//
+// Até 18/08/2026 nada na tela dizia isso, e não havia como perguntar "tem outro
+// modelo que caiba aqui?". O selo responde a primeira parte; a busca, a segunda.
+//
+// Desenho em docs/superpowers/specs/2026-08-18-aproveitamento-de-folha-entre-pedidos-design.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A partir de que fração de uma folha a sobra merece aviso. Meia folha por
+ * padrão, ajustável no ADM.
+ *
+ * É fração e não número de células de propósito: num formato de 4 células
+ * sobrar 3 é grave, num de 20 sobrar 3 é ruído.
+ */
+function limiarDeSobra() {
+
+    const v = parseFloat(state.limiarSobra);
+
+    return (isFinite(v) && v > 0 && v <= 1) ? v : 0.5;
+
+}
+window.limiarDeSobra = limiarDeSobra;
+
+
+
+/**
+ * Quanto papel esta imposição vai deixar vazio, ou null quando ainda não dá
+ * para saber (sem modelo, sem formato ou sem quantidade).
+ *
+ * A conta é a sobra do RESTO — `células − (total mod células)` —, e não
+ * `folhas × células − total`. As duas dão o mesmo número no sequencial, mas no
+ * blocado a montagem gasta folhas a mais de propósito, e essas não são
+ * desperdício: são a pilha de tamanho fixo que o operador pediu. O que combinar
+ * modelos consegue eliminar é só a sobra do resto, e é ela que se mede.
+ */
+function sobraDaImposicao() {
+
+    const varias = (state.selectedOSItems || []).length > 1;
+
+    const itens = itensDaImposicao(varias).filter(Boolean);
+
+    if (!itens.length) return null;
+
+    const fmt = (state.formatos || []).find(f => String(f.id) === String(itens[0].formato_id));
+
+    const poses = fmt ? (parseInt(fmt.cols) || 0) * (parseInt(fmt.rows) || 0) : 0;
+
+    if (!poses) return null;
+
+    let total = 0;
+
+    itens.forEach(it => { total += quantidadeDoModelo(it) || 0; });
+
+    if (total <= 0) return null;
+
+    const vazias = (poses - (total % poses)) % poses;
+
+    return {
+        modelos: itens.length,
+        itens: total,
+        poses,
+        folhas: Math.ceil(total / poses),
+        vazias,
+        fracao: vazias / poses
+    };
+
+}
+window.sobraDaImposicao = sobraDaImposicao;
+
+
+
+/** A sobra passa do limiar? */
+function sobraMereceAviso(s) {
+
+    return !!(s && s.vazias > 0 && s.fracao >= limiarDeSobra());
+
+}
+window.sobraMereceAviso = sobraMereceAviso;
+
+
+
+/** A frase do selo. Diz a sobra em células E em fração de folha. */
+function textoDaSobra(s) {
+
+    if (!s) return '';
+
+    const folhas = `${s.folhas.toLocaleString('pt-BR')} folha(s) · ${s.itens.toLocaleString('pt-BR')} itens`;
+
+    if (!s.vazias) return `📄 ${folhas} · a folha fecha certo, sem sobra`;
+
+    return `📄 ${folhas} · sobram ${s.vazias} célula(s) `
+         + `(${Math.round(s.fracao * 100)}% de uma folha)`;
+
+}
+window.textoDaSobra = textoDaSobra;
+
+
+
+/** Pinta o selo da sobra nas duas abas. */
+function atualizarSeloDeSobra() {
+
+    const s = sobraDaImposicao();
+
+    const texto = textoDaSobra(s);
+
+    const oferecer = sobraMereceAviso(s);
+
+    [['imp-sobra-selo', 'imp-sobra-texto', 'imp-sobra-btn'],
+     ['ped-sobra-selo', 'ped-sobra-texto', 'ped-sobra-btn']].forEach(ids => {
+
+        const selo = document.getElementById(ids[0]);
+
+        if (!selo) return;
+
+        selo.style.display = s ? 'flex' : 'none';
+
+        if (!s) return;
+
+        const elTexto = document.getElementById(ids[1]);
+
+        if (elTexto) elTexto.textContent = texto;
+
+        const btn = document.getElementById(ids[2]);
+
+        if (btn) btn.style.display = oferecer ? 'inline-flex' : 'none';
+
+    });
+
+}
+window.atualizarSeloDeSobra = atualizarSeloDeSobra;
+
+
+
+/**
+ * O modelo pode entrar numa folha de aproveitamento?
+ *
+ * Arte aprovada e ainda não impresso. Decisão do usuário em 18/08/2026: o
+ * aproveitamento não pode virar fila furada — nada que a produção ainda não
+ * liberou é antecipado só porque caberia na folha.
+ */
+function modeloLiberadoParaImprimir(item) {
+
+    if (!item) return false;
+
+    const impressao = String(item.status_impressao || item.impressao || '').toUpperCase();
+
+    if (impressao.indexOf('IMPRESSO') >= 0) return false;
+
+    const arte = String(item.amostra_status || item.status_arte || '').toUpperCase();
+
+    return arte.indexOf('APROVAD') >= 0;
+
+}
+window.modeloLiberadoParaImprimir = modeloLiberadoParaImprimir;
+
+
+
+/** Os modelos que já estão na folha desta imposição. */
+function itensJaNaFolha() {
+
+    return itensDaImposicao((state.selectedOSItems || []).length > 1).filter(Boolean);
+
+}
+
+
+
+/** O pedido a que a imposição de agora pertence. */
+function osDaImposicao() {
+
+    if (state.selectedOSItems && state.selectedOSItems.length) return state.selectedOSItems[0].osId;
+
+    return (state.activeOSItem || {}).osId || null;
+
+}
+
+
+
+/**
+ * Os modelos do PEDIDO ABERTO que poderiam entrar nesta folha. Passa pelo mesmo
+ * `porQueNaoCombina` da seleção manual — a busca não pode sugerir o que a tela
+ * recusaria.
+ */
+function candidatosDoPedido() {
+
+    const naFolha = itensJaNaFolha();
+
+    if (!naFolha.length) return [];
+
+    const osId = osDaImposicao();
+
+    const jaTem = new Set(naFolha.map(i => String(i.id)));
+
+    return (state.osItens[osId] || [])
+
+        .filter(it => !jaTem.has(String(it.id)))
+
+        .filter(modeloLiberadoParaImprimir)
+
+        .filter(it => !porQueNaoCombina(naFolha[0], it))
+
+        .map(it => ({ item: it, osId, qtd: quantidadeDoModelo(it) || 0 }))
+
+        .filter(c => c.qtd > 0);
+
+}
+window.candidatosDoPedido = candidatosDoPedido;
+
+
+
+/**
+ * O subconjunto de candidatos que melhor fecha a folha, ou null quando nenhum
+ * melhora.
+ *
+ * Não é busca gulosa: é a conta exata. Só o RESTO de cada quantidade importa
+ * (`qtd mod células`), então o problema tem no máximo `células` estados — 40 no
+ * pior formato deste catálogo. A varredura passa por cada candidato uma vez,
+ * guardando, para cada resto alcançável, a menor quantidade de modelos que
+ * chega nele. Cada modelo entra no máximo uma vez, e por isso a varredura lê uma
+ * cópia do estado anterior.
+ *
+ * O critério final é a sobra que restaria, e o desempate é o menor número de
+ * modelos extras: fechar a folha com um modelo é melhor que fechar com três.
+ */
+function melhorComposicao(sobra, candidatos) {
+
+    if (!sobra || !sobra.vazias || !candidatos || !candidatos.length) return null;
+
+    const poses = sobra.poses;
+
+    const alcance = new Array(poses).fill(null);
+
+    alcance[0] = { modelos: 0, escolhidos: [] };
+
+    candidatos.forEach((c, idx) => {
+
+        const passo = ((c.qtd % poses) + poses) % poses;
+
+        const antes = alcance.slice();
+
+        for (let r = 0; r < poses; r++) {
+
+            if (!antes[r]) continue;
+
+            const destino = (r + passo) % poses;
+
+            const novo = { modelos: antes[r].modelos + 1, escolhidos: antes[r].escolhidos.concat([idx]) };
+
+            if (!alcance[destino] || novo.modelos < alcance[destino].modelos) {
+
+                alcance[destino] = novo;
+
+            }
+
+        }
+
+    });
+
+    let melhor = null;
+
+    for (let r = 0; r < poses; r++) {
+
+        const passo = alcance[r];
+
+        if (!passo || !passo.modelos) continue;          // "não fazer nada" não é sugestão
+
+        const restante = (poses - ((sobra.itens + r) % poses)) % poses;
+
+        if (restante >= sobra.vazias) continue;          // não melhora, ou piora
+
+        if (!melhor || restante < melhor.restante
+            || (restante === melhor.restante && passo.modelos < melhor.modelos)) {
+
+            melhor = { restante, modelos: passo.modelos, escolhidos: passo.escolhidos };
+
+        }
+
+    }
+
+    if (!melhor) return null;
+
+    const escolhidos = melhor.escolhidos.map(i => candidatos[i]);
+
+    const somaExtra = escolhidos.reduce((t, c) => t + c.qtd, 0);
+
+    return {
+        candidatos: escolhidos,
+        itens: sobra.itens + somaExtra,
+        folhas: Math.ceil((sobra.itens + somaExtra) / poses),
+        vazias: melhor.restante
+    };
+
+}
+window.melhorComposicao = melhorComposicao;
+
+
+
+/**
+ * Traz o limiar da sobra e a lista de produtos liberados a combinar entre
+ * pedidos. Falhar aqui não impede imprimir: o selo cai no limiar padrão e a
+ * busca entre pedidos simplesmente não acha ninguém.
+ */
+async function carregarConfigDeAproveitamento() {
+
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+
+    const [cfg, prods] = await Promise.all([
+
+        supabaseClient.from('producao_config').select('chave, valor').eq('chave', 'limiar_sobra'),
+
+        supabaseClient.from('producao_produtos_combinaveis').select('id_produto, liberado')
+
+    ]);
+
+    const linha = cfg && cfg.data && cfg.data.length ? cfg.data[0] : null;
+
+    if (linha && linha.valor !== undefined && linha.valor !== null) {
+
+        const v = parseFloat(linha.valor);
+
+        if (isFinite(v) && v > 0 && v <= 1) state.limiarSobra = v;
+
+    }
+
+    const liberados = new Set();
+
+    ((prods && prods.data) || []).forEach(p => { if (p.liberado) liberados.add(String(p.id_produto)); });
+
+    state.produtosCombinaveis = liberados;
+
+    atualizarSeloDeSobra();
+
+}
+window.carregarConfigDeAproveitamento = carregarConfigDeAproveitamento;
+
+
+
+/** O nome de um produto do catálogo do parceiro, com os apelidos que ele usa. */
+function nomeDoProdutoGlobal(p) {
+
+    return p.nome || p.descricao || p.nome_produto || p.produto || `Produto ${p.id_produto}`;
+
+}
+
+
+
+/** Desenha a aba ADM → Aproveitamento. */
+async function renderAdmAproveitamento() {
+
+    try { await carregarConfigDeAproveitamento(); } catch (e) { console.warn('[ADM] aproveitamento', e); }
+
+    const inp = document.getElementById('adm-limiar-sobra');
+
+    if (inp) inp.value = Math.round(limiarDeSobra() * 100);
+
+    const ex = document.getElementById('adm-limiar-exemplo');
+
+    if (ex) {
+
+        ex.textContent = `Com ${Math.round(limiarDeSobra() * 100)}%: num formato de 4 celulas o aviso `
+            + `aparece a partir de ${Math.ceil(limiarDeSobra() * 4)} celula(s) vazia(s); num de 20, `
+            + `a partir de ${Math.ceil(limiarDeSobra() * 20)}.`;
+
+    }
+
+    const lista = document.getElementById('adm-aproveitamento-lista');
+
+    if (!lista) return;
+
+    const produtos = (state.produtosGlobais || []).slice()
+
+        .filter(p => p && (p.id_produto !== undefined && p.id_produto !== null))
+
+        .sort((a, b) => String(nomeDoProdutoGlobal(a)).localeCompare(String(nomeDoProdutoGlobal(b)), 'pt-BR'));
+
+    if (!produtos.length) {
+
+        lista.innerHTML = '<div style="color:var(--text-dim);">Nenhum produto no catalogo. '
+            + 'Abra a tela de Pedidos uma vez para o catalogo carregar e volte aqui.</div>';
+
+        return;
+
+    }
+
+    lista.innerHTML = produtos.map(p => {
+
+        const id = String(p.id_produto);
+
+        const marcado = state.produtosCombinaveis.has(id) ? 'checked' : '';
+
+        return `<label style="display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">`
+             + `<input type="checkbox" ${marcado} onchange="salvarProdutoCombinavel('${escHtmlSimples(id)}', this.checked)">`
+             + `<span>${escHtmlSimples(nomeDoProdutoGlobal(p))}</span>`
+             + `<span style="margin-left:auto; color:var(--text-dim); font-size:0.8rem;">#${escHtmlSimples(id)}</span>`
+             + `</label>`;
+
+    }).join('');
+
+}
+window.renderAdmAproveitamento = renderAdmAproveitamento;
+
+
+
+/** Liga ou desliga um produto para dividir folha entre pedidos. */
+window.salvarProdutoCombinavel = async function(idProduto, liberado) {
+
+    const p = (state.produtosGlobais || []).find(x => String(x.id_produto) === String(idProduto));
+
+    try {
+
+        const { error } = await supabaseClient.from('producao_produtos_combinaveis').upsert({
+            id_produto: String(idProduto),
+            nome: p ? nomeDoProdutoGlobal(p) : null,
+            liberado: !!liberado,
+            atualizado_em: new Date().toISOString()
+        }, { onConflict: 'id_produto' });
+
+        if (error) throw error;
+
+        if (liberado) state.produtosCombinaveis.add(String(idProduto));
+
+        else state.produtosCombinaveis.delete(String(idProduto));
+
+        toast(liberado ? 'Produto liberado a dividir folha entre pedidos.'
+                       : 'Produto voltou a aproveitar so dentro do proprio pedido.', 'success');
+
+    } catch (e) {
+
+        console.error('[ADM] salvarProdutoCombinavel', e);
+
+        toast('Nao consegui salvar. Recarregue a pagina e tente de novo.', 'error');
+
+        renderAdmAproveitamento();
+
+    }
+
+};
+
+
+
+/** Grava o limiar da sobra, em porcentagem de uma folha. */
+window.salvarLimiarDeSobra = async function(pct) {
+
+    const v = parseFloat(pct) / 100;
+
+    if (!isFinite(v) || v <= 0 || v > 1) {
+
+        toast('O limiar precisa ficar entre 1% e 100% de uma folha.', 'error');
+
+        return renderAdmAproveitamento();
+
+    }
+
+    try {
+
+        const { error } = await supabaseClient.from('producao_config').upsert({
+            chave: 'limiar_sobra',
+            valor: v,
+            atualizado_em: new Date().toISOString()
+        }, { onConflict: 'chave' });
+
+        if (error) throw error;
+
+        state.limiarSobra = v;
+
+        atualizarSeloDeSobra();
+
+        renderAdmAproveitamento();
+
+        toast('Limiar salvo.', 'success');
+
+    } catch (e) {
+
+        console.error('[ADM] salvarLimiarDeSobra', e);
+
+        toast('Nao consegui salvar o limiar.', 'error');
+
+    }
+
+};
+
+
+
+/**
+ * Grava que esta folha juntou modelos de pedidos diferentes.
+ *
+ * Só grava quando cruza pedido: folha de um pedido só não levanta pergunta
+ * nenhuma. E grava na CONFIRMAÇÃO da impressão, não na geração do PDF — PDF
+ * gerado é conferência, e conferência não muda o status de pedido nenhum.
+ *
+ * É este registro que responde, semanas depois, "por que o 20508 foi impresso
+ * antes da hora". Falhar aqui não desfaz a impressão: o material já saiu, e
+ * derrubar a tela por causa do registro seria pior que o registro faltando.
+ */
+async function registrarCombinacao(alvos) {
+
+    const lista = (alvos || []).filter(a => a && a.itemId);
+
+    if (new Set(lista.map(a => String(a.osId))).size < 2) return;
+
+    try {
+
+        const linhas = lista.map(a => {
+
+            const it = (state.osItens[a.osId] || []).find(i => String(i.id) === String(a.itemId));
+
+            const os = (state.ordens || []).find(o => String(o.id) === String(a.osId));
+
+            return {
+                pedido: os ? String(os.numero) : null,
+                os_id: String(a.osId),
+                modelo: it ? String(it.modelo || '') : String(a.itemId),
+                nome: it ? rotuloDoModelo(it, 0) : null,
+                qtd: it ? (quantidadeDoModelo(it) || 0) : 0
+            };
+
+        });
+
+        const itens = lista
+
+            .map(a => (state.osItens[a.osId] || []).find(i => String(i.id) === String(a.itemId)))
+
+            .filter(Boolean);
+
+        const fmt = itens.length
+
+            ? (state.formatos || []).find(f => String(f.id) === String(itens[0].formato_id))
+
+            : null;
+
+        const poses = fmt ? (parseInt(fmt.cols) || 0) * (parseInt(fmt.rows) || 0) : 0;
+
+        const total = linhas.reduce((t, l) => t + (l.qtd || 0), 0);
+
+        const { error } = await supabaseClient.from('producao_combinacoes').insert({
+            criado_por: (window._currentUser && (window._currentUser.email || window._currentUser.id)) || null,
+            formato: fmt ? fmt.name : null,
+            poses: poses || null,
+            itens: total,
+            folhas: poses ? Math.ceil(total / poses) : null,
+            celulas_vazias: poses ? ((poses - (total % poses)) % poses) : null,
+            modelos: linhas
+        });
+
+        if (error) throw error;
+
+    } catch (e) {
+
+        console.warn('[aproveitamento] nao consegui registrar a combinacao:', e);
+
+    }
+
+}
+window.registrarCombinacao = registrarCombinacao;
+
+
+
+/** Este modelo pertence a um produto liberado para dividir folha entre pedidos? */
+function produtoLiberadoParaCombinar(item) {
+
+    const liberados = state.produtosCombinaveis;
+
+    if (!liberados || !liberados.size) return false;
+
+    const id = item && (item._vibe_id_produto || item.id_produto);
+
+    return id !== undefined && id !== null && liberados.has(String(id));
+
+}
+window.produtoLiberadoParaCombinar = produtoLiberadoParaCombinar;
+
+
+
+/**
+ * Os modelos de OUTROS pedidos da fila que poderiam entrar nesta folha.
+ *
+ * Carrega os pedidos que ainda não estão em memória com o mesmo `loadOSItens`
+ * que a tela usa — e não com uma consulta própria. O motivo é concreto:
+ * `formato_id` e `saida_id` NÃO existem em `pedidos_modelos`, são resolvidos em
+ * memória a partir do texto do ERP, e uma consulta crua traria modelos sem
+ * formato, que o `porQueNaoCombina` recusaria todos. Reaproveitar o carregador
+ * também evita mais uma cópia da regra de mapeamento para envelhecer sozinha.
+ *
+ * Só roda quando o operador pede: é a única razão de o custo ser aceitável.
+ */
+async function candidatosDeOutrosPedidos() {
+
+    const naFolha = itensJaNaFolha();
+
+    if (!naFolha.length) return [];
+
+    if (!produtoLiberadoParaCombinar(naFolha[0])) return [];
+
+    const osAtual = String(osDaImposicao());
+
+    // Um teto para o clique não virar espera: a fila da gráfica raramente passa
+    // disso, e o que ficar de fora é dito ao operador em vez de sumir calado.
+    const TETO = 25;
+
+    const alvos = (state.ordens || [])
+
+        .filter(o => String(o.id) !== osAtual)
+
+        .slice(0, TETO);
+
+    for (const os of alvos) {
+
+        if (!state.osItens[os.id] || !state.osItens[os.id].length) {
+
+            try { await loadOSItens(os.id); } catch (e) { console.warn('[aproveitamento] pedido nao carregou', os.id, e); }
+
+        }
+
+    }
+
+    const fora = [];
+
+    alvos.forEach(os => {
+
+        (state.osItens[os.id] || []).forEach(it => {
+
+            if (!modeloLiberadoParaImprimir(it)) return;
+
+            if (!produtoLiberadoParaCombinar(it)) return;
+
+            if (porQueNaoCombina(naFolha[0], it)) return;
+
+            const qtd = quantidadeDoModelo(it) || 0;
+
+            if (qtd > 0) fora.push({ item: it, osId: os.id, qtd });
+
+        });
+
+    });
+
+    return fora;
+
+}
+window.candidatosDeOutrosPedidos = candidatosDeOutrosPedidos;
+
+
+
+/** A linha que descreve um candidato no popup. */
+function linhaDaComposicao(item, osId, qtd, marca) {
+
+    const os = (state.ordens || []).find(o => String(o.id) === String(osId));
+
+    const pedido = os ? os.numero : '—';
+
+    return `<div style="font-family:monospace; font-size:0.86rem;">`
+         + `${escHtmlSimples(String(item.modelo || '—'))} · `
+         + `${escHtmlSimples(rotuloDoModelo(item, 0))} · `
+         + `pedido ${escHtmlSimples(String(pedido))} · ${qtd}`
+         + (marca ? ` <span style="color:#94a3b8;">${marca}</span>` : '')
+         + `</div>`;
+
+}
+
+
+
+/**
+ * Aplica a composição sugerida: a seleção passa a ser exatamente ela.
+ *
+ * Quando entra modelo de outro pedido, liga `state.combinacaoEntrePedidos` — o
+ * sinalizador que diz à trava `problemaNaSelecao()` que este cruzamento foi
+ * DECIDIDO, e não sobrou de um pedido anterior. Foi o cruzamento por acidente
+ * que fez o 1000277 imprimir sozinho em 18/08/2026; a diferença é esta.
+ */
+function aplicarComposicao(comp) {
+
+    const osAtual = osDaImposicao();
+
+    const sel = itensJaNaFolha().map(it => ({ itemId: it.id, osId: it.os_id || osAtual }));
+
+    comp.candidatos.forEach(c => sel.push({ itemId: c.item.id, osId: c.osId }));
+
+    state.selectedOSItems = sel;
+
+    state.combinacaoEntrePedidos = sel.some(s => String(s.osId) !== String(osAtual));
+
+    if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+
+    if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
+
+    atualizarBarraDeSoma();
+
+    if (typeof drawPedPreview === 'function') drawPedPreview();
+
+}
+window.aplicarComposicao = aplicarComposicao;
+
+
+
+/**
+ * O botão "Ver aproveitamento". Procura primeiro dentro do pedido; só depois,
+ * e só para produtos liberados no ADM, entre os pedidos da fila.
+ */
+window.verAproveitamento = async function() {
+
+    const sobra = sobraDaImposicao();
+
+    if (!sobra) return toast('Escolha o modelo e o formato para calcular o aproveitamento.', 'info');
+
+    if (!sobra.vazias) return toast('A folha já fecha certo — não há sobra para aproveitar.', 'info');
+
+    const overlay = document.getElementById('loading-overlay');
+
+    const sub = document.getElementById('loading-sub');
+
+    let comp = melhorComposicao(sobra, candidatosDoPedido());
+
+    if (!comp) {
+
+        if (overlay) overlay.classList.add('active');
+
+        if (sub) sub.textContent = 'Procurando aproveitamento nos outros pedidos...';
+
+        try {
+
+            const fora = await candidatosDeOutrosPedidos();
+
+            comp = melhorComposicao(sobra, candidatosDoPedido().concat(fora));
+
+        } finally {
+
+            if (overlay) overlay.classList.remove('active');
+
+        }
+
+    }
+
+    if (!comp) {
+
+        return toast(
+            `Não achei modelo nenhum que aproveite as ${sobra.vazias} célula(s) que sobram. `
+            + 'Candidato precisa ter arte aprovada, estar aguardando impressão e dividir a mesma '
+            + 'cor, formato, saída, face e modo de impressão. Para buscar em outros pedidos, o '
+            + 'produto precisa estar liberado em ADM → Aproveitamento.', 'info');
+
+    }
+
+    const osAtual = String(osDaImposicao());
+
+    const cruzaPedido = comp.candidatos.some(c => String(c.osId) !== osAtual);
+
+    const linhas = itensJaNaFolha().map(it => linhaDaComposicao(it, it.os_id || osAtual, quantidadeDoModelo(it), '(este)'))
+
+        .concat(comp.candidatos.map(c => linhaDaComposicao(c.item, c.osId, c.qtd, '')))
+
+        .join('');
+
+    const resumo = `<div style="font-family:monospace; font-size:0.9rem; line-height:1.6;">`
+        + `Hoje:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${sobra.itens} itens → ${sobra.folhas} folhas, `
+        + `sobram ${sobra.vazias} células<br>`
+        + `Combinado: ${comp.itens} itens → ${comp.folhas} folhas, `
+        + (comp.vazias ? `sobram ${comp.vazias} células` : 'sem sobra')
+        + `</div>`;
+
+    const aviso = cruzaPedido
+        ? 'Os pedidos acima serão marcados como impressos quando você confirmar a impressão, '
+          + 'e fica registrado que saíram juntos.'
+        : 'Os modelos acima serão marcados como impressos quando você confirmar a impressão.';
+
+    const usar = await confirmarPopup({
+        titulo: '🧩 Aproveitamento encontrado',
+        mensagem: resumo + '<div style="margin-top:14px;">' + linhas + '</div>',
+        detalhe: aviso,
+        textoOk: 'Usar esta composição',
+        textoCancelar: 'Imprimir só o que está'
+    });
+
+    if (!usar) return;
+
+    aplicarComposicao(comp);
+
+    toast(`Composição aplicada: ${comp.candidatos.length + sobra.modelos} modelos, `
+        + (comp.vazias ? `${comp.vazias} célula(s) de sobra.` : 'sem sobra.'), 'success');
+
+};
+
+
+
 /**
  * Por que dois modelos não podem sair na mesma folha, ou null quando podem.
  * Cor já era conferida; formato, saída, face e modo PDF não eram — e cada um
@@ -14014,13 +14814,20 @@ function problemaNaSelecao() {
 
     const pedidos = Array.from(new Set(sel.map(s => String(s.osId))));
 
-    if (pedidos.length > 1) {
+    // Cruzar pedidos e permitido quando foi DECIDIDO: o operador viu a
+    // composicao listada no popup de aproveitamento e aceitou, e os itens do
+    // outro pedido foram carregados na memoria por causa disso. O que continua
+    // recusado e o cruzamento por ACIDENTE — a selecao que sobrou do pedido
+    // anterior, invisivel na fila, que fez o 1000277 imprimir sozinho.
+    if (pedidos.length > 1 && !state.combinacaoEntrePedidos) {
 
         return 'A selecao tem modelos de mais de um pedido, e a fila so mostra o pedido aberto — '
 
             + 'os de fora dele nao aparecem na tela e sairiam com zero itens. '
 
-            + 'Desmarque tudo e escolha de novo, so dentro deste pedido.';
+            + 'Desmarque tudo e escolha de novo, so dentro deste pedido. '
+
+            + 'Para juntar pedidos de proposito, use "Ver aproveitamento".';
 
     }
 
@@ -14057,6 +14864,12 @@ function limparSelecaoDeOutroPedido(osId) {
     if (!forasteiros.length) return 0;
 
     state.selectedOSItems = sel.filter(s => String(s.osId) === String(osId));
+
+    // Uma composicao aceita no aproveitamento morre aqui, junto com os modelos
+    // que ela trouxe. E deliberado: o operador acabou de mexer na fila de um
+    // pedido so, e manter viva uma combinacao invisivel e exatamente o defeito
+    // que a trava existe para impedir. Quem chama diz quantos sairam.
+    state.combinacaoEntrePedidos = false;
 
     return forasteiros.length;
 
@@ -17858,6 +18671,13 @@ if (!state.activeOSItem) state.activeOSItem = null;
 // Como somar modelos numa folha. Decisão de tiragem, não do pedido: vive aqui e
 // não vai ao banco. O padrão é o comportamento de sempre.
 if (!state.modoSomaFolha) state.modoSomaFolha = 'separado';
+// Cruzar pedidos numa folha so vale quando foi DECIDIDO no aproveitamento.
+// Nasce desligado a cada carga da pagina, de proposito: uma combinacao que
+// sobrevivesse a um F5 seria invisivel e voltaria a ser cruzamento por acidente.
+if (state.combinacaoEntrePedidos === undefined) state.combinacaoEntrePedidos = false;
+// Produtos liberados a dividir folha entre pedidos (ADM → Aproveitamento) e o
+// limiar da sobra. Carregados de producao_produtos_combinaveis / producao_config.
+if (!state.produtosCombinaveis) state.produtosCombinaveis = new Set();
 
 // -------------------------------------------------------------------------------
 // STATUS ADIANTADO DESTA MÁQUINA (vibe_status_overrides)
@@ -21190,6 +22010,9 @@ async function confirmarImpressaoModelos(alvos) {
     for (const a of lista) {
         await updateItemImpressao(a.itemId, a.osId, 'IMPRESSO');
     }
+    // Folha que juntou pedidos diferentes deixa registro. Só depois do status:
+    // é a confirmação do operador que torna a impressão um fato.
+    if (typeof registrarCombinacao === 'function') await registrarCombinacao(lista);
     if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
     if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
     if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
@@ -31871,6 +32694,7 @@ window.switchAdmTab = function(tabId) {
     }
     // Carregar dados se necessário
     if (tabId === 'imagens') loadAdmImages();
+    if (tabId === 'aproveitamento' && typeof renderAdmAproveitamento === 'function') renderAdmAproveitamento();
 };
 
 // Inicializa a view ADM ao entrar nela (hook no showView)
