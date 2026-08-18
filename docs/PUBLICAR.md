@@ -72,6 +72,26 @@ git tag -l
 > Prefere clicar em vez de digitar? O `publicar.bat` faz a mesma coisa — ele só chama o
 > `publicar.ps1`.
 
+### Quando outra pessoa está mexendo na mesma pasta
+
+O script commita **tudo o que mudou**, e isso é o certo no caso comum. Mas quando há duas
+sessões trabalhando ao mesmo tempo, publicar leva ao ar também o que a outra deixou pela
+metade — e não dá para desfazer isso sem tirar do ar junto o que foi publicado de
+propósito.
+
+Para levar só o seu:
+
+```powershell
+.\publicar.ps1 "descreva o que mudou" -Somente frontend\script.js, docs\
+```
+
+Aceita arquivo e pasta. Antes da pergunta final, o script **diz em voz alta o que ficou de
+fora**, e esses arquivos continuam na pasta, intactos.
+
+Duas coisas que o `-Somente` **não** faz: ele não pula freio nenhum — rascunho, segredo e
+"o motor sobe?" continuam valendo —, e não recorta a história: commits já feitos vão junto
+de qualquer jeito, porque publicar é mandar o `main` inteiro.
+
 ---
 
 ## Voltar

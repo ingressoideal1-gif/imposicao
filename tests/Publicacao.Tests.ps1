@@ -314,3 +314,109 @@ Describe "Confirmacao do publicar.ps1" {
         ($motor -lt $conf) | Should Be $true
     }
 }
+
+Describe "Select-ArquivosDaLeva" {
+    # Existe porque neste repositorio e' rotina haver duas sessoes trabalhando ao
+    # mesmo tempo. Publicar enquanto a outra esta no meio de uma edicao levaria o
+    # trabalho pela metade dela ao ar.
+    $todos = @(
+        'frontend/script.js',
+        'frontend/controle.js',
+        'docs/aproveitamento_de_folha.md',
+        'supabase/functions/acesso-conta/index.ts',
+        'tests/aproveitamento_harness.js'
+    )
+
+    It "sem -Somente, leva tudo — o caso comum nao muda" {
+        (Select-ArquivosDaLeva -Mudados $todos -Somente @()).Count | Should Be 5
+        (Select-ArquivosDaLeva -Mudados $todos -Somente $null).Count | Should Be 5
+    }
+
+    It "leva so o arquivo declarado" {
+        # O @() e' parte do contrato: a funcao devolve pela pipeline, entao um
+        # resultado de um item so chega como escalar. Quem chama envolve --
+        # inclusive o publicar.ps1. A alternativa (virgula unaria na funcao)
+        # aninharia o array quando somada a esse @(), que foi o defeito de
+        # 18/08/2026.
+        $r = @(Select-ArquivosDaLeva -Mudados $todos -Somente @('frontend/script.js'))
+        $r.Count | Should Be 1
+        $r[0] | Should Be 'frontend/script.js'
+    }
+
+    It "aceita pasta, e nao leva o vizinho de nome parecido" {
+        $r = Select-ArquivosDaLeva -Mudados @('docs/a.md', 'docs2/b.md', 'docs/sub/c.md') -Somente @('docs/')
+        $r.Count | Should Be 2
+        # `Should Contain` do Pester 3 e' sobre CONTEUDO DE ARQUIVO, nao
+        # pertinencia em colecao — dai o -contains explicito.
+        ($r -contains 'docs/sub/c.md') | Should Be $true
+        ($r -contains 'docs2/b.md')    | Should Be $false
+    }
+
+    It "a contrabarra do Windows e a barra do git sao a mesma coisa" {
+        $r = Select-ArquivosDaLeva -Mudados $todos -Somente @('frontend\script.js', 'TESTS/')
+        $r.Count | Should Be 2
+        ($r -contains 'tests/aproveitamento_harness.js') | Should Be $true
+    }
+
+    It "o que nao foi declarado fica de fora — inclusive o da outra sessao" {
+        $r = Select-ArquivosDaLeva -Mudados $todos -Somente @('frontend/script.js', 'docs/')
+        ($r -contains 'frontend/controle.js') | Should Be $false
+        ($r -contains 'supabase/functions/acesso-conta/index.ts') | Should Be $false
+    }
+
+    It "lista vazia de mudados devolve vazio, e nao erro" {
+        (Select-ArquivosDaLeva -Mudados @() -Somente @('frontend/script.js')).Count | Should Be 0
+        (Select-ArquivosDaLeva -Mudados $null -Somente @('x')).Count | Should Be 0
+    }
+}
+
+Describe "O -Somente do publicar.ps1" {
+    $fonte = Get-Content -Raw -Encoding UTF8 (Join-Path $PSScriptRoot '..\publicar.ps1')
+
+    It "recorta o git add em vez de usar -A" {
+        $fonte | Should Match 'git add -- @\(\$paraCommitar\)'
+        $fonte | Should Match 'git add -A'          # o caminho comum continua existindo
+    }
+
+    It "leva junto as paginas que o bump dos assets mexeu" {
+        # Sem isto o commit sairia com o codigo novo e o ?v= velho, e o
+        # navegador da estacao continuaria servindo o arquivo do cache.
+        $fonte | Should Match '\$bumpados \+='
+        $fonte | Should Match '\$Somente \+ \$bumpados'
+    }
+
+    It "diz o que ficou de fora, em vez de recortar calado" {
+        $fonte | Should Match 'FICAM DE FORA'
+    }
+
+    It "nao pula freio nenhum" {
+        # O -Somente recorta a leva; quem pula conferencia e' o -SemFreio, e os
+        # dois nao podem se confundir.
+        $fonte | Should Match 'Conferindo se o motor sobe'
+        $fonte | Should Match 'Arquivo de rascunho no commit'
+        $fonte | Should Match 'Segredo em '
+    }
+}
+
+Describe "Select-ArquivosDaLeva devolve lista plana" {
+    # O primeiro uso real falhou aqui: a funcao devolvia `,@(...)`, quem chama
+    # envolvia em `@(...)`, e o resultado era um array DENTRO de um array. Os
+    # quatro caminhos viravam um elemento so -- o freio de rascunho recebeu a
+    # lista inteira no lugar de um nome de arquivo e o script morreu.
+    It "cada item e uma string, e nao outro array" {
+        $r = @(Select-ArquivosDaLeva -Mudados @('a.js', 'b.js') -Somente @('a.js', 'b.js'))
+        $r.Count | Should Be 2
+        ($r[0] -is [string]) | Should Be $true
+        ($r[1] -is [string]) | Should Be $true
+    }
+    It "continua plana quando quem chama envolve em @()" {
+        $r = @(Select-ArquivosDaLeva -Mudados @('a.js', 'b.js') -Somente @())
+        $r.Count | Should Be 2
+        ($r[0] -is [string]) | Should Be $true
+    }
+    It "um item so nao vira escalar para quem envolve em @()" {
+        $r = @(Select-ArquivosDaLeva -Mudados @('a.js', 'b.js') -Somente @('a.js'))
+        $r.Count | Should Be 1
+        ($r[0] -is [string]) | Should Be $true
+    }
+}

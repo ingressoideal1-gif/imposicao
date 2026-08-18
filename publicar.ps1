@@ -29,6 +29,23 @@
     ja terem passado. Sem este parametro, a unica saida seria o -SemFreio, que
     e justamente o que nao se deve usar: ele pularia os freios para resolver um
     problema que nao tem nada a ver com eles.
+
+.PARAMETER Somente
+    Leva ao ar apenas os caminhos declarados, em vez de tudo o que mudou na
+    pasta. Aceita arquivo e pasta.
+
+    Existe porque neste repositorio e' rotina haver duas sessoes trabalhando ao
+    mesmo tempo: publicar enquanto a outra esta no meio de uma edicao levaria o
+    trabalho pela metade dela ao ar, e nao ha como desfazer isso sem tirar do ar
+    tambem o que foi publicado de proposito.
+
+    NAO pula freio nenhum: rascunho, segredo e "o motor sobe?" continuam
+    valendo, e o que fica de fora e' dito na tela antes da pergunta final. Os
+    commits ja feitos vao junto de qualquer jeito — o -Somente recorta o que
+    ainda esta solto na pasta, nao a historia.
+
+    Exemplo:
+        .\publicar.ps1 "msg" -Somente frontend\script.js, docs\
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0,
@@ -38,7 +55,9 @@ param(
 
     [switch]$SemFreio,
 
-    [switch]$Sim
+    [switch]$Sim,
+
+    [string[]]$Somente
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,7 +89,20 @@ if ($SemFreio) {
     # que ainda nao foram enviados ao GitHub. Olhar so a primeira faria o
     # script dizer "nada para publicar" no caso mais comum de todos —
     # commitei ontem, publico hoje.
-    $mudados = @(git status --porcelain | ForEach-Object { $_.Substring(3).Trim('"') })
+    $naPasta = @(git status --porcelain | ForEach-Object { $_.Substring(3).Trim('"') })
+    $mudados = @(Select-ArquivosDaLeva -Mudados $naPasta -Somente $Somente)
+
+    # O que o -Somente deixou de fora e' dito em voz alta: recorte silencioso
+    # num script de publicacao e' pior que recorte nenhum, porque quem le a
+    # saida acha que levou tudo.
+    if ($Somente) {
+        $deFora = @($naPasta | Where-Object { $mudados -notcontains $_ })
+        Write-Host "  -Somente: a leva se restringe a $($Somente -join ', ')" -ForegroundColor Yellow
+        if ($deFora.Count -gt 0) {
+            Write-Host "  $($deFora.Count) arquivo(s) modificados FICAM DE FORA e continuam na pasta:" -ForegroundColor Yellow
+            foreach ($f in $deFora) { Write-Host "    $f" -ForegroundColor DarkYellow }
+        }
+    }
 
     $pendentes = @()
     git rev-parse --verify --quiet refs/remotes/origin/main | Out-Null
@@ -220,10 +252,15 @@ if ($funcoesEdge.Count -gt 0) {
 # (/3.11.174/pdf.min.js), nunca em querystring.
 Write-Host "Atualizando a versao dos assets para v$proxima..." -ForegroundColor Cyan
 $substituicao = '.$1?v=' + $proxima
+# Guardadas para o `git add` do -Somente: o bump e' parte desta publicacao,
+# entao as paginas que ele mexeu tem de entrar no commit mesmo que nao estejam
+# na lista que o operador declarou.
+$bumpados = @()
 Get-ChildItem "frontend\*.html" | ForEach-Object {
     $html = Get-Content -Encoding UTF8 -Raw $_.FullName
     $novo = $html -replace '\.(js|css)\?v=\d+', $substituicao
     if ($novo -ne $html) {
+        $bumpados += ("frontend/" + $_.Name)
         # -Raw + -NoNewline preserva o arquivo byte a byte fora as
         # substituicoes (o Get-Content/Set-Content por linha normalizava as
         # quebras de linha).
@@ -239,7 +276,15 @@ Get-ChildItem "frontend\*.html" | ForEach-Object {
 
 # ─── Git ─────────────────────────────────────────────────────────────────────
 Write-Host "Commitando..." -ForegroundColor Cyan
-git add -A
+if ($Somente) {
+    # Caminho recortado: entra o que foi declarado, mais as paginas que o bump
+    # dos assets acabou de mexer. O resto continua na pasta, intacto.
+    $paraCommitar = @($Somente + $bumpados | Where-Object { $_ -ne $null -and $_ -ne '' } | Select-Object -Unique)
+    Write-Host "  git add -- $($paraCommitar -join ' ')" -ForegroundColor Gray
+    git add -- @($paraCommitar)
+} else {
+    git add -A
+}
 git commit -m "$Mensagem (v$proxima)"
 if ($LASTEXITCODE -ne 0) {
     Abortar "O commit falhou." "Rode 'git status' para ver o estado."

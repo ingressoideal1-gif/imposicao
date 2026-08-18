@@ -242,6 +242,59 @@ function Get-FuncoesEdgeDoRepo {
               ForEach-Object { $_.Name })
 }
 
+function Select-ArquivosDaLeva {
+    <#
+    .SYNOPSIS
+        Dos arquivos mudados, os que ESTA publicacao leva.
+
+    .DESCRIPTION
+        O `publicar.ps1` commita com `git add -A`, e isso e' o certo no caso
+        comum: uma pessoa, uma pasta, tudo o que mudou vai junto.
+
+        Neste repositorio, porem, e' rotina haver duas sessoes trabalhando ao
+        mesmo tempo. Publicar enquanto a outra esta no meio de uma edicao
+        levaria o trabalho pela metade dela ao ar — e nao ha como desfazer isso
+        sem tirar do ar tambem o que foi publicado de proposito.
+
+        Com `-Somente`, a leva se restringe aos caminhos declarados. Aceita
+        arquivo (`frontend/script.js`) e pasta (`docs/`), com barra de qualquer
+        um dos dois lados e sem diferenciar maiuscula: o que chega aqui vem de
+        `git status`, que usa barra normal, e o que o operador digita costuma
+        vir com a contrabarra do Windows.
+
+        O que fica DE FORA e' devolvido por quem chama, para ser dito em voz
+        alta. Recorte silencioso num script de publicacao e' pior que recorte
+        nenhum: quem le a saida acha que levou tudo.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param(
+        [AllowEmptyCollection()][string[]]$Mudados,
+        [AllowEmptyCollection()][string[]]$Somente
+    )
+
+    # Sem a virgula unaria de proposito: quem chama ja envolve em @(), e o
+    # `,@(...)` somado a isso produz um array DENTRO de um array — os quatro
+    # caminhos viravam um elemento so, e o freio de rascunho recebia a lista
+    # inteira no lugar de um nome de arquivo.
+    if ($null -eq $Mudados) { return @() }
+    if ($null -eq $Somente -or $Somente.Count -eq 0) { return @($Mudados) }
+
+    $alvos = @($Somente |
+        Where-Object { $_ -ne $null -and $_.Trim() -ne '' } |
+        ForEach-Object { (($_ -replace '\\', '/').Trim() -replace '^\./', '').ToLowerInvariant() })
+
+    return @($Mudados | Where-Object {
+        $c = (($_ -replace '\\', '/').Trim() -replace '^\./', '').ToLowerInvariant()
+        $bate = $false
+        foreach ($a in $alvos) {
+            if ($c -eq $a) { $bate = $true; break }
+            if ($c.StartsWith($a.TrimEnd('/') + '/')) { $bate = $true; break }
+        }
+        $bate
+    })
+}
+
 # ─── Versoes e tags ──────────────────────────────────────────────────────────
 function Get-ProximaVersao {
     <#
@@ -483,6 +536,6 @@ function Test-SegredoNoBuild {
 
 Export-ModuleMember -Function Test-ArquivoDeRascunho, ConvertFrom-JwtPayload,
     Find-SegredoNoTexto, Find-ProjetoSupabaseErrado, Get-FuncoesEdgeDoRepo,
-    Get-ProximaVersao, ConvertTo-TuplaVersao,
+    Select-ArquivosDaLeva, Get-ProximaVersao, ConvertTo-TuplaVersao,
     Test-VersaoMaior, Get-TagAnterior, ConvertFrom-VercelLs,
     New-SegredoDoAgente, Test-SegredoNoBuild
