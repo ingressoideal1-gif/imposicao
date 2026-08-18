@@ -17,9 +17,11 @@
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import casos from "./momento_casos.json" with { type: "json" };
 import {
+  aplicarAparelho,
   aplicarEvento,
   aplicarSetor,
   conferirJanela,
+  excluirAparelho,
   faixa,
   momento,
   sortearCodigo,
@@ -381,4 +383,72 @@ Deno.test("setor: `bloqueado` que nao e booleano nao passa", async () => {
     () => comBancoDeMesa(() => aplicarSetor(SETOR, { bloqueado: "sim" })),
     Recusa,
   );
+});
+
+
+// ── Pausar e excluir um aparelho ────────────────────────────────────────────
+//
+// 18/08/2026: "Revogar" saiu, e no lugar dele entraram Pausar (tem volta) e
+// Excluir (nao tem, e apaga a linha). Os testes abaixo guardam a diferenca.
+
+/** Como o `comBancoDeMesa`, mas ANOTANDO cada ida ao banco. */
+async function anotandoOBanco<T>(
+  tarefa: () => Promise<T>,
+): Promise<{ r: T; idas: Array<{ metodo: string; url: string }> }> {
+  Deno.env.set("SUPABASE_URL", "https://banco.de.mesa");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "chave-de-mesa");
+  const idas: Array<{ metodo: string; url: string }> = [];
+  globalThis.fetch = ((url: string, opcoes: RequestInit) => {
+    idas.push({ metodo: String(opcoes?.method ?? "GET"), url: String(url) });
+    return Promise.resolve(new Response(null, { status: 204 }));
+  }) as unknown as typeof fetch;
+  try {
+    return { r: await tarefa(), idas };
+  } finally {
+    globalThis.fetch = fetchDeVerdade;
+  }
+}
+
+/** O aparelho ja lido do banco, que e o que as duas funcoes recebem. */
+const APARELHO = { id: "a1", evento_id: "e1", nome: "Portao A" };
+
+Deno.test("aparelho: status aceita ativo e pausado", async () => {
+  for (const valor of ["ativo", "pausado"]) {
+    const { r } = await anotandoOBanco(() =>
+      aplicarAparelho(APARELHO, { status: valor })
+    );
+    assertEquals(r.ok, true, `recusou o status ${valor}`);
+  }
+});
+
+Deno.test("aparelho: `revogado` nao passa mais", async () => {
+  // A coluna e texto livre e aceitaria. Quem nao aceita e esta validacao: o
+  // estado do meio -- desligado para sempre, mas ocupando a lista -- deixou de
+  // existir como escolha da tela, e recria-lo por uma chamada solta poria de
+  // volta na tela do dono um cartao que ele nao tem como resolver.
+  await assertRejects(
+    () => anotandoOBanco(() => aplicarAparelho(APARELHO, { status: "revogado" })),
+    Recusa,
+  );
+});
+
+Deno.test("excluir aparelho: apaga os vinculos e a linha, e NAO toca nas leituras", async () => {
+  const { r, idas } = await anotandoOBanco(() => excluirAparelho(APARELHO));
+
+  assertEquals(r.excluido, "a1");
+  assertEquals(idas.map((i) => i.metodo), ["DELETE", "DELETE"]);
+  // Os vinculos primeiro: sem eles, a linha do aparelho ainda tem quem aponte
+  // para ela num banco onde a migracao do `on delete cascade` nao passou.
+  assertEquals(
+    idas[0].url,
+    "https://banco.de.mesa/rest/v1/producao_acesso_dispositivo_setores?dispositivo_id=eq.a1",
+  );
+  assertEquals(
+    idas[1].url,
+    "https://banco.de.mesa/rest/v1/producao_acesso_dispositivos?id=eq.a1",
+  );
+  // O historico da noite nao vai junto. Quem cuida disso e o `on delete set
+  // null` das leituras -- e este teste garante que ninguem resolva o mesmo
+  // problema apagando-as por aqui.
+  assertEquals(idas.some((i) => i.url.includes("leituras")), false);
 });

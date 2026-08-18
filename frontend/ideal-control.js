@@ -1294,7 +1294,8 @@
         var el = document.createElement('div');
         el.className = 'card ic-aparelho';
         texto(el, 'h4', a.nome);
-        texto(el, 'span', (a.status === 'ativo' ? 'Ativo' : 'Revogado')
+        texto(el, 'span', (a.status === 'ativo' ? 'Ativo'
+                           : (a.status === 'pausado' ? 'Pausado' : 'Desligado'))
               + ' · ' + (a.pareado ? 'já pareado' : 'nunca pareado')
               + ' · visto ' + quando(a.ultimo_visto), 'ic-dim');
 
@@ -1330,20 +1331,35 @@
         });
         el.appendChild(codigo);
 
-        if (a.status === 'ativo') {
-            var revogar = document.createElement('button');
-            revogar.className = 'btn btn-sm btn-danger';
-            revogar.id = 'ic-ap-revogar-' + a.id;
-            revogar.textContent = 'Revogar';
-            revogar.addEventListener('click', function () {
-                if (!window.confirm('Revogar "' + a.nome + '"? Isso DESLIGA o aparelho '
-                        + 'agora — ele para de validar na portaria imediatamente. '
-                        + 'Nesta versão não há como reativar.')) { return; }
-                gravar('/aparelhos/' + a.id, { status: 'revogado' })
-                    .then(recarregar).catch(function () { /* já avisado */ });
-            });
-            el.appendChild(revogar);
-        }
+        // Pausar e Excluir, o mesmo par que o Ideal Control do cliente oferece
+        // desde 18/08/2026. "Revogar" saiu: ele desligava o aparelho e o
+        // deixava na lista para sempre, que nao era nenhuma das duas coisas que
+        // alguem quer fazer com um portao que nao serve mais.
+        var ativo = a.status === 'ativo';
+        var pausar = document.createElement('button');
+        pausar.className = 'btn btn-sm btn-outline';
+        pausar.id = 'ic-ap-pausar-' + a.id;
+        pausar.textContent = ativo ? 'Pausar' : 'Retomar';
+        pausar.addEventListener('click', function () {
+            if (ativo && !window.confirm('Pausar "' + a.nome + '"? Ele para de validar '
+                    + 'ingresso agora, e volta quando você tocar em "Retomar".')) { return; }
+            gravar('/aparelhos/' + a.id, { status: ativo ? 'pausado' : 'ativo' })
+                .then(recarregar).catch(function () { /* já avisado */ });
+        });
+        el.appendChild(pausar);
+
+        var excluir = document.createElement('button');
+        excluir.className = 'btn btn-sm btn-danger';
+        excluir.id = 'ic-ap-excluir-' + a.id;
+        excluir.textContent = 'Excluir';
+        excluir.addEventListener('click', function () {
+            if (!window.confirm('Excluir "' + a.nome + '"? Ele sai da lista para sempre '
+                    + 'e para de validar ingresso agora. As entradas que ele já leu '
+                    + 'continuam contadas no evento.')) { return; }
+            gravar('/aparelhos/' + a.id, null, 'DELETE')
+                .then(recarregar).catch(function () { /* já avisado */ });
+        });
+        el.appendChild(excluir);
         return el;
     }
 

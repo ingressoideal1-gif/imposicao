@@ -418,9 +418,17 @@
         (p.aparelhos || []).forEach(function (a) {
             var campoNome = $('aparelho-nome-' + a.id);
             if (!campoNome) { return; }
+            var painelNome = $('aparelho-painel-nome-' + a.id);
+            var painelSetores = $('aparelho-painel-setores-' + a.id);
             edicoesDeAparelhoAntes[a.id] = {
                 nome: campoNome.value,
-                setores: setoresAcesos('aparelho-setores-' + a.id)
+                setores: setoresAcesos('aparelho-setores-' + a.id),
+                // Qual das opcoes estava aberta. Sem isto, marcar um setor --
+                // que grava sozinho e recarrega o painel -- fecharia a lista de
+                // setores na cara de quem ia marcar o proximo.
+                aberto: (painelNome && !painelNome.classList.contains('sumindo')) ? 'nome'
+                      : ((painelSetores && !painelSetores.classList.contains('sumindo'))
+                         ? 'setores' : '')
             };
         });
 
@@ -1133,8 +1141,30 @@
             .then(carregarPainel);
     }
 
-    function revogarAparelho(aparelho_id) {
-        return gravar('/aparelhos/' + aparelho_id, { status: 'revogado' }, 'PATCH')
+    /**
+     * Pausar e retomar.
+     *
+     * A portaria so aceita `status=eq.ativo`, entao qualquer outro valor ja
+     * derruba o aparelho na hora -- pausar nao precisa de mais nada do lado de
+     * la. O que muda em relacao a excluir e que este tem volta.
+     */
+    function pausarAparelho(aparelho_id, pausar) {
+        return gravar('/aparelhos/' + aparelho_id,
+                      { status: pausar ? 'pausado' : 'ativo' }, 'PATCH')
+            .then(carregarPainel);
+    }
+
+    /**
+     * Excluir de verdade: a linha sai do banco e o aparelho some da lista.
+     *
+     * Decisao do usuario em 18/08/2026, no lugar do antigo "Revogar", que
+     * desligava o aparelho e o deixava na tela para sempre. As entradas que ele
+     * ja leu ficam contadas no evento -- quem cuida disso e a chave estrangeira
+     * `on delete set null` das leituras, em
+     * `sql/schema_acesso_excluir_aparelho.sql`.
+     */
+    function excluirAparelho(aparelho_id) {
+        return gravar('/aparelhos/' + aparelho_id, undefined, 'DELETE')
             .then(carregarPainel);
     }
 
@@ -1225,16 +1255,38 @@
     }
 
     /**
-     * O cartão de um portão: nome, situação, os setores que ele valida e a
-     * revogação.
+     * A situação do aparelho, em uma frase.
+     *
+     * `pausado` entrou em 18/08/2026 no lugar de `revogado`, que nenhuma tela
+     * cria mais. As linhas antigas com `revogado` continuam no banco, e por
+     * isso continuam tendo uma frase aqui: a portaria as recusa igual, e o dono
+     * pode retomá-las ou excluí-las.
+     */
+    function situacaoDoAparelho(a) {
+        if (a.status === 'ativo') { return 'Ativo. '; }
+        if (a.status === 'pausado') {
+            return 'Pausado — não valida ingresso até você retomar. ';
+        }
+        return 'Desligado — não valida ingresso. ';
+    }
+
+    /**
+     * O cartão de um portão: o nome, a situação, e as QUATRO coisas que se faz
+     * com ele — Renomear, Selecionar os Setores, Pausar e Excluir.
+     *
+     * As quatro em botões do mesmo tamanho, um abaixo do outro (usuário,
+     * 18/08/2026). Antes o cartão despejava campo de nome, botões de setor e a
+     * revogação abertos ao mesmo tempo: com três portões, achar o terceiro
+     * custava a tela inteira de rolagem. Agora cada opção abre o que é dela, e
+     * uma de cada vez.
      *
      * TODOS os portões do evento aparecem, de todos os celulares — decisão do
      * usuário em 16/08/2026. Por isso o portão DESTE aparelho vem marcado com
-     * ★: sem a marca, o dono renomeia ou revoga o errado, e revogar desliga o
-     * aparelho na hora, no meio do evento.
+     * ★: sem a marca, o dono mexe no errado — e excluir não tem volta.
      *
-     * `edicaoAnterior`, se vier, é o que o dono tinha digitado/marcado ANTES
-     * do painel recarregar por baixo dele — ver o comentário em `desenhar()`.
+     * `edicaoAnterior`, se vier, é o que o dono tinha digitado, marcado e
+     * ABERTO antes de o painel recarregar por baixo dele — ver o comentário em
+     * `desenhar()`.
      */
     function cartaoDeAparelho(a, edicaoAnterior) {
         var el = document.createElement('div');
@@ -1255,63 +1307,74 @@
         }
 
         var situacao = document.createElement('p');
-        situacao.style.fontSize = '.84rem';
-        situacao.style.color = 'var(--dim)';
+        situacao.className = 'situacao-aparelho';
         var nomes = (estado.painel.setores || [])
             .filter(function (s) { return a.setores.indexOf(s.id) >= 0; })
             .map(function (s) { return s.nome; });
-        situacao.textContent = (a.status === 'ativo' ? 'Ativo. ' : 'Revogado. ')
+        situacao.textContent = situacaoDoAparelho(a)
             + (nomes.length ? 'Valida: ' + nomes.join(', ') : 'Ainda não valida nenhum setor.');
         el.appendChild(situacao);
 
-        // ── Editar nome e setores ───────────────────────────────────────────
+        var opcoes = document.createElement('div');
+        opcoes.className = 'opcoes-aparelho';
+        el.appendChild(opcoes);
+
+        // Qual opção estava aberta antes do redesenho: '' (nenhuma), 'nome' ou
+        // 'setores'.
+        var aberto = edicaoAnterior ? edicaoAnterior.aberto : '';
+        var abridores = [];
+
+        /**
+         * Uma opção que ABRE um painel, e o painel logo abaixo dela.
+         *
+         * Uma de cada vez: dois painéis abertos empurram o próximo aparelho para
+         * fora da tela, e a lista tem quantos portões o evento tiver.
+         */
+        function abridor(id, rotulo, chave, painel) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'opcao-aparelho so-com-senha';
+            b.id = id;
+            b.textContent = rotulo;
+            b.setAttribute('aria-controls', painel.id);
+            b.setAttribute('aria-expanded', aberto === chave ? 'true' : 'false');
+            painel.classList.toggle('sumindo', aberto !== chave);
+            b.addEventListener('click', function () {
+                var vaiAbrir = painel.classList.contains('sumindo');
+                abridores.forEach(function (o) {
+                    o.painel.classList.add('sumindo');
+                    o.botao.setAttribute('aria-expanded', 'false');
+                });
+                painel.classList.toggle('sumindo', !vaiAbrir);
+                b.setAttribute('aria-expanded', vaiAbrir ? 'true' : 'false');
+            });
+            abridores.push({ botao: b, painel: painel });
+            opcoes.appendChild(b);
+            opcoes.appendChild(painel);
+            return b;
+        }
+
+        // ── Renomear ───────────────────────────────────────────
+
+        var painelNome = document.createElement('div');
+        painelNome.className = 'painel-opcao';
+        painelNome.id = 'aparelho-painel-nome-' + a.id;
+
         var rotNome = document.createElement('label');
         rotNome.setAttribute('for', 'aparelho-nome-' + a.id);
         rotNome.textContent = 'Nome do aparelho';
-        el.appendChild(rotNome);
+        painelNome.appendChild(rotNome);
 
         var campoNome = document.createElement('input');
         campoNome.type = 'text';
         campoNome.id = 'aparelho-nome-' + a.id;
         campoNome.value = edicaoAnterior ? edicaoAnterior.nome : a.nome;
-        el.appendChild(campoNome);
-
-        var rotSetores = document.createElement('p');
-        rotSetores.style.fontSize = '.82rem';
-        rotSetores.style.color = 'var(--dim)';
-        rotSetores.style.margin = '12px 0 4px';
-        rotSetores.textContent = 'Toque nos setores que este aparelho valida. '
-            + 'O que estiver aceso vale na hora.';
-        el.appendChild(rotSetores);
-
-        // Passa a valer no toque, sem botão de confirmar: é a mesma regra que
-        // o "Uso do ingresso" do cartão de setor já segue. O aviso de gravado
-        // fica logo abaixo, porque gravar sozinho não pode ser gravar calado.
-        var marcadosAgora = edicaoAnterior ? edicaoAnterior.setores : a.setores;
-        var recado = document.createElement('span');
-        recado.className = 'salvo sumindo';
-        recado.id = 'aparelho-salvo-' + a.id;
-        recado.setAttribute('role', 'status');
-        recado.textContent = '✓ salvo';
-
-        el.appendChild(botoesDeSetor('aparelho-setores-' + a.id, marcadosAgora,
-            function (setores) {
-                trocarSetoresDoAparelho(a.id, setores)
-                    .then(function () {
-                        var atual = $('aparelho-salvo-' + a.id);
-                        if (atual) { atual.classList.remove('sumindo'); }
-                    })
-                    .catch(function () { /* `gravar()` já avisou na tela */ });
-            }));
-        el.appendChild(recado);
+        painelNome.appendChild(campoNome);
 
         var btnSalvar = document.createElement('button');
         btnSalvar.type = 'button';
         btnSalvar.className = 'so-com-senha';
         btnSalvar.id = 'aparelho-salvar-' + a.id;
-        // Só o nome: os setores já gravaram sozinhos ao serem tocados. Um
-        // botão que continuasse dizendo "e setores" prometeria uma gravação
-        // que não acontece mais aqui.
         btnSalvar.textContent = 'Salvar nome';
         btnSalvar.addEventListener('click', function () {
             var novoNome = campoNome.value;
@@ -1330,31 +1393,106 @@
                 /* já avisado */
             });
         });
-        el.appendChild(btnSalvar);
+        painelNome.appendChild(btnSalvar);
 
-        if (a.status === 'ativo') {
-            var btnRevogar = document.createElement('button');
-            btnRevogar.type = 'button';
-            btnRevogar.className = 'so-com-senha secundario';
-            btnRevogar.id = 'aparelho-revogar-' + a.id;
-            btnRevogar.textContent = 'Revogar (desliga o aparelho)';
-            btnRevogar.addEventListener('click', function () {
-                // Confirmação, não senha de novo: a elevação já cobre isso. O
-                // que falta avisar é o tamanho do estrago — revogar desconecta
-                // o aparelho na hora, no meio do evento.
-                window.caixaConfirmar.perguntar(
-                    'Revogar "' + a.nome + '"? Isso DESLIGA o aparelho agora — ele para '
-                    + 'de validar QR na portaria imediatamente. Nesta versão não há como '
-                    + 'reativar um aparelho revogado — para voltar a usar, será preciso '
-                    + 'abrir o evento de novo naquele celular.',
-                    { rotulo: 'Revogar', perigo: true }
-                ).then(function (sim) {
-                    if (!sim) { return; }
-                    return revogarAparelho(a.id).catch(function () { /* já avisado */ });
+        abridor('aparelho-renomear-' + a.id, 'Renomear', 'nome', painelNome);
+
+        // ── Selecionar os Setores ─────────────────────────────────
+
+        var painelSetores = document.createElement('div');
+        painelSetores.className = 'painel-opcao';
+        painelSetores.id = 'aparelho-painel-setores-' + a.id;
+
+        var ajudaSetores = document.createElement('p');
+        ajudaSetores.className = 'config-ajuda';
+        ajudaSetores.textContent = 'Toque nos setores que este aparelho valida. '
+            + 'O que estiver aceso vale na hora.';
+        painelSetores.appendChild(ajudaSetores);
+
+        // Passa a valer no toque, sem botão de confirmar: é a mesma regra que
+        // o "Uso do ingresso" do cartão de setor já segue. O aviso de gravado
+        // fica logo abaixo, porque gravar sozinho não pode ser gravar calado.
+        var marcadosAgora = edicaoAnterior ? edicaoAnterior.setores : a.setores;
+        var recado = document.createElement('span');
+        recado.className = 'salvo sumindo';
+        recado.id = 'aparelho-salvo-' + a.id;
+        recado.setAttribute('role', 'status');
+        recado.textContent = '✓ salvo';
+
+        painelSetores.appendChild(botoesDeSetor('aparelho-setores-' + a.id, marcadosAgora,
+            function (setores) {
+                trocarSetoresDoAparelho(a.id, setores)
+                    .then(function () {
+                        var atual = $('aparelho-salvo-' + a.id);
+                        if (atual) { atual.classList.remove('sumindo'); }
+                    })
+                    .catch(function () { /* `gravar()` já avisou na tela */ });
+            }));
+        painelSetores.appendChild(recado);
+
+        abridor('aparelho-escolher-setores-' + a.id, 'Selecionar os Setores',
+                'setores', painelSetores);
+
+        // ── Pausar / Retomar ─────────────────────────────────────
+
+        var ativo = a.status === 'ativo';
+        var btnPausar = document.createElement('button');
+        btnPausar.type = 'button';
+        btnPausar.className = 'opcao-aparelho so-com-senha';
+        btnPausar.id = 'aparelho-pausar-' + a.id;
+        btnPausar.textContent = ativo ? 'Pausar' : 'Retomar';
+        btnPausar.addEventListener('click', function () {
+            // Retomar não pergunta; pausar sim. A assimetria é a mesma do
+            // "Inativar este evento": ligar de volta não quebra a noite de
+            // ninguém, e pausar para o portão no meio dela.
+            var perguntar = !ativo ? Promise.resolve(true)
+                : window.caixaConfirmar.perguntar(
+                    'Pausar "' + a.nome + '"? Ele para de validar ingresso agora. '
+                    + 'Toque em "Retomar" quando quiser que ele volte a ler.',
+                    { rotulo: 'Pausar' }
+                );
+            return perguntar.then(function (sim) {
+                if (!sim) { return; }
+                window.botaoEspera.comecar(btnPausar, ativo ? 'Pausando…' : 'Retomando…');
+                return pausarAparelho(a.id, ativo).then(function () {
+                    window.botaoEspera.terminar(btnPausar);
+                }, function () {
+                    window.botaoEspera.terminar(btnPausar);
+                    /* já avisado */
                 });
             });
-            el.appendChild(btnRevogar);
-        }
+        });
+        opcoes.appendChild(btnPausar);
+
+        // ── Excluir ────────────────────────────────────────────
+
+        var btnExcluir = document.createElement('button');
+        btnExcluir.type = 'button';
+        btnExcluir.className = 'opcao-aparelho so-com-senha perigo';
+        btnExcluir.id = 'aparelho-excluir-' + a.id;
+        btnExcluir.textContent = 'Excluir';
+        btnExcluir.addEventListener('click', function () {
+            // Confirmação, e não senha de novo: a elevação já cobre isso. O que
+            // falta avisar é o tamanho do estrago — excluir desliga o aparelho
+            // na hora, no meio do evento, e não tem volta.
+            window.caixaConfirmar.perguntar(
+                'Excluir "' + a.nome + '"? Ele sai da lista para sempre e para de '
+                + 'validar ingresso agora. As entradas que ele já leu continuam '
+                + 'contadas no evento. Para usar aquele celular de novo, será preciso '
+                + 'abrir o evento nele outra vez.',
+                { rotulo: 'Excluir', perigo: true }
+            ).then(function (sim) {
+                if (!sim) { return; }
+                window.botaoEspera.comecar(btnExcluir, 'Excluindo…');
+                return excluirAparelho(a.id).then(function () {
+                    window.botaoEspera.terminar(btnExcluir);
+                }, function () {
+                    window.botaoEspera.terminar(btnExcluir);
+                    /* já avisado */
+                });
+            });
+        });
+        opcoes.appendChild(btnExcluir);
 
         return el;
     }
@@ -2218,7 +2356,8 @@
         reabrirEvento: reabrirEvento,
         renomearAparelho: renomearAparelho,
         trocarSetoresDoAparelho: trocarSetoresDoAparelho,
-        revogarAparelho: revogarAparelho,
+        pausarAparelho: pausarAparelho,
+        excluirAparelho: excluirAparelho,
         importarCodigos: importarCodigos,
         // A conversão de fuso é a única lógica desta tela que dá para errar sem
         // que nada apareça errado: um horário três horas fora ainda é um

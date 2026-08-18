@@ -49,6 +49,7 @@ import {
   aplicarLiberacao,
   aplicarNovoCodigo,
   aplicarSetor,
+  excluirAparelho,
   momento,
   texto,
   zerarEntradas,
@@ -946,6 +947,14 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     const ap = await aparelhoDoDono(p[1], usuario);
     await exigirElevacao(ap.evento_id, usuario, req);
     return ok(await aplicarAparelho(ap, await corpo()));
+  }
+  // Excluir e escrita de configuracao como as outras, e passa pela MESMA
+  // elevacao: sem ela, quem pegasse o celular do dono destrancado apagaria os
+  // portoes do evento no meio da noite.
+  if (metodo === "DELETE" && p.length === 2 && p[0] === "aparelhos") {
+    const ap = await aparelhoDoDono(p[1], usuario);
+    await exigirElevacao(ap.evento_id, usuario, req);
+    return ok(await excluirAparelho(ap));
   }
   if (metodo === "POST" && p.length === 3 && p[0] === "aparelhos" && p[2] === "codigo") {
     const ap = await aparelhoDoDono(p[1], usuario);

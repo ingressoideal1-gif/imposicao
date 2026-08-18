@@ -519,8 +519,16 @@ export async function aplicarAparelho(aparelho: any, corpo: any): Promise<any> {
   const mudanca: Record<string, unknown> = {};
   if ("nome" in corpo) mudanca.nome = texto(corpo.nome, "nome do aparelho", 1, 60);
   if ("status" in corpo) {
-    if (corpo.status !== "ativo" && corpo.status !== "revogado") {
-      throw new Recusa(422, "status: ativo ou revogado");
+    // `revogado` saiu em 18/08/2026, por decisao do usuario: quem nao serve
+    // mais e EXCLUIDO, e quem so vai parar um pouco e PAUSADO. Um estado do
+    // meio -- desligado para sempre, mas ocupando a lista -- nao era nenhuma
+    // das duas coisas que ele queria fazer.
+    //
+    // Linhas antigas com `revogado` continuam no banco e a portaria continua
+    // recusando-as, porque ela exige `status=eq.ativo`. Elas so nao podem mais
+    // ser CRIADAS por aqui.
+    if (corpo.status !== "ativo" && corpo.status !== "pausado") {
+      throw new Recusa(422, "status: ativo ou pausado");
     }
     mudanca.status = corpo.status;
   }
@@ -540,6 +548,42 @@ export async function aplicarAparelho(aparelho: any, corpo: any): Promise<any> {
     );
   }
   return { ok: true };
+}
+
+/**
+ * O aparelho sai do banco, e nao da lista so.
+ *
+ * Decisao do usuario em 18/08/2026: "deve excluir definitivamente o aparelho e
+ * sumir da listagem". O que acontece com o que apontava para ele esta escrito
+ * em `sql/schema_acesso_excluir_aparelho.sql`, e vale repetir porque e a parte
+ * que nao se ve:
+ *
+ *   os VINCULOS de setor vao junto        (`on delete cascade`)
+ *   as LEITURAS ficam, sem dono           (`on delete set null`)
+ *
+ * O historico do evento nao pode depender de o aparelho continuar existindo: a
+ * contagem que o dono ve ("4.812 entraram") sai de `evento_id`, e apagar as
+ * leituras junto faria o numero da noite mudar por causa de uma faxina.
+ *
+ * O `DELETE` dos vinculos vem explicito ANTES do cascade fazer o mesmo. Nao e
+ * redundancia inutil: se um dia esta funcao rodar contra um banco onde a
+ * migracao nao passou, ela ainda faz a coisa certa em vez de falhar com um erro
+ * de chave estrangeira que ninguem liga ao aparelho.
+ */
+export async function excluirAparelho(aparelho: any): Promise<any> {
+  await banco(
+    "DELETE",
+    `producao_acesso_dispositivo_setores?dispositivo_id=eq.${aparelho.id}`,
+    undefined,
+    "return=minimal",
+  );
+  await banco(
+    "DELETE",
+    `producao_acesso_dispositivos?id=eq.${aparelho.id}`,
+    undefined,
+    "return=minimal",
+  );
+  return { ok: true, excluido: aparelho.id };
 }
 
 export async function aplicarNovoCodigo(aparelho: any): Promise<any> {

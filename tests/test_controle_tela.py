@@ -152,49 +152,75 @@ def test_da_para_inativar_o_evento_e_a_tela_avisa_o_limite():
     assert "sem internet" in texto or "sem rede" in texto
 
 
-# ── O vocabulário: um evento TERMINA, ele não deixa de ter existido ─────────
+# ── O vocabulário: um EVENTO termina, ele não deixa de ter existido ─────────
 #
-# Decisão do usuário em 16/08/2026, corrigindo o meu termo: não é "excluir", é
-# "finalizar". Apagar de verdade não existe como função desta tela — nem o
-# `excluido` que o esquema conhece tem caminho aqui, de propósito.
+# Decisão do usuário em 16/08/2026, corrigindo o meu termo: um evento não se
+# "exclui", ele se "finaliza". Apagar um evento de verdade não existe como
+# função desta tela — nem o `excluido` que o esquema conhece tem caminho aqui,
+# de propósito.
+#
+# Em 18/08/2026 ele pediu o CONTRÁRIO para o aparelho: "Excluir Aparelho, deve
+# excluir definitivamente o aparelho e sumir da listagem". São coisas
+# diferentes, e é por isso que o teste que proibia a palavra em qualquer lugar
+# virou este par: "apagar" e "remover" continuam fora da interface inteira, e
+# "excluir" fica proibido só onde continua errado — junto do evento.
 #
 # Isto é teste, e não convenção de comentário, porque a palavra errada não
 # quebra nada: ela só ensina ao dono que o botão faz algo que ele não faz, e
 # quem descobre a diferença é ele, depois de tocar.
 
-TRES_PALAVRAS = ("excluir", "apagar", "remover")
 TELAS_DO_CONTROLE = ("frontend/controle.html", "frontend/controle.js",
                      "frontend/lista-eventos.js")
 
+# A família da palavra, e não só a forma no infinitivo: "apagaria", "exclusão"
+# e "apagado" ensinam a mesma coisa errada a quem for mexer aqui depois.
+#
+# "remov" fica de fora DESTA varredura porque `classList.remove('sumindo')` cai
+# ao lado de `$('bloco-novo-evento')` no meio do código — não é português, é
+# nome do navegador. A palavra "remover" continua proibida inteira, logo abaixo.
+PERTO_DO_EVENTO = re.compile(r"(exclu|apag)\w*[^.!?]{0,40}\bevento", re.I)
+DEPOIS_DO_EVENTO = re.compile(r"\bevento\b[^.!?]{0,40}(exclu|apag)\w*", re.I)
 
-def test_nenhuma_das_tres_telas_fala_em_excluir_apagar_nem_remover():
+
+def test_nenhuma_das_tres_telas_oferece_EXCLUIR_UM_EVENTO():
     for arquivo in TELAS_DO_CONTROLE:
         texto = _ler(arquivo)
-        for palavra in TRES_PALAVRAS:
+        for regra in (PERTO_DO_EVENTO, DEPOIS_DO_EVENTO):
+            achado = regra.search(texto)
+            assert not achado, (
+                f"{arquivo} fala em apagar evento: " + repr(
+                    texto[max(0, achado.start() - 40):achado.end() + 40])
+            )
+
+
+def test_apagar_e_remover_continuam_fora_da_interface_inteira():
+    """Só "excluir" foi liberada, e só para o aparelho. As outras duas não têm
+    uso legítimo nenhum nesta tela.
+
+    "remov" fica de fora da varredura do JS porque `classList.remove` e
+    `localStorage.removeItem` são nomes do navegador, não palavras da nossa
+    interface — a forma em português, "remover", é pega pela primeira volta.
+    """
+    for arquivo in TELAS_DO_CONTROLE:
+        texto = _ler(arquivo)
+        for palavra in ("apagar", "remover"):
             achado = re.search(r"\b" + palavra + r"\b", texto, re.IGNORECASE)
             assert not achado, (
                 f"{arquivo} fala em '{palavra}': " + repr(
                     texto[max(0, achado.start() - 60):achado.end() + 60])
             )
-
-
-def test_o_codigo_das_telas_nao_guarda_nem_a_familia_da_palavra():
-    """Mais apertado que o teste acima, e de propósito: "apagaria", "exclusão"
-    e "apagado" ensinam a mesma coisa errada a quem for mexer aqui depois.
-
-    "remov" fica de fora desta versão porque `classList.remove` e
-    `localStorage.removeItem` são nomes do navegador, não palavras da nossa
-    interface — a forma em português, "remover", já é proibida acima.
-    """
     for arquivo in ("frontend/controle.js", "frontend/lista-eventos.js"):
-        texto = _ler(arquivo).lower()
-        for familia in ("apag", "exclu"):
-            assert familia not in texto, f"{arquivo} tem a família '{familia}'"
+        assert "apag" not in _ler(arquivo).lower(), f"{arquivo} tem a família 'apag'"
 
 
-def test_o_texto_que_o_dono_LE_na_tela_nao_tem_nenhuma_das_tres():
+def test_o_texto_que_o_dono_LE_no_HTML_nao_tem_nenhuma_das_tres():
     """Lido do HTML sem as tags e sem os comentários: o que sobra é o que
-    aparece na tela do celular."""
+    aparece na tela do celular.
+
+    O HTML continua com as três proibidas: o "Excluir" do aparelho nasce no
+    `controle.js`, dentro do cartão do portão, e não aqui — aqui não há nada
+    para excluir.
+    """
     html = re.sub(r"<!--.*?-->", " ", _ler("frontend/controle.html"), flags=re.S)
     visivel = re.sub(r"<[^>]+>", " ", html).lower()
     for familia in ("apag", "exclu", "remov"):
@@ -789,9 +815,16 @@ def test_o_setor_do_aparelho_e_botao_e_nao_caixa_de_marcar():
     direito. Este teste MEDE, e nao so conta elementos -- foi a medida
     (385px x 13px, com o rotulo a 400px de distancia) que revelou o defeito.
 
-    As secoes nascem recolhidas desde 18/08/2026, e um `display: none` mede
-    zero por zero -- por isso o `abrirTodasSecoes()` antes da regua. A medida
-    que este teste protege continua sendo a mesma.
+    As secoes nascem recolhidas desde 18/08/2026, e os setores agora moram
+    dentro da opcao "Selecionar os Setores" -- um `display: none` mede zero por
+    zero, e por isso o teste ABRE os dois antes da regua.
+
+    A medida mudou em 18/08/2026, por pedido do usuario: "mostrar setores como
+    botao um abaixo do outro, todos do mesmo tamanho". A largura de antes
+    (menos de 70% da folha, um do lado do outro) virou o oposto -- todos com a
+    MESMA largura, empilhados. O que nao mudou, e e o que este teste sempre
+    protegeu de verdade, e o rotulo ser o proprio alvo do toque e a altura ser
+    de dedo, nao de risco.
     """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
@@ -801,9 +834,11 @@ def test_o_setor_do_aparelho_e_botao_e_nao_caixa_de_marcar():
         Controle.desenhar();
         document.getElementById('engrenagem').classList.remove('sumindo');
         Controle.abrirTodasSecoes();
+        document.getElementById('aparelho-escolher-setores-a1').click();
 
         const medir = el => { const r = el.getBoundingClientRect();
-                              return { w: Math.round(r.width), h: Math.round(r.height) }; };
+                              return { w: Math.round(r.width), h: Math.round(r.height),
+                                       x: Math.round(r.left), y: Math.round(r.top) }; };
         const botoes = [...document.querySelectorAll('#aparelho-setores-a1 button')];
         return {
             caixas_de_marcar: document.querySelectorAll(
@@ -819,10 +854,15 @@ def test_o_setor_do_aparelho_e_botao_e_nao_caixa_de_marcar():
     # O rotulo E o botao: o nome do setor esta no alvo do toque.
     assert saida["rotulos"] == ["PISTA", "VIP"]
     for m in saida["medidas"]:
-        # Nao estica pela linha inteira -- era exatamente esse o defeito.
-        assert m["w"] < saida["largura_da_folha"] * 0.7, m
-        # E e um alvo de toque de verdade, nao um risco de 13px.
+        # Alvo de toque de verdade, nao um risco de 13px.
         assert m["h"] >= 36, m
+    primeiro, segundo = saida["medidas"]
+    # Do MESMO tamanho: com larguras diferentes, o olho procura a maior antes
+    # de ler o que esta escrito.
+    assert primeiro["w"] == segundo["w"], saida["medidas"]
+    # UM ABAIXO DO OUTRO: mesma coluna, linha de baixo.
+    assert primeiro["x"] == segundo["x"], saida["medidas"]
+    assert segundo["y"] > primeiro["y"], saida["medidas"]
 
 
 def test_a_tranca_fica_a_vista_enquanto_o_evento_esta_so_para_olhar():
@@ -964,7 +1004,10 @@ def test_importar_anuncia_QUANTOS_entraram():
     assert "3" in saida["aviso"]
 
 
-def test_revogar_manda_status_revogado():
+def test_excluir_manda_um_DELETE_e_nao_uma_troca_de_situacao():
+    """Decisao do usuario, 18/08/2026: "deve excluir definitivamente o aparelho
+    e sumir da listagem". Um PATCH de status deixaria a linha no banco e o
+    cartao na tela -- que e exatamente o que o antigo "Revogar" fazia."""
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -972,14 +1015,40 @@ def test_revogar_manda_status_revogado():
         Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
         let enviado = null;
         Controle._pedirParaTeste = async (caminho, opcoes) => {
-            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
+            enviado = { caminho, metodo: opcoes.method, corpo: opcoes.body || null };
             return { ok: true };
         };
-        await Controle.revogarAparelho('a1');
+        await Controle.excluirAparelho('a1');
         return enviado;
     """)
     assert saida["caminho"] == "/aparelhos/a1"
-    assert saida["corpo"]["status"] == "revogado"
+    assert saida["metodo"] == "DELETE"
+    assert saida["corpo"] is None, "DELETE nao manda corpo nenhum"
+
+
+def test_pausar_manda_pausado_e_retomar_manda_ativo():
+    """Pausar tem volta -- e a diferenca inteira entre ele e o Excluir. A
+    portaria so aceita `status=eq.ativo`, entao qualquer outro valor ja derruba
+    o aparelho do outro lado."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        const enviados = [];
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            enviados.push({ caminho, metodo: opcoes.method,
+                            corpo: JSON.parse(opcoes.body) });
+            return { ok: true };
+        };
+        await Controle.pausarAparelho('a1', true);
+        await Controle.pausarAparelho('a1', false);
+        return { enviados };
+    """)
+    assert saida["enviados"][0]["caminho"] == "/aparelhos/a1"
+    assert saida["enviados"][0]["metodo"] == "PATCH"
+    assert saida["enviados"][0]["corpo"]["status"] == "pausado"
+    assert saida["enviados"][1]["corpo"]["status"] == "ativo"
 
 
 def test_renomear_manda_o_nome():
@@ -1003,48 +1072,124 @@ def test_renomear_manda_o_nome():
 
 
 def test_os_controles_do_aparelho_existem_com_rotulo_e_entram_na_trava():
-    """O revisor pediu para conferir isto especificamente: um botao de
-    revogar que funciona sem elevacao seria pior que a tela sem revogar
-    nenhuma."""
+    """O revisor pediu para conferir isto especificamente: um botao de excluir
+    que funcionasse sem elevacao seria pior que a tela sem excluir nenhum."""
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
         await Controle.carregarPainel();
-        const semSenha = {
+        const trancado = () => ({
             nome: document.getElementById('aparelho-nome-a1').disabled,
             salvar: document.getElementById('aparelho-salvar-a1').disabled,
-            revogar: document.getElementById('aparelho-revogar-a1').disabled,
-            rotulos: {
-                salvar: document.getElementById('aparelho-salvar-a1').textContent.trim(),
-                revogar: document.getElementById('aparelho-revogar-a1').textContent.trim(),
-            },
-            // O "Gerar outro codigo" saiu em 16/08/2026 junto com todo o
-            // caminho de codigo de seis caracteres.
-            novoCodigo: !!document.getElementById('aparelho-novo-codigo-a1'),
-        };
+            renomear: document.getElementById('aparelho-renomear-a1').disabled,
+            setores: document.getElementById('aparelho-escolher-setores-a1').disabled,
+            pausar: document.getElementById('aparelho-pausar-a1').disabled,
+            excluir: document.getElementById('aparelho-excluir-a1').disabled,
+        });
+        const semSenha = trancado();
+        // O "Gerar outro codigo" saiu em 16/08/2026 junto com todo o caminho
+        // de codigo de seis caracteres.
+        semSenha.novoCodigo = !!document.getElementById('aparelho-novo-codigo-a1');
+        semSenha.rotulos = ['renomear', 'escolher-setores', 'pausar', 'excluir'].map(
+            k => document.getElementById('aparelho-' + k + '-a1').textContent.trim());
         Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
         Controle.desenhar();
-        const comSenha = {
-            nome: document.getElementById('aparelho-nome-a1').disabled,
-            salvar: document.getElementById('aparelho-salvar-a1').disabled,
-            revogar: document.getElementById('aparelho-revogar-a1').disabled,
-        };
-        return { semSenha, comSenha };
+        return { semSenha, comSenha: trancado() };
     """)
-    assert len(saida["semSenha"]["rotulos"]["salvar"]) > 3
-    assert len(saida["semSenha"]["rotulos"]["revogar"]) > 3
+    # As quatro opcoes do usuario, com estes rotulos e nesta ordem.
+    assert saida["semSenha"]["rotulos"] == [
+        "Renomear", "Selecionar os Setores", "Pausar", "Excluir"]
     assert saida["semSenha"]["novoCodigo"] is False
-    assert saida["semSenha"]["nome"] is True
-    assert saida["semSenha"]["salvar"] is True
-    assert saida["semSenha"]["revogar"] is True
-    assert saida["comSenha"]["nome"] is False
-    assert saida["comSenha"]["salvar"] is False
-    assert saida["comSenha"]["revogar"] is False
+    for controle in ("nome", "salvar", "renomear", "setores", "pausar", "excluir"):
+        assert saida["semSenha"][controle] is True, controle
+        assert saida["comSenha"][controle] is False, controle
 
 
-def test_revogar_pelo_botao_pede_confirmacao_antes_de_desligar():
-    """Revogar DESLIGA o aparelho na hora, no meio do evento. O toque no botao
-    nao pode desligar nada sozinho.
+def test_as_opcoes_abrem_UMA_DE_CADA_VEZ():
+    """Dois paineis abertos empurram o proximo aparelho para fora da tela, e a
+    lista tem quantos portoes o evento tiver. Tocar em "Selecionar os Setores"
+    fecha o "Renomear" que estava aberto."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        const escondido = (id) =>
+            document.getElementById(id).classList.contains('sumindo');
+        const fechados = { nome: escondido('aparelho-painel-nome-a1'),
+                           setores: escondido('aparelho-painel-setores-a1') };
+        document.getElementById('aparelho-renomear-a1').click();
+        const comNome = { nome: escondido('aparelho-painel-nome-a1'),
+                          setores: escondido('aparelho-painel-setores-a1') };
+        document.getElementById('aparelho-escolher-setores-a1').click();
+        const comSetores = { nome: escondido('aparelho-painel-nome-a1'),
+                             setores: escondido('aparelho-painel-setores-a1'),
+                             aria: document.getElementById('aparelho-renomear-a1')
+                                     .getAttribute('aria-expanded') };
+        // O segundo toque na mesma opcao FECHA -- senao nao ha como voltar ao
+        // cartao inteiro sem sair do evento.
+        document.getElementById('aparelho-escolher-setores-a1').click();
+        const depoisDeFechar = escondido('aparelho-painel-setores-a1');
+        return { fechados, comNome, comSetores, depoisDeFechar };
+    """)
+    # O cartao nasce so com as quatro opcoes a vista.
+    assert saida["fechados"] == {"nome": True, "setores": True}
+    assert saida["comNome"] == {"nome": False, "setores": True}
+    assert saida["comSetores"]["nome"] is True
+    assert saida["comSetores"]["setores"] is False
+    assert saida["comSetores"]["aria"] == "false", (
+        "quem le a tela por voz precisa ouvir que o Renomear fechou")
+    assert saida["depoisDeFechar"] is True
+
+
+def test_a_opcao_aberta_sobrevive_ao_redesenho_do_painel():
+    """Marcar um setor grava sozinho e recarrega o painel. Sem guardar o que
+    estava aberto, a lista de setores se fecharia na cara de quem ia marcar o
+    proximo -- o mesmo defeito que o `edicaoAnterior` ja resolvia para o texto
+    digitado."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.desenhar();
+        document.getElementById('aparelho-escolher-setores-a1').click();
+        Controle.desenhar();
+        return {
+            aberto: !document.getElementById('aparelho-painel-setores-a1')
+                        .classList.contains('sumindo'),
+            aria: document.getElementById('aparelho-escolher-setores-a1')
+                    .getAttribute('aria-expanded'),
+        };
+    """)
+    assert saida["aberto"] is True
+    assert saida["aria"] == "true"
+
+
+def test_o_aparelho_pausado_oferece_RETOMAR_e_diz_a_situacao():
+    """Pausar tem volta, e a tela precisa mostrar por onde. Regra do projeto:
+    toda trava diz, nela mesma, como sair dela."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
+        Controle.estado.painel.aparelhos[0].status = 'pausado';
+        Controle.desenhar();
+        return {
+            botao: document.getElementById('aparelho-pausar-a1').textContent.trim(),
+            situacao: document.querySelector('#aparelhos .situacao-aparelho').textContent,
+        };
+    """)
+    assert saida["botao"] == "Retomar"
+    assert "Pausado" in saida["situacao"]
+    assert "retomar" in saida["situacao"].lower()
+
+
+def test_excluir_pelo_botao_pede_confirmacao_antes_de_desligar():
+    """Excluir DESLIGA o aparelho na hora, no meio do evento, e nao tem volta.
+    O toque no botao nao pode desligar nada sozinho.
 
     O teste toca em "Cancelar" na caixa de verdade, e confere que a caixa
     APARECEU antes disso. Sem essa segunda asercao ele passaria por vazio no dia
@@ -1058,7 +1203,7 @@ def test_revogar_pelo_botao_pede_confirmacao_antes_de_desligar():
         Controle.desenhar();
         let chamou = false;
         Controle._pedirParaTeste = async () => { chamou = true; return { ok: true }; };
-        document.getElementById('aparelho-revogar-a1').click();
+        document.getElementById('aparelho-excluir-a1').click();
         await new Promise(r => setTimeout(r, 80));
         const pergunta = document.getElementById('texto-confirmar');
         const texto = pergunta ? pergunta.textContent : null;
@@ -1067,7 +1212,9 @@ def test_revogar_pelo_botao_pede_confirmacao_antes_de_desligar():
         return { chamou, texto };
     """)
     assert saida["texto"], "a confirmacao nao apareceu na propria pagina"
-    assert "DESLIGA o aparelho agora" in saida["texto"]
+    assert "para sempre" in saida["texto"]
+    assert "continuam contadas no evento" in saida["texto"], (
+        "quem exclui precisa saber que o historico da noite NAO vai junto")
     assert saida["chamou"] is False
 
 
@@ -1190,10 +1337,9 @@ def test_salvar_nao_manda_nada_quando_nada_mudou():
     assert saida["chamadas"] == []
 
 
-def test_revogar_aceito_manda_status_revogado_pelo_botao():
-    """O teste anterior so provava o Cancelar. Aqui o `dialog` do arnes
-    ACEITA -- `page.on('dialog', d => d.accept())` -- para provar que quem
-    confirma de verdade desliga o aparelho de verdade."""
+def test_excluir_aceito_manda_o_DELETE_pelo_botao():
+    """O teste anterior so provava o Cancelar. Aqui alguem confirma de verdade,
+    e o que tem de sair e um DELETE -- nao um PATCH de situacao."""
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -1202,10 +1348,10 @@ def test_revogar_aceito_manda_status_revogado_pelo_botao():
         Controle.desenhar();
         let enviado = null;
         Controle._pedirParaTeste = async (caminho, opcoes) => {
-            enviado = { caminho, corpo: JSON.parse(opcoes.body) };
+            enviado = { caminho, metodo: opcoes.method };
             return { ok: true };
         };
-        document.getElementById('aparelho-revogar-a1').click();
+        document.getElementById('aparelho-excluir-a1').click();
         await new Promise(r => setTimeout(r, 80));
         document.getElementById('btn-confirmar-sim').click();
         await new Promise(r => setTimeout(r, 150));
@@ -1213,7 +1359,7 @@ def test_revogar_aceito_manda_status_revogado_pelo_botao():
     """)
     assert saida["enviado"] is not None
     assert saida["enviado"]["caminho"] == "/aparelhos/a1"
-    assert saida["enviado"]["corpo"]["status"] == "revogado"
+    assert saida["enviado"]["metodo"] == "DELETE"
 
 
 def test_o_cartao_do_setor_nao_tem_campo_de_lotacao_nem_botao_de_salvar():

@@ -40,6 +40,7 @@ import {
   aplicarLiberacao,
   aplicarNovoCodigo,
   aplicarSetor,
+  excluirAparelho,
 } from "../_compartilhado/configuracao.ts";
 import { contasDoCliente, liberarAcesso, novaSenhaProvisoria } from "../_compartilhado/contas.ts";
 import {
@@ -664,6 +665,9 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   }
   if (metodo === "PATCH" && p.length === 2 && p[0] === "aparelhos") {
     return ok(await aplicarAparelho(await aparelho(p[1]), await corpo()));
+  }
+  if (metodo === "DELETE" && p.length === 2 && p[0] === "aparelhos") {
+    return ok(await excluirAparelho(await aparelho(p[1])));
   }
   if (metodo === "POST" && p.length === 3 && p[0] === "aparelhos" && p[2] === "codigo") {
     return ok(await aplicarNovoCodigo(await aparelho(p[1])));
