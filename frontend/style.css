@@ -2844,6 +2844,17 @@ input[type=number] {
 
 .ic-paginacao { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
 
+/* ── As contas do cliente, no bloco "Acesso do cliente" ────────────────────
+ *
+ * Uma linha por conta, e ate 17/08/2026 elas nasciam sem espaco nenhum entre
+ * si: duas contas viravam duas frases empilhadas, e o botao "Nova senha
+ * provisoria" -- que e alto -- encostava no texto da linha de baixo. Quem
+ * olhasse rapido nao saberia a qual das duas contas o botao pertence, e essa
+ * duvida, neste bloco, e a senha do cliente errado. */
+.ic-conta { padding: 8px 0; line-height: 1.7; }
+.ic-conta + .ic-conta { border-top: 1px solid var(--border); }
+.ic-conta .btn { vertical-align: middle; }
+
 /* ── O codigo de pareamento ────────────────────────────────────────────── */
 .ic-codigo-caixa { padding: 16px; margin-top: 16px; }
 .ic-codigo-valor {

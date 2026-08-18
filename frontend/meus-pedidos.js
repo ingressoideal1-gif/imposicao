@@ -47,9 +47,45 @@
         return el;
     }
 
+    /**
+     * O icone de lista da barra do topo.
+     *
+     * SVG embutido, e nao PNG, pelo mesmo motivo dos icones do
+     * `lista-eventos.js`: esta tela precisa abrir sem rede, e cada arquivo de
+     * imagem e mais uma requisicao que pode faltar. `aria-hidden` porque o
+     * rotulo em texto esta ao lado, dentro do proprio botao -- anunciado duas
+     * vezes, o leitor de tela leria "lista Meus Pedidos".
+     */
+    function iconeLista() {
+        var el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        el.setAttribute('viewBox', '0 0 24 24');
+        el.setAttribute('width', '24');
+        el.setAttribute('height', '24');
+        el.setAttribute('fill', 'none');
+        el.setAttribute('stroke', 'currentColor');
+        el.setAttribute('stroke-width', '2');
+        el.setAttribute('stroke-linecap', 'round');
+        el.setAttribute('stroke-linejoin', 'round');
+        el.setAttribute('aria-hidden', 'true');
+        ['M8 6h13', 'M8 12h13', 'M8 18h13',
+         'M3 6h.01', 'M3 12h.01', 'M3 18h.01'].forEach(function (d) {
+            var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            p.setAttribute('d', d);
+            el.appendChild(p);
+        });
+        return el;
+    }
+
     function cartaoDePedido(p, sessao) {
         var c = document.createElement('div');
         c.className = 'cartao cartao-pedido';
+        // A linha verde-agua a esquerda: este pedido tem pelo menos um setor JA
+        // IMPRESSO, ou seja, carregar agora ja poe gente para dentro. Ela e
+        // resumo, nunca a unica fonte -- a palavra continua no selo de cada
+        // setor, para quem nao distingue as cores.
+        if ((p.setores || []).some(function (s) { return !!s.impresso; })) {
+            c.className += ' tem-impresso';
+        }
         c.id = 'pedido-' + p.pedido;
         var topo = document.createElement('div');
         topo.className = 'pedido-topo';
@@ -194,6 +230,17 @@
 
     function ligar() {
         if (!$('meus-pedidos')) { return; }
+        // O icone entra ANTES do rotulo, e por JS: o `controle.html` nao
+        // carrega SVG solto em lugar nenhum, e as barras de evento ja desenham
+        // os icones delas assim. O rotulo em texto continua no HTML -- o icone
+        // nao substitui palavra nenhuma nesta tela.
+        var barra = $('btn-meus-pedidos');
+        if (barra && !barra.querySelector('.icone-lista')) {
+            var caixa = document.createElement('span');
+            caixa.className = 'icone-lista';
+            caixa.appendChild(iconeLista());
+            barra.insertBefore(caixa, barra.firstChild);
+        }
         // As duas portas da MESMA acao: a barra e o rotulo em texto, o `+`
         // fecha a coluna da direita onde cada evento tem a sua engrenagem.
         ['btn-meus-pedidos', 'btn-meus-pedidos-mais'].forEach(function (id) {

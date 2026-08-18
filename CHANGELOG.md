@@ -8,6 +8,77 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
+## [v631 (a publicar)] — A conta do cliente traz os pedidos; o QR do Pedido sai de cena
+
+Até aqui o cliente entrava no controle de acesso por um **QR do Pedido**: o atendente
+gerava um QR no painel, mandava por WhatsApp, e quem lesse aquela imagem cadastrava o
+evento — uma vez. O QR era a credencial. Quem recebesse o encaminhamento reivindicava o
+pedido no lugar do dono, e desfazer isso não tinha botão: era conserto à mão no banco.
+
+**Agora quem traz os pedidos é a conta do cliente** — a mesma que ele já usa no ERP Vibe,
+pela regra que este projeto não abre mão: nenhuma tela nossa cria conta separada.
+
+**A gráfica libera o acesso pelo painel**, dentro do pedido, no bloco novo **"Acesso do
+cliente"**: um e-mail, um toque, e sai uma senha provisória de 8 símbolos — sem `0 O 1 I
+L`, que são os que se confundem ao ditar por telefone. Ela aparece **uma vez só**, porque
+o que fica guardado é o hash dela, e a tela diz isso em texto. E-mail que já tinha conta no
+Vibe é só **ligado** ao cliente: a senha dele não é tocada, senão a gráfica derrubaria o
+acesso da pessoa ao ERP.
+
+**A senha provisória nunca aparece no pedido errado.** O atendente toca em "Liberar
+acesso" no pedido A, a resposta demora, ele abre o pedido B enquanto espera — e sem a
+conferência a senha de A apareceria sob o nome de B. A tela confere **duas** coisas antes
+de mostrar: o número do pedido e o id do cliente. Só o pedido não bastaria, porque o
+parceiro pode trocar o cliente de uma proposta e o mesmo número já é outra gente.
+
+**O QR que sobra é o de instalação**, um só, genérico, igual para todos os clientes:
+`https://ideal-imposition.vercel.app/ic/`. Ele não é credencial de nada — leva à instalação
+do aplicativo. Pode ir para material impresso e para o WhatsApp sem risco nenhum.
+
+**"Meus Pedidos"** tomou o lugar da barra "Novo Evento" na casa do aplicativo, e a câmera
+saiu junto com o QR. A lista traz os pedidos do cliente **já impressos** — com pelo menos
+uma credencial publicada, e não pelo carimbo `publicado_em`, que gerar QR e reimprimir
+zeram —, legíveis, não cancelados e ainda não carregados. Nome, data e local vêm da ficha
+da arte.
+
+**"Carregar" é o antigo reivindicar, sem QR:** cria o evento (ou junta a um que já existe
+do mesmo cliente, para o pedido complementar não virar uma segunda festa), um setor por
+modelo legível, e carimba as credenciais. A resposta devolve a **elevação de 15 minutos** —
+por isso a pergunta seguinte, "quer usar este aparelho para ler os ingressos dele?", liga o
+aparelho sem pedir a senha de novo. A pessoa acabou de digitá-la ali.
+
+**Os eventos passaram a ser do cliente, e não da conta.** Toda conta ligada ao mesmo
+`id_cliente` vê e configura os mesmos eventos — o dono e o financeiro da mesma empresa não
+enxergam metades diferentes. Os eventos antigos continuam visíveis pela conta que os criou.
+
+**"Esqueci minha senha" manda falar com a gráfica.** Não é preguiça: este projeto não tem
+SMTP, e-mail de recuperação não chega a lugar nenhum, e um botão que promete um e-mail que
+nunca vem é pior que não ter botão.
+
+**Vocabulário: "Aparelho", nunca "Portão".** Decisão do usuário — todo aparelho é portão, e
+a palavra dupla fazia o dono procurar uma tela de "portões" que não existe.
+
+**O primeiro acesso obriga a trocar a senha**, e não há como escapar dessa tela: o olho do
+cabeçalho fica travado enquanto ela está no ar, e a lista de eventos não reaparece por baixo
+dela.
+
+**O que saiu do repositório:** `frontend/evento.html`, `evento.js`, `ler-qr.js` e
+`instalar.js`. As funções de servidor `acesso-evento`, `acesso-pedido` e o
+`POST /reivindicar` **ficam publicadas um release**, sem chamador nenhum — para nenhum QR
+que já circula por WhatsApp bater em porta fechada antes da hora.
+
+**Acabamento das telas novas:** a barra "Meus Pedidos" ganhou um ícone de lista; o cartão
+de cada pedido, uma linha verde-água à esquerda quando há setor já impresso e uma linha
+separando a leitura da ação; a caixa do Carregar, uma linha separando a ficha do evento da
+confirmação com senha; entrar, escolher a senha e entrar na configuração ganharam a mesma
+borda verde-água no alto, que é o que diz que as três são a mesma coisa — a pessoa provando
+quem é. Todo botão afunda 2% ao toque, porque no aplicativo instalado não há cursor nem
+barra de endereço, e o afundamento é o único recibo imediato de que o toque valeu. Quem
+pediu para o sistema não se mexer (`prefers-reduced-motion`) não recebe a animação. No
+painel da gráfica, as linhas de conta do bloco "Acesso do cliente" deixaram de se encostar.
+
+---
+
 ## [v612] — O dono configura o portão no próprio celular
 
 Até aqui, pôr um portão no ar era: o dono criava o aparelho na tela dele, o servidor

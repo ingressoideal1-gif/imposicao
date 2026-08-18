@@ -112,6 +112,34 @@ button {
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 button.secundario { background: transparent; color: var(--dim); border: 1px solid var(--border); }
 
+/* O toque RESPONDE. Num aplicativo instalado não há barra de endereço nem
+   cursor: se o botão não muda de forma ao ser pressionado, a única prova de
+   que o toque valeu é a tela mudar — e ela pode demorar uma ida à rede. O
+   afundamento de 2% é o recibo imediato.
+
+   `:not(:disabled)` de propósito: um botão desligado que afunda ao toque
+   promete uma ação que não vai acontecer. */
+button { transition: transform 120ms ease, background-color 120ms ease,
+                     border-color 120ms ease, color 120ms ease; }
+button:active:not(:disabled) { transform: scale(0.98); }
+
+/* O anel de foco é CLARO, e não verde-água como o dos campos. A tentação era
+   repetir o verde-água por coerência, e ela está errada duas vezes: o botão
+   primário JÁ é verde-água cheio, e um anel da mesma cor em volta dele
+   desapareceria — justamente no botão mais usado da tela; e nesta folha o
+   verde-água significa "é por aqui", então o anel pintaria de recomendado
+   qualquer botão que recebesse o foco, inclusive o "Cancelar" da caixa de
+   confirmar, que nasce focado de propósito. O padrão do navegador (dois anéis,
+   branco e preto) resolve a visibilidade, mas é grosso demais no escuro. */
+button:focus-visible { outline: 2px solid #cbd5e1; outline-offset: 2px; }
+
+/* Quem pediu para o sistema não se mexer não recebe nem o afundamento nem a
+   transição — mas continua recebendo o anel de foco, que não é animação. */
+@media (prefers-reduced-motion: reduce) {
+    button { transition: none; }
+    button:active:not(:disabled) { transform: none; }
+}
+
 .aviso {
     font-size: 0.82rem;
     line-height: 1.5;
@@ -154,7 +182,14 @@ button.secundario { background: transparent; color: var(--dim); border: 1px soli
     line-height: 1.5;
 }
 .acoes-confirmar { display: flex; gap: 10px; }
-.acoes-confirmar button { flex: 1 1 0; min-height: 46px; }
+.acoes-confirmar button { flex: 1 1 0; min-height: 46px; font-size: .95rem; line-height: 1.25; }
+/* O que CONFIRMA leva mais largura. Ele é o único dos dois cujo rótulo muda —
+   "Sim, usar este aparelho", "Ir para a leitura", "Finalizar" —, e em duas
+   colunas iguais o mais longo sobrava apertado enquanto o "Cancelar" ao lado
+   ficava com espaço de sobra. Num celular de 390px o rótulo mais longo ainda
+   quebra em duas linhas, e por isso a `line-height` acima: duas linhas
+   apertadas parecem descuido, duas linhas com respiro parecem escolha. */
+.acoes-confirmar button + button { flex: 1.45 1 0; }
 
 /* As saídas de um aviso que trava o dono. Um aviso que só explica o problema e
    não oferece o que fazer é um beco sem saída — foi o que prendeu o dono na
@@ -426,8 +461,18 @@ button.perigo {
        fora do alinhamento com a engrenagem ao lado. */
     margin: 0;
 }
+/* A barra "Meus Pedidos" é a única SEM evento dentro: não tem luz à esquerda
+   nem celular-com-QR à direita, e por isso o conteúdo dela se centra. O
+   `flex: 1` do nome vale para as barras de evento, onde ele precisa empurrar o
+   ícone de ler até a borda; aqui ele espalharia o texto contra a esquerda e o
+   `justify-content: center` não teria o que centrar. */
 .barra-evento.destaque { justify-content: center; }
 .barra-evento .nome-evento { flex: 1; }
+.barra-evento.destaque .nome-evento { flex: 0 0 auto; }
+/* O ícone de lista, à esquerda do texto. Ele é a pista de que esta barra abre
+   uma LISTA, e não um evento — as outras barras desta tela abrem a leitura. */
+.barra-evento .icone-lista { color: var(--teal); display: flex; flex: none; }
+.barra-evento .icone-lista svg { width: 26px; height: 26px; }
 /* O celular-com-QR do lado direito da barra. Maior que os 24px que o SVG
    declara, para ficar como está na imagem de referência — e porque ele é a
    única pista visual de que a barra inteira é o botão de LER. */
@@ -480,13 +525,32 @@ button.perigo {
     min-height: 0;
 }
 
-/* A tela de entrar e a de trocar senha: um cartao, centrado, com folga no topo. */
+/* ── As PORTAS da casa ────────────────────────────────────────────────────
+ *
+ * Entrar, escolher a senha e entrar na configuracao sao a mesma coisa vista de
+ * tres lugares: a pessoa provando quem e. A linha verde-agua no alto e o que
+ * as reune -- sem ela, cada uma parecia um formulario solto no meio da tela.
+ *
+ * O logotipo NAO se repete aqui, embora a primeira ideia tenha sido essa: o
+ * `<header>` desta pagina fica FORA de todos os blocos de estado, entao a
+ * marca ja esta na tela dez pixels acima do cartao. Um segundo logotipo seria
+ * a mesma imagem duas vezes na mesma dobra. */
+#bloco-entrar, #trocar-senha, #caixa-entrar-config { border-top: 2px solid var(--teal); }
 #bloco-entrar h1, #trocar-senha h1 { font-size: 1.35rem; margin: 0 0 6px; }
 #bloco-entrar .config-ajuda, #trocar-senha .config-ajuda { margin-bottom: 14px; }
 
 /* Meus Pedidos: um cartao por pedido, o Carregar a direita. */
 #meus-pedidos #btn-voltar-pedidos { width: auto; padding: 10px 18px; }
-.cartao-pedido { display: grid; gap: 8px; }
+/* A linha a esquerda fala o mesmo idioma que o `.aviso` desta folha ja fala:
+   verde-agua quando ha pelo menos um setor IMPRESSO -- ou seja, quando
+   carregar este pedido ja poe gente para dentro hoje --, e cinza quando nao
+   ha. A palavra continua nos selos de cada setor: a cor aqui e o resumo, nunca
+   a unica fonte da informacao. */
+.cartao-pedido {
+    display: grid; gap: 8px;
+    border-left: 3px solid rgba(148, 163, 184, .35);
+}
+.cartao-pedido.tem-impresso { border-left-color: var(--teal); }
 .pedido-topo { display: flex; justify-content: space-between; align-items: baseline; }
 .pedido-data { color: var(--dim); font-size: .85rem; }
 .pedido-nome { font-size: 1.15rem; font-weight: 700; }
@@ -495,8 +559,14 @@ button.perigo {
 .selo-impressao { font-size: .74rem; padding: 2px 8px; border-radius: 999px; border: 1px solid; }
 .selo-impressao.sim { color: #16a34a; border-color: rgba(22,163,74,.5); }
 .selo-impressao.nao { color: var(--dim); border-color: rgba(148,163,184,.4); }
-.pedido-acoes { display: flex; justify-content: flex-end; margin-top: 4px; }
-.pedido-acoes button { width: auto; min-width: 140px; }
+/* A acao fica separada da leitura por uma linha: o cartao inteiro e
+   informacao, e so o que esta abaixo dela muda alguma coisa. */
+.pedido-acoes {
+    display: flex; justify-content: flex-end;
+    margin-top: 6px; padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+.pedido-acoes button { width: auto; min-width: 140px; margin-top: 0; }
 
 /* A caixa do Carregar. Os campos ja vem da regra `input, select` la de cima --
    nao ha nada de especial neles aqui, e uma segunda regra so criaria duas
@@ -504,3 +574,16 @@ button.perigo {
    outras caixas de cartao, e uma folga entre a ficha e a senha. */
 #caixa-carregar h1 { font-size: 1.35rem; margin: 0 0 6px; }
 #caixa-carregar .config-ajuda { margin-top: 14px; }
+/* A linha que separa a FICHA do evento da CONFIRMACAO. Acima dela a pessoa
+   descreve o que vai nascer; daqui para baixo ela assina. Sem a separacao, a
+   senha parecia mais um campo do formulario, e "Conta: fulano@..." se perdia
+   no meio de dois paragrafos cinzas do mesmo tamanho. */
+.carregar-conta {
+    margin-top: 16px; padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+/* O menu do olho: o primeiro botao de um cartao nao precisa da margem que
+   separa um botao do outro. Sem isto sobravam 34px de vazio entre o alto do
+   cartao "Minha conta" e o "Trocar minha senha". */
+#menu-geral .cartao > button:first-child { margin-top: 0; }

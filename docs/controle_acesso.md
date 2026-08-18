@@ -15,16 +15,23 @@ começou.
 
 ```
 1. o operador imprime          →  agente calcula os hashes e publica a faixa
-2. o atendente clica no painel →  QR do Pedido gerado, o anterior morre
-3. o cliente lê com a câmera   →  troca o token pelo esqueleto, lido do ERP
-4. o cliente entra e cadastra  →  evento criado, credenciais ligadas ao setor
+2. o atendente libera o acesso →  conta do cliente ligada ao id_cliente do ERP
+3. o cliente entra no app      →  "Meus Pedidos" lista o que já foi impresso
+4. o cliente toca em Carregar  →  evento criado, credenciais ligadas ao setor
 5. o dono configura o evento   →  janela, bloqueios e aparelhos (parte 3a)
 6. (parte 3b) a portaria lê    →  pronta, aguardando publicação
 ```
 
-O passo 1 e o passo 4 **não têm ordem obrigatória**. Imprimir antes de o cliente
-reivindicar é o caso comum; reivindicar antes de imprimir acontece, e o sistema tem de
-funcionar nos dois sentidos. Ver [O vínculo com o setor](#vinculo).
+Os passos 2 e 3 são de **17/08/2026**, quando o QR do Pedido saiu de circulação — até
+então o passo 2 era o atendente gerar o QR no painel e o passo 3 era o cliente lê-lo com a
+câmera. O que mudou está em [A conta do cliente traz os
+pedidos](#a-conta-do-cliente-traz-os-pedidos-17082026); o resto do desenho continua igual.
+
+O passo 1 e o passo 4 **não têm ordem obrigatória** — e desde 17/08 essa liberdade só vale
+em um sentido: `Meus Pedidos` só oferece pedido **já impresso**, então carregar antes de
+imprimir deixou de acontecer pela tela. O banco continua aceitando as duas ordens, e as
+credenciais publicadas depois se ligam ao setor do mesmo jeito. Ver
+[O vínculo com o setor](#vinculo).
 
 ## A regra que decide tudo: quem fala com o banco
 
@@ -32,7 +39,7 @@ funcionar nos dois sentidos. Ver [O vínculo com o setor](#vinculo).
 Agente (tem o pool)  ──hash──►  Render (service_role)  ──►  Supabase
                                        ▲
                                        │ JWT do cliente
-                              evento.html (página no celular)
+                              controle.html (o app no celular)
 ```
 
 **Nenhuma chave de banco chega ao celular nem ao navegador.** As onze tabelas
@@ -63,17 +70,23 @@ estar no caminho:
 Agente (tem o pool)  ──hash──►  Edge Function (service_role)  ──►  Supabase
                                        ▲
                                        │ JWT do cliente
-                              evento.html (página no celular)
+                              controle.html (o app no celular)
 ```
 
 | Quem fala | Função | Antes, no Render | `verify_jwt` |
 |---|---|---|---|
 | Ideal Control da gráfica (`ideal-control.js`) | `acesso-interno` | `/api/acesso/interno/*` | sim |
 | Tela do dono (`controle.html`) | `acesso-conta` | `/api/acesso/*` | sim |
-| Leitura do QR pelo cliente (`evento.html`) | `acesso-evento` | `/api/acesso/evento` | **não** |
-| Botão "QR do Pedido" do painel | `acesso-pedido` | `/api/acesso/pedidos/{p}/qr` | sim |
+| **ninguém** — sem chamador desde 17/08 | `acesso-evento` | `/api/acesso/evento` | **não** |
+| **ninguém** — sem chamador desde 17/08 | `acesso-pedido` | `/api/acesso/pedidos/{p}/qr` | sim |
 | Estação, publicando a faixa | `acesso-estacao` | `/api/acesso/pedidos/{p}/…` | **não** |
 | Celular da portaria | `portaria` | `/api/acesso/portaria/*` | **não** |
+
+As duas linhas de **ninguém** eram, até 17/08/2026, as do caminho do QR do Pedido. Quem
+falava com elas era o `evento.html` — a página que o QR do Pedido abria — e o botão "QR do Pedido" do
+painel; as duas saíram da tela naquele dia, e o arquivo `frontend/evento.html` foi apagado.
+As funções ficam publicadas um release, para nenhum QR que já circula por WhatsApp bater
+em porta fechada antes da hora.
 
 O que cada corte economiza é uma travessia de internet inteira — antes toda chamada ia ao
 Render e o Render ia ao Supabase — mais, nas três primeiras, uma segunda ida escondida: o
@@ -196,8 +209,9 @@ faz o sistema mentir de duas formas, e as duas são caladas:
 - o pedido se declara **eternamente incompleto** — o 20508 vivia como 163 de 213 —, e o
   agente avisa "faixa INCOMPLETA" a cada impressão.
 
-`acesso_api._modelos_legiveis()` filtra os dois lugares onde isso aparece: os setores
-criados na reivindicação e o `esperado` do `fechar`. Quem decide o que é legível é
+`modelosLegiveis()` filtra os dois lugares onde isso aparece: os setores criados ao
+carregar o pedido (o `_modelos_legiveis()` do `acesso_api.py` é o gêmeo em Python) e o
+`esperado` do `fechar`. Quem decide o que é legível é
 `acesso_publicacao.numeracao_do_modelo`, a **mesma** função que o agente usa para decidir o
 que publicar (a regra dela está em
 [Nem todo ingresso tem QR Ideal](#nem-todo-ingresso-tem-qr-ideal), logo abaixo) — duas
@@ -216,9 +230,14 @@ numeração, com código, e de reimpressão de verdade, com papel novo.
 <a name="vinculo"></a>
 ### O vínculo com o evento e o setor
 
-A credencial nasce com `evento_id` e `setor_id` preenchidos quando o pedido já foi
-reivindicado, e a reivindicação carimba as que vieram antes dela. **As duas metades juntas
+A credencial nasce com `evento_id` e `setor_id` preenchidos quando o pedido já virou
+evento, e o momento em que ele vira carimba as que vieram antes. **As duas metades juntas
 é que cobrem as duas ordens possíveis.**
+
+> O momento em que o pedido vira evento chamava-se **reivindicação** (o cliente lia o QR do
+> Pedido) e desde 17/08/2026 chama-se **carregar** (o cliente toca em "Carregar" em Meus
+> Pedidos). O mecanismo é o mesmo, e o `carregar` herdou este código inteiro; o parágrafo
+> abaixo, que conta a história de 15/08, guarda o nome antigo de propósito.
 
 > Até 15/08/2026 só existia a segunda metade — um `PATCH` sobre as credenciais que já
 > existiam no momento da reivindicação. Isso cobre uma ordem e falha calado na outra: no
@@ -231,8 +250,8 @@ reivindicado, e a reivindicação carimba as que vieram antes dela. **As duas me
 > setor, não alcança nenhuma. O conserto do passado é
 > [sql/reparo_acesso_credenciais_orfas.sql](../sql/reparo_acesso_credenciais_orfas.sql).
 
-Pedido ainda não reivindicado continua gravando **sem** setor, porque ainda não existe
-evento a que pertencer. Isso é o normal, não uma falha.
+Pedido ainda não carregado continua gravando **sem** setor, porque ainda não existe evento
+a que pertencer. Isso é o normal, não uma falha.
 
 <a name="nem-todo-ingresso-tem-qr-ideal"></a>
 ### Nem todo ingresso tem QR Ideal
@@ -323,11 +342,13 @@ Quatro travas:
   pedido — nem com o segredo dá para inventar o ingresso 99.999 de uma tiragem de 88;
 - publicação fechada não aceita mais lote; reabrir é ato explícito do agente.
 
-> **Uma exceção que vale registrar:** gerar o QR do Pedido também chama `_abrir_pedido`
-> para garantir a linha e o sal, e isso **reabre** uma publicação já fechada — apaga o
-> `publicado_em`. Hoje é inofensivo (o agente sempre reabre antes de mandar lote, e a tela
-> do dono não mostra esse carimbo), mas o "estado da publicação" que a tabela `_pedidos`
-> guarda não é confiável enquanto for assim.
+> **Uma exceção que vale registrar, hoje sem gatilho:** gerar o QR do Pedido chamava
+> `_abrir_pedido` para garantir a linha e o sal, e isso **reabre** uma publicação já
+> fechada — apaga o `publicado_em`. Ninguém gera mais QR do Pedido desde 17/08/2026,
+> então esse caminho não é mais percorrido; a conclusão, porém, continua de pé, porque o
+> agente também reabre a cada lote: o "estado da publicação" que a tabela `_pedidos`
+> guarda **não é confiável**, e é por isso que `Meus Pedidos` conta credencial publicada
+> em vez de olhar o `publicado_em`.
 
 O segredo vai **embutido no executável**. Quem o gera é `New-SegredoDoAgente`, no módulo
 `ferramentas/Publicacao.psm1`, chamada **antes** da compilação pelas duas ferramentas que
@@ -352,7 +373,14 @@ constroem o agente: o `build_agent.ps1` e o `publicar_agente.ps1`. O arquivo ger
 > usuário em 14/08 **saiu** da tela do dono — se voltar, volta como relatório no painel ao
 > vivo da parte 3c, não como alarme na portaria.
 
-## O QR do Pedido
+## O QR do Pedido (fora de circulação desde 17/08/2026)
+
+> **Nada nesta seção está em uso.** O QR do Pedido saiu da tela no dia 17/08/2026, junto
+> com o `evento.html` que ele abria: quem traz os pedidos para o aplicativo passou a ser a
+> **conta do cliente** — ver [A conta do cliente traz os
+> pedidos](#a-conta-do-cliente-traz-os-pedidos-17082026). A seção fica porque a função
+> `acesso-pedido` continua publicada por um release e o mecanismo precisa estar escrito
+> em algum lugar enquanto isso.
 
 É uma URL curta com token assinado: `evento.html?t=<pedido>.<vencimento>.<assinatura>`.
 Quarenta e quatro caracteres de token, 87 de URL, QR versão 5 com 37 módulos por lado — lê
@@ -387,7 +415,13 @@ O endpoint que **gera** o QR exige login de verdade — ele confere o token do S
 perguntando ao próprio Supabase. O `get_current_user` do `app.py` não serve: ele devolve
 admin para todo mundo sem conferir nada.
 
-## Reivindicar o evento
+## Reivindicar o evento (fora de circulação desde 17/08/2026)
+
+> **Nada nesta seção está em uso.** O `POST /reivindicar` ficou sem chamador quando o QR
+> do Pedido saiu da tela. Quem cria o evento hoje é o "Carregar" de **Meus Pedidos** — ver
+> [A conta do cliente traz os pedidos](#a-conta-do-cliente-traz-os-pedidos-17082026). As
+> regras abaixo sobre **setor por modelo** e **juntar pedidos num mesmo evento**
+> continuam valendo palavra por palavra: o `carregar` as herdou inteiras.
 
 O QR anda por WhatsApp, então quem receber a imagem consegue cadastrar — **uma vez**. A
 primeira reivindicação trava o pedido na conta que cadastrou; uma segunda conta leva `409`.
@@ -409,6 +443,36 @@ código legível não vira setor — ver
 > reflete o pedido de hoje. Os **setores já criados**, não: eles são gravados uma vez, na
 > reivindicação. Se um modelo ganhar numeração com código depois disso, o setor dele não
 > aparece sozinho. Não há hoje uma re-sincronização, e ela é trabalho da parte 3c.
+
+## A conta do cliente traz os pedidos (17/08/2026)
+
+O QR do Pedido saiu de circulação. O que existe agora:
+
+1. **A gráfica libera o acesso** no painel, dentro do pedido, no bloco "Acesso do
+   cliente": cria a conta na mesma auth do Vibe com uma senha provisória (8
+   símbolos, sem `0 O 1 I L`, mostrada uma vez) e grava a ligação conta ↔
+   `id_cliente` em `producao_acesso_contas`. E-mail que já tinha conta é só
+   ligado — a senha dele fica em paz (`criada_aqui = false`).
+2. **O cliente instala o app pelo QR de instalação** (um só, genérico:
+   `https://ideal-imposition.vercel.app/ic/`) e entra. O primeiro acesso obriga a
+   trocar a senha. "Esqueci minha senha" manda falar com a gráfica: o projeto não
+   tem SMTP, e-mail não chega.
+3. **"Meus Pedidos"** (`GET /meus-pedidos`) lista os pedidos do cliente **já
+   impressos** — com pelo menos uma credencial publicada; `publicado_em` não serve,
+   porque gerar QR e reimprimir a zeram —, legíveis, não cancelados e ainda não
+   carregados. Nome, data e local vêm de `pedidos_artes`.
+4. **"Carregar"** (`POST /pedidos/{p}/carregar`) cria o evento (ou junta a um
+   existente do mesmo cliente), um setor por modelo legível, carimba as
+   credenciais e devolve a **elevação de 15 minutos** — por isso o "usar este
+   aparelho" logo depois não pede a senha de novo.
+5. **Os eventos são do cliente**: toda conta ligada ao mesmo `id_cliente` vê e
+   configura os mesmos eventos (`pertenceAConta`). Os eventos antigos continuam
+   visíveis pela conta que os criou.
+
+Vocabulário: **"Aparelho"**, não "Portão" — todo aparelho é portão.
+
+Ficam um release, sem chamador: `acesso-evento`, `acesso-pedido` e
+`POST /reivindicar`.
 
 ## A conta é a do Vibe, e não uma daqui
 
@@ -438,16 +502,21 @@ e-mails têm cadastro.
 > vez só. Fechar isso exige criar a ligação `auth.users → clientes.id_cliente`, e é assunto
 > do parceiro também.
 
-## A tela `evento.html`
+## A tela do cliente: era `evento.html`, hoje é `controle.html`
 
-Auto-contida e feita para telefone. **Não** carrega o `style.css` de 84 KB do painel, que
-foi desenhado para a tela larga do operador — o cliente chega pela câmera, quase sempre no
-4G. Campos com fonte de 16px (menor que isso o iOS dá zoom ao focar), alvos de toque de
-48px, dois passos numerados na própria tela.
+**O `frontend/evento.html` foi apagado em 17/08/2026**, junto com o `evento.js`, o
+`ler-qr.js` e o `instalar.js`. Ele existia para uma coisa só: receber o cliente que
+chegava pela câmera, lendo o QR do Pedido. Sem QR, não havia mais por onde chegar nele.
 
-As mensagens de erro do QR são traduzidas para português de gente **no endpoint**. O
-`qr_pedido` continua falando técnico, que é o certo para log e teste, mas "token
-malformado" não é frase para o cliente ler no celular.
+A casa do cliente passou a ser o próprio aplicativo, o `controle.html` — a mesma tela onde
+ele já configurava o evento. O que valia lá continua valendo aqui, e pelas mesmas razões:
+auto-contida e feita para telefone, **sem** o `style.css` de 84 KB do painel, que foi
+desenhado para a tela larga do operador; campos com fonte de 16px (menor que isso o iOS dá
+zoom ao focar) e alvos de toque de 48px.
+
+As mensagens de erro continuam traduzidas para português de gente **no servidor**. O
+`qr_pedido` falava técnico, que é o certo para log e teste, e "token malformado" nunca foi
+frase para o cliente ler no celular; o `acesso-conta` de hoje segue a mesma regra.
 
 ## O que precisa estar configurado
 
@@ -455,7 +524,7 @@ malformado" não é frase para o cliente ler no celular.
 |---|---|---|
 | `SUPABASE_SERVICE_KEY` | Render | o router `/api/acesso/*` nem é montado |
 | `ACESSO_AGENTE_SEGREDO` | Render **e** no build do agente | a faixa nunca é publicada |
-| `QR_PEDIDO_SEGREDO` | Render | não dá para gerar QR do evento |
+| `QR_PEDIDO_SEGREDO` | Render | não dá para gerar QR do Pedido — que **saiu de circulação em 17/08/2026**. A variável continua exigida enquanto a função `acesso-pedido` estiver publicada |
 | `ACESSO_ELEVACAO_SEGREDO` | Render | o dono digita a senha e a tela responde "ACESSO_ELEVACAO_SEGREDO nao configurada neste servidor" (503) — continua somente leitura |
 
 `GET /api/acesso/saude` responde as quatro de uma vez — presença de cada variável e se o
@@ -515,7 +584,7 @@ migrações que vieram depois.
 | `reparo_acesso_total_publicado.sql` | recalcula `total_credenciais` de cada pedido a partir do que existe | sim |
 | `schema_acesso_freio_pareamento.sql` | a **nona** tabela, `_falhas_pareamento`: o freio de forca bruta do pareamento, que ate 16/08/2026 vivia na memoria do processo | sim |
 | `schema_acesso_setor_bloqueado.sql` | `bloqueado`/`bloqueado_motivo` nos setores: desligar o setor INTEIRO, e nao so uma faixa de numeros | sim |
-| `schema_acesso_entradas_unicas.sql` | a **decima** tabela, `_entradas_unicas`: e ela que decide, no banco, qual de dois portoes registrou a entrada primeiro | sim |
+| `schema_acesso_entradas_unicas.sql` | a **decima** tabela, `_entradas_unicas`: e ela que decide, no banco, qual de dois aparelhos registrou a entrada primeiro | sim |
 | `schema_acesso_contas.sql` | a **decima primeira** tabela, `_contas`: liga a conta do cliente ao `id_cliente` do ERP. Cria tambem `acesso_usuario_por_email()`, o unico caminho ate `auth.users` | sim |
 
 **Por que os dois primeiros não devem ser recolados:** os dois contêm
@@ -531,7 +600,7 @@ ingressos do 20508.
 | `_pedidos` | sal, token do QR e estado da publicação. Nasce **antes** do evento |
 | `_setores` | um por modelo; a lotação É a `quantidade` do ERP. Existe uma coluna `lotacao`, herdada do desenho de 13/08, **nula em todas as linhas e ignorada pela API e pela tela** — não use. `abre_em`/`fecha_em` = janela em que o setor vale; nulo = sempre |
 | `_bloqueios` | faixas de ingresso recusadas na porta: `de`, `ate`, `motivo`. A faixa é um intervalo de `credenciais.numero`, e o motivo é o que a portaria lê em voz alta |
-| `_entradas_unicas` | uma linha por credencial que JA ENTROU, so para setor de entrada unica. A chave primaria e o mecanismo: `ON CONFLICT DO NOTHING` decide a corrida entre dois portoes numa operacao so. Perguntar "ja existe?" e so entao gravar sao duas consultas que podem se cruzar, e os dois entram. Setor de reentrada nao tem linha aqui, por desenho |
+| `_entradas_unicas` | uma linha por credencial que JA ENTROU, so para setor de entrada unica. A chave primaria e o mecanismo: `ON CONFLICT DO NOTHING` decide a corrida entre dois aparelhos numa operacao so. Perguntar "ja existe?" e so entao gravar sao duas consultas que podem se cruzar, e os dois entram. Setor de reentrada nao tem linha aqui, por desenho |
 | `_falhas_pareamento` | uma linha por tentativa errada de pareamento, com `evento_id` e `momento`. Dez em cinco minutos fecham o pareamento daquele evento. Mora no banco, e não na memória do processo, porque a Edge Function é stateless — e porque enquanto as duas versões conviverem elas precisam contar no mesmo lugar |
 | `_credenciais` | `codigo_hash` sempre; `codigo_visivel` só quando `origem='cliente'`; `evento_id`/`setor_id` quando o pedido já foi reivindicado. **`origem` só separa agente de cliente**: o agente grava `qr_ideal` em toda credencial, inclusive nas de QR e barras comuns — o tipo de código se lê pela numeração do modelo, não por aqui |
 | `_dispositivos` | os aparelhos da portaria (parte 3a — já em uso pela tela do dono) |
@@ -666,8 +735,13 @@ setor. Backend em [acesso_interno.py](../acesso_interno.py), prefixo
 `/api/acesso/interno`; tela em [frontend/ideal-control.js](../frontend/ideal-control.js).
 
 Ela existe para **entregar o Ideal Control pré-configurado**. Antes dela, o cliente
-reivindicava o pedido e caía numa tela onde nada estava nomeado nem horário nenhum
-marcado; agora a gráfica deixa os portões prontos antes de mandar o QR.
+carregava o pedido e caía numa tela onde nada estava nomeado nem horário nenhum
+marcado; agora a gráfica deixa os aparelhos prontos antes de liberar o acesso dele.
+
+Desde 17/08/2026 esta tela ganhou também o bloco **"Acesso do cliente"**, que é por onde
+a gráfica abre a conta e mostra o QR de instalação — ver [A conta do cliente traz os
+pedidos](#a-conta-do-cliente-traz-os-pedidos-17082026). Foi o botão "QR do Pedido" que
+saiu daqui.
 
 **A porta é o papel, e não a senha.** Decisão do usuário em 15/08/2026: *"a edição será
 feita sem o uso de senha, basta estar logado na aplicação como ADM ou Atendimento"*. Isso
