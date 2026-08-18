@@ -69,6 +69,11 @@ sozinho ao imprimir, a gráfica libera o acesso do cliente no painel, e o client
 aplicativo, acha o pedido em **Meus Pedidos** e toca em **Carregar** para criar o evento.
 Até 17/08/2026 este passo era outro — o atendente gerava o **QR do Pedido** e o cliente o
 lia com a câmera; o QR saiu de circulação naquele dia, junto com o `evento.html`.
+Em 18/08/2026 o aplicativo ganhou identidade visual própria (v632) e uma leva de
+usabilidade (v635, a publicar): entrar libera 15 minutos (bilhete de conta), mostrar/ocultar
+senha, botões com estado de espera, engrenagem em seções recolhidas, nome do aparelho na
+hora e "Enviar por WhatsApp" no painel — plano em
+[docs/superpowers/plans/2026-08-18-ideal-control-usabilidade.md](superpowers/plans/2026-08-18-ideal-control-usabilidade.md).
 
 Publicada em 14/08/2026, com as três variáveis configuradas no backend de então e
 conferidas por fora. **Falta o teste de ponta a ponta com um pedido de verdade** — ver abaixo.

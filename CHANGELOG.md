@@ -4,11 +4,59 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v631** — 2026-08-18 | Agente **1.2.126**
+## Versão atual: **v634** — 2026-08-18 | Agente **1.2.129**
 
 ---
 
-## [v632 — 2026-08-18] *(a publicar)* — A identidade visual do Ideal Control
+## [v635 — 2026-08-18] *(a publicar)* — Usabilidade do Ideal Control
+
+Depois da identidade visual, o atrito. O que a leva tira do caminho:
+
+**Entrar libera 15 minutos.** O cliente entrava com e-mail e senha e, no primeiro Carregar,
+digitava a senha de novo. Agora a mesma digitação compra um **bilhete de conta**
+(`POST /minha-conta/elevar`, o mesmo segredo e formato da elevação de evento, sob o
+pseudo-evento `conta`, preso ao navegador). Dentro dos 15 minutos ele dispensa a digitação
+em duas portas — `POST /pedidos/{p}/carregar` e `POST /eventos/{id}/elevar` —, e a
+engrenagem o troca pelo bilhete **do evento**, que é o que toda escrita exige. Ele não
+substitui elevação nenhuma: a assinatura é recalculada sobre o id do evento, e `conta` não
+bate. Trocar a senha também compra o bilhete (com a nova); sair da conta o esquece; um
+bilhete de conta emitido para o navegador A não cunha elevação para o navegador B. Na
+tela: a caixa do Carregar esconde o campo de senha ("Você entrou há pouco: não precisa
+digitar a senha de novo") e o devolve com a frase certa se o bilhete venceu — inclusive
+quando o gerenciador de senhas preencheu o campo escondido por fora.
+
+**Mostrar/Ocultar** em todo campo de senha; e-mail sem auto-capitalizar; Enter em todo
+formulário (inclusive o número digitado na portaria).
+
+**Botões com estado de espera** — "Entrando…", "Salvando…", "Carregando…", "Conferindo…",
+"Gravando…", "Reabrindo…" — desabilitados durante a ida à rede, e voltando ao texto
+original mesmo quando dá erro. A `travarCampos()` da engrenagem, que corre a cada 20 s,
+não reabilita botão em espera: era assim que um segundo toque em "Salvar nome" mandava dois
+PATCH.
+
+**A casa mais falante.** A barra do evento ganhou subtítulo (data · local · "lê neste
+aparelho como Aparelho 1"); a casa vazia diz os três passos; o menu do olho diz a conta e
+a versão; Meus Pedidos tem "Atualizar"; e ao abrir a engrenagem dentro dos 15 minutos o
+botão da lista fica ocupado (`aria-busy`) em vez de deixar a tela morta.
+
+**A engrenagem em cinco seções recolhidas** — Evento, Aparelhos, Setores, Este aparelho,
+Zona de risco —, cada uma com o resumo no cabeçalho ("3 aparelhos · 1 revogado",
+"3 setores · 1 bloqueado"), o estado lembrado por evento, nada fechando por baixo do dono
+quando a tela redesenha. A engrenagem inteira cabe numa tela de celular.
+
+**O nome do aparelho na hora.** "Sim, usar este aparelho" pergunta o nome (opcional,
+sugere "Aparelho N") — tanto depois do Carregar quanto ao tocar na barra do evento, que
+antes só a senha confirmava: virar aparelho encerra a sessão da conta neste celular, e
+uma confirmação antes disso é proteção, não burocracia. O nome é cortado em 60 no dado,
+não só no `maxlength`.
+
+**No painel da gráfica, "Enviar por WhatsApp"** ao lado da senha provisória: abre o
+WhatsApp com e-mail, senha e link de instalação já escritos; vive e morre com a senha na
+tela, e nunca aparece no pedido errado.
+
+---
+
+## [v632 — 2026-08-18] — A identidade visual do Ideal Control
 
 O aplicativo funcionava, mas parecia um formulário: fundo chapado, botões genéricos, letra
 do sistema, e a primeira tela que o cliente via depois de ler o QR de instalação era um

@@ -487,6 +487,22 @@ o bilhete aberto; sair da conta o esquece.
 
 Vocabulário: **"Aparelho"**, não "Portão" — todo aparelho é portão.
 
+**Usabilidade (18/08/2026).** Junto com o bilhete de conta entraram, na mesma leva: o
+**Mostrar/Ocultar** em todo campo de senha (a senha provisória é `K7M2PQ9X` digitada no
+celular); botões com estado de espera ("Entrando…", "Salvando…", "Carregando…") que se
+desabilitam durante a ida à rede — e a `travarCampos()` da engrenagem não os reabilita
+enquanto esperam; a barra do evento com subtítulo (data · local · "lê neste aparelho como
+Aparelho 1"); a casa vazia em três passos; o e-mail da conta e a versão no menu do olho;
+"Atualizar" em Meus Pedidos; a **engrenagem em cinco seções recolhidas** (Evento,
+Aparelhos, Setores, Este aparelho, Zona de risco), cada uma com o resumo no cabeçalho, o
+estado lembrado por evento no `sessionStorage` (`ideal_control_secoes:<evento_id>`) e
+`Controle.abrirSecao/abrirTodasSecoes` para os testes; a **pergunta "usar este aparelho?"
+com o nome do aparelho** (opcional, sugere "Aparelho N") — tanto no "Sim" depois do
+Carregar quanto no toque na barra do evento, que antes só a senha confirmava e agora
+confirma antes de encerrar a sessão da conta neste celular; e, no painel da gráfica, o
+**"Enviar por WhatsApp"** ao lado da senha provisória (`wa.me/?text=` com e-mail, senha e
+link de instalação já escritos, vivendo e morrendo com a senha na tela).
+
 Ficam um release, sem chamador: `acesso-evento`, `acesso-pedido` e
 `POST /reivindicar`.
 
