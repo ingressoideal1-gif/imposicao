@@ -2552,6 +2552,51 @@
                         </div>
                     </div>
 
+                    <!-- ACESSO DO CLIENTE: onde o atendente libera o aplicativo
+                         para o cliente deste pedido, com senha provisoria, e o
+                         QR de instalacao (um so, generico). Decisao de 17/08/2026:
+                         o QR do Pedido saiu; a conta do cliente e que traz os pedidos. -->
+                    <div id="ic-acesso-secao" style="display:none;">
+                        <h3 class="ic-secao-titulo">Acesso do cliente</h3>
+                        <div class="card" style="padding:14px 16px;margin-bottom:20px;">
+                            <p id="ic-acesso-cliente" style="margin:0 0 8px;font-weight:600;"></p>
+                            <div id="ic-acesso-contas" class="ic-dim" style="margin-bottom:12px;"></div>
+                            <div class="ic-grade">
+                                <div class="ic-campo">
+                                    <label for="ic-acesso-email">E-mail do cliente</label>
+                                    <input id="ic-acesso-email" class="form-control" type="email" autocomplete="off">
+                                </div>
+                            </div>
+                            <button id="ic-acesso-liberar" class="btn btn-sm btn-primary">Liberar acesso</button>
+                            <p id="ic-acesso-aviso" class="ic-ajuda" style="display:none;"></p>
+
+                            <!-- A senha aparece UMA vez: o que fica gravado e o
+                                 hash dela, como no codigo de pareamento do
+                                 aparelho. Por isso a caixa diz isso em texto. -->
+                            <div id="ic-acesso-senha" class="card ic-codigo-caixa" style="display:none;">
+                                <h4 style="margin:0 0 6px;">Senha provisória — anote e passe ao cliente</h4>
+                                <p class="ic-ajuda" style="margin-bottom:10px;">
+                                    Ela aparece <strong>uma vez só</strong>. No primeiro acesso o
+                                    cliente escolhe a senha dele.
+                                </p>
+                                <div id="ic-acesso-senha-valor" class="ic-codigo-valor"></div>
+                                <button id="ic-acesso-senha-copiar" class="btn btn-sm btn-outline"
+                                        style="margin-top:10px;">Copiar a senha</button>
+                            </div>
+
+                            <hr style="margin:16px 0;border:0;border-top:1px solid rgba(255,255,255,.08);">
+                            <h4 style="margin:0 0 6px;">QR de instalação do aplicativo</h4>
+                            <p class="ic-ajuda">Um só para todos os clientes: leva à instalação do
+                               Ideal Control. Pode ir para material impresso e para o WhatsApp.</p>
+                            <canvas id="ic-qr-instalacao" width="180" height="180"
+                                    style="background:#fff;border-radius:8px;margin-top:10px;"></canvas>
+                            <p style="margin:8px 0 0;">
+                                <code id="ic-qr-link"></code>
+                                <button id="ic-qr-copiar" class="btn btn-sm btn-ghost">Copiar link</button>
+                            </p>
+                        </div>
+                    </div>
+
                     <!-- Dados do evento -->
                     <p id="ic-sem-evento" class="empty-state" style="display:none;">
                         Este pedido ainda não virou evento. O cliente carrega o pedido no

@@ -321,6 +321,7 @@
             + (p.evento ? ' · ' + p.evento.nome_evento : '');
 
         desenharSituacao();
+        desenharAcessoDoCliente();
         // A seção do público aparece com o BOTÃO, e não com os números: eles
         // só são buscados se alguém pedir.
         $('ic-dashboard-secao').style.display = p.tem_dashboard ? '' : 'none';
@@ -388,6 +389,270 @@
         s.textContent = rotulo;
         pai.appendChild(s);
         return s;
+    }
+
+    // ── Acesso do cliente ──────────────────────────────────────────
+
+    /**
+     * O endereço único de instalação do aplicativo.
+     *
+     * O servidor manda o dele em `GET /instalacao`; este aqui é o mesmo valor,
+     * repetido de propósito. O QR precisa aparecer NA HORA em que o bloco é
+     * desenhado — esperar uma ida à rede deixaria um quadrado branco na tela
+     * de quem só quer mostrar o código ao cliente que está no balcão. A
+     * resposta do servidor troca este valor depois, se um dia divergirem.
+     */
+    var URL_INSTALACAO_PADRAO = 'https://ideal-imposition.vercel.app/ic/';
+    var urlInstalacao = URL_INSTALACAO_PADRAO;
+    var jaPerguntouInstalacao = false;
+
+    /**
+     * Copiar sem depender de configuração do navegador.
+     *
+     * Cada estação da gráfica usa um navegador diferente, e nenhuma solução
+     * daqui pode pedir permissão ou flag. `navigator.clipboard` é o caminho
+     * bom; quando ele não existe ou é recusado, o `execCommand` antigo ainda
+     * funciona dentro de um clique. Só se os dois falharem é que a tela pede
+     * para copiar à mão — e aí o valor continua na tela, para selecionar.
+     */
+    function copiar(conteudo, avisoOk) {
+        return Promise.resolve().then(function () {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(conteudo);
+            }
+            return copiarNaMarra(conteudo);
+        }).catch(function () {
+            return copiarNaMarra(conteudo);
+        }).then(function () {
+            avisar(avisoOk, 'success');
+        }).catch(function () {
+            avisar('Não consegui copiar; selecione o texto na tela e copie à mão.',
+                   'warning');
+        });
+    }
+
+    function copiarNaMarra(conteudo) {
+        var caixa = document.createElement('textarea');
+        caixa.value = conteudo;
+        caixa.setAttribute('readonly', 'readonly');
+        caixa.style.position = 'fixed';
+        caixa.style.top = '-1000px';
+        document.body.appendChild(caixa);
+        caixa.select();
+        var deu = false;
+        try { deu = document.execCommand('copy'); } catch (e) { deu = false; }
+        document.body.removeChild(caixa);
+        if (!deu) { throw new Error('a cópia não foi aceita'); }
+    }
+
+    /**
+     * O QR de instalação — um só, genérico, igual para todos os clientes.
+     *
+     * A folga branca em volta é desenhada AQUI. O `renderQRCodeOnCtx` nasceu
+     * para o papel, onde a margem é o próprio ingresso em volta do elemento, e
+     * por isso ele desenha com margem zero, centrado em (x, y). Na tela não há
+     * ingresso nenhum em volta: sem esta folga o código encosta na borda do
+     * canvas e o celular do cliente não lê.
+     */
+    function desenharQrInstalacao(url) {
+        $('ic-qr-link').textContent = url;
+        var canvas = $('ic-qr-instalacao');
+        if (canvas && canvas.getContext && typeof window.renderQRCodeOnCtx === 'function') {
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            var lado = Math.min(canvas.width, canvas.height) - 32;
+            window.renderQRCodeOnCtx(ctx, url, canvas.width / 2, canvas.height / 2, lado);
+        }
+        $('ic-qr-copiar').onclick = function () { copiar(url, 'Link copiado.'); };
+    }
+
+    /**
+     * O bloco "Acesso do cliente".
+     *
+     * Decisão de 17/08/2026: o QR do Pedido saiu da tela. Quem traz os pedidos
+     * para o aplicativo passou a ser a CONTA do cliente — a mesma que ele já
+     * tem no ERP Vibe, quando tem. Este bloco é a porta por onde a gráfica
+     * abre esse acesso, e some inteiro quando o pedido não tem cliente no ERP:
+     * sem e-mail não há o que liberar, e um formulário vazio só faria o
+     * atendente tentar.
+     */
+    function desenharAcessoDoCliente() {
+        var p = estado.painel;
+        var c = p && p.cliente;
+        var secao = $('ic-acesso-secao');
+        secao.style.display = c ? '' : 'none';
+        if (!c) { return; }
+
+        $('ic-acesso-cliente').textContent = c.nome + ' (cliente ' + c.id_cliente + ')'
+            + (c.email ? ' · ' + c.email : '');
+
+        var contas = $('ic-acesso-contas');
+        contas.innerHTML = '';
+        var lista = c.contas || [];
+        if (!lista.length) {
+            texto(contas, 'div', 'Sem acesso ainda. Confira o e-mail abaixo e toque '
+                  + 'em "Liberar acesso".');
+        }
+        lista.forEach(function (ct) { contas.appendChild(linhaDeConta(ct)); });
+
+        $('ic-acesso-email').value = c.email || '';
+        $('ic-acesso-senha').style.display = 'none';
+        $('ic-acesso-senha-valor').textContent = '';
+        $('ic-acesso-aviso').style.display = 'none';
+        $('ic-acesso-aviso').textContent = '';
+        $('ic-acesso-liberar').disabled = false;
+        $('ic-acesso-liberar').onclick = liberarAcesso;
+
+        desenharQrInstalacao(urlInstalacao);
+        if (!jaPerguntouInstalacao) {
+            jaPerguntouInstalacao = true;
+            pedir('/instalacao').then(function (r) {
+                if (r && r.url && r.url !== urlInstalacao) {
+                    urlInstalacao = r.url;
+                    if ($('ic-acesso-secao').style.display !== 'none') {
+                        desenharQrInstalacao(urlInstalacao);
+                    }
+                }
+            }).catch(function () { /* fica o endereço padrão, que é o mesmo */ });
+        }
+    }
+
+    function linhaDeConta(ct) {
+        var linha = document.createElement('div');
+        linha.className = 'ic-conta';
+        var criadoEm = ct.criado_em ? new Date(ct.criado_em) : null;
+        texto(linha, 'span',
+              (ct.criada_aqui ? 'Acesso liberado aqui' : 'Conta do Vibe ligada')
+              + ' para ' + ct.email
+              + (criadoEm && !isNaN(criadoEm.getTime())
+                 ? ' em ' + criadoEm.toLocaleDateString('pt-BR') : '')
+              + (ct.senha_provisoria ? ' · ainda com a senha provisória' : ''));
+        if (ct.criada_aqui) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn btn-sm btn-outline';
+            b.style.marginLeft = '8px';
+            b.textContent = 'Nova senha provisória';
+            b.addEventListener('click', function () { novaSenhaProvisoria(ct, b); });
+            linha.appendChild(b);
+        } else {
+            // A gráfica não mexe na senha de uma conta que já era do cliente no
+            // ERP: ela não nasceu aqui, e trocar a senha dela derrubaria o
+            // acesso da pessoa ao Vibe.
+            texto(linha, 'span', ' — entra com a senha que já usa', 'ic-dim');
+        }
+        return linha;
+    }
+
+    /**
+     * A senha provisória aparece UMA vez, como o código de pareamento do
+     * aparelho — e pelo mesmo motivo: o que fica guardado é o hash dela. Se a
+     * tela não disser isso em texto, o atendente fecha o pedido achando que
+     * consulta depois.
+     */
+    function mostrarSenhaProvisoria(senha) {
+        $('ic-acesso-senha-valor').textContent = senha;
+        $('ic-acesso-senha').style.display = '';
+        $('ic-acesso-senha-copiar').onclick = function () {
+            copiar(senha, 'Senha copiada.');
+        };
+    }
+
+    function liberarAcesso() {
+        var c = estado.painel && estado.painel.cliente;
+        if (!c) { return Promise.resolve(); }
+        var aviso = $('ic-acesso-aviso');
+        var email = ($('ic-acesso-email').value || '').trim().toLowerCase();
+        if (!email) {
+            aviso.textContent = 'Escreva o e-mail do cliente.';
+            aviso.style.display = '';
+            return Promise.resolve();
+        }
+        $('ic-acesso-liberar').disabled = true;
+        aviso.style.display = 'none';
+        return pedir('/clientes/' + c.id_cliente + '/contas', {
+            method: 'POST',
+            body: JSON.stringify({ email: email })
+        }).then(function (r) {
+            var avisoTexto = '';
+            if (r && r.ja_tinha_conta) {
+                avisoTexto = 'Esse e-mail já tem conta; ela foi ligada a este cliente '
+                    + 'e a pessoa entra com a senha que já usa.';
+            } else if (r && r.senha_provisoria) {
+                mostrarSenhaProvisoria(r.senha_provisoria);
+            }
+            // Relê o pedido para a lista de contas se atualizar. O redesenho
+            // limpa a caixa da senha, então ela é reposta logo depois: perder a
+            // senha provisória por causa de um refresh seria perdê-la de vez.
+            return pedir('/pedidos/' + estado.pedido).then(function (novo) {
+                estado.painel = novo;
+                var senhaNaTela = $('ic-acesso-senha').style.display !== 'none'
+                    ? $('ic-acesso-senha-valor').textContent : '';
+                desenharAcessoDoCliente();
+                $('ic-acesso-email').value = (r && r.email) || email;
+                if (senhaNaTela) { mostrarSenhaProvisoria(senhaNaTela); }
+                if (avisoTexto) {
+                    aviso.textContent = avisoTexto;
+                    aviso.style.display = '';
+                }
+            });
+        }).catch(function (e) {
+            $('ic-acesso-liberar').disabled = false;
+            aviso.textContent = (e && e.message) || 'Não consegui liberar o acesso agora.';
+            aviso.style.display = '';
+        });
+    }
+
+    /**
+     * Gerar outra senha provisória — com a pergunta DENTRO da tela.
+     *
+     * Nada de `confirm()`: a caixa do navegador é a mesma para tudo, não diz de
+     * qual conta se trata, e cada estação da gráfica usa um navegador
+     * diferente. Aqui o próprio botão vira a pergunta, com "Sim, gerar" e
+     * "Não" ao lado — e a pergunta nomeia a conta que perde a senha atual.
+     */
+    function novaSenhaProvisoria(conta, botao) {
+        var pai = botao.parentNode;
+        botao.style.display = 'none';
+
+        var pergunta = document.createElement('span');
+        pergunta.className = 'ic-dim';
+        pergunta.style.marginLeft = '8px';
+        pergunta.textContent = 'A senha atual de ' + conta.email
+            + ' deixa de valer. Gerar outra? ';
+        var sim = document.createElement('button');
+        sim.type = 'button';
+        sim.className = 'btn btn-sm btn-primary';
+        sim.textContent = 'Sim, gerar';
+        var nao = document.createElement('button');
+        nao.type = 'button';
+        nao.className = 'btn btn-sm btn-ghost';
+        nao.style.marginLeft = '6px';
+        nao.textContent = 'Não';
+        pai.appendChild(pergunta);
+        pai.appendChild(sim);
+        pai.appendChild(nao);
+
+        function limpar() {
+            [pergunta, sim, nao].forEach(function (el) {
+                if (el.parentNode) { el.parentNode.removeChild(el); }
+            });
+            botao.style.display = '';
+        }
+        nao.addEventListener('click', limpar);
+        sim.addEventListener('click', function () {
+            sim.disabled = true;
+            pedir('/contas/' + conta.auth_user_id + '/nova-senha', {
+                method: 'POST', body: '{}'
+            }).then(function (r) {
+                limpar();
+                mostrarSenhaProvisoria(r.senha_provisoria);
+            }).catch(function (e) {
+                limpar();
+                avisar((e && e.message) || 'Não consegui gerar a senha agora.', 'error');
+            });
+        });
     }
 
     /**

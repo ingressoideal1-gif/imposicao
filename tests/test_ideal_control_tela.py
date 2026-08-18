@@ -272,17 +272,39 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
 
 
 # Um backend de mentira que so responde ao painel e a lista de pedidos.
+#
+# `window.__respostas` e a porta para o resto: o teste poe ali a resposta de um
+# caminho especifico -- `/clientes/14/contas`, por exemplo -- e o resto do
+# arnes continua igual. Sem isso, cada teste de uma rota nova teria de
+# reescrever o desvio inteiro, e um deles envelheceria em silencio no dia em
+# que o formato do painel mudasse.
+#
+# `window.__painel` e o MESMO objeto que `window.PAINEL`, por `defineProperty`:
+# alguns testes reatribuem um nome, outros mutam o outro, e um alias comum
+# deixaria os dois discordando na metade dos casos.
 SERVIDOR = """
     const chamadas = [];
+    window.__respostas = {};
+    Object.defineProperty(window, '__painel', {
+        configurable: true,
+        get: () => window.PAINEL,
+        set: (v) => { window.PAINEL = v; }
+    });
     IdealControl._pedirParaTeste = async (caminho, opcoes) => {
         chamadas.push({ caminho, metodo: (opcoes || {}).method || 'GET',
                         corpo: (opcoes || {}).body ? JSON.parse(opcoes.body) : null });
+        if (Object.prototype.hasOwnProperty.call(window.__respostas, caminho)) {
+            const r = window.__respostas[caminho];
+            if (r instanceof Error) { throw r; }
+            return r;
+        }
         if (caminho.startsWith('/pedidos?')) return { pedidos: [] };
         if (caminho.indexOf('/dashboard') >= 0) return window.DASHBOARD;
         if (caminho.startsWith('/pedidos/')) return window.PAINEL;
         return { ok: true };
     };
     window._chamadas = chamadas;
+    window.__chamadas = chamadas;
     IdealControl.iniciar();
 """
 
@@ -1011,3 +1033,66 @@ def test_abrir_o_pedido_com_o_config_real_chega_ao_motor():
     assert saida["carregando"] == "none"
     assert saida["conteudo"] != "none"
     assert "Baile do Hawaii" in saida["titulo"]
+
+
+# ── Acesso do cliente ───────────────────────────────────────────────────────
+#
+# Decisao de 17/08/2026: o QR do Pedido saiu, e quem traz os pedidos para o
+# aplicativo e a CONTA do cliente. O bloco abaixo e a porta que a grafica usa
+# para abrir essa conta -- e a senha provisoria que sai dali aparece UMA vez.
+
+CLIENTE = {"id_cliente": 14, "nome": "DANIEL MOREIRA", "email": "daniel@exemplo.com",
+           "contas": [{"auth_user_id": "u-1", "email": "maria@exemplo.com", "criada_aqui": True,
+                       "senha_provisoria": False, "criado_em": "2026-08-17T10:00:00Z"}]}
+
+
+def test_o_bloco_acesso_do_cliente_mostra_o_cliente_e_as_contas():
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        await IdealControl.abrirPedido(20272);
+        const bloco = document.getElementById('ic-acesso-secao');
+        return { visivel: bloco.style.display !== 'none', texto: bloco.textContent,
+                 email: document.getElementById('ic-acesso-email').value,
+                 link: document.getElementById('ic-qr-link').textContent };
+    """ % json.dumps(CLIENTE))
+    assert saida["visivel"] is True
+    assert "DANIEL MOREIRA" in saida["texto"] and "maria@exemplo.com" in saida["texto"]
+    assert "Nova senha provisória" in saida["texto"]
+    assert saida["email"] == "daniel@exemplo.com"
+    assert saida["link"] == "https://ideal-imposition.vercel.app/ic/"
+
+
+def test_liberar_acesso_mostra_a_senha_provisoria_uma_vez():
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/clientes/14/contas'] = { email: 'daniel@exemplo.com', ja_tinha_conta: false, senha_provisoria: 'K7M2PQ9X' };
+        await IdealControl.abrirPedido(20272);
+        document.getElementById('ic-acesso-liberar').click();
+        await new Promise(r => setTimeout(r, 60));
+        const senha = document.getElementById('ic-acesso-senha');
+        return { visivel: senha.style.display !== 'none', texto: senha.textContent,
+                 corpo: window.__chamadas.find(c => c.caminho === '/clientes/14/contas').corpo };
+    """ % json.dumps(CLIENTE))
+    assert saida["visivel"] and "K7M2PQ9X" in saida["texto"]
+    assert saida["corpo"] == {"email": "daniel@exemplo.com"}
+
+
+def test_email_que_ja_tinha_conta_so_liga_e_diz_isso():
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/clientes/14/contas'] = { email: 'daniel@exemplo.com', ja_tinha_conta: true, senha_provisoria: null };
+        await IdealControl.abrirPedido(20272);
+        document.getElementById('ic-acesso-liberar').click();
+        await new Promise(r => setTimeout(r, 60));
+        return document.getElementById('ic-acesso-secao').textContent;
+    """ % json.dumps(CLIENTE))
+    assert "já tem conta" in saida and "senha que já usa" in saida
+
+
+def test_o_bloco_some_quando_o_pedido_nao_tem_cliente_no_erp():
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = null;
+        await IdealControl.abrirPedido(20272);
+        return document.getElementById('ic-acesso-secao').style.display;
+    """)
+    assert saida == "none"
