@@ -500,3 +500,10 @@ button.perigo {
 .selo-impressao.nao { color: var(--dim); border-color: rgba(148,163,184,.4); }
 .pedido-acoes { display: flex; justify-content: flex-end; margin-top: 4px; }
 .pedido-acoes button { width: auto; min-width: 140px; }
+
+/* A caixa do Carregar. Os campos ja vem da regra `input, select` la de cima --
+   nao ha nada de especial neles aqui, e uma segunda regra so criaria duas
+   verdades sobre a mesma caixa de texto. O que falta e o titulo na medida das
+   outras caixas de cartao, e uma folga entre a ficha e a senha. */
+#caixa-carregar h1 { font-size: 1.35rem; margin: 0 0 6px; }
+#caixa-carregar .config-ajuda { margin-top: 14px; }

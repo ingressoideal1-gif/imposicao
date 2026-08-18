@@ -110,6 +110,40 @@
         <p id="sem-pedidos" class="aviso sumindo" role="alert"></p>
     </div>
 
+    <!-- A CAIXA DO CARREGAR. Nome, data e local vem da ficha da arte
+         (`pedidos_artes`), editaveis. "Juntar ao evento" existe para o pedido
+         complementar nao virar um segundo evento. A senha vai junto: carregar e
+         configuracao, e e essa senha que deixa o passo seguinte (ligar este
+         aparelho) acontecer sem pedir outra.
+
+         NAO e um setimo estado de topo: e um cartao DENTRO de Meus Pedidos.
+         Enquanto ele esta na tela, `#meus-pedidos` fica escondido, e o
+         "Cancelar" devolve a lista de pedidos -- nao a tela inicial. Mesmo
+         assim ele entra no `DOS_OUTROS` do `conta.js`, porque uma tela de conta
+         que abra por cima dele precisa esconde-lo, e o `NA_FRENTE` de la
+         precisa conta-lo como "esta na frente" para nao devolver a casa por
+         baixo dele. -->
+    <div id="caixa-carregar" class="cartao sumindo">
+        <h1 id="carregar-titulo">Carregar o pedido</h1>
+        <label for="carregar-destino">Onde</label>
+        <select id="carregar-destino"></select>
+        <div id="carregar-campos-novo">
+            <label for="carregar-nome">Nome do evento</label>
+            <input id="carregar-nome" type="text" maxlength="120">
+            <label for="carregar-data">Data e hora</label>
+            <input id="carregar-data" type="datetime-local">
+            <label for="carregar-local">Local</label>
+            <input id="carregar-local" type="text" maxlength="200">
+        </div>
+        <p class="config-ajuda">Cada modelo do pedido vira um setor do evento. Setor ainda não impresso passa a valer quando a gráfica imprimir.</p>
+        <p class="config-ajuda">Conta: <strong id="carregar-email"></strong></p>
+        <label for="carregar-senha">Sua senha</label>
+        <input id="carregar-senha" type="password" autocomplete="off">
+        <button id="btn-carregar-confirmar">Carregar</button>
+        <button id="btn-carregar-cancelar" class="secundario">Cancelar</button>
+        <div id="erro-carregar" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
+    </div>
+
     <!-- O MENU GERAL, atrás do olho do cabeçalho.
 
          É um dos seis estados de topo desta página, e como os outros nunca
@@ -442,6 +476,10 @@
      `conta.js` porque ele chama `meusPedidos.abrir()` quando a conta ainda não
      tem evento nenhum. -->
 <script src="meus-pedidos.js?v=630"></script>
+<!-- A caixa do Carregar: a ficha da arte, a senha, e a pergunta do aparelho.
+     Depois do `meus-pedidos.js` porque é de lá que ela é aberta, e ela devolve
+     a lista de pedidos ao fechar. -->
+<script src="carregar-pedido.js?v=630"></script>
 <script src="caixa-confirmar.js?v=630"></script>
 <script src="menu-geral.js?v=630"></script>
 <script src="fila-presa.js?v=630"></script>

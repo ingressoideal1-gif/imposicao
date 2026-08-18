@@ -157,6 +157,10 @@ PAINEL_ARQUIVOS = [
     # "Meus Pedidos" (17/08/2026): a barra que era "Novo Evento" deixou de
     # abrir a camera e passou a listar os pedidos ja impressos do cliente.
     "meus-pedidos.js",
+    # A caixa do Carregar: a ficha da arte, a senha e a pergunta do aparelho.
+    # Sai junto com o `meus-pedidos.js`, que e quem a abre -- um dos dois de
+    # fora e a estacao servindo uma tela cujo botao nao faz nada.
+    "carregar-pedido.js",
     # O deposito entra JUNTO com eles, embora seja da portaria: antes de trocar
     # de evento, o "virar portao" pergunta a ele quantas leituras ainda nao
     # subiram, e sem essa conta a troca perderia contagem que o cliente pagou

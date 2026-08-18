@@ -57,8 +57,14 @@
     // como "esta na frente" quando ela fecha, para o `esconderEntrar()` nao
     // devolver a tela inicial POR BAIXO de Meus Pedidos. Estar aqui da os dois
     // de uma vez, porque o `NA_FRENTE` abaixo e montado a partir desta lista.
+    // `caixa-carregar` NAO e um setimo estado: e um cartao DENTRO de Meus
+    // Pedidos, e por isso os "seis" acima continuam sendo seis. Ele entra aqui
+    // pelos mesmos DOIS papeis: ser escondido quando uma tela de conta abre --
+    // senao o login nasceria por cima da caixa com a senha do dono digitada
+    // dentro --, e contar como "esta na frente" quando ela fecha, para a tela
+    // inicial nao voltar POR BAIXO dele.
     var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento'];
-    var DOS_OUTROS = ['menu-geral', 'engrenagem', 'meus-pedidos'];
+    var DOS_OUTROS = ['menu-geral', 'engrenagem', 'meus-pedidos', 'caixa-carregar'];
     // TUDO o que pode estar na frente da tela inicial -- os estados de fora e
     // as DUAS telas deste arquivo.
     //
