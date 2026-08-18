@@ -4,11 +4,32 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v634** — 2026-08-18 | Agente **1.2.129**
+## Versão atual: **v636** — 2026-08-18 | Agente **1.2.131**
 
 ---
 
-## [v635 — 2026-08-18] *(a publicar)* — Usabilidade do Ideal Control
+## [v637 — 2026-08-18] *(a publicar)* — A casa vazia diz onde estão os eventos
+
+Um cliente entrou pela primeira vez e leu **"Nenhum evento aqui ainda"** — com quatro
+eventos na conta dele, todos finalizados, a um toque dali no menu do olho. A frase era
+verdade sobre a lista e mentira sobre a conta, e a leitura natural foi que o cadastro não
+tinha funcionado.
+
+Agora, quando a lista está vazia **e** existem finalizados, a casa vazia diz quantos são
+("Você tem 4 eventos finalizados. Para usar um deles de novo, reabra ele.") e traz o botão
+**Ver eventos finalizados**, que abre o menu direto neles. Sem nenhum finalizado nada muda:
+os três passos já são a saída de quem nunca teve evento.
+
+---
+
+## [v636 — 2026-08-18] — A lista de produtos do ADM
+
+A lista de produtos do ADM passou a ser a mesma que a Lista de Arte e o Painel de Produção
+mostram. *(Entrada resumida: a leva saiu por outra sessão de trabalho.)*
+
+---
+
+## [v635 — 2026-08-18] — Usabilidade do Ideal Control
 
 Depois da identidade visual, o atrito. O que a leva tira do caminho:
 
