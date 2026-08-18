@@ -4,11 +4,32 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v636** — 2026-08-18 | Agente **1.2.131**
+## Versão atual: **v638** — 2026-08-18 | Agente **1.2.133**
 
 ---
 
-## [v637 — 2026-08-18] *(a publicar)* — O aparelho, o nome dele, a tela de leitura e o painel da gráfica
+## [v639 — 2026-08-18] *(a publicar)* — O menu Ideal Control da gráfica
+
+**A busca é pelo número do cliente.** O atendente atende o telefone sabendo quem está do
+outro lado; o número do pedido ele teria de perguntar, e o cliente muitas vezes não tem em
+mãos. Digitar o número do cliente abre quem ele é, as contas dele, o bloco de liberar acesso
+e a lista dos pedidos dele que têm controle — tocar num deles abre o painel de configuração,
+como antes.
+
+**O que o cliente salva no aplicativo agora aparece aqui, e vice-versa.** Faltavam duas
+coisas, as duas do lado do cliente: a **situação do evento** (ele inativa e finaliza pela
+engrenagem do celular, e a gráfica não via nem uma coisa nem outra) e o **setor bloqueado
+inteiro**, com o motivo que o porteiro lê em voz alta. As duas agora aparecem no painel da
+gráfica, e podem ser mudadas de lá — é a mesma coluna nos dois lados.
+
+**Dois caminhos mortos saíram.** "Criar um aparelho" e "Gerar código de pareamento"
+produziam um código de seis caracteres que **não tinha mais onde ser digitado** desde
+16/08/2026, quando a tela que o pedia saiu da portaria. No lugar deles, a tela explica como
+um aparelho entra hoje: o próprio cliente abre o evento no celular e toca na barra.
+
+---
+
+## [v637 e v638 — 2026-08-18] — O aparelho, o nome dele, e a tela de leitura
 
 **"Revogar" saiu.** Ele desligava o aparelho e deixava o cartão na lista para sempre — que não
 é nenhuma das duas coisas que se quer fazer com um portão. No lugar dele, as quatro opções que
@@ -31,25 +52,6 @@ e o servidor liga as linhas do mesmo aparelho pela coluna nova `navegador_id`: r
 portão renomeia os outros do mesmo cliente. Ver `sql/schema_acesso_nome_do_dispositivo.sql`.
 
 Os dois arquivos SQL já foram rodados no banco.
-
-### O menu Ideal Control da gráfica: busca por cliente, e o espelho
-
-**A busca é pelo número do cliente.** O atendente atende o telefone sabendo quem está do
-outro lado; o número do pedido ele teria de perguntar, e o cliente muitas vezes não tem em
-mãos. Digitar o número do cliente abre quem ele é, as contas dele, o bloco de liberar acesso
-e a lista dos pedidos dele que têm controle — tocar num deles abre o painel de configuração,
-como antes.
-
-**O que o cliente salva no aplicativo agora aparece aqui, e vice-versa.** Faltavam duas
-coisas, as duas do lado do cliente: a **situação do evento** (ele inativa e finaliza pela
-engrenagem do celular, e a gráfica não via nem uma coisa nem outra) e o **setor bloqueado
-inteiro**, com o motivo que o porteiro lê em voz alta. As duas agora aparecem no painel da
-gráfica, e podem ser mudadas de lá — é a mesma coluna nos dois lados.
-
-**Dois caminhos mortos saíram.** "Criar um aparelho" e "Gerar código de pareamento"
-produziam um código de seis caracteres que **não tinha mais onde ser digitado** desde
-16/08/2026, quando a tela que o pedia saiu da portaria. No lugar deles, a tela explica como
-um aparelho entra hoje: o próprio cliente abre o evento no celular e toca na barra.
 
 ### A tela de leitura: o setor em destaque, e o que se toca na base
 
