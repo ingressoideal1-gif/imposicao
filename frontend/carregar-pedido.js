@@ -19,16 +19,58 @@
  * `caixa-carregar` esta no `DOS_OUTROS` do `conta.js` pelos dois papeis de
  * sempre: ser escondida quando uma tela de conta abre, e contar como "esta na
  * frente" quando ela fecha.
+ *
+ * ## O "Sim" NAO e um atalho para `virarPortao.criar`
+ *
+ * Ligar este aparelho a um evento tem duas travas que moram no
+ * `virar-portao.js`, e as duas valem aqui: um aparelho que ja le OUTRO evento
+ * com leitura pendente nao pode trocar de token -- as leituras do evento
+ * anterior subiriam contadas no evento novo, e a contagem que o cliente pagou
+ * para ter sai errada sem ninguem descobrir --, e um aparelho que ja le o
+ * evento de DESTINO nao pode criar um segundo portao, que apareceria na lista
+ * do dono como um "Aparelho 2" indistinguivel e deixaria o token antigo orfao.
+ *
+ * Por isso o que este arquivo pergunta depende do que ele encontra no
+ * chaveiro. Ver `depoisDeCarregar`.
+ *
+ * ## Sem guarda de `window.<modulo>`
+ *
+ * Este arquivo chama `conta`, `meusPedidos`, `caixaConfirmar`, `virarPortao`,
+ * `chaveiro`, `portariaDeposito`, `Controle` e `AcessoConta` direto, sem
+ * `if (window.X)`. A pagina que o carrega e uma so -- o `controle.html` --, e
+ * quem garante que os donos desses globais estao nela e um teste, o
+ * `test_a_pagina_carrega_todo_modulo_que_os_scripts_dela_usam`. Meia guarda
+ * seria pior que nenhuma: ela transforma "faltou um `<script>`" num caminho
+ * silencioso -- a caixa abrindo por cima da casa, ou o bilhete de 15 minutos
+ * indo para o lixo -- em vez de um erro que aparece.
  */
 (function () {
     'use strict';
     var $ = function (id) { return document.getElementById(id); };
 
+    /** O erro que ainda cabe NA CAIXA, porque ela continua na tela. */
     function erro(texto) {
         var e = $('erro-carregar');
         e.textContent = texto;              // frase do servidor ou nossa: TEXTO
         e.classList.remove('sumindo');
         $('btn-carregar-confirmar').disabled = false;
+    }
+
+    /**
+     * A frase de uma falha do POST.
+     *
+     * O `acesso-conta.js` inventa um "Erro N" quando o servidor nao manda frase
+     * nenhuma, e esse e o unico texto que nao pode chegar ao cliente: ele nao
+     * informa nem oferece saida. A comparacao e EXATA com o texto inventado --
+     * adivinhar "isto parece uma frase?" jogaria fora mensagem legitima e curta
+     * do servidor, como "senha nao confere". Mesma escolha do `meus-pedidos.js`.
+     */
+    function fraseDoErro(e) {
+        if (!e || !e.status) {
+            return 'Não consegui carregar o pedido agora. Confira a internet e tente de novo.';
+        }
+        if (e.message && e.message !== 'Erro ' + e.status) { return e.message; }
+        return 'Não consegui carregar o pedido agora (código ' + e.status + ').';
     }
 
     function opcao(select, valor, rotulo) {
@@ -87,13 +129,16 @@
         window.conta.esconderTelaInicial(true);
         $('carregar-titulo').textContent = 'Carregar o pedido ' + pedido;
         $('carregar-nome').value = dados.nome_evento || ('Pedido ' + pedido);
-        $('carregar-data').value = dados.data_evento && window.Controle && window.Controle.deISOParaCampo
+        $('carregar-data').value = dados.data_evento
             ? window.Controle.deISOParaCampo(dados.data_evento) : '';
         $('carregar-local').value = dados.local_evento || '';
         $('carregar-email').textContent = (sessao.user && sessao.user.email) || emailLembrado();
         $('carregar-senha').value = '';
         $('erro-carregar').classList.add('sumindo');
         $('btn-carregar-confirmar').disabled = false;
+        // Reposto a cada abertura: quem escolheu "Juntar ao evento", cancelou e
+        // abriu a caixa de novo encontraria a ficha escondida, sem gesto nenhum
+        // que a trouxesse de volta.
         $('carregar-campos-novo').classList.remove('sumindo');
         $('caixa-carregar').classList.remove('sumindo');
         // `onclick`, e nao `addEventListener`: abrir a caixa para um segundo
@@ -107,6 +152,12 @@
         };
         $('btn-carregar-cancelar').onclick = function () { fechar(); };
         $('btn-carregar-confirmar').onclick = function () { confirmar(pedido, sessao); };
+        // A senha e o ultimo campo, e o Enter dela e o gesto natural de
+        // terminar. Sem isto o teclado do celular oferece "Ir" e nada acontece.
+        // Mesma ligacao que a caixa de senha da configuracao ja tem.
+        $('carregar-senha').onkeydown = function (ev) {
+            if (ev.key === 'Enter') { $('btn-carregar-confirmar').click(); }
+        };
         return preencherDestino(sessao).then(function () { $('carregar-senha').focus(); });
     }
 
@@ -120,8 +171,7 @@
     function fechar() {
         $('caixa-carregar').classList.add('sumindo');
         $('carregar-senha').value = '';     // a senha nao fica na memoria do DOM
-        if (window.meusPedidos) { return window.meusPedidos.abrir(); }
-        window.conta.esconderTelaInicial(false);
+        return window.meusPedidos.abrir();
     }
 
     /**
@@ -130,16 +180,63 @@
      * o servidor ja o tirou).
      */
     function voltarParaACasa() {
-        if (window.meusPedidos) { return window.meusPedidos.fechar(); }
-        window.conta.esconderTelaInicial(false);
+        return window.meusPedidos.fechar();
     }
 
-    /** O unico aviso que sobrevive fora dos blocos de estado. */
+    /**
+     * O unico aviso que sobrevive fora dos blocos de estado.
+     *
+     * Da confirmacao em diante a caixa JA saiu da tela, e escrever no
+     * `#erro-carregar` seria escrever numa caixa invisivel -- o mesmo defeito
+     * que o `#aviso-gravacao` da engrenagem ja teve.
+     */
     function avisarNaCasa(texto) {
         var aviso = $('erro-arranque');
         if (!aviso) { return; }
         aviso.textContent = texto;
         aviso.classList.remove('sumindo');
+    }
+
+    /** "Evento criado." ou "Pedido juntado ao evento X." -- sempre com ponto. */
+    function fraseDoResultado(r) {
+        if (r.novo) { return 'Evento criado. '; }
+        return r.nome_evento
+            ? 'Pedido juntado ao evento ' + r.nome_evento + '. '
+            : 'Pedido juntado ao evento. ';
+    }
+
+    /**
+     * Quantas leituras do OUTRO evento ainda nao subiram.
+     *
+     * Zero quando este aparelho nao le nada, e zero tambem quando ele ja le o
+     * evento de destino -- nesse caso a fila e DELE, e travar ali pararia o
+     * portao por causa de um 4G ruim, que e exatamente quando a fila cresce. A
+     * mesma leitura que o `decidirTroca` faz.
+     *
+     * `-1` quando NAO DA para conferir. Sem o deposito na pagina, a resposta
+     * certa nao e "fila zero": seria a leitura mais simples e a errada, e
+     * deixaria trocar de evento com leitura pendente -- que e a perda de
+     * contagem que esta trava existe para impedir.
+     */
+    function filaDeOutroEvento(evento_id) {
+        var carregado = window.chaveiro.carregado();
+        if (!carregado || carregado === evento_id) { return Promise.resolve(0); }
+        if (!window.portariaDeposito) { return Promise.resolve(-1); }
+        return window.portariaDeposito.contarFila().catch(function () {
+            return 0;                  // IndexedDB fora do ar: nao ha fila a proteger
+        });
+    }
+
+    function fraseDaFilaPresa(naFila) {
+        if (naFila < 0) {
+            return 'Não consegui conferir se este aparelho tem leituras pendentes, '
+                 + 'e sem essa conferência não dá para ligá-lo a este evento com '
+                 + 'segurança. Recarregue a tela; se continuar, avise a gráfica.';
+        }
+        return 'Este aparelho ainda tem ' + naFila
+             + (naFila === 1 ? ' leitura' : ' leituras')
+             + ' para enviar do evento que ele lê hoje. Depois que elas subirem, '
+             + 'ligue-o a este evento pela barra dele em Meus Eventos.';
     }
 
     /**
@@ -163,6 +260,56 @@
         });
     }
 
+    /**
+     * O que oferecer depois de o pedido virar evento -- e sao TRES caminhos,
+     * nao um.
+     *
+     * (a) Este aparelho JA le o evento de destino. Acontece exatamente no caso
+     *     que o "juntar ao evento" existe para atender: o dono ja leu ontem, e
+     *     agora carrega o pedido complementar. Criar outro portao aqui deixaria
+     *     dois "Aparelho N" iguais na lista dele e um token orfao. O que falta
+     *     e so ir ler.
+     *
+     * (b) Este aparelho le OUTRO evento e tem leitura pendente. Aqui nao ha
+     *     pergunta a fazer: trocar o token agora faria as leituras do evento de
+     *     ontem subirem contadas no evento de hoje, e ninguem descobriria. A
+     *     tela diz quantas sao e por onde ligar depois -- uma trava sem saida
+     *     escrita seria uma parede.
+     *
+     * (c) O caso comum: aparelho livre. Pergunta e liga.
+     */
+    function depoisDeCarregar(r, sessao) {
+        var prefixo = fraseDoResultado(r);
+
+        if (window.chaveiro.procurar(r.evento_id)) {
+            return window.caixaConfirmar.perguntar(
+                prefixo + 'Este aparelho já lê este evento. Quer ir para a leitura agora?',
+                { rotulo: 'Ir para a leitura' }
+            ).then(function (sim) {
+                if (!sim) { return voltarParaACasa(); }
+                // `abrir`, e nao `criar`: e ele que sabe distinguir "ja e este
+                // evento" de "trocar" e de "fila cheia", e ja tem a saida
+                // escrita para cada um.
+                return window.virarPortao.abrir(r.evento_id, r.nome_evento);
+            });
+        }
+
+        return filaDeOutroEvento(r.evento_id).then(function (naFila) {
+            if (naFila !== 0) {
+                return Promise.resolve(voltarParaACasa()).then(function () {
+                    avisarNaCasa(fraseDaFilaPresa(naFila));
+                });
+            }
+            return window.caixaConfirmar.perguntar(
+                prefixo + 'Quer usar este aparelho para ler os ingressos dele?',
+                { rotulo: 'Sim, usar este aparelho' }
+            ).then(function (sim) {
+                if (!sim) { return voltarParaACasa(); }
+                return ligarEsteAparelho(r.evento_id, sessao, r.elevacao);
+            });
+        });
+    }
+
     function confirmar(pedido, sessao) {
         var senha = $('carregar-senha').value || '';
         var destino = $('carregar-destino').value || null;
@@ -176,13 +323,16 @@
             // O `datetime-local` nao tem fuso nenhum: mandar o que ele entrega
             // faria o Postgres ler a hora do relogio do dono como UTC. Ver
             // `doCampoParaISO`.
-            data_evento: window.Controle && window.Controle.doCampoParaISO
-                ? window.Controle.doCampoParaISO($('carregar-data').value) : null,
+            data_evento: window.Controle.doCampoParaISO($('carregar-data').value),
             local_evento: ($('carregar-local').value || '').trim() || null,
             evento_id: destino,
             senha: senha,
             navegador: window.AcessoConta.navegadorId()
         };
+        // Os DOIS ramos do `then`, e nao um `.catch` no fim: sao dois mundos
+        // diferentes. Enquanto o POST nao respondeu, a caixa esta na tela e o
+        // motivo tem de aparecer NELA; depois que ele deu certo, a caixa sai, e
+        // dali para a frente um aviso so e visto na casa.
         return window.AcessoConta.pedir('/pedidos/' + pedido + '/carregar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessao.access_token },
@@ -194,31 +344,23 @@
             // aberta em seguida nao pode pedir a senha de novo dentro dos
             // minutos que a pessoa acabou de comprar. Pode nao vir -- e ai nao
             // ha bilhete nenhum a entregar.
-            if (r.elevacao && window.Controle && window.Controle.receberElevacao) {
-                window.Controle.receberElevacao(r.evento_id, r.elevacao);
-            }
-            var frase = (r.novo ? 'Evento criado. ' : 'Pedido juntado ao evento ' + (r.nome_evento || '') + '. ')
-                + 'Quer usar este aparelho para ler os ingressos dele?';
-            return window.caixaConfirmar.perguntar(frase, { rotulo: 'Sim, usar este aparelho' })
-                .then(function (sim) {
-                    if (!sim) { return voltarParaACasa(); }
-                    return ligarEsteAparelho(r.evento_id, sessao, r.elevacao)
-                        .catch(function (e) {
-                            // O EVENTO ESTA CRIADO. Seja qual for a falha daqui
-                            // -- rede, senha recusada, ou o dono cancelando a
-                            // caixa de senha --, a casa e o lugar certo de
-                            // parar: o evento novo esta la, e a barra dele liga
-                            // o aparelho de novo quando ele quiser.
-                            var voltou = voltarParaACasa();
-                            if (e && e.message === 'cancelado') { return voltou; }
-                            return Promise.resolve(voltou).then(function () {
-                                avisarNaCasa('O evento foi criado, mas não consegui ligar este aparelho: '
-                                    + ((e && e.message) || 'tente pela barra do evento.'));
-                            });
-                        });
+            if (r.elevacao) { window.Controle.receberElevacao(r.evento_id, r.elevacao); }
+            return depoisDeCarregar(r, sessao).catch(function (e) {
+                // O EVENTO ESTA CRIADO. Seja qual for a falha daqui -- rede,
+                // senha recusada, ou o dono cancelando a caixa de senha --, a
+                // casa e o lugar certo de parar: o evento novo esta la, e a
+                // barra dele liga o aparelho de novo quando ele quiser.
+                var voltou = voltarParaACasa();
+                if (e && e.message === 'cancelado') { return voltou; }
+                return Promise.resolve(voltou).then(function () {
+                    avisarNaCasa('O pedido foi carregado, mas não consegui ligar este '
+                        + 'aparelho: ' + ((e && e.message) || 'falha inesperada.')
+                        + ' O evento está em Meus Eventos — toque na barra dele para '
+                        + 'tentar de novo.');
                 });
-        }).catch(function (e) {
-            erro((e && e.message) || 'Não consegui carregar o pedido agora. Confira a internet e tente de novo.');
+            });
+        }, function (e) {
+            erro(fraseDoErro(e));
         });
     }
 

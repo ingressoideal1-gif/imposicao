@@ -169,3 +169,170 @@ def test_a_recusa_do_servidor_aparece_na_caixa_e_a_caixa_fica():
                  aberta: !document.getElementById('caixa-carregar').classList.contains('sumindo') };
     """)
     assert "senha nao confere" in saida["erro"] and saida["aberta"] is True
+
+
+def test_o_codigo_cru_do_servidor_nao_chega_ao_cliente():
+    """Sem frase do servidor, o `acesso-conta.js` inventa um "Erro N". Esse
+    texto nao informa nem oferece saida -- e o unico que nao pode chegar a
+    tela. O numero fica, porque sem ele a grafica nao tem o que apurar."""
+    saida = _no_navegador(DESVIO + """
+        AcessoConta.pedir = async (caminho) => {
+            if (caminho === '/meus-eventos') return { eventos: [] };
+            const e = new Error('Erro 502'); e.status = 502; throw e;
+        };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 60));
+        return document.getElementById('erro-carregar').textContent;
+    """)
+    assert "Erro 502" not in saida, "o texto inventado chegou ao cliente"
+    assert "502" in saida, "sem o codigo, a grafica nao tem o que apurar"
+
+
+def test_o_Enter_na_senha_envia():
+    """A senha e o ultimo campo, e o Enter dela e o gesto natural de terminar.
+    Sem o ouvinte, o teclado do celular oferece "Ir" e nada acontece."""
+    saida = _no_navegador(DESVIO + """
+        window.caixaConfirmar.perguntar = async () => false;
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        const campo = document.getElementById('carregar-senha');
+        campo.value = 'segredo1';
+        campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+        await new Promise(r => setTimeout(r, 80));
+        return window.__chamadas.some(c => c.caminho === '/pedidos/20272/carregar');
+    """)
+    assert saida is True
+
+
+# ── A caixa como sub-estado de Meus Pedidos ─────────────────────────────────
+
+
+def test_abrir_esconde_meus_pedidos_e_mostra_a_caixa():
+    saida = _no_navegador(DESVIO + """
+        document.getElementById('meus-pedidos').classList.remove('sumindo');
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        const sumiu = id => document.getElementById(id).classList.contains('sumindo');
+        return { pedidos: sumiu('meus-pedidos'), caixa: !sumiu('caixa-carregar'),
+                 lista: sumiu('lista'), barra: sumiu('bloco-novo-evento') };
+    """)
+    assert saida == {"pedidos": True, "caixa": True, "lista": True, "barra": True}
+
+
+def test_cancelar_volta_para_meus_pedidos_e_a_senha_nao_fica_no_DOM():
+    """Cancelar volta para a LISTA DE PEDIDOS, e nao para a casa: e de la que a
+    pessoa veio, e o pedido continua la para ser carregado depois. A senha do
+    dono nao pode sobrar no campo, num celular que fica com o porteiro."""
+    saida = _no_navegador(DESVIO + """
+        const base = AcessoConta.pedir;
+        AcessoConta.pedir = async (c, o) => (c === '/meus-pedidos'
+            ? { pedidos: [], sem_cliente: false } : base(c, o));
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-cancelar').click();
+        await new Promise(r => setTimeout(r, 150));
+        const sumiu = id => document.getElementById(id).classList.contains('sumindo');
+        return { caixa: sumiu('caixa-carregar'), pedidos: !sumiu('meus-pedidos'),
+                 senha: document.getElementById('carregar-senha').value };
+    """)
+    assert saida == {"caixa": True, "pedidos": True, "senha": ""}
+
+
+def test_a_frase_de_juntar_nomeia_o_evento_e_nao_deixa_espaco_solto():
+    def _pergunta(desvio_extra=""):
+        return _no_navegador(DESVIO + desvio_extra + """
+            window.__perguntas = [];
+            window.caixaConfirmar.perguntar = async (t) => { window.__perguntas.push(t); return false; };
+            await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+            document.getElementById('carregar-destino').value = 'ev-a';
+            document.getElementById('carregar-senha').value = 'segredo1';
+            document.getElementById('btn-carregar-confirmar').click();
+            await new Promise(r => setTimeout(r, 150));
+            return window.__perguntas[0];
+        """)
+
+    com_nome = _pergunta()
+    assert com_nome.startswith("Pedido juntado ao evento Click. ")
+    assert "usar este aparelho" in com_nome
+
+    # Sem nome na resposta, a frase nao pode virar "ao evento . Quer…".
+    sem_nome = _pergunta("""
+        const comNome = AcessoConta.pedir;
+        AcessoConta.pedir = async (c, o) => {
+            const r = await comNome(c, o);
+            if (c === '/pedidos/20272/carregar') { r.nome_evento = ''; }
+            return r;
+        };
+    """)
+    assert sem_nome.startswith("Pedido juntado ao evento. ")
+    assert "  " not in sem_nome and " ." not in sem_nome
+
+
+# ── As duas travas que moram no `virar-portao.js`, e valem aqui tambem ──────
+
+
+def test_o_aparelho_que_JA_le_o_evento_vai_LER_em_vez_de_criar_outro_portao():
+    """O caso que o "juntar ao evento" existe para atender: o dono leu ontem, e
+    hoje carrega o pedido complementar. `criar` ali registraria um segundo
+    portao -- um "Aparelho 2" indistinguivel do primeiro na lista dele -- e
+    deixaria o token antigo orfao. O que falta e so ir ler."""
+    saida = _no_navegador(DESVIO + """
+        window.chaveiro.procurar = (id) => (id === 'ev-novo' ? { evento_id: id, token: 't' } : null);
+        window.virarPortao.abrir = (id, nome) => { window.__abriu = { id, nome }; return Promise.resolve(); };
+        window.__perguntas = [];
+        window.caixaConfirmar.perguntar = async (t, o) => { window.__perguntas.push({ t, o }); return true; };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('carregar-destino').value = 'ev-a';
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 150));
+        return { pergunta: window.__perguntas[0], abriu: window.__abriu,
+                 criou: window.__chamadas.some(c => c.caminho === '/eventos/ev-novo/aparelhos/aqui') };
+    """)
+    assert "já lê" in saida["pergunta"]["t"]
+    assert saida["pergunta"]["o"]["rotulo"] == "Ir para a leitura"
+    assert saida["abriu"]["id"] == "ev-novo"
+    assert saida["criou"] is False, "criou um segundo portao no mesmo aparelho"
+
+
+def test_com_leitura_pendente_de_OUTRO_evento_nao_ha_Sim_nenhum():
+    """Trocar o token agora faria as leituras do evento de ontem subirem
+    contadas no evento de hoje -- a contagem que o cliente pagou para ter sai
+    errada e ninguem descobre. Nao e pergunta: e recusa, com o numero exato e
+    por onde ligar depois."""
+    saida = _no_navegador(DESVIO + """
+        window.chaveiro.carregado = () => 'ev-outro';
+        window.portariaDeposito.contarFila = () => Promise.resolve(3);
+        window.__perguntas = [];
+        window.caixaConfirmar.perguntar = async (t) => { window.__perguntas.push(t); return true; };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 200));
+        const aviso = document.getElementById('erro-arranque');
+        return { perguntou: window.__perguntas.length, texto: aviso.textContent,
+                 visivel: !aviso.classList.contains('sumindo'),
+                 criou: window.__chamadas.some(c => c.caminho === '/eventos/ev-novo/aparelhos/aqui') };
+    """)
+    assert saida["perguntou"] == 0, "ofereceu trocar de evento com leitura pendente"
+    assert saida["criou"] is False
+    assert saida["visivel"] is True
+    assert "3 leitura" in saida["texto"]
+    assert "Meus Eventos" in saida["texto"], "a trava nao disse por onde sair dela"
+
+
+def test_a_fila_do_PROPRIO_evento_de_destino_nao_trava_nada():
+    """A fila e DELE. Travar aqui pararia o portao por causa de um 4G ruim --
+    que e exatamente quando a fila cresce. Mesma leitura do `decidirTroca`."""
+    saida = _no_navegador(DESVIO + """
+        window.chaveiro.carregado = () => 'ev-novo';
+        window.portariaDeposito.contarFila = () => Promise.resolve(9);
+        window.__perguntas = [];
+        window.caixaConfirmar.perguntar = async (t) => { window.__perguntas.push(t); return false; };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 150));
+        return window.__perguntas.length;
+    """)
+    assert saida == 1

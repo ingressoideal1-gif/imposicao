@@ -97,6 +97,13 @@
                 var el = $(id);
                 if (el) { el.classList.add('sumindo'); }
             });
+            // A caixa do Carregar pode estar saindo de cena COM A SENHA DO DONO
+            // digitada dentro. Escondê-la nao apaga o valor do campo: ele
+            // continuaria no DOM, num celular que fica com o porteiro, ate a
+            // pagina recarregar. A mesma limpeza que a caixa de senha da
+            // configuracao e a tela de entrar ja fazem ao sair.
+            var senhaCarregar = $('carregar-senha');
+            if (senhaCarregar) { senhaCarregar.value = ''; }
             return;
         }
         // Ha outro estado na frente: a tela inicial continua atras dele, e quem

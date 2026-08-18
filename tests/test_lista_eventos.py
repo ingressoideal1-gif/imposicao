@@ -195,6 +195,14 @@ MODULOS_GLOBAIS = {
     "aparelhoAqui": "aparelho.js",
     "AcessoConta": "acesso-conta.js",
     "meusPedidos": "meus-pedidos.js",
+    "carregarPedido": "carregar-pedido.js",
+    # `conta` e `caixaConfirmar` entraram em 17/08/2026 junto com o
+    # `carregar-pedido.js`, que os chama SEM guarda de `window.X` -- e a guarda
+    # foi dispensada justamente porque esta lista e o teste abaixo garantem que
+    # o dono do global esta na pagina. Sem os dois aqui, a dispensa seria uma
+    # aposta.
+    "conta": "conta.js",
+    "caixaConfirmar": "caixa-confirmar.js",
     "portariaCamera": "portaria-camera.js",
     "Controle": "controle.js",
     "paredePwa": "parede-pwa.js",
