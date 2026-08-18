@@ -128,10 +128,21 @@
 #amostra-mod-ov .am-b.fechar{background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.5);}
 #amostra-mod-ov .am-corpo{flex:1;overflow:auto;display:flex;flex-wrap:wrap;gap:24px;
   align-items:center;justify-content:center;padding:22px;}
+/* Centralizacao "segura": quando a arte e maior que o espaco (Tamanho real),
+   centralizar corta a borda de cima/da esquerda e a rolagem nao alcanca o que
+   ficou de fora. Com "safe", nesse caso o alinhamento cai para o inicio e a
+   imagem inteira volta a ser acessivel. Navegador antigo ignora estas duas
+   linhas e fica com a centralizacao acima — nada quebra. */
+#amostra-mod-ov .am-corpo{align-items:safe center;justify-content:safe center;}
 #amostra-mod-ov .am-face{display:flex;flex-direction:column;align-items:center;gap:8px;}
 #amostra-mod-ov .am-face .rot{font-size:0.8rem;font-weight:800;letter-spacing:0.06em;}
-#amostra-mod-ov .am-face img{background:#fff;border:1px solid rgba(148,163,184,0.35);
-  box-shadow:0 10px 30px rgba(0,0,0,0.55);cursor:zoom-in;}
+/* Janela limpa: nenhum fio de contorno, nenhum canto arredondado. O antigo
+   "border:1px" desenhava uma moldura por cima da beirada da arte (com
+   box-sizing:border-box ele ainda comia 2px do conteudo ao caber na tela), e
+   era isso que parecia cortar a imagem. A sombra continua, mas cai FORA da
+   imagem e nao encosta em pixel nenhum do desenho. */
+#amostra-mod-ov .am-face img{display:block;background:#fff;border:0;border-radius:0;
+  outline:none;box-shadow:0 10px 30px rgba(0,0,0,0.55);cursor:zoom-in;}
 #amostra-mod-ov.ampliado .am-corpo{align-items:flex-start;}
 #amostra-mod-ov.ampliado .am-face img{cursor:zoom-out;}
 #amostra-mod-ov .am-vazio{color:#94a3b8;text-align:center;font-size:0.95rem;line-height:1.7;}
