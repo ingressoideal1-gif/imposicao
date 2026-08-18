@@ -68,6 +68,19 @@ def test_a_arte_em_pdf_nao_volta_a_encolher_ate_caber(arquivo):
         )
 
 
+def test_o_criador_de_arte_usa_a_mesma_regra_do_card():
+    """O editor reproduz o card. Divergir poe a arte num lugar no editor e noutro no pedido."""
+    corpo = _corpo_da_funcao(_ler("frontend/criador-arte.js"), "async function carregarArteBaseNoCanvas(")
+    assert "escalaPranchaPxPorMm / (2.0 * 2.8346)" in corpo, (
+        "criador-arte.js nao poe mais a arte em PDF no tamanho real. O editor volta a "
+        "mostrar a arte num tamanho e o card do pedido noutro."
+    )
+    assert "if (ehPdf)" in corpo, (
+        "criador-arte.js perdeu a separacao entre arte em PDF (tamanho real) e arte em "
+        "imagem (contain)."
+    )
+
+
 def test_o_motor_continua_pondo_a_arte_no_tamanho_da_propria_pagina():
     """Se o motor mudar de regra, a tela tem de mudar junto — e este teste avisa."""
     fonte = _ler("engine.py")

@@ -355,8 +355,10 @@ async function setupEditorWorkspace() {
  * Rasteriza a arte que o modelo ja possui (PDF ou imagem, URL publica ou base64)
  * e a insere como objeto base editavel da Camada 3 (Fabric).
  *
- * O enquadramento e o mesmo de drawAmostraFace() no script.js -- "contain":
- * cabe inteira na prancha, proporcao preservada, centralizada nos dois eixos.
+ * O enquadramento e o mesmo de drawAmostraFace() no script.js, que copia o
+ * engine.py: arte em PDF entra no TAMANHO REAL da pagina, centrada, e o que
+ * passar da prancha fica de fora; arte em IMAGEM entra em "contain", cabendo
+ * inteira, com proporcao preservada e centralizada nos dois eixos.
  * Divergir daqui faz o editor mostrar a arte num lugar e o card do pedido noutro.
  */
 async function carregarArteBaseNoCanvas(fc, rawArteSource) {
@@ -415,9 +417,29 @@ async function carregarArteBaseNoCanvas(fc, rawArteSource) {
         if (!img.width || !img.height) return false;
 
         const fImg = new fabric.Image(img);
-        const arteRatio = img.width / img.height;
-        const pranchaRatio = fc.width / fc.height;
-        const scale = arteRatio > pranchaRatio ? (fc.width / img.width) : (fc.height / img.height);
+        // Enquadramento: o MESMO de drawAmostraFace(), que por sua vez copia o
+        // engine.py. Sao duas regras, e nao uma:
+        //
+        //   PDF    -> tamanho REAL da pagina, centrado; o que passar da prancha
+        //             fica de fora, como a faca corta. O raster acima saiu a 2.0
+        //             (2 px por ponto = 2 x 2,8346 px por mm) e a prancha tem
+        //             `scalePxPerMm` px por mm, entao a escala do tamanho real e
+        //             scalePxPerMm / (2 x 2,8346).
+        //   IMAGEM -> "contain": cabe inteira, proporcao preservada, centrada.
+        //             E o que o motor faz com imagem em _load_base_as_pdf().
+        //
+        // Ate 18/08/2026 as duas caiam no "contain", e a arte em PDF entrava no
+        // editor maior do que ela sai no papel sempre que a pagina do PDF nao
+        // tinha exatamente o tamanho da peca.
+        const escalaPranchaPxPorMm = (window.editorState && window.editorState.scalePxPerMm) || 4.0;
+        let scale;
+        if (ehPdf) {
+            scale = escalaPranchaPxPorMm / (2.0 * 2.8346);
+        } else {
+            const arteRatio = img.width / img.height;
+            const pranchaRatio = fc.width / fc.height;
+            scale = arteRatio > pranchaRatio ? (fc.width / img.width) : (fc.height / img.height);
+        }
 
         fImg.set({
             scaleX: scale,

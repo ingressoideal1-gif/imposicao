@@ -131,3 +131,20 @@ ctx.translate(el_x_rel, el_y_rel);
 
 O `ctx.save()` / `ctx.translate()` / `ctx.restore()` envolvendo cada elemento garante que a rotação e posição não vazam entre elementos.
 
+---
+
+## 4. Qual é o `scale` do frontend — nota de 18/08/2026
+
+A seção A acima descreve a centralização, mas não diz de onde sai o `scale`. Durante muito tempo
+ele foi o de **"encolher até caber"**: a arte era reduzida até o arquivo inteiro entrar na peça.
+O motor nunca fez isso — ele usa `base_w`/`base_h`, o tamanho real da página, como a seção B
+mostra. Onde a arte não tinha exatamente o tamanho da peça, a tela mostrava a arte menor do que
+ela ia sair, com faixa branca em volta que o papel não tem.
+
+Hoje o `scale` do frontend, para arte em **PDF**, é o do tamanho real: `S / 2.8346`, onde `S` é
+quantos pixels por milímetro o canvas tem (2,8346 pt = 1 mm). Arte em **imagem** continua
+encolhendo até caber, porque uma imagem não tem tamanho físico — e é o que o motor faz com ela
+em `_load_base_as_pdf()`.
+
+A regra completa, com as medições e as quatro janelas que precisam concordar, está em
+[`como_a_arte_entra_na_peca.md`](como_a_arte_entra_na_peca.md).

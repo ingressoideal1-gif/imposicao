@@ -10,8 +10,18 @@ editor tem três comportamentos que o código não revela sozinho, e cada um já
 produção:
 
 1. **`drawAmostraFace()` (em `frontend/script.js`) é a especificação do editor.** Ela é o
-   renderizador canônico do card do pedido e do link do cliente. Enquadramento "contain" e fusão
-   multiply saem dela. Divergir faz o editor mostrar uma coisa e a impressão outra.
+   renderizador canônico do card do pedido e do link do cliente. Enquadramento e fusão multiply
+   saem dela. Divergir faz o editor mostrar uma coisa e a impressão outra.
+
+   O enquadramento são **duas** regras, e ambas vêm do `engine.py`, que é quem imprime: arte em
+   **PDF** entra no **tamanho real** da página, centrada, e o que passar da peça fica de fora;
+   arte em **imagem** entra em **"contain"**, cabendo inteira. Leia
+   **`docs/como_a_arte_entra_na_peca.md`** antes de mexer em qualquer janela que mostre arte —
+   são quatro (card, janela ampliada, link do cliente e editor), e elas têm de concordar.
+
+   Duas consequências que esse documento detalha: **nada de moldura desenhada dentro do
+   bitmap** (a janela ampliada copia o canvas do card, e o JPEG de aprovação é esse canvas),
+   e **entre a cor e o formato manda o formato**, porque é ele que a impressão usa.
 
    A regra de fusão em vigor: **a numeração cobre a arte com fusão normal, e é o grupo
    arte+numeração que multiplica, uma vez só, sobre a cor do papel.** Ela vale nos cinco lugares

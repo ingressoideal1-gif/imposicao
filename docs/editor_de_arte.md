@@ -23,8 +23,15 @@ Essa função é o renderizador canônico: é ela que compõe as três camadas n
 pedido, e é o que o cliente vê no link de aprovação. O editor precisa reproduzir as decisões
 dela. Duas em particular:
 
-1. **Enquadramento "contain"** — a arte cabe inteira na prancha, com proporção preservada e
-   centralizada nos **dois** eixos. Não é encaixe pela altura com âncora no topo.
+1. **Enquadramento: duas regras, não uma.** Arte em **PDF** entra no **tamanho real** da
+   página, centrada — o que passar da prancha fica de fora, como a faca corta. Arte em
+   **imagem** entra em **"contain"**: cabe inteira, proporção preservada, centralizada nos
+   **dois** eixos. Não é encaixe pela altura com âncora no topo.
+
+   As duas regras vêm do `engine.py`, que é quem imprime, e estão explicadas em
+   [`como_a_arte_entra_na_peca.md`](como_a_arte_entra_na_peca.md). Até 18/08/2026 tudo caía no
+   "contain", e a arte em PDF aparecia na tela menor do que sairia no papel sempre que a
+   página não tinha exatamente o tamanho da peça.
 2. **Multiply, uma vez só, e do grupo inteiro** — a numeração **não** funde com a arte: ela
    cobre a arte com fusão normal. Arte e numeração formam um **grupo**, e é o grupo que
    multiplica sobre a cor do papel. Na prática, `drawAmostraFace()` pinta arte e numeração
@@ -33,6 +40,11 @@ dela. Duas em particular:
 
    Não é o que era antes: até a v496 cada camada multiplicava em cascata sobre o resultado
    acumulado, e a numeração escurecia onde caísse em cima de arte escura.
+
+3. **Nenhuma moldura desenhada dentro do bitmap.** O card, a janela ampliada e o link do
+   cliente mostram o mesmo canvas, e o JPEG de aprovação é esse canvas salvo — um contorno
+   pintado ali cobre a beirada da arte e viaja para todos eles. Ver
+   [`como_a_arte_entra_na_peca.md`](como_a_arte_entra_na_peca.md).
 
 Divergir disso produz a classe de bug mais reportada aqui: o editor mostra uma coisa e o
 pedido/impressão mostram outra. Ao implementar qualquer coisa sobre como a arte é carregada,

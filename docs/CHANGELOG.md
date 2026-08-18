@@ -4,6 +4,52 @@ Registro cronológico de todas as funcionalidades implementadas, correções e m
 
 ---
 
+## [2026-08-18] — A janela da amostra mostra 100% da arte, do tamanho que vai imprimir
+
+Três releases seguidos (v641, v642 e v643) sobre a mesma queixa: *"parece visualizar com uma
+borda, como se a janela tivesse um fio de contorno que acaba cortando parte da imagem"*. Eram
+três causas diferentes, empilhadas, e todas só de tela — o papel sempre saiu inteiro, porque o
+motor redesenha tudo do zero.
+
+**v641 — o fio do CSS.** As caixas de amostra e o canvas do editor de numeração tinham
+`border: 1px solid`. Com `box-sizing: border-box` a borda entra na largura: o desenho encolhia
+2 px (a proporção de um canvas 1200 × 500 saía 2,3927 em vez de 2,4000) e a conta do clique em
+`getCanvasPos()` ficava alguns pixels fora no extremo direito. Removida também a moldura
+arredondada do canvas de numeração. E a centralização por flexbox passou a ser `safe`: um item
+maior que a caixa transbordava pelos dois lados e a rolagem não alcançava o começo — medido em
+308 px de arte inacessíveis acima do topo.
+
+**v642 — a moldura pintada dentro do bitmap.** O fio que sobrou não era CSS: eram três
+`strokeRect` desenhados no próprio desenho da amostra (`// Borda decorativa`,
+`// contorno do formato` e `// Borda final da amostra`). Como a janela ampliada copia o canvas
+do card e o JPEG de aprovação é esse mesmo canvas, o enfeite viajava para todo lugar. Medido
+com uma arte que tem faixa vermelha colada no topo: a primeira fileira de pixels saía
+`165,54,64` em vez de `255,0,0`; depois, `255,0,0`. Uma fileira recuperada em cima e outra
+embaixo.
+
+**v643 — a arte no tamanho real.** A tela e o motor tinham regras diferentes para encaixar a
+arte na peça: o `engine.py` põe a arte em PDF no tamanho real da página, centrada, e deixa de
+fora o que passar; a amostra encolhia a arte até o arquivo inteiro caber. Onde a arte não bate
+com a peça, a tela mostrava a arte menor do que ela sai no papel, com faixa branca que o papel
+não tem. Medido nos 25 modelos mais recentes: as credenciais (arte 98 × 148 numa peça
+105 × 148) apareciam a 98,3%, e dois modelos do pedido 20508 (arte 245 × 20 numa peça Mobi
+148,5 × 52,25) apareciam a **60%**. Arte em **imagem** continua em "contain", porque é o que o
+motor faz com ela em `_load_base_as_pdf()`. O Criador de Arte foi alinhado junto.
+
+No mesmo dia, a cor **Credencial PVC** foi corrigida de 145,5 para 148 mm de altura: era a
+única das 24 cores fora de sincronia com o formato dela, e fazia a peça na tela nascer 2,5 mm
+mais curta do que a que imprime — a camada de numeração, montada pelo formato, perdia 1,25 mm
+em cima e embaixo. Decisão do usuário: manda o formato, porque é ele que a impressão usa.
+(`sql/cor_credencial_pvc_alinha_com_o_formato.sql`)
+
+A regra inteira, com as medições e o que conferir ao mexer em qualquer uma das quatro janelas
+que desenham arte, está em [`como_a_arte_entra_na_peca.md`](como_a_arte_entra_na_peca.md).
+Dois testes novos prendem o resultado — `tests/test_amostra_sem_moldura.py` e
+`tests/test_arte_da_amostra_no_tamanho_real.py` —, e o segundo vigia também o `engine.py`: se o
+motor mudar de regra, ele avisa que as telas precisam mudar junto.
+
+---
+
 ## [2026-08-13] — Elemento travado também não pode ser excluído
 
 A trava (🔒) dos elementos de numeração impedia apenas o arrasto e o alinhamento. Agora
