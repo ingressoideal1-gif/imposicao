@@ -19,6 +19,11 @@ Entao a regra e literal: nos arquivos que FORMAM o aplicativo, a palavra
 `onrender` nao aparece. Nem em codigo, nem em comentario. Contar a historia
 continua permitido — em `docs/`, e sem o nome do host: "o servidor Python que
 ficava na nuvem" diz a mesma coisa e nao convida ninguem a tentar.
+
+O `app.py` esta na lista mesmo continuando VIVO: ele e o motor da estacao, e o
+que saiu foi a copia dele que rodava hospedada. Um comentario ali dizendo que o
+mesmo arquivo "roda no Render, num endereco publico" descreveria uma segunda
+instalacao que nao existe mais.
 """
 import glob
 import os
@@ -30,9 +35,17 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Os arquivos que o aplicativo carrega, publica ou usa para se publicar. Docs
 # ficam de fora de proposito: `CHANGELOG.md` e `docs/superpowers/` sao registro
 # historico, e reescrever registro e apagar a razao de o corte ter acontecido.
+#
+# As Edge Functions entram pelo mesmo motivo que o frontend: `cors.ts` guarda a
+# GEMEA da lista `ALLOWED_ORIGINS` do `security_config.py`, e as duas divergiram
+# na primeira limpeza -- o Python perdeu a origem do servidor antigo e o
+# TypeScript ficou com ela. Uma lista de origens permitidas com um dominio que
+# nao e mais nosso e a definicao de porta esquecida aberta.
 ARQUIVOS = sorted(
     glob.glob(os.path.join(RAIZ, "frontend", "*.js"))
     + glob.glob(os.path.join(RAIZ, "frontend", "*.html"))
+    + glob.glob(os.path.join(RAIZ, "supabase", "functions", "**", "*.ts"),
+                recursive=True)
     + [
         os.path.join(RAIZ, "vercel.json"),
         os.path.join(RAIZ, "frontend", "vercel.json"),
@@ -41,6 +54,7 @@ ARQUIVOS = sorted(
         os.path.join(RAIZ, "publicar.ps1"),
         os.path.join(RAIZ, "acesso_publicacao.py"),
         os.path.join(RAIZ, "agent_worker.py"),
+        os.path.join(RAIZ, "app.py"),
     ]
 )
 

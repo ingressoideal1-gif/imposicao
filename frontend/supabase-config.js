@@ -164,9 +164,12 @@ function urlDeEscritaDeFontes(sufixo) {
 // 1. `supabase.co` sai fora ANTES de qualquer coisa. O próprio SDK do Supabase
 //    usa `fetch` para renovar a sessão; sem este corte, pedir a sessão dentro do
 //    `fetch` chamaria `fetch` de novo, para sempre.
-// 2. O agente local (127.0.0.1:9000) não recebe cabeçalho, e nem precisa: ele
-//    vive na LAN da gráfica, atrás da trava do código local, e o operador que
-//    entrou offline não tem sessão nenhuma do Supabase para oferecer.
+// 2. URL ABSOLUTA do agente local (http://127.0.0.1:9000/...) não recebe
+//    cabeçalho, e nem precisa: ele vive na LAN da gráfica, atrás da trava do
+//    código local, e o operador que entrou offline não tem sessão nenhuma do
+//    Supabase para oferecer. Já o caminho RELATIVO (`${API_BASE_URL}/api/...`,
+//    que na estação também leva ao agente) recebe — é o ramo `return true`
+//    logo abaixo, e é o mesmo caminho que na nuvem levaria a uma rota nossa.
 (function () {
     const fetchOriginal = window.fetch.bind(window);
 

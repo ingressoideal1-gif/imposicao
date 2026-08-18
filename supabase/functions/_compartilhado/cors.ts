@@ -1,8 +1,11 @@
 /**
  * A politica de CORS de todas as Edge Functions deste projeto.
  *
- * Copiada de `security_config.py` (ALLOWED_ORIGINS e ALLOWED_ORIGIN_REGEX) para
- * nao divergir do Python enquanto as duas pilhas convivem.
+ * Gemea de `security_config.py` (ALLOWED_ORIGINS e ALLOWED_ORIGIN_REGEX). As duas
+ * listas dizem a MESMA coisa em linguagens diferentes: esta atende as paginas que
+ * falam com as Edge Functions, e a do Python atende as que falam com o motor da
+ * estacao. Divergir significa uma tela que carrega num caminho e nao no outro,
+ * sem erro visivel em servidor nenhum -- entao mexer numa e mexer nas duas.
  *
  * ## Por que isto existe num arquivo compartilhado
  *
@@ -15,8 +18,9 @@
  *
  * ## Por que isto precisou existir
  *
- * O Render responde o preflight sozinho, via `CORSMiddleware` do FastAPI. A
- * primeira Edge Function nao respondia nada, e o OPTIONS caia no 404 de rota
+ * O FastAPI responde o preflight sozinho, via `CORSMiddleware` -- era assim que o
+ * backend antigo se virava, e e assim que o motor da estacao continua se virando.
+ * A primeira Edge Function nao respondia nada, e o OPTIONS caia no 404 de rota
  * desconhecida. Como as paginas vem da Vercel e chamam `supabase.co`, TODA
  * requisicao delas e cross-origin; qualquer chamada com Authorization obriga o
  * navegador a mandar o preflight ANTES. Sem resposta, a chamada de verdade
@@ -26,10 +30,14 @@
  * conferem cabecalho de origem. So o navegador.
  */
 
+// As duas origens em que o site atende. A do servidor Python que ficava na nuvem
+// saiu em 17/08/2026, junto com o servidor.
+//
+// `imposicao.vercel.app` fica: QR ja impresso e ja enviado por WhatsApp carrega o
+// endereco antigo, e tirar a origem quebraria todo QR que ja saiu daqui.
 const ORIGENS_PERMITIDAS = [
   "https://ideal-imposition.vercel.app",
   "https://imposicao.vercel.app",
-  "https://imposicao.onrender.com",
 ];
 
 /**

@@ -4896,11 +4896,14 @@ window.runPedImposition = async function (mode, isRefazer) {
                                 const checkData = await agentCheck.json().catch(() => ({}));
                                 // Ver o comentario longo na sondagem do script.js:
                                 // o primeiro endereco testado e o da propria pagina,
-                                // que na Vercel leva ao Render. Como o mesmo app.py
-                                // serve os dois, a nuvem se apresentava como agente
-                                // local e a imposicao ia parar la -- com o selo
-                                // "AGENTE LOCAL" na tela e o QR Ideal impossivel de
-                                // imprimir, porque o pool so existe na estacao.
+                                // e ate 17/08/2026 esse caminho, na Vercel, era
+                                // desviado para uma copia do mesmo app.py na nuvem.
+                                // Ela se apresentava como agente local e a imposicao
+                                // ia parar la -- com o selo "AGENTE LOCAL" na tela e
+                                // o QR Ideal impossivel de imprimir, porque o pool so
+                                // existe na estacao. O desvio e a copia sairam; a
+                                // conferencia fica, porque e ela que garante que so
+                                // um agente de verdade e aceito.
                                 if (checkData.status === "running" && checkData.onde !== "nuvem") {
                                     localActive = true;
                                     agentBaseUrl = base;

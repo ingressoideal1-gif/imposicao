@@ -52,10 +52,12 @@ import security_config
 # alias: dentro de _embed_system_fonts ja existe um dict local chamado font_cache
 import font_cache as font_cache_local
 
-# Controle de acesso: só onde a SUPABASE_SERVICE_KEY existe — quer dizer, no
-# Render, e não nas estações. O NewProd.exe embute o acesso_api.py mas não a
-# chave, e montar o router lá deixaria endpoints respondendo 503 a tudo, o que
-# só confunde quem for diagnosticar por que uma publicação não chegou.
+# Controle de acesso: só onde a SUPABASE_SERVICE_KEY existe — o que, desde
+# 17/08/2026, quer dizer "em lugar nenhum em produção": estas rotas viraram Edge
+# Function, e a chave mora nos segredos do Supabase. Nas estações ela nunca
+# esteve. O NewProd.exe embute o acesso_api.py mas não a chave, e montar o router
+# lá deixaria endpoints respondendo 503 a tudo, o que só confunde quem for
+# diagnosticar por que uma publicação não chegou.
 import acesso_api
 import acesso_config
 import acesso_interno
@@ -73,8 +75,8 @@ else:
 #
 # Medido em 16/08/2026, sem nenhuma credencial, de fora:
 #
-#     GET https://imposicao.onrender.com/api/acessos-locais  ->  200
-#     GET https://imposicao.onrender.com/api/user/permissions -> 200
+#     GET  <servidor da nuvem>/api/acessos-locais  ->  200
+#     GET  <servidor da nuvem>/api/user/permissions -> 200
 #
 # A primeira devolvia os CÓDIGOS de acesso local em texto claro — três pessoas,
 # uma delas com papel `admin`. É o código que destranca o painel do NewProd numa
@@ -83,8 +85,11 @@ else:
 #
 # A causa é que `get_current_user` (mais abaixo) é um carimbo: devolve admin para
 # todo mundo, sem conferir nada. Isso nunca foi um problema na estação, que vive
-# na LAN da gráfica atrás da trava do código local — mas o MESMO `app.py` roda no
-# Render, num endereço público.
+# na LAN da gráfica atrás da trava do código local — mas o MESMO `app.py` rodava
+# também numa cópia hospedada, num endereço público.
+#
+# Aquela cópia saiu do ar em 17/08/2026. A regra abaixo FICA: ela é o que impede a
+# próxima cópia deste arquivo de nascer aberta.
 #
 # ## A regra
 #
@@ -313,23 +318,25 @@ def _agent_id_local():
 def read_root():
     """Quem sou eu, e — principalmente — ONDE estou rodando.
 
-    O `onde` existe por causa de 15/08/2026. Este mesmo arquivo serve a estação
-    e o Render, então a nuvem respondia exatamente o que o agente responde:
-    `{"status": "running", "message": "NewProd Agent ativo", ...}`.
+    O `onde` existe por causa de 15/08/2026. Este mesmo arquivo servia a estação
+    e uma cópia hospedada, então a nuvem respondia exatamente o que o agente
+    responde: `{"status": "running", "message": "NewProd Agent ativo", ...}`.
 
     O painel procura o agente testando três endereços, e o primeiro é o da
-    própria página — que na Vercel leva ao Render. Ele acreditava, parava de
-    procurar, e mandava a imposição para a nuvem **mostrando na tela o selo
-    "⚡ AGENTE LOCAL"**.
+    própria página — que na Vercel era desviado para aquela cópia. Ele
+    acreditava, parava de procurar, e mandava a imposição para a nuvem
+    **mostrando na tela o selo "⚡ AGENTE LOCAL"**.
 
     O estrago era grande e silencioso: o QR Ideal não podia ser impresso por
     caminho nenhum (a nuvem não tem o pool, e nunca vai ter), a imposição rodava
     pela rede contra a razão de o agente existir, e a faixa de credenciais não
     subia.
 
-    `is_cloud_runtime()` olha as variáveis que só o Render define. Não é
-    configurável de fora de propósito: quem controlasse a configuração poderia
-    fazer a nuvem se declarar estação de novo.
+    A cópia hospedada saiu do ar em 17/08/2026, e hoje `is_cloud_runtime()` é
+    sempre falso — mas o campo fica, e o painel continua conferindo. É o que
+    impede que uma próxima cópia deste arquivo, em qualquer serviço, volte a se
+    passar por agente. Não é configurável de fora de propósito: quem controlasse
+    a configuração poderia fazer a nuvem se declarar estação de novo.
     """
     return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION,
             "agent_id": _agent_id_local(), "capabilities": ["impose", "print"],
@@ -383,8 +390,8 @@ async def proxy_url(url: str):
     import requests
     from fastapi.responses import Response
 
-    # Sem allowlist este endpoint é um SSRF: alcança a rede interna do Render
-    # e, no agente, a LAN da gráfica. Só o Storage do Supabase é legítimo aqui.
+    # Sem allowlist este endpoint é um SSRF: no agente, alcança a LAN inteira da
+    # gráfica. Só o Storage do Supabase é legítimo aqui.
     if not security_config.is_allowed_proxy_url(url):
         log_diag(f"[proxy] BLOQUEADO: host fora da allowlist: {url!r}")
         raise HTTPException(status_code=403, detail="URL não autorizada para proxy.")
@@ -1271,7 +1278,7 @@ async def impose_file(
         ma_files_map = {}
         temp_paths_ma = []
 
-        # Matching por INDICE (mais robusto que por filename no Linux/Render)
+        # Matching por INDICE (mais robusto que por filename no Linux)
         form_data = await request.form()
         files_list = []
         for i in range(len(multi_artes_list)):

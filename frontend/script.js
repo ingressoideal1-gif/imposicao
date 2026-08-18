@@ -3543,7 +3543,7 @@ if (typeof window.renderQRCodeOnCtx !== 'function') {
  * De quebra, ela escondia um defeito: `baseParaImposicao` so reconhecia
  * `localhost` e `127.0.0.1`, mas a sondagem tambem acha a estacao pelo IP de LAN
  * do agente. Com a estacao achada por `http://192.168.1.50:9000`, a tela mostrava
- * "AGENTE LOCAL" e o trabalho ia para o Render -- o mesmo modo de falhar de
+ * "AGENTE LOCAL" e o trabalho ia para a nuvem -- o mesmo modo de falhar de
  * 15/08/2026, por outro caminho.
  *
  * Ver docs/superpowers/specs/2026-08-16-migrar-render-para-supabase-design.md
@@ -10217,12 +10217,17 @@ window.runImposition = async function (mode, returnBlob = false) {
                                 // que precisa ser barrada.
                                 //
                                 // 15/08/2026: o primeiro endereco sondado e o da
-                                // PROPRIA PAGINA, que na Vercel leva ao Render. Como
-                                // o mesmo app.py serve os dois, a nuvem respondia
-                                // "NewProd Agent ativo" e o painel acreditava --
-                                // impondo na nuvem com o selo "AGENTE LOCAL" na tela.
-                                // O QR Ideal ficou impossivel de imprimir por caminho
-                                // nenhum, porque o pool so existe na estacao.
+                                // PROPRIA PAGINA, e naquela data a Vercel desviava
+                                // esse caminho para uma copia do mesmo app.py na
+                                // nuvem. Ela respondia "NewProd Agent ativo" e o
+                                // painel acreditava -- impondo na nuvem com o selo
+                                // "AGENTE LOCAL" na tela. O QR Ideal ficou impossivel
+                                // de imprimir por caminho nenhum, porque o pool so
+                                // existe na estacao.
+                                //
+                                // O desvio e a copia sairam em 17/08/2026. Esta linha
+                                // fica: ela e o que garante que so um agente de
+                                // verdade -- na maquina, com o pool -- e aceito.
                                 if (checkData.status === "running" && checkData.onde !== "nuvem") {
                                     localActive = true;
                                     agentBaseUrl = base;
@@ -14227,9 +14232,10 @@ async function salvarPermissoesNoMotor(payload) {
  * perguntar".
  *
  * A diferença decide se é seguro gravar um perfil padrão por cima. Enquanto as
- * duas respostas chegavam como `null`, o motor lento — o Render dorme, e a
- * consulta tem 8 s de paciência — bastava para o painel achar que era primeiro
- * acesso e rebaixar a pessoa a visualizador. Ela entrava no dia seguinte sem
+ * duas respostas chegavam como `null`, o motor lento — na época o backend
+ * hospedado dormia, e a consulta tem 8 s de paciência — bastava para o painel
+ * achar que era primeiro acesso e rebaixar a pessoa a visualizador. A Edge
+ * Function de hoje não dorme, mas 4G ruim no celular produz o mesmo atraso. Ela entrava no dia seguinte sem
  * metade do menu, sem nada ter sido mexido de propósito.
  *
  * Devolve { estado: 'ok' | 'sem_linha' | 'indisponivel', perms }.
@@ -14312,7 +14318,7 @@ async function ensureUserPermissions(userId, email) {
  * Sem isto o caminho de falha caía em `_currentPerms` vazio, e `podeAbrirView`
  * libera tudo quando não há grade — a aplicação inteira aberta justamente no
  * momento em que ninguém sabe quem é a pessoa. Um botão de tentar de novo
- * resolve o caso real, que é o motor dormindo no Render.
+ * resolve o caso real, que é a rede — a consulta que não voltou a tempo.
  */
 function mostrarFalhaDePermissoes(email) {
     let overlay = document.getElementById('auth-overlay-perms');
@@ -29261,9 +29267,12 @@ async function carregarCorImpressora(printerName) {
     try {
         // 127.0.0.1 e nao caminho relativo: o mapa e os perfis vivem no AGENTE
         // (`printer_icc_map.json`), como diz o comentario acima deste bloco. Com
-        // caminho relativo, o painel aberto pela Vercel perguntava ao Render —
-        // que tem outro disco, e efemero. O seletor vinha vazio, e o que fosse
-        // salvo ali sumia na publicacao seguinte, sem erro na tela.
+        // caminho relativo, o painel aberto pela Vercel perguntava ao servidor
+        // da nuvem — que tinha outro disco, e efemero. O seletor vinha vazio, e o
+        // que fosse salvo ali sumia na publicacao seguinte, sem erro na tela.
+        //
+        // Aquele servidor saiu do ar em 17/08/2026, e hoje o caminho relativo nao
+        // chega a lugar nenhum: o sintoma seria seletor vazio direto.
         //
         // E o MESMO desvio que ja tinha sido corrigido em `carregarCapacidades`
         // e no mapa de PPDs; este bloco ficou para tras.
@@ -30151,7 +30160,9 @@ function _updateSaveButtonLabel() {
 }
 
 // URL do agente desta maquina. Sempre 127.0.0.1: a configuracao de impressao e
-// fisica da estacao, entao nao pode vir do Render nem do Supabase compartilhado.
+// fisica DESTA maquina -- impressora, bandeja, papel --, entao nao pode vir de
+// caminho relativo (que na nuvem nao chega a lugar nenhum) nem do Supabase, que e
+// compartilhado por todas as estacoes.
 const AGENTE_LOCAL_URL = 'http://127.0.0.1:9000';
 
 async function savePrintConfigForProduct() {
@@ -31605,9 +31616,11 @@ window.admDeleteImage = async function(name, btnEl) {
 
 // ──── Versão do agente local no rodapé ────────────────────────────────────
 // Lê direto do agente em 127.0.0.1:9000, e só de lá. Não consulta
-// window.location.origin de propósito: na nuvem esse caminho é reescrito para o
-// Render, que responde {"status":"running"} com a versão do backend — o rodapé
-// passaria a exibir a versão da nuvem como se fosse a da estação.
+// window.location.origin de propósito: a versão do agente é um fato desta
+// MÁQUINA, e só o loopback sabe respondê-lo. Até 17/08/2026 havia um motivo mais
+// agudo — na nuvem aquele caminho era desviado para uma cópia do mesmo app.py,
+// que respondia {"status":"running"} com a versão do backend, e o rodapé exibia
+// a versão da nuvem como se fosse a da estação. O desvio saiu; a regra fica.
 // A detecção que já existia só roda durante uma imposição; esta roda ao abrir.
 // Manifesto de releases: endereço fixo, a mesma fonte que o agente consulta.
 // Comparar com ele — e não com o que a nuvem reporta — é o que faz o aviso
@@ -31688,8 +31701,10 @@ setInterval(atualizarVersaoAgenteRodape, 60000);
 // ──── Identidade do agente desta máquina ──────────────────────────────────
 // Pergunta ao agente local qual é o AGENT_ID dele. É o que permite escolher o
 // registro certo em print_agents em vez do heartbeat mais recente do banco.
-// Consulta só o loopback: window.location.origin, na nuvem, é reescrito para o
-// Render, que responderia sem agent_id.
+// Consulta só o loopback: o AGENT_ID é de quem está rodando NESTA máquina, e
+// mais ninguém tem como responder isso. (Até 17/08/2026 havia um motivo extra:
+// na nuvem aquele caminho era desviado para uma cópia do app.py, que respondia
+// sem agent_id.)
 let _agentIdLocalCache = null;
 let _agentIdLocalEm = 0;
 

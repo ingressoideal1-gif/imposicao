@@ -26,6 +26,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # A origem do arnês. Um `fetch('/api/ordens')` dela vira este endereço absoluto
 # quando chega ao interceptador.
 PAGINA_DO_ARNES = "https://imposicao.vercel.app/"
+MOTOR = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/painel"
 
 ARNES = r"""
 const puppeteer = require('puppeteer');
@@ -43,7 +44,9 @@ const PAGINA = 'https://imposicao.vercel.app/';
 // um só: a Edge Function `painel`, que é quem grava a grade de permissões e os
 // códigos de acesso local. O servidor Python que ficava na nuvem — e que era o
 // que este teste exercitava até então — saiu do ar.
-const MOTOR = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/painel';
+// O endereco vem do Python (argv[3]): uma fonte so, para as duas pontas nao
+// divergirem quando a Edge Function mudar de nome.
+const MOTOR = process.argv[3];
 
 (async () => {
   const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
@@ -143,7 +146,7 @@ def resultado(tmp_path_factory):
     # `NODE_PATH` porque o arnês roda de uma pasta temporária, e o `require`
     # procura `node_modules` subindo a partir do ARQUIVO, não do `cwd`.
     ambiente = dict(os.environ, NODE_PATH=os.path.join(RAIZ, "node_modules"))
-    r = subprocess.run(["node", str(script), RAIZ], capture_output=True, text=True,
+    r = subprocess.run(["node", str(script), RAIZ, MOTOR], capture_output=True, text=True,
                        timeout=180, cwd=RAIZ, env=ambiente)
     assert r.returncode == 0, f"o arnês falhou:\n{r.stderr[-2000:]}"
     return json.loads(r.stdout.strip().splitlines()[-1])
@@ -153,7 +156,6 @@ def test_a_pagina_carrega_sem_erro(resultado):
     assert resultado["erros"] == [], resultado["erros"]
 
 
-MOTOR = "https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/painel"
 
 
 def test_a_chamada_ao_motor_leva_a_sessao(resultado):
@@ -206,6 +208,6 @@ def test_o_sdk_do_supabase_nao_entra_em_recursao(resultado):
     propósito: o que se mede não é o número exato — é que ele TENHA teto. Se
     recursionasse, não teria.
     """
-    assert resultado["chamadas"] <= 8, (
+    assert resultado["chamadas"] <= 6, (
         f"getSession chamada {resultado['chamadas']} vezes — recursão"
     )

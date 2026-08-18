@@ -52,7 +52,7 @@ O **Ideal Imposition** é um sistema de imposição gráfica que automatiza o pr
 ├──────────────────────────────────────────────────────────────────┤
 │  AGENTE LOCAL (opcional, porta 9000)                             │
 │  local_print_agent.py                                            │
-│  └─ Permite impressão física local a partir do frontend online  │
+│  └─ Imprime na estação; o painel abre por http://localhost:9000 │
 ├──────────────────────────────────────────────────────────────────┤
 │  BANCO DE DADOS                                                  │
 │  ├─ Supabase PostgreSQL (9 tabelas, RLS desabilitado)           │
