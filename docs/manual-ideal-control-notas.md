@@ -99,8 +99,8 @@ linhas impossível de revisar. Para uma correção pequena, edite direto o
 
 Se a edição for grande, as partes ficam em `ferramentas/manual-fonte/`:
 
-    venv\Scripts\python ferramentas\manual-fonteuild.py     # remonta o manual
-    node ferramentas\manual-fonteerificar.js                # abre num Chrome de verdade
+    venv\Scripts\python ferramentas\manual-fonte\build.py     # remonta o manual
+    node ferramentas\manual-fonte\verificar.js                # abre num Chrome de verdade
 
 O `verificar.js` tira capturas nas quatro combinações de tema e largura (em
 `ferramentas/manual-fonte/fotos/`), exercita teclado, busca, cópia, tema e link direto,
