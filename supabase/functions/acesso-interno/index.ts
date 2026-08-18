@@ -179,8 +179,12 @@ async function setoresDoEvento(eventoId: string, pedidoIdInt?: number): Promise<
   if (pedidoIdInt !== undefined) filtro += `&pedido_id_int=eq.${pedidoIdInt}`;
   const setores = (await banco(
     "GET",
+    // `bloqueado` e `bloqueado_motivo` entram aqui em 18/08/2026: o cliente
+    // bloqueia o setor inteiro no aplicativo dele, e ate agora a grafica nao
+    // via nem o bloqueio nem o motivo -- o atendente atendia o telefone sem
+    // saber que o proprio dono tinha fechado aquele portao.
     filtro + "&select=id,nome,quantidade,tipo_uso,abre_em,fecha_em," +
-      "pedido_id_int,modelo_id&order=nome.asc",
+      "bloqueado,bloqueado_motivo,pedido_id_int,modelo_id&order=nome.asc",
   )) ?? [];
 
   const bloqueios = (await banco(
@@ -587,6 +591,79 @@ async function pedidosComControle(limite: number): Promise<any[]> {
   return pedidos;
 }
 
+/**
+ * Tudo o que a grafica precisa saber de um cliente, pelo numero dele.
+ *
+ * A busca desta tela passou a ser pelo NUMERO DO CLIENTE em 18/08/2026, por
+ * decisao do usuario. O atendente atende o telefone e sabe quem esta do outro
+ * lado -- o numero do pedido ele teria de perguntar, e o cliente muitas vezes
+ * nao tem.
+ *
+ * Devolve o cliente, as contas dele (o mesmo bloco de "Acesso do cliente", que
+ * agora nao depende mais de abrir um pedido) e os pedidos dele que tem controle
+ * de acesso, do mais recente para o mais antigo.
+ */
+async function painelDoCliente(idCliente: number): Promise<any> {
+  const c = ((await banco(
+    "GET",
+    `clientes?id_cliente=eq.${idCliente}&select=id_cliente,nome,fantasia,email,email_contato`,
+  )) ?? [])[0];
+  if (!c) throw new Recusa(404, `o cliente ${idCliente} nao existe no ERP`);
+
+  // As propostas do cliente primeiro, e so entao os pedidos com controle: e o
+  // caminho mais curto entre "numero do cliente" e "pedidos dele", porque a
+  // tabela de controle nao guarda o cliente -- ela guarda o pedido.
+  const propostas = ((await banco(
+    "GET",
+    `propostas?id_cliente=eq.${idCliente}&select=id_int&order=created_at.desc&limit=200`,
+  )) ?? []).map((p: any) => Number(p.id_int)).filter(Boolean);
+
+  let pedidos: any[] = [];
+  if (propostas.length) {
+    pedidos = (await banco(
+      "GET",
+      `producao_acesso_pedidos?pedido_id_int=in.(${propostas.join(",")})` +
+        "&select=pedido_id_int,evento_id,publicado_em,total_credenciais,created_at" +
+        "&order=created_at.desc",
+    )) ?? [];
+  }
+
+  const ids = [...new Set(
+    pedidos.filter((p: any) => p.evento_id).map((p: any) => String(p.evento_id)),
+  )].sort();
+  const eventos: Record<string, any> = {};
+  if (ids.length) {
+    const lista = ids.map((i) => `"${i}"`).join(",");
+    for (
+      const e of (await banco(
+        "GET",
+        `producao_acesso_eventos?id=in.(${lista})` +
+          "&select=id,nome_evento,data_evento,local_evento,status",
+      )) ?? []
+    ) {
+      eventos[String(e.id)] = e;
+    }
+  }
+  for (const p of pedidos) {
+    const ev = eventos[String(p.evento_id)];
+    p.nome_evento = ev?.nome_evento ?? null;
+    p.data_evento = ev?.data_evento ?? null;
+    p.local_evento = ev?.local_evento ?? null;
+    p.status_evento = ev?.status ?? null;
+  }
+
+  return {
+    cliente: {
+      id_cliente: idCliente,
+      nome: c?.nome ?? "",
+      fantasia: c?.fantasia ?? "",
+      email: String(c?.email || c?.email_contato || "").trim().toLowerCase(),
+      contas: await contasDoCliente(idCliente),
+    },
+    pedidos,
+  };
+}
+
 // ── Roteamento ──────────────────────────────────────────────────────────────
 
 async function rotear(req: Request, url: URL): Promise<Response> {
@@ -612,6 +689,9 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   }
   if (metodo === "GET" && p.length === 2 && p[0] === "pedidos") {
     return ok(await painelDoPedido(inteiro(p[1], "path", "pedido")));
+  }
+  if (metodo === "GET" && p.length === 2 && p[0] === "clientes") {
+    return ok(await painelDoCliente(inteiro(p[1], "path", "cliente")));
   }
   if (metodo === "GET" && p.length === 1 && p[0] === "instalacao") {
     return ok({ url: URL_DE_INSTALACAO });

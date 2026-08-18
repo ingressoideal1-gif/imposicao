@@ -49,7 +49,14 @@
     var BASE = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-interno';
 
     var estado = {
-        pedido: null,        // o número pesquisado
+        cliente: null,       // o número do cliente pesquisado
+        painelCliente: null, // a resposta de /clientes/{n}
+        // Quem o bloco "Acesso do cliente" está mostrando AGORA. Ele é
+        // desenhado por dois caminhos -- a busca por cliente e a abertura de um
+        // pedido --, e quem grava precisa saber de quem está falando sem
+        // adivinhar por qual porta a tela entrou.
+        clienteAberto: null,
+        pedido: null,        // o pedido aberto, quando há um
         painel: null,        // a resposta do servidor
         ingressos: {},       // { setor_id: { pagina, ha_mais, lista, busca } }
         dashboard: null      // so existe depois de alguem pedir
@@ -286,6 +293,94 @@
         });
     }
 
+    /**
+     * A busca desta tela: o NUMERO DO CLIENTE (usuario, 18/08/2026).
+     *
+     * Mostra quem e o cliente, as contas dele e os pedidos dele que tem
+     * controle de acesso. O painel de configuracao continua sendo por PEDIDO --
+     * um evento pertence a um pedido --, e tocar num deles o abre logo abaixo.
+     */
+    function abrirCliente(numeroDigitado) {
+        var n = parseInt(String(numeroDigitado || '').replace(/\D/g, ''), 10);
+        if (!n) {
+            avisar('Digite o número do cliente.', 'warning');
+            return Promise.resolve();
+        }
+        estado.cliente = n;
+        // O painel do pedido some: ele e de OUTRO cliente ate alguem tocar num
+        // pedido desta lista, e deixa-lo na tela faria o atendente configurar o
+        // evento errado.
+        estado.pedido = null;
+        estado.painel = null;
+        estado.ingressos = {};
+        estado.dashboard = null;
+        $('ic-conteudo').style.display = 'none';
+        $('ic-cliente-secao').style.display = 'none';
+        $('ic-carregando').style.display = '';
+        $('ic-vazio').style.display = 'none';
+
+        return pedir('/clientes/' + n).then(function (r) {
+            estado.painelCliente = r;
+            desenharCliente();
+        }).catch(function (e) {
+            estado.painelCliente = null;
+            $('ic-carregando').style.display = 'none';
+            $('ic-cliente-secao').style.display = 'none';
+            $('ic-vazio').style.display = '';
+            $('ic-vazio').textContent = e && e.status === 404
+                ? ('O cliente ' + n + ' não existe no ERP.')
+                : ((e && e.message) || 'Não consegui abrir este cliente.');
+            if (window.console) { console.error('[ideal-control] abrirCliente', e); }
+        });
+    }
+
+    function desenharCliente() {
+        var r = estado.painelCliente;
+        var c = r.cliente;
+        $('ic-carregando').style.display = 'none';
+        $('ic-cliente-secao').style.display = '';
+
+        $('ic-cliente-nome').textContent = c.nome || ('Cliente ' + c.id_cliente);
+        $('ic-cliente-dados').textContent = 'Cliente ' + c.id_cliente
+            + (c.fantasia && c.fantasia !== c.nome ? ' · ' + c.fantasia : '')
+            + (c.email ? ' · ' + c.email : '');
+
+        var caixa = $('ic-cliente-pedidos');
+        caixa.innerHTML = '';
+        var pedidos = r.pedidos || [];
+        $('ic-cliente-sem-pedido').style.display = pedidos.length ? 'none' : '';
+        pedidos.forEach(function (p) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn btn-sm btn-outline ic-pedido-do-cliente';
+            b.id = 'ic-pedido-' + p.pedido_id_int;
+            var partes = ['#' + p.pedido_id_int];
+            partes.push(p.nome_evento || 'sem evento ainda');
+            if (p.data_evento) { partes.push(quando(p.data_evento)); }
+            // A situacao do evento vem junto: e o espelho do que o cliente fez
+            // no aplicativo dele, e e a primeira coisa que o atendente precisa
+            // saber antes de abrir o pedido.
+            if (p.status_evento && p.status_evento !== 'ativo') {
+                partes.push(SITUACAO_DO_EVENTO[p.status_evento] || p.status_evento);
+            }
+            b.textContent = partes.join(' · ');
+            b.addEventListener('click', function () { abrirPedido(p.pedido_id_int); });
+            caixa.appendChild(b);
+        });
+
+        // O bloco de liberar acesso vive aqui TAMBEM, e nao so dentro de um
+        // pedido: cliente novo ainda nao tem pedido com controle nenhum, e era
+        // justamente ele quem precisava do acesso liberado.
+        desenharAcessoDoCliente(c);
+    }
+
+    /** As palavras da situacao do evento, as MESMAS do aplicativo do cliente. */
+    var SITUACAO_DO_EVENTO = {
+        ativo: 'Ativo',
+        encerrado: 'Inativo',
+        finalizado: 'Finalizado'
+    };
+
     function listarRecentes() {
         return pedir('/pedidos?limite=30').then(function (r) {
             var caixa = $('ic-recentes');
@@ -321,7 +416,7 @@
             + (p.evento ? ' · ' + p.evento.nome_evento : '');
 
         desenharSituacao();
-        desenharAcessoDoCliente();
+        desenharAcessoDoCliente(estado.painel.cliente);
         // A seção do público aparece com o BOTÃO, e não com os números: eles
         // só são buscados se alguém pedir.
         $('ic-dashboard-secao').style.display = p.tem_dashboard ? '' : 'none';
@@ -477,10 +572,13 @@
      * sem e-mail não há o que liberar, e um formulário vazio só faria o
      * atendente tentar.
      */
-    function desenharAcessoDoCliente() {
-        var p = estado.painel;
-        var c = p && p.cliente;
+    /**
+     * @param c o cliente a mostrar -- do pedido aberto ou da busca por cliente.
+     *          Sem ele o bloco some, que e o caso do pedido sem cliente no ERP.
+     */
+    function desenharAcessoDoCliente(c) {
         var secao = $('ic-acesso-secao');
+        estado.clienteAberto = c || null;
         secao.style.display = c ? '' : 'none';
         if (!c) { return; }
 
@@ -594,24 +692,25 @@
      * pedido não bastaria — o parceiro pode trocar o cliente de uma proposta,
      * e nesse caso o mesmo número na tela já é outra gente.
      */
+    /** A tela ainda esta mostrando o MESMO cliente de quando o pedido saiu? */
     function aindaNaTela(pedidoAlvo, clienteAlvo) {
-        var c = estado.painel && estado.painel.cliente;
-        return estado.pedido === pedidoAlvo && !!c && c.id_cliente === clienteAlvo;
+        var c = estado.clienteAberto;
+        return !!c && c.id_cliente === clienteAlvo;
     }
 
-    /** O recado de quem trocou de pedido antes de a resposta chegar. */
+    /** O recado de quem trocou de cliente antes de a resposta chegar. */
     function avisarQueTrocouDePedido(nomeAlvo, pedidoAlvo, jaTinhaConta) {
         avisar(jaTinhaConta
             ? ('O acesso de ' + nomeAlvo + ' foi ligado à conta que ele já tinha, mas '
-               + 'você já abriu outro pedido. Abra o pedido ' + pedidoAlvo
+               + 'você já abriu outro cliente. Abra ' + nomeAlvo
                + ' de novo para ver a lista de contas.')
             : ('A senha do cliente ' + nomeAlvo + ' foi gerada, mas você já abriu '
-               + 'outro pedido. Abra o pedido ' + pedidoAlvo + ' de novo para gerar '
+               + 'outro cliente. Abra ' + nomeAlvo + ' de novo para gerar '
                + 'outra.'), 'warning');
     }
 
     function liberarAcesso() {
-        var c = estado.painel && estado.painel.cliente;
+        var c = estado.clienteAberto;
         if (!c) { return Promise.resolve(); }
         var aviso = $('ic-acesso-aviso');
         var campo = $('ic-acesso-email');
@@ -907,6 +1006,49 @@
         $('ic-ev-nome').value = ev.nome_evento || '';
         $('ic-ev-local').value = ev.local_evento || '';
         $('ic-ev-data').value = deISOParaCampo(ev.data_evento);
+        desenharSituacaoDoEvento(ev);
+    }
+
+    /**
+     * A situacao do evento, espelhada do aplicativo do cliente.
+     *
+     * As tres palavras sao as dele, e o efeito de cada botao e o mesmo que a
+     * engrenagem do celular faz -- a grafica e o cliente mexem na MESMA coluna.
+     *
+     * "Inativar" para o evento inteiro: nenhum aparelho aceita ingresso
+     * enquanto estiver assim. "Finalizar" arquiva: o evento sai de Meus Eventos
+     * e vai para a lista de finalizados do cliente. Nenhum dos dois apaga nada.
+     */
+    function desenharSituacaoDoEvento(ev) {
+        var ativo = ev.status === 'ativo';
+        var finalizado = ev.status === 'finalizado';
+        $('ic-ev-situacao').textContent = finalizado
+            ? 'Finalizado. Ele saiu de "Meus Eventos" no aplicativo do cliente e está '
+              + 'na lista de finalizados dele.'
+            : (ativo
+                ? 'Ativo. Os aparelhos deste evento estão aceitando ingresso.'
+                : 'Inativo. Nenhum aparelho deste evento aceita ingresso agora — '
+                  + 'aparelho sem internet só recebe a mudança quando voltar a ter sinal.');
+
+        var ativar = $('ic-ev-ativar');
+        ativar.textContent = ativo ? 'Inativar este evento' : 'Ativar este evento';
+        // Um evento finalizado nao se inativa: ele ja saiu de cena, e o caminho
+        // de volta e o "Reabrir" ao lado.
+        ativar.style.display = finalizado ? 'none' : '';
+        ativar.onclick = function () {
+            trocarStatusDoEvento(ativo ? 'encerrado' : 'ativo');
+        };
+
+        var finalizar = $('ic-ev-finalizar');
+        finalizar.textContent = finalizado ? 'Reabrir este evento' : 'Finalizar este evento';
+        finalizar.onclick = function () {
+            trocarStatusDoEvento(finalizado ? 'ativo' : 'finalizado');
+        };
+    }
+
+    function trocarStatusDoEvento(status) {
+        return gravar('/eventos/' + estado.painel.evento.id, { status: status })
+            .then(recarregar).catch(function () { /* já avisado */ });
     }
 
     // ── Setores ─────────────────────────────────────────────────────────────
@@ -984,6 +1126,7 @@
         });
         el.appendChild(salvar);
 
+        el.appendChild(bloqueioDoSetorInteiro(s));
         el.appendChild(bloqueiosDoSetor(s));
         el.appendChild(codigosDoSetor(s));
         el.appendChild(ingressosDoSetor(s));
@@ -1013,6 +1156,52 @@
         if (ajuda) { texto(c, 'span', ajuda, 'ic-ajuda'); }
         pai.appendChild(c);
         return i;
+    }
+
+    /**
+     * O setor INTEIRO bloqueado -- espelho do que o cliente faz no aplicativo.
+     *
+     * E diferente de bloquear uma faixa: aqui nenhum ingresso daquele setor
+     * entra, e o motivo e o que o porteiro le em voz alta para a pessoa na
+     * frente dele. Ate 18/08/2026 a grafica nao via este estado, e o atendente
+     * atendia o telefone sem saber que o proprio dono tinha fechado o portao.
+     */
+    function bloqueioDoSetorInteiro(s) {
+        var el = document.createElement('div');
+        el.className = 'ic-bloco';
+        el.id = 'ic-setor-bloqueio-' + s.id;
+        texto(el, 'h4', 'Setor inteiro');
+
+        if (s.bloqueado) {
+            texto(el, 'p', 'BLOQUEADO — nenhum ingresso deste setor entra. Motivo: '
+                  + (s.bloqueado_motivo || 'sem motivo escrito'), 'ic-alerta');
+            var liberar = document.createElement('button');
+            liberar.className = 'btn btn-sm btn-primary';
+            liberar.id = 'ic-setor-liberar-' + s.id;
+            liberar.textContent = 'Liberar o setor';
+            liberar.addEventListener('click', function () {
+                gravar('/setores/' + s.id, { bloqueado: false })
+                    .then(recarregar).catch(function () { /* já avisado */ });
+            });
+            el.appendChild(liberar);
+            return el;
+        }
+
+        texto(el, 'p', 'Bloquear para o porteiro recusar TODOS os ingressos deste '
+              + 'setor, com o motivo na tela dele.', 'ic-ajuda');
+        var motivo = campo(el, 'Motivo', 'text', 'ic-setor-bloq-motivo-' + s.id, '',
+                           'O porteiro lê isto em voz alta.');
+        var bloquear = document.createElement('button');
+        bloquear.className = 'btn btn-sm btn-outline';
+        bloquear.id = 'ic-setor-bloquear-' + s.id;
+        bloquear.textContent = 'Bloquear o setor inteiro';
+        bloquear.addEventListener('click', function () {
+            gravar('/setores/' + s.id, {
+                bloqueado: true, bloqueado_motivo: motivo.value
+            }).then(recarregar).catch(function () { /* já avisado */ });
+        });
+        el.appendChild(bloquear);
+        return el;
     }
 
     function bloqueiosDoSetor(s) {
@@ -1284,10 +1473,26 @@
         $('ic-aparelhos-secao').style.display = ev ? '' : 'none';
         if (!ev) { return; }
 
-        (estado.painel.aparelhos || []).forEach(function (a) {
-            caixa.appendChild(cartaoDeAparelho(a));
-        });
-        caixa.appendChild(formularioDeAparelho());
+        var lista = estado.painel.aparelhos || [];
+        lista.forEach(function (a) { caixa.appendChild(cartaoDeAparelho(a)); });
+
+        // Como nasce um aparelho HOJE. O formulario "Criar um aparelho" saiu em
+        // 18/08/2026 junto com o codigo de seis caracteres: a tela que o pedia
+        // foi removida da portaria em 16/08, e o codigo gerado aqui nao tinha
+        // mais onde ser digitado. Sem esta frase no lugar, quem procurasse o
+        // botao acharia que a tela quebrou.
+        var comoCriar = document.createElement('div');
+        comoCriar.className = 'card ic-aparelho';
+        comoCriar.id = 'ic-como-criar-aparelho';
+        texto(comoCriar, 'h4', 'Como entra um aparelho novo');
+        texto(comoCriar, 'p', 'Quem põe um aparelho no ar é o próprio cliente, no '
+              + 'celular: ele abre o Ideal Control, toca na barra do evento e digita '
+              + 'a senha da conta dele. O nome que ele escolher vale para esse '
+              + 'celular em todos os eventos.', 'ic-ajuda');
+        if (!lista.length) {
+            texto(comoCriar, 'p', 'Este evento ainda não tem nenhum aparelho.', 'ic-dim');
+        }
+        caixa.appendChild(comoCriar);
     }
 
     function cartaoDeAparelho(a) {
@@ -1320,17 +1525,6 @@
         });
         el.appendChild(salvar);
 
-        var codigo = document.createElement('button');
-        codigo.className = 'btn btn-sm btn-outline';
-        codigo.id = 'ic-ap-codigo-' + a.id;
-        codigo.textContent = 'Gerar código de pareamento';
-        codigo.addEventListener('click', function () {
-            pedir('/aparelhos/' + a.id + '/codigo', { method: 'POST', body: '{}' })
-                .then(function (r) { mostrarCodigo(a.nome, r.codigo); })
-                .catch(function (e) { avisar(e.message, 'error'); });
-        });
-        el.appendChild(codigo);
-
         // Pausar e Excluir, o mesmo par que o Ideal Control do cliente oferece
         // desde 18/08/2026. "Revogar" saiu: ele desligava o aparelho e o
         // deixava na lista para sempre, que nao era nenhuma das duas coisas que
@@ -1360,36 +1554,6 @@
                 .then(recarregar).catch(function () { /* já avisado */ });
         });
         el.appendChild(excluir);
-        return el;
-    }
-
-    function formularioDeAparelho() {
-        var el = document.createElement('div');
-        el.className = 'card ic-aparelho';
-        texto(el, 'h4', 'Criar um aparelho');
-        texto(el, 'p', 'Pré-configure os portões antes de entregar o evento ao '
-              + 'cliente: ele recebe o Ideal Control pronto para parear.', 'ic-ajuda');
-
-        var nome = campo(el, 'Nome do novo aparelho', 'text', 'ic-novo-ap-nome', '');
-        nome.placeholder = 'Ex.: Portão A';
-        texto(el, 'p', 'Toque nos setores que este aparelho valida', 'ic-ajuda');
-        el.appendChild(botoesDeSetor('ic-novo-ap-setores', [], null));
-
-        var criar = document.createElement('button');
-        criar.className = 'btn btn-sm btn-primary';
-        criar.id = 'ic-novo-ap-criar';
-        criar.textContent = 'Criar aparelho';
-        criar.addEventListener('click', function () {
-            gravar('/eventos/' + estado.painel.evento.id + '/aparelhos', {
-                nome: nome.value,
-                setores: setoresAcesos('ic-novo-ap-setores')
-            }, 'POST').then(function (r) {
-                mostrarCodigo(r.nome, r.codigo);
-                nome.value = '';
-                return recarregar();
-            }).catch(function () { /* já avisado */ });
-        });
-        el.appendChild(criar);
         return el;
     }
 
@@ -1426,19 +1590,6 @@
             .map(function (b) { return b.dataset.setor; });
     }
 
-    /**
-     * O código de pareamento aparece UMA vez.
-     *
-     * Ele não fica guardado em lugar nenhum — o que fica é o hash. Se a tela
-     * não disser isso em texto, o atendente fecha a caixa achando que consulta
-     * depois, e descobre na porta do evento que não dá.
-     */
-    function mostrarCodigo(nomeAparelho, codigo) {
-        $('ic-codigo-titulo').textContent = 'Código de "' + nomeAparelho + '"';
-        $('ic-codigo-valor').textContent = codigo;
-        $('ic-codigo-caixa').style.display = '';
-    }
-
     function recarregar() {
         return estado.pedido ? abrirPedido(estado.pedido) : Promise.resolve();
     }
@@ -1460,16 +1611,12 @@
         jaLigou = true;
 
         $('ic-buscar').addEventListener('click', function () {
-            abrirPedido($('ic-busca').value);
+            abrirCliente($('ic-busca').value);
         });
         $('ic-busca').addEventListener('keydown', function (ev) {
-            if (ev.key === 'Enter') { abrirPedido($('ic-busca').value); }
+            if (ev.key === 'Enter') { abrirCliente($('ic-busca').value); }
         });
         $('ic-dashboard-abrir').addEventListener('click', carregarDashboard);
-        $('ic-codigo-fechar').addEventListener('click', function () {
-            $('ic-codigo-caixa').style.display = 'none';
-            $('ic-codigo-valor').textContent = '';
-        });
         $('ic-ev-salvar').addEventListener('click', function () {
             gravar('/eventos/' + estado.painel.evento.id, {
                 nome_evento: $('ic-ev-nome').value,
@@ -1483,6 +1630,7 @@
     window.IdealControl = {
         estado: estado,
         iniciar: iniciar,
+        abrirCliente: abrirCliente,
         abrirPedido: abrirPedido,
         listarRecentes: listarRecentes,
         desenhar: desenhar,

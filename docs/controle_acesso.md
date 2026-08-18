@@ -704,6 +704,14 @@ nenhum código a mais. *Excluir* apaga a linha: os vínculos de setor vão junto
 histórico da noite não pode depender de o aparelho continuar existindo. Ver
 `sql/schema_acesso_excluir_aparelho.sql`.
 
+**A gráfica e o cliente veem a mesma configuração** (usuário, 18/08/2026): "Configurações
+salvas no aparelho devem ser espelhadas no menu Ideal Control do Imposition, e vice-versa".
+Os dois lados escrevem nas mesmas tabelas; o que faltava era o painel da gráfica *mostrar* o
+que o cliente muda — a situação do evento (`status`) e o setor bloqueado inteiro
+(`bloqueado`, `bloqueado_motivo`). A busca daquela tela passou a ser pelo **número do
+cliente** (`GET /clientes/{id}` da `acesso-interno`), e o formulário de criar aparelho por
+código saiu: o código de seis caracteres não tem mais onde ser digitado desde 16/08/2026.
+
 **O nome é do dispositivo, não do evento** (usuário, 18/08/2026). A coluna `navegador_id`,
 gravada quando o celular vira portão, liga as linhas do mesmo aparelho em eventos
 diferentes; renomear um portão renomeia os outros do mesmo cliente. O celular também guarda

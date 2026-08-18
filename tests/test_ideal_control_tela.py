@@ -141,6 +141,22 @@ PAINEL_FALSO = {
     "tem_dashboard": True,
 }
 
+# O que `GET /clientes/{n}` devolve: quem e o cliente, as contas dele e os
+# pedidos dele que tem controle de acesso. E por aqui que a tela entra desde
+# 18/08/2026 -- a busca e pelo numero do cliente.
+CLIENTE_FALSO = {
+    "cliente": {
+        "id_cliente": 14, "nome": "DANIEL MOREIRA", "fantasia": "",
+        "email": "daniel@exemplo.com.br", "contas": [],
+    },
+    "pedidos": [
+        {"pedido_id_int": 18560, "evento_id": "ev-1", "publicado_em": None,
+         "total_credenciais": 1000, "created_at": "2026-08-14T10:00:00Z",
+         "nome_evento": "Baile do Hawaii", "data_evento": None,
+         "local_evento": "Clube", "status_evento": "ativo"},
+    ],
+}
+
 DASHBOARD_FALSO = {
         "publico": {"contratado": 1000, "publicado": 1000, "cortesias": 42,
                     "entraram": 150, "sairam": 10, "presentes": 140,
@@ -254,6 +270,7 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
   const saida = await page.evaluate(async () => {{
     window.PAINEL = {json.dumps(PAINEL_FALSO)};
     window.DASHBOARD = {json.dumps(DASHBOARD_FALSO)};
+    window.CLIENTE_COM_PEDIDO = {json.dumps(CLIENTE_FALSO)};
     window.toast = (t, tipo) => {{ (window._avisos = window._avisos || []).push([t, tipo]); }};
     {script_extra}
   }});
@@ -574,41 +591,29 @@ def test_a_grafica_configura_o_setor_sem_pedir_senha_nenhuma():
     assert saida["pediu_senha"] is False
 
 
-def test_criar_aparelho_leva_os_setores_acesos_e_mostra_o_codigo_uma_vez():
+def test_a_tela_NAO_cria_mais_aparelho_por_codigo_e_explica_como_se_cria():
+    """O codigo de seis caracteres deixou de ter onde ser digitado em
+    16/08/2026, quando a tela que o pedia saiu da portaria. Gerar um aqui
+    produzia um segredo que nenhuma tela aceitava -- e o atendente so descobria
+    na porta do evento.
+
+    Quem poe um aparelho no ar hoje e o proprio cliente, no celular. A tela diz
+    isso no lugar do formulario: um botao que some sem explicacao vira chamado."""
     saida = _no_navegador("""
-        const chamadas = [];
-        IdealControl._pedirParaTeste = async (caminho, opcoes) => {
-            chamadas.push({ caminho, metodo: (opcoes || {}).method || 'GET',
-                            corpo: (opcoes || {}).body ? JSON.parse(opcoes.body) : null });
-            if (caminho.startsWith('/pedidos?')) return { pedidos: [] };
-            if (caminho.indexOf('/dashboard') >= 0) return window.DASHBOARD;
-            if (caminho.startsWith('/pedidos/')) return window.PAINEL;
-            if (caminho.indexOf('/aparelhos') >= 0)
-                return { id: 'a2', nome: 'Portao B', codigo: 'ABC234' };
-            return { ok: true };
+        IdealControl.estado.painel = window.PAINEL;
+        IdealControl.desenhar();
+        return {
+            formulario: !!document.getElementById('ic-novo-ap-criar'),
+            codigoDoAparelho: !!document.getElementById('ic-ap-codigo-a1'),
+            caixaDeCodigo: !!document.getElementById('ic-codigo-caixa'),
+            comoCriar: (document.getElementById('ic-como-criar-aparelho') || {}).textContent,
         };
-        window._chamadas = chamadas;
-    IdealControl.iniciar();
-        await IdealControl.abrirPedido(18560);
-
-        document.getElementById('ic-novo-ap-nome').value = 'Portao B';
-        document.getElementById('ic-novo-ap-setores-s2').click();
-        chamadas.length = 0;
-        document.getElementById('ic-novo-ap-criar').click();
-        await new Promise(r => setTimeout(r, 160));
-
-        return { chamadas,
-                 codigo: document.getElementById('ic-codigo-valor').textContent,
-                 titulo: document.getElementById('ic-codigo-titulo').textContent,
-                 caixa: document.getElementById('ic-codigo-caixa').style.display };
     """)
-    criacao = [c for c in saida["chamadas"] if c["metodo"] == "POST"]
-    assert criacao[0]["caminho"] == "/eventos/ev-1/aparelhos"
-    assert criacao[0]["corpo"]["nome"] == "Portao B"
-    assert criacao[0]["corpo"]["setores"] == ["s2"]
-    assert saida["codigo"] == "ABC234"
-    assert "Portao B" in saida["titulo"]
-    assert saida["caixa"] != "none"
+    assert saida["formulario"] is False
+    assert saida["codigoDoAparelho"] is False
+    assert saida["caixaDeCodigo"] is False
+    assert saida["comoCriar"], "a tela precisa dizer como um aparelho entra hoje"
+    assert "celular" in saida["comoCriar"]
 
 
 def test_tocar_no_setor_de_um_aparelho_grava_na_hora():
@@ -1010,25 +1015,44 @@ def test_a_tela_acha_o_cliente_do_supabase_como_o_painel_o_declara():
     assert "login" not in saida["recentes"].lower()
 
 
-def test_abrir_o_pedido_com_o_config_real_chega_ao_motor():
-    """O caminho inteiro, do clique ate a chamada: e o que o usuario fez e nao
-    funcionou."""
+def test_o_caminho_inteiro_com_o_config_real_chega_ao_motor():
+    """Do clique na busca ate a chamada, com o cliente do Supabase de verdade:
+    e o que o usuario fez e nao funcionou, em 16/08/2026.
+
+    A busca e por CLIENTE desde 18/08/2026, entao o caminho tem duas pernas --
+    abrir o cliente, e tocar no pedido dele."""
     saida = _no_navegador("""
         const chamadas = [];
         window.fetch = async (url, o) => {
             chamadas.push(url);
-            return { ok: true, json: async () => (
-                url.indexOf('/pedidos/') >= 0 ? window.PAINEL : { pedidos: [] }) };
+            return { ok: true, json: async () => {
+                if (url.indexOf('/clientes/') >= 0) { return window.CLIENTE_COM_PEDIDO; }
+                if (url.indexOf('/pedidos/18560') >= 0) { return window.PAINEL; }
+                return { pedidos: [] };
+            } };
         };
         IdealControl.iniciar();
-        document.getElementById('ic-busca').value = '18560';
+        document.getElementById('ic-busca').value = '14';
         document.getElementById('ic-buscar').click();
         await new Promise(r => setTimeout(r, 200));
-        return { chamadas,
+        const doCliente = {
+            secao: document.getElementById('ic-cliente-secao').style.display,
+            nome: document.getElementById('ic-cliente-nome').textContent,
+            pedidos: document.getElementById('ic-cliente-pedidos').textContent,
+        };
+        document.getElementById('ic-pedido-18560').click();
+        await new Promise(r => setTimeout(r, 200));
+        return { chamadas, doCliente,
                  carregando: document.getElementById('ic-carregando').style.display,
                  conteudo: document.getElementById('ic-conteudo').style.display,
                  titulo: document.getElementById('ic-titulo').textContent };
     """, config_real=True)
+    assert any("/clientes/14" in c for c in saida["chamadas"]), saida["chamadas"]
+    assert saida["doCliente"]["secao"] != "none"
+    assert "DANIEL MOREIRA" in saida["doCliente"]["nome"]
+    assert "18560" in saida["doCliente"]["pedidos"]
+    assert "Baile do Hawaii" in saida["doCliente"]["pedidos"]
+    # E o toque no pedido abre o painel de configuracao, como antes.
     assert any("/pedidos/18560" in c for c in saida["chamadas"]), saida["chamadas"]
     assert saida["carregando"] == "none"
     assert saida["conteudo"] != "none"
@@ -1188,8 +1212,11 @@ def test_a_senha_provisoria_nunca_aparece_no_pedido_errado():
     assert saida["senha_visivel"] is False
     assert "K7M2PQ9X" not in saida["valor"]
     assert "K7M2PQ9X" not in saida["secao"]
-    # O atendente e avisado, com o numero do pedido que ele precisa reabrir.
-    assert any("20272" in a and a.startswith("warning") for a in saida["avisos"]), saida["avisos"]
+    # O atendente e avisado, com o NOME DO CLIENTE de quem era a senha: desde
+    # 18/08/2026 esta tela e aberta pelo numero do cliente, e mandar "abra o
+    # pedido X de novo" apontaria para uma busca que nao existe mais.
+    assert any("DANIEL MOREIRA" in a and a.startswith("warning")
+               for a in saida["avisos"]), saida["avisos"]
 
 
 def test_o_link_de_whatsapp_tambem_nao_vaza_para_o_pedido_errado():
@@ -1236,7 +1263,8 @@ def test_a_nova_senha_tambem_nao_vaza_para_o_pedido_seguinte():
     """ % (json.dumps(CLIENTE), json.dumps(OUTRO_PEDIDO)))
     assert saida["senha_visivel"] is False
     assert "ZZ9TOP44" not in saida["secao"]
-    assert any("20272" in a and a.startswith("warning") for a in saida["avisos"]), saida["avisos"]
+    assert any("DANIEL MOREIRA" in a and a.startswith("warning")
+               for a in saida["avisos"]), saida["avisos"]
 
 
 def test_o_link_de_whatsapp_tambem_nao_vaza_pela_porta_da_nova_senha():
@@ -1338,3 +1366,122 @@ def test_email_invalido_nem_chega_a_sair_da_tela():
     assert saida["visivel"] is True
     assert saida["aviso"] == "Escreva um e-mail válido."
     assert saida["foi_a_rede"] is False
+
+
+# ── O espelho: o que o cliente salva no aplicativo aparece aqui ─────────────
+#
+# Decisao do usuario em 18/08/2026: "Configuracoes salvas no aparelho devem ser
+# espelhadas no menu ideal control do imposition, e vice versa". As duas coisas
+# que faltavam eram a SITUACAO do evento (o cliente inativa e finaliza no
+# celular dele) e o setor BLOQUEADO INTEIRO.
+
+
+def test_a_situacao_do_evento_aparece_e_pode_ser_trocada_daqui():
+    saida = _no_navegador(SERVIDOR + """
+        await IdealControl.abrirPedido(18560);
+        const ativo = {
+            frase: document.getElementById('ic-ev-situacao').textContent,
+            ativar: document.getElementById('ic-ev-ativar').textContent,
+            finalizar: document.getElementById('ic-ev-finalizar').textContent,
+        };
+        window._chamadas.length = 0;
+        document.getElementById('ic-ev-ativar').click();
+        await new Promise(r => setTimeout(r, 160));
+        const inativou = window._chamadas.filter(c => c.metodo === 'PATCH');
+
+        // Agora o evento volta do servidor FINALIZADO, como o cliente o
+        // deixaria pela engrenagem do celular dele.
+        window.PAINEL.evento.status = 'finalizado';
+        await IdealControl.abrirPedido(18560);
+        const finalizado = {
+            frase: document.getElementById('ic-ev-situacao').textContent,
+            ativarVisivel: document.getElementById('ic-ev-ativar').style.display,
+            finalizar: document.getElementById('ic-ev-finalizar').textContent,
+        };
+        return { ativo, inativou, finalizado };
+    """)
+    assert "Ativo" in saida["ativo"]["frase"]
+    assert saida["ativo"]["ativar"] == "Inativar este evento"
+    assert saida["ativo"]["finalizar"] == "Finalizar este evento"
+    # Inativar manda o MESMO status que a engrenagem do cliente manda.
+    assert saida["inativou"][0]["caminho"] == "/eventos/ev-1"
+    assert saida["inativou"][0]["corpo"]["status"] == "encerrado"
+    # Finalizado: a frase diz onde ele foi parar, e "Inativar" some -- um evento
+    # arquivado nao se inativa, ele se reabre.
+    assert "Finalizado" in saida["finalizado"]["frase"]
+    assert "finalizados" in saida["finalizado"]["frase"]
+    assert saida["finalizado"]["ativarVisivel"] == "none"
+    assert saida["finalizado"]["finalizar"] == "Reabrir este evento"
+
+
+def test_o_setor_que_o_CLIENTE_bloqueou_inteiro_aparece_com_o_motivo():
+    """O atendente atendia o telefone sem saber que o proprio dono tinha
+    fechado aquele portao."""
+    saida = _no_navegador(SERVIDOR + """
+        window.PAINEL.setores[0].bloqueado = true;
+        window.PAINEL.setores[0].bloqueado_motivo = 'obra na entrada norte';
+        await IdealControl.abrirPedido(18560);
+        const bloco = document.getElementById('ic-setor-bloqueio-s1');
+        const antes = {
+            texto: bloco.textContent,
+            liberar: !!document.getElementById('ic-setor-liberar-s1'),
+            formulario: !!document.getElementById('ic-setor-bloquear-s1'),
+        };
+        window._chamadas.length = 0;
+        document.getElementById('ic-setor-liberar-s1').click();
+        await new Promise(r => setTimeout(r, 160));
+        return { antes, chamadas: window._chamadas.filter(c => c.metodo === 'PATCH') };
+    """)
+    assert "BLOQUEADO" in saida["antes"]["texto"]
+    assert "obra na entrada norte" in saida["antes"]["texto"]
+    assert saida["antes"]["liberar"] is True
+    assert saida["antes"]["formulario"] is False, (
+        "com o setor bloqueado, o que falta e liberar -- nao bloquear de novo")
+    assert saida["chamadas"][0]["caminho"] == "/setores/s1"
+    assert saida["chamadas"][0]["corpo"]["bloqueado"] is False
+
+
+def test_a_grafica_tambem_pode_bloquear_o_setor_inteiro_com_motivo():
+    saida = _no_navegador(SERVIDOR + """
+        await IdealControl.abrirPedido(18560);
+        document.getElementById('ic-setor-bloq-motivo-s1').value = 'lote nao pago';
+        window._chamadas.length = 0;
+        document.getElementById('ic-setor-bloquear-s1').click();
+        await new Promise(r => setTimeout(r, 160));
+        return { chamadas: window._chamadas.filter(c => c.metodo === 'PATCH') };
+    """)
+    assert saida["chamadas"][0]["caminho"] == "/setores/s1"
+    assert saida["chamadas"][0]["corpo"]["bloqueado"] is True
+    assert saida["chamadas"][0]["corpo"]["bloqueado_motivo"] == "lote nao pago"
+
+
+def test_o_aparelho_pausado_pelo_cliente_aparece_como_pausado():
+    """Pausar e excluir sao as opcoes do aplicativo do cliente desde
+    18/08/2026, e as duas mexem na mesma linha que esta tela mostra."""
+    saida = _no_navegador(SERVIDOR + """
+        window.PAINEL.aparelhos[0].status = 'pausado';
+        await IdealControl.abrirPedido(18560);
+        const cartao = document.getElementById('ic-aparelhos').textContent;
+        window._chamadas.length = 0;
+        document.getElementById('ic-ap-pausar-a1').click();
+        await new Promise(r => setTimeout(r, 160));
+        return { cartao, chamadas: window._chamadas.filter(c => c.metodo === 'PATCH'),
+                 rotulo: document.getElementById('ic-ap-pausar-a1').textContent };
+    """)
+    assert "Pausado" in saida["cartao"]
+    # Pausado, o botao oferece a VOLTA -- e retomar nao pergunta nada.
+    assert saida["rotulo"] == "Retomar"
+    assert saida["chamadas"][0]["corpo"]["status"] == "ativo"
+
+
+def test_excluir_o_aparelho_daqui_manda_um_DELETE():
+    saida = _no_navegador("""
+        window.confirm = () => true;
+        %s
+        await IdealControl.abrirPedido(18560);
+        window._chamadas.length = 0;
+        document.getElementById('ic-ap-excluir-a1').click();
+        await new Promise(r => setTimeout(r, 160));
+        return { chamadas: window._chamadas.filter(c => c.metodo === 'DELETE') };
+    """ % SERVIDOR)
+    assert saida["chamadas"][0]["caminho"] == "/aparelhos/a1"

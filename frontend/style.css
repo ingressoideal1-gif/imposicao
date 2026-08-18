@@ -2729,6 +2729,16 @@ input[type=number] {
 .ic-busca-linha .form-control { flex: 1; min-width: 0; }
 
 .ic-recentes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+/* A busca por CLIENTE (18/08/2026): o rotulo em texto ao lado do campo, porque
+   "14" sozinho num campo de busca nao diz de que numero se trata. */
+.ic-rotulo-busca { font-size: .82rem; font-weight: 700; color: var(--text-dim); white-space: nowrap; }
+/* Os pedidos do cliente, um por linha: o nome do evento e a data cabem, e a
+   lista se le de cima para baixo. */
+.ic-cliente-pedidos { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.ic-pedido-do-cliente { justify-content: flex-start; text-align: left; }
+/* O setor bloqueado inteiro pelo cliente: e a unica linha vermelha desta tela,
+   e ela existe para o atendente ver antes de o telefone tocar. */
+.ic-alerta { color: #fca5a5; font-weight: 700; margin: 0 0 8px; }
 
 .ic-selos { display: flex; flex-wrap: wrap; gap: 8px; }
 

@@ -2582,24 +2582,47 @@
                 <div class="page-header">
                     <div class="page-header-text">
                         <h1>🎟️ Ideal Control</h1>
-                        <p>Pesquise pelo número do pedido e configure o controle de
-                           acesso do cliente. Sem senha de evento: basta estar logado
+                        <p>Pesquise pelo <strong>número do cliente</strong> e configure o
+                           controle de acesso dele. Tudo o que o cliente salva no
+                           aplicativo aparece aqui, e o que você salva aqui chega ao
+                           aplicativo dele. Sem senha de evento: basta estar logado
                            como ADM ou Atendimento.</p>
                     </div>
                 </div>
 
                 <div class="card" style="padding:16px;margin-bottom:18px;">
+                    <!-- A busca e pelo NUMERO DO CLIENTE desde 18/08/2026, por
+                         decisao do usuario. O atendente atende o telefone sabendo
+                         quem esta do outro lado; o numero do pedido ele teria de
+                         perguntar, e o cliente muitas vezes nao tem em maos. -->
                     <div class="ic-busca-linha">
+                        <label for="ic-busca" class="ic-rotulo-busca">Número do cliente</label>
                         <input id="ic-busca" class="form-control" type="search"
-                               inputmode="numeric" placeholder="Número do pedido (ex.: 18560)">
-                        <button id="ic-buscar" class="btn btn-primary">Abrir pedido</button>
+                               inputmode="numeric" placeholder="Ex.: 14">
+                        <button id="ic-buscar" class="btn btn-primary">Abrir cliente</button>
                     </div>
-                    <p class="ic-ajuda" style="margin-top:10px;">Pedidos com controle de acesso:</p>
+                    <p class="ic-ajuda" style="margin-top:10px;">Últimos pedidos com controle de acesso:</p>
                     <div id="ic-recentes" class="ic-recentes"></div>
                 </div>
 
                 <p id="ic-carregando" class="ic-dim" style="display:none;">Carregando…</p>
                 <div id="ic-vazio" class="empty-state" style="display:none;"></div>
+
+                <!-- O CLIENTE: quem ele e, que contas ja tem, e quais pedidos dele
+                     tem controle de acesso. Tocar num pedido abre o painel de
+                     baixo, que continua sendo por pedido — e um evento e sempre
+                     de um pedido so. -->
+                <div id="ic-cliente-secao" style="display:none;">
+                    <h2 id="ic-cliente-nome" style="margin:0 0 4px;font-size:1.15rem;"></h2>
+                    <p id="ic-cliente-dados" class="ic-dim" style="margin:0 0 12px;"></p>
+                    <h3 class="ic-secao-titulo">Pedidos deste cliente</h3>
+                    <div id="ic-cliente-pedidos" class="ic-cliente-pedidos"></div>
+                    <p id="ic-cliente-sem-pedido" class="ic-ajuda" style="display:none;">
+                        Este cliente ainda não tem nenhum pedido com controle de acesso.
+                        Libere o acesso dele abaixo — quando o pedido for publicado, ele
+                        carrega no aplicativo e o evento nasce ali.
+                    </p>
+                </div>
 
                 <div id="ic-conteudo" style="display:none;">
                     <h2 id="ic-titulo" style="margin:0 0 10px;font-size:1.1rem;"></h2>
@@ -2712,6 +2735,21 @@
                                 </div>
                             </div>
                             <button id="ic-ev-salvar" class="btn btn-sm btn-primary">Salvar dados do evento</button>
+
+                            <!-- A SITUACAO, espelhada do aplicativo do cliente: ele
+                                 inativa e finaliza o evento la, e ate 18/08/2026 a
+                                 grafica nao via nem uma coisa nem outra. Os botoes
+                                 fazem o mesmo caminho que a engrenagem dele faz. -->
+                            <hr style="margin:16px 0;border:0;border-top:1px solid rgba(255,255,255,.08);">
+                            <h4 style="margin:0 0 6px;">Situação do evento</h4>
+                            <p id="ic-ev-situacao" class="ic-ajuda"></p>
+                            <!-- O rotulo nasce escrito e o JS o troca conforme a
+                                 situacao: botao sem palavra nenhuma no HTML e botao
+                                 sem rotulo para quem le a pagina antes de o script
+                                 rodar. -->
+                            <button id="ic-ev-ativar" class="btn btn-sm btn-outline">Inativar este evento</button>
+                            <button id="ic-ev-finalizar" class="btn btn-sm btn-outline"
+                                    style="margin-left:8px;">Finalizar este evento</button>
                         </div>
                     </div>
 
@@ -2727,17 +2765,12 @@
                         <div id="ic-aparelhos"></div>
                     </div>
 
-                    <div id="ic-codigo-caixa" class="card ic-codigo-caixa" style="display:none;">
-                        <h4 id="ic-codigo-titulo" style="margin:0 0 8px;"></h4>
-                        <div id="ic-codigo-valor" class="ic-codigo-valor"></div>
-                        <p class="ic-ajuda">
-                            Anote agora: este código <strong>não aparece de novo</strong>.
-                            Se perder, é só gerar outro — e gerar outro
-                            <strong>não desconecta</strong> o aparelho que já está
-                            trabalhando. Para desligar, use "Revogar".
-                        </p>
-                        <button id="ic-codigo-fechar" class="btn btn-sm btn-ghost">Já anotei, fechar</button>
-                    </div>
+                    <!-- A caixa do codigo de pareamento saiu em 18/08/2026. O
+                         codigo de seis caracteres nao tinha mais onde ser digitado
+                         desde 16/08: a tela que o pedia foi removida da portaria, e
+                         quem poe um aparelho no ar hoje e o proprio dono, tocando na
+                         barra do evento no celular. Gerar um codigo aqui produzia um
+                         segredo que nenhuma tela aceitava. -->
                 </div>
             </section>
 
