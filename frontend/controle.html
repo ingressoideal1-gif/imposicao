@@ -479,6 +479,11 @@
      DEPOIS da lista porque é ela quem decide, no arranque, se a casa abre na
      tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
      ouvintes do login para cá. -->
+<!-- O estado de espera de um botao (texto trocado, disabled, aria-busy)
+     enquanto uma chamada de rede corre. ANTES do `conta.js` de proposito: e
+     ele quem usa `window.botaoEspera` primeiro, no "Entrar" e no "Salvar a
+     senha". -->
+<script src="botao-espera.js?v=632"></script>
 <script src="conta.js?v=632"></script>
 <!-- O olho de mostrar/ocultar senha, ao lado de cada campo de senha da casa.
      Depois do `conta.js` por estilo -- ele nao depende de nenhum dos scripts

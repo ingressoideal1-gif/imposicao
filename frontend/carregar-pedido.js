@@ -53,7 +53,7 @@
         var e = $('erro-carregar');
         e.textContent = texto;              // frase do servidor ou nossa: TEXTO
         e.classList.remove('sumindo');
-        $('btn-carregar-confirmar').disabled = false;
+        window.botaoEspera.terminar($('btn-carregar-confirmar'));
     }
 
     /**
@@ -135,7 +135,11 @@
         $('carregar-email').textContent = (sessao.user && sessao.user.email) || emailLembrado();
         $('carregar-senha').value = '';
         $('erro-carregar').classList.add('sumindo');
-        $('btn-carregar-confirmar').disabled = false;
+        // `terminar`, e nao so `disabled = false`: reabrir a caixa para um
+        // pedido novo enquanto o toque ANTERIOR ainda espera resposta (ex.:
+        // "Cancelar" no meio de uma rede lenta, seguido de outro pedido) nao
+        // pode deixar o botao preso em "Carregando…" para sempre.
+        window.botaoEspera.terminar($('btn-carregar-confirmar'));
         // Reposto a cada abertura: quem escolheu "Juntar ao evento", cancelou e
         // abriu a caixa de novo encontraria a ficha escondida, sem gesto nenhum
         // que a trouxesse de volta.
@@ -317,7 +321,7 @@
         if (!senha) { return erro('Digite a sua senha para carregar o pedido.'); }
         if (!destino && !nome) { return erro('Dê um nome ao evento.'); }
         $('erro-carregar').classList.add('sumindo');
-        $('btn-carregar-confirmar').disabled = true;
+        window.botaoEspera.comecar($('btn-carregar-confirmar'), 'Carregando…');
         var corpo = {
             nome_evento: nome,
             // O `datetime-local` nao tem fuso nenhum: mandar o que ele entrega
@@ -338,6 +342,7 @@
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessao.access_token },
             body: JSON.stringify(corpo)
         }).then(function (r) {
+            window.botaoEspera.terminar($('btn-carregar-confirmar'));
             $('carregar-senha').value = '';
             $('caixa-carregar').classList.add('sumindo');
             // O bilhete de 15 minutos vai para o `controle.js`: a engrenagem

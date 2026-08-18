@@ -202,6 +202,7 @@ MODULOS_GLOBAIS = {
     # o dono do global esta na pagina. Sem os dois aqui, a dispensa seria uma
     # aposta.
     "conta": "conta.js",
+    "botaoEspera": "botao-espera.js",
     "caixaConfirmar": "caixa-confirmar.js",
     "portariaCamera": "portaria-camera.js",
     "Controle": "controle.js",

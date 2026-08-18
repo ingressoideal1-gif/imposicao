@@ -310,12 +310,19 @@
                 if (nova !== confirma) {
                     return erro('As duas senhas não conferem. Digite a mesma nas duas caixas.');
                 }
+                var botaoSalvar = $('btn-trocar-senha');
+                window.botaoEspera.comecar(botaoSalvar, 'Salvando…');
                 window.AcessoConta.sessao().then(function (s) {
                     if (!s) { throw new Error('Sua sessão caiu. Entre de novo.'); }
                     return window.AcessoConta.trocarSenha(s, obrigatoria ? '' : atual, nova);
                 }).then(function () {
+                    // Antes de `fecharTroca`: ela esconde a tela inteira, e o
+                    // rotulo precisa voltar ao normal antes de sumir -- nao
+                    // depois, quando o botao ja nao esta mais visivel.
+                    window.botaoEspera.terminar(botaoSalvar);
                     fecharTroca(true);
-                }).catch(function (e) {
+                }, function (e) {
+                    window.botaoEspera.terminar(botaoSalvar);
                     erro(fraseDoErro(e));
                 });
             };
@@ -351,9 +358,20 @@
             var senha = $('senha').value || '';
             if (!email || !senha) { return mostrarErroLogin('Preencha o e-mail e a senha.'); }
             try { localStorage.setItem('ideal_control_email', email); } catch (e) { /* aba anonima */ }
+            var botao = $('btn-entrar');
+            window.botaoEspera.comecar(botao, 'Entrando…');
             window.AcessoConta.entrar(email, senha)
                 .then(depoisDeEntrar)
-                .catch(function (e) { mostrarErroLogin(e.message); });
+                // Os DOIS ramos, e nao um `.catch` solto: um catch separado
+                // nao pegaria o erro se algo dentro do proprio `.then` de
+                // sucesso lancasse, e o botao ficaria preso em "Entrando…"
+                // para sempre. `terminar` roda mesmo que `esconderEntrar()`
+                // ja tenha escondido este botao da tela -- e idempotente.
+                .then(function () { window.botaoEspera.terminar(botao); },
+                      function (e) {
+                          window.botaoEspera.terminar(botao);
+                          mostrarErroLogin(e.message);
+                      });
         });
         $('senha').addEventListener('keydown', function (ev) {
             if (ev.key === 'Enter') { $('btn-entrar').click(); }

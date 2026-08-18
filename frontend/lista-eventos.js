@@ -322,7 +322,18 @@
         reabrir.id = 'reabrir-' + ev.id;
         reabrir.textContent = 'Reabrir';
         reabrir.setAttribute('aria-label', 'Reabrir ' + ev.nome);
-        reabrir.addEventListener('click', function () { reabrir_(ev); });
+        reabrir.addEventListener('click', function () {
+            window.botaoEspera.comecar(reabrir, 'Reabrindo…');
+            // `reabrir_` engole os proprios erros (a caixa de senha
+            // cancelada, a falha de rede) e devolve um aviso na tela -- por
+            // isso ela nunca rejeita. Os dois ramos aqui sao so a garantia:
+            // se algum dia ela passar a rejeitar, o botao ainda volta.
+            reabrir_(ev).then(function () {
+                window.botaoEspera.terminar(reabrir);
+            }, function () {
+                window.botaoEspera.terminar(reabrir);
+            });
+        });
         linha.appendChild(reabrir);
 
         return linha;

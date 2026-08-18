@@ -593,12 +593,16 @@
         botao.id = 'codigos-carregar-' + s.id;
         botao.textContent = 'Carregar códigos neste setor';
         botao.addEventListener('click', function () {
+            window.botaoEspera.comecar(botao, 'Carregando…');
             importarCodigos(texto.value, s.id)
                 .then(function () {
                     var atual = $('codigos-texto-' + s.id);
                     if (atual) { atual.value = ''; }
-                })
-                .catch(function () { /* `gravar()` já avisou na tela */ });
+                    window.botaoEspera.terminar(botao);
+                }, function () {
+                    window.botaoEspera.terminar(botao);
+                    /* `gravar()` já avisou na tela */
+                });
         });
         caixa.appendChild(botao);
 
@@ -1107,7 +1111,18 @@
             var novoNome = campoNome.value;
             // Nenhum PATCH vazio se o dono só olhou o campo e não mexeu.
             if (novoNome === a.nome) { return; }
-            renomearAparelho(a.id, novoNome).catch(function () { /* já avisado */ });
+            window.botaoEspera.comecar(btnSalvar, 'Salvando…');
+            renomearAparelho(a.id, novoNome).then(function () {
+                // No sucesso, `carregarPainel()` já reconstruiu este cartão
+                // inteiro -- este `btnSalvar` nem está mais no documento. O
+                // `terminar` aqui é so para o caso de falha, quando o cartão
+                // continua sendo o mesmo: idempotente, não custa nada no
+                // outro caminho.
+                window.botaoEspera.terminar(btnSalvar);
+            }, function () {
+                window.botaoEspera.terminar(btnSalvar);
+                /* já avisado */
+            });
         });
         el.appendChild(btnSalvar);
 
@@ -1236,7 +1251,7 @@
         function mostrarErro(texto) {
             erro.textContent = texto;
             erro.classList.remove('sumindo');
-            botao.disabled = false;
+            window.botaoEspera.terminar(botao);
         }
 
         function fechar() {
@@ -1257,7 +1272,7 @@
                 try { localStorage.setItem(CHAVE_EMAIL, email); }
                 catch (e) { /* aba anônima */ }
 
-                botao.disabled = true;
+                window.botaoEspera.comecar(botao, 'Conferindo…');
                 erro.classList.add('sumindo');
                 AcessoConta.entrarEElevar(email, senha, evento_id)
                     .then(function (r) {
@@ -1274,7 +1289,7 @@
                             expira_em: r.elevacao.expira_em,
                             evento_id: evento_id
                         });
-                        botao.disabled = false;
+                        window.botaoEspera.terminar(botao);
                         fechar();
                         resolver({ sessao: r.sessao, elevacao: r.elevacao });
                     })
@@ -1783,6 +1798,8 @@
         });
 
         $('btn-gravar-evento').addEventListener('click', function () {
+            var botao = $('btn-gravar-evento');
+            window.botaoEspera.comecar(botao, 'Gravando…');
             gravar('/eventos/' + estado.evento_id, {
                 nome_evento: $('campo-nome-evento').value,
                 local_evento: $('campo-local').value,
@@ -1792,7 +1809,12 @@
                 // Brasília — e o evento apareceria três horas mais cedo para
                 // todo mundo. Ver `doCampoParaISO`.
                 data_evento: doCampoParaISO($('campo-data').value)
-            }, 'PATCH').then(carregarPainel).catch(function () { /* já avisado */ });
+            }, 'PATCH').then(carregarPainel).then(function () {
+                window.botaoEspera.terminar(botao);
+            }, function () {
+                window.botaoEspera.terminar(botao);
+                /* já avisado */
+            });
         });
 
         // O FORMULÁRIO DE LOGIN saiu daqui em 17/08/2026. Ele é do `conta.js`

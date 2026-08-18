@@ -152,6 +152,10 @@ PAINEL_ARQUIVOS = [
     # tem.
     "chaveiro.js",
     "lista-eventos.js",
+    # O estado de espera de um botao (18/08/2026): texto trocado, disabled e
+    # aria-busy enquanto uma chamada de rede corre. Sai junto com `conta.js`,
+    # que e quem o usa primeiro -- e carrega ANTES dele no controle.html.
+    "botao-espera.js",
     "conta.js",
     # O olho de mostrar/ocultar senha (18/08/2026), em cada campo de senha da
     # casa. Sai junto com `conta.js`: e o mesmo arquivo que o `controle.html`
