@@ -788,6 +788,10 @@ def test_o_setor_do_aparelho_e_botao_e_nao_caixa_de_marcar():
     a esticava por toda a linha e jogava o nome do setor para o extremo
     direito. Este teste MEDE, e nao so conta elementos -- foi a medida
     (385px x 13px, com o rotulo a 400px de distancia) que revelou o defeito.
+
+    As secoes nascem recolhidas desde 18/08/2026, e um `display: none` mede
+    zero por zero -- por isso o `abrirTodasSecoes()` antes da regua. A medida
+    que este teste protege continua sendo a mesma.
     """
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
@@ -796,6 +800,7 @@ def test_o_setor_do_aparelho_e_botao_e_nao_caixa_de_marcar():
         Controle.estado.elevacao = { token: 't', expira_em: Math.floor(Date.now()/1000) + 900 };
         Controle.desenhar();
         document.getElementById('engrenagem').classList.remove('sumindo');
+        Controle.abrirTodasSecoes();
 
         const medir = el => { const r = el.getBoundingClientRect();
                               return { w: Math.round(r.width), h: Math.round(r.height) }; };
@@ -3373,3 +3378,350 @@ def test_inativar_um_evento_NAO_encosta_no_outro():
     assert "inativa" in saida["luz1"], "o evento inativado nao ficou vermelho"
     assert saida["luz2"] == saida["antes2"], "a barra do OUTRO evento mudou"
     assert "inativo" not in saida["texto2"], "o outro evento foi marcado inativo"
+
+
+# ── As cinco secoes recolhidas ──────────────────────────────────────────────
+#
+# Task 5 do plano de usabilidade, 18/08/2026. Em pe, a configuracao tinha tres
+# telas de altura no celular, e o dono quase sempre entra aqui para mexer em UMA
+# coisa. Recolhida, cada secao ocupa uma linha que ja diz o que tem dentro -- o
+# resumo a direita --, e ele escolhe onde entrar sem rolar procurando.
+#
+# O que estes testes protegem: que a tela nasca fechada (e nao apenas encolha
+# depois de um instante em pe), que o resumo diga a verdade sobre o que ha
+# dentro, que um redesenho nunca feche o que o dono abriu, e que a memoria do
+# que estava aberto seja de CADA evento.
+
+_SECOES = ("evento", "aparelhos", "setores", "este-aparelho", "zona-de-risco")
+_BLOCOS = ("bloco-evento", "bloco-aparelhos", "bloco-setores",
+           "bloco-este-aparelho", "bloco-zona-de-risco")
+
+
+def test_cada_secao_da_engrenagem_tem_cabecalho_corpo_e_resumo():
+    """A estrutura, no HTML: o `<h2>` solto virou um botao com titulo, resumo e
+    seta, e o conteudo de antes mudou-se para dentro do `.secao-corpo`.
+
+    O `recolhida` vem no HTML de proposito. Posto pelo script, a tela abriria
+    com tudo em pe e encolheria um instante depois, na cara de quem esta
+    olhando."""
+    html = _ler("frontend/controle.html")
+    for secao in _SECOES:
+        assert 'id="abrir-%s"' % secao in html
+        assert 'id="corpo-%s"' % secao in html
+        assert 'id="resumo-%s"' % secao in html
+        assert 'aria-controls="corpo-%s"' % secao in html
+    # Nenhum `<h2>` de secao sobrou: o titulo agora e o proprio botao.
+    for titulo in ("Evento", "Aparelhos", "Setores", "Este aparelho",
+                   "Zona de risco"):
+        assert "<h2>%s</h2>" % titulo not in html
+        assert '<span class="secao-titulo">%s</span>' % titulo in html
+    # E as cinco ja nascem recolhidas no proprio HTML.
+    for bloco in _BLOCOS:
+        casou = re.search(r'<div class="([^"]*)" id="%s"' % bloco, html)
+        assert casou, bloco
+        assert "recolhida" in casou.group(1), bloco
+
+
+def test_a_engrenagem_nasce_com_TODAS_as_secoes_recolhidas():
+    """Evento nunca aberto: nada em pe. Estilo COMPUTADO, e nao a classe -- foi
+    exatamente assim que a faixa de elevacao enganou os testes antes."""
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'ev-1'
+        }));
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        const secoes = ['evento', 'aparelhos', 'setores', 'este-aparelho', 'zona-de-risco'];
+        const recolhida = {};
+        const anunciada = {};
+        secoes.forEach(s => {
+            recolhida[s] = getComputedStyle(document.getElementById('corpo-' + s)).display;
+            anunciada[s] = document.getElementById('abrir-' + s).getAttribute('aria-expanded');
+        });
+        Controle.abrirTodasSecoes();
+        const emPe = {};
+        secoes.forEach(s => {
+            emPe[s] = getComputedStyle(document.getElementById('corpo-' + s)).display;
+        });
+        return { recolhida, anunciada, emPe,
+                 engrenagemAberta: !document.getElementById('engrenagem')
+                     .classList.contains('sumindo') };
+    """)
+    assert saida["engrenagemAberta"] is True, "a engrenagem nem chegou a abrir"
+    for secao in _SECOES:
+        assert saida["recolhida"][secao] == "none", secao
+        # A seta desenhada nao basta: quem ouve a tela precisa saber o estado.
+        assert saida["anunciada"][secao] == "false", secao
+        assert saida["emPe"][secao] != "none", secao
+
+
+def test_tocar_no_cabecalho_abre_a_secao_e_guarda_que_ela_ficou_aberta():
+    """O toque alterna, e a escolha sobrevive ao redesenho seguinte -- por isso
+    ela e guardada, e nao so pintada."""
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'ev-1'
+        }));
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        const chave = 'ideal_control_secoes:ev-1';
+        const olhar = () => ({
+            display: getComputedStyle(document.getElementById('corpo-setores')).display,
+            anunciada: document.getElementById('abrir-setores').getAttribute('aria-expanded'),
+            guardado: JSON.parse(sessionStorage.getItem(chave) || '[]'),
+        });
+        const antes = olhar();
+        document.getElementById('abrir-setores').click();
+        const depoisDoToque = olhar();
+        document.getElementById('abrir-setores').click();
+        const depoisDoSegundo = olhar();
+        return { antes, depoisDoToque, depoisDoSegundo };
+    """)
+    assert saida["antes"]["display"] == "none"
+    assert saida["antes"]["guardado"] == []
+
+    assert saida["depoisDoToque"]["display"] != "none"
+    assert saida["depoisDoToque"]["anunciada"] == "true"
+    assert saida["depoisDoToque"]["guardado"] == ["setores"]
+
+    # E o segundo toque fecha de novo, e desfaz o registro.
+    assert saida["depoisDoSegundo"]["display"] == "none"
+    assert saida["depoisDoSegundo"]["anunciada"] == "false"
+    assert saida["depoisDoSegundo"]["guardado"] == []
+
+
+def test_desenhar_de_novo_NUNCA_fecha_uma_secao_que_o_dono_abriu():
+    """`desenhar()` roda a cada gravacao desta tela e a cada 20s pela faixa. Se
+    ele fechasse a secao, o dono perderia o lugar onde estava trabalhando no
+    instante seguinte a salvar um setor -- o mesmo defeito que o painel do setor
+    ja teve."""
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'ev-1'
+        }));
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        Controle.abrirSecao('setores');
+        Controle.abrirSecao('aparelhos');
+        const ver = () => ({
+            setores: getComputedStyle(document.getElementById('corpo-setores')).display,
+            aparelhos: getComputedStyle(document.getElementById('corpo-aparelhos')).display,
+            evento: getComputedStyle(document.getElementById('corpo-evento')).display,
+        });
+        const antes = ver();
+        await Controle.carregarPainel();     // termina em `desenhar()`
+        Controle.desenhar();
+        return { antes, depois: ver() };
+    """)
+    assert saida["antes"]["setores"] != "none"
+    assert saida["antes"]["aparelhos"] != "none"
+    assert saida["depois"]["setores"] != "none", "o redesenho fechou os setores"
+    assert saida["depois"]["aparelhos"] != "none", "o redesenho fechou os aparelhos"
+    # E o que estava fechado continua fechado: redesenhar tambem nao ABRE nada.
+    assert saida["antes"]["evento"] == "none"
+    assert saida["depois"]["evento"] == "none"
+
+
+def test_o_resumo_diz_o_que_ha_dentro_de_cada_secao_sem_abrir_nenhuma():
+    """A linha recolhida so serve se responder a pergunta comum sem um toque:
+    quantos setores, quantos aparelhos, e se o evento esta ligado."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const r = {};
+        ['evento', 'aparelhos', 'setores', 'este-aparelho', 'zona-de-risco']
+            .forEach(s => { r[s] = document.getElementById('resumo-' + s).textContent; });
+        return r;
+    """)
+    # O evento da fixture nao tem `status`, entao nao esta ativo -- e essa e a
+    # primeira pergunta que o dono faz sobre um evento.
+    assert saida["evento"] == "Baile do Hawaii · Clube · inativo"
+    assert saida["aparelhos"] == "1 aparelho"
+    assert saida["setores"] == "2 setores"
+    # Este navegador nao e aparelho de evento nenhum.
+    assert saida["este-aparelho"] == "este celular não lê este evento"
+    assert saida["zona-de-risco"] == "zerar entradas · finalizar"
+
+
+def test_o_resumo_conta_o_aparelho_revogado_e_o_setor_bloqueado():
+    """Sao os dois estados que mudam o que acontece na porta, e o dono precisa
+    ve-los sem abrir a secao."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        Controle.estado.painel.aparelhos.push(
+            { id: 'a2', nome: 'Aparelho 2', status: 'revogado', ultimo_visto: null,
+              setores: [] },
+            { id: 'a3', nome: 'Aparelho 3', status: 'ativo', ultimo_visto: null,
+              setores: [] });
+        Controle.estado.painel.setores[0].bloqueado = true;
+        Controle.estado.painel.setores[0].bloqueado_motivo = 'lote nao pago';
+        Controle.estado.painel.evento.status = 'ativo';
+        Controle.desenhar();
+        return {
+            aparelhos: document.getElementById('resumo-aparelhos').textContent,
+            setores: document.getElementById('resumo-setores').textContent,
+            evento: document.getElementById('resumo-evento').textContent,
+        };
+    """)
+    assert saida["aparelhos"] == "3 aparelhos · 1 revogado"
+    assert saida["setores"] == "2 setores · 1 bloqueado"
+    # Ativo nao se anuncia: o normal nao precisa de etiqueta.
+    assert saida["evento"] == "Baile do Hawaii · Clube"
+
+
+def test_o_resumo_do_evento_mostra_a_data_curta_no_fuso_de_quem_olha():
+    """"dd/mm HH:mm", e passando pela conversao de fuso -- a coluna e
+    TIMESTAMPTZ, e um corte cru na string ISO mostraria a hora UTC: tres horas
+    fora, e ainda assim um horario plausivel."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        // Montada no fuso de quem olha e mandada em UTC: e o caminho que o
+        // banco faz de verdade.
+        const d = new Date(2026, 7, 20, 22, 30);
+        Controle.estado.painel.evento.data_evento = d.toISOString();
+        Controle.desenhar();
+        return { resumo: document.getElementById('resumo-evento').textContent };
+    """)
+    assert saida["resumo"] == "Baile do Hawaii · 20/08 22:30 · Clube · inativo"
+
+
+def test_o_resumo_deste_aparelho_diz_o_nome_com_que_este_celular_le():
+    """A pergunta e "este celular le este evento?", e ela tem resposta sem rede:
+    quem sabe e o chaveiro."""
+    saida = _no_navegador("""
+        window.chaveiro.guardar({ evento_id: 'ev-1', nome_evento: 'Baile do Hawaii',
+                                  aparelho_id: 'a1', nome_portao: 'Aparelho 1',
+                                  token: 'tok' });
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();
+        const comChave = document.getElementById('resumo-este-aparelho').textContent;
+        window.chaveiro.esquecer('ev-1');
+        Controle.desenhar();
+        return { comChave,
+                 semChave: document.getElementById('resumo-este-aparelho').textContent };
+    """)
+    assert saida["comChave"] == "Aparelho 1"
+    assert saida["semChave"] == "este celular não lê este evento"
+
+
+def test_o_que_estava_aberto_e_lembrado_POR_EVENTO():
+    """Configurar o baile de sabado e configurar o show de domingo sao tarefas
+    diferentes. Uma secao que o dono nao pediu e rolagem que ele nao pediu -- e
+    voltar ao evento de antes tem de devolver a tela como ele a deixou."""
+    saida = _no_navegador("""
+        const elevar = (id) => sessionStorage.setItem('acesso_elevacao',
+            JSON.stringify({ token: 't', evento_id: id,
+                             expira_em: Math.floor(Date.now()/1000) + 900 }));
+        const olhar = () => {
+            const r = {};
+            ['evento', 'aparelhos', 'setores', 'este-aparelho', 'zona-de-risco']
+                .forEach(s => { r[s] = getComputedStyle(
+                    document.getElementById('corpo-' + s)).display !== 'none'; });
+            return r;
+        };
+
+        elevar('ev-1');
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        Controle.abrirSecao('setores');
+        const noPrimeiro = olhar();
+        await Controle.fecharEngrenagem();
+
+        elevar('ev-2');
+        await Controle.abrirEngrenagem('ev-2', 'Show de domingo');
+        const noSegundo = olhar();
+        Controle.abrirSecao('evento');
+        await Controle.fecharEngrenagem();
+
+        elevar('ev-1');
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        return { noPrimeiro, noSegundo, deVolta: olhar() };
+    """)
+    assert saida["noPrimeiro"]["setores"] is True
+    # O SEGUNDO evento nasce inteiro recolhido: nao herda nada do primeiro.
+    assert saida["noSegundo"] == {"evento": False, "aparelhos": False,
+                                  "setores": False, "este-aparelho": False,
+                                  "zona-de-risco": False}
+    # E voltar ao primeiro devolve o que era dele, e so o que era dele: os
+    # "Setores" que ficaram abertos la, e nao o "Evento" aberto no outro.
+    assert saida["deVolta"]["setores"] is True
+    assert saida["deVolta"]["evento"] is False
+
+
+def test_a_secao_que_abre_sobe_para_o_alto_da_tela():
+    """Sem isto, abrir "Setores" com a pagina no meio faz o conteudo novo
+    crescer ABAIXO da dobra: o dono toca, nada muda onde ele esta olhando, e ele
+    toca de novo -- fechando o que tinha acabado de abrir.
+
+    O `matchMedia` e trocado a mao porque o Chrome sem tela pede
+    `prefers-reduced-motion: reduce` por padrao -- o celular do dono nao pede,
+    e e esse celular que este teste representa. O outro caso esta no teste
+    seguinte."""
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'ev-1'
+        }));
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        window.matchMedia = (consulta) => ({ matches: false, media: consulta });
+        const pedidos = [];
+        Element.prototype.scrollIntoView = function (opcoes) {
+            pedidos.push({ id: this.id, opcoes });
+        };
+        document.getElementById('abrir-setores').click();     // abre
+        document.getElementById('abrir-setores').click();     // fecha
+        return { pedidos };
+    """)
+    # Uma rolagem so, e a de ABRIR: fechar uma secao nao move a tela de lugar.
+    assert len(saida["pedidos"]) == 1, saida["pedidos"]
+    assert saida["pedidos"][0]["id"] == "bloco-setores"
+    assert saida["pedidos"][0]["opcoes"]["block"] == "start"
+    assert saida["pedidos"][0]["opcoes"]["behavior"] == "smooth"
+
+
+def test_quem_pede_menos_movimento_chega_la_sem_deslizar():
+    """A rolagem continua acontecendo -- o que sai e o deslizamento. Uma tela
+    que nao rolasse deixaria quem pediu `prefers-reduced-motion` sem ver a secao
+    que acabou de abrir."""
+    saida = _no_navegador("""
+        sessionStorage.setItem('acesso_elevacao', JSON.stringify({
+            token: 't', expira_em: Math.floor(Date.now()/1000) + 900, evento_id: 'ev-1'
+        }));
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        window.matchMedia = (consulta) => ({
+            matches: consulta.indexOf('reduced-motion') >= 0, media: consulta });
+        const pedidos = [];
+        Element.prototype.scrollIntoView = function (opcoes) {
+            pedidos.push({ id: this.id, opcoes });
+        };
+        Controle.abrirSecao('zona-de-risco');
+        return { pedidos };
+    """)
+    assert len(saida["pedidos"]) == 1, saida["pedidos"]
+    assert saida["pedidos"][0]["id"] == "bloco-zona-de-risco"
+    assert saida["pedidos"][0]["opcoes"] == {"block": "start"}
+
+
+def test_o_cabecalho_da_secao_NAO_e_travado_pelo_modo_somente_leitura():
+    """Ele nao grava nada -- so mostra. Trava-lo deixaria o dono sem conseguir
+    nem OLHAR a configuracao do evento dele enquanto nao digitasse a senha, e a
+    tela inteira viraria cinco linhas mudas."""
+    saida = _no_navegador("""
+        Controle.estado.sessao = { access_token: 'jwt-de-teste' };
+        Controle.estado.evento_id = 'ev-1';
+        await Controle.carregarPainel();          // sem elevacao: somente leitura
+        const travados = ['evento', 'aparelhos', 'setores', 'este-aparelho',
+                          'zona-de-risco']
+            .filter(s => document.getElementById('abrir-' + s).disabled);
+        document.getElementById('abrir-setores').click();
+        return {
+            somenteLeitura: document.body.classList.contains('somente-leitura'),
+            travados,
+            abriu: getComputedStyle(
+                document.getElementById('corpo-setores')).display !== 'none',
+        };
+    """)
+    assert saida["somenteLeitura"] is True, "o teste precisa comecar sem elevacao"
+    assert saida["travados"] == []
+    assert saida["abriu"] is True

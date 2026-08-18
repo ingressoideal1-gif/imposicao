@@ -240,6 +240,9 @@ button:focus-visible { outline: 2px solid #e2e8f0; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
     button { transition: none; }
     button:active:not(:disabled) { transform: none; }
+    /* A seta da secao e um `<span>`, entao a regra de `button` acima nao a
+       alcanca: ela vira de lado na hora, sem girar. */
+    .secao-seta { transition: none; }
     #lista, #meus-pedidos, #menu-geral, #engrenagem,
     #bloco-entrar, #trocar-senha, #caixa-carregar, #caixa-entrar-config { animation: none; }
 }
@@ -412,19 +415,74 @@ button:focus-visible { outline: 2px solid #e2e8f0; outline-offset: 2px; }
 /* ── Secoes ──────────────────────────────────────────────────────────────── */
 
 .secao { margin: 24px 0; }
-/* O titulo de secao: etiqueta pequena em caixa alta, com um fio que corre ate a
-   borda direita. E a "regua" da tela -- o olho acha as secoes pelo fio, sem
-   precisar ler. */
-.secao > h2, .rotulo-secao {
+/* O titulo das secoes que NAO recolhem -- as da casa ("Meus Eventos", "Meus
+   Pedidos", "Minha conta", "Eventos finalizados"): etiqueta pequena em caixa
+   alta, com um fio que corre ate a borda direita. E a "regua" da tela -- o olho
+   acha as secoes pelo fio, sem precisar ler.
+
+   As cinco secoes da ENGRENAGEM deixaram de usar isto em 18/08/2026: o titulo
+   delas virou o `.secao-cabecalho` logo abaixo, que e um botao. */
+.rotulo-secao {
     display: flex; align-items: center; gap: 12px;
     font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--dim); margin: 0 0 12px;
+    color: var(--dim); margin: 26px 0 12px;
 }
-.secao > h2::after, .rotulo-secao::after {
+.rotulo-secao::after {
     content: ""; flex: 1; height: 1px;
     background: linear-gradient(90deg, var(--border-forte), transparent);
 }
-.rotulo-secao { margin: 26px 0 12px; }
+
+/* ── O cabecalho que abre e fecha uma secao da engrenagem ─────────────────
+   A linha inteira e o alvo de toque, e ela leva tres coisas: o titulo a
+   esquerda, o RESUMO do que ha la dentro a direita, e a seta que diz de que
+   lado a secao esta. O resumo e o que faz a tela recolhida continuar
+   respondendo sem ser aberta -- "3 setores · 1 bloqueado" resolve a pergunta
+   mais comum sem um toque. */
+.secao-cabecalho {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; min-height: 56px;
+    margin: 0; padding: 12px 16px;
+    text-align: left;
+    background: var(--card);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: none;
+    color: var(--text);
+    cursor: pointer;
+}
+.secao-cabecalho:hover:not(:disabled) {
+    background: var(--card-2); border-color: var(--border-forte);
+}
+.secao-titulo {
+    flex: none;
+    font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim);
+    white-space: nowrap;
+}
+/* Aberta, a secao se acende: com cinco cabecalhos empilhados e um so aberto, a
+   cor diz de relance onde o dono esta. */
+.secao-cabecalho[aria-expanded="true"] .secao-titulo { color: var(--teal-claro); }
+/* Uma linha so, cortada com reticencias: o resumo de um evento pode ter nome
+   longo, e ele NAO pode empurrar a seta para fora nem virar duas linhas. */
+.secao-resumo {
+    flex: 1; min-width: 0; text-align: right;
+    font-size: .88rem; font-weight: 600; color: var(--dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A seta e o mesmo chevron de duas bordas do menu do olho, virado para baixo.
+   Aberta, ela gira 180 graus e aponta para cima. */
+.secao-seta {
+    flex: none; width: 9px; height: 9px; margin-top: -5px;
+    border-right: 2px solid var(--apagado); border-bottom: 2px solid var(--apagado);
+    transform: rotate(45deg);
+    transition: transform 160ms ease;
+}
+.secao-cabecalho[aria-expanded="true"] .secao-seta {
+    margin-top: 4px; transform: rotate(225deg);
+}
+.secao-corpo { margin-top: 12px; }
+/* A classe mora na `.secao`, e nao no corpo: e ela que o `controle.js` liga e
+   desliga, e assim o cabecalho continua desenhavel pelo estado do pai. */
+.secao.recolhida .secao-corpo { display: none; }
 
 /* A faixa da elevação. Fica GRUDADA no topo enquanto vale: uma trava que se
    desarma em silêncio é pior que nenhuma. */
@@ -540,8 +598,20 @@ body.somente-leitura .so-com-senha { opacity: .55; }
     margin-top: 40px; padding-top: 18px;
     border-top: 1px solid rgba(239, 68, 68, .45);
 }
-.zona-de-risco > h2 { color: #f87171; }
-.zona-de-risco > h2::after { background: linear-gradient(90deg, rgba(239, 68, 68, .45), transparent); }
+/* Recolhida, esta secao e uma linha vermelha no fim da tela -- e continua
+   dizendo, sem ser aberta, que e daqui que saem as duas acoes que mudam o
+   evento inteiro. */
+.zona-de-risco .secao-cabecalho {
+    border-color: var(--red);
+    background: linear-gradient(180deg, #1c1826, #141522);
+}
+.zona-de-risco .secao-cabecalho:hover:not(:disabled) {
+    background: linear-gradient(180deg, #241c2e, #1a1b2a);
+    border-color: var(--red);
+}
+.zona-de-risco .secao-titulo,
+.zona-de-risco .secao-cabecalho[aria-expanded="true"] .secao-titulo { color: #f87171; }
+.zona-de-risco .secao-seta { border-color: #f87171; }
 .zona-de-risco .cartao { border-color: rgba(239, 68, 68, .40); background: linear-gradient(180deg, #1c1826, #141522); }
 .zona-de-risco h3 { color: #fca5a5; }
 

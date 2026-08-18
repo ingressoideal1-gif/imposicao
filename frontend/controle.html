@@ -350,49 +350,94 @@
             <button id="btn-esqueci-config" class="secundario">Esqueci minha senha</button>
         </div>
 
-        <div class="secao" id="bloco-evento">
-            <h2>Evento</h2>
-            <div class="cartao">
-                <!-- O rótulo deste botão é escrito pelo `desenharAtivacao()`,
-                     porque ele alterna entre "Inativar" e "Ativar" conforme o
-                     estado que o painel devolve. -->
-                <button id="btn-ativar-evento" class="so-com-senha">Inativar este evento</button>
-                <p class="config-ajuda">
-                    Inativar desliga o evento para <strong>todos</strong> os
-                    aparelhos. Aparelho sem internet só recebe a mudança quando
-                    voltar a ter sinal.
-                </p>
-                <label for="campo-nome-evento">Nome do evento</label>
-                <input id="campo-nome-evento" type="text">
-                <label for="campo-data">Data e hora</label>
-                <input id="campo-data" type="datetime-local">
-                <label for="campo-local">Local</label>
-                <input id="campo-local" type="text">
-                <button id="btn-gravar-evento" class="so-com-senha">Gravar dados do evento</button>
+        <!-- AS CINCO SEÇÕES NASCEM RECOLHIDAS.
+
+             Aberta, esta configuração tem três telas de altura no celular, e o
+             dono quase sempre chega aqui para mexer em UMA coisa. Recolhida,
+             cada seção ocupa uma linha que já diz o que tem lá dentro — o
+             `.secao-resumo` à direita, escrito pelo `desenharResumos()` —, e
+             ele escolhe onde entrar sem rolar procurando.
+
+             `recolhida` já vem no HTML, e não posta pelo script: sem isso a
+             tela abriria com tudo em pé e encolheria um instante depois, na
+             cara de quem está olhando.
+
+             A rolagem até a zona de risco continua sendo parte da proteção
+             dela: recolhida, ela fica ainda mais longe de um toque sem querer.
+
+             Quem lembra o que estava aberto é o script desta tela, por evento
+             e só enquanto a aba viver. Ver as funções de seção lá. -->
+        <div class="secao recolhida" id="bloco-evento">
+            <button type="button" class="secao-cabecalho" aria-expanded="false"
+                    aria-controls="corpo-evento" id="abrir-evento">
+                <span class="secao-titulo">Evento</span>
+                <span class="secao-resumo" id="resumo-evento"></span>
+                <span class="secao-seta" aria-hidden="true"></span>
+            </button>
+            <div class="secao-corpo" id="corpo-evento">
+                <div class="cartao">
+                    <!-- O rótulo deste botão é escrito pelo `desenharAtivacao()`,
+                         porque ele alterna entre "Inativar" e "Ativar" conforme o
+                         estado que o painel devolve. -->
+                    <button id="btn-ativar-evento" class="so-com-senha">Inativar este evento</button>
+                    <p class="config-ajuda">
+                        Inativar desliga o evento para <strong>todos</strong> os
+                        aparelhos. Aparelho sem internet só recebe a mudança quando
+                        voltar a ter sinal.
+                    </p>
+                    <label for="campo-nome-evento">Nome do evento</label>
+                    <input id="campo-nome-evento" type="text">
+                    <label for="campo-data">Data e hora</label>
+                    <input id="campo-data" type="datetime-local">
+                    <label for="campo-local">Local</label>
+                    <input id="campo-local" type="text">
+                    <button id="btn-gravar-evento" class="so-com-senha">Gravar dados do evento</button>
+                </div>
             </div>
         </div>
 
-        <div class="secao" id="bloco-aparelhos">
-            <h2>Aparelhos</h2>
-            <p class="config-ajuda">
-                Todos os aparelhos deste evento, de todos os celulares. O
-                aparelho em que você está vem marcado com ★.
-            </p>
-            <div id="aparelhos"></div>
+        <div class="secao recolhida" id="bloco-aparelhos">
+            <button type="button" class="secao-cabecalho" aria-expanded="false"
+                    aria-controls="corpo-aparelhos" id="abrir-aparelhos">
+                <span class="secao-titulo">Aparelhos</span>
+                <span class="secao-resumo" id="resumo-aparelhos"></span>
+                <span class="secao-seta" aria-hidden="true"></span>
+            </button>
+            <div class="secao-corpo" id="corpo-aparelhos">
+                <p class="config-ajuda">
+                    Todos os aparelhos deste evento, de todos os celulares. O
+                    aparelho em que você está vem marcado com ★.
+                </p>
+                <div id="aparelhos"></div>
+            </div>
         </div>
 
-        <div class="secao" id="bloco-setores">
-            <h2>Setores</h2>
-            <div id="setores"></div>
+        <div class="secao recolhida" id="bloco-setores">
+            <button type="button" class="secao-cabecalho" aria-expanded="false"
+                    aria-controls="corpo-setores" id="abrir-setores">
+                <span class="secao-titulo">Setores</span>
+                <span class="secao-resumo" id="resumo-setores"></span>
+                <span class="secao-seta" aria-hidden="true"></span>
+            </button>
+            <div class="secao-corpo" id="corpo-setores">
+                <div id="setores"></div>
+            </div>
         </div>
 
-        <div class="secao" id="bloco-este-aparelho">
-            <h2>Este aparelho</h2>
-            <p class="config-ajuda">
-                Sair não descarta as leituras que ainda não subiram: elas
-                continuam guardadas aqui e sobem quando a internet voltar.
-            </p>
-            <button id="btn-sair-do-aparelho" class="secundario">Sair deste aparelho</button>
+        <div class="secao recolhida" id="bloco-este-aparelho">
+            <button type="button" class="secao-cabecalho" aria-expanded="false"
+                    aria-controls="corpo-este-aparelho" id="abrir-este-aparelho">
+                <span class="secao-titulo">Este aparelho</span>
+                <span class="secao-resumo" id="resumo-este-aparelho"></span>
+                <span class="secao-seta" aria-hidden="true"></span>
+            </button>
+            <div class="secao-corpo" id="corpo-este-aparelho">
+                <p class="config-ajuda">
+                    Sair não descarta as leituras que ainda não subiram: elas
+                    continuam guardadas aqui e sobem quando a internet voltar.
+                </p>
+                <button id="btn-sair-do-aparelho" class="secundario">Sair deste aparelho</button>
+            </div>
         </div>
 
         <!-- A ZONA DE RISCO, no fim de tudo e separada por uma linha vermelha.
@@ -404,45 +449,51 @@
 
              O que NÃO existe nesta tela, de propósito: nenhum caminho para o
              evento deixar de existir. Um evento acontece e termina. -->
-        <div class="secao zona-de-risco" id="bloco-zona-de-risco">
-            <h2>Zona de risco</h2>
+        <div class="secao zona-de-risco recolhida" id="bloco-zona-de-risco">
+            <button type="button" class="secao-cabecalho" aria-expanded="false"
+                    aria-controls="corpo-zona-de-risco" id="abrir-zona-de-risco">
+                <span class="secao-titulo">Zona de risco</span>
+                <span class="secao-resumo" id="resumo-zona-de-risco"></span>
+                <span class="secao-seta" aria-hidden="true"></span>
+            </button>
+            <div class="secao-corpo" id="corpo-zona-de-risco">
+                <div class="cartao" id="cartao-zerar-entradas">
+                    <h3>Zerar as entradas deste evento</h3>
+                    <p class="config-ajuda">
+                        A contagem recomeça do zero: quem já entrou some da lista de
+                        quem entrou, o contador de cada aparelho volta a zero, e essas
+                        pessoas podem entrar de novo. É o que transforma um evento
+                        de teste no evento de verdade.
+                    </p>
+                    <p class="config-ajuda">
+                        <strong>Continuam valendo:</strong> os ingressos, os setores
+                        e os aparelhos. Nada do que a gráfica imprimiu deixa de servir,
+                        e nenhum celular precisa ser configurado outra vez.
+                    </p>
+                    <p class="config-ajuda">
+                        Peço a sua senha de novo, mesmo dentro dos 15 minutos já
+                        liberados: esta é a única coisa desta tela que não tem
+                        volta, e o celular pode estar na mão do porteiro.
+                    </p>
+                    <button id="btn-zerar-entradas" class="so-com-senha perigo">Zerar as entradas deste evento</button>
+                </div>
 
-            <div class="cartao" id="cartao-zerar-entradas">
-                <h3>Zerar as entradas deste evento</h3>
-                <p class="config-ajuda">
-                    A contagem recomeça do zero: quem já entrou some da lista de
-                    quem entrou, o contador de cada aparelho volta a zero, e essas
-                    pessoas podem entrar de novo. É o que transforma um evento
-                    de teste no evento de verdade.
-                </p>
-                <p class="config-ajuda">
-                    <strong>Continuam valendo:</strong> os ingressos, os setores
-                    e os aparelhos. Nada do que a gráfica imprimiu deixa de servir,
-                    e nenhum celular precisa ser configurado outra vez.
-                </p>
-                <p class="config-ajuda">
-                    Peço a sua senha de novo, mesmo dentro dos 15 minutos já
-                    liberados: esta é a única coisa desta tela que não tem
-                    volta, e o celular pode estar na mão do porteiro.
-                </p>
-                <button id="btn-zerar-entradas" class="so-com-senha perigo">Zerar as entradas deste evento</button>
-            </div>
-
-            <div class="cartao" id="cartao-finalizar-evento">
-                <h3>Finalizar evento</h3>
-                <p class="config-ajuda">
-                    O evento sai de <strong>Meus Eventos</strong> e passa a
-                    aparecer em <strong>Eventos finalizados</strong>, com quanta
-                    gente entrou. Todos os aparelhos param de aceitar ingresso.
-                    Aparelho sem internet só recebe a mudança quando voltar a ter
-                    sinal.
-                </p>
-                <p class="config-ajuda">
-                    Dá para reabrir depois, e ele volta <strong>inativo</strong>:
-                    religar os aparelhos é uma segunda decisão sua, no
-                    <em>Ativar este evento</em>.
-                </p>
-                <button id="btn-finalizar-evento" class="so-com-senha perigo">Finalizar evento</button>
+                <div class="cartao" id="cartao-finalizar-evento">
+                    <h3>Finalizar evento</h3>
+                    <p class="config-ajuda">
+                        O evento sai de <strong>Meus Eventos</strong> e passa a
+                        aparecer em <strong>Eventos finalizados</strong>, com quanta
+                        gente entrou. Todos os aparelhos param de aceitar ingresso.
+                        Aparelho sem internet só recebe a mudança quando voltar a ter
+                        sinal.
+                    </p>
+                    <p class="config-ajuda">
+                        Dá para reabrir depois, e ele volta <strong>inativo</strong>:
+                        religar os aparelhos é uma segunda decisão sua, no
+                        <em>Ativar este evento</em>.
+                    </p>
+                    <button id="btn-finalizar-evento" class="so-com-senha perigo">Finalizar evento</button>
+                </div>
             </div>
         </div>
     </div>

@@ -150,6 +150,194 @@
             });
     }
 
+    // ── As cinco seções, que nascem recolhidas ──────────────────────────────
+    //
+    // Em pé, esta configuração tem três telas de altura no celular, e o dono
+    // quase sempre entra aqui para mexer em UMA coisa. Recolhida, cada seção
+    // ocupa uma linha que já diz o que tem dentro, e ele escolhe onde entrar
+    // sem rolar procurando. Ver o comentário grande no `controle.html`.
+    var SECOES = ['evento', 'aparelhos', 'setores', 'este-aparelho', 'zona-de-risco'];
+
+    /**
+     * O que estava aberto fica guardado POR EVENTO, e só enquanto a aba viver.
+     *
+     * Por evento porque configurar o baile de sábado e configurar o show de
+     * domingo são tarefas diferentes: quem deixou "Setores" aberto num deles
+     * não está no meio da mesma coisa no outro, e uma seção que ele não pediu
+     * é rolagem que ele não pediu. Evento nunca aberto nasce com tudo fechado.
+     *
+     * No `sessionStorage`, e não no `localStorage`, pela mesma razão que a
+     * elevação (ver `CHAVE_ELEVACAO`, mais abaixo): o celular fica com o
+     * porteiro, e fechar a aba tem de deixar a próxima abertura igual à
+     * primeira.
+     */
+    var CHAVE_SECOES = 'ideal_control_secoes:';
+
+    function secoesGuardadas() {
+        if (!estado.evento_id) { return []; }
+        var bruto;
+        try { bruto = sessionStorage.getItem(CHAVE_SECOES + estado.evento_id); }
+        catch (e) { return []; }                 // aba anônima
+        if (!bruto) { return []; }
+        var lista;
+        try { lista = JSON.parse(bruto); } catch (e) { return []; }
+        return Array.isArray(lista) ? lista : [];
+    }
+
+    function guardarSecoes(lista) {
+        if (!estado.evento_id) { return; }
+        try {
+            sessionStorage.setItem(CHAVE_SECOES + estado.evento_id,
+                                   JSON.stringify(lista));
+        } catch (e) { /* aba anônima: vale só nesta visita */ }
+    }
+
+    function secaoAberta(nome) {
+        var bloco = $('bloco-' + nome);
+        return !!bloco && !bloco.classList.contains('recolhida');
+    }
+
+    /**
+     * A seção que abre sobe para o alto da tela.
+     *
+     * Sem isto, abrir "Setores" com a página no meio faz o conteúdo novo
+     * crescer ABAIXO da dobra: o dono toca, nada muda onde ele está olhando, e
+     * ele toca de novo — fechando o que tinha acabado de abrir.
+     *
+     * `prefers-reduced-motion` tira o deslizamento, e não a rolagem: quem pede
+     * menos movimento continua precisando chegar lá.
+     */
+    function rolarAte(bloco) {
+        var suave = true;
+        try {
+            suave = !(window.matchMedia
+                      && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (e) { /* sem matchMedia: desliza */ }
+        try {
+            bloco.scrollIntoView(suave
+                ? { block: 'start', behavior: 'smooth' }
+                : { block: 'start' });
+        } catch (e) {
+            bloco.scrollIntoView();              // navegador que só aceita booleano
+        }
+    }
+
+    /**
+     * O único lugar que mexe no estado de uma seção: a classe, o `aria-expanded`
+     * e o que fica guardado andam sempre juntos.
+     */
+    function definirSecao(nome, aberta, rolar) {
+        var bloco = $('bloco-' + nome);
+        var cabecalho = $('abrir-' + nome);
+        if (!bloco || !cabecalho) { return; }
+
+        bloco.classList.toggle('recolhida', !aberta);
+        cabecalho.setAttribute('aria-expanded', aberta ? 'true' : 'false');
+
+        var lista = secoesGuardadas().filter(function (n) { return n !== nome; });
+        if (aberta) { lista.push(nome); }
+        guardarSecoes(lista);
+
+        if (aberta && rolar) { rolarAte(bloco); }
+    }
+
+    function abrirSecao(nome) { definirSecao(nome, true, true); }
+    function fecharSecao(nome) { definirSecao(nome, false, false); }
+    function alternarSecao(nome) { definirSecao(nome, !secaoAberta(nome), true); }
+
+    /**
+     * Tudo aberto de uma vez, SEM rolar: cinco rolagens disputando a mesma
+     * tela deixariam o dono em qualquer lugar menos onde ele quisesse.
+     */
+    function abrirTodasSecoes() {
+        SECOES.forEach(function (nome) { definirSecao(nome, true, false); });
+    }
+
+    /**
+     * Devolve as seções ao que estavam NESTE evento. Chamada pelo
+     * `abrirEngrenagem` depois que a tela aparece.
+     *
+     * Passa por TODAS as cinco, e não só pelas guardadas: sem isso, abrir a
+     * engrenagem de um segundo evento na mesma visita herdaria as seções que
+     * ficaram abertas no primeiro.
+     */
+    function restaurarSecoes() {
+        var abertas = secoesGuardadas();
+        SECOES.forEach(function (nome) {
+            definirSecao(nome, abertas.indexOf(nome) >= 0, false);
+        });
+    }
+
+    /**
+     * "dd/mm HH:mm" para o resumo do evento.
+     *
+     * Reusa a conversão de fuso do `deISOParaCampo`: a coluna é TIMESTAMPTZ, e
+     * um corte cru na string ISO mostraria a hora UTC — três horas fora, e
+     * ainda assim um horário plausível, que é o pior jeito de errar.
+     */
+    function dataCurta(iso) {
+        var campo = deISOParaCampo(iso);         // "AAAA-MM-DDTHH:MM"
+        if (!campo) { return ''; }
+        return campo.slice(8, 10) + '/' + campo.slice(5, 7) + ' ' + campo.slice(11, 16);
+    }
+
+    /**
+     * O resumo à direita de cada cabeçalho: o que a seção tem dentro, dito numa
+     * linha, para o dono escolher qual abrir sem abrir nenhuma.
+     *
+     * `textContent` em todos, sem exceção: nome de evento, de aparelho e de
+     * setor são digitados por gente ou vêm do ERP.
+     */
+    function desenharResumos() {
+        var p = estado.painel;
+        if (!p) { return; }
+
+        var escrever = function (nome, texto) {
+            var el = $('resumo-' + nome);
+            if (el) { el.textContent = texto; }
+        };
+        var juntar = function (partes) {
+            return partes.filter(function (t) { return !!t; }).join(' · ');
+        };
+        var contar = function (n, singular, plural) {
+            return n + ' ' + (n === 1 ? singular : plural);
+        };
+
+        var ev = p.evento || {};
+        escrever('evento', juntar([
+            ev.nome_evento, dataCurta(ev.data_evento), ev.local_evento,
+            // A mesma leitura do `desenharAtivacao`: só "ativo" é ativo. Um
+            // evento desligado tem de dizer isso na linha recolhida — é a
+            // pergunta que o dono faz antes de qualquer outra.
+            ev.status === 'ativo' ? '' : 'inativo'
+        ]));
+
+        var aparelhos = p.aparelhos || [];
+        var revogados = aparelhos.filter(function (a) {
+            return a.status !== 'ativo';
+        }).length;
+        escrever('aparelhos', aparelhos.length
+            ? juntar([contar(aparelhos.length, 'aparelho', 'aparelhos'),
+                      revogados ? contar(revogados, 'revogado', 'revogados') : ''])
+            : 'nenhum ainda');
+
+        var setores = p.setores || [];
+        var bloqueados = setores.filter(function (s) { return !!s.bloqueado; }).length;
+        escrever('setores', setores.length
+            ? juntar([contar(setores.length, 'setor', 'setores'),
+                      bloqueados ? contar(bloqueados, 'bloqueado', 'bloqueados') : ''])
+            : 'nenhum');
+
+        // O chaveiro responde sem rede: é ele que sabe se ESTE celular é
+        // aparelho deste evento, e com que nome.
+        var meu = window.chaveiro ? window.chaveiro.procurar(estado.evento_id) : null;
+        escrever('este-aparelho', (meu && meu.nome_portao)
+            ? meu.nome_portao
+            : 'este celular não lê este evento');
+
+        escrever('zona-de-risco', 'zerar entradas · finalizar');
+    }
+
     function desenhar() {
         var p = estado.painel;
         if (!p) { return; }
@@ -243,6 +431,12 @@
 
         desenharAtivacao();
         desenharZonaDeRisco();
+
+        // As linhas recolhidas se atualizam junto com o que há dentro delas —
+        // e SÓ elas: nada aqui mexe na classe `recolhida`, então um redesenho
+        // disparado por qualquer gravação desta tela nunca fecha uma seção que
+        // o dono abriu.
+        desenharResumos();
 
         // Depois dos cartões de setor existirem no DOM: são eles que trazem os
         // campos de uso e de bloqueio que a trava também precisa desligar.
@@ -1418,6 +1612,10 @@
                 $('lista').classList.add('sumindo');
                 $('bloco-novo-evento').classList.add('sumindo');
                 if (nome) { $('nome-evento-titulo').textContent = nome; }
+                // DEPOIS de a engrenagem aparecer, e antes do painel: a tela
+                // já nasce com as seções deste evento no lugar certo, em vez
+                // de piscar de recolhida para aberta quando a rede responder.
+                restaurarSecoes();
                 return carregarPainel();
             });
         }).catch(function () {
@@ -1920,6 +2118,18 @@
             sairDoAparelho();
         });
 
+        // O toque no cabeçalho alterna a seção. Um ouvinte por seção, e não um
+        // delegado no `#engrenagem`: os cinco cabeçalhos estão fixos no HTML e
+        // nunca são redesenhados, ao contrário de tudo o que há dentro deles.
+        SECOES.forEach(function (secao) {
+            var cabecalho = $('abrir-' + secao);
+            if (cabecalho) {
+                cabecalho.addEventListener('click', function () {
+                    alternarSecao(secao);
+                });
+            }
+        });
+
         $('btn-gravar-evento').addEventListener('click', function () {
             var botao = $('btn-gravar-evento');
             window.botaoEspera.comecar(botao, 'Gravando…');
@@ -1968,6 +2178,13 @@
         abrirEngrenagem: abrirEngrenagem,
         fecharEngrenagem: fecharEngrenagem,
         comSenha: comSenha,
+        // As cinco seções recolhíveis. Expostas porque os testes que medem o
+        // que há DENTRO de uma delas precisam abri-la primeiro — e porque
+        // `abrirTodasSecoes` é a saída de quem quiser a tela inteira em pé.
+        abrirSecao: abrirSecao,
+        fecharSecao: fecharSecao,
+        alternarSecao: alternarSecao,
+        abrirTodasSecoes: abrirTodasSecoes,
         // Quem elevou de FORA desta tela — o "carregar pedido" do Meus Pedidos
         // entra e eleva numa digitação só — entrega o bilhete aqui. Sem isto,
         // a engrenagem aberta em seguida pediria a senha de novo, dentro dos 15
