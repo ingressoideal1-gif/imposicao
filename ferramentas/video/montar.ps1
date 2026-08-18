@@ -134,9 +134,11 @@ try {
         $vozModerna = $todas | Where-Object { $_.DisplayName -eq $Voz } | Select-Object -First 1
     }
     if (-not $vozModerna) {
-        # Daniel primeiro: voz masculina, e a que soa menos sintetica das duas.
+        # Maria, a MODERNA -- escolha do usuario depois de ouvir as duas. Nao
+        # confundir com "Maria Desktop", a voz velha do SAPI: sao vozes
+        # diferentes, de geracoes diferentes, com o mesmo primeiro nome.
         $vozModerna = $todas | Where-Object {
-            $_.Language -eq 'pt-BR' -and $_.DisplayName -match 'Daniel'
+            $_.Language -eq 'pt-BR' -and $_.DisplayName -match 'Maria'
         } | Select-Object -First 1
     }
     if (-not $vozModerna) {

@@ -617,7 +617,7 @@ async function desenharPecas(browser) {
           <div style="font-size:30px;font-weight:800;letter-spacing:.01em">Ideal Control</div>
           <div style="font-size:19px;color:#94a3b8">como instalar e usar</div>
         </div>
-      </div></body>`, { waitUntil: 'networkidle0' });
+      </div></body></html>`, { waitUntil: 'networkidle0' });
     fs.writeFileSync(path.join(SAIDA, 'barra.png'), await page.screenshot({ type: 'png' }));
 
     // A moldura: uma máscara com um buraco arredondado. O `box-shadow` enorme
@@ -719,15 +719,46 @@ async function desenharIngresso(page) {
 
 /** As duas cartelas — abertura e fecho — são desenhadas na mesma medida da tela
  *  do celular, para caírem dentro da moldura como as outras cenas. */
+/**
+ * O ícone como ele fica na tela de início do celular.
+ *
+ * Não é uma imitação da interface do aplicativo — é o ÍCONE de verdade, o mesmo
+ * arquivo que a instalação põe no celular, com o nome por baixo como o sistema
+ * o escreve. Sem esta cena o vídeo mandava instalar e nunca dizia o que
+ * procurar depois.
+ */
+async function cartelaDoIcone(page) {
+    await page.setContent(`<!DOCTYPE html><html><head><meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1"></head>
+      <body style="margin:0;background:#0a0f1e;height:${ALTURA}px">
+      <div style="height:${ALTURA}px;display:flex;flex-direction:column;
+                  align-items:center;justify-content:center;gap:14px;padding:0 40px;
+                  font-family:${FONTE_CSS};text-align:center">
+        <div style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;
+                    font-weight:800;color:#2dd4bf;margin-bottom:6px">Na tela do seu celular</div>
+        <img src="${BASE}/icones/portaria-192.png"
+             style="width:112px;border-radius:26px;
+                    box-shadow:0 26px 54px -20px rgba(20,184,166,.8),
+                               0 0 0 1px rgba(255,255,255,.08)">
+        <div style="font-size:17px;font-weight:700;color:#e2e8f0">Ideal Control</div>
+        <div style="font-size:15px;color:#94a3b8;line-height:1.6;margin-top:18px;max-width:20em">
+          No iPhone: toque em <b style="color:#e2e8f0">Compartilhar</b> e depois em
+          <b style="color:#e2e8f0">Adicionar à Tela de Início</b>.
+        </div>
+      </div></body></html>`, { waitUntil: 'networkidle0' });
+}
+
 async function cartela(page, titulo, subtitulo) {
-    await page.setContent(`<body style="margin:0;background:#0a0f1e;height:${ALTURA}px">
+    await page.setContent(`<!DOCTYPE html><html><head><meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1"></head>
+      <body style="margin:0;background:#0a0f1e;height:${ALTURA}px">
       <div style="height:${ALTURA}px;display:flex;flex-direction:column;
                   align-items:center;justify-content:center;gap:18px;padding:0 40px;
                   font-family:${FONTE_CSS};text-align:center">
         <img src="${BASE}/icones/portaria-192.png" style="width:104px;border-radius:22px">
-        <div style="font-size:34px;font-weight:800;color:#e2e8f0">${titulo}</div>
-        <div style="font-size:18px;color:#94a3b8;line-height:1.5">${subtitulo}</div>
-      </div></body>`, { waitUntil: 'networkidle0' });
+        <div style="font-size:30px;font-weight:800;color:#e2e8f0">${titulo}</div>
+        <div style="font-size:16px;color:#94a3b8;line-height:1.55;max-width:20em">${subtitulo}</div>
+      </div></body></html>`, { waitUntil: 'networkidle0' });
 }
 
 // ── A gravação ───────────────────────────────────────────────────────────────
@@ -799,17 +830,32 @@ async function main() {
     await g.segurar(1.5);
     g.fecharCena();
 
-    // O navegador de verdade fecha a parede sozinho ao instalar. Aqui não há
-    // instalação nenhuma para acontecer, então a gravação a retira.
+    // ── O ícone na tela inicial ──────────────────────────────────────────────
+    const ondeEstava = page.url();
+    await page.goto(BASE + '/__estudio', { waitUntil: 'domcontentloaded' });
+    g.abrirCena('03-icone');
+    await cartelaDoIcone(page);
+    await g.segurar(8);
+    g.fecharCena();
+
+    // ── Entrar ───────────────────────────────────────────────────────────────
+    //
+    // De volta ao aplicativo, agora pelo ícone: uma abertura nova, sem a parede
+    // de instalação na frente — que é exatamente o que acontece no celular
+    // depois de instalado.
+    await page.goto(ondeEstava, { waitUntil: 'networkidle0' });
+    // A parede volta a aparecer: o Chrome oferece instalar a cada abertura, e
+    // aqui não há instalação de verdade para acontecer. Num celular ela some
+    // sozinha depois de instalado — que é o estado que esta cena representa.
+    // Sem retirá-la, o toque em "Entrar" cai na parede e a gravação para.
+    await page.waitForSelector('#parede-pwa', { timeout: 4000 }).catch(function () { });
     await page.evaluate(function () {
         const p = document.getElementById('parede-pwa');
         if (p) { p.remove(); }
     });
-
-    // ── Entrar ───────────────────────────────────────────────────────────────
     await page.waitForSelector('#bloco-entrar:not(.sumindo)', { timeout: 10000 });
 
-    g.abrirCena('03-entrar');
+    g.abrirCena('04-entrar');
     await g.segurar(1);
     await g.digitar('#email', EMAIL);
     await g.digitar('#senha', 'a-senha-do-cliente');
@@ -817,19 +863,38 @@ async function main() {
     await g.tocar('#btn-entrar');
     // Conta sem evento nenhum cai direto em Meus Pedidos: é lá que o primeiro
     // evento nasce.
-    await page.waitForSelector('#meus-pedidos:not(.sumindo)', { timeout: 20000 });
+    await page.waitForSelector('#meus-pedidos:not(.sumindo)', { timeout: 20000 })
+        .catch(async function () {
+            const d = await page.evaluate(function () {
+                const v = function (id) {
+                    const e = document.getElementById(id);
+                    return e ? !e.classList.contains('sumindo') : null;
+                };
+                const t = function (id) {
+                    const e = document.getElementById(id);
+                    return e ? (e.textContent || '').trim().slice(0, 160) : '';
+                };
+                return { entrar: v('bloco-entrar'), lista: v('lista'),
+                         pedidos: v('meus-pedidos'), trocarSenha: v('trocar-senha'),
+                         parede: !!document.getElementById('parede-pwa'),
+                         erroLogin: t('erro-login'), erroArranque: t('erro-arranque'),
+                         semPedidos: t('sem-pedidos') };
+            });
+            console.log('    [diagnóstico do entrar] ' + JSON.stringify(d));
+            throw new Error('não cheguei em Meus Pedidos');
+        });
     await g.segurar(1);
     g.fecharCena();
 
     // ── Meus Pedidos ─────────────────────────────────────────────────────────
-    g.abrirCena('04-pedidos');
+    g.abrirCena('05-pedidos');
     await g.segurar(1.5);
     await g.rolarAte('#pedido-' + PEDIDO, 7);
     await g.segurar(2);
     g.fecharCena();
 
     // ── Carregar ─────────────────────────────────────────────────────────────
-    g.abrirCena('05-carregar');
+    g.abrirCena('06-carregar');
     await g.tocar('#carregar-' + PEDIDO);
     await page.waitForSelector('#caixa-carregar:not(.sumindo)', { timeout: 15000 });
     await g.segurar(1.5);
@@ -871,7 +936,7 @@ async function main() {
     }, { timeout: 20000 });
 
     // ── A configuração ───────────────────────────────────────────────────────
-    g.abrirCena('06-configurar');
+    g.abrirCena('07-configurar');
     await g.tocar('#config-' + EVENTO_ID);
     await page.waitForSelector('#engrenagem:not(.sumindo)', { timeout: 20000 });
     await page.waitForFunction(function () {
@@ -889,17 +954,6 @@ async function main() {
         await g.digitar('#setor-nome-s1', 'PISTA');
     }
     await g.segurar(1.5);
-    g.fecharCena();
-
-    g.abrirCena('07-uso');
-    if (await existe(page, '#uso-s1-reentrada')) {
-        await g.rolarAte('#uso-s1-reentrada', 7);
-        await g.segurar(0.8);
-        await g.tocar('#uso-s1-reentrada');
-        await g.segurar(1.5);
-        await g.tocar('#uso-s1-unico');
-    }
-    await g.segurar(2);
     g.fecharCena();
 
     // ── O celular da porta ───────────────────────────────────────────────────

@@ -42,27 +42,27 @@ module.exports = [
             + 'Instalar agora.',
     },
     {
-        id: '03-entrar',
+        id: '03-icone',
+        narracao: 'O aplicativo ganha um ícone na tela inicial. É por ele que '
+            + 'você entra. No iPhone, use Compartilhar, e Adicionar à Tela de Início.',
+    },
+    {
+        id: '04-entrar',
         narracao: 'Entre com o seu e-mail e a senha que a gráfica passou.',
     },
     {
-        id: '04-pedidos',
+        id: '05-pedidos',
         narracao: 'Estes são os seus pedidos, já impressos.',
     },
     {
-        id: '05-carregar',
+        id: '06-carregar',
         narracao: 'Toque em Carregar e dê um nome ao evento. Pronto. O evento '
             + 'está criado.',
     },
     {
-        id: '06-configurar',
+        id: '07-configurar',
         narracao: 'Na engrenagem ficam os setores. Aqui você escolhe o nome que '
             + 'o porteiro vê na tela.',
-    },
-    {
-        id: '07-uso',
-        narracao: 'E escolhe se o ingresso vale uma entrada só, ou se a pessoa '
-            + 'pode sair e voltar.',
     },
     {
         id: '08-aparelho',
