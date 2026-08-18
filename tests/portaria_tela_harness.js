@@ -394,6 +394,38 @@ async function rodar(caso) {
         return;
     }
 
+    if (caso.modo === 'layout') {
+        // ONDE cada coisa esta na tela de leitura. Mede no navegador de
+        // verdade: "esta na base" e "esta em destaque" sao afirmacoes sobre
+        // pixels, e ler o CSS no texto do arquivo provaria so que a regra foi
+        // escrita -- nao que ela venceu a cascata.
+        await semear(caso);
+        await esperar(LENDO);
+        const saida = await page.evaluate(() => {
+            const cx = (id) => document.getElementById(id).getBoundingClientRect();
+            const tamanho = (id) =>
+                parseFloat(getComputedStyle(document.getElementById(id)).fontSize);
+            const base = document.querySelector('.base').getBoundingClientRect();
+            const visor = document.querySelector('.visor').getBoundingClientRect();
+            return {
+                alturaDaTela: window.innerHeight,
+                baseComeca: Math.round(base.top),
+                baseTermina: Math.round(base.bottom),
+                visorTermina: Math.round(visor.bottom),
+                contadorNaBase: !!document.querySelector('.base .contador'),
+                lanternaNaBase: !!document.querySelector('.base #btn-lanterna'),
+                digitarNaBase: !!document.querySelector('.base #btn-digitar'),
+                setorTopo: Math.round(cx('topo-setores').top),
+                aparelhoTopo: Math.round(cx('topo-aparelho').top),
+                setorCorpo: tamanho('topo-setores'),
+                aparelhoCorpo: tamanho('topo-aparelho'),
+            };
+        });
+        await browser.close();
+        console.log(JSON.stringify(saida));
+        return;
+    }
+
     if (caso.modo === 'reconfigurado') {
         await semear(caso);
         await esperar(LENDO

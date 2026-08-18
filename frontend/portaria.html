@@ -82,16 +82,40 @@
                 var(--bg);
             padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
         }
-        .folha { max-width: 520px; margin: 0 auto; padding: 14px; }
+        /* A folha e uma COLUNA de altura cheia: e o que permite a base
+           (contador, lanterna, digitar) descer para o fim da tela, onde o
+           polegar do porteiro alcanca sem ele tirar o olho da fila. Decisao do
+           usuario, 18/08/2026.
+
+           `100vh` primeiro e `100dvh` depois: no celular, a barra do navegador
+           que aparece e some muda a altura util, e so o `dvh` acompanha. Quem
+           nao entender o `dvh` fica com o `vh`, que erra por pouco. */
+        .folha {
+            max-width: 520px; margin: 0 auto; padding: 14px;
+            display: flex; flex-direction: column;
+            min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+        }
         .topo {
             display: flex; align-items: center;
             gap: 12px; font-size: 0.82rem; color: var(--dim); margin-bottom: 14px;
         }
-        .topo > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-        .topo strong { color: var(--text); font-size: 1.15rem; font-weight: 800; letter-spacing: -0.015em; line-height: 1.2; }
-        /* Os setores que este aparelho valida, em verde: e a resposta muda para
-           "esta pessoa esta na fila certa?", que o porteiro faz o tempo todo. */
-        #topo-setores { color: var(--verde-claro); font-size: 0.78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+        .topo > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        /* O NOME DO SETOR e a linha grande, e nao o nome do aparelho (usuario,
+           18/08/2026). E ele que responde a pergunta que o porteiro faz o tempo
+           todo -- "esta pessoa esta na fila certa?" --, e ele que precisa ser
+           lido de relance, com o celular na mao e gente andando na frente. O
+           nome do aparelho continua ali, menor: serve para saber QUAL celular e
+           este, o que se pergunta uma vez por noite. */
+        #topo-setores {
+            color: var(--verde-claro); font-size: 1.3rem; font-weight: 800;
+            letter-spacing: .02em; line-height: 1.15; text-transform: uppercase;
+            overflow-wrap: anywhere;
+        }
+        .topo strong {
+            color: var(--dim); font-size: 0.82rem; font-weight: 700;
+            letter-spacing: .04em; line-height: 1.2;
+        }
         h1 { font-size: 1.3rem; margin: 0 0 8px; font-weight: 800; letter-spacing: -0.015em; }
         .sumindo { display: none !important; }
 
@@ -162,8 +186,19 @@
            "aponte aqui" sem uma palavra. As cantoneiras sao oito degrades num
            unico pseudo-elemento -- nenhum elemento a mais por cima do video,
            que precisa continuar leve. */
-        .visor { position: relative; border-radius: 16px; overflow: hidden; background: #000; }
-        .cam { width: 100%; background: #000; aspect-ratio: 4/3; display: block; }
+        /* O visor CRESCE para ocupar o que sobra entre o topo e a base. A
+           base desceu para o fim da tela em 18/08/2026, e sem isto sobrava um
+           vazio no meio; camera maior e mira mais facil, que e o que se ganha
+           com o espaco. O  continua sendo o piso, para a tela deitada e
+           para telas curtas. */
+        .visor {
+            position: relative; border-radius: 16px; overflow: hidden; background: #000;
+            flex: 1 1 auto; min-height: 0; display: flex;
+        }
+        .cam {
+            width: 100%; background: #000; aspect-ratio: 4/3; display: block;
+            flex: 1 1 auto; min-height: 0; object-fit: cover;
+        }
         .visor::after {
             content: ""; position: absolute; inset: 12px; z-index: 1; pointer-events: none;
             --c: var(--teal-claro); --l: 30px; --e: 3px;
@@ -221,6 +256,14 @@
             font-size: 0.95rem; font-weight: 600; box-shadow: none;
         }
 
+        /* ── A base da tela ────────────────────────────────────────────────
+           Contador, lanterna e "Digitar o numero", grudados no fim da tela
+           (usuario, 18/08/2026). O `margin-top: auto` dentro da coluna e o que
+           empurra: sem altura fixa, sem `position: fixed`, e sem tapar nada
+           quando a caixa de digitar abre. */
+        #tela-lendo { display: flex; flex-direction: column; flex: 1 1 auto; }
+        .base { margin-top: auto; }
+
         /* ── O contador ────────────────────────────────────────────────────
            Destacado, sempre a vista. Soma TODOS os setores deste aparelho. */
         .contador {
@@ -253,6 +296,9 @@
            Navegador nenhum toca audio antes de a pessoa encostar na tela, e ler
            QR nao conta como encostar. Cobre a area de trabalho, e NAO a tela
            inteira: o `←` do topo fica fora dele de proposito. */
+        /* `relative` para o `#btn-toque` cobrir SO esta area, e nao a tela
+           inteira -- o `<-` do topo fica de fora de proposito. A regra de
+           coluna esta mais acima, junto da base. */
         #tela-lendo { position: relative; }
         #btn-toque {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -294,7 +340,9 @@
         <button id="btn-voltar" class="sumindo" type="button"
                 title="Voltar para a lista de eventos"
                 aria-label="Voltar para a lista de eventos">←</button>
-        <span><strong id="topo-aparelho">Portaria</strong><span id="topo-setores"></span></span>
+        <!-- O setor em cima e em corpo grande; o nome do aparelho embaixo e
+             pequeno. A ordem e a do que se le com pressa. -->
+        <span><span id="topo-setores"></span><strong id="topo-aparelho">Portaria</strong></span>
     </div>
 
     <!--
@@ -330,25 +378,36 @@
         <div class="rotulo">Última leitura</div>
         <div id="faixa-ultima" class="faixa vazia">Nenhum ingresso lido ainda</div>
 
-        <!-- `entraram / contratado · N não enviadas`. O denominador é a
-             quantidade CONTRATADA no ERP, que é a regra do projeto para
-             lotação. -->
-        <div class="contador">
-            <span id="contador-numeros">…</span><span id="contador-pendentes" class="pendentes"></span>
-        </div>
+        <!--
+            A BASE: o contador e os dois botões, no fim da tela.
 
-        <div class="rodape">
-            <!-- Só aparece onde a lanterna existe de verdade (Chrome no
-                 Android). Botão morto no escuro faz o porteiro achar que o
-                 aparelho travou. -->
-            <button id="btn-lanterna" class="sumindo" type="button"
-                    title="Lanterna" aria-label="Acender a lanterna">🔦</button>
-            <button id="btn-digitar" class="discreto">Digitar o número</button>
-        </div>
+            Decisão do usuário em 18/08/2026. O porteiro segura o celular por
+            baixo e trabalha com o polegar; o que ele toca tem de estar onde o
+            polegar chega, e o que ele confere de relance — o contador — logo
+            acima, na mesma região do olhar. No meio da tela, os dois disputavam
+            espaço com a câmera.
+        -->
+        <div class="base">
+            <!-- `entraram / contratado · N não enviadas`. O denominador é a
+                 quantidade CONTRATADA no ERP, que é a regra do projeto para
+                 lotação. -->
+            <div class="contador">
+                <span id="contador-numeros">…</span><span id="contador-pendentes" class="pendentes"></span>
+            </div>
 
-        <div id="caixa-digitar" class="sumindo">
-            <input id="campo-numero" inputmode="numeric" placeholder="000001">
-            <button id="btn-conferir">Conferir</button>
+            <div class="rodape">
+                <!-- Só aparece onde a lanterna existe de verdade (Chrome no
+                     Android). Botão morto no escuro faz o porteiro achar que o
+                     aparelho travou. -->
+                <button id="btn-lanterna" class="sumindo" type="button"
+                        title="Lanterna" aria-label="Acender a lanterna">🔦</button>
+                <button id="btn-digitar" class="discreto">Digitar o número</button>
+            </div>
+
+            <div id="caixa-digitar" class="sumindo">
+                <input id="campo-numero" inputmode="numeric" placeholder="000001">
+                <button id="btn-conferir">Conferir</button>
+            </div>
         </div>
 
         <!--

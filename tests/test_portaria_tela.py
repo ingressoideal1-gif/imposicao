@@ -714,3 +714,39 @@ def test_sem_a_carga_nova_o_aparelho_NAO_le_com_a_antiga():
     assert r["lendo"] is False, "abriu a leitura com a carga do aparelho anterior"
     assert r["marcaDepois"] == "1", "a marca sumiu; a proxima abertura leria com a carga velha"
     assert r["aparelhoDepois"] == "Portao A", "apagou a carga que ainda era a unica que havia"
+
+
+# ── Onde cada coisa fica na tela de leitura ─────────────────────────────────
+#
+# Decisao do usuario em 18/08/2026: "nome do Setor deve ficar mais destacado,
+# Lanterna, Digitar Numero e Contador devem ficar na base, parte de baixo da
+# tela". O porteiro segura o celular por baixo e trabalha com o polegar.
+
+
+def _layout(c=None):
+    return _harness({"modo": "layout", "carga": c or carga(),
+                     "token": "token-de-teste"})
+
+
+def test_o_contador_a_lanterna_e_o_digitar_ficam_na_BASE_da_tela():
+    r = _layout()
+    assert r["contadorNaBase"] is True
+    assert r["lanternaNaBase"] is True
+    assert r["digitarNaBase"] is True
+    # Grudados no fim: a base termina onde a folha termina, e a folha tem a
+    # altura da tela. A folga e o `padding` de 14px da folha mais a area segura.
+    assert r["baseTermina"] >= r["alturaDaTela"] - 40, r
+    # E a camera continua em cima -- a base nao subiu para o meio.
+    assert r["baseComeca"] > r["visorTermina"], r
+
+
+def test_o_nome_do_SETOR_e_a_linha_grande_do_topo():
+    """E ele que responde a pergunta que o porteiro faz o tempo todo -- "esta
+    pessoa esta na fila certa?" -- e ele que precisa ser lido de relance. O
+    nome do aparelho serve para saber QUAL celular e este, o que se pergunta
+    uma vez por noite."""
+    r = _layout()
+    assert r["setorCorpo"] > r["aparelhoCorpo"], r
+    assert r["setorCorpo"] >= 18, ("de relance, com gente andando na frente", r)
+    # O setor vem PRIMEIRO: a ordem e a do que se le com pressa.
+    assert r["setorTopo"] < r["aparelhoTopo"], r
