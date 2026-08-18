@@ -138,3 +138,17 @@ def test_com_campo_o_foco_nasce_NELE_e_nao_em_Cancelar():
         return focoNoCampo;
     """)
     assert saida is True
+
+
+def test_campo_SEM_maxlength_aceita_digitar():
+    """`campo.maxLength = undefined` vira 0 no DOM, e maxLength 0 recusa
+    qualquer tecla. Sem `maxlength` na opcao, o input tem de ficar livre --
+    achado da revisao final de 18/08/2026."""
+    saida = _no_navegador("""
+        window.caixaConfirmar.perguntar('Usar este aparelho?', {
+            campo: { id: 'campo-livre', rotulo: 'Nome', valor: '' }
+        });
+        const campo = document.getElementById('campo-livre');
+        return { maxLength: campo.maxLength, aceita: campo.maxLength !== 0 };
+    """)
+    assert saida["aceita"] is True, saida

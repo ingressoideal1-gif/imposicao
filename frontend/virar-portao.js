@@ -239,8 +239,14 @@
                         }
                     }
                 ).then(function (nomeEscolhido) {
-                    // null: cancelou. Fica na lista, sem criar nada.
-                    if (!nomeEscolhido) { return; }
+                    // null: cancelou. Fica na lista, sem criar nada -- e sem
+                    // deixar a conta aberta: se a senha desta pergunta veio de
+                    // um login relampago (a sessao tinha caido), o `criar` que
+                    // encerraria a sessao nao vai acontecer, e o celular pode
+                    // estar indo para a mao do porteiro.
+                    if (!nomeEscolhido) {
+                        return window.Controle.encerrarSessaoRelampago();
+                    }
                     return criar(evento_id, sessao, elevacao, nomeEscolhido, painel);
                 });
             });

@@ -79,3 +79,43 @@ def test_a_sessao_e_encerrada_pelo_aparelho_js():
     """A ordem (token, signOut, navegar) ja esta resolvida la, e inverte-la nao
     da erro na tela: da um aparelho inutil no meio de um evento."""
     assert "aparelhoAqui.assumir" in _ler("frontend/virar-portao.js")
+
+
+# ── Cancelar a pergunta do nome nao deixa a conta aberta ─────────────────────
+#
+# Achado da revisao final de 18/08/2026 (Task 4 x Task 6): a sessao cai com a
+# lista na tela; o dono toca na barra; o `comSenha` faz o login relampago e marca
+# `sessaoDaEngrenagem`; a pergunta do nome aparece; ele CANCELA. Antes da Task 6
+# nao havia como cancelar depois do login -- o `criar` vinha em seguida e o
+# `aparelhoAqui.assumir` encerrava a sessao. Sem a saida, a conta inteira ficava
+# aberta num celular que vai para a mao do porteiro.
+
+def test_cancelar_a_pergunta_do_nome_encerra_o_login_relampago():
+    from test_controle_tela import _no_navegador
+    saida = _no_navegador("""
+        window.__saiu = false;
+        window.supabaseClient = { auth: {
+            getSession: async () => ({ data: { session: { access_token: 'jwt' } } }),
+            signOut: async () => { window.__saiu = true; return {}; },
+        } };
+        // O login relampago aconteceu: a bandeira que o `fecharEngrenagem`
+        // (e agora o cancelar) desfaz.
+        Controle.estado.sessaoDaEngrenagem = true;
+        Controle.estado.sessao = { access_token: 'jwt' };
+        await Controle.encerrarSessaoRelampago();
+        return { saiu: window.__saiu, bandeira: Controle.estado.sessaoDaEngrenagem,
+                 sessao: Controle.estado.sessao };
+    """)
+    assert saida["saiu"] is True
+    assert saida["bandeira"] is False
+    assert saida["sessao"] is None
+
+
+def test_o_cancelar_da_pergunta_do_nome_chama_o_encerrar():
+    """O fio entre os dois arquivos: e o `virar-portao.js` que precisa chamar
+    o encerrar quando a resposta da caixa e `null`."""
+    texto = _ler("frontend/virar-portao.js")
+    i = texto.index("if (!nomeEscolhido)")
+    assert "encerrarSessaoRelampago" in texto[i:i + 200], (
+        "cancelar a pergunta do nome nao desfaz o login relampago"
+    )

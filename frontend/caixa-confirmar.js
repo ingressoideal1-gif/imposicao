@@ -87,7 +87,9 @@
                 campo = document.createElement('input');
                 campo.type = 'text';
                 campo.id = opcoes.campo.id;
-                campo.maxLength = opcoes.campo.maxlength;
+                // So quando vier: `maxLength = undefined` vira 0 no DOM, e um
+                // campo com maxLength 0 nao aceita tecla nenhuma.
+                if (opcoes.campo.maxlength) { campo.maxLength = opcoes.campo.maxlength; }
                 campo.value = opcoes.campo.valor || '';
                 campo.autocomplete = 'off';
                 caixa.appendChild(campo);

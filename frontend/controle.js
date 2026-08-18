@@ -1447,6 +1447,9 @@
 
         campoEmail.value = emailLembrado();
         campoSenha.value = '';
+        // Reabrir a caixa devolve o botão: quem cancelou no meio da ida à rede
+        // deixou "Conferindo…" preso até a resposta chegar.
+        if (window.botaoEspera) { window.botaoEspera.terminar(botao); }
         erro.classList.add('sumindo');
         $('lista').classList.add('sumindo');
         caixa.classList.remove('sumindo');
@@ -1723,16 +1726,29 @@
                 .catch(function () { /* a lista já avisa na tela quando falha */ })
             : Promise.resolve();
 
-        return refeita.then(function () {
-            if (!estado.sessaoDaEngrenagem) { return; }
-            estado.sessaoDaEngrenagem = false;
-            estado.sessao = null;
-            try {
-                return supabaseClient.auth.signOut().catch(function () { });
-            } catch (e) {
-                return;                 // sem SDK: não há sessão para encerrar
-            }
-        });
+        return refeita.then(encerrarSessaoRelampago);
+    }
+
+    /**
+     * Desfaz o login relâmpago — e SÓ ele. Se a conta já estava aberta neste
+     * celular antes da caixa de senha, não há nada a desfazer.
+     *
+     * Vive separado do `fecharEngrenagem` desde 18/08/2026 porque ganhou um
+     * segundo chamador: o `virar-portao.js`, quando o dono entra com a conta só
+     * para virar aparelho e depois CANCELA a pergunta do nome. Antes não havia
+     * como cancelar depois do login — o `criar` vinha em seguida e o
+     * `aparelhoAqui.assumir` encerrava a sessão. Sem esta saída, a conta inteira
+     * do cliente ficaria aberta num celular que vai para a mão do porteiro.
+     */
+    function encerrarSessaoRelampago() {
+        if (!estado.sessaoDaEngrenagem) { return; }
+        estado.sessaoDaEngrenagem = false;
+        estado.sessao = null;
+        try {
+            return supabaseClient.auth.signOut().catch(function () { });
+        } catch (e) {
+            return;                     // sem SDK: não há sessão para encerrar
+        }
     }
 
     /**
@@ -2177,6 +2193,7 @@
         // O que a lista e o `virar-portao.js` chamam.
         abrirEngrenagem: abrirEngrenagem,
         fecharEngrenagem: fecharEngrenagem,
+        encerrarSessaoRelampago: encerrarSessaoRelampago,
         comSenha: comSenha,
         // As cinco seções recolhíveis. Expostas porque os testes que medem o
         // que há DENTRO de uma delas precisam abri-la primeiro — e porque
