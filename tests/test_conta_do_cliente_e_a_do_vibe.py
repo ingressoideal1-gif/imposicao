@@ -32,12 +32,12 @@ def _ler(nome):
 def _login_do_cliente():
     """A superfície inteira do login do cliente.
 
-    Desde a Tarefa 8, `evento.js` não fala com o Supabase direto: quem faz
-    isso é `acesso-conta.js`, compartilhado com `controle.html`. Testar só
-    `evento.js` checaria um arquivo que, de propósito, não tem mais essa
-    lógica — a extração é o ponto da tarefa, não uma regressão.
+    Desde a Tarefa 8, quem fala com o Supabase é `acesso-conta.js`, e não a
+    tela. Até 17/08/2026 havia duas telas usando o módulo — `evento.js` e
+    `controle.html` —; a primeira saiu junto com o QR do Pedido, e
+    `acesso-conta.js` ficou como a única superfície do login do cliente.
     """
-    return _ler("evento.js") + _ler("acesso-conta.js")
+    return _ler("acesso-conta.js")
 
 
 def test_o_mesmo_projeto_supabase_do_vibe():
@@ -80,7 +80,8 @@ def test_a_tela_diz_de_que_conta_esta_falando():
     "a grafica liberou" nomeia quem ele pode chamar no telefone.
 
     A tela lida e a `controle.html`, a casa do aplicativo. O `evento.html`
-    tinha esta frase antes e sai do projeto.
+    tinha esta frase antes e saiu do projeto em 17/08/2026, junto com o QR
+    do Pedido.
     """
     html = _ler("controle.html")
     assert re.search(r"a gráfica liberou", html), (

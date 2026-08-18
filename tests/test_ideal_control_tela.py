@@ -652,8 +652,14 @@ def test_carregar_codigos_de_staff_quebra_o_texto_em_linhas():
 
 
 def test_pedido_sem_evento_explica_o_que_falta():
-    """O caso mais comum na grafica: impresso e ainda nao reivindicado. A tela
-    tem de dizer o proximo passo, e nao so ficar vazia."""
+    """O caso mais comum na grafica: impresso e o cliente ainda nao carregou o
+    pedido no aplicativo. A tela tem de dizer o proximo passo, e nao so ficar
+    vazia.
+
+    Ate 17/08/2026 o proximo passo era o cliente abrir o QR do Pedido; a tela
+    saiu junto com ele, e agora e o cliente que carrega o pedido pela propria
+    conta, no aplicativo.
+    """
     saida = _no_navegador(SERVIDOR + """
         window.PAINEL = JSON.parse(JSON.stringify(window.PAINEL));
         window.PAINEL.evento = null;
@@ -670,7 +676,7 @@ def test_pedido_sem_evento_explica_o_que_falta():
         };
     """)
     assert saida["aviso_visivel"] is True
-    assert "QR do Pedido" in saida["aviso"]
+    assert "carrega o pedido" in saida["aviso"]
     assert saida["dashboard"] == "none"
     assert saida["setores"] == "none"
     # ...mas os modelos do ERP continuam a vista: e o que o pedido TEM.

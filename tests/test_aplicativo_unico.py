@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""O aplicativo unico: as tres telas do cliente e do portao numa pagina so.
+"""O aplicativo unico: as duas telas do cliente e do portao numa pagina so.
 
 O que estes testes protegem: que a pagina ABRA SEM REDE (nenhum arquivo de
 fora), que o roteador leve cada QR a tela certa, e que o endereco que ja circula
@@ -16,7 +16,10 @@ FRENTE = os.path.join(RAIZ, "frontend")
 # `app.html` entra aqui na Tarefa 3, quando nascer. A lista e explicita, e nao
 # "todo html que existir", para que apagar uma tela por engano quebre o teste em
 # vez de passar em silencio.
-PAGINAS_DO_APLICATIVO = ("controle.html", "evento.html", "portaria.html")
+#
+# `evento.html` saiu em 17/08/2026: era a tela do QR do Pedido, e o cliente
+# passou a carregar o pedido pela conta dele, dentro do proprio controle.html.
+PAGINAS_DO_APLICATIVO = ("controle.html", "portaria.html")
 
 
 def _ler(caminho):
@@ -60,7 +63,7 @@ def test_a_estacao_sincroniza_tudo_o_que_as_telas_pedem():
     """
     import security_config
 
-    for pagina in ("controle.html", "evento.html"):
+    for pagina in ("controle.html",):
         html = _ler("frontend/" + pagina)
         pedidos = re.findall(r'<(?:script|link)[^>]+(?:src|href)="([^"?]+)', html)
         for pedido in pedidos:
@@ -121,12 +124,17 @@ def test_a_vercel_serve_as_telas_sob_o_prefixo():
 
 
 def test_as_urls_antigas_continuam_valendo():
-    """O QR do Pedido ja circula por WhatsApp, e o endereco do portao ja foi
-    passado a porteiro. Nenhum dos dois volta atras."""
+    """O endereco do portao ja foi passado a porteiro, e o da casa ja circula.
+    Nenhum dos dois volta atras.
+
+    `/evento.html` saiu desta lista em 17/08/2026 junto com a tela: o arquivo
+    nao existe mais nem sob `/ic/`, entao manter o redirect so levaria a uma
+    pagina que nao esta la.
+    """
     for arquivo in ("vercel.json", "frontend/vercel.json"):
         conf = json.loads(_ler(arquivo))
         destino = {r["source"]: r["destination"] for r in conf.get("redirects", [])}
-        for antiga in ("/evento.html", "/portaria.html", "/controle.html"):
+        for antiga in ("/portaria.html", "/controle.html"):
             assert antiga in destino, arquivo + " perdeu " + antiga
             assert destino[antiga].startswith("/ic/"), arquivo + " " + antiga
 
@@ -174,14 +182,6 @@ def test_o_aparelho_de_portaria_ve_o_portao_dele_sem_rede():
         "a lista espera a rede para aparecer -- um 4G ruim deixaria o porteiro "
         "sem lista nenhuma"
     )
-
-
-def test_o_qr_de_fora_e_recusado():
-    """Um QR qualquer de rua nao pode abrir fluxo nenhum com dado estranho
-    dentro."""
-    js = _ler("frontend/ler-qr.js")
-    assert "location.origin" in js
-    assert "não é do Ideal Control" in js
 
 
 def test_a_barra_do_topo_nao_exige_conta_para_estar_na_tela():
@@ -233,7 +233,8 @@ def test_a_camera_entrega_a_leitura_a_quem_a_ligou():
 
 def test_quem_liga_a_camera_diz_o_que_fazer_com_a_leitura():
     # So a portaria liga a camera desde 17/08/2026: a casa perdeu a dela junto
-    # com o QR do Pedido. O `ler-qr.js` sai do disco na proxima tarefa.
+    # com o QR do Pedido, e o `ler-qr.js` que a lia saiu do disco na mesma
+    # limpeza.
     for arquivo in ("frontend/portaria.js",):
         js = _ler(arquivo)
         assert re.search(r"portariaCamera\.ligar\(\s*\w|portariaCamera\.ligar\(function", js), (
@@ -271,11 +272,11 @@ def test_as_telas_declaram_o_manifesto_do_aplicativo():
         assert 'href="app.webmanifest"' in html, nome + " nao declara o manifesto"
 
 
-def test_o_pre_cache_cobre_as_tres_telas():
+def test_o_pre_cache_cobre_as_duas_telas():
     """A portaria abria sem rede porque o service worker guardava os arquivos
-    DELA. Agora sao tres telas no mesmo aplicativo."""
+    DELA. Agora sao duas telas no mesmo aplicativo."""
     sw = _ler("frontend/sw.js")
-    for arquivo in ("controle.html", "evento.html", "portaria.html",
+    for arquivo in ("controle.html", "portaria.html",
                     "supabase-js.min.js", "meus-pedidos.js"):
         assert arquivo in sw, arquivo + " ficou fora do pre-cache"
 
@@ -297,7 +298,7 @@ def test_o_service_worker_continua_sem_guardar_api():
     )
 
 
-def test_as_tres_telas_registram_o_service_worker():
+def test_as_duas_telas_registram_o_service_worker():
     """O Chrome so oferece "Instalar aplicativo" numa pagina que TENHA service
     worker registrado.
 
@@ -320,15 +321,10 @@ def test_o_registro_do_service_worker_e_um_so():
     assert donos == [], "ha registro de service worker escrito dentro de HTML: " + str(donos)
 
 
-def test_o_convite_para_instalar_so_aparece_onde_cabe():
-    """Botao morto e pior que botao nenhum -- e no iPhone nao existe evento de
-    instalacao, so instrucao."""
-    js = _ler("frontend/instalar.js")
-    assert "beforeinstallprompt" in js
-    assert "display-mode: standalone" in js, (
-        "o convite continuaria aparecendo depois de instalado"
-    )
-    assert "Compartilhar" in js, "falta o caminho do iPhone"
+# O convite de instalar do `instalar.js` saiu em 17/08/2026 junto com o
+# `evento.html` -- era a unica tela que o carregava. O que cobre o convite de
+# instalar hoje, nas duas telas que restam, e o `parede-pwa.js`; a cobertura
+# dele mora em `tests/test_parede_pwa.py`.
 
 
 def test_os_dois_construtores_apontam_para_o_prefixo():
@@ -342,3 +338,19 @@ def test_os_dois_construtores_apontam_para_o_prefixo():
     # para passar, porque quem vira portao e o proprio celular que o dono tem na
     # mao. O `virar-portao.js` navega para `portaria.html` por caminho relativo,
     # que ja resolve dentro do `/ic/` sem construtor nenhum.
+
+
+def test_o_qr_do_pedido_saiu_da_tela_e_o_servidor_ficou_um_release():
+    """Decisao de 17/08/2026: tela e botao saem agora; as funcoes ficam um
+    release sem chamador, como rede de volta."""
+    assert not os.path.exists(os.path.join(RAIZ, "frontend", "evento.html"))
+    assert not os.path.exists(os.path.join(RAIZ, "frontend", "ler-qr.js"))
+    script = _ler("frontend/script.js")
+    assert "gerarQrDoEvento" not in script
+    assert "QR do Evento" not in script
+    assert "acesso-pedido" not in script, "nenhuma tela chama mais o acesso-pedido"
+    # o servidor fica: apagar e o release seguinte
+    assert os.path.isdir(os.path.join(RAIZ, "supabase", "functions", "acesso-evento"))
+    assert os.path.isdir(os.path.join(RAIZ, "supabase", "functions", "acesso-pedido"))
+    vercel = _ler("vercel.json")
+    assert '"/evento.html"' not in vercel

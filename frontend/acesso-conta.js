@@ -1,9 +1,11 @@
 /**
- * A conta do cliente, compartilhada pelas duas telas dele.
+ * A conta do cliente, compartilhada pela tela dele.
  *
- * `evento.html` — onde o QR do Pedido cai — e `controle.html` — a tela do dono —
- * fazem o mesmo login, com as mesmas frases. Duas cópias divergem, e divergência
- * de login tranca o cliente para fora do evento dele.
+ * `controle.html` — a casa do aplicativo — usa este login. Ate 17/08/2026 o
+ * `evento.html` tambem o usava, com as mesmas frases; a tela saiu junto com o
+ * QR do Pedido, e o compartilhamento — que existia para duas copias nao
+ * divergirem — ficou como garantia contra uma terceira tela que volte a
+ * duplicar o login.
  *
  * A conta é a MESMA que o cliente já tem no ERP Vibe: os dois sistemas apontam
  * para o mesmo projeto Supabase, logo o mesmo `auth.users`. Por isso não existe

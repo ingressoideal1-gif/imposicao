@@ -103,17 +103,6 @@ def test_o_botao_sem_texto_pelo_menos_se_anuncia_a_quem_nao_ve():
         assert "aria-label" in casou.group(0), f"{id_} nao tem aria-label"
 
 
-def test_a_tela_do_QR_leva_a_tela_do_dono():
-    """A promessa da ultima tela do evento.html passa a ter porta."""
-    assert "controle.html" in _ler("frontend/evento.html")
-
-
-def test_a_porta_carrega_o_evento_recem_cadastrado():
-    """Cair na lista de eventos depois de cadastrar um seria mandar o cliente
-    procurar o que ele acabou de criar."""
-    assert "controle.html?evento=" in _ler("frontend/evento.js")
-
-
 def test_o_status_do_projeto_conhece_a_tela_nova():
     texto = _ler("docs/STATUS_PROJETO.md")
     assert "controle.html" in texto

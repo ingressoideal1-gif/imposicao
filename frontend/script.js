@@ -15415,113 +15415,11 @@ window.copiarCodigoAcesso = async function(codigo) {
     }
 };
 
-
-/**
- * Gera o QR do Evento e mostra numa janela para o atendente mandar ao cliente.
- *
- * Este QR é a ÚNICA forma de o cliente cadastrar o pedido no controle de acesso.
- * Ele vai por WhatsApp, então quem receber a imagem consegue reivindicar o
- * evento — uma vez. Se cair no cliente errado, gerar outro aqui mata o anterior,
- * e é isso que o texto da janela precisa dizer em português.
- *
- * A geração exige sessão: o backend confere o token do Supabase de verdade, e
- * não o `get_current_user` do app.py, que devolve admin para todo mundo.
- */
-window.gerarQrDoEvento = async function (osId, numeroPedido) {
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session?.access_token) {
-            toast('Faça login para gerar o QR do evento.', 'warning');
-            return;
-        }
-
-        // 16/08/2026: passou a ser Edge Function, ao lado do banco. Antes era
-        // `${API_BASE_URL}/api/acesso/pedidos/.../qr`, no Render — que dorme
-        // quando ninguém usa, e o atendente está com o cliente ao telefone
-        // esperando o QR sair. O Python continua no ar no endereço antigo
-        // durante a transição; para voltar atrás, troque esta linha e republique.
-        //
-        // A assinatura do token é a MESMA dos dois lados, e isso está provado
-        // nos dois sentidos contra o banco de verdade
-        // (`tests/test_acesso_pedido_paridade.py`): o QR que um lado emite, o
-        // outro abre. Um byte de diferença invalidaria todo QR em circulação.
-        const base = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-pedido';
-        const resp = await fetch(`${base}/pedidos/${encodeURIComponent(numeroPedido)}/qr`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${session.access_token}` }
-        });
-        const corpo = await resp.json().catch(() => ({}));
-        if (!resp.ok) {
-            toast(corpo.detail || `Não consegui gerar o QR (${resp.status}).`, 'error');
-            return;
-        }
-        window.mostrarModalQrDoEvento(numeroPedido, corpo.url);
-    } catch (e) {
-        toast(`Não consegui gerar o QR: ${e.message}`, 'error');
-    }
-};
-
-
-window.mostrarModalQrDoEvento = function (numeroPedido, url) {
-    document.getElementById('modal-qr-evento')?.remove();
-
-    const fundo = document.createElement('div');
-    fundo.id = 'modal-qr-evento';
-    fundo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-    fundo.onclick = (ev) => { if (ev.target === fundo) fundo.remove(); };
-
-    fundo.innerHTML = `
-        <div style="background:var(--bg-card,#1e293b);border:1px solid var(--border,#334155);border-radius:12px;max-width:420px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
-            <h3 style="margin:0 0 4px;font-size:1.05rem;color:var(--text,#e2e8f0);">🎟️ QR do Evento</h3>
-            <p style="margin:0 0 16px;font-size:0.8rem;color:var(--text-dim,#94a3b8);">Pedido ${numeroPedido}</p>
-
-            <div style="background:#ffffff;border-radius:8px;padding:14px;display:flex;justify-content:center;">
-                <canvas id="qr-evento-canvas" width="260" height="260" style="display:block;"></canvas>
-            </div>
-
-            <p style="margin:14px 0 6px;font-size:0.78rem;color:var(--text-dim,#94a3b8);line-height:1.5;">
-                Mande esta imagem ao cliente. É por ela que ele cadastra o evento no
-                controle de acesso — <b>não há outro caminho</b>. Quem receber a imagem
-                consegue cadastrar, então mande só para o cliente certo.
-            </p>
-            <p style="margin:0 0 14px;font-size:0.78rem;color:#f59e0b;line-height:1.5;">
-                Gerar de novo <b>invalida este</b>. Use isso se o QR for para a pessoa errada.
-            </p>
-
-            <input id="qr-evento-url" readonly value="${url}"
-                   style="width:100%;padding:7px 9px;font-size:0.72rem;background:rgba(0,0,0,0.35);border:1px solid var(--border,#334155);border-radius:6px;color:var(--text-dim,#94a3b8);margin-bottom:12px;">
-
-            <div style="display:flex;gap:8px;">
-                <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="copiarCodigoAcesso(document.getElementById('qr-evento-url').value)">📋 Copiar link</button>
-                <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="window.baixarQrDoEvento('${numeroPedido}')">⬇️ Baixar imagem</button>
-                <button class="btn btn-sm" style="flex:0 0 auto;" onclick="document.getElementById('modal-qr-evento').remove()">Fechar</button>
-            </div>
-        </div>`;
-
-    document.body.appendChild(fundo);
-
-    // Desenhado com o mesmo renderizador do resto do app. Fundo branco e uma
-    // margem generosa: este QR vai ser lido de foto de WhatsApp comprimida.
-    const ctx = document.getElementById('qr-evento-canvas').getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 260, 260);
-    ctx.save();
-    ctx.translate(130, 130);
-    renderQRCodeOnCtx(ctx, url, 0, 0, 240, '#000000');
-    ctx.restore();
-};
-
-
-window.baixarQrDoEvento = function (numeroPedido) {
-    const canvas = document.getElementById('qr-evento-canvas');
-    if (!canvas) return;
-    const a = document.createElement('a');
-    a.download = `QR_Evento_Pedido_${numeroPedido}.png`;
-    a.href = canvas.toDataURL('image/png');
-    a.click();
-};
-
-
+// O botão que gerava o QR do pedido, e as duas funções que ele chamava para
+// montar e baixar a imagem, saíram da tela em 17/08/2026: o cliente passou a
+// carregar o pedido pela conta dele, e não há mais tela alguma que reivindique
+// um evento por token. As Edge Functions correspondentes continuam no ar por
+// um release, como rede de segurança, mas sem chamador daqui.
 
 
 
@@ -20369,12 +20267,9 @@ function renderOrdens() {
                                     btns.push(`<button class="btn btn-sm" onclick="liberarParaProducao('${os.id}')" ${canEdit ? '' : 'disabled'} style="padding:4px 8px;font-size:0.73rem;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}">🖨️ Produção</button>`);
                                 }
 
-                                // 5) QR do Evento — a única forma de o cliente cadastrar
-                                // este pedido no Ideal Control. Aparece só depois da
-                                // aprovação, que é quando o atendente manda o QR.
-                                if (isAprovada) {
-                                    btns.push(`<button class="btn btn-sm" onclick="gerarQrDoEvento('${os.id}', '${escapeJsAttr(os.numero)}')" ${canEdit ? '' : 'disabled'} style="padding:4px 8px;font-size:0.73rem;background:rgba(20,184,166,0.15);color:#14b8a6;border:1px solid rgba(20,184,166,0.3);border-radius:6px;${!canEdit ? 'opacity:0.4;cursor:not-allowed;' : ''}" title="Gera o QR que o cliente le para cadastrar este evento no controle de acesso">🎟️ QR do Evento</button>`);
-                                }
+                                // O botão do QR do pedido (5, aqui) saiu em 17/08/2026 junto
+                                // com a tela que ele abria: o cliente carrega o pedido pela
+                                // conta dele agora, e não há mais QR para o atendente gerar.
 
                                 return btns.length > 0 ? `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">${btns.join('')}</div>` : '<span style="color:var(--text-dim);font-size:0.75rem;">—</span>';
                             })()}

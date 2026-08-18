@@ -77,9 +77,8 @@ def is_allowed_release_url(url: str) -> bool:
 # oferecia instalar uma SEGUNDA cópia do aplicativo. Duas cópias do mesmo sistema
 # no mesmo celular, cada uma com os seus portões.
 #
-# QR já emitido continua valendo: `imposicao.vercel.app` segue servindo o site, e
-# o `ler-qr.js` aceita as duas origens. O que muda é só o que se cunha daqui para
-# a frente.
+# QR já emitido continua valendo: `imposicao.vercel.app` segue servindo o site.
+# O que muda é só o que se cunha daqui para a frente.
 PAINEL_BASE_URL = "https://ideal-imposition.vercel.app"
 
 # Só o que a estação precisa. As fontes (fonts_local) ficam de fora: são ~140 MB
@@ -97,8 +96,6 @@ PAINEL_ARQUIVOS = [
     "index.html",
     "producao.html",
     "cliente.html",
-    "evento.html",
-    "evento.js",
     "acesso-conta.js",
     "controle.html",
     "controle.js",
@@ -130,14 +127,12 @@ PAINEL_ARQUIVOS = [
     "supabase-js.min.js",
     "qrcode-generator.min.js",
     # A camera entrou aqui pelo "+ Novo Evento" da casa do Ideal Control, que
-    # em 17/08/2026 virou "Meus Pedidos" e deixou de ler QR. O `instalar.js`
-    # fica porque o `evento.html` ainda o carrega; os tres de cima ficam ate a
-    # limpeza que apaga o `ler-qr.js` do disco -- tirar da lista antes do
-    # arquivo sair deixaria a estacao sem um arquivo que ela ainda tem.
+    # em 17/08/2026 virou "Meus Pedidos" e deixou de ler QR. Nesta mesma data
+    # saem da lista o `ler-qr.js` (o leitor do QR do Pedido) e o `instalar.js`
+    # (o convite de instalar so aparecia no `evento.html`, que saiu junto) --
+    # os dois arquivos foram apagados do disco.
     "jsqr.min.js",
     "portaria-camera.js",
-    "ler-qr.js",
-    "instalar.js",
     "sw-registro.js",
     "aparelho.js",
     # A tela nova do Ideal Control (v613): o `controle.js` se partiu em quatro

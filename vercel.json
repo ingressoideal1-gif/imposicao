@@ -44,10 +44,6 @@
   ],
   "redirects": [
     {
-      "source": "/evento.html",
-      "destination": "/ic/evento.html"
-    },
-    {
       "source": "/portaria.html",
       "destination": "/ic/portaria.html"
     },

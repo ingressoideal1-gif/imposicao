@@ -211,11 +211,10 @@ button.secundario { background: transparent; color: var(--dim); border: 1px soli
 /*
  * A tela do dono do evento. Celular primeiro, uma coluna, sem abas.
  *
- * As cores acima repetem as do `evento.html` de propósito: o cliente chega de
- * lá, e mudar de identidade no meio do caminho faz parecer outro sistema. Lá
- * elas estão embutidas na página porque aquela é a porta de entrada e vale a
- * requisição a menos; aqui moram num arquivo porque esta tela é reaberta muitas
- * vezes e vale o cache.
+ * As cores acima repetiam as do `evento.html`, que ate 17/08/2026 era a porta
+ * de entrada do cliente: mudar de identidade no meio do caminho parecia outro
+ * sistema. A tela saiu junto com o QR do Pedido -- o cliente entra direto por
+ * aqui agora --, mas a paleta ficou, porque e a mesma marca do aplicativo.
  */
 
 h3 { font-size: 1rem; margin: 0 0 4px; }
@@ -480,8 +479,6 @@ button.perigo {
        cresceria e deixaria de ser redonda. */
     min-height: 0;
 }
-
-.cam-qr { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4/3; margin-top: 12px; }
 
 /* A tela de entrar e a de trocar senha: um cartao, centrado, com folga no topo. */
 #bloco-entrar h1, #trocar-senha h1 { font-size: 1.35rem; margin: 0 0 6px; }

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Um login só para as duas telas do cliente.
+"""Um login só para a tela do cliente.
 
-`evento.html` (onde o QR do Pedido cai) e `controle.html` (a tela do dono) fazem
-o mesmo login, com as mesmas frases. Duas cópias divergem, e divergência de
-login tranca o cliente para fora do evento dele.
+`controle.html` — a casa do aplicativo, de onde o cliente entra com a própria
+conta — usa o login deste módulo. Até 17/08/2026 o `evento.html` também o
+usava, com a mesma frase; a tela saiu junto com o QR do Pedido, e o login
+compartilhado deixou de ter uma segunda cópia para divergir.
 
 Também mora aqui o `navegadorId()`: o identificador da instalação do navegador,
 que a elevação assina junto. Ele NÃO é o aparelho de portaria cadastrado no
@@ -12,7 +13,6 @@ aparelho de portaria.
 """
 
 import os
-import re
 
 import pytest
 
@@ -56,27 +56,11 @@ def test_o_modulo_nao_depende_de_nada_alem_do_sdk():
     assert "supabaseClient" in texto
 
 
-def test_a_tela_do_QR_usa_o_modulo():
-    assert "AcessoConta" in _ler("frontend/evento.js")
-
-
 @pytest.mark.parametrize("nome", ["acesso-conta.js"])
 def test_o_modulo_esta_na_lista_que_as_estacoes_baixam(nome):
-    """Sem isto o evento.html da estacao pede um arquivo que nunca chega."""
+    """Sem isto o controle.html da estacao pede um arquivo que nunca chega."""
     import security_config
     assert nome in security_config.PAINEL_ARQUIVOS
-
-
-def test_o_evento_html_carrega_o_modulo_ANTES_do_evento_js():
-    """Ordem importa: o `evento.js` chama o modulo no arranque."""
-    texto = _ler("frontend/evento.html")
-    assert texto.index("acesso-conta.js") < texto.index("evento.js")
-
-
-def test_a_versao_do_script_acompanha_as_outras():
-    """Uma tag com ?v= velho serve arquivo velho do cache do navegador."""
-    versoes = set(re.findall(r'\.js\?v=(\d+)', _ler("frontend/evento.html")))
-    assert len(versoes) == 1, f"evento.html tem versoes misturadas: {sorted(versoes)}"
 
 
 def test_o_navegador_id_nao_pode_conter_ponto():

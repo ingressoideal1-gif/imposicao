@@ -37,9 +37,8 @@ def test_o_QR_aponta_para_a_origem_em_que_o_aplicativo_e_instalado():
     """O defeito de 17/08/2026.
 
     O QR era cunhado com `imposicao.vercel.app` e o aplicativo vive em
-    `ideal-imposition.vercel.app`. Quem lia pela camera do aplicativo passava
-    (o `ler-qr.js` aceita as duas origens); quem TOCAVA no link no WhatsApp
-    caia no outro endereco numa aba de navegador -- outra origem, outro
+    `ideal-imposition.vercel.app`. Quem TOCAVA no link no WhatsApp caia no
+    outro endereco numa aba de navegador -- outra origem, outro
     `localStorage`, e o celular oferecendo instalar uma SEGUNDA copia do
     aplicativo, cada uma com os seus proprios portoes."""
     assert security_config.PAINEL_BASE_URL == ONDE_O_APLICATIVO_MORA

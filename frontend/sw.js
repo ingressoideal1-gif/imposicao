@@ -1,9 +1,9 @@
 /**
- * O service worker do Ideal Control — as tres telas do aplicativo.
+ * O service worker do Ideal Control — as duas telas do aplicativo.
  *
  * Nasceu servindo so a portaria, e desde 16/08/2026 serve o aplicativo inteiro:
- * a casa (a lista de eventos), o cadastro do evento e o portao. O escopo e
- * `/ic/`, que vem do endereco por onde ele e registrado.
+ * a casa (a lista de eventos, onde o cliente tambem carrega os pedidos dele) e
+ * o portao. O escopo e `/ic/`, que vem do endereco por onde ele e registrado.
  *
  * Existe por um motivo so: a pagina precisa ABRIR sem rede. Isso e obrigacao no
  * portao, onde nao ha sinal e ha fila. Depois de aberta, quem decide e o
@@ -61,11 +61,9 @@ const ARQUIVOS = [
     // Pedido, e o `qr-canvas.js` + `qrcode-generator.min.js` desenhavam o QR de
     // pareamento, que ja nao existe. Guardar arquivo que tela nenhuma pede so
     // ocupa espaco no aparelho -- e o `install` falha inteiro se UM deles
-    // deixar de existir. O `instalar.js` FICA: o `evento.html` ainda o carrega.
+    // deixar de existir. O `evento.html`/`evento.js` e o `instalar.js` que ele
+    // carregava sairam junto, na mesma limpeza.
     'aparelho.js?v=' + VERSAO,
-
-    'evento.html',
-    'evento.js?v=' + VERSAO,
 
     'portaria.html',
     'qr-ideal-hash.js?v=' + VERSAO,
@@ -79,13 +77,12 @@ const ARQUIVOS = [
     'portaria-sincronismo.js?v=' + VERSAO,
     'portaria.js?v=' + VERSAO,
 
-    // Compartilhados pelas tres telas.
+    // Compartilhados pelas duas telas.
     'portaria-camera.js?v=' + VERSAO,
     'jsqr.min.js?v=' + VERSAO,
     'supabase-js.min.js?v=' + VERSAO,
     'supabase-config.js?v=' + VERSAO,
     'acesso-conta.js?v=' + VERSAO,
-    'instalar.js?v=' + VERSAO,
     'sw-registro.js?v=' + VERSAO,
 
     // Sem versao, de proposito: o `publicar.ps1` so renumera `.js?v=` e
