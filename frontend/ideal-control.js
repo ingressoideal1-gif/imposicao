@@ -559,22 +559,74 @@
         };
     }
 
+    /**
+     * A tela ainda é a do pedido que fez a chamada?
+     *
+     * Esta pergunta existe por causa do pior defeito que este bloco poderia
+     * ter. O atendente toca em "Liberar acesso" no pedido A, a resposta demora,
+     * e ele abre o pedido B enquanto espera. Sem esta conferência, a senha
+     * provisória de A apareceria na tela de B, embaixo do nome de B — e o
+     * atendente a passaria ao cliente errado. Uma senha mostrada sob o cliente
+     * errado é exatamente a falha que este bloco inteiro existe para evitar.
+     *
+     * Confere as DUAS coisas: o número do pedido e o id do cliente. Só o
+     * pedido não bastaria — o parceiro pode trocar o cliente de uma proposta,
+     * e nesse caso o mesmo número na tela já é outra gente.
+     */
+    function aindaNaTela(pedidoAlvo, clienteAlvo) {
+        var c = estado.painel && estado.painel.cliente;
+        return estado.pedido === pedidoAlvo && !!c && c.id_cliente === clienteAlvo;
+    }
+
+    /** O recado de quem trocou de pedido antes de a resposta chegar. */
+    function avisarQueTrocouDePedido(nomeAlvo, pedidoAlvo, jaTinhaConta) {
+        avisar(jaTinhaConta
+            ? ('O acesso de ' + nomeAlvo + ' foi ligado à conta que ele já tinha, mas '
+               + 'você já abriu outro pedido. Abra o pedido ' + pedidoAlvo
+               + ' de novo para ver a lista de contas.')
+            : ('A senha do cliente ' + nomeAlvo + ' foi gerada, mas você já abriu '
+               + 'outro pedido. Abra o pedido ' + pedidoAlvo + ' de novo para gerar '
+               + 'outra.'), 'warning');
+    }
+
     function liberarAcesso() {
         var c = estado.painel && estado.painel.cliente;
         if (!c) { return Promise.resolve(); }
         var aviso = $('ic-acesso-aviso');
-        var email = ($('ic-acesso-email').value || '').trim().toLowerCase();
+        var campo = $('ic-acesso-email');
+        var email = (campo.value || '').trim().toLowerCase();
         if (!email) {
             aviso.textContent = 'Escreva o e-mail do cliente.';
             aviso.style.display = '';
             return Promise.resolve();
         }
+        // O campo é `type="email"`: o próprio navegador sabe dizer se aquilo é
+        // um endereço. Perguntar a ele custa nada e poupa uma ida à rede que
+        // voltaria com a mesma resposta — e, numa gráfica, a volta da rede é
+        // tempo de gente parada no balcão.
+        if (campo.checkValidity && !campo.checkValidity()) {
+            aviso.textContent = 'Escreva um e-mail válido.';
+            aviso.style.display = '';
+            return Promise.resolve();
+        }
+
+        // O alvo é fotografado AQUI, antes de sair da tela. Ler `estado.pedido`
+        // lá na volta leria o pedido que estiver aberto NAQUELE momento, que
+        // pode não ser este.
+        var pedidoAlvo = estado.pedido;
+        var clienteAlvo = c.id_cliente;
+        var nomeAlvo = c.nome;
+
         $('ic-acesso-liberar').disabled = true;
         aviso.style.display = 'none';
-        return pedir('/clientes/' + c.id_cliente + '/contas', {
+        return pedir('/clientes/' + clienteAlvo + '/contas', {
             method: 'POST',
             body: JSON.stringify({ email: email })
         }).then(function (r) {
+            if (!aindaNaTela(pedidoAlvo, clienteAlvo)) {
+                avisarQueTrocouDePedido(nomeAlvo, pedidoAlvo, r && r.ja_tinha_conta);
+                return;
+            }
             var avisoTexto = '';
             if (r && r.ja_tinha_conta) {
                 avisoTexto = 'Esse e-mail já tem conta; ela foi ligada a este cliente '
@@ -585,7 +637,8 @@
             // Relê o pedido para a lista de contas se atualizar. O redesenho
             // limpa a caixa da senha, então ela é reposta logo depois: perder a
             // senha provisória por causa de um refresh seria perdê-la de vez.
-            return pedir('/pedidos/' + estado.pedido).then(function (novo) {
+            return pedir('/pedidos/' + pedidoAlvo).then(function (novo) {
+                if (!aindaNaTela(pedidoAlvo, clienteAlvo)) { return; }
                 estado.painel = novo;
                 var senhaNaTela = $('ic-acesso-senha').style.display !== 'none'
                     ? $('ic-acesso-senha-valor').textContent : '';
@@ -596,11 +649,33 @@
                     aviso.textContent = avisoTexto;
                     aviso.style.display = '';
                 }
+            }, function () {
+                // A RELEITURA falhou — o acesso foi liberado do mesmo jeito, e a
+                // senha está na tela. Dizer "não consegui liberar o acesso" aqui
+                // seria mentir sobre o que aconteceu, e o atendente jogaria fora
+                // uma senha boa que não aparece de novo.
+                if (!aindaNaTela(pedidoAlvo, clienteAlvo)) { return; }
+                $('ic-acesso-liberar').disabled = false;
+                if (avisoTexto) {
+                    aviso.textContent = avisoTexto;
+                    aviso.style.display = '';
+                }
+                avisar('Acesso liberado. Não consegui atualizar a lista de contas '
+                       + 'agora — recarregue o pedido para vê-la.', 'warning');
             });
-        }).catch(function (e) {
+        }, function (e) {
+            // Rejeição do POST, e SÓ dela: um `.catch()` no fim da corrente
+            // pegaria também um erro do bloco de sucesso acima e o anunciaria
+            // como "não consegui liberar", depois de o acesso já ter sido
+            // liberado. Por isso o segundo argumento do `.then`.
+            if (!aindaNaTela(pedidoAlvo, clienteAlvo)) { return; }
             $('ic-acesso-liberar').disabled = false;
             aviso.textContent = (e && e.message) || 'Não consegui liberar o acesso agora.';
             aviso.style.display = '';
+        }).catch(function (e) {
+            // Rede de segurança: sem ela, um erro ao montar a tela viraria uma
+            // promessa rejeitada sem dono. A frase já foi dada acima.
+            if (window.console) { console.error('[ideal-control] liberarAcesso', e); }
         });
     }
 
@@ -643,14 +718,29 @@
         nao.addEventListener('click', limpar);
         sim.addEventListener('click', function () {
             sim.disabled = true;
-            pedir('/contas/' + conta.auth_user_id + '/nova-senha', {
+            // Mesmo cuidado do `liberarAcesso`: o alvo é fotografado antes de
+            // sair da tela. A conta também — assim um redesenho que troque o
+            // objeto `conta` não muda a URL de uma chamada já em voo.
+            var pedidoAlvo = estado.pedido;
+            var dono = (estado.painel && estado.painel.cliente) || {};
+            var clienteAlvo = dono.id_cliente;
+            var nomeAlvo = dono.nome || conta.email;
+            var contaAlvo = conta.auth_user_id;
+            pedir('/contas/' + contaAlvo + '/nova-senha', {
                 method: 'POST', body: '{}'
             }).then(function (r) {
+                if (!aindaNaTela(pedidoAlvo, clienteAlvo)) {
+                    avisarQueTrocouDePedido(nomeAlvo, pedidoAlvo, false);
+                    return;
+                }
                 limpar();
                 mostrarSenhaProvisoria(r.senha_provisoria);
-            }).catch(function (e) {
+            }, function (e) {
+                if (!aindaNaTela(pedidoAlvo, clienteAlvo)) { return; }
                 limpar();
                 avisar((e && e.message) || 'Não consegui gerar a senha agora.', 'error');
+            }).catch(function (e) {
+                if (window.console) { console.error('[ideal-control] novaSenhaProvisoria', e); }
             });
         });
     }

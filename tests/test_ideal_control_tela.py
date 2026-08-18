@@ -1096,3 +1096,123 @@ def test_o_bloco_some_quando_o_pedido_nao_tem_cliente_no_erp():
         return document.getElementById('ic-acesso-secao').style.display;
     """)
     assert saida == "none"
+
+
+# ── A senha provisoria e o pedido que esta na tela ──────────────────────────
+#
+# O pior defeito que este bloco poderia ter: a senha de um cliente aparecer
+# embaixo do nome de outro. Basta a resposta demorar e o atendente abrir o
+# proximo pedido enquanto espera -- e numa grafica ele faz exatamente isso.
+
+OUTRO_PEDIDO = json.loads(json.dumps(PAINEL_FALSO))
+OUTRO_PEDIDO["pedido"] = 20281
+OUTRO_PEDIDO["cliente"] = {"id_cliente": 99, "nome": "OUTRA EMPRESA",
+                           "email": "outra@exemplo.com", "contas": []}
+
+
+def test_a_senha_provisoria_nunca_aparece_no_pedido_errado():
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        // O POST demora: da tempo de trocar de pedido antes de a resposta cair.
+        window.__respostas['/clientes/14/contas'] = new Promise(function (ok) {
+            setTimeout(function () { ok({ email: 'daniel@exemplo.com',
+                ja_tinha_conta: false, senha_provisoria: 'K7M2PQ9X' }); }, 80);
+        });
+        window.__respostas['/pedidos/20281'] = %s;
+        await IdealControl.abrirPedido(20272);
+        document.getElementById('ic-acesso-liberar').click();
+        await IdealControl.abrirPedido(20281);
+        await new Promise(r => setTimeout(r, 200));
+        return {
+            secao: document.getElementById('ic-acesso-secao').textContent,
+            senha_visivel: document.getElementById('ic-acesso-senha').style.display !== 'none',
+            valor: document.getElementById('ic-acesso-senha-valor').textContent,
+            cliente: document.getElementById('ic-acesso-cliente').textContent,
+            avisos: (window._avisos || []).map(function (a) { return a[1] + ': ' + a[0]; }),
+        };
+    """ % (json.dumps(CLIENTE), json.dumps(OUTRO_PEDIDO)))
+    # A tela e a do pedido novo...
+    assert "OUTRA EMPRESA" in saida["cliente"]
+    # ...e a senha do pedido anterior NAO esta nela, em canto nenhum.
+    assert saida["senha_visivel"] is False
+    assert "K7M2PQ9X" not in saida["valor"]
+    assert "K7M2PQ9X" not in saida["secao"]
+    # O atendente e avisado, com o numero do pedido que ele precisa reabrir.
+    assert any("20272" in a and a.startswith("warning") for a in saida["avisos"]), saida["avisos"]
+
+
+def test_a_nova_senha_tambem_nao_vaza_para_o_pedido_seguinte():
+    """O mesmo buraco, pela outra porta: o botao 'Nova senha provisoria'."""
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/contas/u-1/nova-senha'] = new Promise(function (ok) {
+            setTimeout(function () { ok({ senha_provisoria: 'ZZ9TOP44' }); }, 80);
+        });
+        window.__respostas['/pedidos/20281'] = %s;
+        await IdealControl.abrirPedido(20272);
+        const achar = (t) => [...document.querySelectorAll('#ic-acesso-contas button')]
+            .find(b => b.textContent.indexOf(t) >= 0);
+        achar('Nova senha').click();
+        achar('Sim, gerar').click();
+        await IdealControl.abrirPedido(20281);
+        await new Promise(r => setTimeout(r, 200));
+        return {
+            secao: document.getElementById('ic-acesso-secao').textContent,
+            senha_visivel: document.getElementById('ic-acesso-senha').style.display !== 'none',
+            avisos: (window._avisos || []).map(function (a) { return a[1] + ': ' + a[0]; }),
+        };
+    """ % (json.dumps(CLIENTE), json.dumps(OUTRO_PEDIDO)))
+    assert saida["senha_visivel"] is False
+    assert "ZZ9TOP44" not in saida["secao"]
+    assert any("20272" in a and a.startswith("warning") for a in saida["avisos"]), saida["avisos"]
+
+
+def test_falha_ao_reler_o_pedido_nao_desmente_o_acesso_liberado():
+    """O acesso FOI liberado e a senha esta na tela; so a releitura falhou.
+
+    Dizer "nao consegui liberar o acesso" aqui faria o atendente jogar fora uma
+    senha boa -- e ela nao aparece de novo.
+    """
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/clientes/14/contas'] = { email: 'daniel@exemplo.com',
+            ja_tinha_conta: false, senha_provisoria: 'K7M2PQ9X' };
+        await IdealControl.abrirPedido(20272);
+        // A releitura so passa a falhar DEPOIS de o pedido ja estar na tela.
+        window.__respostas['/pedidos/20272'] = new Error('a rede caiu no meio');
+        document.getElementById('ic-acesso-liberar').click();
+        await new Promise(r => setTimeout(r, 120));
+        return {
+            visivel: document.getElementById('ic-acesso-senha').style.display !== 'none',
+            valor: document.getElementById('ic-acesso-senha-valor').textContent,
+            aviso: document.getElementById('ic-acesso-aviso').textContent,
+            travado: document.getElementById('ic-acesso-liberar').disabled,
+            avisos: (window._avisos || []).map(function (a) { return a[1] + ': ' + a[0]; }),
+        };
+    """ % json.dumps(CLIENTE))
+    assert saida["visivel"] is True
+    assert saida["valor"] == "K7M2PQ9X"
+    assert "Não consegui liberar" not in saida["aviso"]
+    # E o botao volta a funcionar: a tela nao fica travada por causa disso.
+    assert saida["travado"] is False
+    assert any("Acesso liberado" in a and a.startswith("warning")
+               for a in saida["avisos"]), saida["avisos"]
+
+
+def test_email_invalido_nem_chega_a_sair_da_tela():
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        await IdealControl.abrirPedido(20272);
+        document.getElementById('ic-acesso-email').value = 'daniel arroba exemplo';
+        document.getElementById('ic-acesso-liberar').click();
+        await new Promise(r => setTimeout(r, 60));
+        return {
+            aviso: document.getElementById('ic-acesso-aviso').textContent,
+            visivel: document.getElementById('ic-acesso-aviso').style.display !== 'none',
+            foi_a_rede: window.__chamadas.some(function (c) {
+                return c.caminho.indexOf('/contas') >= 0; }),
+        };
+    """ % json.dumps(CLIENTE))
+    assert saida["visivel"] is True
+    assert saida["aviso"] == "Escreva um e-mail válido."
+    assert saida["foi_a_rede"] is False
