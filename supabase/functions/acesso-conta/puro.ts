@@ -124,3 +124,29 @@ export function montarMeusPedidos(entrada: {
   saida.sort((a, b) => (a.criado_em < b.criado_em ? 1 : a.criado_em > b.criado_em ? -1 : 0));
   return saida.map(({ criado_em: _c, ...resto }) => resto);
 }
+
+/**
+ * A senha ainda e obrigatoria nesta chamada?
+ *
+ * Decisao de 18/08/2026 ("entrar libera 15 minutos"): quem acabou de entrar na
+ * conta ja provou quem e, e a mesma prova vale por 15 minutos para carregar um
+ * pedido e para abrir a configuracao de um evento. A elevacao DE CONTA e o
+ * bilhete assinado que carrega essa prova; ver `ELEVACAO_DE_CONTA` no
+ * `index.ts`.
+ *
+ * Duas coisas que a regra NAO faz, e sao o motivo de ela caber numa funcao
+ * propria em vez de virar um `if` solto no meio de duas rotas:
+ *
+ *   - senha DIGITADA continua sendo conferida, mesmo com o bilhete valido. Uma
+ *     senha errada nao pode passar calada so porque havia uma liberacao aberta:
+ *     quem digitou espera que o que digitou tenha sido olhado, e o contrario
+ *     esconderia da pessoa que ela esta errando a senha da propria conta;
+ *   - ela nao substitui elevacao NENHUMA nas rotas de escrita. O que o bilhete
+ *     de conta dispensa e a DIGITACAO da senha nestas duas portas; a escrita
+ *     continua exigindo o bilhete do EVENTO, que so sai depois de passar por
+ *     aqui.
+ */
+export function precisaDeSenha(senha: string, temElevacaoDeConta: boolean): boolean {
+  if (String(senha ?? "")) return true;
+  return !temElevacaoDeConta;
+}

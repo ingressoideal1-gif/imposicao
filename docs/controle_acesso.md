@@ -475,6 +475,16 @@ O QR do Pedido saiu de circulação. O que existe agora:
    configura os mesmos eventos (`pertenceAConta`). Os eventos antigos continuam
    visíveis pela conta que os criou.
 
+**Entrar libera 15 minutos** (18/08/2026). A mesma senha que abre a sessão compra, na
+mesma digitação, um bilhete de **conta** — `POST /minha-conta/elevar`, assinado com o
+mesmo `ACESSO_ELEVACAO_SEGREDO` e preso a este navegador, só que sob o pseudo-evento
+`conta`. Dentro dos 15 minutos ele dispensa a **digitação** da senha em duas portas:
+`POST /pedidos/{p}/carregar` e `POST /eventos/{id}/elevar`. Ele **não** substitui elevação
+nenhuma nas rotas de escrita — a assinatura é recalculada sobre o id do evento e um bilhete
+de conta simplesmente não bate. O que a engrenagem faz é trocá-lo pelo bilhete **do
+evento**, que é o que a escrita exige. Senha digitada continua sendo conferida, mesmo com
+o bilhete aberto; sair da conta o esquece.
+
 Vocabulário: **"Aparelho"**, não "Portão" — todo aparelho é portão.
 
 Ficam um release, sem chamador: `acesso-evento`, `acesso-pedido` e

@@ -1,5 +1,5 @@
 /**
- * A tela do cliente: as 18 rotas de `/api/acesso/*` que o dono do evento usa.
+ * A tela do cliente: as 19 rotas de `/api/acesso/*` que o dono do evento usa.
  *
  * Porte de `acesso_config.py` mais `/evento`, `/meus-eventos` e `/reivindicar`
  * de `acesso_api.py`.
@@ -53,7 +53,14 @@ import {
   texto,
   zerarEntradas,
 } from "../_compartilhado/configuracao.ts";
-import { montarMeusPedidos, nomeDoEvento, pedacosDaRota, pertenceAConta, recusaHumana } from "./puro.ts";
+import {
+  montarMeusPedidos,
+  nomeDoEvento,
+  pedacosDaRota,
+  pertenceAConta,
+  precisaDeSenha,
+  recusaHumana,
+} from "./puro.ts";
 import { numeracaoDoModelo } from "../_compartilhado/modelos.ts";
 import {
   clientesDaConta, contaPrecisaTrocarSenha, marcarSenhaTrocada,
@@ -172,17 +179,113 @@ async function conferirSenha(email: string, senha: string): Promise<boolean> {
   throw new Recusa(503, `nao consegui conferir a senha agora (codigo ${r.status})`);
 }
 
+/**
+ * O pseudo-evento sob o qual a elevacao DE CONTA e assinada.
+ *
+ * Ela usa o mesmo segredo, o mesmo formato e a mesma funcao de assinar da
+ * elevacao de evento -- muda so o primeiro campo do corpo. Duas consequencias,
+ * e as duas sao de proposito:
+ *
+ *   - um bilhete de conta NAO passa em `exigirElevacao`, porque la a assinatura
+ *     e recalculada sobre o id do evento de verdade e nao bate;
+ *   - um bilhete de evento nao passa em `temElevacaoDeConta`, pelo mesmo motivo
+ *     invertido.
+ *
+ * `conta` casa com o `IDENTIFICADOR` de `assinatura.ts` (letras, digitos, `_` e
+ * `-`) e nenhum evento real pode se chamar assim: id de evento e UUID, conferido
+ * por `uuid()` antes de chegar a qualquer lugar.
+ */
+const ELEVACAO_DE_CONTA = "conta";
+
+/**
+ * A prova de que a senha da CONTA foi digitada ha menos de 15 minutos NESTE
+ * navegador. Decisao de 18/08/2026: "entrar libera 15 minutos".
+ *
+ * Nao ha evento nenhum aqui, e e essa a diferenca que importa. Este bilhete
+ * dispensa a DIGITACAO da senha em duas portas -- carregar um pedido e pedir a
+ * elevacao de um evento --, e nao dispensa elevacao nenhuma nas rotas de
+ * escrita: elas continuam exigindo o bilhete DAQUELE evento, que sai de
+ * `elevar` depois de esta prova ter sido aceita.
+ */
+async function elevarConta(
+  usuario: { id: string; email: string },
+  senha: string,
+  navegador: string,
+): Promise<any> {
+  await exigirSegredo(SEGREDO_ELEVACAO);
+  // 422 aqui, e nao o "identificador invalido" que `gerarElevacao` lancaria la
+  // na frente: aquele viraria 500, e um navegador mal formado e defeito de quem
+  // chamou. Mesma conferencia que `carregar` ja faz, pelo mesmo motivo.
+  exigirNavegador(navegador);
+  if (!(await conferirSenha(usuario.email ?? "", senha ?? ""))) {
+    // Uma frase so: nao dizer se o problema foi o e-mail ou a senha.
+    throw new Recusa(401, "senha nao confere");
+  }
+  const { token, expira } = await gerarElevacao(
+    ELEVACAO_DE_CONTA,
+    usuario.id,
+    navegador,
+  );
+  return { token, expira_em: expira, minutos: 15 };
+}
+
+/** O mesmo formato de `conferirIdentificadores` (assinatura.ts), so que 422. */
+function exigirNavegador(valor: string): string {
+  const v = String(valor ?? "");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(v)) throw new Recusa(422, "navegador invalido");
+  return v;
+}
+
+/**
+ * Ha um bilhete de conta valido nesta requisicao? Nunca lanca.
+ *
+ * Segredo ausente, cabecalho ausente, bilhete de outra conta, de outro
+ * navegador ou vencido: tudo vira `false`, e `false` significa apenas "a senha
+ * continua sendo pedida" -- o caminho de sempre, que nao e erro nenhum.
+ *
+ * O `navegadorDoCorpo` existe porque as duas rotas que usam isto ainda EMITEM
+ * um bilhete novo com o navegador que veio no corpo. Sem exigir que os dois
+ * casem, um bilhete de conta preso ao navegador A poderia cunhar uma elevacao
+ * de evento para o navegador B -- afrouxando exatamente a amarra que faz o
+ * bilhete nao viajar de aparelho para aparelho.
+ */
+async function temElevacaoDeConta(
+  usuario: { id: string },
+  req: Request,
+  navegadorDoCorpo: string,
+): Promise<boolean> {
+  const doCabecalho = req.headers.get("x-navegador") ?? "";
+  if (String(navegadorDoCorpo ?? "") !== doCabecalho) return false;
+  try {
+    await exigirSegredo(SEGREDO_ELEVACAO);
+    await conferirElevacao(
+      req.headers.get("x-elevacao") ?? "",
+      ELEVACAO_DE_CONTA,
+      usuario.id,
+      doCabecalho,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function elevar(
   eventoId: string,
   usuario: { id: string; email: string },
   senha: string,
   navegador: string,
+  req: Request,
 ): Promise<any> {
   await eventoDoDono(eventoId, usuario);
   await exigirSegredo(SEGREDO_ELEVACAO);
-  if (!(await conferirSenha(usuario.email ?? "", senha ?? ""))) {
-    // Uma frase so: nao dizer se o problema foi o e-mail ou a senha.
-    throw new Recusa(401, "senha nao confere");
+  // `eventoDoDono` acima continua sendo a porta que importa: o bilhete de conta
+  // diz QUEM esta pedindo, nunca de quem e o evento.
+  if (precisaDeSenha(senha, await temElevacaoDeConta(usuario, req, navegador))) {
+    if (!(await conferirSenha(usuario.email ?? "", senha ?? ""))) {
+      // Uma frase so: nao dizer se o problema foi o e-mail ou a senha.
+      throw new Recusa(401, "senha nao confere");
+    }
   }
   const { token, expira } = await gerarElevacao(eventoId, usuario.id, navegador);
   return { token, expira_em: expira, minutos: 15 };
@@ -652,11 +755,16 @@ async function reivindicar(
  * deixa o passo seguinte (ligar este aparelho) acontecer sem pedir outra: a
  * resposta traz a elevacao de 15 minutos do evento resultante, ou `null` se a
  * elevacao falhar depois que o evento ja foi criado (ver comentario abaixo).
+ *
+ * Desde 18/08/2026 a senha pode vir VAZIA: quem entrou na conta ha menos de 15
+ * minutos manda o bilhete de conta nos cabecalhos e nao digita nada. O corpo
+ * sem senha e sem bilhete valido continua sendo 401, como sempre foi.
  */
 async function carregar(
   pedido: number,
   usuario: { id: string; email: string },
   corpo: any,
+  req: Request,
 ): Promise<any> {
   const clientes = await clientesDaConta(usuario.id);
   if (!clientes.length) throw new Recusa(403, "sua conta ainda nao esta ligada a um cliente; peca a grafica");
@@ -685,14 +793,14 @@ async function carregar(
   // `gerarElevacao` o exigir la na frente: o mesmo formato de
   // `conferirIdentificadores` (assinatura.ts), so que aqui vira 422 e nao um
   // 500 generico depois que o evento ja existe -- ver o try/catch no fim.
-  const navegador = String(corpo?.navegador ?? "");
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(navegador)) {
-    throw new Recusa(422, "navegador invalido");
-  }
+  const navegador = exigirNavegador(corpo?.navegador);
 
   await exigirSegredo(SEGREDO_ELEVACAO);
-  if (!(await conferirSenha(usuario.email ?? "", String(corpo?.senha ?? "")))) {
-    throw new Recusa(401, "senha nao confere");
+  const senha = String(corpo?.senha ?? "");
+  if (precisaDeSenha(senha, await temElevacaoDeConta(usuario, req, navegador))) {
+    if (!(await conferirSenha(usuario.email ?? "", senha))) {
+      throw new Recusa(401, "senha nao confere");
+    }
   }
   const r = await carregarPedido(
     { pedido, id_cliente: Number(proposta.id_cliente), setores },
@@ -745,6 +853,13 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   if (metodo === "POST" && p.length === 2 && p[0] === "minha-conta" && p[1] === "senha") {
     return ok(await trocarMinhaSenha(usuario, await corpo()));
   }
+  // "Entrar libera 15 minutos": a mesma senha que abriu a sessao compra o
+  // bilhete de conta, e a pessoa nao a digita de novo nas duas portas que o
+  // aceitam. Nao substitui elevacao de evento em escrita nenhuma.
+  if (metodo === "POST" && p.length === 2 && p[0] === "minha-conta" && p[1] === "elevar") {
+    const c = await corpo();
+    return ok(await elevarConta(usuario, c?.senha ?? "", c?.navegador ?? ""));
+  }
   if (metodo === "POST" && p.length === 1 && p[0] === "reivindicar") {
     const c = await corpo();
     return ok(await reivindicar(
@@ -756,7 +871,7 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   }
 
   if (metodo === "POST" && p.length === 3 && p[0] === "pedidos" && p[2] === "carregar") {
-    return ok(await carregar(inteiro(p[1], "path", "pedido"), usuario, await corpo()));
+    return ok(await carregar(inteiro(p[1], "path", "pedido"), usuario, await corpo(), req));
   }
 
   if (metodo === "GET" && p.length === 2 && p[0] === "eventos") {
@@ -765,7 +880,7 @@ async function rotear(req: Request, url: URL): Promise<Response> {
   }
   if (metodo === "POST" && p.length === 3 && p[0] === "eventos" && p[2] === "elevar") {
     const c = await corpo();
-    return ok(await elevar(p[1], usuario, c?.senha ?? "", c?.navegador ?? ""));
+    return ok(await elevar(p[1], usuario, c?.senha ?? "", c?.navegador ?? "", req));
   }
 
   // Daqui para baixo, TODA rota escreve -- e toda escrita exige elevacao. A

@@ -198,6 +198,77 @@
     function minhaConta(sessao) {
         return _pedir('/minha-conta', { headers: comSessao(sessao) });
     }
+
+    // ── "Entrar libera 15 minutos" ──────────────────────────────────────────
+    //
+    // Decisão do usuário, 18/08/2026. Quem acabou de entrar na conta já provou
+    // quem é: a mesma senha que abriu a sessão compra um bilhete assinado de 15
+    // minutos, e dentro deles carregar um pedido e abrir a configuração de um
+    // evento não pedem a senha de novo.
+    //
+    // O bilhete é preso a ESTA conta e a ESTE navegador (`navegadorId()`), e
+    // vive no `sessionStorage` pelo mesmo motivo que a elevação de evento:
+    // fechar a aba tem de encerrar a liberação. O aparelho pode ficar com o
+    // porteiro.
+    //
+    // O que ele NÃO faz: substituir a elevação DO EVENTO em gravação nenhuma. O
+    // servidor assina os dois com o mesmo segredo e formato, mas sobre corpos
+    // diferentes — um bilhete de conta simplesmente não bate na conferência de
+    // uma escrita de evento. Ver `ELEVACAO_DE_CONTA` no `acesso-conta/index.ts`.
+
+    var CHAVE_ELEVACAO_CONTA = 'ideal_control_elevacao_conta';
+
+    // 30 segundos de folga: um bilhete que vence NO CAMINHO da requisição
+    // voltaria 401 depois de a tela já ter escondido o campo da senha. É mais
+    // barato pedir a senha meio minuto antes do que explicar um erro.
+    var FOLGA_SEGUNDOS = 30;
+
+    // Espelho na memória, pelo mesmo motivo do `_idMemorizado` acima: onde o
+    // `sessionStorage` lança (aba anônima do iOS, quota estourada), sem isto a
+    // liberação simplesmente não existiria e a pessoa digitaria a senha de novo
+    // em cada porta. Ela continua morrendo com a página, que é o prazo certo.
+    var _elevacaoMemorizada = null;
+
+    function elevarConta(sessao, senha) {
+        return _pedir('/minha-conta/elevar', {
+            method: 'POST', headers: comSessao(sessao),
+            body: JSON.stringify({ senha: senha || '', navegador: navegadorId() })
+        }).then(function (r) {
+            var bilhete = { token: r.token, expira_em: r.expira_em };
+            _elevacaoMemorizada = bilhete;
+            try { sessionStorage.setItem(CHAVE_ELEVACAO_CONTA, JSON.stringify(bilhete)); }
+            catch (e) { /* aba anônima: vale só na memória desta página */ }
+            return bilhete;
+        });
+    }
+
+    /** O bilhete, se ainda vale. Vencido ou ilegível, some daqui e devolve `null`. */
+    function elevacaoConta() {
+        var bilhete = _elevacaoMemorizada;
+        if (!bilhete) {
+            var bruto = null;
+            try { bruto = sessionStorage.getItem(CHAVE_ELEVACAO_CONTA); }
+            catch (e) { return null; }
+            if (!bruto) { return null; }
+            try { bilhete = JSON.parse(bruto); } catch (e) { bilhete = null; }
+        }
+        if (!bilhete || !bilhete.token || !bilhete.expira_em) {
+            esquecerElevacaoConta();
+            return null;
+        }
+        if (bilhete.expira_em * 1000 <= Date.now() + FOLGA_SEGUNDOS * 1000) {
+            esquecerElevacaoConta();     // vencido: não deixa lixo no storage
+            return null;
+        }
+        return bilhete;
+    }
+
+    function esquecerElevacaoConta() {
+        _elevacaoMemorizada = null;
+        try { sessionStorage.removeItem(CHAVE_ELEVACAO_CONTA); }
+        catch (e) { /* aba anônima */ }
+    }
+
     function trocarSenha(sessao, atual, nova) {
         return _pedir('/minha-conta/senha', {
             method: 'POST', headers: comSessao(sessao),
@@ -205,6 +276,11 @@
         });
     }
     function sair() {
+        // O bilhete sai ANTES do `signOut`, e não depois: ele é a prova de que
+        // a senha DESTA conta foi digitada, e a próxima pessoa a entrar neste
+        // aparelho não pode herdar liberação nenhuma. Fora do `then` para valer
+        // mesmo se o `signOut` falhar por falta de rede.
+        esquecerElevacaoConta();
         return Promise.resolve().then(function () {
             return supabaseClient.auth.signOut();
         }).catch(function () { /* sem rede: a sessao local ja foi apagada */ });
@@ -220,6 +296,9 @@
         esqueciSenha: esqueciSenha,
         minhaConta: minhaConta,
         trocarSenha: trocarSenha,
+        elevarConta: elevarConta,
+        elevacaoConta: elevacaoConta,
+        esquecerElevacaoConta: esquecerElevacaoConta,
         sair: sair,
         navegadorId: navegadorId
     };

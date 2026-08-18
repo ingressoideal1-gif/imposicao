@@ -13,6 +13,8 @@ DESVIO = """
         window.__chamadas.push({ caminho, corpo: opcoes && opcoes.body ? JSON.parse(opcoes.body) : null });
         if (caminho === '/minha-conta') return window.__minhaConta;
         if (caminho === '/minha-conta/senha') return { ok: true };
+        if (caminho === '/minha-conta/elevar') return { token: 'bilhete-da-conta',
+            expira_em: Math.floor(Date.now() / 1000) + 900, minutos: 15 };
         if (caminho === '/meus-eventos') return { eventos: [] };
         if (caminho === '/meus-pedidos') return { pedidos: [] };
         return pedirReal(caminho, opcoes);
@@ -339,3 +341,147 @@ def test_o_olho_nao_abre_o_menu_por_baixo_da_troca_de_senha():
     assert saida["trocaNaFrente"] is True
     assert saida["olhoTravado"] is False, "a troca opcional nao trava o olho"
     assert saida["menuAberto"] is False, "o menu abriu por baixo da troca de senha"
+
+
+# -- "Entrar libera 15 minutos" ----------------------------------------------
+#
+# Decisao do usuario, 18/08/2026. Quem acabou de entrar na conta ja provou quem
+# e: a MESMA senha compra um bilhete assinado de 15 minutos, e dentro deles
+# carregar um pedido e abrir a configuracao de um evento nao a pedem de novo.
+#
+# O bilhete e da CONTA, e nao de um evento. Ele NAO substitui a elevacao de
+# evento em gravacao nenhuma -- o servidor recusa, porque assina os dois sobre
+# corpos diferentes. O que ele dispensa e a DIGITACAO em duas portas.
+
+
+def test_entrar_compra_o_bilhete_de_quinze_minutos_com_a_mesma_senha():
+    saida = _no_navegador(DESVIO + """
+        window.supabaseClient.auth.signInWithPassword = async () => ({
+            error: null, data: { session: { access_token: 'jwt', user: { email: 'd@x.com' } } } });
+        document.getElementById('email').value = 'd@x.com';
+        document.getElementById('senha').value = 'segredo1';
+        document.getElementById('btn-entrar').click();
+        await new Promise(r => setTimeout(r, 250));
+        return {
+            chamada: window.__chamadas.find(c => c.caminho === '/minha-conta/elevar'),
+            guardado: JSON.parse(sessionStorage.getItem('ideal_control_elevacao_conta') || 'null'),
+            vale: !!AcessoConta.elevacaoConta(),
+            entrou: document.getElementById('bloco-entrar').classList.contains('sumindo'),
+        };
+    """)
+    assert saida["chamada"], "entrar nao comprou o bilhete de 15 minutos"
+    assert saida["chamada"]["corpo"]["senha"] == "segredo1"
+    assert saida["chamada"]["corpo"]["navegador"], (
+        "o bilhete saiu sem o navegador -- ele viajaria de aparelho para aparelho"
+    )
+    assert saida["guardado"]["token"] == "bilhete-da-conta"
+    assert saida["vale"] is True
+    assert saida["entrou"] is True, "a compra do bilhete atrapalhou o login"
+
+
+def test_o_bilhete_nao_e_pedido_quando_o_login_falha():
+    """Ele custa uma chamada ao servidor, e sem sessao nao ha o que elevar."""
+    saida = _no_navegador(DESVIO + """
+        window.supabaseClient.auth.signInWithPassword = async () => ({
+            error: { message: 'Invalid login credentials' } });
+        document.getElementById('email').value = 'd@x.com';
+        document.getElementById('senha').value = 'errada';
+        document.getElementById('btn-entrar').click();
+        await new Promise(r => setTimeout(r, 200));
+        return { pediu: window.__chamadas.some(c => c.caminho === '/minha-conta/elevar'),
+                 guardado: sessionStorage.getItem('ideal_control_elevacao_conta') };
+    """)
+    assert saida["pediu"] is False
+    assert saida["guardado"] is None
+
+
+def test_uma_falha_do_bilhete_NAO_atrapalha_o_login():
+    """Melhor esforco. Sem bilhete, cada porta volta a pedir a senha -- que e o
+    comportamento de sempre, e nao um erro que valha uma frase na cara de quem
+    acabou de entrar."""
+    saida = _no_navegador(DESVIO + """
+        const base = AcessoConta.pedir;
+        AcessoConta.pedir = async (c, o) => {
+            if (c === '/minha-conta/elevar') { const e = new Error('nao deu'); e.status = 503; throw e; }
+            return base(c, o);
+        };
+        window.supabaseClient.auth.signInWithPassword = async () => ({
+            error: null, data: { session: { access_token: 'jwt', user: { email: 'd@x.com' } } } });
+        document.getElementById('email').value = 'd@x.com';
+        document.getElementById('senha').value = 'segredo1';
+        document.getElementById('btn-entrar').click();
+        await new Promise(r => setTimeout(r, 250));
+        const erro = document.getElementById('erro-login');
+        return { entrou: document.getElementById('bloco-entrar').classList.contains('sumindo'),
+                 erroVisivel: !erro.classList.contains('sumindo'),
+                 vale: !!AcessoConta.elevacaoConta() };
+    """)
+    assert saida["entrou"] is True, "a falha do bilhete prendeu a pessoa na tela de entrar"
+    assert saida["erroVisivel"] is False, "a falha do bilhete virou erro na tela do login"
+    assert saida["vale"] is False
+
+
+def test_trocar_a_senha_compra_o_bilhete_com_a_senha_NOVA():
+    """E a nova que o servidor vai conferir de agora em diante. Quem trocou a
+    senha provisoria no primeiro acesso segue para a casa liberado, sem digitar
+    uma terceira vez a senha que acabou de escolher duas."""
+    saida = _no_navegador(DESVIO + """
+        window.supabaseClient.auth.getSession = async () => ({
+            data: { session: { access_token: 'jwt' } } });
+        window.conta.mostrarTrocarSenha({ obrigatoria: false });
+        document.getElementById('campo-senha-atual').value = 'antiga123';
+        document.getElementById('campo-senha-nova').value = 'novasenha123';
+        document.getElementById('campo-senha-confirma').value = 'novasenha123';
+        document.getElementById('btn-trocar-senha').click();
+        await new Promise(r => setTimeout(r, 250));
+        return { chamada: window.__chamadas.find(c => c.caminho === '/minha-conta/elevar'),
+                 vale: !!AcessoConta.elevacaoConta() };
+    """)
+    assert saida["chamada"], "trocar a senha nao comprou o bilhete"
+    assert saida["chamada"]["corpo"]["senha"] == "novasenha123", (
+        "o bilhete foi pedido com a senha ANTIGA, que o servidor ja nao aceita"
+    )
+    assert saida["vale"] is True
+
+
+def test_sair_da_conta_esquece_o_bilhete():
+    """A proxima pessoa a entrar neste aparelho nao herda liberacao nenhuma."""
+    saida = _no_navegador(DESVIO + """
+        localStorage.clear();
+        sessionStorage.setItem('ideal_control_elevacao_conta', JSON.stringify({
+            token: 'b', expira_em: Math.floor(Date.now() / 1000) + 900 }));
+        window.supabaseClient = { auth: {
+            getSession: async () => ({ data: { session: null } }),
+            signOut: async () => ({}) } };
+        await window.conta.sair();
+        await new Promise(r => setTimeout(r, 60));
+        return { guardado: sessionStorage.getItem('ideal_control_elevacao_conta'),
+                 vale: !!AcessoConta.elevacaoConta() };
+    """)
+    assert saida["guardado"] is None
+    assert saida["vale"] is False
+
+
+def test_o_bilhete_vence_com_trinta_segundos_de_folga_e_se_apaga():
+    """A folga existe para o bilhete nao vencer NO CAMINHO da requisicao: um
+    401 depois de a tela ja ter escondido o campo da senha custa mais do que
+    pedir a senha meio minuto antes."""
+    saida = _no_navegador("""
+        const por = (segundos) => {
+            AcessoConta.esquecerElevacaoConta();   // limpa tambem o espelho na memoria
+            sessionStorage.setItem('ideal_control_elevacao_conta', JSON.stringify({
+                token: 'b', expira_em: Math.floor(Date.now() / 1000) + segundos }));
+        };
+        por(900);
+        const vivo = !!AcessoConta.elevacaoConta();
+        por(10);
+        const quaseVencido = !!AcessoConta.elevacaoConta();
+        const sobrou = sessionStorage.getItem('ideal_control_elevacao_conta');
+        por(-5);
+        const vencido = !!AcessoConta.elevacaoConta();
+        return { vivo, quaseVencido, sobrou, vencido };
+    """)
+    assert saida["vivo"] is True
+    assert saida["quaseVencido"] is False, "um bilhete de 10 segundos ainda foi dado por bom"
+    assert saida["sobrou"] is None, "o bilhete vencido ficou de lixo no storage"
+    assert saida["vencido"] is False

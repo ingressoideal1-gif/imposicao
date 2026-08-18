@@ -336,3 +336,200 @@ def test_a_fila_do_PROPRIO_evento_de_destino_nao_trava_nada():
         return window.__perguntas.length;
     """)
     assert saida == 1
+
+
+# -- "Entrar libera 15 minutos" ----------------------------------------------
+#
+# Decisao do usuario, 18/08/2026. Quem entrou na conta ha menos de 15 minutos
+# tem um bilhete assinado (o `elevacaoConta()` do `acesso-conta.js`), e esta
+# caixa deixa de pedir a senha: o campo sai da tela e o POST leva o bilhete nos
+# cabecalhos, sem `senha` nenhuma no corpo.
+#
+# O campo que some sem explicacao faz a pessoa procurar o que ela deveria
+# digitar -- por isso a frase entra no lugar dele. E o bilhete pode vencer com a
+# caixa aberta: nesse caso o campo VOLTA, com o motivo escrito, que e a regra do
+# projeto de toda trava dizer na propria tela como sair dela.
+
+BILHETE = """
+    sessionStorage.setItem('ideal_control_elevacao_conta', JSON.stringify({
+        token: 'bilhete-da-conta', expira_em: Math.floor(Date.now() / 1000) + 900 }));
+"""
+
+
+def _escondido(id_):
+    """O campo da senha mora dentro do `span.campo-senha` que o olho de
+    mostrar/ocultar cria em tempo de execucao. Esconder so o input deixaria o
+    botao "Mostrar" boiando sozinho na caixa -- por isso o teste olha para o
+    envoltorio, e nao para o campo."""
+    return ("(() => { const el = document.getElementById('" + id_ + "');"
+            " const alvo = el.parentNode.classList.contains('campo-senha')"
+            " ? el.parentNode : el;"
+            " return alvo.classList.contains('sumindo'); })()")
+
+
+def test_com_o_bilhete_da_conta_a_caixa_abre_SEM_o_campo_da_senha():
+    saida = _no_navegador(DESVIO + BILHETE + """
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        const aviso = document.getElementById('carregar-sem-senha');
+        return {
+            campoEscondido: """ + _escondido("carregar-senha") + """,
+            rotuloEscondido: document.querySelector('label[for="carregar-senha"]')
+                .classList.contains('sumindo'),
+            olhoEscondido: document.querySelector('#caixa-carregar .olho-senha')
+                .closest('.campo-senha').classList.contains('sumindo'),
+            avisoVisivel: !aviso.classList.contains('sumindo'),
+            avisoTexto: aviso.textContent,
+        };
+    """)
+    assert saida["campoEscondido"] is True
+    assert saida["rotuloEscondido"] is True
+    assert saida["olhoEscondido"] is True, "o olho ficou sozinho, ligado a um campo invisivel"
+    assert saida["avisoVisivel"] is True
+    assert "não precisa digitar a senha" in saida["avisoTexto"]
+
+
+def test_com_o_bilhete_o_POST_leva_o_cabecalho_e_NAO_leva_senha():
+    """`senha: ''` no corpo seria mandar uma senha errada: o servidor so olha
+    para o bilhete quando o campo vem vazio de verdade."""
+    saida = _no_navegador(DESVIO + BILHETE + """
+        window.caixaConfirmar.perguntar = async () => false;
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 120));
+        const c = window.__chamadas.find(x => x.caminho === '/pedidos/20272/carregar');
+        return { corpo: c && c.corpo, headers: c && c.headers,
+                 caixaFechada: document.getElementById('caixa-carregar')
+                     .classList.contains('sumindo') };
+    """)
+    assert saida["corpo"], "o POST nao saiu sem a senha digitada"
+    assert "senha" not in saida["corpo"], "mandou uma senha vazia junto com o bilhete"
+    assert saida["headers"]["X-Elevacao"] == "bilhete-da-conta"
+    assert saida["headers"]["X-Navegador"] == saida["corpo"]["navegador"], (
+        "o navegador do cabecalho e o do corpo divergem; o servidor recusa"
+    )
+    assert saida["caixaFechada"] is True
+
+
+def test_o_401_do_bilhete_traz_o_campo_da_senha_de_volta_com_o_motivo():
+    """O bilhete pode vencer no caminho, ou a aba pode ter sido restaurada com
+    um token velho. Nao ha o que tentar de novo sozinho: o que resolve e a
+    senha, e ela precisa ter onde ser digitada."""
+    saida = _no_navegador(DESVIO + BILHETE + """
+        const base = AcessoConta.pedir;
+        AcessoConta.pedir = async (c, o) => {
+            if (c === '/pedidos/20272/carregar') {
+                const e = new Error('senha nao confere'); e.status = 401; throw e;
+            }
+            return base(c, o);
+        };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 120));
+        return {
+            erro: document.getElementById('erro-carregar').textContent,
+            campoDeVolta: !(""" + _escondido("carregar-senha") + """),
+            avisoSumiu: document.getElementById('carregar-sem-senha')
+                .classList.contains('sumindo'),
+            aberta: !document.getElementById('caixa-carregar').classList.contains('sumindo'),
+            bilhete: sessionStorage.getItem('ideal_control_elevacao_conta'),
+            botaoLiberado: !document.getElementById('btn-carregar-confirmar').disabled,
+        };
+    """)
+    assert "liberação venceu" in saida["erro"]
+    assert "senha" in saida["erro"].lower(), "a trava nao disse por onde sair dela"
+    assert saida["campoDeVolta"] is True, "pediu a senha com o campo escondido"
+    assert saida["avisoSumiu"] is True
+    assert saida["aberta"] is True
+    assert saida["bilhete"] is None, "guardou um bilhete que o servidor ja recusou"
+    assert saida["botaoLiberado"] is True, "ele nao consegue tentar de novo"
+
+
+def test_a_segunda_tentativa_depois_do_401_vai_pelo_caminho_da_senha():
+    """A saida tem de FUNCIONAR, e nao so aparecer: a segunda tentativa manda a
+    senha digitada e nenhum cabecalho de bilhete."""
+    saida = _no_navegador(DESVIO + BILHETE + """
+        window.caixaConfirmar.perguntar = async () => false;
+        // Contador proprio, e nao o `__chamadas` do DESVIO: a primeira
+        // tentativa MORRE antes de chegar la, e o teste precisa ver as duas.
+        window.__tentativas = [];
+        const base = AcessoConta.pedir;
+        AcessoConta.pedir = async (c, o) => {
+            if (c === '/pedidos/20272/carregar') {
+                window.__tentativas.push({ corpo: JSON.parse(o.body), headers: o.headers });
+                if (window.__tentativas.length === 1) {
+                    const e = new Error('nao'); e.status = 401; throw e;
+                }
+            }
+            return base(c, o);
+        };
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 120));
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 200));
+        const ultima = window.__tentativas[window.__tentativas.length - 1];
+        return { quantas: window.__tentativas.length,
+                 corpo: ultima.corpo, headers: ultima.headers };
+    """)
+    assert saida["quantas"] == 2
+    assert saida["corpo"]["senha"] == "segredo1"
+    assert "X-Elevacao" not in saida["headers"], (
+        "a segunda tentativa levou o bilhete que o servidor acabou de recusar"
+    )
+
+
+def test_o_bilhete_que_vence_com_a_caixa_ABERTA_devolve_o_campo_sem_mandar_nada():
+    """Ele e lido no toque do botao, e nao guardado da abertura: a caixa pode
+    ficar aberta mais tempo do que o bilhete dura, e mandar o POST assim
+    gastaria uma viagem para receber o mesmo 401."""
+    saida = _no_navegador(DESVIO + BILHETE + """
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        // O bilhete morre com a caixa na tela.
+        AcessoConta.esquecerElevacaoConta();
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 80));
+        return {
+            mandou: window.__chamadas.some(c => c.caminho.endsWith('/carregar')),
+            erro: document.getElementById('erro-carregar').textContent,
+            campoDeVolta: !(""" + _escondido("carregar-senha") + """),
+        };
+    """)
+    assert saida["mandou"] is False
+    assert "liberação venceu" in saida["erro"]
+    assert saida["campoDeVolta"] is True
+
+
+def test_uma_senha_DIGITADA_vence_o_bilhete_e_vai_no_corpo():
+    """A senha digitada tem precedencia. O servidor confere a que veio, e uma
+    senha errada nao pode passar calada por causa de uma liberacao aberta --
+    quem digitou espera que o que digitou tenha sido olhado."""
+    saida = _no_navegador(DESVIO + BILHETE + """
+        window.caixaConfirmar.perguntar = async () => false;
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        // O campo esta escondido, mas ele existe: o teste escreve nele como um
+        // preenchimento automatico do navegador escreveria.
+        document.getElementById('carregar-senha').value = 'segredo1';
+        document.getElementById('btn-carregar-confirmar').click();
+        await new Promise(r => setTimeout(r, 120));
+        const c = window.__chamadas.find(x => x.caminho === '/pedidos/20272/carregar');
+        return { corpo: c.corpo, headers: c.headers };
+    """)
+    assert saida["corpo"]["senha"] == "segredo1"
+    assert "X-Elevacao" not in saida["headers"]
+
+
+def test_sem_bilhete_a_caixa_continua_pedindo_a_senha():
+    """O caminho de sempre, e ele nao pode ter mudado: sem liberacao aberta, o
+    campo esta na tela e o aviso nao."""
+    saida = _no_navegador(DESVIO + """
+        await window.carregarPedido.abrir(20272, SESSAO, PEDIDO);
+        return {
+            campoNaTela: !(""" + _escondido("carregar-senha") + """),
+            rotuloNaTela: !document.querySelector('label[for="carregar-senha"]')
+                .classList.contains('sumindo'),
+            avisoEscondido: document.getElementById('carregar-sem-senha')
+                .classList.contains('sumindo'),
+        };
+    """)
+    assert saida == {"campoNaTela": True, "rotuloNaTela": True, "avisoEscondido": True}

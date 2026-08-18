@@ -1359,24 +1359,83 @@
         // redesenhos. Ver o comentário daquela bandeira.
         jaDesenhouEvento = false;
         restaurarElevacao();
-        return comSenha(evento_id, function () {
-            $('engrenagem').classList.remove('sumindo');
-            // A BARRA DO TOPO SAI JUNTO com a lista. Ela vive FORA do `#lista`
-            // -- o porteiro nao tem conta, e ela precisa aparecer acima do
-            // login --, e por isso sobrava por cima da configuracao. Enquanto
-            // sobrou, ela era uma saida da engrenagem que NAO passava pelo
-            // `fecharEngrenagem()`: tocar em "Meus Pedidos" e depois em
-            // "← Voltar" devolvia a casa com a elevacao de 15 minutos de pe e a
-            // sessao relampago ainda aberta, num celular que fica com o
-            // porteiro.
-            $('lista').classList.add('sumindo');
-            $('bloco-novo-evento').classList.add('sumindo');
-            if (nome) { $('nome-evento-titulo').textContent = nome; }
-            return carregarPainel();
+        // ANTES do `comSenha`, pelo mesmo motivo do `restaurarElevacao` acima:
+        // ele só pede a senha quando não encontra elevação deste evento, e a
+        // troca do bilhete de conta pelo bilhete do evento é justamente o que
+        // faz não haver nada a pedir.
+        return trocarPeloBilheteDaConta(evento_id).then(function () {
+            return comSenha(evento_id, function () {
+                $('engrenagem').classList.remove('sumindo');
+                // A BARRA DO TOPO SAI JUNTO com a lista. Ela vive FORA do
+                // `#lista` -- o porteiro nao tem conta, e ela precisa aparecer
+                // acima do login --, e por isso sobrava por cima da
+                // configuracao. Enquanto sobrou, ela era uma saida da
+                // engrenagem que NAO passava pelo `fecharEngrenagem()`: tocar
+                // em "Meus Pedidos" e depois em "← Voltar" devolvia a casa com
+                // a elevacao de 15 minutos de pe e a sessao relampago ainda
+                // aberta, num celular que fica com o porteiro.
+                $('lista').classList.add('sumindo');
+                $('bloco-novo-evento').classList.add('sumindo');
+                if (nome) { $('nome-evento-titulo').textContent = nome; }
+                return carregarPainel();
+            });
         }).catch(function () {
             // Cancelou a senha, ou ela não conferiu: a lista continua na tela,
             // que é onde ele já estava. Quem explica o erro é o `avisar()` de
             // dentro de `abrirCaixaDeSenha`.
+        });
+    }
+
+    /**
+     * "Entrar libera 15 minutos": a engrenagem sem senha, logo depois do login.
+     *
+     * O bilhete de CONTA diz que a senha do dono foi digitada há pouco neste
+     * navegador. Ele não abre escrita nenhuma sozinho — o servidor recusa um
+     * bilhete de conta em qualquer gravação de evento, porque a assinatura é
+     * recalculada sobre o id do evento e não bate. O que ele faz é dispensar a
+     * DIGITAÇÃO no `POST /eventos/{id}/elevar`, que devolve o bilhete DO EVENTO
+     * — o mesmo que a senha devolveria, com o mesmo prazo e as mesmas amarras.
+     *
+     * Tudo aqui é de melhor esforço. Bilhete vencido, sessão caída, rede ruim,
+     * evento de outra conta: qualquer um deles cai no caminho de sempre, a
+     * `#caixa-entrar-config` pedindo a senha. Por isso o `catch` engole — não
+     * há erro a mostrar, porque não houve promessa nenhuma ao dono.
+     */
+    function trocarPeloBilheteDaConta(evento_id) {
+        // Já há bilhete DESTE evento (o `restaurarElevacao` acabou de lê-lo, ou
+        // o `receberElevacao` o entregou): nada a trocar, e uma chamada a menos.
+        if (elevado()) { return Promise.resolve(); }
+        var daConta = AcessoConta.elevacaoConta();
+        if (!daConta) { return Promise.resolve(); }
+
+        // `Promise.resolve().then` e não a chamada direta: `AcessoConta.sessao()`
+        // NÃO é async e LANÇA na hora com `supabaseClient` nulo (sem rede, ou o
+        // modo offline do `supabase-config.js`). Mesma razão do `sessaoOuLogin`.
+        return Promise.resolve().then(function () {
+            return AcessoConta.sessao();
+        }).then(function (s) {
+            if (!s) { return; }
+            var navegador = AcessoConta.navegadorId();
+            return _pedir('/eventos/' + evento_id + '/elevar', {
+                method: 'POST',
+                headers: {
+                    Authorization: 'Bearer ' + s.access_token,
+                    'Content-Type': 'application/json',
+                    'X-Elevacao': daConta.token,
+                    'X-Navegador': navegador
+                },
+                body: JSON.stringify({ navegador: navegador })
+            }).then(function (r) {
+                estado.sessao = s;
+                // SEM `sessaoDaEngrenagem`: a conta já estava aberta neste
+                // aparelho antes de a engrenagem ser tocada — é o celular do
+                // próprio dono. Marcá-la aqui faria o `fecharEngrenagem`
+                // deslogá-lo por ter fechado uma tela de configuração.
+                guardarElevacao({ token: r.token, expira_em: r.expira_em,
+                                  evento_id: evento_id });
+            });
+        }).catch(function () {
+            // O caminho de hoje: a caixa pede a senha.
         });
     }
 

@@ -1,5 +1,10 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { montarMeusPedidos, nomeDaFicha, pertenceAConta } from "./puro.ts";
+import {
+  montarMeusPedidos,
+  nomeDaFicha,
+  pertenceAConta,
+  precisaDeSenha,
+} from "./puro.ts";
 
 Deno.test("posse: o evento e da conta que o criou, mesmo sem cliente ligado", () => {
   assert(pertenceAConta({ dono_auth_id: "u1", id_cliente: 14 }, "u1", []));
@@ -73,4 +78,27 @@ Deno.test("nome da ficha: vazio vira 'Pedido N'", () => {
   assertEquals(nomeDaFicha({ nome_evento: "  Click " }, 20272), "Click");
   assertEquals(nomeDaFicha({ nome_evento: "" }, 20272), "Pedido 20272");
   assertEquals(nomeDaFicha(null, 20272), "Pedido 20272");
+});
+
+// ── "Entrar libera 15 minutos" ──────────────────────────────────────────────
+
+Deno.test("senha: sem bilhete de conta, ela continua obrigatoria", () => {
+  assert(precisaDeSenha("", false));
+  assert(precisaDeSenha("segredo1", false));
+});
+
+Deno.test("senha: com bilhete de conta e campo vazio, nao se pede senha", () => {
+  assert(!precisaDeSenha("", true));
+});
+
+Deno.test("senha DIGITADA e conferida mesmo com bilhete de conta valido", () => {
+  // Se ela passasse calada, quem digitou errado nunca saberia que errou a senha
+  // da propria conta -- e descobriria isso na proxima tela que a pedisse.
+  assert(precisaDeSenha("errada", true));
+});
+
+Deno.test("senha: nulo e indefinido contam como campo vazio", () => {
+  assert(!precisaDeSenha(null as unknown as string, true));
+  assert(!precisaDeSenha(undefined as unknown as string, true));
+  assert(precisaDeSenha(undefined as unknown as string, false));
 });

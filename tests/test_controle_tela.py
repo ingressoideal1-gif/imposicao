@@ -1452,6 +1452,150 @@ def test_elevacao_ainda_viva_dispensa_a_senha_ao_reabrir_a_engrenagem():
     assert saida["listaEscondida"] is True
 
 
+# -- "Entrar libera 15 minutos": a engrenagem sem senha ----------------------
+#
+# Decisao do usuario, 18/08/2026. O bilhete de CONTA diz que a senha do dono foi
+# digitada ha pouco NESTE navegador. Ele nao abre escrita nenhuma sozinho -- o
+# servidor recusa um bilhete de conta em qualquer gravacao de evento, porque a
+# assinatura e recalculada sobre o id do evento e nao bate. O que ele faz e
+# dispensar a DIGITACAO no `POST /eventos/{id}/elevar`, que devolve o bilhete DO
+# EVENTO: o mesmo que a senha devolveria, com o mesmo prazo e as mesmas amarras.
+#
+# Tudo de melhor esforco: qualquer falha cai no caminho de sempre, a caixa
+# pedindo a senha.
+
+_BILHETE_DA_CONTA = """
+    sessionStorage.setItem('ideal_control_elevacao_conta', JSON.stringify({
+        token: 'bilhete-da-conta', expira_em: Math.floor(Date.now() / 1000) + 900 }));
+    window.supabaseClient.auth.getSession = async () => ({
+        data: { session: { access_token: 'jwt-de-teste' } } });
+    window.__elevar = null;
+    const _real = AcessoConta.pedir;
+"""
+
+
+def test_a_engrenagem_abre_SEM_SENHA_com_o_bilhete_de_conta():
+    saida = _no_navegador(_BILHETE_DA_CONTA + """
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (caminho.endsWith('/elevar')) {
+                window.__elevar = { caminho, headers: opcoes.headers,
+                                    corpo: JSON.parse(opcoes.body) };
+                return { token: 'bilhete-do-evento', minutos: 15,
+                         expira_em: Math.floor(Date.now() / 1000) + 900 };
+            }
+            return _real(caminho, opcoes);
+        };
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        return {
+            elevar: window.__elevar,
+            pediuSenha: !document.getElementById('caixa-entrar-config')
+                .classList.contains('sumindo'),
+            engrenagemAberta: !document.getElementById('engrenagem')
+                .classList.contains('sumindo'),
+            elevado: Controle.elevado(),
+            somenteLeitura: document.body.classList.contains('somente-leitura'),
+            guardado: JSON.parse(sessionStorage.getItem('acesso_elevacao') || 'null'),
+        };
+    """)
+    assert saida["elevar"], "a engrenagem nem tentou trocar o bilhete de conta"
+    assert saida["elevar"]["caminho"] == "/eventos/ev-1/elevar"
+    assert saida["elevar"]["headers"]["X-Elevacao"] == "bilhete-da-conta"
+    assert saida["elevar"]["headers"]["X-Navegador"] == saida["elevar"]["corpo"]["navegador"], (
+        "o navegador do cabecalho e o do corpo divergem; o servidor recusa"
+    )
+    assert "senha" not in saida["elevar"]["corpo"], "mandou uma senha que ninguem digitou"
+    assert saida["pediuSenha"] is False, "pediu a senha dentro dos 15 minutos ja comprados"
+    assert saida["engrenagemAberta"] is True
+    assert saida["elevado"] is True
+    assert saida["somenteLeitura"] is False
+    assert saida["guardado"]["token"] == "bilhete-do-evento", (
+        "guardou o bilhete DA CONTA no lugar do bilhete DO EVENTO"
+    )
+    assert saida["guardado"]["evento_id"] == "ev-1"
+
+
+def test_o_bilhete_de_conta_recusado_cai_na_caixa_de_senha_de_sempre():
+    """Bilhete vencido, evento de outra conta, rede ruim: nao ha promessa a
+    quebrar, porque o dono nunca soube que esta troca foi tentada. O caminho de
+    hoje continua inteiro atras dela."""
+    saida = _no_navegador(_BILHETE_DA_CONTA + """
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (caminho.endsWith('/elevar')) {
+                const e = new Error('senha nao confere'); e.status = 401; throw e;
+            }
+            return _real(caminho, opcoes);
+        };
+        // Sem `await`: a caixa fica na tela ate alguem tocar num botao dela.
+        var indo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 150));
+        var medido = {
+            caixaApareceu: !document.getElementById('caixa-entrar-config')
+                .classList.contains('sumindo'),
+            engrenagemEscondida: document.getElementById('engrenagem')
+                .classList.contains('sumindo'),
+            elevado: Controle.elevado(),
+        };
+        document.getElementById('btn-cancelar-entrar-config').click();
+        await indo;
+        return medido;
+    """)
+    assert saida["caixaApareceu"] is True, "a recusa deixou o dono sem caminho nenhum"
+    assert saida["engrenagemEscondida"] is True
+    assert saida["elevado"] is False
+
+
+def test_sem_bilhete_de_conta_a_engrenagem_nao_tenta_elevar_calada():
+    """Uma chamada a menos no 4G de quem abriu o aplicativo, e o comportamento
+    de antes de 18/08/2026 intacto: sem liberacao, a caixa pede a senha."""
+    saida = _no_navegador("""
+        window.supabaseClient.auth.getSession = async () => ({
+            data: { session: { access_token: 'jwt-de-teste' } } });
+        window.__tentou = false;
+        const _real = AcessoConta.pedir;
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (caminho.endsWith('/elevar')) { window.__tentou = true; }
+            return _real(caminho, opcoes);
+        };
+        var indo = Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await new Promise(r => setTimeout(r, 150));
+        var medido = { tentou: window.__tentou,
+                       caixaApareceu: !document.getElementById('caixa-entrar-config')
+                           .classList.contains('sumindo') };
+        document.getElementById('btn-cancelar-entrar-config').click();
+        await indo;
+        return medido;
+    """)
+    assert saida["tentou"] is False
+    assert saida["caixaApareceu"] is True
+
+
+def test_a_engrenagem_aberta_pelo_bilhete_de_conta_NAO_desloga_o_dono_ao_fechar():
+    """A conta ja estava aberta neste aparelho antes de a engrenagem ser tocada
+    -- e o celular do proprio dono. O `signOut` do `fecharEngrenagem` existe
+    para a sessao relampago do celular do PORTEIRO, aquela que a caixa de senha
+    abre; deslogar aqui tiraria a conta de quem nunca a emprestou."""
+    saida = _no_navegador(_BILHETE_DA_CONTA + """
+        window.__saiu = false;
+        window.supabaseClient.auth.signOut = async () => { window.__saiu = true; return {}; };
+        Controle._pedirParaTeste = async (caminho, opcoes) => {
+            if (caminho.endsWith('/elevar')) {
+                return { token: 'bilhete-do-evento', minutos: 15,
+                         expira_em: Math.floor(Date.now() / 1000) + 900 };
+            }
+            return _real(caminho, opcoes);
+        };
+        await Controle.abrirEngrenagem('ev-1', 'Baile do Hawaii');
+        await Controle.fecharEngrenagem();
+        await new Promise(r => setTimeout(r, 80));
+        return { saiu: window.__saiu,
+                 elevado: Controle.elevado(),
+                 listaNaTela: !document.getElementById('lista').classList.contains('sumindo') };
+    """)
+    assert saida["saiu"] is False, "deslogou o dono do proprio celular"
+    assert saida["elevado"] is False, "a elevacao do evento sobreviveu ao fechamento"
+    assert saida["listaNaTela"] is True
+
+
 def test_elevacao_de_um_evento_nao_libera_a_engrenagem_de_outro():
     """O bilhete de 15 minutos e assinado para UM evento -- o servidor recusa o
     do evento A numa escrita do evento B.

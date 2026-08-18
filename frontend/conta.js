@@ -160,6 +160,22 @@
         esconderTelaInicial(false);
     }
 
+    /**
+     * O bilhete de 15 minutos da CONTA, de melhor esforco.
+     *
+     * Chamada nos dois pontos em que a senha da conta acaba de ser conferida
+     * pelo servidor: o login e a troca de senha (com a senha NOVA, que e a que
+     * passa a valer). A senha nao fica em variavel nenhuma depois disto -- ela
+     * vive no argumento e morre com a chamada, a mesma regra do
+     * `entrarEElevar`.
+     */
+    function liberarQuinzeMinutos(sessao, senha) {
+        if (!sessao || !senha) { return; }
+        window.AcessoConta.elevarConta(sessao, senha).catch(function () {
+            // Sem bilhete, cada porta pede a senha -- o caminho de sempre.
+        });
+    }
+
     function mostrarErroLogin(texto) {
         var erro = $('erro-login');
         erro.textContent = texto;
@@ -312,10 +328,19 @@
                 }
                 var botaoSalvar = $('btn-trocar-senha');
                 window.botaoEspera.comecar(botaoSalvar, 'Salvando…');
+                var aSessao = null;
                 window.AcessoConta.sessao().then(function (s) {
                     if (!s) { throw new Error('Sua sessão caiu. Entre de novo.'); }
+                    aSessao = s;
                     return window.AcessoConta.trocarSenha(s, obrigatoria ? '' : atual, nova);
                 }).then(function () {
+                    // Com a senha NOVA: e ela que o servidor vai conferir de
+                    // agora em diante. Quem trocou a senha provisoria no
+                    // primeiro acesso segue para a casa liberado, sem digitar
+                    // uma terceira vez a senha que acabou de escolher duas.
+                    liberarQuinzeMinutos(aSessao, nova);
+                    aSessao = null;
+                    atual = nova = confirma = '';
                     // Antes de `fecharTroca`: ela esconde a tela inteira, e o
                     // rotulo precisa voltar ao normal antes de sumir -- nao
                     // depois, quando o botao ja nao esta mais visivel.
@@ -361,7 +386,19 @@
             var botao = $('btn-entrar');
             window.botaoEspera.comecar(botao, 'Entrando…');
             window.AcessoConta.entrar(email, senha)
-                .then(depoisDeEntrar)
+                .then(function (s) {
+                    // "Entrar libera 15 minutos": a MESMA senha que abriu a
+                    // sessao compra o bilhete de conta, e dentro dele carregar
+                    // um pedido e abrir a configuracao nao a pedem de novo.
+                    //
+                    // Melhor esforco, de proposito: uma falha aqui nao pode
+                    // atrapalhar o login. Sem bilhete, cada porta volta a pedir
+                    // a senha -- que e o comportamento de sempre, e nao um erro
+                    // que valha uma frase na tela de quem acabou de entrar.
+                    liberarQuinzeMinutos(s, senha);
+                    senha = '';       // a senha morre aqui, e nao no fim do login
+                    return depoisDeEntrar(s);
+                })
                 // Os DOIS ramos, e nao um `.catch` solto: um catch separado
                 // nao pegaria o erro se algo dentro do proprio `.then` de
                 // sucesso lancasse, e o botao ficaria preso em "Entrando…"

@@ -73,6 +73,32 @@
         return 'Não consegui carregar o pedido agora (código ' + e.status + ').';
     }
 
+    /**
+     * "Entrar libera 15 minutos": a caixa sem o campo da senha.
+     *
+     * Esconder o `<input>` sozinho nao serve. O olho de mostrar/ocultar envolve
+     * cada campo de senha num `<span class="campo-senha">` criado EM TEMPO DE
+     * EXECUCAO (`mostrar-senha.js`), e o botao "Mostrar" e irmao do input
+     * dentro dele: escondendo so o input, o olho ficaria boiando sozinho na
+     * caixa, ligado a um campo que ninguem ve. Por isso o alvo e o envoltorio
+     * quando ele existe -- e o proprio campo quando nao existe, que e o caso de
+     * uma pagina onde aquele arquivo nao rodou.
+     *
+     * O rotulo sai junto pelo mesmo motivo, e no lugar dos dois entra a frase
+     * que explica a ausencia. Um campo que some sem explicacao faz a pessoa
+     * procurar o que ela deveria digitar.
+     */
+    function mostrarCampoSenha(mostrar) {
+        var campo = $('carregar-senha');
+        var pai = campo.parentNode;
+        var alvo = (pai && pai.classList && pai.classList.contains('campo-senha'))
+            ? pai : campo;
+        alvo.classList.toggle('sumindo', !mostrar);
+        var rotulo = document.querySelector('label[for="carregar-senha"]');
+        if (rotulo) { rotulo.classList.toggle('sumindo', !mostrar); }
+        $('carregar-sem-senha').classList.toggle('sumindo', !!mostrar);
+    }
+
     function opcao(select, valor, rotulo) {
         var o = document.createElement('option');
         o.value = valor;
@@ -134,6 +160,10 @@
         $('carregar-local').value = dados.local_evento || '';
         $('carregar-email').textContent = (sessao.user && sessao.user.email) || emailLembrado();
         $('carregar-senha').value = '';
+        // Lido A CADA abertura, e nao guardado: o bilhete vence sozinho, e uma
+        // caixa reaberta vinte minutos depois tem de voltar a pedir a senha.
+        var liberado = !!window.AcessoConta.elevacaoConta();
+        mostrarCampoSenha(!liberado);
         $('erro-carregar').classList.add('sumindo');
         // `terminar`, e nao so `disabled = false`: reabrir a caixa para um
         // pedido novo enquanto o toque ANTERIOR ainda espera resposta (ex.:
@@ -162,7 +192,12 @@
         $('carregar-senha').onkeydown = function (ev) {
             if (ev.key === 'Enter') { $('btn-carregar-confirmar').click(); }
         };
-        return preencherDestino(sessao).then(function () { $('carregar-senha').focus(); });
+        return preencherDestino(sessao).then(function () {
+            // Sem campo na tela nao ha onde por o foco -- e roubar o foco de um
+            // campo escondido tiraria o teclado de quem ainda pode querer
+            // corrigir o nome do evento.
+            if (!liberado) { $('carregar-senha').focus(); }
+        });
     }
 
     /**
@@ -314,11 +349,36 @@
         });
     }
 
+    /** A unica saida quando o bilhete de 15 minutos nao serve mais: a senha. */
+    var LIBERACAO_VENCEU = 'Sua liberação venceu. Digite a senha para continuar.';
+
+    /** Traz o campo da senha de volta e pede a senha, com o motivo escrito. */
+    function voltarAPedirASenha(texto) {
+        window.AcessoConta.esquecerElevacaoConta();
+        mostrarCampoSenha(true);
+        $('carregar-senha').focus();
+        return erro(texto);
+    }
+
     function confirmar(pedido, sessao) {
         var senha = $('carregar-senha').value || '';
         var destino = $('carregar-destino').value || null;
         var nome = ($('carregar-nome').value || '').trim();
-        if (!senha) { return erro('Digite a sua senha para carregar o pedido.'); }
+        // Relido AGORA, e nao o que valia quando a caixa abriu: ela pode ter
+        // ficado aberta mais tempo do que o bilhete dura. A senha digitada tem
+        // precedencia -- o servidor confere a que veio, e uma senha errada nao
+        // pode passar calada por causa de uma liberacao aberta.
+        var bilhete = senha ? null : window.AcessoConta.elevacaoConta();
+        if (!senha && !bilhete) {
+            // Com o campo escondido, "digite a senha" seria uma parede: a
+            // liberacao venceu com a caixa aberta, e o campo precisa voltar
+            // junto com o motivo. Ver a regra do projeto: toda trava diz na
+            // propria tela como sair dela.
+            var venceuAgora = !$('carregar-sem-senha').classList.contains('sumindo');
+            return voltarAPedirASenha(venceuAgora
+                ? LIBERACAO_VENCEU
+                : 'Digite a sua senha para carregar o pedido.');
+        }
         if (!destino && !nome) { return erro('Dê um nome ao evento.'); }
         $('erro-carregar').classList.add('sumindo');
         window.botaoEspera.comecar($('btn-carregar-confirmar'), 'Carregando…');
@@ -330,16 +390,28 @@
             data_evento: window.Controle.doCampoParaISO($('carregar-data').value),
             local_evento: ($('carregar-local').value || '').trim() || null,
             evento_id: destino,
-            senha: senha,
             navegador: window.AcessoConta.navegadorId()
         };
+        var cabecalhos = {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + sessao.access_token
+        };
+        if (bilhete) {
+            // Sem `senha` NENHUMA no corpo: o campo vazio e o que faz o
+            // servidor olhar para o bilhete. Mandar `senha: ''` junto seria
+            // mandar uma senha errada.
+            cabecalhos['X-Elevacao'] = bilhete.token;
+            cabecalhos['X-Navegador'] = window.AcessoConta.navegadorId();
+        } else {
+            corpo.senha = senha;
+        }
         // Os DOIS ramos do `then`, e nao um `.catch` no fim: sao dois mundos
         // diferentes. Enquanto o POST nao respondeu, a caixa esta na tela e o
         // motivo tem de aparecer NELA; depois que ele deu certo, a caixa sai, e
         // dali para a frente um aviso so e visto na casa.
         return window.AcessoConta.pedir('/pedidos/' + pedido + '/carregar', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessao.access_token },
+            headers: cabecalhos,
             body: JSON.stringify(corpo)
         }).then(function (r) {
             window.botaoEspera.terminar($('btn-carregar-confirmar'));
@@ -365,6 +437,13 @@
                 });
             });
         }, function (e) {
+            // 401 no caminho do bilhete e sempre a mesma historia: ele nao vale
+            // mais (venceu no caminho, ou a aba foi restaurada com um token
+            // velho). Nao ha o que tentar de novo sozinho -- o que resolve e a
+            // senha, e ela e uma saida que o dono TEM em maos.
+            if (bilhete && e && e.status === 401) {
+                return voltarAPedirASenha(LIBERACAO_VENCEU);
+            }
             erro(fraseDoErro(e));
         });
     }

@@ -159,6 +159,10 @@
         <p class="config-ajuda carregar-conta">Conta: <strong id="carregar-email"></strong></p>
         <label for="carregar-senha">Sua senha</label>
         <input id="carregar-senha" type="password" autocomplete="off" autocapitalize="none">
+        <!-- No lugar do campo, quando a conta entrou ha menos de 15 minutos.
+             Nasce escondido: quem abre a caixa e o `carregar-pedido.js`, e e
+             ele que sabe se ha bilhete valido. -->
+        <p id="carregar-sem-senha" class="config-ajuda sumindo">Você entrou há pouco: não precisa digitar a senha de novo.</p>
         <button id="btn-carregar-confirmar">Carregar</button>
         <button id="btn-carregar-cancelar" class="secundario">Cancelar</button>
         <div id="erro-carregar" class="aviso erro sumindo" role="alert" style="margin-top:14px;"></div>
