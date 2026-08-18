@@ -244,3 +244,77 @@ def test_folha_somada_com_qr_ideal_e_item_sem_modelo_falha_alto(tmp_path):
 
     with pytest.raises(ValueError, match="QR Ideal"):
         _impor(tmp_path, artes, pedido=20495)
+
+
+# ── Pose girada no caminho de montagem ───────────────────────────────────────
+#
+# `Credencial 90x140`, o formato do pedido 20495, gira as poses 2 e 3 em 180
+# graus (`rotations = {"2": 180, "3": 180}`). Imprimir um modelo sozinho nunca
+# passa por aqui: a rotacao da celula so cai em `_render_item_front` /
+# `_render_item_back`, que sao o caminho de MONTAGEM — o de combinar modelos.
+
+FORMATO_GIRADO = dict(FORMATO, rotations={"2": 180, "3": 180, "page_rotate": 0})
+
+
+def _saidas_da_montagem(tmp_path):
+    """A montagem grava um PDF por set (`..._setN_02_miolo.pdf`), e nao o
+    `out_pdf` cru. Ler o nome pedido daria "arquivo nao existe" mesmo com a
+    geracao inteira correta."""
+    return sorted(str(f) for f in tmp_path.glob("*.pdf"))
+
+
+def _impor_montagem(tmp_path, artes):
+    """O caminho `strict_assembly`: cada modelo com folhas proprias."""
+    out = tmp_path / "montagem.pdf"
+    cfg = ImpositionConfig(
+        base_file="base_ticket.pdf",
+        out_pdf=str(out),
+        formato=FORMATO_GIRADO,
+        numeracao={"tipo": "SEQUENCIAL", "elements": [ELEMENTO_NOME]},
+        saida=SAIDA,
+        layout_schema="cut_stack",
+        cut_stack_mode="strict_assembly",
+        multi_artes=artes,
+    )
+    ImpositionEngine(cfg).process()
+    return _saidas_da_montagem(tmp_path)
+
+
+def test_pose_girada_nao_derruba_a_montagem(tmp_path):
+    """Combinar dois modelos num formato com pose girada morria com
+    `name 'rotate_element_coords' is not defined`.
+
+    A funcao nao existe em lugar nenhum do repositorio: as duas chamadas eram
+    sobra de um desenho antigo. Quem gira a celula e o `show_pdf_page(rotate=...)`
+    que poe a pagina temporaria na folha — exatamente como o laco principal ja
+    fazia no ponto gemeo, onde a linha e so `rotated_el = dict(el)`.
+    """
+    saidas = _impor_montagem(tmp_path, [_arte("A", 5), _arte("B", 5)])
+    assert saidas, "a montagem nao gravou PDF nenhum"
+    todos = {n for c in saidas for folha in _nomes_por_folha(c) for n in folha}
+    assert {"A1", "A5", "B1", "B5"} <= todos, todos
+
+
+def test_pose_girada_com_verso_tambem_sai(tmp_path):
+    """O gemeo em `_render_item_back` tinha a mesma chamada fantasma."""
+    artes = [_arte("A", 5), _arte("B", 5)]
+    for a in artes:
+        a["pdf_verso_url"] = None
+        a["numeracao"]["print_mode"] = "duplex"
+    out = tmp_path / "montagem_verso.pdf"
+    cfg = ImpositionConfig(
+        base_file="base_ticket.pdf",
+        out_pdf=str(out),
+        formato=FORMATO_GIRADO,
+        numeracao={"tipo": "SEQUENCIAL", "elements": [ELEMENTO_NOME]},
+        saida=SAIDA,
+        layout_schema="cut_stack",
+        cut_stack_mode="strict_assembly",
+        multi_artes=artes,
+        print_mode="duplex",
+    )
+    ImpositionEngine(cfg).process()
+    saidas = _saidas_da_montagem(tmp_path)
+    assert saidas, "a montagem com verso nao gravou PDF nenhum"
+    todos = {n for c in saidas for folha in _nomes_por_folha(c) for n in folha}
+    assert {"A1", "B5"} <= todos, todos

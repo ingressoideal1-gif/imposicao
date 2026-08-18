@@ -3030,9 +3030,19 @@ class ImpositionEngine:
                     N = int(item_data.get("ticket_qtd", 1))
                     current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
                 
+                # A rotacao da celula NAO se aplica ao elemento aqui: quem gira
+                # e o `show_pdf_page(rotate=cell_rotation)` que poe a pagina
+                # temporaria na folha, mais abaixo. O laco principal sempre fez
+                # so isto, no ponto gemeo.
+                #
+                # Ate a v630 havia aqui uma chamada a `rotate_element_coords`,
+                # funcao que nao existe em lugar nenhum do repositorio. Ela so
+                # era alcancada quando a pose tinha rotacao E o caminho era o de
+                # MONTAGEM — ou seja, ao combinar modelos. O formato
+                # `Credencial 90x140` gira as poses 2 e 3 em 180 graus, entao
+                # imprimir dois modelos juntos ali morria com
+                # `name 'rotate_element_coords' is not defined`.
                 rotated_el = dict(el)
-                if cell_rotation > 0:
-                    rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
                     c_idx = item_data.get("local_idx", 0)
                     c_l_cam = item_data.get("l_cam")
@@ -3188,9 +3198,19 @@ class ImpositionEngine:
                     N = int(item_data.get("ticket_qtd", 1))
                     current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
                 
+                # A rotacao da celula NAO se aplica ao elemento aqui: quem gira
+                # e o `show_pdf_page(rotate=cell_rotation)` que poe a pagina
+                # temporaria na folha, mais abaixo. O laco principal sempre fez
+                # so isto, no ponto gemeo.
+                #
+                # Ate a v630 havia aqui uma chamada a `rotate_element_coords`,
+                # funcao que nao existe em lugar nenhum do repositorio. Ela so
+                # era alcancada quando a pose tinha rotacao E o caminho era o de
+                # MONTAGEM — ou seja, ao combinar modelos. O formato
+                # `Credencial 90x140` gira as poses 2 e 3 em 180 graus, entao
+                # imprimir dois modelos juntos ali morria com
+                # `name 'rotate_element_coords' is not defined`.
                 rotated_el = dict(el)
-                if cell_rotation > 0:
-                    rotated_el = rotate_element_coords(el, cell_rotation, cfg.item_w, cfg.item_h)
                 if cfg.num_tipo == "CAMAROTE" and el["type"].startswith("CAMAROTE_"):
                     c_idx = item_data.get("local_idx", 0)
                     c_l_cam = item_data.get("l_cam")
