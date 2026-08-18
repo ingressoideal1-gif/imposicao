@@ -2634,6 +2634,12 @@
                                 <div id="ic-acesso-senha-valor" class="ic-codigo-valor"></div>
                                 <button id="ic-acesso-senha-copiar" class="btn btn-sm btn-outline"
                                         style="margin-top:10px;">Copiar a senha</button>
+                                <!-- Mesmo ciclo de vida da senha: nasce e some com ela, porque
+                                     a mensagem carrega e-mail e senha em claro na URL. Ver
+                                     `mostrarSenhaProvisoria` em ideal-control.js. -->
+                                <a id="ic-acesso-whatsapp" class="btn btn-secondary"
+                                   style="margin-top:10px;margin-left:8px;display:none;"
+                                   target="_blank" rel="noopener noreferrer">Enviar por WhatsApp</a>
                             </div>
 
                             <hr style="margin:16px 0;border:0;border-top:1px solid rgba(255,255,255,.08);">

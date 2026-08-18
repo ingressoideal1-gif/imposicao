@@ -374,6 +374,9 @@ input[type="color"].form-control {
     border: none;
     transition: all var(--transition);
     white-space: nowrap;
+    /* `.btn` também veste `<a>` (o "Enviar por WhatsApp" do Ideal Control) —
+       sem isto o link sairia sublinhado, diferente de todo outro botão. */
+    text-decoration: none;
 }
 
 .btn-primary {

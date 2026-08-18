@@ -1077,6 +1077,42 @@ def test_liberar_acesso_mostra_a_senha_provisoria_uma_vez():
     assert saida["corpo"] == {"email": "daniel@exemplo.com"}
 
 
+def test_liberar_acesso_tambem_poe_o_link_de_whatsapp():
+    """O link nasce junto com a senha, com a MESMA mensagem que o atendente
+    manda ao cliente -- e-mail, senha e URL de instalacao, todos codificados
+    na query string do `wa.me`."""
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/clientes/14/contas'] = { email: 'daniel@exemplo.com', ja_tinha_conta: false, senha_provisoria: 'K7M2PQ9X' };
+        await IdealControl.abrirPedido(20272);
+        document.getElementById('ic-acesso-liberar').click();
+        await new Promise(r => setTimeout(r, 150));
+        const link = document.getElementById('ic-acesso-whatsapp');
+        const href = link.getAttribute('href');
+        return {
+            visivel: link.style.display !== 'none',
+            texto: link.textContent,
+            target: link.target,
+            rel: link.rel,
+            prefixo: href ? href.indexOf('https://wa.me/?text=') : -1,
+            mensagem: href ? decodeURIComponent(href.split('?text=')[1]) : null,
+        };
+    """ % json.dumps(CLIENTE))
+    assert saida["visivel"] is True
+    assert saida["texto"] == "Enviar por WhatsApp"
+    assert saida["target"] == "_blank"
+    assert "noopener" in saida["rel"]
+    assert saida["prefixo"] == 0
+    assert saida["mensagem"] == (
+        "Olá! Seu acesso ao Ideal Control (controle de acesso da Ingresso Ideal) "
+        "está liberado.\n\n"
+        "1) Instale o aplicativo: https://ideal-imposition.vercel.app/ic/\n"
+        "2) Entre com o e-mail: daniel@exemplo.com\n"
+        "3) Senha provisória: K7M2PQ9X\n\n"
+        "No primeiro acesso o aplicativo pede para você escolher a sua senha."
+    )
+
+
 def test_email_que_ja_tinha_conta_so_liga_e_diz_isso():
     saida = _no_navegador(SERVIDOR + """
         window.__painel.cliente = %s;
@@ -1087,6 +1123,21 @@ def test_email_que_ja_tinha_conta_so_liga_e_diz_isso():
         return document.getElementById('ic-acesso-secao').textContent;
     """ % json.dumps(CLIENTE))
     assert "já tem conta" in saida and "senha que já usa" in saida
+
+
+def test_email_que_ja_tinha_conta_nao_mostra_link_de_whatsapp():
+    """Sem senha provisoria nova, nao ha o que mandar -- o link fica escondido."""
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/clientes/14/contas'] = { email: 'daniel@exemplo.com', ja_tinha_conta: true, senha_provisoria: null };
+        await IdealControl.abrirPedido(20272);
+        document.getElementById('ic-acesso-liberar').click();
+        await new Promise(r => setTimeout(r, 150));
+        const link = document.getElementById('ic-acesso-whatsapp');
+        return { visivel: link.style.display !== 'none', href: link.getAttribute('href') };
+    """ % json.dumps(CLIENTE))
+    assert saida["visivel"] is False
+    assert saida["href"] is None
 
 
 def test_o_bloco_some_quando_o_pedido_nao_tem_cliente_no_erp():
@@ -1141,6 +1192,27 @@ def test_a_senha_provisoria_nunca_aparece_no_pedido_errado():
     assert any("20272" in a and a.startswith("warning") for a in saida["avisos"]), saida["avisos"]
 
 
+def test_o_link_de_whatsapp_tambem_nao_vaza_para_o_pedido_errado():
+    """A mesma fuga, pela porta do link: o `href` carrega e-mail e senha em
+    claro, entao precisa sumir por inteiro -- nao so ficar escondido."""
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/clientes/14/contas'] = new Promise(function (ok) {
+            setTimeout(function () { ok({ email: 'daniel@exemplo.com',
+                ja_tinha_conta: false, senha_provisoria: 'K7M2PQ9X' }); }, 80);
+        });
+        window.__respostas['/pedidos/20281'] = %s;
+        await IdealControl.abrirPedido(20272);
+        document.getElementById('ic-acesso-liberar').click();
+        await IdealControl.abrirPedido(20281);
+        await new Promise(r => setTimeout(r, 200));
+        const link = document.getElementById('ic-acesso-whatsapp');
+        return { visivel: link.style.display !== 'none', href: link.getAttribute('href') };
+    """ % (json.dumps(CLIENTE), json.dumps(OUTRO_PEDIDO)))
+    assert saida["visivel"] is False
+    assert saida["href"] is None
+
+
 def test_a_nova_senha_tambem_nao_vaza_para_o_pedido_seguinte():
     """O mesmo buraco, pela outra porta: o botao 'Nova senha provisoria'."""
     saida = _no_navegador(SERVIDOR + """
@@ -1165,6 +1237,56 @@ def test_a_nova_senha_tambem_nao_vaza_para_o_pedido_seguinte():
     assert saida["senha_visivel"] is False
     assert "ZZ9TOP44" not in saida["secao"]
     assert any("20272" in a and a.startswith("warning") for a in saida["avisos"]), saida["avisos"]
+
+
+def test_o_link_de_whatsapp_tambem_nao_vaza_pela_porta_da_nova_senha():
+    """O mesmo cuidado do teste acima, mas para o link: uma resposta de
+    'nova senha' que chega depois de o atendente trocar de pedido nao pode
+    deixar o `href` armado com a senha do cliente anterior."""
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/contas/u-1/nova-senha'] = new Promise(function (ok) {
+            setTimeout(function () { ok({ senha_provisoria: 'ZZ9TOP44' }); }, 80);
+        });
+        window.__respostas['/pedidos/20281'] = %s;
+        await IdealControl.abrirPedido(20272);
+        const achar = (t) => [...document.querySelectorAll('#ic-acesso-contas button')]
+            .find(b => b.textContent.indexOf(t) >= 0);
+        achar('Nova senha').click();
+        achar('Sim, gerar').click();
+        await IdealControl.abrirPedido(20281);
+        await new Promise(r => setTimeout(r, 200));
+        const link = document.getElementById('ic-acesso-whatsapp');
+        return { visivel: link.style.display !== 'none', href: link.getAttribute('href') };
+    """ % (json.dumps(CLIENTE), json.dumps(OUTRO_PEDIDO)))
+    assert saida["visivel"] is False
+    assert saida["href"] is None
+
+
+def test_nova_senha_provisoria_usa_o_email_da_conta_no_link_de_whatsapp():
+    """A senha nova e de UMA conta especifica -- maria@exemplo.com, e nao do
+    e-mail principal do cliente (daniel@exemplo.com). O link tem de mandar a
+    senha para quem de fato vai usa-la para entrar."""
+    saida = _no_navegador(SERVIDOR + """
+        window.__painel.cliente = %s;
+        window.__respostas['/contas/u-1/nova-senha'] = { senha_provisoria: 'ZZ9TOP44' };
+        await IdealControl.abrirPedido(20272);
+        const achar = (t) => [...document.querySelectorAll('#ic-acesso-contas button')]
+            .find(b => b.textContent.indexOf(t) >= 0);
+        achar('Nova senha').click();
+        achar('Sim, gerar').click();
+        await new Promise(r => setTimeout(r, 60));
+        const link = document.getElementById('ic-acesso-whatsapp');
+        const href = link.getAttribute('href');
+        return {
+            visivel: link.style.display !== 'none',
+            mensagem: href ? decodeURIComponent(href.split('?text=')[1]) : null,
+        };
+    """ % json.dumps(CLIENTE))
+    assert saida["visivel"] is True
+    assert "maria@exemplo.com" in saida["mensagem"]
+    assert "ZZ9TOP44" in saida["mensagem"]
+    assert "daniel@exemplo.com" not in saida["mensagem"]
 
 
 def test_falha_ao_reler_o_pedido_nao_desmente_o_acesso_liberado():

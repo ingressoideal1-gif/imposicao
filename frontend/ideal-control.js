@@ -499,6 +499,11 @@
         $('ic-acesso-email').value = c.email || '';
         $('ic-acesso-senha').style.display = 'none';
         $('ic-acesso-senha-valor').textContent = '';
+        // O link de WhatsApp some junto: o `href` dele carrega e-mail e senha
+        // em claro, e deixá-lo no DOM escondido seria o mesmo vazamento que
+        // limpar o `textContent` acima existe para evitar.
+        $('ic-acesso-whatsapp').style.display = 'none';
+        $('ic-acesso-whatsapp').removeAttribute('href');
         $('ic-acesso-aviso').style.display = 'none';
         $('ic-acesso-aviso').textContent = '';
         $('ic-acesso-liberar').disabled = false;
@@ -550,13 +555,29 @@
      * aparelho — e pelo mesmo motivo: o que fica guardado é o hash dela. Se a
      * tela não disser isso em texto, o atendente fecha o pedido achando que
      * consulta depois.
+     *
+     * O link "Enviar por WhatsApp" nasce aqui, junto com ela: a mensagem leva
+     * e-mail e senha em claro, então só existe enquanto a caixa da senha
+     * existe. `desenharAcessoDoCliente` é quem o esconde de novo.
      */
-    function mostrarSenhaProvisoria(senha) {
+    function mostrarSenhaProvisoria(senha, email) {
         $('ic-acesso-senha-valor').textContent = senha;
         $('ic-acesso-senha').style.display = '';
         $('ic-acesso-senha-copiar').onclick = function () {
             copiar(senha, 'Senha copiada.');
         };
+
+        var mensagem = 'Olá! Seu acesso ao Ideal Control (controle de acesso da '
+            + 'Ingresso Ideal) está liberado.\n\n'
+            + '1) Instale o aplicativo: ' + urlInstalacao + '\n'
+            + '2) Entre com o e-mail: ' + (email || '') + '\n'
+            + '3) Senha provisória: ' + senha + '\n\n'
+            + 'No primeiro acesso o aplicativo pede para você escolher a sua senha.';
+        // `setAttribute`, nunca `innerHTML`: e-mail e senha são dado de gente,
+        // e aqui só entram na URL passando por `encodeURIComponent`.
+        $('ic-acesso-whatsapp').setAttribute('href',
+            'https://wa.me/?text=' + encodeURIComponent(mensagem));
+        $('ic-acesso-whatsapp').style.display = '';
     }
 
     /**
@@ -632,7 +653,7 @@
                 avisoTexto = 'Esse e-mail já tem conta; ela foi ligada a este cliente '
                     + 'e a pessoa entra com a senha que já usa.';
             } else if (r && r.senha_provisoria) {
-                mostrarSenhaProvisoria(r.senha_provisoria);
+                mostrarSenhaProvisoria(r.senha_provisoria, (r && r.email) || email);
             }
             // Relê o pedido para a lista de contas se atualizar. O redesenho
             // limpa a caixa da senha, então ela é reposta logo depois: perder a
@@ -643,8 +664,9 @@
                 var senhaNaTela = $('ic-acesso-senha').style.display !== 'none'
                     ? $('ic-acesso-senha-valor').textContent : '';
                 desenharAcessoDoCliente();
-                $('ic-acesso-email').value = (r && r.email) || email;
-                if (senhaNaTela) { mostrarSenhaProvisoria(senhaNaTela); }
+                var emailNaTela = (r && r.email) || email;
+                $('ic-acesso-email').value = emailNaTela;
+                if (senhaNaTela) { mostrarSenhaProvisoria(senhaNaTela, emailNaTela); }
                 if (avisoTexto) {
                     aviso.textContent = avisoTexto;
                     aviso.style.display = '';
@@ -734,7 +756,7 @@
                     return;
                 }
                 limpar();
-                mostrarSenhaProvisoria(r.senha_provisoria);
+                mostrarSenhaProvisoria(r.senha_provisoria, conta.email);
             }, function (e) {
                 if (!aindaNaTela(pedidoAlvo, clienteAlvo)) { return; }
                 limpar();
