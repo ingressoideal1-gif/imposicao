@@ -69,7 +69,7 @@ function modelo(nome, qtd, extra) {
 }
 
 function estado(itensOs1, selecionados, extra) {
-    return Object.assign({
+    const st = Object.assign({
         formatos: [CREDENCIAL], numeracoes: [], cores: [],
         ordens: [{ id: 'os1', numero: '20495' }, { id: 'os2', numero: '20508' }],
         osItens: { os1: itensOs1 },
@@ -77,6 +77,15 @@ function estado(itensOs1, selecionados, extra) {
         activeOSItem: { osId: 'os1', itemId: itensOs1[0].id },
         produtosCombinaveis: new Set()
     }, extra || {});
+    // O que o Sumário teria acabado de mostrar. Com um modelo só, é daqui que a
+    // sobra sai — ver registrarContaDaTela() no script.js.
+    if (st.contaDaTela === undefined) {
+        const fmt = (st.formatos || [])[0];
+        const poses = fmt ? (parseInt(fmt.cols) || 0) * (parseInt(fmt.rows) || 0) : 0;
+        const it = itensOs1[0];
+        st.contaDaTela = { total: parseInt(it.quantidade) || 0, poses, item: it };
+    }
+    return st;
 }
 
 // ─── A medida do desperdício ─────────────────────────────────────────────────
@@ -112,9 +121,46 @@ function estado(itensOs1, selecionados, extra) {
     ok(s.vazias === 1, '35 em folhas de 4 deixa uma celula', s && s.vazias);
 })();
 
-(function semFormatoNaoInventaConta() {
-    const st = estado([modelo('SemFmt', 29, { formato_id: 'nao-existe' })]);
-    ok(api(st).sobraDaImposicao() === null, 'sem formato devolve null em vez de um numero inventado');
+(function aContaDeUmModeloSoEADoSumario() {
+    // O selo nasceu medindo pelo `formato_id` do modelo — um campo que so existe
+    // em memoria e nem sempre esta preenchido. O resultado foi um selo INVISIVEL
+    // enquanto o Sumario, ao lado, mostrava formato, total e folhas. Agora as
+    // duas contas sao a mesma, e por construcao.
+    const semFmtNoItem = estado([modelo('X', 29, { formato_id: null, quantidade: 29 })]);
+    const s = api(semFmtNoItem).sobraDaImposicao();
+    ok(!!s, 'modelo sem formato_id continua medindo, porque a conta vem do Sumario');
+    ok(s && s.vazias === 3, 'e o numero e o mesmo', s && s.vazias);
+
+    // Sumario escondido (sem formato ou sem saida na tela) = nada a medir.
+    const semSumario = estado([modelo('X', 29)], null, { contaDaTela: null });
+    ok(api(semSumario).sobraDaImposicao() === null,
+        'sem Sumario o selo some, em vez de mostrar um numero inventado');
+
+    // E o total vem do Sumario, nao da quantidade do modelo: com banco de dados
+    // eles diferem, e quem manda no papel e o que a tela mostrou.
+    const outroTotal = estado([modelo('X', 29)], null,
+        { contaDaTela: { total: 30, poses: 4, item: modelo('X', 29) } });
+    ok(api(outroTotal).sobraDaImposicao().itens === 30,
+        'o total e o do Sumario', api(outroTotal).sobraDaImposicao().itens);
+})();
+
+(function asDuasContasSaoAMesmaPorConstrucao() {
+    // A ligacao tem de existir nas duas telas: o Sumario publica, o selo le.
+    ok(/registrarContaDaTela\(total, perSheet/.test(SCRIPT),
+        'o Sumario da aba Imposicao publica o que mostrou');
+    ok(/registrarContaDaTela\(total, perSheet/.test(PEDIDO),
+        'o Sumario da aba Pedido publica o que mostrou');
+    ok((SCRIPT.match(/registrarContaDaTela\(0, 0\)/g) || []).length >= 2,
+        'e as duas desistencias do Sumario da aba Imposicao apagam a conta');
+    ok((PEDIDO.match(/registrarContaDaTela\(0, 0\)/g) || []).length >= 2,
+        'e as duas da aba Pedido tambem');
+})();
+
+(function oNumeroApareceNoSumario() {
+    const html = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
+    ok(html.indexOf('id="sum-vazias"') >= 0, 'a aba Imposicao tem a linha Celulas vazias');
+    ok(html.indexOf('id="ped-sum-vazias"') >= 0, 'a aba Pedido tem a linha Celulas vazias');
+    ok(/'sum-vazias', 'ped-sum-vazias'/.test(SCRIPT), 'e alguem as preenche');
 })();
 
 // ─── O limiar ────────────────────────────────────────────────────────────────

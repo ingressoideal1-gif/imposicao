@@ -3006,6 +3006,8 @@ function updatePedSummary() {
 
     if (!fmtId || !saiId) {
 
+        // Sem Sumario nao ha conta, e o selo da sobra some junto.
+        if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
         box.style.display = 'none';
 
         drawPedPreview();
@@ -3022,6 +3024,8 @@ function updatePedSummary() {
 
     if (!fmt || !sai) {
 
+        // Sem Sumario nao ha conta, e o selo da sobra some junto.
+        if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
         box.style.display = 'none';
 
         drawPedPreview();
@@ -3100,6 +3104,11 @@ function updatePedSummary() {
     document.getElementById('ped-sum-folhas').textContent = sheets.toLocaleString('pt-BR') + ' folha(s)';
 
     document.getElementById('ped-sum-saida').textContent = `${sai.name} -- ${(sai.file_format || 'pdf').toUpperCase()}`;
+    // Publica os números que acabaram de ser mostrados, para a sobra ser medida
+    // em cima DELES. Só pinta; não muda nada do que é impresso.
+    if (typeof registrarContaDaTela === 'function') {
+        registrarContaDaTela(total, perSheet, typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null);
+    }
 
 
 

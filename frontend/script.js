@@ -9304,6 +9304,8 @@ function updateImpSummary() {
 
     if (!fmtId || !saiId) {
 
+        // Sem Sumario nao ha conta, e o selo da sobra some junto.
+        if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
         box.style.display = 'none';
 
         drawPreview();
@@ -9320,6 +9322,8 @@ function updateImpSummary() {
 
     if (!fmt || !sai) {
 
+        // Sem Sumario nao ha conta, e o selo da sobra some junto.
+        if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
         box.style.display = 'none';
 
         drawPreview();
@@ -9386,6 +9390,12 @@ function updateImpSummary() {
     document.getElementById('sum-folhas').textContent = sheets.toLocaleString('pt-BR') + ' folha(s)';
 
     document.getElementById('sum-saida').textContent = `${sai.name} -- ${(sai.file_format || 'pdf').toUpperCase()}`;
+
+    // Publica os números que acabaram de ser mostrados, para a sobra ser medida
+    // em cima DELES. Só pinta; não muda nada do que é impresso.
+    if (typeof registrarContaDaTela === 'function') {
+        registrarContaDaTela(total, perSheet, typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null);
+    }
 
 
 
@@ -14043,17 +14053,40 @@ function sobraDaImposicao() {
 
     const itens = itensDaImposicao(varias).filter(Boolean);
 
-    if (!itens.length) return null;
-
-    const fmt = (state.formatos || []).find(f => String(f.id) === String(itens[0].formato_id));
-
-    const poses = fmt ? (parseInt(fmt.cols) || 0) * (parseInt(fmt.rows) || 0) : 0;
-
-    if (!poses) return null;
+    let poses = 0;
 
     let total = 0;
 
-    itens.forEach(it => { total += quantidadeDoModelo(it) || 0; });
+    if (varias) {
+
+        // Vários modelos: a conta é a soma das fatias, a mesma da barra de
+        // modelos combinados. O Sumário só sabe do modelo aberto.
+        if (!itens.length) return null;
+
+        const fmt = (state.formatos || []).find(f => String(f.id) === String(itens[0].formato_id));
+
+        poses = fmt ? (parseInt(fmt.cols) || 0) * (parseInt(fmt.rows) || 0) : 0;
+
+        itens.forEach(it => { total += quantidadeDoModelo(it) || 0; });
+
+    } else {
+
+        // Um modelo: valem os números que o SUMÁRIO acabou de mostrar. Uma
+        // segunda conta própria divergiria dele — e a que o operador lê é a
+        // dele. Ver registrarContaDaTela().
+        const conta = state.contaDaTela;
+
+        if (!conta) return null;
+
+        poses = parseInt(conta.poses) || 0;
+
+        total = parseInt(conta.total) || 0;
+
+        if (conta.item) itens[0] = conta.item;
+
+    }
+
+    if (!poses) return null;
 
     if (total <= 0) return null;
 
@@ -14074,6 +14107,33 @@ function sobraDaImposicao() {
 
 }
 window.sobraDaImposicao = sobraDaImposicao;
+
+
+
+/**
+ * O que o Sumário acabou de calcular, publicado para a sobra medir em cima.
+ *
+ * Existe porque as duas contas precisam ser a mesma. O Sumário tira o total do
+ * banco de dados, da faixa De/Até ou das páginas do PDF, e as células do formato
+ * ESCOLHIDO NA TELA; medir a sobra por outro caminho — pelo `formato_id` do
+ * modelo, por exemplo — dava número diferente, e pior: dava nenhum, porque
+ * `formato_id` só existe em memória e nem sempre está preenchido. O selo ficava
+ * invisível enquanto o Sumário mostrava tudo, ao lado.
+ *
+ * `null` quando o Sumário não tem o que mostrar, e aí o selo some junto.
+ */
+function registrarContaDaTela(total, poses, item) {
+
+    const t = parseInt(total) || 0;
+
+    const p = parseInt(poses) || 0;
+
+    state.contaDaTela = (t > 0 && p > 0) ? { total: t, poses: p, item: item || null } : null;
+
+    atualizarSeloDeSobra();
+
+}
+window.registrarContaDaTela = registrarContaDaTela;
 
 
 
@@ -14104,7 +14164,15 @@ window.textoDaSobra = textoDaSobra;
 
 
 
-/** Pinta o selo da sobra nas duas abas. */
+/**
+ * Pinta a sobra nas duas abas, em dois lugares e de propósito:
+ *
+ * - **no Sumário**, ao lado de "Folhas Estimadas", que é onde o operador já lê
+ *   os números da imposição. É ali que ele procura, e um número que só existe
+ *   noutro canto é um número que ninguém vê;
+ * - **no selo acima dos botões**, que é onde mora a ação "Ver aproveitamento" —
+ *   e essa só aparece quando a sobra passa do limiar do produto.
+ */
 function atualizarSeloDeSobra() {
 
     const s = sobraDaImposicao();
@@ -14112,6 +14180,20 @@ function atualizarSeloDeSobra() {
     const texto = textoDaSobra(s);
 
     const oferecer = sobraMereceAviso(s);
+
+    const noSumario = !s ? '—'
+        : (s.vazias
+            ? `${s.vazias} (${Math.round(s.fracao * 100)}% de uma folha)`
+            : 'nenhuma — a folha fecha certo');
+
+    // A aba Imposicao usa `sum-*` sem prefixo; a aba Pedido usa `ped-sum-*`.
+    ['sum-vazias', 'ped-sum-vazias'].forEach(id => {
+
+        const el = document.getElementById(id);
+
+        if (el) el.textContent = noSumario;
+
+    });
 
     [['imp-sobra-selo', 'imp-sobra-texto', 'imp-sobra-btn'],
      ['ped-sobra-selo', 'ped-sobra-texto', 'ped-sobra-btn']].forEach(ids => {

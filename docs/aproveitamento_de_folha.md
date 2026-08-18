@@ -24,13 +24,40 @@ número no sequencial, mas no blocado a montagem gasta folhas a mais de propósi
 e essas não são desperdício: são a pilha de tamanho fixo que o operador pediu.
 Combinar modelos só elimina a sobra do resto, e é ela que se mede.
 
-## O selo
+## Onde a sobra aparece
 
-Uma linha acima dos botões de imposição, nas duas abas:
+Em dois lugares, e de propósito.
+
+**No Sumário**, ao lado de "Folhas Estimadas", que é onde o operador já lê os
+números da imposição:
+
+```
+Total de Itens     29
+Folhas Estimadas   8 folha(s)
+Células vazias     3 (75% de uma folha)
+```
+
+**No selo acima dos botões**, que é onde mora a ação:
 
 ```
 📄 8 folha(s) · 29 itens · sobram 3 célula(s) (75% de uma folha)   [ Ver aproveitamento ]
 ```
+
+O selo mostra a conta sempre; o **botão** só aparece quando a sobra passa do
+limiar daquele produto.
+
+### A conta é a do Sumário, e isso não é detalhe
+
+Com um modelo só, a sobra é medida sobre os números que o Sumário **acabou de
+mostrar** — `registrarContaDaTela()` os publica, e `sobraDaImposicao()` os lê.
+
+A primeira versão media por conta própria, pelo `formato_id` do modelo. Esse
+campo só existe em memória e nem sempre está preenchido: o resultado foi um selo
+**invisível** enquanto o Sumário, ao lado, mostrava formato, total e folhas. Duas
+contas para a mesma folha divergem, e a que o operador lê é a do Sumário.
+
+Com dois ou mais modelos a conta é a soma das fatias — o Sumário só sabe do
+modelo aberto, e quem cobre esse caso é a barra de modelos combinados.
 
 **Vale para um modelo sozinho**, que é o caso das 29 credenciais, e só informa —
 não muda nada do que é impresso. O botão é a porta para o caminho combinado, e
