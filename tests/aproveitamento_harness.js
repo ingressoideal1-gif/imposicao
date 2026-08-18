@@ -144,16 +144,31 @@ function estado(itensOs1, selecionados, extra) {
         'o total e o do Sumario', api(outroTotal).sobraDaImposicao().itens);
 })();
 
-(function asDuasContasSaoAMesmaPorConstrucao() {
-    // A ligacao tem de existir nas duas telas: o Sumario publica, o selo le.
+(function cadaAbaPublicaAContaDeQuemEstaVISIVEL() {
+    // Aba Imposicao: quem mostra os numeros e o Sumario, e e' ele quem publica.
     ok(/registrarContaDaTela\(total, perSheet/.test(SCRIPT),
         'o Sumario da aba Imposicao publica o que mostrou');
-    ok(/registrarContaDaTela\(total, perSheet/.test(PEDIDO),
-        'o Sumario da aba Pedido publica o que mostrou');
     ok((SCRIPT.match(/registrarContaDaTela\(0, 0\)/g) || []).length >= 2,
-        'e as duas desistencias do Sumario da aba Imposicao apagam a conta');
-    ok((PEDIDO.match(/registrarContaDaTela\(0, 0\)/g) || []).length >= 2,
-        'e as duas da aba Pedido tambem');
+        'e as duas desistencias dele apagam a conta');
+
+    // Aba Pedido: o Sumario esta dentro do bloco escondido, e os campos Formato
+    // e Saida DELE ficam vazios -- `updatePedSummary` desiste na primeira
+    // conferencia e nunca chega ao fim. Quem sabe quantas folhas o trabalho tem
+    // e' a previa, que escreve "FOLHA 1 DE 7" na tela. Foi o segundo ato do
+    // defeito de 18/08/2026: mudar o selo de lugar nao bastou, porque a conta
+    // continuava saindo de uma funcao que desistia antes.
+    ok(/registrarContaDaTela\(total_items, poses_per_sheet/.test(PEDIDO),
+        'a previa da aba Pedido publica o que mostrou');
+    ok((PEDIDO.match(/registrarContaDaTela\(0, 0\)/g) || []).length >= 3,
+        'e as tres desistencias da previa apagam a conta');
+
+    // E o Sumario da aba Pedido nao pode voltar a publicar: ele apagaria, com
+    // zero, a conta que a previa acabou de escrever.
+    const iSum = PEDIDO.indexOf('function updatePedSummary');
+    const fimSum = PEDIDO.indexOf('\nfunction ', iSum + 10);
+    const corpoSum = PEDIDO.slice(iSum, fimSum > 0 ? fimSum : undefined);
+    ok(corpoSum.indexOf('registrarContaDaTela') < 0,
+        'o Sumario da aba Pedido nao mexe na conta');
 })();
 
 (function oNumeroApareceNoSumario() {

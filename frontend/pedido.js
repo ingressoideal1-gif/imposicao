@@ -580,6 +580,8 @@ function drawPedPreview() {
         ctx.textAlign = 'center';
         ctx.fillText('Aguardando formato e saída...', 150, 100);
         document.getElementById('ped-preview-sheet-num').textContent = 'Sem Configuração';
+        // Sem prévia não há conta, e o selo da sobra some junto.
+        if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
         return;
     }
 
@@ -622,6 +624,8 @@ function drawPedPreview() {
         ctx.textAlign = 'center';
         ctx.fillText('Erro: Regras de Imposição ausentes no Formato.', 150, 100);
         document.getElementById('ped-preview-sheet-num').textContent = 'Erro de Regra';
+        // Sem prévia não há conta, e o selo da sobra some junto.
+        if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
         return;
     }
 
@@ -636,6 +640,8 @@ function drawPedPreview() {
             ctx.textAlign = 'center';
             ctx.fillText('Erro: Parâmetros Cut & Stack ausentes.', 150, 100);
             document.getElementById('ped-preview-sheet-num').textContent = 'Erro de Regra';
+            // Sem prévia não há conta, e o selo da sobra some junto.
+            if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
             return;
         }
     }
@@ -941,6 +947,18 @@ function drawPedPreview() {
             ? `${folhaLabel} · ${state.pedArtPdfDoc.numPages} páginas do PDF · ${poses_per_sheet} por folha`
             : folhaLabel;
     atualizarAvisoPaginacao(schema, total_items);
+
+    // A conta da sobra sai DAQUI na aba Pedido, e não do Sumário.
+    //
+    // O Sumário desta aba vive dentro de um `display: none !important` e nem
+    // chega a ser calculado: os campos Formato e Saída dele também estão
+    // escondidos, ficam vazios, e `updatePedSummary` desiste na primeira
+    // conferência. Quem sabe quantas folhas o trabalho tem é a prévia — é ela
+    // que escreve "FOLHA 1 DE 7" na tela, e é esse número que o operador lê.
+    if (typeof registrarContaDaTela === 'function') {
+        registrarContaDaTela(total_items, poses_per_sheet,
+            typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null);
+    }
 
     const isBack = state.previewFace === 'back' || previewPart === 'miolo_verso';
 
@@ -3006,8 +3024,6 @@ function updatePedSummary() {
 
     if (!fmtId || !saiId) {
 
-        // Sem Sumario nao ha conta, e o selo da sobra some junto.
-        if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
         box.style.display = 'none';
 
         drawPedPreview();
@@ -3024,8 +3040,6 @@ function updatePedSummary() {
 
     if (!fmt || !sai) {
 
-        // Sem Sumario nao ha conta, e o selo da sobra some junto.
-        if (typeof registrarContaDaTela === 'function') registrarContaDaTela(0, 0);
         box.style.display = 'none';
 
         drawPedPreview();
@@ -3104,11 +3118,10 @@ function updatePedSummary() {
     document.getElementById('ped-sum-folhas').textContent = sheets.toLocaleString('pt-BR') + ' folha(s)';
 
     document.getElementById('ped-sum-saida').textContent = `${sai.name} -- ${(sai.file_format || 'pdf').toUpperCase()}`;
-    // Publica os números que acabaram de ser mostrados, para a sobra ser medida
-    // em cima DELES. Só pinta; não muda nada do que é impresso.
-    if (typeof registrarContaDaTela === 'function') {
-        registrarContaDaTela(total, perSheet, typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null);
-    }
+    // Nesta aba o Sumário NÃO publica a conta da sobra: ele vive dentro de um
+    // `display: none !important`, e os campos Formato e Saída dele, escondidos
+    // junto, ficam vazios — esta função desiste na primeira conferência. Quem
+    // publica é a prévia, que é quem sabe quantas folhas o trabalho tem.
 
 
 

@@ -64,18 +64,31 @@ porque o Sumário inteiro está nesse bloco. Quem carrega a informação ali é 
 selo, e por isso ele traz folhas, itens e a sobra na mesma frase. Na aba
 Imposição o Sumário aparece, e a linha vale.
 
-### A conta é a do Sumário, e isso não é detalhe
+### A conta vem de quem está visível, e isso não é detalhe
 
-Com um modelo só, a sobra é medida sobre os números que o Sumário **acabou de
-mostrar** — `registrarContaDaTela()` os publica, e `sobraDaImposicao()` os lê.
+Com um modelo só, a sobra é medida sobre os números que a tela **acabou de
+mostrar** — `registrarContaDaTela()` os publica, e `sobraDaImposicao()` os lê. Só
+que "a tela" é uma em cada aba:
 
-A primeira versão media por conta própria, pelo `formato_id` do modelo. Esse
-campo só existe em memória e nem sempre está preenchido: o resultado foi um selo
-**invisível** enquanto o Sumário, ao lado, mostrava formato, total e folhas. Duas
-contas para a mesma folha divergem, e a que o operador lê é a do Sumário.
+| Aba | Quem publica | Por quê |
+|---|---|---|
+| Imposição | o Sumário | é ele que mostra formato, total e folhas |
+| Pedido | a **prévia** | é ela que escreve "FOLHA 1 DE 7" |
 
-Com dois ou mais modelos a conta é a soma das fatias — o Sumário só sabe do
-modelo aberto, e quem cobre esse caso é a barra de modelos combinados.
+Na aba Pedido o Sumário não serve: ele está dentro do bloco escondido, e os
+campos Formato e Saída **dele** — escondidos junto — ficam vazios, então
+`updatePedSummary` desiste na primeira conferência e nunca chega ao fim. Medido
+na tela real: `ped-formato` e `ped-saida` valem `""`, e a prévia mostra
+`Folha 1 de 7`.
+
+Foram dois atos do mesmo defeito, no mesmo dia:
+
+1. o selo media por conta própria, pelo `formato_id` do modelo — um campo que só
+   existe em memória e nem sempre está preenchido;
+2. passou a medir pelo Sumário, que nesta aba **nunca é calculado**.
+
+Com dois ou mais modelos a conta é a soma das fatias — nem o Sumário nem a prévia
+sabem do conjunto, e quem cobre esse caso é a barra de modelos combinados.
 
 **Vale para um modelo sozinho**, que é o caso das 29 credenciais, e só informa —
 não muda nada do que é impresso. O botão é a porta para o caminho combinado, e
