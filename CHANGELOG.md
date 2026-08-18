@@ -8,7 +8,7 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v637 — 2026-08-18] *(a publicar)* — O aparelho: quatro opções, o nome é dele, e a casa vazia mostra a saída
+## [v637 — 2026-08-18] *(a publicar)* — O aparelho, o nome dele, e a tela de leitura
 
 **"Revogar" saiu.** Ele desligava o aparelho e deixava o cartão na lista para sempre — que não
 é nenhuma das duas coisas que se quer fazer com um portão. No lugar dele, as quatro opções que
@@ -31,6 +31,15 @@ e o servidor liga as linhas do mesmo aparelho pela coluna nova `navegador_id`: r
 portão renomeia os outros do mesmo cliente. Ver `sql/schema_acesso_nome_do_dispositivo.sql`.
 
 Os dois arquivos SQL já foram rodados no banco.
+
+### A tela de leitura: o setor em destaque, e o que se toca na base
+
+Decisão do usuário: o porteiro segura o celular por baixo e trabalha com o polegar. O
+**contador**, a **lanterna** e o **Digitar o número** desceram para o fim da tela; o visor da
+câmera cresceu para ocupar o que sobrou — câmera maior é mira mais fácil. No topo, o **nome
+do setor** virou a linha grande em verde, e o nome do aparelho ficou pequeno embaixo dele: o
+setor responde à pergunta que o porteiro faz o tempo todo ("esta pessoa está na fila
+certa?"), e o nome do aparelho se pergunta uma vez por noite.
 
 ### A casa vazia diz onde estão os eventos
 
