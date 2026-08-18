@@ -7,16 +7,24 @@
  *
  * `narracao` é o que a voz do Windows fala. `legenda` é o que aparece escrito.
  * São o mesmo texto por padrão — a legenda existe porque no WhatsApp o vídeo
- * toca MUDO, e quem assiste no ônibus lê em vez de ouvir. Quando os dois
- * precisam diferir (uma sigla que a voz erra, um texto longo demais para a
- * faixa), declare `legenda` à parte.
+ * toca MUDO, e quem assiste no ônibus lê em vez de ouvir.
  *
- * ## O tom, decidido pelo usuário em 18/08/2026
+ * ## Como se escreve para ser FALADO, e não lido
  *
- * "Uma apresentação mais simples, sem tantos dados técnicos." Então: frases
- * curtas, nada de minuto, versão, formato ou nome de tela interna. O que o
- * cliente precisa é saber onde tocar e o que vai acontecer. O manual em slides
- * (`manual-ideal-control.html`) é que cobre o detalhe.
+ * O usuário ouviu o primeiro corte e disse duas coisas: encurtar, e que a
+ * narração soava artificial. Metade disso era a voz, trocada no `montar.ps1`
+ * pela moderna do Windows. A outra metade é o texto, e as regras que ficaram:
+ *
+ *   frase curta, uma ideia por frase — a voz sintética se perde em oração
+ *   subordinada, e quem está aprendendo a mexer no aplicativo também;
+ *   nada de travessão, parêntese ou reticência, que viram pausa torta;
+ *   ordem direta: quem faz, o que faz, o que acontece;
+ *   o verbo na frente, no que é instrução: "toque", "entre", "aponte";
+ *   nenhuma palavra que ninguém diria em voz alta num balcão.
+ *
+ * A duração de cada cena é a da NARRAÇÃO ou a da imagem, o que for maior.
+ * Cortar texto aqui só encurta o vídeo se a cena gravada encolher junto — as
+ * esperas moram no `gravar.js`, e as duas coisas andam de mãos dadas.
  *
  * Regra que vale para todo texto daqui: o vídeo circula por WhatsApp e vai
  * parar na mão de gente que não é cliente. Ele nunca explica COMO o código do
@@ -26,91 +34,69 @@
 module.exports = [
     {
         id: '01-abertura',
-        narracao: 'Ideal Control é o aplicativo que confere os ingressos na porta '
-            + 'do seu evento. Em dois minutos, você vê como usar.',
+        narracao: 'Ideal Control confere os ingressos na porta do seu evento.',
     },
     {
         id: '02-instalar',
-        narracao: 'A gráfica te manda um endereço. Abra no celular e toque em '
-            + 'Instalar agora. O aplicativo ganha um ícone, como qualquer outro.',
+        narracao: 'A gráfica manda um endereço. Abra no celular e toque em '
+            + 'Instalar agora.',
     },
     {
         id: '03-entrar',
-        narracao: 'Entre com o seu e-mail e a senha que a gráfica te passou. Na '
-            + 'primeira vez, você escolhe a sua própria senha.',
+        narracao: 'Entre com o seu e-mail e a senha que a gráfica passou.',
     },
     {
         id: '04-pedidos',
-        narracao: 'Aqui estão os seus pedidos, já impressos. Cada tipo de '
-            + 'ingresso aparece com a quantidade.',
+        narracao: 'Estes são os seus pedidos, já impressos.',
     },
     {
         id: '05-carregar',
-        narracao: 'Toque em Carregar. Dê um nome ao evento, confira a data e o '
-            + 'local, e pronto: o evento está criado.',
+        narracao: 'Toque em Carregar e dê um nome ao evento. Pronto. O evento '
+            + 'está criado.',
     },
     {
-        id: '06-casa',
-        narracao: 'O evento aparece na sua lista. É por aqui que você entra em '
-            + 'tudo o que vem a seguir.',
+        id: '06-configurar',
+        narracao: 'Na engrenagem ficam os setores. Aqui você escolhe o nome que '
+            + 'o porteiro vê na tela.',
     },
     {
-        id: '07-configurar',
-        narracao: 'Na engrenagem fica a configuração. Em Setores, você escolhe o '
-            + 'nome que o porteiro vê na tela dele.',
-    },
-    {
-        id: '08-uso',
+        id: '07-uso',
         narracao: 'E escolhe se o ingresso vale uma entrada só, ou se a pessoa '
             + 'pode sair e voltar.',
     },
     {
-        id: '09-aparelho',
-        narracao: 'Agora, no celular da porta. Toque na barra do evento, digite a '
-            + 'sua senha e dê um nome ao aparelho. Ele vira o leitor daquele portão.',
+        id: '08-aparelho',
+        narracao: 'Agora o celular da porta. Toque na barra do evento, digite a '
+            + 'sua senha e dê um nome ao aparelho.',
     },
     {
-        id: '10-baixando',
-        narracao: 'Ele baixa o evento inteiro. Depois disso funciona sem '
-            + 'internet — espere terminar antes de ir para a porta.',
+        id: '09-baixando',
+        narracao: 'Ele baixa o evento. A partir daqui, funciona sem internet.',
     },
     {
-        id: '11-lendo',
-        narracao: 'Na porta, é só apontar a câmera para o ingresso. Se o papel '
-            + 'estiver ruim, dá para digitar o número.',
+        id: '10-lendo',
+        narracao: 'Na porta, aponte a câmera para o ingresso.',
     },
     {
-        id: '12-verde',
-        narracao: 'Verde é pode entrar, com o setor e o número na tela.',
+        id: '11-verde',
+        narracao: 'Verde é pode entrar.',
     },
     {
-        // Era a tela laranja de "outra porta", e ela saiu: um portão nasce lendo
-        // TODOS os setores do evento, então, no caminho que este vídeo grava,
-        // ela só apareceria depois de o dono restringir os setores daquele
-        // aparelho — três telas a mais, num vídeo que pediram simples. A recusa
-        // que ficou é a que o cliente mais teme, e a mais fácil de mostrar: o
-        // mesmo ingresso passando duas vezes.
-        id: '13-ja-entrou',
-        narracao: 'Se o mesmo ingresso tentar entrar de novo, ele é recusado — '
-            + 'com a hora em que passou da primeira vez.',
-    },
-    {
-        id: '14-vermelho',
-        narracao: 'Vermelho é recusado, e sempre com o motivo escrito. Aqui, um '
-            + 'lote que você mesmo bloqueou.',
+        id: '12-ja-entrou',
+        narracao: 'Se o mesmo ingresso voltar, ele é recusado. A tela mostra a '
+            + 'hora em que ele passou.',
     },
     {
         // A regra que o porteiro precisa ouvir do organizador, e não descobrir
-        // na porta: não existe botão de "deixar entrar mesmo assim". Sem esta
-        // cena, o vídeo ensina a ler o ingresso e cala sobre o momento em que
-        // alguém vai insistir na frente da fila.
-        id: '15-recusa',
-        narracao: 'E recusa é recusa: não existe deixar entrar mesmo assim. Quem '
-            + 'for recusado procura você.',
+        // na porta: não existe botão de "deixar entrar mesmo assim". Ela tinha
+        // uma cena só dela e agora fecha esta, para o vídeo caber em dois
+        // minutos sem perder o recado.
+        id: '13-vermelho',
+        narracao: 'Vermelho é recusado, sempre com o motivo escrito. E recusa é '
+            + 'recusa. Não existe liberar mesmo assim.',
     },
     {
-        id: '16-fecho',
-        narracao: 'É isso. Configure com calma antes, e no dia a portaria precisa '
-            + 'só do celular. Qualquer dúvida, fale com a gráfica.',
+        id: '14-fecho',
+        narracao: 'Configure antes. No dia, a portaria precisa só do celular.',
     },
 ];

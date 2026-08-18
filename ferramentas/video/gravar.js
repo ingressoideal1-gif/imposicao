@@ -781,7 +781,7 @@ async function main() {
     g.abrirCena('01-abertura');
     await cartela(page, 'Ideal Control',
                   'Confira os ingressos na porta do seu evento.<br>Funciona sem internet.');
-    await g.segurar(8);
+    await g.segurar(5);
     g.fecharCena();
 
     // ── Instalar ─────────────────────────────────────────────────────────────
@@ -794,9 +794,9 @@ async function main() {
     await page.waitForSelector('#parede-pwa', { timeout: 10000 });
 
     g.abrirCena('02-instalar');
-    await g.segurar(7);
+    await g.segurar(4);
     await g.tocar('#parede-pwa button');
-    await g.segurar(2.5);
+    await g.segurar(1.5);
     g.fecharCena();
 
     // O navegador de verdade fecha a parede sozinho ao instalar. Aqui não há
@@ -810,31 +810,31 @@ async function main() {
     await page.waitForSelector('#bloco-entrar:not(.sumindo)', { timeout: 10000 });
 
     g.abrirCena('03-entrar');
-    await g.segurar(2);
+    await g.segurar(1);
     await g.digitar('#email', EMAIL);
     await g.digitar('#senha', 'a-senha-do-cliente');
-    await g.segurar(1.5);
+    await g.segurar(0.8);
     await g.tocar('#btn-entrar');
     // Conta sem evento nenhum cai direto em Meus Pedidos: é lá que o primeiro
     // evento nasce.
     await page.waitForSelector('#meus-pedidos:not(.sumindo)', { timeout: 20000 });
-    await g.segurar(2);
+    await g.segurar(1);
     g.fecharCena();
 
     // ── Meus Pedidos ─────────────────────────────────────────────────────────
     g.abrirCena('04-pedidos');
-    await g.segurar(4);
-    await g.rolarAte('#pedido-' + PEDIDO, 8);
-    await g.segurar(4);
+    await g.segurar(1.5);
+    await g.rolarAte('#pedido-' + PEDIDO, 7);
+    await g.segurar(2);
     g.fecharCena();
 
     // ── Carregar ─────────────────────────────────────────────────────────────
     g.abrirCena('05-carregar');
     await g.tocar('#carregar-' + PEDIDO);
     await page.waitForSelector('#caixa-carregar:not(.sumindo)', { timeout: 15000 });
-    await g.segurar(2.5);
-    await g.digitar('#carregar-nome', 'Festa Ideal 2026');
     await g.segurar(1.5);
+    await g.digitar('#carregar-nome', 'Festa Ideal 2026');
+    await g.segurar(0.8);
     await g.tocar('#btn-carregar-confirmar');
     // Em seguida o aplicativo pergunta se ESTE celular vai ler os ingressos.
     // Aqui a resposta é não: quem configura é o celular do dono, e o leitor
@@ -860,51 +860,46 @@ async function main() {
         console.log('    [diagnóstico do carregar] ' + JSON.stringify(diag));
         throw new Error('a caixa de confirmação não apareceu');
     });
-    await g.segurar(3);
+    await g.segurar(2);
     await g.tocar('#btn-confirmar-nao');
     await page.waitForSelector('#lista:not(.sumindo)', { timeout: 20000 });
-    await g.segurar(1.5);
+    await g.segurar(2.5);
     g.fecharCena();
 
-    // ── A casa ───────────────────────────────────────────────────────────────
     await page.waitForFunction(function () {
         return document.querySelectorAll('#eventos .barra-evento').length > 0;
     }, { timeout: 20000 });
 
-    g.abrirCena('06-casa');
-    await g.segurar(6);
-    g.fecharCena();
-
     // ── A configuração ───────────────────────────────────────────────────────
-    g.abrirCena('07-configurar');
+    g.abrirCena('06-configurar');
     await g.tocar('#config-' + EVENTO_ID);
     await page.waitForSelector('#engrenagem:not(.sumindo)', { timeout: 20000 });
     await page.waitForFunction(function () {
         return document.querySelectorAll('#setores .cartao').length > 0;
     }, { timeout: 20000 });
-    await g.segurar(3);
+    await g.segurar(1.5);
     // As cinco seções nascem recolhidas. A de setores é a que interessa aqui.
     await g.tocar('#abrir-setores');
-    await g.segurar(1.5);
-    await g.rolarAte('#setores', 10);
+    await g.segurar(0.8);
+    await g.rolarAte('#setores', 8);
     await g.tocar('#setor-configurar-s1');
-    await g.rolarAte('#setor-config-s1', 10);
-    await g.segurar(1);
+    await g.rolarAte('#setor-config-s1', 8);
+    await g.segurar(0.5);
     if (await existe(page, '#setor-nome-s1')) {
         await g.digitar('#setor-nome-s1', 'PISTA');
     }
-    await g.segurar(3);
+    await g.segurar(1.5);
     g.fecharCena();
 
-    g.abrirCena('08-uso');
+    g.abrirCena('07-uso');
     if (await existe(page, '#uso-s1-reentrada')) {
-        await g.rolarAte('#uso-s1-reentrada', 8);
-        await g.segurar(1.5);
+        await g.rolarAte('#uso-s1-reentrada', 7);
+        await g.segurar(0.8);
         await g.tocar('#uso-s1-reentrada');
-        await g.segurar(2);
+        await g.segurar(1.5);
         await g.tocar('#uso-s1-unico');
     }
-    await g.segurar(4);
+    await g.segurar(2);
     g.fecharCena();
 
     // ── O celular da porta ───────────────────────────────────────────────────
@@ -915,20 +910,20 @@ async function main() {
     await g.tocar('#btn-fechar-engrenagem');
     await page.waitForSelector('#lista:not(.sumindo)', { timeout: 20000 });
 
-    g.abrirCena('09-aparelho');
-    await g.segurar(1.5);
+    g.abrirCena('08-aparelho');
+    await g.segurar(1);
     await g.tocar('#evento-' + EVENTO_ID);
     // Ligar um celular ao evento é escrita de configuração, e por isso passa
     // pela senha — mesmo com a conta aberta. O e-mail já vem preenchido.
     await page.waitForSelector('#caixa-entrar-config:not(.sumindo)', { timeout: 20000 });
-    await g.segurar(2);
+    await g.segurar(1);
     await g.digitar('#entrar-config-senha', 'a-senha-do-cliente');
     await g.tocar('#btn-entrar-config');
     await page.waitForSelector('#fundo-confirmar', { timeout: 20000 });
-    await g.segurar(4);
+    await g.segurar(2);
     if (await existe(page, '#campo-nome-aparelho')) {
         await g.digitar('#campo-nome-aparelho', NOME_APARELHO);
-        await g.segurar(1.5);
+        await g.segurar(1);
     }
     // O atraso é o que dá DURAÇÃO à cena seguinte. Num aparelho de verdade quem
     // demora é a rede; aqui o backend falso responde na hora, e sem isto a tela
@@ -945,7 +940,7 @@ async function main() {
         .catch(function () { /* já navegou antes de a espera começar */ });
     await page.waitForSelector('#tela-carregando, #tela-lendo', { timeout: 30000 });
 
-    g.abrirCena('10-baixando');
+    g.abrirCena('09-baixando');
     // Fotografa ENQUANTO carrega, e não por um tempo fixo: cada foto custa
     // tempo real, então "cinco segundos de quadros" acaba muito depois de o
     // carregamento ter terminado — e a cena mostrava a câmera já ligada.
@@ -956,7 +951,7 @@ async function main() {
     }
     // Estica o último quadro DO CARREGAMENTO, e não a tela seguinte: a legenda
     // ainda está dizendo "espere terminar antes de ir para a porta".
-    g.segurarUltimo(6);
+    g.segurarUltimo(4);
     await page.waitForSelector('#tela-lendo:not(.sumindo)', { timeout: 40000 });
     atrasoDaFaixa = 0;
     g.fecharCena();
@@ -969,8 +964,8 @@ async function main() {
         await g.tocar('#btn-toque');
     }
 
-    g.abrirCena('11-lendo');
-    await g.segurarVivo(8);
+    g.abrirCena('10-lendo');
+    await g.segurarVivo(5);
     g.fecharCena();
 
     // Os três resultados. A leitura passa pelo caminho de verdade — "Digitar o
@@ -997,40 +992,26 @@ async function main() {
     // segue lendo. Esperar a tela de resposta aqui seria esperar uma tela que
     // o aplicativo deixou de mostrar de propósito — o que dá certo não pode
     // custar um toque ao porteiro.
-    g.abrirCena('12-verde');
+    g.abrirCena('11-verde');
     await digitarIngresso(INGRESSOS[0].texto);
     await page.waitForFunction(function () {
         const f = document.getElementById('faixa-ultima');
         return f && !f.classList.contains('vazia');
     }, { timeout: 15000 });
-    await g.segurarVivo(6);
+    await g.segurarVivo(4);
     g.fecharCena();
 
     // O MESMO ingresso da cena anterior. O aparelho já o registrou, e o setor
     // dele vale uma entrada só — a recusa sai do próprio aparelho, sem rede.
-    await lerRecusado('13-ja-entrou', INGRESSOS[0].texto, 7);
-    await lerRecusado('14-vermelho', INGRESSOS[2].texto, 7.5);
-
-    // A recusa fica na tela enquanto a legenda diz que não há como contorná-la.
-    // Mostrar a câmera aqui sugeriria que a conversa acabou e o porteiro seguiu
-    // em frente, que é justamente o momento em que alguém insiste.
-    g.abrirCena('15-recusa');
-    if (await page.$('#caixa-digitar.sumindo')) { await page.click('#btn-digitar'); }
-    // O texto tem de ser o do ingresso, com os zeros à esquerda: o código é
-    // conferido sobre o que está ESCRITO no papel. "512" e "000512" são
-    // diferentes, e o segundo é o que existe na faixa.
-    await g.digitar('#campo-numero', INGRESSOS[2].texto);
-    await g.tocar('#btn-conferir');
-    await page.waitForSelector('#tela-resposta:not(.sumindo)', { timeout: 15000 });
-    await g.segurar(7);
-    g.fecharCena();
+    await lerRecusado('12-ja-entrou', INGRESSOS[0].texto, 5.5);
+    await lerRecusado('13-vermelho', INGRESSOS[2].texto, 8);
 
     // ── Fecho ────────────────────────────────────────────────────────────────
     await page.goto(BASE + '/__estudio', { waitUntil: 'domcontentloaded' });
-    g.abrirCena('16-fecho');
+    g.abrirCena('14-fecho');
     await cartela(page, 'Ingresso Ideal',
                   'Configure antes do evento.<br>No dia, a portaria precisa só do celular.');
-    await g.segurar(9);
+    await g.segurar(6);
     g.fecharCena();
 
     // ── O manifesto ──────────────────────────────────────────────────────────

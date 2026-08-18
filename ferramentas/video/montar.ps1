@@ -95,13 +95,67 @@ $dados = Get-Content $manifesto -Raw -Encoding UTF8 | ConvertFrom-Json
 $FPS = $dados.fps
 
 # ── A voz ────────────────────────────────────────────────────────────────────
+#
+# Duas gerações de voz convivem neste Windows, e a diferença se ouve:
+#
+#   OneCore  -- "Microsoft Daniel" e "Microsoft Maria", as vozes modernas do
+#               sistema. Sao as que o Narrador e o Edge usam. Alcancadas so pelo
+#               WinRT (`Windows.Media.SpeechSynthesis`).
+#   SAPI 5   -- "Microsoft Maria Desktop", de duas decadas atras. E a unica que
+#               o `System.Speech` enxerga, e foi a que narrou o primeiro video.
+#
+# O usuario ouviu o primeiro corte e disse: "narracao muito artificial". Era a
+# Maria Desktop. Daqui em diante a narracao sai pela OneCore, e o SAPI fica como
+# reserva -- numa maquina sem as modernas, um video com voz velha ainda e melhor
+# que nenhum video.
 
 Add-Type -AssemblyName System.Speech
-$sintetizador = New-Object System.Speech.Synthesis.SpeechSynthesizer
+Add-Type -AssemblyName System.Runtime.WindowsRuntime | Out-Null
 
-if ($Voz) {
-    $sintetizador.SelectVoice($Voz)
+$vozModerna = $null
+$sintetizador = $null
+
+try {
+    [Windows.Media.SpeechSynthesis.SpeechSynthesizer, Windows.Media, ContentType = WindowsRuntime] | Out-Null
+    [Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
+
+    # `AsTask` e o que transforma a promessa do WinRT em algo que o PowerShell
+    # 5.1 sabe esperar. Sem ele, cada chamada volta um `IAsyncOperation` que
+    # ninguem consegue abrir.
+    $script:AsTask = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+        Where-Object {
+            $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and
+            $_.GetParameters().Count -eq 1 -and
+            $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+        } | Select-Object -First 1
+
+    $todas = [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices
+    if ($Voz) {
+        $vozModerna = $todas | Where-Object { $_.DisplayName -eq $Voz } | Select-Object -First 1
+    }
+    if (-not $vozModerna) {
+        # Daniel primeiro: voz masculina, e a que soa menos sintetica das duas.
+        $vozModerna = $todas | Where-Object {
+            $_.Language -eq 'pt-BR' -and $_.DisplayName -match 'Daniel'
+        } | Select-Object -First 1
+    }
+    if (-not $vozModerna) {
+        $vozModerna = $todas | Where-Object { $_.Language -eq 'pt-BR' } | Select-Object -First 1
+    }
+} catch {
+    $vozModerna = $null
+}
+
+function Esperar-WinRT($operacao, $tipo) {
+    $t = $script:AsTask.MakeGenericMethod($tipo).Invoke($null, @($operacao))
+    if (-not $t.Wait(120000)) { throw 'a voz do Windows nao respondeu' }
+    return $t.Result
+}
+
+if ($vozModerna) {
+    Write-Host ("Narracao: " + $vozModerna.DisplayName + " (voz moderna do Windows)")
 } else {
+    $sintetizador = New-Object System.Speech.Synthesis.SpeechSynthesizer
     $emPortugues = $sintetizador.GetInstalledVoices() |
         Where-Object { $_.VoiceInfo.Culture.Name -eq 'pt-BR' } |
         Select-Object -First 1
@@ -110,11 +164,49 @@ if ($Voz) {
                "Configuracoes > Hora e idioma > Idioma > Portugues (Brasil) > Voz.")
     }
     $sintetizador.SelectVoice($emPortugues.VoiceInfo.Name)
-    Write-Host ("Narracao: " + $emPortugues.VoiceInfo.Name)
+    $sintetizador.Rate = -1
+    Write-Host ("Narracao: " + $emPortugues.VoiceInfo.Name + " (reserva)")
 }
-# Um pouco mais devagar que o padrao: a voz sintetica corre, e quem assiste esta
-# aprendendo a mexer no aplicativo enquanto ouve.
-$sintetizador.Rate = -1
+
+<#
+    Grava a narracao de uma cena num .wav.
+
+    Pela voz moderna vai SSML, e nao texto cru: e o que permite pedir um ritmo
+    um pouco mais lento (quem assiste esta aprendendo a mexer no aplicativo
+    enquanto ouve) e um respiro entre as frases. Sem isso a voz emenda tudo
+    numa linha so, que e metade do que soa artificial numa narracao.
+#>
+function Narrar([string]$texto, [string]$wav) {
+    $limpo = Para-Voz $texto
+    if (-not $vozModerna) {
+        $sintetizador.SetOutputToWaveFile($wav)
+        $sintetizador.Speak($limpo)
+        $sintetizador.SetOutputToDefaultAudioDevice()
+        return
+    }
+
+    $escapado = [Security.SecurityElement]::Escape($limpo)
+    $ssml = @"
+<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='pt-BR'>
+<prosody rate='-8%'>$escapado</prosody>
+</speak>
+"@
+
+    $s = New-Object Windows.Media.SpeechSynthesis.SpeechSynthesizer
+    $s.Voice = $vozModerna
+    $fluxo = Esperar-WinRT $s.SynthesizeSsmlToStreamAsync($ssml) `
+        ([Windows.Media.SpeechSynthesis.SpeechSynthesisStream])
+
+    $leitor = New-Object Windows.Storage.Streams.DataReader($fluxo.GetInputStreamAt(0))
+    $n = [uint32]$fluxo.Size
+    Esperar-WinRT $leitor.LoadAsync($n) ([uint32]) | Out-Null
+    $bytes = New-Object byte[] $n
+    $leitor.ReadBytes($bytes)
+    [IO.File]::WriteAllBytes($wav, $bytes)
+    $leitor.Dispose()
+    $fluxo.Dispose()
+    $s.Dispose()
+}
 
 <#
     A pontuacao que a voz tropeca.
@@ -192,9 +284,7 @@ foreach ($cena in $dados.cenas) {
     # 1. A narração.
     $wav = Join-Path $narracoes ($cena.id + '.wav')
     if (Test-Path $wav) { Remove-Item $wav -Force }
-    $sintetizador.SetOutputToWaveFile($wav)
-    $sintetizador.Speak((Para-Voz $cena.narracao))
-    $sintetizador.SetOutputToNull()
+    Narrar $cena.narracao $wav
 
     # 2. A duração: a maior entre a voz e a imagem, mais um respiro.
     $daVoz    = Segundos-Do-Audio $wav
@@ -227,7 +317,7 @@ foreach ($cena in $dados.cenas) {
     Write-Host ("  {0:N1}s  (voz {1:N1}s, imagem {2:N1}s)" -f $duracao, $daVoz, $daImagem)
 }
 
-$sintetizador.Dispose()
+if ($sintetizador) { $sintetizador.Dispose() }
 
 # ── A emenda ─────────────────────────────────────────────────────────────────
 #
