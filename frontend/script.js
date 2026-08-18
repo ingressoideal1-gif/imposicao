@@ -18127,19 +18127,9 @@ function renderAmostraCombinada() {
 
 
 
-    // Borda final da amostra
-
-    ctx.save();
-
-    ctx.globalCompositeOperation = 'source-over';
-
-    ctx.strokeStyle = '#1e293b';
-
-    ctx.lineWidth = 1.5;
-
-    ctx.strokeRect(0, 0, canvasComb.width, canvasComb.height);
-
-    ctx.restore();
+    // Sem borda final: o strokeRect de 1,5 px caia sobre a beirada da propria
+    // amostra e comia as fileiras de fora do desenho. Mesmo motivo da moldura
+    // removida em drawAmostraFace.
 
 }
 
@@ -20878,9 +20868,24 @@ function pedidoEhParaHoje(os) {
         && prazo.getDate() === agora.getDate();
 }
 
+/** Pedido com TODOS os modelos impressos (o mesmo cálculo do selo da coluna Status). */
+function pedidoTotalmenteImpresso(os) {
+    if (!os) return false;
+    const numOs = parseInt(os.numero);
+    const modelosGlobais = (state.modelosGlobais && state.modelosGlobais[numOs]) ? state.modelosGlobais[numOs] : [];
+    const osItensList = state.osItens[os.id] || [];
+    const modelos = modelosGlobais.length > 0 ? modelosGlobais : osItensList;
+    if (!modelos.length) return false;
+    return calcularStatusImpressaoPedido(modelos) === 'Impresso';
+}
+
 /** Decide se o pedido entra na lista conforme o filtro de prazo escolhido. */
 function pedidoPassaFiltroPrazo(os) {
     const filtro = state.filtroPrazo || 'geral';
+    // Pedido pronto sai da fila de trabalho: quem já teve todos os modelos
+    // impressos só reaparece com o botão "Impresso" ligado.
+    if (filtro === 'impressos') return pedidoTotalmenteImpresso(os);
+    if (pedidoTotalmenteImpresso(os)) return false;
     if (filtro === 'geral') return true;
     // Sem prazo não há como comparar: fica só no Geral
     if (filtro === 'atrasados') return pedidoEstaAtrasado(os);
@@ -20904,6 +20909,14 @@ const PRAZO_BTN_ON = {
     color: '#60a5fa',
     boxShadow: '0 0 8px rgba(59,130,246,0.3)'
 };
+// "Impresso" ligado usa o verde do selo Impresso, para nunca ser confundido
+// com a fila de trabalho (que é azul).
+const PRAZO_BTN_ON_IMPRESSO = {
+    background: 'rgba(34,197,94,0.2)',
+    border: '1px solid #22c55e',
+    color: '#4ade80',
+    boxShadow: '0 0 8px rgba(34,197,94,0.3)'
+};
 // Alerta: só quando "Para Hoje" está selecionado e existe pedido atrasado escondido
 const PRAZO_BTN_ALERTA = {
     background: 'rgba(239,68,68,0.22)',
@@ -20923,6 +20936,7 @@ function updateFiltroPrazoBotoes() {
         btn.classList.toggle('active', ativo);
 
         let estado = ativo ? PRAZO_BTN_ON : PRAZO_BTN_OFF;
+        if (ativo && btn.dataset.prazo === 'impressos') estado = PRAZO_BTN_ON_IMPRESSO;
         if (!ativo && btn.dataset.prazo === 'atrasados' && alertarAtrasados) {
             estado = PRAZO_BTN_ALERTA;
         }
@@ -20937,7 +20951,7 @@ window.updateFiltroPrazoBotoes = updateFiltroPrazoBotoes;
 
 /** Clique nos botões Para Hoje / Atrasados / Geral. */
 function setFiltroPrazo(valor) {
-    state.filtroPrazo = (valor === 'hoje' || valor === 'atrasados') ? valor : 'geral';
+    state.filtroPrazo = (valor === 'hoje' || valor === 'atrasados' || valor === 'impressos') ? valor : 'geral';
     // renderOrdens recalcula state.temPedidosAtrasados; pintar depois dele
     renderOrdens();
     updateFiltroPrazoBotoes();
@@ -21238,7 +21252,8 @@ function renderOrdens() {
     // "Atrasados" quando a lista está filtrada em "Para Hoje".
     // De propósito sobre ordensImpressao, e não sobre a lista já filtrada: o alerta
     // é global, não muda conforme setor, estágio ou busca.
-    state.temPedidosAtrasados = ordensImpressao.some(os => pedidoEstaAtrasado(os));
+    // Pedido já impresso não conta: ele não está mais na fila de trabalho.
+    state.temPedidosAtrasados = ordensImpressao.some(os => pedidoEstaAtrasado(os) && !pedidoTotalmenteImpresso(os));
 
     // 4. Filtro de Prazo de Entrega (Para Hoje / Atrasados / Geral)
     let filteredImpressao = filteredImpressaoSemPrazo.filter(os => pedidoPassaFiltroPrazo(os));
@@ -27118,10 +27133,12 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         numCanvas.height = Math.round(fmt.height_mm * S);
         const numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
 
-        // Fundo transparente -- contorno do formato
-        numCtx.strokeStyle = '#64748b';
-        numCtx.lineWidth = 1;
-        numCtx.strokeRect(0, 0, numCanvas.width, numCanvas.height);
+        // Fundo transparente. NAO desenhar contorno do formato aqui: este canvas
+        // e composto POR CIMA da arte, entao um strokeRect na borda cobria a
+        // fileira de pixels da beirada do desenho -- a arte aparecia cortada em
+        // cima e embaixo na tela, e so na tela, porque o motor redesenha a
+        // numeracao do zero e nunca pinta esta moldura. Quem mostra ate onde vai
+        // o ingresso e a propria borda do canvas, com a sombra do CSS.
 
         // Desenhar cada elemento da numeração
         num.elements.forEach(el => {
@@ -27372,10 +27389,11 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         ctx.globalCompositeOperation = 'source-over';
     }
 
-    // Borda decorativa
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, finalWidth, finalHeight);
+    // Sem borda decorativa: ela era desenhada DENTRO do bitmap, na ultima
+    // fileira de pixels, entao cobria a beirada da arte e viajava junto para
+    // todo lugar que copia este canvas -- a janela ampliada, o link do cliente
+    // e o JPEG de aprovacao. Enfeite de tela nao entra na imagem (ver
+    // docs/editor_de_arte.md).
 }
 
 async function renderItemAmostraCombinada(idx, osId) {

@@ -2637,10 +2637,12 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         numCanvas.height = Math.round(fmt.height_mm * S);
         const numCtx = numCanvas.getContext('2d', { colorSpace: 'srgb' });
 
-        // Fundo transparente -- contorno do formato
-        numCtx.strokeStyle = '#64748b';
-        numCtx.lineWidth = 1;
-        numCtx.strokeRect(0, 0, numCanvas.width, numCanvas.height);
+        // Fundo transparente. NAO desenhar contorno do formato aqui: este canvas
+        // e composto POR CIMA da arte, entao um strokeRect na borda cobria a
+        // fileira de pixels da beirada do desenho -- a arte aparecia cortada em
+        // cima e embaixo na tela, e so na tela, porque o motor redesenha a
+        // numeracao do zero e nunca pinta esta moldura. Quem mostra ate onde vai
+        // o ingresso e a propria borda do canvas, com a sombra do CSS.
 
         // Desenhar cada elemento da numeração
         num.elements.forEach(el => {
@@ -2884,10 +2886,11 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         ctx.globalCompositeOperation = 'source-over';
     }
 
-    // Borda decorativa
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, finalWidth, finalHeight);
+    // Sem borda decorativa: ela era desenhada DENTRO do bitmap, na ultima
+    // fileira de pixels, entao cobria a beirada da arte e viajava junto para
+    // todo lugar que copia este canvas -- a janela ampliada, o link do cliente
+    // e o JPEG de aprovacao. Enfeite de tela nao entra na imagem (ver
+    // docs/editor_de_arte.md).
 }
 
 async function renderItemAmostraCombinada(idx, osId) {

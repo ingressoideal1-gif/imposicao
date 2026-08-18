@@ -2056,6 +2056,7 @@
                                     Fila de Produção:
                                 </h2>
                                 <div id="filtro-prazo-grupo" style="position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 8px;">
+                                    <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo="impressos" onclick="setFiltroPrazo('impressos')" title="Somente os pedidos com todos os modelos impressos (ficam fora das outras listas)">Impresso</button>
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo="hoje" onclick="setFiltroPrazo('hoje')" title="Pedidos com prazo de entrega no dia de hoje">Para Hoje</button>
                                     <button type="button" class="prod-btn-dark filter-btn-pill" data-prazo="atrasados" onclick="setFiltroPrazo('atrasados')" title="Pedidos com prazo de entrega já vencido (data e hora)">Atrasados</button>
                                     <button type="button" class="prod-btn-dark filter-btn-pill active" data-prazo="geral" onclick="setFiltroPrazo('geral')" title="Todos os pedidos, sem filtrar por prazo">Geral</button>
