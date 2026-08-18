@@ -62,30 +62,62 @@
         // Estilo inline, e nao no `controle.css`: esta parede precisa aparecer
         // mesmo que a folha de estilo nao tenha carregado -- e sem folha a
         // tela por baixo dela ficaria visivel e clicavel.
+        //
+        // E a PRIMEIRA tela que o cliente ve depois de ler o QR de instalacao,
+        // entao ela carrega a identidade inteira: o brilho verde-agua → azul do
+        // icone, o proprio icone, a fonte. A fonte vem por nome ('Manrope'):
+        // se o `controle.css` ja a declarou, ela vale; se nao, a lista cai na
+        // do sistema.
         parede.setAttribute('style',
-            'position:fixed;inset:0;z-index:9999;background:#0a0f1e;color:#e2e8f0;'
+            'position:fixed;inset:0;z-index:9999;color:#eef2f8;'
+            + 'background:radial-gradient(900px 520px at 20% -8%,rgba(20,184,166,.28),transparent 62%),'
+            + 'radial-gradient(760px 480px at 100% -4%,rgba(59,130,246,.22),transparent 60%),#0a0f1e;'
             + 'display:flex;flex-direction:column;align-items:center;'
-            + 'justify-content:center;gap:16px;padding:32px;text-align:center;'
-            + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;');
+            + 'justify-content:center;gap:14px;padding:32px 28px;text-align:center;'
+            + 'font-family:Manrope,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;'
+            + '-webkit-font-smoothing:antialiased;');
+
+        // O icone do aplicativo, o mesmo que vai parar na tela de inicio: e o
+        // que a pessoa vai procurar depois de instalar, entao ela ja o ve aqui.
+        var icone = document.createElement('img');
+        icone.src = 'icones/portaria-192.png';
+        icone.alt = '';
+        icone.setAttribute('style',
+            'width:96px;height:96px;border-radius:24px;'
+            + 'box-shadow:0 22px 46px -18px rgba(20,184,166,.7),0 0 0 1px rgba(255,255,255,.08);'
+            + 'margin-bottom:6px;');
+        parede.appendChild(icone);
+
+        var marca = document.createElement('div');
+        marca.setAttribute('style',
+            'font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;'
+            + 'color:#2dd4bf;');
+        marca.textContent = 'Ideal Control';
+        parede.appendChild(marca);
 
         var titulo = document.createElement('h1');
         titulo.textContent = 'Instale o Ideal Control';
-        titulo.setAttribute('style', 'font-size:1.4rem;margin:0;');
+        titulo.setAttribute('style',
+            'font-size:1.55rem;font-weight:800;letter-spacing:-.02em;line-height:1.2;margin:0;');
         parede.appendChild(titulo);
 
         var frase = document.createElement('p');
-        frase.setAttribute('style', 'font-size:.95rem;color:#94a3b8;margin:0;max-width:34ch;');
+        frase.setAttribute('style', 'font-size:.98rem;line-height:1.55;color:#9aa6bb;margin:0;max-width:34ch;');
         frase.textContent = 'O aparelho trabalha sem internet, e para '
             + 'isso ele precisa estar instalado neste celular. É rápido e não '
             + 'ocupa espaço.';
         parede.appendChild(frase);
 
         if (modo === 'iphone') {
-            var passos = document.createElement('p');
-            passos.setAttribute('style', 'font-size:1rem;margin:0;max-width:34ch;');
             // Em texto, e nao em icone: o icone de compartilhar do iPhone muda
             // de desenho entre versoes do iOS, e o dono esta lendo isto uma
-            // vez so, com pressa.
+            // vez so, com pressa. Num cartao, para se separar da explicacao
+            // acima -- isto e a INSTRUCAO, o resto e o motivo.
+            var passos = document.createElement('p');
+            passos.setAttribute('style',
+                'font-size:1rem;line-height:1.5;margin:8px 0 0;max-width:36ch;'
+                + 'padding:14px 16px;border-radius:14px;'
+                + 'background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.3);');
             passos.textContent = 'Toque em Compartilhar, na barra de baixo do '
                 + 'Safari, e escolha "Adicionar à Tela de Início".';
             parede.appendChild(passos);
@@ -94,14 +126,26 @@
             botao.type = 'button';
             botao.textContent = 'Instalar agora';
             botao.setAttribute('style',
-                'padding:16px 24px;font-size:1.05rem;font-weight:700;border:0;'
-                + 'border-radius:10px;background:#14b8a6;color:#06231f;cursor:pointer;');
+                'margin-top:10px;width:100%;max-width:340px;padding:16px 24px;'
+                + 'font-size:1.05rem;font-weight:700;font-family:inherit;border:0;'
+                + 'border-radius:12px;color:#04201c;cursor:pointer;min-height:54px;'
+                + 'background:linear-gradient(135deg,#2dd4bf,#14b8a6 55%,#0ea5a0);'
+                + 'box-shadow:0 12px 26px -12px rgba(20,184,166,.8),inset 0 1px 0 rgba(255,255,255,.22);');
             botao.addEventListener('click', function () {
                 if (!promptGuardado) { return; }
                 promptGuardado.prompt();
             });
             parede.appendChild(botao);
         }
+
+        // A assinatura da marca no rodape da parede: quem faz, em letra
+        // pequena, como no rodape da casa.
+        var rodape = document.createElement('div');
+        rodape.setAttribute('style',
+            'position:absolute;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom));'
+            + 'font-size:.72rem;color:#64718a;');
+        rodape.textContent = 'Ingresso Ideal · Controle de Acesso';
+        parede.appendChild(rodape);
 
         document.body.appendChild(parede);
     }

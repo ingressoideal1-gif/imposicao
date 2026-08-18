@@ -105,6 +105,10 @@ PAINEL_ARQUIVOS = [
     "controle.html",
     "controle.js",
     "controle.css",
+    # A fonte da identidade visual do Ideal Control (18/08/2026), pedida pelo
+    # controle.css e pelo portaria.html. Sem ela aqui a estacao serviria a casa
+    # com a letra do sistema -- funciona, mas nao e a tela que foi publicada.
+    "ideal-control.woff2",
     "ideal-control.js",
     "script.js",
     "pedido.js",

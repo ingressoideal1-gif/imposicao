@@ -4,11 +4,51 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## Versão atual: **v612** — 2026-08-16 | Agente **1.2.106**
+## Versão atual: **v631** — 2026-08-18 | Agente **1.2.126**
 
 ---
 
-## [v631 — 2026-08-17] *(a publicar)* — A conta do cliente traz os pedidos; o QR do Pedido sai de cena
+## [v632 — 2026-08-18] *(a publicar)* — A identidade visual do Ideal Control
+
+O aplicativo funcionava, mas parecia um formulário: fundo chapado, botões genéricos, letra
+do sistema, e a primeira tela que o cliente via depois de ler o QR de instalação era um
+título solto no escuro. O usuário pediu **"modernizar e refinar, dar identidade"** — e deu
+liberdade para mexer em layout, cores, botões e efeitos.
+
+**A identidade nasce do próprio ícone do aplicativo**: o degradê verde-água → azul do
+fundo, a fita laranja, o ingresso off-white. O fundo ganhou esse brilho subindo do alto
+da tela (por cima do `#0a0f1e`, que continua sendo a cor de abertura); os cartões ganharam
+relevo — fio de luz na borda de cima, sombra por baixo; os botões de ação viraram o
+degradê do ícone com sombra na cor dele; e o cabeçalho tem a assinatura da marca, um fio
+que vai do verde-água ao laranja e some. A **letra é a Manrope**, embarcada
+(`ideal-control.woff2`, 24 KB, no pré-cache do service worker): o aplicativo continua
+abrindo sem rede e sem CDN.
+
+**Navegação e menus.** As seções têm etiqueta em caixa alta com uma régua até a borda; os
+"Voltar" viraram pílulas discretas; o menu do olho virou uma lista com a seta à direita; a
+barra **Meus Pedidos** é a única pintada com o degradê da marca, e o "+" ao lado dela é a
+única bolinha cheia — um convite, não uma configuração. As portas da casa (Entrar, Escolha
+a sua senha, Configurar o evento) têm a barra da marca no alto e um cadeado ao lado do
+título. Nos pedidos, o número virou selo, os setores viraram linhas com selo de impressão,
+e o Carregar leva uma seta.
+
+**Efeitos.** Cada troca de tela desliza de leve para cima; a luz verde do aparelho que já lê
+o evento respira; a faixa âmbar do modo configuração pulsa; a caixa "tem certeza?" sobe do
+rodapé sobre um fundo desfocado. Na portaria, o **visor da câmera** ganhou cantoneiras
+verde-água nos quatro cantos e uma linha discreta que varre o quadro — a câmera está viva.
+Quem pediu ao sistema menos movimento (`prefers-reduced-motion`) não recebe nenhum deles.
+
+**A parede de instalação** — a primeira impressão — mostra o ícone do aplicativo, o nome, o
+motivo e o botão, sobre o mesmo brilho da marca; no iPhone, a instrução do Compartilhar vem
+num cartão.
+
+O que **não** mudou: cada id e cada classe que o JS e os testes usam; a área segura do topo;
+a `.sumindo` com o único `!important`; a tranca e a faixa grudadas no topo; o vermelho
+reservado à zona de risco; e o texto de todos os botões.
+
+---
+
+## [v631 — 2026-08-18] — A conta do cliente traz os pedidos; o QR do Pedido sai de cena
 
 Até aqui o cliente entrava no controle de acesso por um **QR do Pedido**: o atendente
 gerava um QR no painel, mandava por WhatsApp, e quem lesse aquela imagem cadastrava o

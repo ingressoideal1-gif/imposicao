@@ -8,6 +8,7 @@
     <meta name="description" content="Leitura de ingressos no aparelho. Funciona sem rede.">
     <link rel="manifest" href="app.webmanifest">
     <link rel="icon" href="icones/portaria-192.png" type="image/png">
+    <link rel="preload" href="ideal-control.woff2" as="font" type="font/woff2" crossorigin>
 
     <!--
         O iOS NAO le o manifesto: nome, icone e "abrir sem barra do Safari" so
@@ -45,161 +46,233 @@
         local -- nao ha CDN nenhum aqui, e nao pode haver.
     -->
     <style>
+        /* A identidade visual do Ideal Control na tela do portao. As mesmas
+           cores e a mesma fonte da casa (`controle.css`) -- reescritas aqui,
+           inline, porque esta pagina precisa ABRIR SEM REDE e nao carrega
+           folha nenhuma. A fonte e o unico arquivo a mais, e ela e local:
+           `ideal-control.woff2`, no pre-cache do service worker. */
+        @font-face {
+            font-family: 'Manrope';
+            font-style: normal;
+            font-weight: 400 800;
+            font-display: swap;
+            src: url(ideal-control.woff2) format('woff2');
+        }
         :root {
-            --bg: #0a0f1e; --card: #1e293b; --border: rgba(148,163,184,0.25);
-            --text: #e2e8f0; --dim: #94a3b8;
-            --verde: #16a34a; --vermelho: #b91c1c; --laranja: #c2410c; --teal: #14b8a6;
+            --bg: #0a0f1e; --card: #121b30; --card-2: #182339;
+            --border: rgba(148,163,184,0.16); --border-forte: rgba(148,163,184,0.30);
+            --text: #eef2f8; --dim: #9aa6bb; --apagado: #64718a;
+            --verde: #16a34a; --vermelho: #b91c1c; --laranja: #c2410c;
+            --teal: #14b8a6; --teal-claro: #2dd4bf; --azul: #3b82f6;
             /* O verde do fundo escuro nao serve para TEXTO: #16a34a sobre
                #0a0f1e fica ilegivel de longe, que e como o porteiro le. */
             --verde-claro: #4ade80;
         }
         * { box-sizing: border-box; }
+        html { background: var(--bg); }
         body {
-            margin: 0; background: var(--bg); color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; min-height: 100vh; color: var(--text);
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+            /* O mesmo brilho verde-agua → azul da casa, mais discreto: aqui a
+               camera e a resposta e que mandam na tela. */
+            background:
+                radial-gradient(760px 420px at 15% -10%, rgba(20,184,166,.18), transparent 60%),
+                radial-gradient(640px 400px at 100% -6%, rgba(59,130,246,.14), transparent 60%),
+                var(--bg);
             padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
         }
         .folha { max-width: 520px; margin: 0 auto; padding: 14px; }
         .topo {
             display: flex; align-items: center;
-            gap: 10px; font-size: 0.82rem; color: var(--dim); margin-bottom: 12px;
+            gap: 12px; font-size: 0.82rem; color: var(--dim); margin-bottom: 14px;
         }
-        .topo strong { color: var(--text); font-size: 1.05rem; }
+        .topo > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .topo strong { color: var(--text); font-size: 1.15rem; font-weight: 800; letter-spacing: -0.015em; line-height: 1.2; }
         /* Os setores que este aparelho valida, em verde: e a resposta muda para
            "esta pessoa esta na fila certa?", que o porteiro faz o tempo todo. */
-        #topo-setores { color: var(--verde-claro); font-size: 0.8rem; }
-        h1 { font-size: 1.25rem; margin: 0 0 6px; }
+        #topo-setores { color: var(--verde-claro); font-size: 0.78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+        h1 { font-size: 1.3rem; margin: 0 0 8px; font-weight: 800; letter-spacing: -0.015em; }
         .sumindo { display: none !important; }
 
         input {
-            width: 100%; padding: 14px; font-size: 1.15rem; letter-spacing: 0.08em;
-            background: rgba(0,0,0,0.32); border: 1px solid var(--border);
-            border-radius: 8px; color: var(--text); font-family: inherit;
+            width: 100%; padding: 14px; font-size: 1.25rem; letter-spacing: 0.12em;
+            font-weight: 700; font-variant-numeric: tabular-nums;
+            background: rgba(2,6,23,0.55); border: 1px solid var(--border-forte);
+            border-radius: 12px; color: var(--text); font-family: inherit;
             text-align: center; text-transform: uppercase;
         }
+        input:focus { outline: none; border-color: var(--teal-claro); box-shadow: 0 0 0 3px rgba(45,212,191,.28); }
+        input::placeholder { color: var(--apagado); font-weight: 600; }
         button {
             width: 100%; padding: 16px; font-size: 1.05rem; font-weight: 700;
-            font-family: inherit; border: 0; border-radius: 10px;
-            background: var(--teal); color: #06231f; margin-top: 14px;
+            font-family: inherit; border: 0; border-radius: 12px;
+            background: linear-gradient(135deg, var(--teal-claro), var(--teal) 55%, #0ea5a0);
+            color: #04201c; margin-top: 14px;
             min-height: 56px; cursor: pointer;
+            box-shadow: 0 10px 22px -12px rgba(20,184,166,.75), inset 0 1px 0 rgba(255,255,255,.22);
+            transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
         }
-        button.discreto { background: transparent; color: var(--dim); border: 1px solid var(--border); }
-        button:disabled { opacity: 0.5; }
+        button:active:not(:disabled) { transform: scale(0.98); }
+        button:focus-visible { outline: 2px solid #e2e8f0; outline-offset: 2px; }
+        button.discreto { background: rgba(255,255,255,.04); color: #cbd5e1; border: 1px solid var(--border-forte); box-shadow: none; }
+        button:disabled { opacity: 0.5; box-shadow: none; }
 
         /* O retorno para a lista de eventos. Alvo de toque grande, mas sem cor
            de acao: ele nao compete com nada nesta tela. */
         #btn-voltar {
-            width: auto; margin: 0; padding: 6px 14px; min-height: 44px;
+            width: 46px; flex: none; margin: 0; padding: 0; min-height: 46px;
             font-size: 1.3rem; line-height: 1;
-            background: transparent; color: var(--text);
-            border: 1px solid var(--border);
+            background: rgba(255,255,255,.04); color: var(--text);
+            border: 1px solid var(--border-forte); border-radius: 50%; box-shadow: none;
         }
 
         /* A RECUSA ocupa a tela: o porteiro le de longe, com o celular na mao
-           esticada e a pessoa esperando. */
-        .resposta { border-radius: 14px; padding: 28px 20px; text-align: center; }
-        .resposta.ok       { background: var(--verde); }
-        .resposta.recusa   { background: var(--vermelho); }
+           esticada e a pessoa esperando. Cor cheia, e uma luz por dentro que da
+           volume sem tirar contraste. */
+        .resposta {
+            border-radius: 20px; padding: 32px 20px; text-align: center;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 20px 50px -24px rgba(0,0,0,.8);
+            animation: surgir .22s cubic-bezier(.2,.7,.2,1) both;
+        }
+        .resposta.ok       { background: linear-gradient(180deg, #22c55e, var(--verde)); }
+        .resposta.recusa   { background: linear-gradient(180deg, #dc2626, var(--vermelho)); }
         /* Laranja, e nao vermelho: ingresso bom na porta errada NAO e a mesma
-           coisa que ingresso estranho ao evento. Confundir os dois faz o
-           porteiro devolver ingresso legitimo achando que e falso. */
-        .resposta.porta    { background: var(--laranja); }
-        .resposta .marca   { font-size: 3.2rem; line-height: 1; }
-        .resposta .titulo  { font-size: 1.5rem; font-weight: 800; margin: 8px 0 4px; }
+           coisa que ingresso estranho ao evento. */
+        .resposta.porta    { background: linear-gradient(180deg, #ea580c, var(--laranja)); }
+        .resposta .marca   { font-size: 3.4rem; line-height: 1; }
+        .resposta .titulo  { font-size: 1.6rem; font-weight: 800; margin: 10px 0 4px; letter-spacing: -0.01em; }
         .resposta .detalhe { font-size: 1.05rem; opacity: 0.95; }
         /* O motivo do bloqueio e o que o porteiro le em voz alta. */
         .resposta .motivo  { font-size: 1.35rem; font-weight: 700; margin-top: 10px; }
-        .resposta .grande  { font-size: 2.1rem; font-weight: 800; margin-top: 6px; }
+        .resposta .grande  { font-size: 2.2rem; font-weight: 800; margin-top: 6px; letter-spacing: -0.01em; }
+        @keyframes surgir { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
         .escolha { display: grid; gap: 12px; margin-top: 16px; }
         .escolha button { margin: 0; font-size: 1.25rem; padding: 22px; }
 
         .aviso {
-            font-size: 0.85rem; padding: 12px 14px; border-radius: 8px;
-            background: rgba(245,158,11,0.12); border-left: 3px solid #f59e0b;
-            color: var(--dim); margin-top: 12px;
+            font-size: 0.86rem; padding: 12px 14px; border-radius: 12px;
+            background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,.3);
+            color: #d6dceb; margin-top: 12px;
         }
-        .cam { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 4/3; display: block; }
+
+        /* ── O visor da camera ─────────────────────────────────────────────
+           O video com cantoneiras verde-agua nos quatro cantos: e o que diz
+           "aponte aqui" sem uma palavra. As cantoneiras sao oito degrades num
+           unico pseudo-elemento -- nenhum elemento a mais por cima do video,
+           que precisa continuar leve. */
+        .visor { position: relative; border-radius: 16px; overflow: hidden; background: #000; }
+        .cam { width: 100%; background: #000; aspect-ratio: 4/3; display: block; }
+        .visor::after {
+            content: ""; position: absolute; inset: 12px; z-index: 1; pointer-events: none;
+            --c: var(--teal-claro); --l: 30px; --e: 3px;
+            background:
+                linear-gradient(var(--c), var(--c)) top left / var(--l) var(--e) no-repeat,
+                linear-gradient(var(--c), var(--c)) top left / var(--e) var(--l) no-repeat,
+                linear-gradient(var(--c), var(--c)) top right / var(--l) var(--e) no-repeat,
+                linear-gradient(var(--c), var(--c)) top right / var(--e) var(--l) no-repeat,
+                linear-gradient(var(--c), var(--c)) bottom left / var(--l) var(--e) no-repeat,
+                linear-gradient(var(--c), var(--c)) bottom left / var(--e) var(--l) no-repeat,
+                linear-gradient(var(--c), var(--c)) bottom right / var(--l) var(--e) no-repeat,
+                linear-gradient(var(--c), var(--c)) bottom right / var(--e) var(--l) no-repeat;
+            filter: drop-shadow(0 0 6px rgba(45,212,191,.55));
+        }
+        /* A linha que varre o visor: discreta, so para dizer que a camera esta
+           VIVA. Some para quem pediu ao sistema menos movimento. */
+        .visor::before {
+            content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+            /* A linha e desenhada no MEIO de um elemento do tamanho do visor, e
+               e o elemento inteiro que sobe e desce: `translateY` em
+               porcentagem e do proprio elemento, entao um risco de 2px so
+               andaria 2px. */
+            background: linear-gradient(180deg,
+                transparent calc(50% - 1px), rgba(45,212,191,.8) 50%, transparent calc(50% + 1px));
+            -webkit-mask: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+                    mask: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+            animation: varrer 2.8s ease-in-out infinite alternate;
+        }
+        @keyframes varrer { from { transform: translateY(-36%); } to { transform: translateY(36%); } }
+        @media (prefers-reduced-motion: reduce) {
+            .visor::before { display: none; }
+            .resposta { animation: none; }
+            button { transition: none; }
+        }
 
         /* ── A faixa da ultima leitura ─────────────────────────────────────
            Ela TROCA de conteudo a cada ingresso bom, e e o unico retorno visual
-           do caminho feliz. A hora vai junto: numa fila rapida, sem ela o
-           porteiro nao distingue "este verde e de quem acabou de passar" de
-           "este verde e de trinta segundos atras e a camera nao leu nada
-           desde entao". */
+           do caminho feliz. A hora vai junto. */
         .rotulo {
-            text-align: center; color: var(--dim); font-size: 0.75rem;
-            letter-spacing: 0.1em; text-transform: uppercase; margin: 12px 0 6px;
+            text-align: center; color: var(--dim); font-size: 0.72rem; font-weight: 800;
+            letter-spacing: 0.14em; text-transform: uppercase; margin: 14px 0 6px;
         }
         .faixa {
-            border-radius: 12px; padding: 16px 12px; text-align: center;
-            background: var(--verde); color: #fff;
+            border-radius: 14px; padding: 16px 12px; text-align: center;
+            background: linear-gradient(180deg, #22c55e, var(--verde)); color: #fff;
             font-size: 1.3rem; font-weight: 800; min-height: 60px;
             word-break: break-word;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 12px 28px -16px rgba(34,197,94,.7);
         }
         /* Antes da primeira leitura nao ha verde nenhum: verde vazio na tela e
            um "pode entrar" sem ingresso nenhum atras. */
         .faixa.vazia {
-            background: rgba(148,163,184,0.14); color: var(--dim);
-            font-size: 0.95rem; font-weight: 600;
+            background: rgba(255,255,255,.04); color: var(--dim);
+            border: 1px dashed var(--border-forte);
+            font-size: 0.95rem; font-weight: 600; box-shadow: none;
         }
 
         /* ── O contador ────────────────────────────────────────────────────
-           Destacado, sempre a vista, acima do "Digitar o numero". Soma TODOS os
-           setores deste portao -- decisao do usuario, contra um seletor de
-           setor: um controle a mais para tocar por engano, no escuro, com a
-           fila andando. */
+           Destacado, sempre a vista. Soma TODOS os setores deste aparelho. */
         .contador {
             margin-top: 12px; padding: 14px 10px; text-align: center;
-            border-radius: 12px; background: rgba(20,184,166,0.12);
-            border: 1px solid rgba(20,184,166,0.4); color: var(--teal);
-            font-size: 1.5rem; font-weight: 800;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(20,184,166,.16), rgba(59,130,246,.10));
+            border: 1px solid rgba(20,184,166,.4); color: var(--teal-claro);
+            font-size: 1.7rem; font-weight: 800; letter-spacing: -0.01em;
             font-variant-numeric: tabular-nums;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
         }
-        /* As leituras que ainda nao subiram andam JUNTO do contador, e nao numa
-           marca separada -- decisao do usuario. Somem quando zeram. */
-        .contador .pendentes { font-size: 0.85rem; font-weight: 600; color: var(--dim); }
+        /* As leituras que ainda nao subiram andam JUNTO do contador. Somem
+           quando zeram. */
+        .contador .pendentes { font-size: 0.85rem; font-weight: 600; color: var(--dim); letter-spacing: 0; }
 
         /* ── O rodape ──────────────────────────────────────────────────────
-           A lanterna virou icone ao lado do "Digitar o numero". Ela continua
+           A lanterna e icone ao lado do "Digitar o numero". Ela continua
            sumindo onde a lanterna nao existe de verdade. */
         .rodape { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
         .rodape button { margin-top: 0; }
         #btn-lanterna {
             width: 64px; flex: 0 0 64px; padding: 0; font-size: 1.6rem;
-            background: transparent; border: 1px solid var(--border);
+            background: rgba(255,255,255,.04); border: 1px solid var(--border-forte); box-shadow: none;
         }
         #btn-lanterna.acesa { background: rgba(245,158,11,0.25); border-color: #f59e0b; }
         #btn-digitar { flex: 1 1 auto; }
+        #caixa-digitar { margin-top: 12px; }
 
         /* ── O toque que destrava o som ────────────────────────────────────
            Navegador nenhum toca audio antes de a pessoa encostar na tela, e ler
-           QR nao conta como encostar. Ele cobre a area de trabalho porque nao ha
-           nada a fazer antes dele: a camera abre no mesmo toque.
-
-           Cobre a area de trabalho, e NAO a tela inteira: o `←` do topo fica
-           fora dele de proposito. Um porteiro que abriu o aparelho por engano
-           precisa poder voltar sem antes tocar em "comecar a ler". */
+           QR nao conta como encostar. Cobre a area de trabalho, e NAO a tela
+           inteira: o `←` do topo fica fora dele de proposito. */
         #tela-lendo { position: relative; }
         #btn-toque {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             /* Sem canto arredondado: o canto deixaria aparecer a borda do
-               "Digitar o numero" por baixo, e meio botao espiando de tras de
-               uma capa parece tela quebrada. */
+               "Digitar o numero" por baixo. */
             width: 100%; margin: 0; border-radius: 0; z-index: 20;
-            background: var(--bg); color: var(--text);
-            font-size: 1.5rem; font-weight: 800;
+            background:
+                radial-gradient(520px 320px at 50% 30%, rgba(20,184,166,.20), transparent 62%),
+                var(--bg);
+            color: var(--text);
+            font-size: 1.5rem; font-weight: 800; box-shadow: none;
         }
 
         /* A faixa de atualizacao NAO e um botao de acao: menor e discreta, de
-           proposito. Ela nao pode competir com o alvo de toque que o porteiro
-           procura no escuro. */
+           proposito. */
         #faixa-atualizacao {
-            margin: 0 0 12px; padding: 10px; min-height: 0;
-            font-size: 0.85rem; font-weight: 600;
-            background: rgba(20,184,166,0.14); color: var(--teal);
-            border: 1px solid rgba(20,184,166,0.4);
+            margin: 0 0 12px; padding: 10px 14px; min-height: 0;
+            font-size: 0.85rem; font-weight: 700;
+            background: rgba(20,184,166,0.12); color: var(--teal-claro);
+            border: 1px solid rgba(20,184,166,0.45); box-shadow: none;
         }
     </style>
 </head>
@@ -221,7 +294,7 @@
         <button id="btn-voltar" class="sumindo" type="button"
                 title="Voltar para a lista de eventos"
                 aria-label="Voltar para a lista de eventos">←</button>
-        <span><strong id="topo-aparelho">Portaria</strong><br><span id="topo-setores"></span></span>
+        <span><strong id="topo-aparelho">Portaria</strong><span id="topo-setores"></span></span>
     </div>
 
     <!--
@@ -252,7 +325,7 @@
     </div>
 
     <div id="tela-lendo" class="sumindo">
-        <video id="cam" class="cam" playsinline muted></video>
+        <div class="visor"><video id="cam" class="cam" playsinline muted></video></div>
 
         <div class="rotulo">Última leitura</div>
         <div id="faixa-ultima" class="faixa vazia">Nenhum ingresso lido ainda</div>

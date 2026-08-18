@@ -95,6 +95,9 @@ const ARQUIVOS = [
     'icones/portaria-512.png',
     'apple-touch-icon.png',
     'Logo Ideal Dark.png',
+    // A fonte da identidade visual (18/08/2026). Sem ela aqui, o aplicativo
+    // sem rede abre com a letra do sistema -- funciona, mas nao e ele.
+    'ideal-control.woff2',
 ];
 
 self.addEventListener('install', e => {

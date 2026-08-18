@@ -354,3 +354,29 @@ def test_o_qr_do_pedido_saiu_da_tela_e_o_servidor_ficou_um_release():
     assert os.path.isdir(os.path.join(RAIZ, "supabase", "functions", "acesso-pedido"))
     vercel = _ler("vercel.json")
     assert '"/evento.html"' not in vercel
+
+
+# ── A identidade visual (18/08/2026) ────────────────────────────────────────
+#
+# A fonte do aplicativo e LOCAL: um `@font-face` apontando para o Google Fonts
+# passaria pela guarda de `<script|link|img>` acima e ainda assim derrubaria a
+# letra sem rede -- e o `font-display: swap` esconderia a falha, com a tela
+# abrindo na letra do sistema como se nada tivesse acontecido.
+
+def test_a_fonte_do_aplicativo_e_local_e_vai_no_pre_cache():
+    assert os.path.isfile(os.path.join(FRENTE, "ideal-control.woff2")), (
+        "a fonte da identidade visual sumiu de frontend/"
+    )
+    css = _ler("frontend/controle.css")
+    portaria = _ler("frontend/portaria.html")
+    for texto, onde in ((css, "controle.css"), (portaria, "portaria.html")):
+        assert "@font-face" in texto, f"{onde} nao declara a fonte"
+        assert "url(ideal-control.woff2)" in texto, f"{onde} nao aponta para a fonte local"
+        assert "googleapis" not in texto and "gstatic" not in texto, (
+            f"{onde} busca fonte de fora: a tela nao abriria sem rede"
+        )
+    # Sem rede, o service worker e quem entrega a fonte.
+    assert "'ideal-control.woff2'" in _ler("frontend/sw.js")
+    # E a estacao da grafica a recebe junto com o resto do painel.
+    import security_config
+    assert "ideal-control.woff2" in security_config.PAINEL_ARQUIVOS

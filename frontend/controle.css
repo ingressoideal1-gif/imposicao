@@ -1,116 +1,196 @@
+/*
+ * A identidade visual do Ideal Control (a casa do aplicativo).
+ *
+ * Reescrita em 18/08/2026, a pedido do usuario: "modernizar, refinar, dar
+ * identidade". As cores nascem do proprio icone do aplicativo -- o degrade
+ * verde-agua → azul do fundo, a fita laranja, o ingresso off-white -- e a
+ * tipografia e a Manrope, embarcada aqui mesmo (`ideal-control.woff2`, 24 KB,
+ * subconjunto latino com todos os acentos do portugues) para o aplicativo abrir
+ * sem rede e sem CDN.
+ *
+ * O que NAO mudou, de proposito: cada id e cada classe que o JS e os testes
+ * usam; a area segura do topo (`env(safe-area-inset-top)` + 38px); a regra
+ * `.sumindo` com o unico `!important` do arquivo; a tranca e a faixa da
+ * elevacao grudadas no topo; e o vermelho reservado a zona de risco.
+ */
+
+@font-face {
+    font-family: 'Manrope';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url(ideal-control.woff2) format('woff2');
+}
+
 :root {
+    /* O fundo continua #0a0f1e por baixo de tudo: e a cor do `theme_color`, do
+       `background_color` do manifesto e da tela de abertura. Mudar so aqui faria
+       o aplicativo piscar de uma cor para outra ao abrir. O que muda e o que se
+       pinta POR CIMA dele. */
     --bg: #0a0f1e;
-    --card: #1e293b;
-    --border: rgba(148, 163, 184, 0.25);
-    --text: #e2e8f0;
-    --dim: #94a3b8;
+    --card: #121b30;
+    --card-2: #182339;
+    --border: rgba(148, 163, 184, 0.16);
+    --border-forte: rgba(148, 163, 184, 0.30);
+    --text: #eef2f8;
+    --dim: #9aa6bb;
+    --apagado: #64718a;
+
     --teal: #14b8a6;
+    --teal-claro: #2dd4bf;
+    --azul: #3b82f6;
+    --laranja: #f08a3c;          /* a fita do icone */
     --amber: #f59e0b;
     --red: #ef4444;
+    --verde: #22c55e;
+
+    --raio: 18px;
+    --raio-p: 12px;
+    --sombra: 0 14px 34px -18px rgba(0, 0, 0, .75);
+    --anel: 0 0 0 3px rgba(45, 212, 191, .28);
+    --fonte: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; }
 
+html { background: var(--bg); }
+
 body {
     margin: 0;
-    background: var(--bg);
+    min-height: 100vh;
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--fonte);
     font-size: 16px;             /* 16px evita o zoom automático do iOS ao focar um campo */
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    /* O brilho do fundo: o mesmo degrade verde-agua → azul do icone, mas
+       diluido, subindo do alto da tela. Duas luzes e a cor base por baixo,
+       para o topo do aplicativo ter profundidade e o resto continuar escuro e
+       legivel. Nao e `fixed`: no celular isso engasga a rolagem. */
+    background:
+        radial-gradient(900px 520px at 20% -8%, rgba(20, 184, 166, .22), transparent 62%),
+        radial-gradient(760px 480px at 100% -4%, rgba(59, 130, 246, .18), transparent 60%),
+        var(--bg);
     /* O TOPO precisa de `env(safe-area-inset-top)`, e não de um número fixo.
        Esta página declara `viewport-fit=cover` e barra de status translúcida:
        as duas juntas mandam desenhar POR BAIXO do relógio e da bateria — é o
        que faz a cor do fundo subir até o alto da tela em vez de deixar uma
        faixa branca. O preço é que o conteúdo tem de se afastar sozinho.
 
-       Aqui havia um `20px` seco. No navegador do computador nada parecia
-       errado, porque ali o `env()` vale zero e não existe barra de status; no
-       celular do usuário o logo ficava por baixo do relógio.
-
-       Os 38px são o "pelo menos 1cm" que ele pediu (1cm ≈ 37,8px de CSS), e
-       eles vêm SOMADOS à área segura, não no lugar dela: o `env()` cobre o
-       entalhe, e a folga é o respiro. */
+       Os 38px são o "pelo menos 1cm" que o usuário pediu (1cm ≈ 37,8px de
+       CSS), e eles vêm SOMADOS à área segura, não no lugar dela: o `env()`
+       cobre o entalhe, e a folga é o respiro. */
     padding: calc(env(safe-area-inset-top) + 38px) 16px
              calc(28px + env(safe-area-inset-bottom));
 }
 
 .folha { max-width: 460px; margin: 0 auto; }
 
-header { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
-header img { height: 30px; border-radius: 5px; }
-header span { font-size: 0.82rem; color: var(--dim); letter-spacing: 0.02em; }
-
-h1 { font-size: 1.3rem; margin: 0 0 6px; line-height: 1.3; }
+h1 { font-size: 1.3rem; margin: 0 0 6px; line-height: 1.3; letter-spacing: -0.01em; }
 h2 { font-size: 0.95rem; margin: 0 0 10px; }
+h3 { font-size: 1.02rem; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.01em; }
+
+strong { font-weight: 700; }
+
+/* ── Os blocos de estado ENTRAM na tela, em vez de aparecerem ─────────────
+   `display: none → block` cria uma caixa nova, e uma caixa nova reinicia a
+   animacao: e o que faz cada troca de tela (lista → Meus Pedidos → Carregar →
+   engrenagem) deslizar de leve para cima, sem uma linha de JS. So translacao e
+   opacidade -- as duas propriedades que o navegador anima sem repintar. */
+@keyframes surgir {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+}
+#lista, #meus-pedidos, #menu-geral, #engrenagem,
+#bloco-entrar, #trocar-senha, #caixa-carregar, #caixa-entrar-config {
+    animation: surgir .26s cubic-bezier(.2, .7, .2, 1) both;
+}
+
+/* ── Cartoes ─────────────────────────────────────────────────────────────── */
 
 .cartao {
-    background: var(--card);
+    position: relative;
+    background: linear-gradient(180deg, var(--card-2), var(--card));
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 18px;
+    border-radius: var(--raio);
+    padding: 20px;
     margin-bottom: 16px;
+    /* Um fio de luz na borda de cima e a sombra por baixo: e o que separa um
+       cartao "colado" na tela de um cartao que esta SOBRE ela. */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), var(--sombra);
 }
 
-.passo {
-    font-size: 0.72rem;
+/* ── Formularios ─────────────────────────────────────────────────────────── */
+
+label {
+    display: block;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--teal);
-    font-weight: 700;
-    margin-bottom: 8px;
+    color: var(--dim);
+    margin: 14px 0 6px;
 }
 
-.setor {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 12px;
-    padding: 9px 0;
-    border-bottom: 1px solid var(--border);
-}
-.setor:last-child { border-bottom: 0; }
-.setor .nome { font-weight: 600; }
-.setor .qtd { color: var(--dim); font-size: 0.85rem; white-space: nowrap; }
-
-.total {
-    display: flex; justify-content: space-between;
-    margin-top: 12px; padding-top: 12px;
-    border-top: 2px solid var(--border);
-    font-weight: 700;
-}
-
-label { display: block; font-size: 0.82rem; color: var(--dim); margin: 12px 0 5px; }
-
-input, select {
+input, select, textarea {
     width: 100%;
-    padding: 12px;
+    padding: 13px 14px;
     font-size: 1rem;               /* nunca menor: iOS daria zoom ao focar */
-    background: rgba(0, 0, 0, 0.32);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    background: rgba(2, 6, 23, 0.55);
+    border: 1px solid var(--border-forte);
+    border-radius: var(--raio-p);
     color: var(--text);
     font-family: inherit;
+    transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
-input:focus, select:focus { outline: 2px solid var(--teal); outline-offset: 1px; }
+input::placeholder, textarea::placeholder { color: var(--apagado); }
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--teal-claro);
+    box-shadow: var(--anel);
+    background: rgba(2, 6, 23, 0.72);
+}
+select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 40px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239aa6bb' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+}
+select option { background: #121b30; color: var(--text); }
+input:disabled, select:disabled, textarea:disabled { opacity: .55; }
+/* O relogio/calendario nativo do campo de data, no escuro. */
+input[type="datetime-local"] { color-scheme: dark; }
+
+/* ── Botoes ──────────────────────────────────────────────────────────────── */
 
 button {
     width: 100%;
-    padding: 14px;
+    padding: 14px 18px;
     font-size: 1rem;
     font-weight: 700;
     font-family: inherit;
+    letter-spacing: 0.005em;
     border: 0;
-    border-radius: 8px;
-    background: var(--teal);
-    color: #06231f;
+    border-radius: var(--raio-p);
+    /* O botao de acao: o degrade do icone, e a sombra na cor dele. */
+    background: linear-gradient(135deg, var(--teal-claro), var(--teal) 55%, #0ea5a0);
+    color: #04201c;
     cursor: pointer;
     margin-top: 16px;
     min-height: 48px;              /* alvo de toque confortável no celular */
+    box-shadow: 0 10px 22px -12px rgba(20, 184, 166, .75),
+                inset 0 1px 0 rgba(255, 255, 255, .22);
 }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-button.secundario { background: transparent; color: var(--dim); border: 1px solid var(--border); }
+button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+button.secundario {
+    background: rgba(255, 255, 255, .03);
+    color: #cbd5e1;
+    border: 1px solid var(--border-forte);
+    box-shadow: none;
+}
+button.secundario:hover:not(:disabled) { background: rgba(255, 255, 255, .06); border-color: rgba(148, 163, 184, .45); }
 
 /* O toque RESPONDE. Num aplicativo instalado não há barra de endereço nem
    cursor: se o botão não muda de forma ao ser pressionado, a única prova de
@@ -120,37 +200,71 @@ button.secundario { background: transparent; color: var(--dim); border: 1px soli
    `:not(:disabled)` de propósito: um botão desligado que afunda ao toque
    promete uma ação que não vai acontecer. */
 button { transition: transform 120ms ease, background-color 120ms ease,
-                     border-color 120ms ease, color 120ms ease; }
+                     border-color 120ms ease, color 120ms ease, box-shadow 120ms ease,
+                     filter 120ms ease; }
+button:hover:not(:disabled):not(.secundario):not(.perigo) { filter: brightness(1.06); }
 button:active:not(:disabled) { transform: scale(0.98); }
 
-/* O anel de foco é CLARO, e não verde-água como o dos campos. A tentação era
-   repetir o verde-água por coerência, e ela está errada duas vezes: o botão
-   primário JÁ é verde-água cheio, e um anel da mesma cor em volta dele
-   desapareceria — justamente no botão mais usado da tela; e nesta folha o
-   verde-água significa "é por aqui", então o anel pintaria de recomendado
-   qualquer botão que recebesse o foco, inclusive o "Cancelar" da caixa de
-   confirmar, que nasce focado de propósito. O padrão do navegador (dois anéis,
-   branco e preto) resolve a visibilidade, mas é grosso demais no escuro. */
-button:focus-visible { outline: 2px solid #cbd5e1; outline-offset: 2px; }
+/* O anel de foco é CLARO, e não verde-água como o dos campos: o botão
+   primário JÁ é verde-água cheio, e um anel da mesma cor sumiria nele. */
+button:focus-visible { outline: 2px solid #e2e8f0; outline-offset: 2px; }
 
-/* Quem pediu para o sistema não se mexer não recebe nem o afundamento nem a
-   transição — mas continua recebendo o anel de foco, que não é animação. */
 @media (prefers-reduced-motion: reduce) {
     button { transition: none; }
     button:active:not(:disabled) { transform: none; }
+    #lista, #meus-pedidos, #menu-geral, #engrenagem,
+    #bloco-entrar, #trocar-senha, #caixa-carregar, #caixa-entrar-config { animation: none; }
 }
 
+/* ── Avisos ──────────────────────────────────────────────────────────────── */
+
 .aviso {
-    font-size: 0.82rem;
+    position: relative;
+    font-size: 0.86rem;
     line-height: 1.5;
-    padding: 12px 14px;
-    border-radius: 8px;
-    border-left: 3px solid var(--amber);
+    padding: 12px 14px 12px 44px;
+    border-radius: var(--raio-p);
+    border: 1px solid rgba(245, 158, 11, .28);
     background: rgba(245, 158, 11, 0.09);
-    color: var(--dim);
+    color: #d6dceb;
 }
-.aviso.erro { border-left-color: var(--red); background: rgba(239, 68, 68, 0.09); }
-.aviso.ok { border-left-color: var(--teal); background: rgba(20, 184, 166, 0.09); }
+/* O icone do aviso, desenhado pela mascara para herdar a cor do tipo:
+   um triangulo com "!" no atencao, um circulo com "x" no erro, um "check" no
+   ok. `mask` e nao `background-image` colorido, para uma so forma servir as
+   tres cores. */
+.aviso::before {
+    content: "";
+    position: absolute;
+    left: 14px; top: 13px;
+    width: 18px; height: 18px;
+    background: var(--amber);
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z'/><path d='M12 9v4'/><path d='M12 17h.01'/></svg>") center / contain no-repeat;
+            mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z'/><path d='M12 9v4'/><path d='M12 17h.01'/></svg>") center / contain no-repeat;
+}
+.aviso.erro { border-color: rgba(239, 68, 68, .35); background: rgba(239, 68, 68, 0.10); }
+.aviso.erro::before {
+    background: #f87171;
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='m15 9-6 6'/><path d='m9 9 6 6'/></svg>");
+            mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='m15 9-6 6'/><path d='m9 9 6 6'/></svg>");
+}
+.aviso.ok { border-color: rgba(20, 184, 166, .38); background: rgba(20, 184, 166, 0.10); }
+.aviso.ok::before {
+    background: var(--teal-claro);
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='m8.5 12.5 2.5 2.5 4.5-5'/></svg>");
+            mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='m8.5 12.5 2.5 2.5 4.5-5'/></svg>");
+}
+.aviso strong { color: var(--text); }
+/* O VAZIO nao e alerta: "nenhum evento ainda" e "nenhum finalizado" sao
+   informacao, e por isso vem em cinza, com um "i" -- o ambar fica para o que
+   pede atencao de verdade. */
+#sem-eventos, #sem-finalizados {
+    border-color: var(--border-forte); background: rgba(255, 255, 255, .03); color: var(--dim);
+}
+#sem-eventos::before, #sem-finalizados::before {
+    background: var(--dim);
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 11v5'/><path d='M12 8h.01'/></svg>");
+            mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 11v5'/><path d='M12 8h.01'/></svg>");
+}
 
 /* A confirmação "tem certeza?", desenhada NA PÁGINA.
    `window.confirm` não responde no aplicativo instalado, e foi assim que
@@ -160,66 +274,69 @@ button:focus-visible { outline: 2px solid #cbd5e1; outline-offset: 2px; }
     inset: 0;
     z-index: 9999;               /* acima da faixa sticky e da engrenagem */
     display: flex;
-    align-items: center;
+    align-items: flex-end;       /* no celular a caixa sobe do rodape, como uma folha */
     justify-content: center;
-    padding: 24px;
-    background: rgba(2, 6, 23, .72);
+    padding: 24px 16px;
+    background: rgba(2, 6, 23, .66);
+    -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+    animation: escurecer .18s ease-out both;
 }
+@keyframes escurecer { from { opacity: 0; } to { opacity: 1; } }
+@keyframes subir { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
 .caixa-confirmar {
     width: 100%;
     max-width: 420px;
-    background: var(--card, #111a2e);
-    border: 1px solid var(--border, #1e293b);
-    border-radius: 12px;
-    padding: 20px;
+    background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--border-forte);
+    border-radius: 22px;
+    padding: 22px 20px;
     /* Folga embaixo para o gesto de início do iPhone não cobrir os botões. */
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
-    box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 24px 60px rgba(0, 0, 0, .6);
+    animation: subir .22s cubic-bezier(.2, .7, .2, 1) both;
 }
+@media (min-width: 560px) { .fundo-confirmar { align-items: center; } }
 .caixa-confirmar p {
     margin: 0 0 18px;
-    font-size: .92rem;
+    font-size: .95rem;
     line-height: 1.5;
 }
 .acoes-confirmar { display: flex; gap: 10px; }
-.acoes-confirmar button { flex: 1 1 0; min-height: 46px; font-size: .95rem; line-height: 1.25; }
-/* O que CONFIRMA leva mais largura. Ele é o único dos dois cujo rótulo muda —
-   "Sim, usar este aparelho", "Ir para a leitura", "Finalizar" —, e em duas
-   colunas iguais o mais longo sobrava apertado enquanto o "Cancelar" ao lado
-   ficava com espaço de sobra. Num celular de 390px o rótulo mais longo ainda
-   quebra em duas linhas, e por isso a `line-height` acima: duas linhas
-   apertadas parecem descuido, duas linhas com respiro parecem escolha. */
+.acoes-confirmar button { flex: 1 1 0; min-height: 46px; font-size: .95rem; line-height: 1.25; margin-top: 0; }
+/* O que CONFIRMA leva mais largura: é o único dos dois cujo rótulo muda —
+   "Sim, usar este aparelho", "Ir para a leitura", "Finalizar". */
 .acoes-confirmar button + button { flex: 1.45 1 0; }
+@media (prefers-reduced-motion: reduce) {
+    .fundo-confirmar, .caixa-confirmar { animation: none; }
+}
 
 /* As saídas de um aviso que trava o dono. Um aviso que só explica o problema e
-   não oferece o que fazer é um beco sem saída — foi o que prendeu o dono na
-   fila pendente em 17/08/2026. */
+   não oferece o que fazer é um beco sem saída. */
 .acoes-aviso {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+    margin-left: -30px;            /* volta para a margem do texto, por baixo do icone */
 }
 .acoes-aviso button {
     flex: 1 1 auto;
     min-height: 44px;              /* alvo de toque: dedo, de pé, no portão */
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     padding: 10px 14px;
+    margin-top: 0;
 }
 /* Descartar PERDE leitura. Ele nunca pode parecer o caminho natural. */
 #btn-descartar-fila {
     background: transparent;
     color: #fca5a5;
     border: 1px solid rgba(239, 68, 68, .5);
+    box-shadow: none;
 }
 
 /* `!important` de propósito, e é a única ocorrência do arquivo.
-   `sumindo` é o "não está na tela" desta página, e nada pode ganhar dele. Sem
-   isto ele perde de qualquer regra mais específica sem avisar: `#faixa-elevacao
-   { display: flex }` (1,0,0) vencia `.sumindo` (0,1,0), e a faixa âmbar dizia
-   "Modo configuração" o tempo todo — inclusive em modo leitura, sob o aviso de
-   que a tela estava só para olhar. Um empate também bastava para quebrar: entre
-   duas classes, ganha a que vier depois no arquivo. */
+   `sumindo` é o "não está na tela" desta página, e nada pode ganhar dele. */
 .sumindo { display: none !important; }
 
 .girando {
@@ -230,58 +347,65 @@ button:focus-visible { outline: 2px solid #cbd5e1; outline-offset: 2px; }
 @keyframes girar { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .girando { animation-duration: 3s; } }
 
-.rodape { text-align: center; font-size: 0.72rem; color: #475569; margin-top: 24px; }
-
-/* O botão do rodapé não é um botão de ação: é uma saída de emergência que
-   precisa estar à mão sem competir com nada. Por isso ele tem cara de link e
-   não a barra verde-água que a folha dá a todo `button`. */
+.rodape { text-align: center; font-size: 0.72rem; color: var(--apagado); margin-top: 28px; }
+/* O botão do rodapé não é um botão de ação: é uma saída de emergência com cara
+   de link. */
 .rodape button {
     width: auto; margin: 0; padding: 0; min-height: 0;
-    background: none; border: 0; font-family: inherit;
-    font-size: inherit; font-weight: 400;
-    color: var(--teal); text-decoration: underline; cursor: pointer;
+    background: none; border: 0; box-shadow: none; font-family: inherit;
+    font-size: inherit; font-weight: 600;
+    color: var(--teal-claro); text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
 }
 #versao-do-app { font-variant-numeric: tabular-nums; }
 
-/*
- * A tela do dono do evento. Celular primeiro, uma coluna, sem abas.
- *
- * As cores acima repetiam as do `evento.html`, que ate 17/08/2026 era a porta
- * de entrada do cliente: mudar de identidade no meio do caminho parecia outro
- * sistema. A tela saiu junto com o QR do Pedido -- o cliente entra direto por
- * aqui agora --, mas a paleta ficou, porque e a mesma marca do aplicativo.
- */
+/* ── Secoes ──────────────────────────────────────────────────────────────── */
 
-h3 { font-size: 1rem; margin: 0 0 4px; }
-
-.secao { margin: 22px 0; }
-.secao > h2 {
-    font-size: .74rem; text-transform: uppercase; letter-spacing: .09em;
-    color: var(--dim); margin: 0 0 10px;
+.secao { margin: 24px 0; }
+/* O titulo de secao: etiqueta pequena em caixa alta, com um fio que corre ate a
+   borda direita. E a "regua" da tela -- o olho acha as secoes pelo fio, sem
+   precisar ler. */
+.secao > h2, .rotulo-secao {
+    display: flex; align-items: center; gap: 12px;
+    font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim); margin: 0 0 12px;
 }
+.secao > h2::after, .rotulo-secao::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--border-forte), transparent);
+}
+.rotulo-secao { margin: 26px 0 12px; }
 
 /* A faixa da elevação. Fica GRUDADA no topo enquanto vale: uma trava que se
-   desarma em silêncio é pior que nenhuma — o dono guarda o celular achando que
-   trancou. */
+   desarma em silêncio é pior que nenhuma. */
 #faixa-elevacao {
     position: sticky; top: 0; z-index: 5;
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 10px 14px; margin: 0 -16px 16px;
-    /* Duas camadas, e a de baixo é OPACA. Só o âmbar translúcido deixava o
-       conteúdo passar por baixo enquanto a página rola — e como a faixa é
-       `sticky`, é justamente por baixo dela que tudo passa. O nome do setor
-       aparecia atravessado no meio de "Modo configuração · 14:59 restante". */
-    background: linear-gradient(rgba(245, 158, 11, .16), rgba(245, 158, 11, .16)),
-                var(--bg);
-    border-bottom: 1px solid var(--amber);
-    font-size: .84rem;
+    padding: 10px 14px 10px 30px; margin: 0 -16px 16px;
+    /* Duas camadas, e a de baixo é OPACA: como a faixa é `sticky`, é por baixo
+       dela que o conteúdo passa ao rolar. */
+    background: linear-gradient(90deg, rgba(245, 158, 11, .16), rgba(245, 158, 11, .06)),
+                #0f1728;
+    border-bottom: 1px solid rgba(245, 158, 11, .55);
+    box-shadow: 0 8px 24px -16px rgba(0, 0, 0, .8);
+    font-size: .84rem; font-weight: 600; color: #fde68a;
 }
-#faixa-elevacao button { width: auto; margin: 0; padding: 7px 12px; font-size: .8rem; }
+/* A luz ambar que pulsa: o modo configuracao esta VIVO, e o tempo esta
+   correndo. */
+#faixa-elevacao::before {
+    content: ""; position: absolute; left: 14px; top: 50%; margin-top: -4px;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--amber);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, .6);
+    animation: pulsar-ambar 2s ease-out infinite;
+}
+@keyframes pulsar-ambar {
+    0%   { box-shadow: 0 0 0 0 rgba(245, 158, 11, .6); }
+    70%  { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+#faixa-elevacao button { width: auto; margin: 0; padding: 7px 12px; font-size: .8rem; min-height: 36px; }
 
 /* A tranca, quando o evento está só para olhar. GRUDADA no topo pela mesma
-   razão que a faixa âmbar: o dono rola até a seção de aparelhos — uma tela e
-   meia abaixo, no desktop —, toca num botão esmaecido e não acontece nada. Se a
-   explicação ficou lá em cima, fora de vista, a tela não explicou nada. */
+   razão que a faixa âmbar. */
 #tranca {
     position: sticky; top: 0; z-index: 5;
     padding: 10px 16px 12px; margin: 0 -16px 16px;
@@ -291,299 +415,389 @@ h3 { font-size: 1rem; margin: 0 0 4px; }
 #tranca .aviso { margin: 0; }
 #tranca button { margin-top: 10px; }
 
-/* Em somente leitura os campos ficam visivelmente desligados. Aceitar o toque e
-   não gravar é a pior das combinações. */
+/* Em somente leitura os campos ficam visivelmente desligados. */
 body.somente-leitura input,
 body.somente-leitura select,
 body.somente-leitura .so-com-senha { opacity: .55; }
 
 /* A quantidade contratada no ERP — que É a lotação do setor. Informação, não
-   alarme: cor de texto comum, sem o âmbar que a tela reserva para a faixa do
-   modo configuração. */
+   alarme. */
 .contratado { color: var(--dim); font-size: .84rem; margin: 2px 0 12px; }
 
-/* O painel que o "Configurar" abre dentro do próprio cartão. O recuo e a linha
-   à esquerda são o que diz, sem legenda, que o que está ali dentro pertence a
-   ESTE setor e não ao cartão seguinte. */
+/* O painel que o "Configurar" abre dentro do próprio cartão: um recuo escuro,
+   com a linha verde-agua a esquerda, para dizer sem legenda que aquilo pertence
+   a ESTE setor. */
 .config-setor {
-    margin-top: 14px; padding-left: 12px;
-    border-left: 2px solid var(--border);
+    margin-top: 14px; padding: 4px 14px 14px;
+    border-left: 2px solid rgba(45, 212, 191, .5);
+    background: rgba(2, 6, 23, .28);
+    border-radius: 0 var(--raio-p) var(--raio-p) 0;
 }
-.config-titulo { margin: 14px 0 6px; font-size: .82rem; color: var(--dim);
-                 text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+.config-titulo { margin: 14px 0 6px; font-size: .74rem; color: var(--dim);
+                 text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
 .config-setor > div:first-child > .config-titulo { margin-top: 0; }
-.config-ajuda { margin: 0 0 8px; font-size: .8rem; color: var(--dim); line-height: 1.45; }
+.config-ajuda { margin: 0 0 8px; font-size: .84rem; color: var(--dim); line-height: 1.5; }
+.config-ajuda strong { color: #cbd5e1; }
 
-/* "De [    ] a [    ]" numa linha só. Em duas linhas o "a" fica órfão no meio do
-   cartão e deixa de ligar os dois campos. */
+/* "De [    ] a [    ]" numa linha só. */
 .faixa { display: flex; align-items: center; gap: 8px; }
 .faixa label { margin: 0; white-space: nowrap; }
 .faixa input { margin: 0; }
 
-/* Cada faixa bloqueada com o seu "Liberar" ao lado. O motivo pode ser longo e
-   quebra em várias linhas; o botão não encolhe junto. */
+/* Cada faixa bloqueada com o seu "Liberar" ao lado. */
 .bloqueado {
     display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
     padding: 8px 0; border-top: 1px solid var(--border);
     font-size: .86rem;
 }
-.bloqueado button { width: auto; margin: 0; flex: 0 0 auto; padding: 5px 10px; font-size: .8rem; }
+.bloqueado button { width: auto; margin: 0; flex: 0 0 auto; padding: 5px 10px; font-size: .8rem; min-height: 34px; }
 
 /* Não há botão de salvar: escolher a opção grava. Este "✓ salvo" é o que
    impede que gravar sozinho vire gravar em silêncio. */
-.salvo { display: inline-block; margin-top: 8px; font-size: .82rem; color: var(--teal); }
+.salvo { display: inline-block; margin-top: 8px; font-size: .82rem; font-weight: 700; color: var(--teal-claro); }
 
-/* `input[type="radio"], input[type="checkbox"]` e não só o rádio. A regra
-   `input { width: 100% }` lá em cima vale para os dois, e enquanto esta
-   exceção cobria só um deles as caixas de marcar da lista de setores saíam
-   com 385px de largura por 13px de altura — uma linha fina atravessando o
-   cartão, com o nome do setor empurrado para o extremo direito, longe da
-   caixa que ele nomeia. Aquela lista virou botão (`.setor-botao`), mas a
-   exceção fica: a próxima caixa de marcar desta tela não pode renascer torta
-   pelo mesmo motivo. */
-.opcao { display: flex; align-items: center; gap: 9px; margin: 7px 0; }
+/* `input[type="radio"], input[type="checkbox"]`: a regra `input { width: 100% }`
+   vale para os dois, e sem esta exceção as caixas de marcar saíam com 385px de
+   largura por 13px de altura. */
+.opcao { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 .opcao input[type="radio"],
-.opcao input[type="checkbox"] { width: auto; min-height: 0; flex: none; }
-.opcao label { margin: 0; color: var(--text); font-size: .9rem; }
+.opcao input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; flex: none; accent-color: var(--teal); box-shadow: none; }
+.opcao label { margin: 0; color: var(--text); font-size: .92rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
 
-/* Os setores de um aparelho: um botão por setor, que acende ao ser tocado.
-   Embrulham em várias linhas porque um evento pode ter uma dúzia de setores e
-   a tela tem 460px no máximo. */
+/* Os setores de um aparelho: um botão por setor, que acende ao ser tocado. */
 .setores-botoes { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
 .setor-botao {
     width: auto; margin: 0;
-    padding: 9px 14px; min-height: 40px;
-    font-size: .88rem; font-weight: 600;
-    border: 1px solid var(--border);
+    padding: 9px 15px; min-height: 40px;
+    font-size: .88rem; font-weight: 700;
+    border: 1px solid var(--border-forte);
     border-radius: 999px;
-    background: transparent; color: var(--dim);
+    background: rgba(255, 255, 255, .03); color: var(--dim);
+    box-shadow: none;
 }
 /* Aceso: cor cheia, e não só uma borda. O porteiro configura isto uma vez e
-   confere de relance; um estado marcado por detalhe de borda se perde no
-   escuro do cartão. */
+   confere de relance. */
 .setor-botao[aria-pressed="true"] {
-    background: var(--teal); color: #06231f; border-color: var(--teal);
+    background: linear-gradient(135deg, var(--teal-claro), var(--teal));
+    color: #04201c; border-color: transparent;
+    box-shadow: 0 8px 18px -10px rgba(20, 184, 166, .8);
 }
 
-/* ── A zona de risco ──────────────────────────────────────────────────────
- *
- * Fica no fim da engrenagem e é a ÚNICA parte vermelha da configuração. A
- * linha de cima e o respiro grande não são enfeite: eles são o que impede o
- * dono de esbarrar em "Zerar as entradas" enquanto rola a página procurando
- * um setor. O vermelho aqui significa "isto muda o evento inteiro", e por
- * isso ele não pode aparecer em mais nenhum lugar desta tela. */
+/* ── A zona de risco ─────────────────────────────────────────────────────
+   Fica no fim da engrenagem e é a ÚNICA parte vermelha da configuração. */
 .zona-de-risco {
-    margin-top: 36px; padding-top: 18px;
+    margin-top: 40px; padding-top: 18px;
     border-top: 1px solid rgba(239, 68, 68, .45);
 }
-.zona-de-risco > h2 { color: var(--red); }
-.zona-de-risco .cartao { border-color: rgba(239, 68, 68, .5); }
+.zona-de-risco > h2 { color: #f87171; }
+.zona-de-risco > h2::after { background: linear-gradient(90deg, rgba(239, 68, 68, .45), transparent); }
+.zona-de-risco .cartao { border-color: rgba(239, 68, 68, .40); background: linear-gradient(180deg, #1c1826, #141522); }
 .zona-de-risco h3 { color: #fca5a5; }
 
 /* Contornado, e não preenchido: um botão vermelho cheio puxaria o olho para
-   si assim que a seção entrasse na tela — e o que o dono precisa fazer antes
-   de tocar aqui é LER os dois parágrafos acima dele. */
+   si antes de o dono LER o que está acima dele. */
 button.perigo {
-    background: transparent; color: #fca5a5;
+    background: rgba(239, 68, 68, .06); color: #fca5a5;
     border: 1px solid var(--red);
+    box-shadow: none;
 }
+button.perigo:hover:not(:disabled) { background: rgba(239, 68, 68, .12); }
 
-/* ── Os eventos que já acabaram ───────────────────────────────────────────
- *
- * Uma linha por evento, e ela NÃO é botão: tocar no nome de um evento
- * finalizado não pode levar à leitura de ingresso. Sem luz e sem o
- * celular-com-QR, pelo mesmo motivo — evento finalizado não é portão. */
+/* ── Os eventos que já acabaram ─────────────────────────────────────────── */
 .linha-finalizada {
     display: flex; align-items: center; gap: 12px;
-    padding: 12px 16px; margin-bottom: 10px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 10px;
+    background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
 }
 .linha-finalizada .dados-finalizado {
-    flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px;
+    flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;
 }
-.linha-finalizada .nome-evento { font-size: 1.05rem; font-weight: 700; }
+.linha-finalizada .nome-evento { font-size: 1.05rem; font-weight: 700; overflow-wrap: anywhere; }
 .linha-finalizada .detalhe-finalizado { color: var(--dim); font-size: .84rem; }
 .linha-finalizada button {
     width: auto; margin: 0; flex: 0 0 auto;
     padding: 8px 14px; min-height: 40px; font-size: .86rem;
 }
 
-.codigo-gerado {
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-    font-size: 1.7rem; letter-spacing: .18em; text-align: center;
-    padding: 14px; border-radius: 8px;
-    background: rgba(20, 184, 166, .12); border: 1px dashed var(--teal);
-}
-
-/* A caixa do endereço de pareamento, ao fim da seção de aparelhos. */
-.pareamento { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
-.pareamento a { display: block; word-break: break-all; font-size: 0.82rem; margin: 6px 0 10px; }
-.pareamento canvas { background: #fff; border-radius: 8px; padding: 8px; }
-
-/* A faixa de atualização. Discreta de propósito: ela não pode competir com o
-   "Novo Evento" nem com as barras dos eventos, que é o que o dono veio fazer.
-   Mesma aparência da faixa da portaria, para as duas telas do aplicativo
-   dizerem a mesma coisa do mesmo jeito. */
+/* A faixa de atualização. Discreta de propósito. Mesma aparência da faixa da
+   portaria, para as duas telas dizerem a mesma coisa do mesmo jeito. */
 #faixa-atualizacao {
-    margin: 0 0 12px; padding: 10px; min-height: 0;
-    font-size: .85rem; font-weight: 600; width: 100%;
-    background: rgba(20,184,166,.14); color: #14b8a6;
-    border: 1px solid rgba(20,184,166,.4); border-radius: 8px;
-    font-family: inherit; cursor: pointer;
+    margin: 0 0 12px; padding: 10px 14px; min-height: 0;
+    font-size: .85rem; font-weight: 700; width: 100%;
+    background: rgba(20, 184, 166, .12); color: var(--teal-claro);
+    border: 1px solid rgba(20, 184, 166, .45); border-radius: var(--raio-p);
+    font-family: inherit; cursor: pointer; box-shadow: none;
 }
 
-/* ── A tela inicial ──────────────────────────────────────────────────────── */
+/* ── O cabecalho ────────────────────────────────────────────────────────── */
 
-.cabecalho { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
-.cabecalho img { height: 46px; }
-.cabecalho .titulos { display: flex; flex-direction: column; line-height: 1.15; }
-.cabecalho .titulos strong { font-size: 1.5rem; }
-.cabecalho .titulos span { font-size: 1.05rem; color: var(--dim); }
-
-.rotulo-secao {
-    font-size: 1.15rem; color: var(--dim); text-align: center;
-    margin: 24px 0 12px; font-weight: 700;
+.cabecalho {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 22px; padding-bottom: 16px;
+    position: relative;
+}
+/* A assinatura da marca: um fio de luz que vai do verde-agua ao laranja da
+   fita e some. E a unica vez que o laranja do icone aparece na casa. */
+.cabecalho::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--teal-claro) 0%, var(--azul) 38%, var(--laranja) 62%, transparent 100%);
+    opacity: .85;
+}
+.cabecalho img { height: 44px; border-radius: 8px; }
+.cabecalho .titulos { display: flex; flex-direction: column; line-height: 1.12; }
+.cabecalho .titulos strong { font-size: 1.42rem; font-weight: 800; letter-spacing: -0.02em; }
+.cabecalho .titulos span {
+    font-size: .70rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--teal-claro); margin-top: 3px;
 }
 
-/* A engrenagem fica FORA da barra, como na imagem que o usuário mandou. Dentro
-   dela, o toque no evento cairia na configuração por engano -- e no portão isso
-   é a fila parada enquanto alguém procura o botão de voltar. */
+/* O olho do cabeçalho: os menus da TELA, à direita e encostado na borda. */
+.botao-olho {
+    margin-left: auto;
+    flex: none;
+    width: 46px; height: 46px; min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; margin-top: 0;
+    background: rgba(255, 255, 255, .04);
+    color: #cbd5e1;
+    border: 1px solid var(--border-forte);
+    border-radius: 50%;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.botao-olho:hover { background: rgba(255, 255, 255, .08); color: var(--text); }
+.botao-olho svg { width: 24px; height: 24px; }
+
+/* ── A tela inicial ─────────────────────────────────────────────────────── */
+
+/* A engrenagem fica FORA da barra: dentro dela, o toque no evento cairia na
+   configuração por engano -- e no portão isso é a fila parada. */
 .linha-evento { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 
 .barra-evento {
     flex: 1; display: flex; align-items: center; gap: 14px;
     /* 64px: o alvo de toque de quem está de pé, no escuro, com uma mão. */
-    min-height: 64px; padding: 12px 18px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-    color: var(--text); font-family: inherit; font-size: 1.25rem; font-weight: 700;
+    min-height: 66px; padding: 12px 16px 12px 18px;
+    background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--border); border-radius: 16px;
+    color: var(--text); font-family: inherit; font-size: 1.2rem; font-weight: 700;
+    letter-spacing: -0.01em;
     text-align: left; cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), var(--sombra);
     /* `margin-top: 16px` da regra geral de `button` empurraria cada barra para
        fora do alinhamento com a engrenagem ao lado. */
     margin: 0;
+    min-width: 0;
 }
-/* A barra "Meus Pedidos" é a única SEM evento dentro: não tem luz à esquerda
-   nem celular-com-QR à direita, e por isso o conteúdo dela se centra. O
-   `flex: 1` do nome vale para as barras de evento, onde ele precisa empurrar o
-   ícone de ler até a borda; aqui ele espalharia o texto contra a esquerda e o
-   `justify-content: center` não teria o que centrar. */
-.barra-evento.destaque { justify-content: center; }
-.barra-evento .nome-evento { flex: 1; }
+.barra-evento:hover:not(:disabled) { border-color: rgba(148, 163, 184, .38); filter: none; }
+.barra-evento .nome-evento { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* A barra "Meus Pedidos" é a única SEM evento dentro: e a PORTA de entrada dos
+   pedidos, e por isso e a unica barra pintada com o degrade da marca. */
+.barra-evento.destaque {
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(20, 184, 166, .22), rgba(59, 130, 246, .14) 60%, rgba(18, 27, 48, .9));
+    border-color: rgba(45, 212, 191, .38);
+}
 .barra-evento.destaque .nome-evento { flex: 0 0 auto; }
-/* O ícone de lista, à esquerda do texto. Ele é a pista de que esta barra abre
-   uma LISTA, e não um evento — as outras barras desta tela abrem a leitura. */
-.barra-evento .icone-lista { color: var(--teal); display: flex; flex: none; }
-.barra-evento .icone-lista svg { width: 26px; height: 26px; }
-/* O celular-com-QR do lado direito da barra. Maior que os 24px que o SVG
-   declara, para ficar como está na imagem de referência — e porque ele é a
-   única pista visual de que a barra inteira é o botão de LER. */
-.barra-evento .icone-ler { color: #60a5fa; display: flex; }
-.barra-evento .icone-ler svg { width: 34px; height: 34px; }
-/* A engrenagem preenche melhor a bolinha, que tem 52px. */
-.botao-engrenagem svg { width: 30px; height: 30px; }
+/* O ícone de lista, à esquerda do texto: a pista de que esta barra abre uma
+   LISTA, e não um evento. Vive num selo redondo verde-agua. */
+.barra-evento .icone-lista {
+    color: #04201c; display: flex; flex: none;
+    width: 34px; height: 34px; border-radius: 10px;
+    align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--teal-claro), var(--teal));
+    box-shadow: 0 6px 14px -8px rgba(20, 184, 166, .9);
+}
+.barra-evento .icone-lista svg { width: 20px; height: 20px; }
+/* O celular-com-QR do lado direito: a única pista visual de que a barra
+   inteira é o botão de LER. Num selo azul, para nao se confundir com o
+   verde-agua de "por aqui". */
+.barra-evento .icone-ler {
+    color: #93c5fd; display: flex; flex: none;
+    width: 40px; height: 40px; border-radius: 12px;
+    align-items: center; justify-content: center;
+    background: rgba(59, 130, 246, .14);
+    border: 1px solid rgba(59, 130, 246, .28);
+}
+.barra-evento .icone-ler svg { width: 26px; height: 26px; }
 
 .luz {
-    width: 22px; height: 22px; border-radius: 50%;
-    border: 2px solid var(--dim); background: transparent; flex: none;
+    width: 12px; height: 12px; border-radius: 50%; flex: none;
+    border: 2px solid var(--apagado); background: transparent;
+    box-shadow: 0 0 0 4px rgba(100, 113, 138, .12);
 }
-.luz.acesa { background: #16a34a; border-color: #16a34a; }
+/* Acesa: este aparelho JA e portao deste evento. A luz respira, para dizer
+   "vivo" sem uma palavra. */
+.luz.acesa {
+    background: var(--verde); border-color: var(--verde);
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, .18);
+    animation: pulsar-verde 2.4s ease-out infinite;
+}
+@keyframes pulsar-verde {
+    0%   { box-shadow: 0 0 0 4px rgba(34, 197, 94, .22); }
+    70%  { box-shadow: 0 0 0 9px rgba(34, 197, 94, 0); }
+    100% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
+}
 /* Evento desligado (usuário, 17/08/2026). Vence o verde: portão de evento
    inativo não lê nada. */
-.luz.inativa { background: #dc2626; border-color: #dc2626; }
+.luz.inativa { background: #dc2626; border-color: #dc2626; box-shadow: 0 0 0 4px rgba(220, 38, 38, .16); animation: none; }
+@media (prefers-reduced-motion: reduce) {
+    .luz.acesa, #faixa-elevacao::before { animation: none; }
+}
 
 /* A palavra continua ao lado do nome, com luz vermelha e tudo: cor sozinha não
-   é rótulo, e quem não distingue as duas ficaria sem a informação. */
+   é rótulo. */
 .marca-inativo {
-    font-size: .78rem; font-weight: 600; color: var(--dim);
-    border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px;
+    font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: #fca5a5; flex: none;
+    border: 1px solid rgba(239, 68, 68, .45); background: rgba(239, 68, 68, .08);
+    border-radius: 999px; padding: 3px 10px;
 }
 
-/* O olho do cabeçalho: os menus da TELA, à direita e encostado na borda.
-   `margin-left: auto` o empurra para lá sem precisar de coluna nova. */
-.botao-olho {
-    margin-left: auto;
-    flex: none;
-    width: 46px; height: 46px;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0;
-    background: transparent;
-    color: var(--dim);
-    border: 1px solid var(--border);
-    border-radius: 50%;
-}
-.botao-olho svg { width: 24px; height: 24px; }
-
-#menu-geral #btn-voltar-menu { width: auto; padding: 10px 18px; }
-
+/* A engrenagem de cada evento e o "+" dos pedidos: bolinhas de 52px, na
+   coluna da direita. */
 .botao-engrenagem {
     width: 52px; height: 52px; flex: none; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    background: var(--card); border: 1px solid var(--border);
-    color: var(--dim); font-size: 1.6rem; font-family: inherit; cursor: pointer;
+    background: rgba(255, 255, 255, .04); border: 1px solid var(--border-forte);
+    color: #cbd5e1; font-size: 1.7rem; font-family: inherit; cursor: pointer;
     margin: 0; padding: 0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
     /* `min-height: 48px` da regra geral não basta: sem zerar aqui, a bolinha
        cresceria e deixaria de ser redonda. */
     min-height: 0;
 }
-
-/* ── As PORTAS da casa ────────────────────────────────────────────────────
- *
- * Entrar, escolher a senha e entrar na configuracao sao a mesma coisa vista de
- * tres lugares: a pessoa provando quem e. A linha verde-agua no alto e o que
- * as reune -- sem ela, cada uma parecia um formulario solto no meio da tela.
- *
- * O logotipo NAO se repete aqui, embora a primeira ideia tenha sido essa: o
- * `<header>` desta pagina fica FORA de todos os blocos de estado, entao a
- * marca ja esta na tela dez pixels acima do cartao. Um segundo logotipo seria
- * a mesma imagem duas vezes na mesma dobra. */
-#bloco-entrar, #trocar-senha, #caixa-entrar-config { border-top: 2px solid var(--teal); }
-#bloco-entrar h1, #trocar-senha h1 { font-size: 1.35rem; margin: 0 0 6px; }
-#bloco-entrar .config-ajuda, #trocar-senha .config-ajuda { margin-bottom: 14px; }
-
-/* Meus Pedidos: um cartao por pedido, o Carregar a direita. */
-#meus-pedidos #btn-voltar-pedidos { width: auto; padding: 10px 18px; }
-/* A linha a esquerda fala o mesmo idioma que o `.aviso` desta folha ja fala:
-   verde-agua quando ha pelo menos um setor IMPRESSO -- ou seja, quando
-   carregar este pedido ja poe gente para dentro hoje --, e cinza quando nao
-   ha. A palavra continua nos selos de cada setor: a cor aqui e o resumo, nunca
-   a unica fonte da informacao. */
-.cartao-pedido {
-    display: grid; gap: 8px;
-    border-left: 3px solid rgba(148, 163, 184, .35);
+.botao-engrenagem:hover:not(:disabled) { background: rgba(255, 255, 255, .08); color: var(--text); filter: none; }
+.botao-engrenagem svg { width: 28px; height: 28px; }
+/* O "+" ao lado de Meus Pedidos e a unica bolinha CHEIA: e um convite, nao uma
+   configuracao. */
+#btn-meus-pedidos-mais {
+    background: linear-gradient(135deg, var(--teal-claro), var(--teal));
+    color: #04201c; border-color: transparent; font-weight: 700; font-size: 2.1rem; line-height: 1;
+    padding-bottom: 3px;           /* o "+" da fonte senta um pouco abaixo do centro otico */
+    box-shadow: 0 10px 22px -12px rgba(20, 184, 166, .8), inset 0 1px 0 rgba(255, 255, 255, .25);
 }
-.cartao-pedido.tem-impresso { border-left-color: var(--teal); }
-.pedido-topo { display: flex; justify-content: space-between; align-items: baseline; }
-.pedido-data { color: var(--dim); font-size: .85rem; }
-.pedido-nome { font-size: 1.15rem; font-weight: 700; }
-.pedido-setores { display: grid; gap: 4px; }
-.pedido-setor { display: flex; justify-content: space-between; align-items: center; font-size: .95rem; }
-.selo-impressao { font-size: .74rem; padding: 2px 8px; border-radius: 999px; border: 1px solid; }
-.selo-impressao.sim { color: #16a34a; border-color: rgba(22,163,74,.5); }
-.selo-impressao.nao { color: var(--dim); border-color: rgba(148,163,184,.4); }
+
+/* ── Os botoes de "voltar" ─────────────────────────────────────────────────
+   Pilulas discretas, alinhadas a esquerda: sao navegacao, nao acao. */
+#menu-geral #btn-voltar-menu,
+#meus-pedidos #btn-voltar-pedidos,
+#engrenagem #btn-fechar-engrenagem {
+    width: auto; padding: 9px 16px 9px 12px; min-height: 40px;
+    font-size: .9rem; font-weight: 700; color: #cbd5e1;
+    background: rgba(255, 255, 255, .04); border: 1px solid var(--border-forte);
+    border-radius: 999px; box-shadow: none; margin-top: 0;
+}
+#engrenagem #btn-fechar-engrenagem { margin-bottom: 14px; }
+#engrenagem #nome-evento-titulo { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 14px; }
+
+/* ── O menu do olho: uma lista, com a seta a direita ────────────────────── */
+#menu-geral .cartao { padding: 6px 8px; }
+#menu-geral .cartao > button {
+    position: relative;
+    margin: 0; padding: 15px 44px 15px 14px;
+    text-align: left; font-size: 1rem; font-weight: 600; color: var(--text);
+    background: transparent; border: 0; border-radius: 12px; box-shadow: none;
+}
+#menu-geral .cartao > button + button::before {
+    content: ""; position: absolute; left: 14px; right: 14px; top: 0; height: 1px;
+    background: var(--border);
+}
+#menu-geral .cartao > button::after {
+    content: ""; position: absolute; right: 16px; top: 50%;
+    width: 9px; height: 9px; margin-top: -6px;
+    border-right: 2px solid var(--apagado); border-bottom: 2px solid var(--apagado);
+    transform: rotate(-45deg);
+}
+#menu-geral .cartao > button:hover:not(:disabled) { background: rgba(255, 255, 255, .05); }
+#menu-geral .cartao > button:first-child { margin-top: 0; }
+
+/* ── As PORTAS da casa ─────────────────────────────────────────────────────
+   Entrar, escolher a senha e entrar na configuracao sao a mesma coisa vista de
+   tres lugares: a pessoa provando quem e. O que as reune e a barra da marca no
+   alto do cartao e o cadeado ao lado do titulo. O logotipo NAO se repete: o
+   cabecalho ja esta dez pixels acima. */
+#bloco-entrar, #trocar-senha, #caixa-entrar-config { overflow: hidden; padding-top: 24px; }
+#bloco-entrar::before, #trocar-senha::before, #caixa-entrar-config::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+    background: linear-gradient(90deg, var(--teal-claro), var(--azul));
+}
+#bloco-entrar h1, #trocar-senha h1, #caixa-entrar-config h1 {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1.4rem; font-weight: 800; margin: 0 0 8px;
+}
+#bloco-entrar h1::before, #trocar-senha h1::before, #caixa-entrar-config h1::before {
+    content: ""; flex: none; width: 34px; height: 34px; border-radius: 10px;
+    border: 1px solid rgba(45, 212, 191, .35);
+    /* O cadeado, desenhado por cima do selo em degrade. */
+    background-image:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232dd4bf' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><rect x='4' y='11' width='16' height='10' rx='2'/><path d='M8 11V7a4 4 0 0 1 8 0v4'/></svg>"),
+        linear-gradient(135deg, rgba(45, 212, 191, .22), rgba(59, 130, 246, .18));
+    background-repeat: no-repeat; background-position: center; background-size: 18px 18px, cover;
+}
+#bloco-entrar .config-ajuda, #trocar-senha .config-ajuda { margin-bottom: 14px; }
+#bloco-entrar button + button, #trocar-senha button + button, #caixa-entrar-config button + button { margin-top: 10px; }
+
+/* ── Meus Pedidos: um cartao por pedido, o Carregar a direita ───────────── */
+#meus-pedidos > .config-ajuda { margin-bottom: 16px; }
+.cartao-pedido {
+    display: grid; gap: 10px;
+    padding-left: 22px;
+}
+/* A linha a esquerda: verde-agua quando ha pelo menos um setor IMPRESSO, cinza
+   quando nao ha. A palavra continua nos selos de cada setor. */
+.cartao-pedido::before {
+    content: ""; position: absolute; left: 0; top: 18px; bottom: 18px; width: 4px;
+    border-radius: 0 4px 4px 0; background: rgba(148, 163, 184, .35);
+}
+.cartao-pedido.tem-impresso::before { background: linear-gradient(180deg, var(--teal-claro), var(--teal)); }
+.pedido-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+/* O numero do pedido num selo: e o que o cliente le no ERP e no papel. */
+.pedido-topo strong {
+    font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--teal-claro); background: rgba(20, 184, 166, .12);
+    border: 1px solid rgba(20, 184, 166, .3); border-radius: 999px; padding: 4px 11px;
+    font-variant-numeric: tabular-nums;
+}
+.pedido-data { color: var(--dim); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.pedido-nome { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.015em; line-height: 1.25; overflow-wrap: anywhere; }
+.pedido-setores { display: grid; gap: 0; }
+.pedido-setor {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    font-size: .95rem; padding: 8px 0; border-top: 1px solid var(--border);
+}
+.pedido-setor:first-child { border-top: 0; }
+.selo-impressao {
+    font-size: .72rem; font-weight: 700; letter-spacing: .03em; padding: 3px 9px;
+    border-radius: 999px; border: 1px solid; white-space: nowrap; flex: none;
+}
+.selo-impressao.sim { color: #4ade80; border-color: rgba(34, 197, 94, .45); background: rgba(34, 197, 94, .08); }
+.selo-impressao.nao { color: var(--dim); border-color: rgba(148, 163, 184, .35); }
 /* A acao fica separada da leitura por uma linha: o cartao inteiro e
    informacao, e so o que esta abaixo dela muda alguma coisa. */
 .pedido-acoes {
     display: flex; justify-content: flex-end;
-    margin-top: 6px; padding-top: 10px;
+    margin-top: 2px; padding-top: 12px;
     border-top: 1px solid var(--border);
 }
-.pedido-acoes button { width: auto; min-width: 140px; margin-top: 0; }
+.pedido-acoes button { width: auto; min-width: 150px; margin-top: 0; }
+/* A seta no Carregar: e um passo adiante, e o botao diz isso sem palavras. */
+.pedido-acoes button::after { content: " →"; font-weight: 800; }
 
-/* A caixa do Carregar. Os campos ja vem da regra `input, select` la de cima --
-   nao ha nada de especial neles aqui, e uma segunda regra so criaria duas
-   verdades sobre a mesma caixa de texto. O que falta e o titulo na medida das
-   outras caixas de cartao, e uma folga entre a ficha e a senha. */
-#caixa-carregar h1 { font-size: 1.35rem; margin: 0 0 6px; }
+/* ── A caixa do Carregar ────────────────────────────────────────────────── */
+#caixa-carregar { overflow: hidden; padding-top: 24px; }
+#caixa-carregar::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+    background: linear-gradient(90deg, var(--teal-claro), var(--azul));
+}
+#caixa-carregar h1 { font-size: 1.4rem; font-weight: 800; margin: 0 0 6px; }
 #caixa-carregar .config-ajuda { margin-top: 14px; }
 /* A linha que separa a FICHA do evento da CONFIRMACAO. Acima dela a pessoa
-   descreve o que vai nascer; daqui para baixo ela assina. Sem a separacao, a
-   senha parecia mais um campo do formulario, e "Conta: fulano@..." se perdia
-   no meio de dois paragrafos cinzas do mesmo tamanho. */
+   descreve o que vai nascer; daqui para baixo ela assina. */
 .carregar-conta {
-    margin-top: 16px; padding-top: 14px;
+    margin-top: 18px; padding-top: 14px;
     border-top: 1px solid var(--border);
 }
-
-/* O menu do olho: o primeiro botao de um cartao nao precisa da margem que
-   separa um botao do outro. Sem isto sobravam 34px de vazio entre o alto do
-   cartao "Minha conta" e o "Trocar minha senha". */
-#menu-geral .cartao > button:first-child { margin-top: 0; }
+#caixa-carregar button + button { margin-top: 10px; }
