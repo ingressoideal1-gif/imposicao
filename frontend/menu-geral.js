@@ -1,8 +1,10 @@
 /**
  * O menu geral, atras do olho do cabecalho.
  *
- * Terceiro estado desta pagina, ao lado de `#lista` e `#engrenagem`, e como
- * eles nunca aparece junto com os outros.
+ * Um dos SEIS estados de topo desta pagina -- a tela inicial (`#lista` + a
+ * barra `#bloco-novo-evento`), este menu, a `#engrenagem`, `#meus-pedidos`,
+ * `#bloco-entrar` e `#trocar-senha` --, e como eles nunca aparece junto com os
+ * outros. Quem esconde e devolve a tela inicial para todos e o `conta.js`.
  *
  * ## O que vai aqui, e o que nao vai
  *
@@ -53,10 +55,11 @@
     /**
      * A tela inicial inteira, e nao so a lista de eventos.
      *
-     * "Novo Evento" entra aqui porque ele fica FORA do `#lista` de proposito --
-     * o porteiro nao tem conta, e a barra precisa aparecer acima do login. Sem
-     * escondê-lo junto, ele sobrava em cima dos eventos finalizados, oferecendo
-     * ler um QR numa tela que nao e a de ler QR.
+     * A barra do topo ("Meus Pedidos" desde 17/08/2026) entra aqui porque ela
+     * fica FORA do `#lista` de proposito -- o porteiro nao tem conta, e ela
+     * precisa aparecer acima do login. Sem escondê-la junto, ela sobrava em
+     * cima dos eventos finalizados, oferecendo os pedidos do cliente numa tela
+     * que nao e a dos pedidos.
      */
     var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento'];
 

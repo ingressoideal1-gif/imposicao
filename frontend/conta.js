@@ -75,6 +75,16 @@
         return !!el && !el.classList.contains('sumindo');
     }
 
+    /**
+     * A DONA da tela inicial, e por isso exportada.
+     *
+     * Ela era interna, e cada tela nova que precisava esconder a casa fazia a
+     * propria copia da lista de blocos -- foi assim que "Meus Pedidos" nasceu
+     * sabendo de `#lista` e `#bloco-novo-evento` e ignorando `#engrenagem` e
+     * `#menu-geral`. Duas copias parciais e o mesmo defeito de sempre: telas
+     * empilhadas, e um "Voltar" que devolve a casa por baixo de algo aberto.
+     * Quem precisar esconder a casa chama esta funcao.
+     */
     function esconderTelaInicial(esconder) {
         if (esconder) {
             DA_TELA_INICIAL.concat(DOS_OUTROS).forEach(function (id) {
@@ -366,6 +376,7 @@
         mostrarEntrar: mostrarEntrar, esconderEntrar: esconderEntrar,
         depoisDeEntrar: depoisDeEntrar, conferirSenhaProvisoria: conferirSenhaProvisoria,
         mostrarTrocarSenha: mostrarTrocarSenha,
+        esconderTelaInicial: esconderTelaInicial,
         sair: sair
     };
     document.addEventListener('DOMContentLoaded', ligar);

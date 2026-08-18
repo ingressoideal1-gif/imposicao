@@ -5,26 +5,31 @@
  * nao carregado); esta tela so desenha e manda para a caixa do Carregar.
  * Sem sessao, pede para entrar primeiro e volta para ca.
  *
- * ## O quinto estado de topo da casa
+ * ## O sexto estado de topo da casa
  *
  * `#meus-pedidos` entra ao lado de `#lista` + `#bloco-novo-evento`, do
- * `#menu-geral`, da `#engrenagem` e das duas telas de conta -- e, como eles,
- * nunca convive com os outros. O contrato escrito no `conta.js` vale aqui:
- * quem abre esconde os outros, e quem fecha so devolve a tela inicial se nao
- * houver mais nada na frente dela. Por isso `abrir()` fecha o menu e esconde a
- * tela inicial, e o `conta.js` esconde ESTA tela quando uma das dele aparece.
+ * `#menu-geral`, da `#engrenagem`, do `#bloco-entrar` e do `#trocar-senha` --
+ * seis ao todo, e, como eles, nunca convive com os outros.
+ *
+ * Quem esconde e devolve a tela inicial e o `conta.js`, por
+ * `conta.esconderTelaInicial()`. Este arquivo NAO guarda uma copia da lista de
+ * blocos: essa copia foi o defeito original desta pagina -- dois donos sem
+ * contrato entre si, cada um sabendo de metade dos blocos, e telas empilhadas
+ * como resultado. Chamando a dona, `#menu-geral` e `#engrenagem` saem do
+ * caminho junto, e o `NA_FRENTE` dela protege a volta.
+ *
+ * ## A engrenagem sai ANTES, e nao junto
+ *
+ * Esconder a `#engrenagem` nao bastaria. Ela e a unica tela desta pagina com
+ * uma senha por tras: o `fecharEngrenagem()` e o unico lugar que apaga a
+ * elevacao de 15 minutos e desfaz o login relampago. Sair dela pela barra sem
+ * passar por ali deixaria o aparelho -- que fica com o porteiro -- com a conta
+ * do dono aberta e a configuracao liberada.
  */
 (function () {
     'use strict';
     var $ = function (id) { return document.getElementById(id); };
-    var DA_TELA_INICIAL = ['lista', 'bloco-novo-evento'];
 
-    function mostrarInicial(mostrar) {
-        DA_TELA_INICIAL.forEach(function (id) {
-            var el = $(id);
-            if (el) { el.classList.toggle('sumindo', !mostrar); }
-        });
-    }
     function numero(n) { return Number(n || 0).toLocaleString('pt-BR'); }
     function dataCurta(iso) {
         if (!iso) { return ''; }
@@ -69,6 +74,9 @@
         b.type = 'button';
         b.id = 'carregar-' + p.pedido;
         b.textContent = 'Carregar';
+        // "Carregar" sozinho se repete em cada cartao: sem o numero do pedido,
+        // quem usa leitor de tela ouve a mesma palavra varias vezes sem saber
+        // de qual pedido se trata.
         b.setAttribute('aria-label', 'Carregar o pedido ' + p.pedido);
         b.addEventListener('click', function () {
             if (!window.carregarPedido) { return; }
@@ -96,25 +104,65 @@
         vazio.classList.toggle('sumindo', lista.length > 0);
     }
 
-    function abrir() {
-        // `Promise.resolve().then(...)` e nao a chamada direta: `AcessoConta.sessao()`
-        // LANCA de forma sincrona quando o `supabaseClient` e nulo -- sem rede na
-        // primeira abertura, ou no modo offline deliberado do `supabase-config.js`.
-        // Um throw solto aqui sairia do ouvinte do toque como erro nao tratado, e o
-        // dono tocaria na barra sem ver acontecer absolutamente nada. E a mesma
-        // protecao que o `lista-eventos.js` ja tem no arranque dele.
+    /** Entrar, e voltar para ca. Um `depois` so, consumido na primeira vez. */
+    function pedirParaEntrar() {
+        return window.conta.mostrarEntrar({ depois: function () { return abrir(); } });
+    }
+
+    /**
+     * A frase de uma falha que NAO e sessao vencida.
+     *
+     * Sem status a rede e que faltou, e ai a frase tem de dizer o que fazer --
+     * a tela nao pode ficar em "Buscando…" para sempre. Com status, o servidor
+     * escreve em portugues quando tem o que dizer; quando nao tem, o
+     * `acesso-conta.js` inventa um "Erro N" para nao devolver texto vazio, e
+     * esse e o unico texto que nao pode chegar ao dono: ele nao informa nem
+     * oferece saida. Comparar com o texto inventado e exato -- adivinhar "isto
+     * parece uma frase?" jogaria fora mensagem legitima e curta do servidor.
+     */
+    function fraseDoErro(e) {
+        if (!e || !e.status) {
+            return 'Preciso de internet para buscar os seus pedidos. Confira a conexão e tente de novo.';
+        }
+        var inventada = 'Erro ' + e.status;
+        if (e.message && e.message !== inventada && e.message.indexOf(' ') !== -1) {
+            return e.message;
+        }
+        return 'Não consegui buscar os seus pedidos agora (código ' + e.status + ').';
+    }
+
+    /**
+     * A engrenagem tem de FECHAR, e nao so sumir.
+     *
+     * O `fecharEngrenagem()` apaga a elevacao de 15 minutos e encerra a sessao
+     * que nasceu ali dentro. Escondê-la por fora deixaria as duas de pe.
+     */
+    function fecharEngrenagemSeAberta() {
         return Promise.resolve().then(function () {
+            var eng = $('engrenagem');
+            if (!eng || eng.classList.contains('sumindo')) { return; }
+            if (!window.Controle || !window.Controle.fecharEngrenagem) { return; }
+            return window.Controle.fecharEngrenagem();
+        });
+    }
+
+    function abrir() {
+        // O `.catch` cobre os dois passos de proposito. `AcessoConta.sessao()`
+        // LANCA de forma sincrona quando o `supabaseClient` e nulo -- sem rede
+        // na primeira abertura, ou no modo offline deliberado do
+        // `supabase-config.js` --, e um throw solto sairia do ouvinte do toque
+        // como erro nao tratado: o dono tocaria na barra e nao aconteceria
+        // absolutamente nada. Tratar as duas falhas como "sem sessao" leva a
+        // tela de entrar, que e uma saida; e o `mostrarEntrar` esconde a
+        // engrenagem de qualquer jeito, se o fechamento dela e que falhou.
+        return fecharEngrenagemSeAberta().then(function () {
             return window.AcessoConta.sessao();
         }).catch(function () { return null; }).then(function (s) {
-            if (!s) {
-                // Um so `depois`: entrou, volta para ca. Sem sessao nao ha o
-                // que buscar, e mandar a pessoa para a lista depois do login
-                // faria ela procurar de novo o botao em que acabou de tocar.
-                window.conta.mostrarEntrar({ depois: function () { return abrir(); } });
-                return;
-            }
-            if (window.menuGeral) { window.menuGeral.fechar(); }
-            mostrarInicial(false);
+            if (!s) { return pedirParaEntrar(); }
+            // A dona das telas primeiro, o nosso bloco depois: `#meus-pedidos`
+            // esta na lista que ela esconde, entao a ordem inversa o apagaria
+            // no mesmo gesto que o abriu.
+            window.conta.esconderTelaInicial(true);
             $('meus-pedidos').classList.remove('sumindo');
             $('pedidos').innerHTML = '';
             var vazio = $('sem-pedidos');
@@ -123,12 +171,13 @@
             return window.AcessoConta.pedir('/meus-pedidos', {
                 headers: { Authorization: 'Bearer ' + s.access_token }
             }).then(function (r) { desenhar(r, s); }).catch(function (e) {
-                // Erro COM status veio do servidor e ja tem frase escrita la;
-                // sem status a rede e que faltou, e a frase tem de dizer o que
-                // fazer -- a tela nao pode ficar so com "Buscando…" para sempre.
-                vazio.textContent = (e && e.status)
-                    ? ((e.message) || 'Não consegui buscar os seus pedidos agora.')
-                    : 'Preciso de internet para buscar os seus pedidos. Confira a conexão e tente de novo.';
+                // SESSAO VENCIDA e a falha mais provavel daqui: sessao no
+                // celular dura dias, e o cliente abre o aplicativo semanas
+                // depois. "Erro 401" na tela nao diz nada e nao oferece saida
+                // nenhuma -- entrar de novo E a saida, e o `depois` traz a
+                // pessoa de volta para os pedidos sem ela tocar em mais nada.
+                if (e && e.status === 401) { return pedirParaEntrar(); }
+                vazio.textContent = fraseDoErro(e);
                 vazio.classList.remove('sumindo');
             });
         });
@@ -136,9 +185,10 @@
 
     function fechar() {
         // `sumindo` em si mesmo ANTES de pedir a tela inicial de volta: e o que
-        // o contrato do `conta.js` exige de quem fecha um estado de topo.
+        // o contrato do `conta.js` exige de quem fecha um estado de topo --
+        // senao o `NA_FRENTE` dela ve esta tela na frente e nao devolve nada.
         $('meus-pedidos').classList.add('sumindo');
-        mostrarInicial(true);
+        window.conta.esconderTelaInicial(false);
         return window.listaEventos.recarregar();
     }
 

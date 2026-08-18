@@ -76,8 +76,12 @@
     </div>
 
     <!-- Envolve a lista inteira para a engrenagem poder escondê-la de uma vez.
-         `#engrenagem` e `#lista` são os dois estados desta página, e nunca
-         aparecem juntos. -->
+
+         `#lista` (com a barra `#bloco-novo-evento` acima dela) é um dos SEIS
+         estados de topo desta página, ao lado de `#menu-geral`, `#engrenagem`,
+         `#meus-pedidos`, `#bloco-entrar` e `#trocar-senha`. Eles nunca
+         aparecem juntos, e quem esconde e devolve a tela inicial para todos é
+         o `conta.js`, por `conta.esconderTelaInicial()`. -->
     <div id="lista">
         <h1 class="rotulo-secao">Meus Eventos</h1>
         <div id="eventos"></div>
@@ -89,20 +93,27 @@
     </div>
 
     <!-- MEUS PEDIDOS: os pedidos já impressos deste cliente, cada um com o
-         Carregar que o transforma em evento. Sexto estado desta página, ao
-         lado de #lista, #menu-geral, #engrenagem e as duas telas de conta. -->
+         Carregar que o transforma em evento.
+
+         É o SEXTO estado de topo desta página, ao lado de #lista (+ a barra
+         #bloco-novo-evento), #menu-geral, #engrenagem, #bloco-entrar e
+         #trocar-senha. Quem esconde e devolve a tela inicial para todos eles é
+         o `conta.js`, por `conta.esconderTelaInicial()`. -->
     <div id="meus-pedidos" class="sumindo">
         <button id="btn-voltar-pedidos" class="secundario" type="button">← Voltar aos meus eventos</button>
         <h1 class="rotulo-secao">Meus Pedidos</h1>
         <p class="config-ajuda">Os pedidos que a gráfica já imprimiu para você. Carregar um pedido cria o evento dele em <strong>Meus Eventos</strong>.</p>
         <div id="pedidos"></div>
-        <p id="sem-pedidos" class="aviso sumindo"></p>
+        <!-- `role="alert"` porque este paragrafo e o unico lugar onde uma
+             falha da busca aparece: sem ele, quem usa leitor de tela fica no
+             "Buscando…" sem saber que a resposta ja chegou e deu errado. -->
+        <p id="sem-pedidos" class="aviso sumindo" role="alert"></p>
     </div>
 
     <!-- O MENU GERAL, atrás do olho do cabeçalho.
 
-         É o terceiro estado desta página, ao lado de `#lista` e `#engrenagem`,
-         e como eles nunca aparece junto com os outros. Aqui vai o que é da
+         É um dos seis estados de topo desta página, e como os outros nunca
+         aparece junto com eles. Aqui vai o que é da
          TELA, e não de um evento: a configuração de um evento continua sendo a
          engrenagem ao lado da barra dele.
 
@@ -227,9 +238,14 @@
     </div>
 
     <!-- A ENGRENAGEM: toda a configuração do evento, atrás de uma senha.
-         `#engrenagem` e `#lista` são os dois estados desta página, e nunca
-         aparecem juntos — quem faz a troca é o `abrirEngrenagem` /
-         `fecharEngrenagem`, do script da engrenagem.
+         Mais um dos seis estados de topo, e quem faz a troca é o
+         `abrirEngrenagem` / `fecharEngrenagem`, do script da engrenagem.
+
+         Ela esconde a barra `#bloco-novo-evento` JUNTO com o `#lista`: a barra
+         vive fora da lista de propósito, e enquanto sobrava aqui em cima ela
+         era uma saída da configuração que não passava pelo
+         `fecharEngrenagem()` — o único lugar que apaga a elevação de 15
+         minutos e desfaz o login relâmpago.
 
          Não sobrou nenhum caminho de código de seis caracteres nesta tela: nem
          a caixa que o mostrava uma vez, nem o botão que gerava outro em cada

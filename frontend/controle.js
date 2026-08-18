@@ -1329,7 +1329,16 @@
         restaurarElevacao();
         return comSenha(evento_id, function () {
             $('engrenagem').classList.remove('sumindo');
+            // A BARRA DO TOPO SAI JUNTO com a lista. Ela vive FORA do `#lista`
+            // -- o porteiro nao tem conta, e ela precisa aparecer acima do
+            // login --, e por isso sobrava por cima da configuracao. Enquanto
+            // sobrou, ela era uma saida da engrenagem que NAO passava pelo
+            // `fecharEngrenagem()`: tocar em "Meus Pedidos" e depois em
+            // "← Voltar" devolvia a casa com a elevacao de 15 minutos de pe e a
+            // sessao relampago ainda aberta, num celular que fica com o
+            // porteiro.
             $('lista').classList.add('sumindo');
+            $('bloco-novo-evento').classList.add('sumindo');
             if (nome) { $('nome-evento-titulo').textContent = nome; }
             return carregarPainel();
         }).catch(function () {
@@ -1350,6 +1359,7 @@
         guardarElevacao(null);
         $('engrenagem').classList.add('sumindo');
         $('lista').classList.remove('sumindo');
+        $('bloco-novo-evento').classList.remove('sumindo');
 
         // A LISTA SE REFAZ AO SAIR DA ENGRENAGEM — e ANTES de a sessão sair.
         //
