@@ -71,8 +71,10 @@ Documentação: [docs/qr_ideal.md](qr_ideal.md) · skill `.claude/skills/qr-idea
 ### ✅ Parte 2 — o código chega à nuvem (**no ar desde a v561**)
 
 Oito tarefas, todas implementadas e testadas. O ciclo fecha: o agente publica a faixa
-sozinho ao imprimir, o atendente gera o QR do Pedido no painel, e o cliente lê com o
-celular e cadastra o evento.
+sozinho ao imprimir, a gráfica libera o acesso do cliente no painel, e o cliente entra no
+aplicativo, acha o pedido em **Meus Pedidos** e toca em **Carregar** para criar o evento.
+Até 17/08/2026 este passo era outro — o atendente gerava o **QR do Pedido** e o cliente o
+lia com a câmera; o QR saiu de circulação naquele dia, junto com o `evento.html`.
 
 Publicada em 14/08/2026, com as três variáveis configuradas no Render e conferidas por
 fora. **Falta o teste de ponta a ponta com um pedido de verdade** — ver abaixo.
@@ -152,7 +154,9 @@ códigos de staff, aparelhos da portaria, e a lista paginada de todos os ingress
 setor com a situação de cada um.
 
 A razão de ela existir é entregar o Ideal Control **já pré-configurado**: o cliente recebe
-o QR do Pedido e encontra os portões prontos, em vez de uma tela em branco.
+o acesso liberado pela gráfica e, ao carregar o pedido, encontra os aparelhos prontos, em
+vez de uma tela em branco. Desde 17/08/2026 é também nesta tela que a gráfica abre esse
+acesso, no bloco **"Acesso do cliente"** — foi o botão "QR do Pedido" que saiu daqui.
 
 Junto vem o **dashboard de gerenciamento de público** — contratado, publicado, entraram,
 presentes, comparecimento, recusas por motivo, ocupação por setor e entradas por hora. É a

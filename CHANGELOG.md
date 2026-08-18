@@ -8,7 +8,7 @@ Registro historico de todas as alteracoes, correcoes e melhorias aplicadas ao si
 
 ---
 
-## [v631 (a publicar)] — A conta do cliente traz os pedidos; o QR do Pedido sai de cena
+## [v631 — 2026-08-17] *(a publicar)* — A conta do cliente traz os pedidos; o QR do Pedido sai de cena
 
 Até aqui o cliente entrava no controle de acesso por um **QR do Pedido**: o atendente
 gerava um QR no painel, mandava por WhatsApp, e quem lesse aquela imagem cadastrava o
@@ -45,7 +45,10 @@ da arte.
 do mesmo cliente, para o pedido complementar não virar uma segunda festa), um setor por
 modelo legível, e carimba as credenciais. A resposta devolve a **elevação de 15 minutos** —
 por isso a pergunta seguinte, "quer usar este aparelho para ler os ingressos dele?", liga o
-aparelho sem pedir a senha de novo. A pessoa acabou de digitá-la ali.
+aparelho sem pedir a senha de novo. A pessoa acabou de digitá-la ali. Ou `null`, se a
+elevação falhar depois de o evento já existir; nesse caso a tela pede a senha de novo antes
+de ligar o aparelho — perder o evento seria grave, perder o bilhete de 15 minutos é
+recuperável, e por isso a gravação não volta atrás por causa dele.
 
 **Os eventos passaram a ser do cliente, e não da conta.** Toda conta ligada ao mesmo
 `id_cliente` vê e configura os mesmos eventos — o dono e o financeiro da mesma empresa não

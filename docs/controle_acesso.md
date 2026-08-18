@@ -60,7 +60,7 @@ A estação simplesmente não serve esses endpoints — e é por isso que o log 
 `[app] Controle de acesso inativo (SUPABASE_SERVICE_KEY ausente)`, que é o certo, não um
 defeito.
 
-## Onde cada consumidor fala hoje (16/08/2026)
+## Onde cada consumidor fala hoje (17/08/2026)
 
 O desenho acima continua valendo — o que mudou foi **onde o código roda**. Desde a Fase 2b
 o controle de acesso inteiro vive em Edge Functions, ao lado do banco, e o Render deixou de
@@ -464,7 +464,9 @@ O QR do Pedido saiu de circulação. O que existe agora:
 4. **"Carregar"** (`POST /pedidos/{p}/carregar`) cria o evento (ou junta a um
    existente do mesmo cliente), um setor por modelo legível, carimba as
    credenciais e devolve a **elevação de 15 minutos** — por isso o "usar este
-   aparelho" logo depois não pede a senha de novo.
+   aparelho" logo depois não pede a senha de novo — ou `null`, se a elevação
+   falhar depois de o evento já existir; nesse caso a tela pede a senha de novo
+   antes de ligar o aparelho.
 5. **Os eventos são do cliente**: toda conta ligada ao mesmo `id_cliente` vê e
    configura os mesmos eventos (`pertenceAConta`). Os eventos antigos continuam
    visíveis pela conta que os criou.
