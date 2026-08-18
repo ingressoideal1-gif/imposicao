@@ -250,6 +250,66 @@ def _so_layout(el: dict) -> bool:
     return str(el.get("render_mode", "print")).strip().lower() == "layout"
 
 
+def _opacidade_arte(el: dict) -> float:
+    """Opacidade de um elemento PDF/SVG, de 0 (invisivel) a 1 (opaco).
+
+    Campo ausente vale 1: todo o acervo anterior a este recurso foi gravado sem
+    ele e precisa continuar saindo exatamente como sempre saiu.
+    """
+    v = el.get("opacity", None)
+    if v is None or v == "":
+        return 1.0
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return 1.0
+    if n != n:  # NaN
+        return 1.0
+    return max(0.0, min(1.0, n))
+
+
+def _colar_arte_pdf(page, rect, doc_origem, py_rotate, opacidade):
+    """Cola a primeira pagina de `doc_origem` em `rect`, com opacidade.
+
+    Opaco (o padrao) segue pelo `show_pdf_page`, que copia o PDF de origem como
+    ele e — vetorial, texto selecionavel, sem perda. Esse caminho nao muda.
+
+    Com opacidade abaixo de 1 nao ha por onde: nem `show_pdf_page` nem
+    `insert_image` aceitam alfa nesta versao do PyMuPDF (1.27), e nenhuma delas
+    jamais aceitou. Entao a pagina e rasterizada a 300 dpi COM canal alfa, o
+    alfa existente e multiplicado pela opacidade pedida, e o resultado entra
+    como imagem — a mesma tecnica que o elemento FOTO ja usa para o canto
+    arredondado. Multiplicar o alfa que ja existe (em vez de rasterizar sobre
+    branco) e o que preserva as areas vazias do arquivo: medido, um PDF com
+    quadrado vermelho e fundo vazio, colado a 50% sobre azul, da (126, 0, 128)
+    onde ha desenho e azul puro onde nao ha.
+
+    O custo e que o elemento deixa de ser vetorial nesse caso — por isso o
+    painel do elemento avisa, e por isso 100% continua sendo o padrao.
+    """
+    if opacidade >= 1.0:
+        page.show_pdf_page(
+            rect, doc_origem, 0,
+            keep_proportion=True, rotate=py_rotate, clip=doc_origem[0].rect,
+        )
+        return
+
+    if opacidade <= 0.0:
+        return  # invisivel: nada a colar, e nada de imagem vazia no PDF
+
+    from PIL import Image
+    pix = doc_origem[0].get_pixmap(dpi=300, alpha=True)
+    img = Image.frombytes("RGBA", (pix.width, pix.height), pix.samples)
+    alfa = img.getchannel("A").point(lambda v: int(v * opacidade))
+    base = fitz.Pixmap(fitz.csRGB, pix.width, pix.height, img.convert("RGB").tobytes(), False)
+    com_alfa = fitz.Pixmap(base, 1)
+    com_alfa.set_alpha(alfa.tobytes())
+    page.insert_image(
+        rect, pixmap=com_alfa,
+        rotate=py_rotate, keep_proportion=True,
+    )
+
+
 def _linha_do_banco(item_data: dict | None, indice: int, csv_data: list | None):
     """A linha do banco de dados (CSV) que ESTE item imprime.
 
@@ -1710,7 +1770,7 @@ class ImpositionEngine:
                     pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
                     # keep_proportion=True: o desenho e encaixado na caixa do elemento
                     # sem distorcao, do mesmo jeito que os canvas do frontend desenham.
-                    page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
+                    _colar_arte_pdf(page, rect, pdf_doc, py_rotate, _opacidade_arte(el))
                     pdf_doc.close()
                 except Exception as ex:
                     # Nao engolir: um PDF impresso sem a arte custa papel e tempo.
@@ -1744,7 +1804,7 @@ class ImpositionEngine:
                     rect = fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt)
                     py_rotate = (360 - angle) % 360
                     # keep_proportion=True: encaixa sem distorcer, igual ao canvas.
-                    page.show_pdf_page(rect, pdf_doc, 0, keep_proportion=True, rotate=py_rotate, clip=pdf_doc[0].rect)
+                    _colar_arte_pdf(page, rect, pdf_doc, py_rotate, _opacidade_arte(el))
                     pdf_doc.close()
                 except Exception as ex:
                     # Nao engolir: um PDF impresso sem a arte custa papel e tempo.

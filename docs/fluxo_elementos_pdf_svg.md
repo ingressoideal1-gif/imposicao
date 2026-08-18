@@ -23,6 +23,7 @@ O arquivo é **do elemento**, não da numeração. Cada elemento PDF/SVG carrega
 | `natural_w_mm` / `natural_h_mm` | o tamanho natural, para o botão "Tamanho original (100%)" |
 | `width_mm` / `height_mm` | o tamanho em uso, sempre na proporção do natural |
 | `render_mode` | `"print"` (padrão) ou `"layout"` — ver "Finalidade", abaixo |
+| `opacity` | 0 a 1, ausente = 1 — ver "Opacidade", abaixo |
 | `_pdfCanvas` / `_svgImage` | cache de render, nunca persistido |
 
 Dá para ter quantos quiser, de qualquer mistura. Quem os cria é a box **Adicionar
@@ -53,8 +54,10 @@ Linhas conferidas contra a v490.
 | 9 | Geração do PDF | `engine.py:735` (SVG), `:775` (PDF) |
 | 10 | Impressão | `app.py:1024` — só reenvia o PDF do engine ao spooler |
 
-Funções de apoio que todo renderizador novo deve usar: `drawImageContain()` (`:3514`)
-para desenhar sem distorcer, `tamanhoNaturalDoElemento()` (`:4753`) para o tamanho
+Funções de apoio que todo renderizador novo deve usar: **`drawArteDoElemento()`**,
+que desenha sem distorcer **e** com a opacidade do elemento — é por ela que os dez
+renderizadores desenham esses dois tipos; `drawImageContain()`, que ela usa por
+baixo e continua servindo aos outros tipos de elemento; `tamanhoNaturalDoElemento()` (`:4753`) para o tamanho
 100%, `svgNaturalSizeMm()` (`:4707`) para medir um SVG como o `svglib` mede, e
 `precarregarArtesDosElementos()` (`:4842`) para carregar a arte de uma lista de
 elementos vinda do banco.
@@ -122,6 +125,58 @@ elemento PDF **de impressão** em vez de ler a coluna `pdf_content` da numeraç�
 primeiro. A coluna é apenas derivada do primeiro elemento PDF ao salvar; o arquivo é
 do elemento, e é no elemento que existe a finalidade. A coluna segue como fallback
 para registros legados, sem elemento PDF.
+
+---
+
+## Opacidade (v644)
+
+Cada elemento PDF/SVG tem um controle **Opacidade** no card de configuração, de 0 a
+100%, gravado em `opacity` como fração de 0 a 1. Campo ausente vale 1 — todo o acervo
+anterior foi gravado sem ele e continua saindo exatamente como sempre saiu.
+
+O pedido veio da comparação com o **Criador de Arte**, que já tinha opacidade e já
+funcionava no PDF gerado. A comparação é instrutiva porque explica por que aqui é
+mais caro: no Criador de Arte a opacidade é resolvida **no navegador**, quando o
+`salvarArteDoEditor()` achata o canvas inteiro num PNG e só depois embrulha o PNG num
+PDF. O motor nunca vê a transparência. Já o elemento PDF da numeração vai inteiro
+para o `engine.py` e é colado por `show_pdf_page`, cópia vetorial fiel — e nem
+`show_pdf_page` nem `insert_image` aceitam alfa no PyMuPDF (conferido na 1.27.2.3;
+nenhuma das duas jamais aceitou).
+
+### Como cada lado aplica
+
+| Lado | Como |
+|---|---|
+| Os dez renderizadores do frontend | `drawArteDoElemento()` multiplica o `ctx.globalAlpha` corrente pela opacidade e o restaura depois |
+| `engine.py` | `_colar_arte_pdf()`, usada pelos ramos `SVG` e `PDF` |
+
+**A 100% nada muda**: o `_colar_arte_pdf()` desvia para o `show_pdf_page` de sempre, e
+o elemento continua vetorial. Há um teste que trava isso —
+`test_a_100_por_cento_o_pdf_continua_vetorial` afirma que a página não ganha imagem
+nenhuma. Se um dia alguém simplificar mandando os dois casos pelo caminho do raster,
+ele acusa.
+
+**Abaixo de 100%** a página do arquivo é rasterizada a 300 dpi **com canal alfa**, o
+alfa existente é multiplicado pela opacidade pedida, e o resultado entra por
+`insert_image` — a mesma técnica que o elemento FOTO já usa para o canto arredondado.
+O elemento deixa de ser vetorial nesse caso, e o texto de apoio do controle diz isso
+ao operador na hora de escolher.
+
+### O detalhe que arruinaria uma tiragem
+
+Multiplicar o alfa **que já existe** é diferente de rasterizar sobre branco. Um PDF
+com desenho numa metade e nada na outra, colado a 50% sobre um fundo azul:
+
+| Caminho | Onde há desenho | Onde o arquivo é vazio |
+|---|---|---|
+| multiplicar o alfa existente (o que se faz) | `(126, 0, 128)` — a mistura correta | azul puro |
+| rasterizar sobre branco (o erro) | a mistura correta | **azul lavado de branco** |
+
+**Medido** nos dois lados, e é o que `test_a_area_vazia_do_arquivo_nao_vela_o_fundo`
+guarda. Na tela, o mesmo cenário no canvas dá `(128, 0, 127)` — tela e papel batem.
+
+Os testes estão em `tests/test_engine_opacidade_arte.py`, e medem **tinta**: cada um
+rasteriza a página e lê a cor do pixel, em vez de inspecionar a árvore do PDF.
 
 ---
 

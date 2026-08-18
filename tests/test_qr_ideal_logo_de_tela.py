@@ -107,7 +107,11 @@ def test_o_qr_ideal_sai_na_cor_do_elemento_e_sem_transparencia():
     corpo = _corpo_da_funcao(
         _fonte(SCRIPT_JS),
         "window.desenharQRIdeal = function",
-        "\n};",
+        # O stub e indentado dentro de um bloco, entao ele fecha com "    };"
+        # e nao na coluna zero. Com o marcador da coluna zero o recorte passava
+        # direto pelo fim da funcao e varria centenas de linhas alheias adiante,
+        # virando alarme para codigo que este teste nao mede.
+        "\n    };",
     )
     assert "globalAlpha" not in corpo, (
         "o QR Ideal nao pode ser desenhado com transparencia: a cor mostrada "

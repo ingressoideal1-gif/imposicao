@@ -729,7 +729,7 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
                 // Tamanho original, escala 100%, sem distorcao: o engine.py impoe PDF e
                 // SVG com keep_proportion=True, entao um drawImage cru esticaria na tela
                 // o que o papel vai encaixar.
-                drawImageContain(ctx, el._pdfCanvas, -hw, -hh_el, w, h);
+                drawArteDoElemento(ctx, el._pdfCanvas, -hw, -hh_el, w, h, el);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;

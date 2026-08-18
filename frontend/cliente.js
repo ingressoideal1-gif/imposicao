@@ -22,6 +22,32 @@ function drawImageContain(ctx, img, x, y, w, h) {
     ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
 
+/**
+ * Opacidade de um elemento PDF/SVG, de 0 a 1. Campo ausente vale 1 (opaco).
+ *
+ * Copia deliberada da opacidadeDoElemento()/drawArteDoElemento() do script.js, pela
+ * mesma razao que a drawImageContain() acima: a cliente.html nao carrega o script.js.
+ * Se mexer em uma das duas, mexa na outra.
+ */
+function opacidadeDoElemento(el) {
+    const v = el && el.opacity;
+    if (v === undefined || v === null || v === '') return 1;
+    const n = Number(v);
+    if (!isFinite(n)) return 1;
+    return Math.min(1, Math.max(0, n));
+}
+
+/** Arte de um elemento PDF/SVG: sem distorcao e com a opacidade do elemento. */
+function drawArteDoElemento(ctx, img, x, y, w, h, el) {
+    const op = opacidadeDoElemento(el);
+    if (op >= 1) { drawImageContain(ctx, img, x, y, w, h); return; }
+    if (op <= 0) return;
+    const antes = ctx.globalAlpha;
+    ctx.globalAlpha = antes * op;
+    drawImageContain(ctx, img, x, y, w, h);
+    ctx.globalAlpha = antes;
+}
+
 let state = {
     osItens: {},
     ordens: [],
@@ -2809,7 +2835,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 if (el.type === 'PDF') {
                     const imgObj = el._pdfCanvas || null;
                     if (imgObj) {
-                        drawImageContain(numCtx, imgObj, -hw, -hh_el, w, h);
+                        drawArteDoElemento(numCtx, imgObj, -hw, -hh_el, w, h, el);
                     } else {
                         numCtx.strokeStyle = color;
                         numCtx.lineWidth = 1;
@@ -2843,7 +2869,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                             }
                         }
                         if (el._svgImage) {
-                            drawImageContain(numCtx, el._svgImage, -hw, -hh_el, w, h);
+                            drawArteDoElemento(numCtx, el._svgImage, -hw, -hh_el, w, h, el);
                         } else {
                             numCtx.strokeStyle = color;
                             numCtx.lineWidth = 1;
@@ -3280,7 +3306,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             ctx.clip();
 
             if (imgObj) {
-                drawImageContain(ctx, imgObj, -hw, -hh_el, w, h);
+                drawArteDoElemento(ctx, imgObj, -hw, -hh_el, w, h, el);
             } else {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 1;
