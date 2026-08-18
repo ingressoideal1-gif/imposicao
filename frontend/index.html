@@ -2838,13 +2838,18 @@
                 <div id="adm-tab-aproveitamento" class="adm-tab-content" style="display:none;">
 
                     <div class="card" style="margin-bottom: 24px;">
-                        <div class="card-header"><span class="card-title">📐 Quando avisar</span></div>
+                        <div class="card-header"><span class="card-title">📐 Quando avisar — padrao geral</span></div>
                         <div style="padding: 18px 20px;">
                             <p style="color: var(--text-dim); font-size: 0.88rem; margin: 0 0 14px 0;">
                                 Toda tiragem que nao fecha a folha deixa celulas vazias. O aviso aparece
-                                na tela de imposicao quando a sobra passa da fracao escolhida aqui.
+                                na tela de imposicao quando a sobra passa da fracao escolhida.
                                 E fracao de folha, e nao numero de celulas, porque num formato de
                                 4 celulas sobrar 3 e grave e num de 20 e ruido.
+                            </p>
+                            <p style="color: var(--text-dim); font-size: 0.88rem; margin: 0 0 14px 0;">
+                                Este e o <strong>padrao</strong>: cada produto pode ter o seu, na lista
+                                abaixo. Meia folha de PVC de credencial nao custa o mesmo que meia folha
+                                de papel de pulseira.
                             </p>
                             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                                 <label for="adm-limiar-sobra" style="font-weight:600;">Avisar quando a sobra passar de</label>
@@ -2865,6 +2870,11 @@
                                 Desmarcado, o aproveitamento dele so procura dentro do proprio pedido.
                                 Isto e uma permissao: se cor, formato, saida, face ou modo de impressao
                                 nao baterem, a imposicao recusa de qualquer jeito.
+                            </p>
+                            <p style="color: var(--text-dim); font-size: 0.88rem; margin: 0 0 14px 0;">
+                                O percentual de cada linha e o aviso <strong>daquele produto</strong>.
+                                Campo vazio usa o padrao geral do quadro acima — e apagar o numero e
+                                como se desfaz uma excecao.
                             </p>
                             <div id="adm-aproveitamento-lista" style="display:flex; flex-direction:column; gap:6px;"></div>
                         </div>

@@ -42,7 +42,8 @@ function extrairFuncao(src, nome) {
 const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem', 'fatiaCsvDoItem',
                'quantidadeDoModelo', 'itemAtivoDoPedido', 'itensDaImposicao',
                'rotuloDoModelo', 'porQueNaoCombina', 'modoDeImpressaoDoModelo',
-               'limiarDeSobra', 'sobraDaImposicao', 'sobraMereceAviso', 'textoDaSobra',
+               'limiarPadraoDeSobra', 'limiarDoProduto', 'limiarDeSobra',
+               'sobraDaImposicao', 'sobraMereceAviso', 'textoDaSobra',
                'modeloLiberadoParaImprimir', 'itensJaNaFolha', 'osDaImposicao',
                'candidatosDoPedido', 'melhorComposicao', 'produtoLiberadoParaCombinar',
                'problemaNaSelecao'];
@@ -142,6 +143,54 @@ function estado(itensOs1, selecionados, extra) {
         st.limiarSobra = v;
         ok(api(st).limiarDeSobra() === 0.5, 'valor invalido cai no padrao: ' + JSON.stringify(v));
     });
+})();
+
+(function oLimiarEIndependentePorProduto() {
+    // Pedido do usuario em 18/08/2026: meia folha de PVC de credencial nao custa
+    // o mesmo que meia folha de papel de pulseira.
+    const pvc = modelo('Credencial', 29, { _vibe_id_produto: '901' });   // sobram 3 de 4 = 75%
+    const st = estado([pvc], null, { limiarSobra: 0.9, limiaresPorProduto: {} });
+
+    ok(!api(st).sobraMereceAviso(api(st).sobraDaImposicao()),
+        'com o padrao em 90%, uma sobra de 75% nao avisa');
+
+    st.limiaresPorProduto = { '901': 0.5 };
+    ok(api(st).sobraMereceAviso(api(st).sobraDaImposicao()),
+        'o produto com limiar proprio de 50% passa a avisar');
+
+    // E o produto ao lado, sem valor proprio, continua no padrao.
+    const outro = estado([modelo('Pulseira', 29, { _vibe_id_produto: '101' })],
+                         null, { limiarSobra: 0.9, limiaresPorProduto: { '901': 0.5 } });
+    ok(!api(outro).sobraMereceAviso(api(outro).sobraDaImposicao()),
+        'produto sem valor proprio segue o padrao geral');
+
+    ok(api(st).limiarDoProduto('901') === 0.5, 'o limiar do produto e o dele', api(st).limiarDoProduto('901'));
+    ok(api(st).limiarDoProduto('101') === 0.9, 'o de quem nao tem e o padrao', api(st).limiarDoProduto('101'));
+
+    // Lixo no banco nao pode virar aviso que nunca aparece nem que aparece sempre.
+    [null, '', 'abc', 0, -1, 5].forEach(v => {
+        st.limiaresPorProduto = { '901': v };
+        ok(api(st).limiarDoProduto('901') === 0.9,
+            'limiar invalido do produto cai no padrao: ' + JSON.stringify(v));
+    });
+
+    // O limiar viaja junto com a conta, para nenhum chamador esquecer de aplica-lo.
+    st.limiaresPorProduto = { '901': 0.25 };
+    ok(api(st).sobraDaImposicao().limiar === 0.25,
+        'sobraDaImposicao devolve o limiar do produto', api(st).sobraDaImposicao().limiar);
+})();
+
+(function asDuasConfiguracoesDoProdutoNaoSeApagam() {
+    // Uma linha, dois controles. Um upsert que mandasse so o campo mexido
+    // apagaria o outro: marcar a caixa limparia o limiar, e digitar o limiar
+    // desmarcaria a caixa.
+    ok(/function gravarProdutoCombinavel/.test(SCRIPT),
+        'existe um unico ponto que grava a linha do produto');
+    const g = SCRIPT.slice(SCRIPT.indexOf('async function gravarProdutoCombinavel'),
+                           SCRIPT.indexOf('async function gravarProdutoCombinavel') + 1400);
+    ok(/liberado: atual\.liberado/.test(g), 'ele parte do liberado que ja estava');
+    ok(/atual\.limiar_sobra/.test(g), 'e do limiar que ja estava');
+    ok(/Object\.assign/.test(g), 'e so entao aplica a mudanca por cima');
 })();
 
 // ─── Quem pode entrar na folha ───────────────────────────────────────────────

@@ -171,7 +171,9 @@ começa pela 2, que é a que protege a portaria.
 ## Decisões do usuário, 18/08/2026
 
 - **Gatilho**: selo na tela, sem popup automático.
-- **Limiar**: sobra acima de meia folha, ajustável no ADM.
+- **Limiar**: sobra acima de meia folha, ajustável no ADM. Em 18/08/2026, ainda no
+  mesmo dia, o usuário pediu que o percentual fosse **independente para cada
+  produto** — o número do ADM virou o padrão de quem não tem o seu.
 - **Candidatos**: só arte aprovada e aguardando impressão.
 - **Carona**: confirma no popup e fica registrado.
 

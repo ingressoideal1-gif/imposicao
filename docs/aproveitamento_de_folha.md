@@ -36,9 +36,34 @@ Uma linha acima dos botões de imposição, nas duas abas:
 não muda nada do que é impresso. O botão é a porta para o caminho combinado, e
 essa porta só se atravessa quando o operador aceita uma composição.
 
-O botão aparece quando a sobra passa do limiar: **meia folha** por padrão,
-ajustável em ADM → Aproveitamento. É fração de folha e não número de células
-porque num formato de 4 sobrar 3 é grave e num de 20 é ruído.
+### O limiar é por produto
+
+O botão aparece quando a sobra passa do limiar **daquele produto**. É fração de
+folha e não número de células porque num formato de 4 sobrar 3 é grave e num de
+20 é ruído.
+
+E é por produto porque o desperdício não custa o mesmo em toda parte: meia folha
+de PVC de credencial é um prejuízo que meia folha de papel de pulseira não é. Foi
+pedido do usuário em 18/08/2026.
+
+| | Onde mora | Quando vale |
+|---|---|---|
+| Padrão da gráfica | `producao_config.limiar_sobra` | produto sem valor próprio |
+| Do produto | `producao_produtos_combinaveis.limiar_sobra` | sempre que preenchido |
+
+Na tela, o campo vazio de um produto significa "usa o padrão", e o *placeholder*
+mostra qual é — em vez de deixar o operador adivinhar se vazio quer dizer "sem
+aviso". Apagar o número é como se desfaz uma exceção.
+
+O limiar viaja **dentro** do resultado de `sobraDaImposicao()`, e não é buscado
+por quem pergunta: quem tem o produto na mão é essa função, e espalhar a busca
+garantiria que um dos chamadores esquecesse.
+
+**As duas configurações do produto vivem na mesma linha da tabela**, e cada uma
+tem o seu controle na tela. Por isso a gravação passa toda por
+`gravarProdutoCombinavel()`, que parte do que já estava e aplica só a mudança:
+um upsert que mandasse apenas o campo mexido apagaria o outro — marcar a caixa
+limparia o limiar, e digitar o limiar desmarcaria a caixa.
 
 ## A busca
 
@@ -134,8 +159,8 @@ repetido entre eventos — já está conhecido e aceito em `docs/qr_ideal.md`.
 
 | Tabela | O que guarda |
 |---|---|
-| `producao_produtos_combinaveis` | quais produtos podem dividir folha com outro pedido; linha ausente = não liberado |
-| `producao_config` | `limiar_sobra`, uma fração de folha entre 0 e 1 |
+| `producao_produtos_combinaveis` | quais produtos podem dividir folha com outro pedido (linha ausente = não liberado) e o limiar próprio de cada um |
+| `producao_config` | `limiar_sobra`, o padrão da gráfica para quem não tem o seu |
 | `producao_combinacoes` | qual trabalho juntou quais pedidos |
 
 Nenhuma toca o catálogo `produtos` do parceiro: o que dizemos ali é uma permissão
@@ -156,8 +181,9 @@ de impressão. São perguntas diferentes.
 ## Como verificar uma mudança
 
 - `node tests/aproveitamento_harness.js` — a medida da sobra (com o exemplo das
-  29 credenciais), o limiar, quem pode entrar, a conta exata da composição e as
-  duas metades da trava de cruzar pedidos.
+  29 credenciais), o limiar por produto e o padrão, quem pode entrar, a conta
+  exata da composição, a lista do ADM e as duas metades da trava de cruzar
+  pedidos.
 - `pytest tests/test_engine_modelos_somados.py` — o pedido por item, a folha que
   mistura pedidos, e o QR de cada item contra o pool de verdade.
 - `pytest tests/test_harness_de_imposicao.py` — roda os harnesses de node dentro

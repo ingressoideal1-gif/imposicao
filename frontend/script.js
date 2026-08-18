@@ -13980,17 +13980,47 @@ window.atualizarOpcoesDoModelo = atualizarOpcoesDoModelo;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * A partir de que fração de uma folha a sobra merece aviso. Meia folha por
- * padrão, ajustável no ADM.
+ * O padrão da gráfica: a partir de que fração de uma folha a sobra merece
+ * aviso. Meia folha, ajustável no ADM.
  *
  * É fração e não número de células de propósito: num formato de 4 células
  * sobrar 3 é grave, num de 20 sobrar 3 é ruído.
  */
-function limiarDeSobra() {
+function limiarPadraoDeSobra() {
 
     const v = parseFloat(state.limiarSobra);
 
     return (isFinite(v) && v > 0 && v <= 1) ? v : 0.5;
+
+}
+window.limiarPadraoDeSobra = limiarPadraoDeSobra;
+
+
+
+/**
+ * O limiar deste produto, ou o padrão quando ele não tem o seu.
+ *
+ * É por produto desde 18/08/2026, a pedido do usuário: o desperdício não custa
+ * o mesmo em toda parte — meia folha de PVC de credencial é um prejuízo que meia
+ * folha de papel de pulseira não é.
+ */
+function limiarDoProduto(idProduto) {
+
+    const tabela = state.limiaresPorProduto || {};
+
+    const v = parseFloat(tabela[String(idProduto)]);
+
+    return (isFinite(v) && v > 0 && v <= 1) ? v : limiarPadraoDeSobra();
+
+}
+window.limiarDoProduto = limiarDoProduto;
+
+
+
+/** O limiar que vale para esta imposição — o do produto do modelo aberto. */
+function limiarDeSobra(item) {
+
+    return limiarDoProduto(item && (item._vibe_id_produto || item.id_produto));
 
 }
 window.limiarDeSobra = limiarDeSobra;
@@ -14035,7 +14065,11 @@ function sobraDaImposicao() {
         poses,
         folhas: Math.ceil(total / poses),
         vazias,
-        fracao: vazias / poses
+        fracao: vazias / poses,
+        // O limiar viaja junto com a conta: ele e' do PRODUTO, e quem tem o
+        // produto na mao e' esta funcao. Sem isto, cada chamador teria de achar
+        // o item de novo — e um deles esqueceria.
+        limiar: limiarDeSobra(itens[0])
     };
 
 }
@@ -14043,10 +14077,10 @@ window.sobraDaImposicao = sobraDaImposicao;
 
 
 
-/** A sobra passa do limiar? */
+/** A sobra passa do limiar deste produto? */
 function sobraMereceAviso(s) {
 
-    return !!(s && s.vazias > 0 && s.fracao >= limiarDeSobra());
+    return !!(s && s.vazias > 0 && s.fracao >= (s.limiar || limiarPadraoDeSobra()));
 
 }
 window.sobraMereceAviso = sobraMereceAviso;
@@ -14281,7 +14315,7 @@ async function carregarConfigDeAproveitamento() {
 
         supabaseClient.from('producao_config').select('chave, valor').eq('chave', 'limiar_sobra'),
 
-        supabaseClient.from('producao_produtos_combinaveis').select('id_produto, liberado')
+        supabaseClient.from('producao_produtos_combinaveis').select('id_produto, liberado, limiar_sobra')
 
     ]);
 
@@ -14297,9 +14331,23 @@ async function carregarConfigDeAproveitamento() {
 
     const liberados = new Set();
 
-    ((prods && prods.data) || []).forEach(p => { if (p.liberado) liberados.add(String(p.id_produto)); });
+    const limiares = {};
+
+    ((prods && prods.data) || []).forEach(p => {
+
+        if (p.liberado) liberados.add(String(p.id_produto));
+
+        if (p.limiar_sobra !== undefined && p.limiar_sobra !== null) {
+
+            limiares[String(p.id_produto)] = parseFloat(p.limiar_sobra);
+
+        }
+
+    });
 
     state.produtosCombinaveis = liberados;
+
+    state.limiaresPorProduto = limiares;
 
     atualizarSeloDeSobra();
 
@@ -14357,17 +14405,19 @@ async function renderAdmAproveitamento() {
 
     try { await carregarConfigDeAproveitamento(); } catch (e) { console.warn('[ADM] aproveitamento', e); }
 
+    const padrao = limiarPadraoDeSobra();
+
     const inp = document.getElementById('adm-limiar-sobra');
 
-    if (inp) inp.value = Math.round(limiarDeSobra() * 100);
+    if (inp) inp.value = Math.round(padrao * 100);
 
     const ex = document.getElementById('adm-limiar-exemplo');
 
     if (ex) {
 
-        ex.textContent = `Com ${Math.round(limiarDeSobra() * 100)}%: num formato de 4 celulas o aviso `
-            + `aparece a partir de ${Math.ceil(limiarDeSobra() * 4)} celula(s) vazia(s); num de 20, `
-            + `a partir de ${Math.ceil(limiarDeSobra() * 20)}.`;
+        ex.textContent = `Com ${Math.round(padrao * 100)}%: num formato de 4 celulas o aviso `
+            + `aparece a partir de ${Math.ceil(padrao * 4)} celula(s) vazia(s); num de 20, `
+            + `a partir de ${Math.ceil(padrao * 20)}.`;
 
     }
 
@@ -14400,11 +14450,28 @@ async function renderAdmAproveitamento() {
             ? ' <span style="color:var(--amber,#f59e0b); font-size:0.78rem;">(desativado)</span>'
             : '';
 
-        return `<label style="display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">`
+        // O limiar proprio deste produto. Campo vazio = usa o padrao geral, e o
+        // placeholder mostra qual e — em vez de deixar o operador adivinhar se
+        // vazio significa "sem aviso" ou "o de cima".
+        const proprio = (state.limiaresPorProduto || {})[id];
+
+        const valor = (proprio !== undefined && proprio !== null && isFinite(parseFloat(proprio)))
+            ? Math.round(parseFloat(proprio) * 100)
+            : '';
+
+        return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid var(--border); border-radius:6px;">`
+             + `<label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1;">`
              + `<input type="checkbox" ${marcado} onchange="salvarProdutoCombinavel('${escHtmlSimples(id)}', this.checked)">`
              + `<span>${escHtmlSimples(nomeDoProdutoGlobal(p))}${inativo}</span>`
-             + `<span class="badge bg-secondary" style="margin-left:auto; font-size:0.72rem; color:#fff;">${escHtmlSimples(String(p.setor_pcp || ''))}</span>`
-             + `</label>`;
+             + `</label>`
+             + `<span style="color:var(--text-dim); font-size:0.8rem;">avisar a partir de</span>`
+             + `<input type="number" class="form-control" style="width:78px; padding:3px 6px; font-size:0.82rem; text-align:center;"`
+             + ` min="1" max="100" step="1" value="${valor}" placeholder="${Math.round(padrao * 100)}"`
+             + ` title="Vazio usa o padrao geral (${Math.round(padrao * 100)}%)"`
+             + ` onchange="salvarLimiarDoProduto('${escHtmlSimples(id)}', this.value)">`
+             + `<span style="color:var(--text-dim); font-size:0.8rem;">%</span>`
+             + `<span class="badge bg-secondary" style="width:64px; text-align:center; font-size:0.72rem; color:#fff;">${escHtmlSimples(String(p.setor_pcp || ''))}</span>`
+             + `</div>`;
 
     }).join('');
 
@@ -14413,21 +14480,52 @@ window.renderAdmAproveitamento = renderAdmAproveitamento;
 
 
 
+/**
+ * Grava a linha de um produto preservando o que a outra metade da tela ja tinha.
+ *
+ * As duas configuracoes moram na mesma linha, e cada uma tem o seu controle. Um
+ * upsert que mandasse so o campo mexido apagaria o outro — marcar a caixa
+ * limparia o limiar, e digitar o limiar desmarcaria a caixa.
+ */
+async function gravarProdutoCombinavel(idProduto, mudanca) {
+
+    const id = String(idProduto);
+
+    const p = (state.produtosGlobais || []).find(x => String(x.id_produto) === id);
+
+    const atual = {
+        liberado: state.produtosCombinaveis.has(id),
+        limiar_sobra: (state.limiaresPorProduto || {})[id]
+    };
+
+    const linha = Object.assign({
+        id_produto: id,
+        nome: p ? nomeDoProdutoGlobal(p) : null,
+        liberado: atual.liberado,
+        limiar_sobra: (atual.limiar_sobra === undefined) ? null : atual.limiar_sobra,
+        atualizado_em: new Date().toISOString()
+    }, mudanca);
+
+    const { error } = await supabaseClient
+
+        .from('producao_produtos_combinaveis')
+
+        .upsert(linha, { onConflict: 'id_produto' });
+
+    if (error) throw error;
+
+    return linha;
+
+}
+
+
+
 /** Liga ou desliga um produto para dividir folha entre pedidos. */
 window.salvarProdutoCombinavel = async function(idProduto, liberado) {
 
-    const p = (state.produtosGlobais || []).find(x => String(x.id_produto) === String(idProduto));
-
     try {
 
-        const { error } = await supabaseClient.from('producao_produtos_combinaveis').upsert({
-            id_produto: String(idProduto),
-            nome: p ? nomeDoProdutoGlobal(p) : null,
-            liberado: !!liberado,
-            atualizado_em: new Date().toISOString()
-        }, { onConflict: 'id_produto' });
-
-        if (error) throw error;
+        await gravarProdutoCombinavel(idProduto, { liberado: !!liberado });
 
         if (liberado) state.produtosCombinaveis.add(String(idProduto));
 
@@ -14441,6 +14539,56 @@ window.salvarProdutoCombinavel = async function(idProduto, liberado) {
         console.error('[ADM] salvarProdutoCombinavel', e);
 
         toast('Nao consegui salvar. Recarregue a pagina e tente de novo.', 'error');
+
+        renderAdmAproveitamento();
+
+    }
+
+};
+
+
+
+/**
+ * Grava o limiar deste produto, em porcentagem de uma folha. Campo vazio volta
+ * ao padrão geral — e é assim que se desfaz uma exceção.
+ */
+window.salvarLimiarDoProduto = async function(idProduto, pct) {
+
+    const texto = String(pct === null || pct === undefined ? '' : pct).trim();
+
+    const v = texto === '' ? null : parseFloat(texto) / 100;
+
+    if (v !== null && (!isFinite(v) || v <= 0 || v > 1)) {
+
+        toast('O limiar precisa ficar entre 1% e 100% de uma folha. '
+            + 'Deixe vazio para usar o padrao geral.', 'error');
+
+        return renderAdmAproveitamento();
+
+    }
+
+    try {
+
+        await gravarProdutoCombinavel(idProduto, { limiar_sobra: v });
+
+        if (!state.limiaresPorProduto) state.limiaresPorProduto = {};
+
+        if (v === null) delete state.limiaresPorProduto[String(idProduto)];
+
+        else state.limiaresPorProduto[String(idProduto)] = v;
+
+        atualizarSeloDeSobra();
+
+        renderAdmAproveitamento();
+
+        toast(v === null ? 'Produto voltou a usar o padrao geral.'
+                         : `Aviso deste produto a partir de ${Math.round(v * 100)}% de uma folha.`, 'success');
+
+    } catch (e) {
+
+        console.error('[ADM] salvarLimiarDoProduto', e);
+
+        toast('Nao consegui salvar o limiar deste produto.', 'error');
 
         renderAdmAproveitamento();
 
@@ -18717,6 +18865,9 @@ if (state.combinacaoEntrePedidos === undefined) state.combinacaoEntrePedidos = f
 // Produtos liberados a dividir folha entre pedidos (ADM → Aproveitamento) e o
 // limiar da sobra. Carregados de producao_produtos_combinaveis / producao_config.
 if (!state.produtosCombinaveis) state.produtosCombinaveis = new Set();
+// O limiar da sobra e por produto; o de producao_config e o padrao de quem nao
+// tem o seu. Ver limiarDoProduto().
+if (!state.limiaresPorProduto) state.limiaresPorProduto = {};
 
 // -------------------------------------------------------------------------------
 // STATUS ADIANTADO DESTA MÁQUINA (vibe_status_overrides)
