@@ -283,6 +283,45 @@ function candidatos(pares) {
         'decidir cruzar pedido nao dispensa ter os itens carregados', recado);
 })();
 
+// ─── A lista do ADM e a mesma que ele ja ve nas telas de pedido ──────────────
+
+(function aListaDoAdmUsaAReferenciaDasTelasDePedido() {
+    // O nome que a grafica usa e `nomeReal` — assim mesmo, com o R maiusculo,
+    // que e como a coluna existe na tabela do parceiro. Em 18/08/2026 a aba nova
+    // do ADM nao o conhecia e mostrava "Produto #101" em tudo.
+    const nomes = new Function('state', 'window',
+        extrairFuncao(SCRIPT, 'nomeDoProdutoGlobal')
+        + extrairFuncao(SCRIPT, 'produtosDaProducao')
+        + 'return { nomeDoProdutoGlobal, produtosDaProducao };');
+
+    const st = {
+        produtosGlobais: [
+            { id_produto: 101, nomeReal: 'Pulseira Triband', setor_pcp: 'LASER', ativo: true },
+            { id_produto: 901, nomeReal: 'Credencial PVC', setor_pcp: 'PVC', ativo: true },
+            { id_produto: 401, nomeReal: 'Ingresso MOBI', setor_pcp: 'LASER', ativo: true },
+            { id_produto: 50, nomeReal: 'Cordao Estoque', setor_pcp: null, ativo: true },
+            { id_produto: 51, nomeReal: 'Item Fiscal', setor_pcp: '', ativo: true }
+        ]
+    };
+    const a = nomes(st, global.window);
+
+    ok(a.nomeDoProdutoGlobal(st.produtosGlobais[0]) === 'Pulseira Triband',
+        'o nome vem de nomeReal', a.nomeDoProdutoGlobal(st.produtosGlobais[0]));
+    ok(/^Produto #/.test(a.nomeDoProdutoGlobal({ id_produto: 9 })),
+        'sem nomeReal, diz o numero em vez de "undefined"');
+
+    const lista = a.produtosDaProducao().map(p => p.nomeReal);
+    ok(lista.length === 3, 'so os produtos com setor no PCP entram', lista);
+    ok(lista.indexOf('Cordao Estoque') < 0 && lista.indexOf('Item Fiscal') < 0,
+        'item de estoque e de nota fiscal ficam de fora', lista);
+    ok(lista[0] === 'Credencial PVC' && lista[2] === 'Pulseira Triband',
+        'em ordem alfabetica', lista);
+
+    // E a tela de pedido, que e a referencia, continua lendo o mesmo campo.
+    ok(/prodObj\.nomeReal/.test(PEDIDO), 'a fila do Painel de Producao usa nomeReal');
+    ok(/prodObj\.nomeReal/.test(SCRIPT), 'a fila da Lista de Arte usa nomeReal');
+})();
+
 // ─── As duas telas ───────────────────────────────────────────────────────────
 
 (function oSeloEstaNasDuasAbas() {

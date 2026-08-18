@@ -14308,12 +14308,47 @@ window.carregarConfigDeAproveitamento = carregarConfigDeAproveitamento;
 
 
 
-/** O nome de um produto do catálogo do parceiro, com os apelidos que ele usa. */
+/**
+ * O nome do produto, do jeito que a gráfica o chama: "Pulseira Triband",
+ * "Ingresso MOBI", "Credencial PVC".
+ *
+ * O campo é `nomeReal` — assim mesmo, com o R maiúsculo, que é como a coluna
+ * existe na tabela do parceiro. É o MESMO que o cabeçalho de cada produto usa
+ * na Lista de Arte e no Painel de Produção; qualquer outro nome obrigaria o
+ * operador a traduzir de cabeça entre duas telas do mesmo sistema.
+ */
 function nomeDoProdutoGlobal(p) {
 
-    return p.nome || p.descricao || p.nome_produto || p.produto || `Produto ${p.id_produto}`;
+    return (p && p.nomeReal) || `Produto #${p && p.id_produto}`;
 
 }
+
+
+
+/**
+ * Os produtos que a produção enxerga — os que têm setor no PCP.
+ *
+ * O catálogo do parceiro tem 64 produtos, e só 15 chegam à produção; os outros
+ * são itens de estoque e de nota fiscal. Uma lista com os 64 não é a lista que o
+ * operador conhece, e ele não teria como dizer qual das duas está errada.
+ *
+ * É o mesmo recorte das telas de pedido: elas agrupam por `_vibe_id_produto` e
+ * mostram `nomeReal` com o selo do `setor_pcp`.
+ */
+function produtosDaProducao() {
+
+    return (state.produtosGlobais || [])
+
+        .filter(p => p && p.id_produto !== undefined && p.id_produto !== null)
+
+        .filter(p => String(p.setor_pcp || '').trim() !== '')
+
+        .slice()
+
+        .sort((a, b) => nomeDoProdutoGlobal(a).localeCompare(nomeDoProdutoGlobal(b), 'pt-BR'));
+
+}
+window.produtosDaProducao = produtosDaProducao;
 
 
 
@@ -14340,16 +14375,13 @@ async function renderAdmAproveitamento() {
 
     if (!lista) return;
 
-    const produtos = (state.produtosGlobais || []).slice()
-
-        .filter(p => p && (p.id_produto !== undefined && p.id_produto !== null))
-
-        .sort((a, b) => String(nomeDoProdutoGlobal(a)).localeCompare(String(nomeDoProdutoGlobal(b)), 'pt-BR'));
+    const produtos = produtosDaProducao();
 
     if (!produtos.length) {
 
-        lista.innerHTML = '<div style="color:var(--text-dim);">Nenhum produto no catalogo. '
-            + 'Abra a tela de Pedidos uma vez para o catalogo carregar e volte aqui.</div>';
+        lista.innerHTML = '<div style="color:var(--text-dim);">Nenhum produto de producao no catalogo. '
+            + 'Abra a Lista de Arte ou o Painel de Producao uma vez para o catalogo carregar, '
+            + 'e volte aqui.</div>';
 
         return;
 
@@ -14361,10 +14393,17 @@ async function renderAdmAproveitamento() {
 
         const marcado = state.produtosCombinaveis.has(id) ? 'checked' : '';
 
+        // Produto desativado no ERP continua na lista, e marcado como tal: um
+        // pedido antigo em producao ainda pode te-lo, e some-lo em silencio
+        // faria a lista parecer completa quando nao esta.
+        const inativo = (p.ativo === false)
+            ? ' <span style="color:var(--amber,#f59e0b); font-size:0.78rem;">(desativado)</span>'
+            : '';
+
         return `<label style="display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">`
              + `<input type="checkbox" ${marcado} onchange="salvarProdutoCombinavel('${escHtmlSimples(id)}', this.checked)">`
-             + `<span>${escHtmlSimples(nomeDoProdutoGlobal(p))}</span>`
-             + `<span style="margin-left:auto; color:var(--text-dim); font-size:0.8rem;">#${escHtmlSimples(id)}</span>`
+             + `<span>${escHtmlSimples(nomeDoProdutoGlobal(p))}${inativo}</span>`
+             + `<span class="badge bg-secondary" style="margin-left:auto; font-size:0.72rem; color:#fff;">${escHtmlSimples(String(p.setor_pcp || ''))}</span>`
              + `</label>`;
 
     }).join('');
