@@ -756,8 +756,12 @@ input[type="color"].element-card-fields .form-control,
 }
 
 #numeracao-canvas, #numeracao-canvas-verso {
-    border: 1px solid var(--border-glow);
-    border-radius: var(--radius-sm);
+    /* Sem fio e sem canto arredondado. A moldura era desenhada POR CIMA da
+       beirada da arte e o raio comia os quatro cantos; com box-sizing:border-box
+       ela ainda encolhia o desenho em 2px e desalinhava a conta do clique de
+       getCanvasPos(), que divide canvas.width pela largura COM borda. */
+    border: 0;
+    border-radius: 0;
     background: white;
     cursor: crosshair;
     max-width: 100%;
@@ -1384,6 +1388,12 @@ body.not-logged-in .app-shell {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    /* Centralizacao "segura": com a arte maior que a caixa, centralizar empurra
+       a beirada de cima e da esquerda para fora, e a rolagem nao alcanca o que
+       ficou de fora. Navegador que nao entenda "safe" ignora estas duas linhas
+       e fica com a centralizacao acima. */
+    align-items: safe center;
+    justify-content: safe center;
     min-height: 350px;
     background: var(--bg-body);
     border-radius: var(--radius);
@@ -1572,6 +1582,12 @@ body.not-logged-in .app-shell {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    /* Centralizacao "segura": com a arte maior que a caixa, centralizar empurra
+       a beirada de cima e da esquerda para fora, e a rolagem nao alcanca o que
+       ficou de fora. Navegador que nao entenda "safe" ignora estas duas linhas
+       e fica com a centralizacao acima. */
+    align-items: safe center;
+    justify-content: safe center;
     min-height: 350px;
     background: var(--bg-body);
     border-radius: var(--radius);
