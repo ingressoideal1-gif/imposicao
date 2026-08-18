@@ -2,10 +2,17 @@
  * Grava os quadros do vídeo do Ideal Control dirigindo as TELAS DE VERDADE.
  *
  * Nada aqui desenha uma imitação da interface. O que entra no vídeo é o
- * `evento.html`, o `controle.html` e o `portaria.html` rodando num Chrome, com
- * o mesmo HTML, o mesmo CSS e o mesmo JavaScript que a Vercel serve. O que é
- * falso é só o BACKEND: as chamadas às Edge Functions e ao login do Supabase são
+ * `controle.html` e o `portaria.html` rodando num Chrome, com o mesmo HTML, o
+ * mesmo CSS e o mesmo JavaScript que a Vercel serve. O que é falso é só o
+ * BACKEND: as chamadas às Edge Functions e ao login do Supabase são
  * interceptadas e respondidas com um evento fictício.
+ *
+ * O caminho gravado é o de hoje, e ele mudou em 17 e 18/08/2026: o QR do Pedido
+ * saiu de cena (não há mais `evento.html`), o código de seis caracteres saiu
+ * junto, e um aparelho de portaria nasce quando o dono toca na barra do evento
+ * no próprio celular que vai ler. Como esse toque ENCERRA a sessão e manda o
+ * navegador para a portaria, a gravação segue com ele: a mesma aba que
+ * configurou o evento vira o portão, e as cenas de leitura vêm em seguida.
  *
  * Duas razões para ser assim, e as duas importam mais do que a economia de
  * trabalho:
@@ -83,7 +90,8 @@ const PORTA = 9321;   // nunca 9000: é a porta do NewProd.exe na estação
 const EVENTO_ID = 'evento-de-demonstracao';
 const PEDIDO = 20991;
 const SAL = crypto.randomBytes(32).toString('hex');
-const CODIGO_APARELHO = 'K7M2QP';
+const NOME_APARELHO = 'Portão A';
+const EMAIL = 'contato@festaideal.com.br';
 
 const SETORES = [
     { id: 's1', nome: 'PISTA', quantidade: 3000, numero_de: 1, numero_ate: 3000 },
@@ -124,12 +132,23 @@ const painel = {
     codigos_cliente: 0,
 };
 
-const ESQUELETO = {
-    pedido: PEDIDO,
-    setores: SETORES.map(function (s) { return { nome: s.nome, quantidade: s.quantidade }; }),
-    total: SETORES.reduce(function (t, s) { return t + s.quantidade; }, 0),
-    ja_reivindicado: false,
+/** O que "Meus Pedidos" lista: o pedido já impresso, pronto para virar evento. */
+const MEUS_PEDIDOS = {
+    pedidos: [{
+        pedido: PEDIDO,
+        data: '2026-08-14T12:00:00Z',
+        nome_evento: 'Festa Ideal 2026',
+        setores: SETORES.map(function (s) {
+            return { nome: s.nome, quantidade: s.quantidade, impresso: true };
+        }),
+    }],
 };
+
+/** A elevação: os quinze minutos em que a configuração fica liberada. */
+function elevacao() {
+    return { token: 'elevacao-de-demonstracao',
+             expira_em: Math.floor(Date.now() / 1000) + 900 };
+}
 
 const SESSAO = {
     access_token: 'sessao-de-demonstracao',
@@ -149,6 +168,10 @@ const SESSAO = {
 /** A carga da portaria. As credenciais de verdade entram depois que o navegador
  *  calcula os hashes — ver `prepararCarga()`. */
 let carga = null;
+
+/** O evento só existe depois de o pedido ser carregado, na cena 05. Antes
+ *  disso a casa precisa aparecer VAZIA. */
+let eventoExiste = false;
 
 // ── O servidor do frontend ───────────────────────────────────────────────────
 
@@ -231,29 +254,60 @@ function rotear(req) {
     if (url.includes('/auth/v1/logout')) { return json(req, {}); }
     if (url.includes('/auth/v1/recover')) { return json(req, {}); }
 
-    // A tela do QR do pedido. O caminho NÃO tem `/evento` no fim: o
-    // `endereco()` do `acesso-conta.js` troca o prefixo `/evento` pela função
-    // inteira, então `/evento?t=…` vira `…/acesso-evento?t=…`.
-    if (url.includes('/acesso-evento')) { return json(req, ESQUELETO); }
+    // Os quinze minutos comprados no login, que fazem o Carregar não pedir a
+    // senha de novo.
+    //
+    // ANTES do `/minha-conta`, e não depois: o endereço desta chamada é
+    // `.../acesso-conta/minha-conta/elevar`, e ele contém o outro por inteiro.
+    // Na ordem trocada, o login recebia a resposta de "quem é a conta" no lugar
+    // do bilhete, o Carregar voltava a pedir a senha e a cena morria com
+    // "Digite a sua senha para carregar o pedido".
+    if (url.includes('/minha-conta/elevar')) { return json(req, elevacao()); }
 
-    // A tela do dono.
+    // A conta: quem é, e se a senha ainda é provisória.
+    if (url.includes('/acesso-conta/minha-conta')) {
+        return json(req, { clientes: [{ id_cliente: 14, nome: 'FESTA IDEAL PRODUÇÕES' }],
+                           precisa_trocar_senha: false });
+    }
+
+    if (url.includes('/acesso-conta/meus-pedidos')) { return json(req, MEUS_PEDIDOS); }
+
+    // Carregar o pedido: é aqui que o evento nasce.
+    if (/\/pedidos\/\d+\/carregar/.test(url) && metodo === 'POST') {
+        eventoExiste = true;
+        return json(req, { criado: true, evento_id: EVENTO_ID,
+                           nome_evento: painel.evento.nome_evento,
+                           setores_criados: SETORES.length,
+                           elevacao: elevacao() });
+    }
+
+    // A lista da casa. Antes de carregar o pedido ela vem VAZIA -- senão o
+    // vídeo mostraria o evento já pronto na tela em que ele ainda vai nascer.
     if (url.includes('/acesso-conta/meus-eventos')) {
-        return json(req, { eventos: [{ id: EVENTO_ID, nome_evento: painel.evento.nome_evento }] });
+        return json(req, { eventos: eventoExiste ? [{
+            id: EVENTO_ID,
+            nome_evento: painel.evento.nome_evento,
+            data_evento: painel.evento.data_evento,
+            local_evento: painel.evento.local_evento,
+            status: 'ativo',
+            entradas: 0,
+        }] : [] });
     }
-    if (url.includes('/acesso-conta/reivindicar')) {
-        return json(req, { novo: true, evento_id: EVENTO_ID,
-                           nome_evento: painel.evento.nome_evento });
-    }
-    if (url.includes('/elevar')) {
-        return json(req, { token: 'elevacao-de-demonstracao',
-                           expira_em: Math.floor(Date.now() / 1000) + 900 });
-    }
-    if (url.includes('/aparelhos') && metodo === 'POST') {
+    if (url.includes('/elevar')) { return json(req, elevacao()); }
+
+    // O aparelho nascendo NO PRÓPRIO celular: devolve o token direto, sem
+    // código intermediário. Foi o que substituiu o pareamento por código.
+    if (url.includes('/aparelhos/aqui') && metodo === 'POST') {
         const corpo = JSON.parse(req.postData() || '{}');
-        const novo = { id: 'ap-1', nome: corpo.nome || 'Portão A', status: 'ativo',
-                       ultimo_visto: null, setores: corpo.setores || [] };
+        const novo = { id: 'ap-1', nome: corpo.nome || NOME_APARELHO, status: 'ativo',
+                       ultimo_visto: null, setores: corpo.setores || ['s1'] };
         painel.aparelhos = [novo];
-        return json(req, { id: novo.id, nome: novo.nome, codigo: CODIGO_APARELHO });
+        if (carga) { carga.aparelho = { id: novo.id, nome: novo.nome, setores: novo.setores }; }
+        return json(req, { id: novo.id, nome: novo.nome, setores: novo.setores,
+                           token: 'aparelho-de-demonstracao' });
+    }
+    if (url.includes('/aparelhos') && metodo === 'PATCH') {
+        return json(req, { ok: true });
     }
     if (url.includes('/setores/') && metodo === 'PATCH') {
         const corpo = JSON.parse(req.postData() || '{}');
@@ -287,6 +341,17 @@ function rotear(req) {
         return json(req, pagina, atrasoDaFaixa);
     }
     if (url.includes('/portaria/leituras')) { return json(req, { ok: true }); }
+    // A corrida da entrada única: quem chegou primeiro naquele ingresso. No
+    // vídeo, este aparelho é sempre o primeiro — a recusa por "já entrou" não
+    // faz parte do roteiro, e forjá-la aqui seria ensinar uma tela que o
+    // aplicativo produz por outro caminho.
+    if (url.includes('/portaria/entrada')) { return json(req, { primeira: true }); }
+    // A rota leve, que o aparelho chama a cada cinco minutos. No vídeo ela só
+    // precisa não falhar.
+    if (url.includes('/portaria/sincronizar')) {
+        return json(req, { evento: { ativo: true }, setores: [], bloqueios: [],
+                           credenciais: [], totais: {}, proxima_desde: null });
+    }
 
     // Qualquer outra coisa que saia da máquina não entra no vídeo. O aviso
     // importa: uma rota que mudou de nome cai aqui e devolve `{}`, e a tela
@@ -468,9 +533,6 @@ async function novaPagina(browser, opcoes) {
     return page;
 }
 
-const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) '
-    + 'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
-
 /** Espera um seletor existir, sem explodir a gravação se ele mudou de nome. */
 async function existe(page, seletor) {
     return page.$(seletor).then(function (el) { return !!el; });
@@ -513,7 +575,9 @@ async function prepararCarga(page) {
         evento: { id: EVENTO_ID, nome: painel.evento.nome_evento },
         aparelho: { id: 'ap-1', nome: 'Portão A', setores: ['s1'] },
         setores: SETORES.map(function (s) {
-            return { id: s.id, nome: s.nome, tipo_uso: 'unico',
+            // `quantidade` é o DENOMINADOR do contador da portaria ("137 / 800").
+            // Sem ela, o vídeo mostrava "1 / 0" na cena mais vista de todas.
+            return { id: s.id, nome: s.nome, tipo_uso: 'unico', quantidade: s.quantidade,
                      abre_em: null, fecha_em: null };
         }),
         bloqueios: [BLOQUEIO],
@@ -642,9 +706,14 @@ async function desenharIngresso(page) {
         window.renderQRCodeOnCtx(ctx, '000123', 0, 0, 130, '#0f172a', '#ffffff');
     });
 
-    const foto = await page.screenshot({ type: 'jpeg', quality: 82 });
+    // Quadros REPETIDOS o bastante para durar a gravação inteira. Com noventa
+    // — o que bastava quando a portaria era a primeira tela gravada — a câmera
+    // secava no meio do caminho e o visor aparecia preto nas cinco cenas de
+    // leitura, que são as mais importantes do vídeo. A qualidade cai para 55
+    // porque é a MESMA foto repetida: o que cresce é só o tamanho do arquivo.
+    const foto = await page.screenshot({ type: 'jpeg', quality: 55 });
     const pedacos = [];
-    for (let i = 0; i < 90; i++) { pedacos.push(foto); }
+    for (let i = 0; i < 2400; i++) { pedacos.push(foto); }
     fs.writeFileSync(path.join(SAIDA, 'ingresso.mjpeg'), Buffer.concat(pedacos));
 }
 
@@ -691,252 +760,281 @@ async function main() {
 
     console.log('Gravando as cenas:');
 
+    // A carga da portaria é montada AGORA, numa página qualquer que já tenha o
+    // `qr-ideal-hash.js`: quando o celular virar aparelho, ele vai pedi-la na
+    // hora, e não há tempo de calcular hash no meio da navegação.
+    // Numa página vazia com o script do código carregado à mão, e nao na
+    // portaria: sem token, ela se manda para a lista de eventos antes de
+    // qualquer script rodar -- e a espera pelo `qrIdealHash` estourava.
+    const cozinha = await novaPagina(browser);
+    await cozinha.goto(BASE + '/__estudio', { waitUntil: 'domcontentloaded' });
+    await cozinha.addScriptTag({ url: '/qr-ideal-hash.js' });
+    await cozinha.waitForFunction(function () { return !!window.qrIdealHash; });
+    await prepararCarga(cozinha);
+    await cozinha.close();
+
     // ── Abertura ─────────────────────────────────────────────────────────────
-    let page = await novaPagina(browser);
+    const page = await novaPagina(browser);
     await page.goto(BASE + '/__estudio', { waitUntil: 'domcontentloaded' });
     const g = new Gravador(page);
 
     g.abrirCena('01-abertura');
     await cartela(page, 'Ideal Control',
-                  'O seu evento, do cadastro à leitura no portão.<br>Funciona sem internet.');
-    await g.segurar(9);
-    g.fecharCena();
-
-    // ── O QR do pedido: evento.html ──────────────────────────────────────────
-    await page.goto(BASE + '/evento.html?t=demonstracao', { waitUntil: 'networkidle0' });
-    await page.waitForSelector('#pedido:not(.sumindo)');
-
-    g.abrirCena('02-qr-chega');
-    await g.segurar(9);
-    g.fecharCena();
-
-    g.abrirCena('03-setores');
-    await g.rolarAte('#total', 12);
-    await g.segurar(7);
-    g.fecharCena();
-
-    g.abrirCena('04-entrar');
-    await g.digitar('#email', 'contato@festaideal.com.br');
-    await g.digitar('#senha', '••••••••');
-    await g.tocar('#btn-entrar');
-    await page.waitForSelector('#bloco-cadastrar:not(.sumindo)');
-    await g.segurar(3.5);
-    g.fecharCena();
-
-    g.abrirCena('05-cadastrar');
-    await g.rolarAte('#bloco-cadastrar', 8);
-    await g.digitar('#nome-evento', 'Festa Ideal 2026');
-    await g.tocar('#btn-cadastrar');
-    await page.waitForSelector('#pronto:not(.sumindo)');
-    await g.segurar(4);
+                  'Confira os ingressos na porta do seu evento.<br>Funciona sem internet.');
+    await g.segurar(8);
     g.fecharCena();
 
     // ── Instalar ─────────────────────────────────────────────────────────────
-    g.abrirCena('06-instalar-android');
-    await page.evaluate(function () { window.scrollTo(0, 0); window.__convidarInstalacao(); });
-    await page.waitForSelector('#convite-instalar button');
-    await g.segurar(3);
-    await g.tocar('#convite-instalar button');
-    await g.segurar(4);
-    g.fecharCena();
+    await page.goto(BASE + '/controle.html', { waitUntil: 'networkidle0' });
+    // A parede de instalação decide um segundo e meio depois de a página abrir,
+    // e só aparece se o navegador tiver oferecido instalar. Num Chrome sem loja
+    // isso nunca acontece: a gravação dispara o convite à mão, no mesmo formato
+    // que o aplicativo espera.
+    await page.evaluate(function () { window.__convidarInstalacao(); });
+    await page.waitForSelector('#parede-pwa', { timeout: 10000 });
 
-    // O iPhone não dispara evento nenhum: o `instalar.js` reconhece o aparelho e
-    // escreve o caminho. Trocar o user agent é o que faz esse ramo rodar.
-    const iphone = await novaPagina(browser, { userAgent: UA_IPHONE });
-    const gi = new Gravador(iphone);
-    await iphone.goto(BASE + '/evento.html?t=demonstracao', { waitUntil: 'networkidle0' });
-    await iphone.waitForSelector('#convite-instalar.aviso');
-    gi.abrirCena('07-instalar-iphone');
-    await gi.segurar(9);
-    gi.fecharCena();
-    await iphone.close();
-
-    g.abrirCena('08-por-que-instalar');
-    await g.segurar(10);
-    g.fecharCena();
-
-    // ── A tela do dono: controle.html ────────────────────────────────────────
-    await page.goto(BASE + '/controle.html?evento=' + EVENTO_ID, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('#evento:not(.sumindo)');
-    await page.waitForFunction(function () {
-        return document.getElementById('setores').children.length > 0;
-    });
-
-    g.abrirCena('09-evento-aberto');
-    await g.segurar(4);
-    await g.rolarAte('#setores', 14);
-    await g.segurar(4);
-    g.fecharCena();
-
-    g.abrirCena('10-destravar');
-    await page.evaluate(function () { window.scrollTo(0, 0); });
+    g.abrirCena('02-instalar');
+    await g.segurar(7);
+    await g.tocar('#parede-pwa button');
     await g.segurar(2.5);
-    await g.tocar('#btn-elevar');
-    await page.waitForFunction(function () {
-        return !document.getElementById('faixa-elevacao').classList.contains('sumindo');
+    g.fecharCena();
+
+    // O navegador de verdade fecha a parede sozinho ao instalar. Aqui não há
+    // instalação nenhuma para acontecer, então a gravação a retira.
+    await page.evaluate(function () {
+        const p = document.getElementById('parede-pwa');
+        if (p) { p.remove(); }
     });
+
+    // ── Entrar ───────────────────────────────────────────────────────────────
+    await page.waitForSelector('#bloco-entrar:not(.sumindo)', { timeout: 10000 });
+
+    g.abrirCena('03-entrar');
+    await g.segurar(2);
+    await g.digitar('#email', EMAIL);
+    await g.digitar('#senha', 'a-senha-do-cliente');
+    await g.segurar(1.5);
+    await g.tocar('#btn-entrar');
+    // Conta sem evento nenhum cai direto em Meus Pedidos: é lá que o primeiro
+    // evento nasce.
+    await page.waitForSelector('#meus-pedidos:not(.sumindo)', { timeout: 20000 });
+    await g.segurar(2);
+    g.fecharCena();
+
+    // ── Meus Pedidos ─────────────────────────────────────────────────────────
+    g.abrirCena('04-pedidos');
+    await g.segurar(4);
+    await g.rolarAte('#pedido-' + PEDIDO, 8);
     await g.segurar(4);
     g.fecharCena();
 
-    g.abrirCena('11-setor-configurar');
-    await g.tocar('#setor-configurar-s1');
-    await g.rolarAte('#setor-config-s1', 10);
-    await g.segurar(2);
-    if (await existe(page, '#setor-nome-s1')) {
-        await g.digitar('#setor-nome-s1', 'PISTA');
-    }
-    await g.segurar(3.5);
+    // ── Carregar ─────────────────────────────────────────────────────────────
+    g.abrirCena('05-carregar');
+    await g.tocar('#carregar-' + PEDIDO);
+    await page.waitForSelector('#caixa-carregar:not(.sumindo)', { timeout: 15000 });
+    await g.segurar(2.5);
+    await g.digitar('#carregar-nome', 'Festa Ideal 2026');
+    await g.segurar(1.5);
+    await g.tocar('#btn-carregar-confirmar');
+    // Em seguida o aplicativo pergunta se ESTE celular vai ler os ingressos.
+    // Aqui a resposta é não: quem configura é o celular do dono, e o leitor
+    // nasce na cena 09, no celular da porta.
+    await page.waitForSelector('#fundo-confirmar', { timeout: 20000 }).catch(async function () {
+        const diag = await page.evaluate(function () {
+            const t = function (id) {
+                const e = document.getElementById(id);
+                return e ? (e.textContent || '').trim().slice(0, 200) : '(sem elemento)';
+            };
+            const v = function (id) {
+                const e = document.getElementById(id);
+                return e ? !e.classList.contains('sumindo') : false;
+            };
+            return {
+                erroCarregar: t('erro-carregar'),
+                caixaAberta: v('caixa-carregar'),
+                semSenha: v('carregar-sem-senha'),
+                erroArranque: t('erro-arranque'),
+                aviso: t('aviso-gravacao'),
+            };
+        });
+        console.log('    [diagnóstico do carregar] ' + JSON.stringify(diag));
+        throw new Error('a caixa de confirmação não apareceu');
+    });
+    await g.segurar(3);
+    await g.tocar('#btn-confirmar-nao');
+    await page.waitForSelector('#lista:not(.sumindo)', { timeout: 20000 });
+    await g.segurar(1.5);
     g.fecharCena();
 
-    g.abrirCena('12-setor-horario');
-    if (await existe(page, '#setor-abre_em-s1')) {
-        await g.rolarAte('#setor-abre_em-s1', 8);
-        await g.segurar(1);
-        await page.evaluate(function () {
-            const c = document.getElementById('setor-abre_em-s1');
-            c.value = '2026-09-12T20:00';
-            c.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        await g.segurar(1);
-    }
+    // ── A casa ───────────────────────────────────────────────────────────────
+    await page.waitForFunction(function () {
+        return document.querySelectorAll('#eventos .barra-evento').length > 0;
+    }, { timeout: 20000 });
+
+    g.abrirCena('06-casa');
     await g.segurar(6);
     g.fecharCena();
 
-    g.abrirCena('13-setor-uso');
+    // ── A configuração ───────────────────────────────────────────────────────
+    g.abrirCena('07-configurar');
+    await g.tocar('#config-' + EVENTO_ID);
+    await page.waitForSelector('#engrenagem:not(.sumindo)', { timeout: 20000 });
+    await page.waitForFunction(function () {
+        return document.querySelectorAll('#setores .cartao').length > 0;
+    }, { timeout: 20000 });
+    await g.segurar(3);
+    // As cinco seções nascem recolhidas. A de setores é a que interessa aqui.
+    await g.tocar('#abrir-setores');
+    await g.segurar(1.5);
+    await g.rolarAte('#setores', 10);
+    await g.tocar('#setor-configurar-s1');
+    await g.rolarAte('#setor-config-s1', 10);
+    await g.segurar(1);
+    if (await existe(page, '#setor-nome-s1')) {
+        await g.digitar('#setor-nome-s1', 'PISTA');
+    }
+    await g.segurar(3);
+    g.fecharCena();
+
+    g.abrirCena('08-uso');
     if (await existe(page, '#uso-s1-reentrada')) {
+        await g.rolarAte('#uso-s1-reentrada', 8);
+        await g.segurar(1.5);
         await g.tocar('#uso-s1-reentrada');
+        await g.segurar(2);
+        await g.tocar('#uso-s1-unico');
     }
     await g.segurar(4);
     g.fecharCena();
 
-    g.abrirCena('14-bloqueio');
-    if (await existe(page, '#bloq-de-s1')) {
-        await g.digitar('#bloq-de-s1', String(BLOQUEIO.de));
-        await g.digitar('#bloq-ate-s1', String(BLOQUEIO.ate));
-        if (await existe(page, '#bloq-motivo-s1')) {
-            await g.digitar('#bloq-motivo-s1', BLOQUEIO.motivo);
-        }
-        // Tocar no botão importa: sem isso a cena mostra o formulário
-        // preenchido e a lista logo abaixo dizendo "nenhum ingresso bloqueado",
-        // que é o contrário do que a legenda está afirmando.
-        if (await existe(page, '#bloq-criar-s1')) {
-            await g.tocar('#bloq-criar-s1');
-            await page.waitForFunction(function () {
-                const l = document.getElementById('bloq-lista-s1');
-                return l && /a\s*560/.test(l.textContent);
-            }, { timeout: 15000 });
-            await g.rolarAte('#bloq-lista-s1', 8);
-        }
+    // ── O celular da porta ───────────────────────────────────────────────────
+    //
+    // Daqui em diante a MESMA aba vira o aparelho: confirmar o nome encerra a
+    // sessão da conta e leva o navegador para a portaria. É o caminho real, e
+    // é por isso que ele fica por último.
+    await g.tocar('#btn-fechar-engrenagem');
+    await page.waitForSelector('#lista:not(.sumindo)', { timeout: 20000 });
+
+    g.abrirCena('09-aparelho');
+    await g.segurar(1.5);
+    await g.tocar('#evento-' + EVENTO_ID);
+    // Ligar um celular ao evento é escrita de configuração, e por isso passa
+    // pela senha — mesmo com a conta aberta. O e-mail já vem preenchido.
+    await page.waitForSelector('#caixa-entrar-config:not(.sumindo)', { timeout: 20000 });
+    await g.segurar(2);
+    await g.digitar('#entrar-config-senha', 'a-senha-do-cliente');
+    await g.tocar('#btn-entrar-config');
+    await page.waitForSelector('#fundo-confirmar', { timeout: 20000 });
+    await g.segurar(4);
+    if (await existe(page, '#campo-nome-aparelho')) {
+        await g.digitar('#campo-nome-aparelho', NOME_APARELHO);
+        await g.segurar(1.5);
     }
-    await g.segurar(5);
-    g.fecharCena();
-
-    g.abrirCena('15-aparelho-criar');
-    if (await existe(page, '#setor-configurar-s1')) { await page.click('#setor-configurar-s1'); }
-    await g.rolarAte('#novo-aparelho-nome', 14);
-    await g.digitar('#novo-aparelho-nome', 'Portão A');
-    const botaoSetor = await page.evaluate(function () {
-        const b = Array.from(document.querySelectorAll('#novo-aparelho-setores button'))
-            .filter(function (x) { return x.textContent.trim() === 'PISTA'; })[0];
-        if (b) { b.id = '__setor-pista'; return true; }
-        return false;
-    });
-    if (botaoSetor) { await g.tocar('#__setor-pista'); }
-    await g.tocar('#btn-criar-aparelho');
-    await page.waitForSelector('#caixa-codigo:not(.sumindo)');
-    await g.segurar(3);
-    g.fecharCena();
-
-    g.abrirCena('16-codigo');
-    await g.rolarAte('#caixa-codigo', 8);
-    await g.segurar(9);
-    g.fecharCena();
-
-    // ── A portaria: portaria.html ────────────────────────────────────────────
-    const portaria = await novaPagina(browser);
-    const gp = new Gravador(portaria);
-    await portaria.goto(BASE + '/portaria.html?e=' + EVENTO_ID, { waitUntil: 'networkidle0' });
-    await portaria.waitForFunction(function () { return !!window.qrIdealHash; });
-    await prepararCarga(portaria);
-
-    gp.abrirCena('17-parear');
-    await gp.segurar(2.5);
-    await gp.digitar('#campo-codigo', CODIGO_APARELHO);
-    // Segura o código digitado ANTES de tocar em Ligar. Sem isto a cena tem
-    // menos imagem do que narração, e o quadro esticado no fim passa a ser o
-    // "Baixando o evento" — a legenda falando de digitar o código sobre uma
-    // tela que já saiu daquele passo.
-    await gp.segurar(3.5);
     // O atraso é o que dá DURAÇÃO à cena seguinte. Num aparelho de verdade quem
     // demora é a rede; aqui o backend falso responde na hora, e sem isto a tela
     // "Baixando o evento" apareceria por um quadro e sumiria.
     atrasoDaFaixa = 2600;
-    await gp.tocar('#btn-parear');
-    gp.fecharCena();
+    // Um `click` cru, e não o `tocar` que fotografa: este toque encerra a
+    // sessão e TROCA A PÁGINA, e uma fotografia em voo durante a navegação
+    // deixa o Chrome pendurado até o tempo do protocolo esgotar.
+    await page.click('#btn-confirmar-sim');
+    g.fecharCena();
 
-    gp.abrirCena('18-baixando');
+    // ── Baixando o evento ────────────────────────────────────────────────────
+    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 })
+        .catch(function () { /* já navegou antes de a espera começar */ });
+    await page.waitForSelector('#tela-carregando, #tela-lendo', { timeout: 30000 });
+
+    g.abrirCena('10-baixando');
     // Fotografa ENQUANTO carrega, e não por um tempo fixo: cada foto custa
     // tempo real, então "cinco segundos de quadros" acaba muito depois de o
     // carregamento ter terminado — e a cena mostrava a câmera já ligada.
-    for (let i = 0; i < 60; i++) {
-        const carregando = await portaria.$('#tela-carregando:not(.sumindo)');
+    for (let i = 0; i < 80; i++) {
+        const carregando = await page.$('#tela-carregando:not(.sumindo)');
         if (!carregando) { break; }
-        await gp.quadro();
+        await g.quadro();
     }
     // Estica o último quadro DO CARREGAMENTO, e não a tela seguinte: a legenda
-    // ainda está dizendo "espere terminar antes de ir para o portão".
-    gp.segurarUltimo(6);
-    await portaria.waitForSelector('#tela-lendo:not(.sumindo)', { timeout: 30000 });
+    // ainda está dizendo "espere terminar antes de ir para a porta".
+    g.segurarUltimo(6);
+    await page.waitForSelector('#tela-lendo:not(.sumindo)', { timeout: 40000 });
     atrasoDaFaixa = 0;
-    gp.fecharCena();
+    g.fecharCena();
 
-    gp.abrirCena('19-lendo');
-    await gp.segurarVivo(7);
-    gp.fecharCena();
-
-    // Os três resultados. A leitura passa pelo caminho de verdade — "Digitar o
-    // número" e "Conferir" —, que corre exatamente as mesmas seis regras da
-    // câmera. Encenar um QR na frente de uma webcam falsa daria a mesma tela por
-    // um caminho que ninguém conseguiria repetir.
-    async function ler(cenaId, numero, segundos) {
-        gp.abrirCena(cenaId);
-        if (await portaria.$('#caixa-digitar.sumindo')) { await portaria.click('#btn-digitar'); }
-        await gp.digitar('#campo-numero', numero);
-        await gp.tocar('#btn-conferir');
-        await portaria.waitForSelector('#tela-resposta:not(.sumindo)');
-        await gp.segurar(segundos);
-        await portaria.click('#btn-proximo');
-        gp.fecharCena();
+    // ── A leitura ────────────────────────────────────────────────────────────
+    //
+    // O véu "Toque para começar a ler" cobre a tela até alguém encostar nela: é
+    // o toque que libera o som no celular. No vídeo ele também é um toque.
+    if (await existe(page, '#btn-toque:not(.sumindo)')) {
+        await g.tocar('#btn-toque');
     }
 
-    await ler('20-verde', '000123', 6);
-    await ler('21-laranja', '003105', 7);
-    await ler('22-vermelho', '000512', 7.5);
+    g.abrirCena('11-lendo');
+    await g.segurarVivo(8);
+    g.fecharCena();
+
+    // Os três resultados. A leitura passa pelo caminho de verdade — "Digitar o
+    // número" e "Conferir" —, que corre exatamente as mesmas regras da câmera.
+    // Encenar um QR na frente de uma webcam falsa daria a mesma tela por um
+    // caminho que ninguém conseguiria repetir.
+    async function digitarIngresso(numero) {
+        if (await page.$('#caixa-digitar.sumindo')) { await page.click('#btn-digitar'); }
+        await g.digitar('#campo-numero', numero);
+        await g.tocar('#btn-conferir');
+    }
+
+    /** A RECUSA ocupa a tela e exige um toque para sair. */
+    async function lerRecusado(cenaId, numero, segundos) {
+        g.abrirCena(cenaId);
+        await digitarIngresso(numero);
+        await page.waitForSelector('#tela-resposta:not(.sumindo)', { timeout: 15000 });
+        await g.segurar(segundos);
+        await page.click('#btn-proximo');
+        g.fecharCena();
+    }
+
+    // O ingresso BOM não ocupa a tela: ele troca a faixa verde e a câmera
+    // segue lendo. Esperar a tela de resposta aqui seria esperar uma tela que
+    // o aplicativo deixou de mostrar de propósito — o que dá certo não pode
+    // custar um toque ao porteiro.
+    g.abrirCena('12-verde');
+    await digitarIngresso(INGRESSOS[0].texto);
+    await page.waitForFunction(function () {
+        const f = document.getElementById('faixa-ultima');
+        return f && !f.classList.contains('vazia');
+    }, { timeout: 15000 });
+    await g.segurarVivo(6);
+    g.fecharCena();
+
+    // O MESMO ingresso da cena anterior. O aparelho já o registrou, e o setor
+    // dele vale uma entrada só — a recusa sai do próprio aparelho, sem rede.
+    await lerRecusado('13-ja-entrou', INGRESSOS[0].texto, 7);
+    await lerRecusado('14-vermelho', INGRESSOS[2].texto, 7.5);
 
     // A recusa fica na tela enquanto a legenda diz que não há como contorná-la.
     // Mostrar a câmera aqui sugeriria que a conversa acabou e o porteiro seguiu
     // em frente, que é justamente o momento em que alguém insiste.
-    gp.abrirCena('23-recusa');
-    if (await portaria.$('#caixa-digitar.sumindo')) { await portaria.click('#btn-digitar'); }
-    // O texto tem de ser o do ingresso, com os zeros à esquerda: o hash é
-    // calculado sobre o que está ESCRITO no papel. "512" e "000512" são códigos
+    g.abrirCena('15-recusa');
+    if (await page.$('#caixa-digitar.sumindo')) { await page.click('#btn-digitar'); }
+    // O texto tem de ser o do ingresso, com os zeros à esquerda: o código é
+    // conferido sobre o que está ESCRITO no papel. "512" e "000512" são
     // diferentes, e o segundo é o que existe na faixa.
-    await gp.digitar('#campo-numero', INGRESSOS[2].texto);
-    await gp.tocar('#btn-conferir');
-    await portaria.waitForSelector('#tela-resposta:not(.sumindo)');
-    await gp.segurar(8);
-    gp.fecharCena();
+    await g.digitar('#campo-numero', INGRESSOS[2].texto);
+    await g.tocar('#btn-conferir');
+    await page.waitForSelector('#tela-resposta:not(.sumindo)', { timeout: 15000 });
+    await g.segurar(7);
+    g.fecharCena();
 
     // ── Fecho ────────────────────────────────────────────────────────────────
-    g.abrirCena('24-fecho');
     await page.goto(BASE + '/__estudio', { waitUntil: 'domcontentloaded' });
+    g.abrirCena('16-fecho');
     await cartela(page, 'Ingresso Ideal',
                   'Configure antes do evento.<br>No dia, a portaria precisa só do celular.');
-    await g.segurar(10);
+    await g.segurar(9);
     g.fecharCena();
 
     // ── O manifesto ──────────────────────────────────────────────────────────
-    const contagem = Object.assign({}, g.contagem, gi.contagem, gp.contagem);
+    const contagem = g.contagem;
     const cenas = ROTEIRO.map(function (c) {
         return {
             id: c.id,
